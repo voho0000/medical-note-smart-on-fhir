@@ -35,6 +35,10 @@ function resolveFhirServerKeys(fhirServerUrl: string): string[] {
   if (fhirServerUrl === LOCAL_BUNDLE_KEY) {
     return [fhirServerUrl, ...LEGACY_LOCAL_KEYS]
   }
+  // Scoped local imports are intentionally exact-match only. Even if two
+  // hospitals reuse Patient/1, their independently-open tabs must not share a
+  // conversation partition.
+  if (fhirServerUrl.startsWith(`${LOCAL_BUNDLE_KEY}:`)) return [fhirServerUrl]
   return [fhirServerUrl]
 }
 

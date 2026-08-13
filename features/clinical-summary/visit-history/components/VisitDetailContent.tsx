@@ -167,7 +167,7 @@ export function VisitDetailContent({
           count={details.medications.length}
           collapseThreshold={COLLAPSE_THRESHOLDS.medications}
         >
-          <div className="grid gap-0 mt-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0 mt-2">
             {details.isMultiDay && details.medSeries.length > 0 ? (
               details.medSeries.map((s) => (
                 <MedTrendRow

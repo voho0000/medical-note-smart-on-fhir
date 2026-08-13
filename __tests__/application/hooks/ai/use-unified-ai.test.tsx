@@ -185,6 +185,46 @@ describe('useUnifiedAi cancellation', () => {
     expect(result.current.isLoading).toBe(false)
   })
 
+  it('lets a caller abort only one transport attempt with its own signal', async () => {
+    let finishStream!: () => void
+    let requestSignal!: AbortSignal
+    mockStream.mockImplementationOnce(async (options: { signal: AbortSignal }) => {
+      requestSignal = options.signal
+      await new Promise<void>((resolve) => { finishStream = resolve })
+    })
+    const attemptController = new AbortController()
+    const { result } = renderHook(() => useUnifiedAi())
+
+    let streaming!: Promise<string>
+    act(() => {
+      streaming = result.current.stream(
+        [{ role: 'user', content: 'summary attempt' }],
+        {
+          modelId: 'gpt-5.4-nano',
+          operationKey: 'summary-slot',
+          signal: attemptController.signal,
+          throwOnAbort: true,
+        },
+      )
+    })
+    await waitFor(() => expect(mockStream).toHaveBeenCalledTimes(1))
+
+    act(() => attemptController.abort())
+    expect(requestSignal.aborted).toBe(true)
+
+    let rejection: unknown
+    await act(async () => {
+      finishStream()
+      try {
+        await streaming
+      } catch (error) {
+        rejection = error
+      }
+    })
+    expect((rejection as Error).name).toBe('AbortError')
+    expect(result.current.isLoading).toBe(false)
+  })
+
   it('fails closed before streaming when a captured custom-model callback loses its profile', async () => {
     const profile: OpenAiCompatibleProfile = {
       profileId: 'legacy',

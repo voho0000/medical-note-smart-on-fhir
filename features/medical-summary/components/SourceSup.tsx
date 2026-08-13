@@ -145,6 +145,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                   resourceId: s.resourceId!,
                   display: s.display,
                   date: s.date,
+                  evidenceQuote: s.evidenceQuote,
                 })
               }}
               className={cn(

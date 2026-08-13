@@ -29,6 +29,30 @@ export type ReportImage = {
   size?: number
 }
 
+/** Stable, URL-free descriptor handed back to the Bridge on every click. */
+export type NhiViewerRequestDescriptor = {
+  version: 1
+  procId: 'IMUE0130'
+  patientContextHash: string
+  iplCaseSeqNo: string
+  readPos: string
+  ordMark: 'Y' | ''
+  fileType: string
+  fileQty: string
+  feeYm: string
+}
+
+export type NhiViewerAction = {
+  kind: 'live'
+  descriptor: NhiViewerRequestDescriptor
+  title?: string
+} | {
+  kind: 'legacy'
+  contentType: string
+  url: string
+  title?: string
+}
+
 export type Row = {
   id: string
   title: string
@@ -46,6 +70,7 @@ export type Row = {
   showTime?: boolean           // true when multiple same-name results share the same date
   isPossibleDuplicate?: boolean // true when same title+date+institution+value appears >1 time
   images?: ReportImage[]        // inline base64 images (presentedForm); rendered on demand
+  viewerActions?: NhiViewerAction[] // live Bridge requests; legacy URL only when no request extension exists
   /** ──── Multi-region study grouping (NHI 33xxxB CT etc.) ────────────
    *  NHI bills every body part imaged on the same machine under one
    *  health-record code. When the same (code, date, institution) carries

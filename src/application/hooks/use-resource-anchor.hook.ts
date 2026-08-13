@@ -8,12 +8,15 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
+import {
+  useResourceNavigationStore,
+  type ResourceNavTarget,
+} from '@/src/application/stores/resource-navigation.store'
 
 export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
   resourceType: string | string[],
   resourceId?: string | string[],
-  onMatch?: (sequence: number) => void,
+  onMatch?: (sequence: number, target: ResourceNavTarget) => void,
 ) {
   const ref = useRef<T | null>(null)
   const pending = useResourceNavigationStore((s) => s.pending)
@@ -39,7 +42,7 @@ export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
     // scheduled rather than called synchronously inside the effect, and is not
     // tied to `pending` after consumption, so the callback cannot be cancelled
     // by the store update that clears the navigation request.
-    if (onMatch) setTimeout(() => onMatch(seq), 0)
+    if (onMatch) setTimeout(() => onMatch(seq, pending), 0)
     // A short timeout (NOT requestAnimationFrame — rAF is frozen in
     // backgrounded tabs) lets a just-switched tab paint before we scroll.
     setTimeout(() => {

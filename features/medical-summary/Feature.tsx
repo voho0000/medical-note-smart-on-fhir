@@ -84,12 +84,13 @@ import {
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
-import { MEDICAL_SUMMARY_MODULE_IDS } from "@/src/core/entities/medical-summary.entity"
+import { MEDICAL_SUMMARY_CARD_IDS } from "@/src/core/entities/medical-summary.entity"
 import type {
   EncounterClass,
   InvestigationDirection,
   InvestigationKind,
   MedicalSummaryModuleId,
+  MedicalSummaryCardId as GeneratedCardId,
   MedicationChangeType,
   ProblemKind,
   ResolvedSourceRef,
@@ -198,12 +199,10 @@ export default function MedicalSummaryFeature() {
     isSafetyGenerating,
     isRestoring,
     summaryError,
-    summaryModuleErrors,
-    safetyError,
+    cardErrors,
     contextOverflowIssue,
     contextAdaptation,
     hasAnyResult,
-    hasCompleteResult,
     resolveSafetySource,
     activeGeneration,
     summaryGenerationSlotKey,
@@ -260,20 +259,23 @@ export default function MedicalSummaryFeature() {
     () => (isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts),
     [isPatient, t.safetyAlerts],
   )
-  const summaryModuleLabels = useMemo<Record<MedicalSummaryModuleId, string>>(() => ({
+  const cardLabels = useMemo<Record<GeneratedCardId, string>>(() => ({
     priorities: ms.prioritiesTitle,
     problems: ms.problemsTitle,
     timeline: ms.timelineTitle,
     investigations: ms.investigationsTitle,
     medications: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
+    safety: ms.careSafetyTitle,
   }), [isPatient, ms])
-  const hasSummaryModuleErrors = Object.values(summaryModuleErrors).some(Boolean)
+  const hasCardErrors = Object.values(cardErrors).some(Boolean)
   const generationErrors = useMemo(() => {
-    const moduleErrors = MEDICAL_SUMMARY_MODULE_IDS.flatMap((moduleId) => {
-      const error = summaryModuleErrors[moduleId]
+    const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
+      const error = cardErrors[cardId]
       return error ? [{
-        label: summaryModuleLabels[moduleId],
-        message: error === "PARSE_FAILED" ? ms.parseError : error,
+        label: cardLabels[cardId],
+        message: error === "PARSE_FAILED"
+          ? cardId === "safety" ? safetyText.parseError : ms.parseError
+          : error,
       }] : []
     })
     const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
@@ -282,20 +284,13 @@ export default function MedicalSummaryFeature() {
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    const safetyErrors = safetyError
-      ? [{
-          label: ms.careSafetyTitle,
-          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
-        }]
-      : []
-    return [...moduleErrors, ...genericSummaryError, ...safetyErrors]
+    return [...failedCards, ...genericSummaryError]
   }, [
+    cardErrors,
+    cardLabels,
     ms,
-    safetyError,
     safetyText.parseError,
     summaryError,
-    summaryModuleErrors,
-    summaryModuleLabels,
   ])
   const displayedGenerationErrors = useMemo(() => {
     if (
@@ -315,7 +310,7 @@ export default function MedicalSummaryFeature() {
   const generationActivity = getSummaryGenerationActivityState({
     isBusy,
     hasContextOverflow: Boolean(contextOverflowIssue),
-    hasCompleteResult,
+    hasAnyResult,
   })
 
   // Clinicians see raw FHIR resource types on chips; patients get plain words.
@@ -461,10 +456,18 @@ export default function MedicalSummaryFeature() {
   const [activeCardId, setActiveCardId] = useState<MedicalSummaryCardId | null>(null)
   const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
 
-  const showSafetyCard = Boolean(safetyResult || (!safetyError && result))
+  const cardSucceeded = useCallback(
+    (cardId: GeneratedCardId) => Boolean(
+      result &&
+      (!result.completedCardIds || result.completedCardIds.includes(cardId)) &&
+      !cardErrors[cardId]
+    ),
+    [cardErrors, result],
+  )
+  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety"))
   const moduleSucceeded = useCallback(
-    (moduleId: MedicalSummaryModuleId) => Boolean(result && !summaryModuleErrors[moduleId]),
-    [result, summaryModuleErrors],
+    (moduleId: MedicalSummaryModuleId) => cardSucceeded(moduleId),
+    [cardSucceeded],
   )
   const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
     const ids: MedicalSummaryCardId[] = []
@@ -1094,7 +1097,7 @@ export default function MedicalSummaryFeature() {
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}
               updating={isSummaryGenerating && (
-                !hasSummaryModuleErrors || Boolean(summaryModuleErrors.priorities)
+                !hasCardErrors || Boolean(cardErrors.priorities)
               )}
             />
           ) : null}

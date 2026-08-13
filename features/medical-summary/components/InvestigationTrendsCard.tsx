@@ -22,12 +22,12 @@ import type {
   InvestigationDirection,
   InvestigationKind,
   MedicalSummaryResult,
-  ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { limitInvestigationTrendPoints } from "@/src/shared/utils/investigation-trend.utils"
 import type { InvestigationCumulativeTarget } from "../utils/investigation-cumulative-target"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 const DIRECTION_STYLE: Record<
   InvestigationDirection,
@@ -139,9 +139,11 @@ export function InvestigationTrendsCard({
               && cumulativeTarget.resourceType === openingCumulativeTarget.resourceType
               && cumulativeTarget.resourceId === openingCumulativeTarget.resourceId,
           )
-          const sources = item.sourceKeys
-            .map((key) => byKey.get(key))
-            .filter((source): source is ResolvedSourceRef => source !== undefined)
+          const sources = resolveClaimSources(
+            item.sourceKeys,
+            byKey,
+            item.documentEvidence,
+          )
 
           return (
             <article key={`${item.label}-${index}`} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>

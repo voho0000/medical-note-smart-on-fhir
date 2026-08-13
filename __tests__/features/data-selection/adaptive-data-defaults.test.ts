@@ -14,7 +14,7 @@ const obs = (i: number) => ({
 describe('estimateFullRecordTokens', () => {
   it('lowers auto-select-all headroom for a configured 32k endpoint', () => {
     expect(autoSelectAllTokenLimit([])).toBe(AUTO_SELECT_ALL_TOKENS)
-    expect(autoSelectAllTokenLimit([32_768])).toBeLessThan(20_000)
+    expect(autoSelectAllTokenLimit([32_768])).toBe(20_768)
     expect(autoSelectAllTokenLimit([131_072, 32_768]))
       .toBe(autoSelectAllTokenLimit([32_768]))
   })

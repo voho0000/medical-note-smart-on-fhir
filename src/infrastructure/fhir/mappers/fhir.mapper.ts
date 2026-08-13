@@ -215,6 +215,7 @@ export class FhirMapper implements IDataMapper {
       conclusionCode: fhirResource.conclusionCode,
       imagingStudy: fhirResource.imagingStudy,
       note: fhirResource.note,
+      extension: fhirResource.extension,
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
       performer: fhirResource.performer,

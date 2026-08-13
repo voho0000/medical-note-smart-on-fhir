@@ -7,12 +7,23 @@
 //   - citation relevance: a renal claim citing the chest X-ray, a polyp citing
 //     an ultrasound, a valve citing the ECG
 //
-// Deterministic and bundle-grounded, so — unlike a same-tier LLM verifier — it
-// cannot miss a fabricated 內視鏡 (empirically the LLM verifier did; this does
-// not). Used by scripts/validate-demo-snapshots.ts and available to the
-// offline snapshot generator as a generate-until-clean gate.
+// Deterministic and record-grounded. Used by scripts/validate-demo-snapshots.ts
+// and available to the offline snapshot generator as a validation gate.
+import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 
-interface CatEntry { key: string; display?: string; resourceType?: string }
+interface CatEntry {
+  key: string
+  display?: string
+  resourceType?: string
+  resourceId?: string
+  getContentText?: () => string
+}
+
+interface DocumentEvidenceEntry {
+  source?: string
+  quote?: string
+}
 
 // Examination/report words that must be BACKED by a matching report in the
 // bundle. Keyed on the term; a term is "allowed" only if it appears in the
@@ -34,15 +45,57 @@ function fabricatedTests(text: string, presentTerms: Set<string>): string[] {
 }
 
 export interface GroundingAuditInput {
-  /** JSON.stringify of the demo bundle — used for the fabricated-test presence test. */
-  bundleBlob: string
+  /**
+   * Searchable evidence in the selected AI scope. This includes structured
+   * records plus decoded plain text from inline clinical documents.
+   */
+  clinicalEvidenceText: string
   /** Catalog entries, for citation-relevance lookups. */
   catalog: CatEntry[]
 }
 
-function makeHelpers({ bundleBlob, catalog }: GroundingAuditInput) {
+/**
+ * Build the same free-text evidence corpus the checker needs from the already
+ * scoped clinical data. DocumentReference attachments are Base64-decoded and
+ * HTML-stripped by the application's canonical document reader; their prose
+ * remains free text and is not converted into inferred diagnoses or events.
+ */
+export function buildGroundingAuditInput(
+  clinicalData: Partial<ClinicalDataCollection>,
+  catalog: CatEntry[],
+): GroundingAuditInput {
+  const documents = listClinicalDocuments(clinicalData)
+  const documentTextById = new Map(documents.map((document) => [document.id, document.text]))
+  const decodedDocuments = documents
+    .map((document) => `${document.title}\n${document.text}`)
+    .join('\n\n')
+  return {
+    clinicalEvidenceText: `${JSON.stringify(clinicalData)}\n${decodedDocuments}`,
+    catalog: catalog.map((entry) => {
+      const documentText = entry.resourceId
+        ? documentTextById.get(entry.resourceId)
+        : undefined
+      return documentText === undefined || entry.getContentText
+        ? entry
+        : { ...entry, getContentText: () => documentText }
+    }),
+  }
+}
+
+function normalizedSearchText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function makeHelpers({ clinicalEvidenceText, catalog }: GroundingAuditInput) {
   const byKey = new Map(catalog.map((c) => [c.key, c]))
-  const presentTerms = new Set(TEST_TERMS.filter((t) => bundleBlob.includes(t)))
+  const normalizedEvidence = normalizedSearchText(clinicalEvidenceText)
+  const presentTerms = new Set(TEST_TERMS.filter((t) =>
+    normalizedEvidence.includes(normalizedSearchText(t)),
+  ))
   const isImaging = (k: string) => {
     const e = byKey.get(k)
     return !!e && /胸腔|X光|X-ray|心電圖|ECG|超音波/i.test(e.display ?? '')
@@ -51,18 +104,89 @@ function makeHelpers({ bundleBlob, catalog }: GroundingAuditInput) {
   return { byKey, presentTerms, isImaging, displayOf }
 }
 
+function auditDocumentEvidence(
+  sources: string[],
+  evidence: DocumentEvidenceEntry[] | undefined,
+  tag: string,
+  byKey: Map<string, CatEntry>,
+  issues: string[],
+): boolean {
+  const normalizedSources = sources.map((source) => source.trim().toUpperCase())
+  const documentSources = normalizedSources.filter((source) => {
+    const resourceType = byKey.get(source)?.resourceType
+    return resourceType === 'DocumentReference' || resourceType === 'Composition'
+  })
+  const entries = evidence ?? []
+
+  for (const entry of entries) {
+    const source = entry.source?.trim().toUpperCase() ?? ''
+    if (!normalizedSources.includes(source)) {
+      issues.push(`document evidence ${source || '(missing source)'} is not cited in ${tag}`)
+    }
+  }
+  if (documentSources.length === 0) return false
+
+  let allDocumentSourcesVerified = true
+  for (const source of documentSources) {
+    const sourceText = byKey.get(source)?.getContentText?.() ?? ''
+    const candidates = entries.filter((entry) =>
+      entry.source?.trim().toUpperCase() === source,
+    )
+    if (candidates.length === 0) {
+      issues.push(`missing verbatim document evidence for ${source} in ${tag}`)
+      allDocumentSourcesVerified = false
+      continue
+    }
+    const matched = candidates.some((entry) => {
+      const quote = normalizedSearchText(entry.quote ?? '')
+      return quote.length >= 8 && normalizedSearchText(sourceText).includes(quote)
+    })
+    if (!matched) {
+      issues.push(`document evidence quote not found verbatim in ${source} for ${tag}`)
+      allDocumentSourcesVerified = false
+    }
+  }
+  return allDocumentSourcesVerified
+}
+
 /** Returns a list of grounding issues (empty = clean) for a parsed medical summary. */
 export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): string[] {
-  const { presentTerms, isImaging, displayOf } = makeHelpers(input)
+  const { byKey, presentTerms, isImaging, displayOf } = makeHelpers(input)
   const issues: string[] = []
-  const spans: Array<{ text: string; tag: string }> = []
-  for (const [i, item] of (ai.investigations ?? []).entries()) spans.push({ text: `${item.label} ${item.trend ?? ''} ${item.interpretation ?? ''}`, tag: `investigation[${i}] ${item.label}` })
-  for (const [i, p] of (ai.problems ?? []).entries()) spans.push({ text: `${p.label} ${p.basis ?? ''}`, tag: `problem[${i}] ${p.label}` })
-  for (const [i, d] of (ai.decisions ?? []).entries()) spans.push({ text: `${d.text} ${d.rationale ?? ''}`, tag: `decision[${i}]` })
-  for (const [i, t] of (ai.timeline ?? []).entries()) spans.push({ text: t.label, tag: `timeline[${i}] ${t.label}` })
-  for (const [i, s] of (ai.summary ?? []).entries()) spans.push({ text: s.text, tag: `summary[${i}]` })
-  for (const { text, tag } of spans) {
-    for (const term of fabricatedTests(text, presentTerms)) issues.push(`fabricated test "${term}" in ${tag}`)
+  const spans: Array<{
+    text: string
+    tag: string
+    sources: string[]
+    documentEvidence?: DocumentEvidenceEntry[]
+  }> = []
+  for (const [i, item] of (ai.investigations ?? []).entries()) spans.push({ text: `${item.label} ${item.trend ?? ''} ${item.interpretation ?? ''}`, tag: `investigation[${i}] ${item.label}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
+  for (const [i, p] of (ai.problems ?? []).entries()) spans.push({ text: `${p.label} ${p.basis ?? ''}`, tag: `problem[${i}] ${p.label}`, sources: p.sources ?? [], documentEvidence: p.documentEvidence })
+  for (const [i, d] of (ai.decisions ?? []).entries()) spans.push({ text: `${d.text} ${d.rationale ?? ''}`, tag: `decision[${i}]`, sources: d.sources ?? [], documentEvidence: d.documentEvidence })
+  for (const [i, t] of (ai.timeline ?? []).entries()) spans.push({ text: t.label, tag: `timeline[${i}] ${t.label}`, sources: t.ref ? [t.ref] : [], documentEvidence: t.documentEvidence })
+  for (const [i, s] of (ai.summary ?? []).entries()) spans.push({ text: s.text, tag: `summary[${i}]`, sources: s.sources ?? [], documentEvidence: s.documentEvidence })
+  for (const [i, item] of (ai.medicationEducation ?? []).entries()) spans.push({ text: `${item.name} ${item.benefit} ${item.attention}`, tag: `medicationEducation[${i}] ${item.name}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
+  for (const [i, item] of (ai.medicationReview?.regimen ?? []).entries()) spans.push({ text: `${item.group} ${item.name} ${item.sig ?? ''}`, tag: `medicationReview.regimen[${i}] ${item.name}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
+  for (const [i, item] of (ai.medicationReview?.changes ?? []).entries()) spans.push({ text: `${item.medication} ${item.summary}`, tag: `medicationReview.changes[${i}] ${item.medication}`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
+  for (const [i, item] of (ai.medicationReview?.reconciliation ?? []).entries()) spans.push({ text: item.text, tag: `medicationReview.reconciliation[${i}]`, sources: item.sources ?? [], documentEvidence: item.documentEvidence })
+  for (const { text, tag, sources, documentEvidence } of spans) {
+    const citesClinicalDocument = sources.some((source) => {
+      const resourceType = byKey.get(source.trim().toUpperCase())?.resourceType
+      return resourceType === 'DocumentReference' || resourceType === 'Composition'
+    })
+    auditDocumentEvidence(
+      sources,
+      documentEvidence,
+      tag,
+      byKey,
+      issues,
+    )
+    // Original-language excerpts replace bilingual keyword lists for all
+    // free-text document claims. Missing/changed quotes are reported above;
+    // do not add a second, dictionary-based verdict that could mistranslate
+    // an otherwise legitimate examination name.
+    if (!citesClinicalDocument) {
+      for (const term of fabricatedTests(text, presentTerms)) issues.push(`fabricated test "${term}" in ${tag}`)
+    }
     if (POSITIONAL.test(text)) issues.push(`positional cross-ref in ${tag}`)
   }
   for (const [i, p] of (ai.problems ?? []).entries()) {

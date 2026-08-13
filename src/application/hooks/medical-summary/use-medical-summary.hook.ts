@@ -29,15 +29,19 @@ import {
   MEDICAL_SUMMARY_MODEL_ID,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type {
-  MedicalSummaryModuleErrors,
-  MedicalSummaryModuleId,
+  MedicalSummaryCardErrors,
+  MedicalSummaryCardId,
   MedicalSummaryResult,
   SummaryCoverageStats,
+  SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
-import { MEDICAL_SUMMARY_MODULE_IDS } from '@/src/core/entities/medical-summary.entity'
+import { MEDICAL_SUMMARY_CARD_IDS } from '@/src/core/entities/medical-summary.entity'
 import {
   DEMO_MEDICAL_SUMMARY_GENERATION,
+  DEMO_SAFETY_SCAN_GENERATION,
   demoMedicalSummarySnapshots,
+  demoSafetyScanSnapshots,
+  remapDemoSnapshotSourceKeys,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
   medicalSummaryStore,
@@ -59,6 +63,17 @@ import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constant
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
+import {
+  MEDICAL_SUMMARY_CARD_REGISTRY,
+  registeredMedicalSummaryCards,
+  type MedicalSummaryCardAggregate,
+  type MedicalSummaryCardDefinition,
+} from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
+import {
+  MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS,
+  MedicalSummaryCardProgressTimeoutError,
+  streamWithCardProgressTimeout,
+} from './card-progress-timeout'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -79,6 +94,11 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
 
 const medicalSummaryResultModelId = (result: MedicalSummaryResult) =>
   result.generation?.modelId
+
+// One initial batch plus at most two progressively smaller combined retries.
+// This is deliberately a hard cap: a persistently non-conforming model must
+// surface card errors instead of starting an unbounded retry loop.
+const MAX_CARD_BATCH_ATTEMPTS = 3
 
 export interface UseMedicalSummaryReturn {
   result: MedicalSummaryResult | undefined
@@ -109,6 +129,7 @@ export interface UseMedicalSummaryReturn {
     error: string | null
     issue: ContextOverflowIssue | null
   }
+  resolveSource: (key: string) => SummarySourceCatalogEntry | undefined
   /** True when this clinical-input scope has a presentable restored result. */
   isHydrated: boolean
   autoGenerate: boolean
@@ -126,7 +147,7 @@ export interface UseMedicalSummaryReturn {
     durationMs: number
   }) => void
   generate: () => Promise<void>
-  /** Regenerate only modules recorded in result.moduleErrors, preserving
+  /** Regenerate only cards recorded in result.cardErrors, preserving
    * successful cards in the same slot. Falls back to a full generation when
    * the selected slot has no partial result. */
   retryFailedModules: () => Promise<void>
@@ -143,7 +164,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const { demographicsReadyForAi } = useAiDemographicsGate()
   const autoAiConsent = useAutoAiConsentState()
   const moduleRetryRequestsRef = useRef(new Map<string, {
-    moduleIds: MedicalSummaryModuleId[]
+    cardIds: MedicalSummaryCardId[]
     baseResult: MedicalSummaryResult
   }>())
 
@@ -176,7 +197,6 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       .join('\n\n')
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
-    const targetModuleIds = retryRequest?.moduleIds ?? [...MEDICAL_SUMMARY_MODULE_IDS]
     const isLocalModel = isCustomOpenAiModelId(ctx.modelId)
     const promptInput = {
       clinicalContext,
@@ -186,18 +206,16 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
       harnessProfile: isLocalModel ? 'local-small' as const : 'frontier' as const,
     }
-    const retryRequests = retryRequest
-      ? targetModuleIds.map((moduleId) => ({
-          moduleId,
-          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
-        }))
-      : []
-    const initialBatchMessages = retryRequest
-      ? null
-      : generateMedicalSummaryUseCase.buildBatchModuleMessages(promptInput)
-    const messageSets = initialBatchMessages
-      ? [initialBatchMessages]
-      : retryRequests.map(({ messages }) => messages)
+    const targetCards = retryRequest
+      ? retryRequest.cardIds.map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])
+      : registeredMedicalSummaryCards(promptInput)
+    // A manual retry uses the same multi-card transport as automatic retry:
+    // all currently failed cards share one request and one copy of the context.
+    const initialBatchMessages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
+      promptInput,
+      targetCards.map((card) => card.buildBatchInstruction(promptInput)),
+    )
+    const messageSets = [initialBatchMessages]
     const overflow = messageSets
       .map((messages) => createContextOverflowIssue(
         messages.map((message) => message.content).join('\n\n'),
@@ -209,156 +227,278 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ))
       .filter((issue): issue is ContextOverflowIssue => issue !== null)
       .sort((left, right) => right.overBy - left.overBy)[0] ?? null
-    if (overflow) {
-      throw new ContextOverflowError(overflow, ctx.locale)
-    }
+    if (overflow) throw new ContextOverflowError(overflow, ctx.locale)
 
-    const validationErrorMessage = (
-      moduleId: MedicalSummaryModuleId,
-    ) => `${moduleId}: PARSE_FAILED`
-    const markLatestValidationError = (message: string) => {
+    const markValidationError = (cardId: MedicalSummaryCardId) => {
       useAiExecutionDiagnosticsStore.getState().markLatestOperationFeatureError(
         ctx.operationKey,
         'medical-summary',
-        message,
+        `${cardId}: PARSE_FAILED`,
       )
     }
-
-    const runModule = async ({
-      moduleId,
-      messages,
-    }: typeof retryRequests[number]) => {
-      const full = await ctx.ai.stream(messages, {
-        modelId: ctx.modelId,
-        operationKey: ctx.operationKey,
-        diagnosticFeature: 'medical-summary',
-        throwOnAbort: true,
-        // Structured JSON is more reliable on OpenAI-compatible local models
-        // when sampling is deterministic. Providers that require/omit a fixed
-        // temperature normalize this option in their adapter.
-        ...(isLocalModel
-          ? { temperature: 0, reasoningEffort: 'low' as const }
-          : {}),
-      })
-      const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
-      if (!parsed) {
-        markLatestValidationError(validationErrorMessage(moduleId))
-        return { moduleId, error: 'PARSE_FAILED' as const }
-      }
-      const unknownSourceKeys = generateMedicalSummaryUseCase.findUnknownSourceKeys(
-        parsed,
-        ctx.catalog,
-      )
+    const warnUnknownSourceKeys = (
+      card: MedicalSummaryCardDefinition,
+      parsed: unknown | null,
+    ) => {
+      const unknownSourceKeys = parsed && card.findUnknownSourceKeys
+        ? card.findUnknownSourceKeys(parsed, ctx.catalog)
+        : []
       if (unknownSourceKeys.length > 0) {
         console.warn(
-          `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
+          `[medical-summary:${card.id}] grounding warning; unknown source keys:`,
           unknownSourceKeys,
         )
       }
-      // Unknown citations are a claim-level warning, not a transport/card
-      // failure. The finalizer keeps them visibly unverified so SourceSup can
-      // show an amber warning beside the exact claim. High-risk fallbacks
-      // remain enforced there: unresolved timeline events and ungrounded
-      // medication items are not promoted as verified clinical facts.
-      return { moduleId, result: parsed }
     }
 
-    // Initial generation sends the large clinical context once, then validates
-    // each delimited card independently. Retry requests remain one call per
-    // failed card so successful content is neither re-billed nor replaced.
-    const settled: Array<PromiseSettledResult<Awaited<ReturnType<typeof runModule>>>> = []
-    if (initialBatchMessages) {
-      try {
-        const full = await ctx.ai.stream(initialBatchMessages, {
+    const generation = (generatedAt: number) => ({
+      source: 'live' as const,
+      modelId: ctx.modelId,
+      modelName: ctx.modelName,
+      generatedAt,
+    })
+    const bundleRevision = medicalSummaryStore.getState().bundleRevision
+    const completedCardIds = new Set<MedicalSummaryCardId>(
+      retryRequest?.baseResult.completedCardIds ?? (
+        retryRequest
+          ? MEDICAL_SUMMARY_CARD_IDS.filter((cardId) => (
+              !retryRequest.baseResult.cardErrors?.[cardId] &&
+              (cardId !== 'safety' || Boolean(retryRequest.baseResult.safety))
+            ))
+          : []
+      ),
+    )
+    targetCards.forEach((card) => completedCardIds.delete(card.id))
+    let progressiveAggregate: MedicalSummaryCardAggregate = {
+      summary: generateMedicalSummaryUseCase.createAiDraftFromResult(retryRequest?.baseResult),
+      safety: retryRequest?.baseResult.safety,
+    }
+    const progressiveCardErrors: MedicalSummaryCardErrors = {
+      ...(retryRequest?.baseResult.cardErrors ?? {}),
+    }
+    const publishedCardIds = new Set<MedicalSummaryCardId>()
+    // Once a closing marker has arrived, that card block is immutable. Remember
+    // its parse result so an invalid block is not parsed and logged again for
+    // every later stream chunk while the model writes the remaining cards.
+    const batchParseResults = new Map<MedicalSummaryCardId, unknown | null>()
+    const publishCardResult = (card: MedicalSummaryCardDefinition, parsed: unknown) => {
+      progressiveAggregate = card.apply(progressiveAggregate, parsed, ctx.catalog)
+      publishedCardIds.add(card.id)
+      completedCardIds.add(card.id)
+      delete progressiveCardErrors[card.id]
+
+      const state = medicalSummaryStore.getState()
+      if (
+        state.bundleRevision !== bundleRevision ||
+        !state.running[ctx.operationKey]
+      ) return
+      const generatedAt = Date.now()
+      const finalized = generateMedicalSummaryUseCase.finalizeResult(
+        progressiveAggregate.summary,
+        ctx.catalog,
+        {
+          clinicalData: ctx.clinicalData ?? undefined,
+          audience: ctx.audience === 'patient' ? 'patient' : 'medical',
+          locale: outputLocale,
+          strictGrounding: isLocalModel,
+        },
+      )
+      state.setResult(ctx.operationKey, {
+        ...finalized,
+        safety: progressiveAggregate.safety
+          ? { ...progressiveAggregate.safety, generation: generation(generatedAt) }
+          : undefined,
+        cardErrors: Object.keys(progressiveCardErrors).length > 0
+          ? { ...progressiveCardErrors }
+          : undefined,
+        completedCardIds: [...completedCardIds],
+        generation: generation(generatedAt),
+      })
+    }
+
+    type CardRunOutcome =
+      | { cardId: MedicalSummaryCardId; result: unknown }
+      | { cardId: MedicalSummaryCardId; error: 'PARSE_FAILED' }
+    const settled: Array<PromiseSettledResult<CardRunOutcome>> = []
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(
+        `[medical-summary] batch attempt 1/${MAX_CARD_BATCH_ATTEMPTS}: ${targetCards.map((card) => card.id).join(',')}`,
+      )
+    }
+    try {
+      const parseInitialChunk = (streamedText: string): boolean => {
+        let madeProgress = false
+        targetCards.forEach((card) => {
+          if (
+            publishedCardIds.has(card.id) ||
+            batchParseResults.has(card.id) ||
+            !card.hasCompleteBatchBlock(streamedText)
+          ) return
+          const parsed = card.parseBatch(streamedText, ctx.catalog)
+          batchParseResults.set(card.id, parsed)
+          warnUnknownSourceKeys(card, parsed)
+          if (parsed) {
+            publishCardResult(card, parsed)
+            madeProgress = true
+          }
+        })
+        return madeProgress
+      }
+      const { fullText: full, timedOut } = await streamWithCardProgressTimeout({
+        stream: (signal, onChunk) => ctx.ai.stream(initialBatchMessages, {
           modelId: ctx.modelId,
           operationKey: ctx.operationKey,
           diagnosticFeature: 'medical-summary',
           throwOnAbort: true,
+          signal,
           ...(isLocalModel
             ? { temperature: 0, reasoningEffort: 'low' as const }
             : {}),
-        })
-        const validationErrors: string[] = []
-        targetModuleIds.forEach((moduleId) => {
-          const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
-          const unknownSourceKeys = parsed
-            ? generateMedicalSummaryUseCase.findUnknownSourceKeys(parsed, ctx.catalog)
-            : []
-          if (unknownSourceKeys.length > 0) {
-            console.warn(
-              `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
-              unknownSourceKeys,
-            )
-          }
-          if (!parsed) {
-            validationErrors.push(validationErrorMessage(moduleId))
-          }
+          onChunk,
+        }),
+        onChunk: parseInitialChunk,
+        timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
+      })
+      if (timedOut && process.env.NODE_ENV !== 'production') {
+        console.info('[medical-summary] batch attempt 1 aborted after 45s without a new valid card')
+      }
+      targetCards.forEach((card) => {
+        const hadStreamParse = batchParseResults.has(card.id)
+        const parsed = hadStreamParse
+          ? batchParseResults.get(card.id) ?? null
+          : card.parseBatch(full, ctx.catalog)
+        if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
+        if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
+        if (parsed) {
           settled.push({
             status: 'fulfilled',
-            value: parsed
-              ? { moduleId, result: parsed }
-              : { moduleId, error: 'PARSE_FAILED' as const },
+            value: { cardId: card.id, result: parsed },
           })
-        })
-        if (validationErrors.length > 0) {
-          markLatestValidationError(validationErrors.join('; '))
+        } else if (timedOut) {
+          settled.push({
+            status: 'rejected',
+            reason: new MedicalSummaryCardProgressTimeoutError(
+              MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS,
+            ),
+          })
+        } else {
+          markValidationError(card.id)
+          settled.push({
+            status: 'fulfilled',
+            value: { cardId: card.id, error: 'PARSE_FAILED' },
+          })
         }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') throw error
-        targetModuleIds.forEach(() => {
-          settled.push({ status: 'rejected', reason: error })
-        })
-      }
-    } else if (isLocalModel) {
-      // A user-configured local endpoint remains sequential so a small
-      // on-prem model is not unexpectedly hit with several retries at once.
-      for (const request of retryRequests) {
-        try {
-          settled.push({ status: 'fulfilled', value: await runModule(request) })
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') throw error
-          settled.push({ status: 'rejected', reason: error })
-        }
-      }
-    } else {
-      settled.push(...await Promise.allSettled(retryRequests.map(runModule)))
+      })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error
+      targetCards.forEach((card) => {
+        const parsed = batchParseResults.get(card.id)
+        settled.push(parsed
+          ? { status: 'fulfilled', value: { cardId: card.id, result: parsed } }
+          : { status: 'rejected', reason: error })
+      })
     }
 
-    // Local Chat Completions endpoints are stateless, so permanently splitting
-    // every summary into multiple calls would resend the entire patient context
-    // and nearly double input tokens. Prefer one batch, then retry only cards
-    // whose independently delimited JSON failed to parse. Module retries use
-    // the compact, module-relevant local prompt,
-    // so retry every failed card once instead of guaranteeing a visible error
-    // whenever more than two cards fail the initial batch.
-    // If the whole request failed, preserve the previous medication-only fallback
-    // instead of resending every card.
-    if (initialBatchMessages && isLocalModel) {
-      const allRejected = settled.length > 0 && settled.every((outcome) => outcome.status === 'rejected')
-      const parseFailedModuleIds = targetModuleIds.filter((moduleId, index) => {
-        const outcome = settled[index]
-        return outcome?.status === 'fulfilled' && 'error' in outcome.value
-      })
-      const retryModuleIds = allRejected && targetModuleIds.includes('medications')
-        ? ['medications' as const]
-        : [...parseFailedModuleIds]
-            .sort((left, right) => Number(right === 'medications') - Number(left === 'medications'))
+    // Retry every remaining failed card in ONE progressively smaller batch.
+    // Successful cards remain visible and are never regenerated. Attempts are
+    // capped at three total calls (initial + two combined retries).
+    for (let attempt = 2; attempt <= MAX_CARD_BATCH_ATTEMPTS; attempt += 1) {
+      const cardsToRetry = targetCards
+        .filter((_card, index) => {
+          const outcome = settled[index]
+          return outcome?.status === 'rejected' || (
+            outcome?.status === 'fulfilled' && 'error' in outcome.value
+          )
+        })
+        .sort((left, right) => Number(right.id === 'medications') - Number(left.id === 'medications'))
+      if (cardsToRetry.length === 0) break
 
-      for (const moduleId of retryModuleIds) {
-        const moduleIndex = targetModuleIds.indexOf(moduleId)
-        const moduleRequest = {
-          moduleId,
-          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
+      if (process.env.NODE_ENV !== 'production') {
+        console.info(
+          `[medical-summary] batch attempt ${attempt}/${MAX_CARD_BATCH_ATTEMPTS}: ${cardsToRetry.map((card) => card.id).join(',')}`,
+        )
+      }
+
+      const retryBatchParseResults = new Map<MedicalSummaryCardId, unknown | null>()
+      const retryBatchMessages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
+        promptInput,
+        cardsToRetry.map((card) => card.buildBatchInstruction(promptInput)),
+      )
+      try {
+        const parseRetryChunk = (streamedText: string): boolean => {
+          let madeProgress = false
+          cardsToRetry.forEach((card) => {
+            if (
+              publishedCardIds.has(card.id) ||
+              retryBatchParseResults.has(card.id) ||
+              !card.hasCompleteBatchBlock(streamedText)
+            ) return
+            const parsed = card.parseBatch(streamedText, ctx.catalog)
+            retryBatchParseResults.set(card.id, parsed)
+            warnUnknownSourceKeys(card, parsed)
+            if (parsed) {
+              publishCardResult(card, parsed)
+              madeProgress = true
+            }
+          })
+          return madeProgress
         }
-        try {
-          settled[moduleIndex] = {
-            status: 'fulfilled',
-            value: await runModule(moduleRequest),
+        const { fullText: full, timedOut } = await streamWithCardProgressTimeout({
+          stream: (signal, onChunk) => ctx.ai.stream(retryBatchMessages, {
+            modelId: ctx.modelId,
+            operationKey: ctx.operationKey,
+            diagnosticFeature: 'medical-summary',
+            throwOnAbort: true,
+            signal,
+            ...(isLocalModel
+              ? { temperature: 0, reasoningEffort: 'low' as const }
+              : {}),
+            onChunk,
+          }),
+          onChunk: parseRetryChunk,
+          timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
+        })
+        if (timedOut && process.env.NODE_ENV !== 'production') {
+          console.info(
+            `[medical-summary] batch attempt ${attempt} aborted after 45s without a new valid card`,
+          )
+        }
+        cardsToRetry.forEach((card) => {
+          const cardIndex = targetCards.indexOf(card)
+          const hadStreamParse = retryBatchParseResults.has(card.id)
+          const parsed = hadStreamParse
+            ? retryBatchParseResults.get(card.id) ?? null
+            : card.parseBatch(full, ctx.catalog)
+          if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
+          if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
+          if (parsed) {
+            settled[cardIndex] = {
+              status: 'fulfilled',
+              value: { cardId: card.id, result: parsed },
+            }
+          } else if (timedOut) {
+            settled[cardIndex] = {
+              status: 'rejected',
+              reason: new MedicalSummaryCardProgressTimeoutError(
+                MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS,
+              ),
+            }
+          } else {
+            markValidationError(card.id)
+            settled[cardIndex] = {
+              status: 'fulfilled',
+              value: { cardId: card.id, error: 'PARSE_FAILED' },
+            }
           }
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') throw error
-          settled[moduleIndex] = { status: 'rejected', reason: error }
-        }
+        })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error
+        cardsToRetry.forEach((card) => {
+          const parsed = retryBatchParseResults.get(card.id)
+          settled[targetCards.indexOf(card)] = parsed
+            ? { status: 'fulfilled', value: { cardId: card.id, result: parsed } }
+            : { status: 'rejected', reason: error }
+        })
       }
     }
 
@@ -369,62 +509,83 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     )
     if (aborted?.status === 'rejected') throw aborted.reason
 
-    let draft = generateMedicalSummaryUseCase.createAiDraftFromResult(retryRequest?.baseResult)
-    const moduleErrors: MedicalSummaryModuleErrors = {
-      ...(retryRequest?.baseResult.moduleErrors ?? {}),
+    let aggregate: MedicalSummaryCardAggregate = {
+      summary: generateMedicalSummaryUseCase.createAiDraftFromResult(retryRequest?.baseResult),
+      safety: retryRequest?.baseResult.safety,
+    }
+    const cardErrors: MedicalSummaryCardErrors = {
+      ...(retryRequest?.baseResult.cardErrors ?? {}),
     }
     settled.forEach((outcome, index) => {
-      const moduleId = targetModuleIds[index]
+      const card = targetCards[index]
       if (outcome.status === 'rejected') {
-        moduleErrors[moduleId] = getUserErrorMessage(outcome.reason)
+        cardErrors[card.id] = getUserErrorMessage(outcome.reason)
         return
       }
       if ('error' in outcome.value) {
-        moduleErrors[moduleId] = outcome.value.error
+        cardErrors[card.id] = outcome.value.error
         return
       }
-      draft = generateMedicalSummaryUseCase.mergeModuleResult(
-        draft,
-        moduleId,
-        outcome.value.result,
-      )
-      delete moduleErrors[moduleId]
+      aggregate = card.apply(aggregate, outcome.value.result, ctx.catalog)
+      completedCardIds.add(card.id)
+      delete cardErrors[card.id]
     })
 
-    const finalized = generateMedicalSummaryUseCase.finalizeResult(draft, ctx.catalog, {
-      clinicalData: ctx.clinicalData ?? undefined,
-      audience: ctx.audience === 'patient' ? 'patient' : 'medical',
-      locale: outputLocale,
-      strictGrounding: isLocalModel,
-    })
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(
+      aggregate.summary,
+      ctx.catalog,
+      {
+        clinicalData: ctx.clinicalData ?? undefined,
+        audience: ctx.audience === 'patient' ? 'patient' : 'medical',
+        locale: outputLocale,
+        strictGrounding: isLocalModel,
+      },
+    )
     const generatedAt = Date.now()
     return {
       ...finalized,
-      moduleErrors: Object.keys(moduleErrors).length > 0 ? moduleErrors : undefined,
-      generation: {
-        source: 'live',
-        // This is the resolved model that actually ran, not the raw picker
-        // preference (which may have fallen back because a key was missing).
-        modelId: ctx.modelId,
-        modelName: ctx.modelName,
-        generatedAt,
-      },
+      safety: aggregate.safety
+        ? { ...aggregate.safety, generation: generation(generatedAt) }
+        : undefined,
+      cardErrors: Object.keys(cardErrors).length > 0 ? cardErrors : undefined,
+      completedCardIds: [...completedCardIds],
+      generation: generation(generatedAt),
     }
   }, [])
 
   // Demo bundle: runs through the SAME parse → finalize pipeline as a live
   // reply, so citations verify against the real catalog.
   const demoSeed = useCallback((ctx: AiSlotDemoContext): MedicalSummaryResult | null => {
-    const snapshot = demoMedicalSummarySnapshots[ctx.audience === 'patient' ? 'patient' : 'medical']
+    const demoAudience = ctx.audience === 'patient' ? 'patient' : 'medical'
+    const snapshot = remapDemoSnapshotSourceKeys(
+      demoMedicalSummarySnapshots[demoAudience],
+      ctx.catalog,
+    )
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return null
+    const safetySnapshot = remapDemoSnapshotSourceKeys(
+      demoSafetyScanSnapshots[demoAudience],
+      ctx.catalog,
+    )
+    const safety = MEDICAL_SUMMARY_CARD_REGISTRY.safety.parseRetry(
+      JSON.stringify(safetySnapshot),
+      ctx.catalog,
+    )
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData,
-      audience: ctx.audience === 'patient' ? 'patient' : 'medical',
+      audience: demoAudience,
       locale: 'zh-TW',
     })
     return {
       ...finalized,
+      safety: safety
+        ? {
+            ...(safety as NonNullable<MedicalSummaryResult['safety']>),
+            scannedCount: ctx.catalog.length,
+            generation: DEMO_SAFETY_SCAN_GENERATION,
+          }
+        : undefined,
+      completedCardIds: [...MEDICAL_SUMMARY_CARD_IDS],
       generation: DEMO_MEDICAL_SUMMARY_GENERATION,
     }
   }, [])
@@ -455,6 +616,14 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     () => (slot.dataReady && slot.clinicalData ? buildCoverageStats(slot.clinicalData) : null),
     [slot.dataReady, slot.clinicalData],
   )
+  const catalogByKey = useMemo(
+    () => new Map(slot.catalog.map((entry) => [entry.key, entry])),
+    [slot.catalog],
+  )
+  const resolveSource = useCallback(
+    (key: string) => catalogByKey.get(key.trim()),
+    [catalogByKey],
+  )
 
   // The picker restores that model's latest completed summary when available.
   // If its slot is empty, the shared hook keeps the last visible summary until
@@ -472,15 +641,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
 
   const retryFailedModules = useCallback(async () => {
     const exactResult = medicalSummaryStore.getState().byKey[generationSlotKey]
-    const moduleIds = MEDICAL_SUMMARY_MODULE_IDS.filter(
-      (moduleId) => Boolean(exactResult?.moduleErrors?.[moduleId]),
+    const cardIds = MEDICAL_SUMMARY_CARD_IDS.filter(
+      (cardId) => Boolean(exactResult?.cardErrors?.[cardId]),
     )
-    if (!exactResult || moduleIds.length === 0) {
+    if (!exactResult || cardIds.length === 0) {
       await generate()
       return
     }
     const request = {
-      moduleIds,
+      cardIds,
       baseResult: exactResult,
     }
     moduleRetryRequestsRef.current.set(generationSlotKey, request)
@@ -560,6 +729,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     generationSlotKey: slot.slotKey,
     isCurrentSlotGenerating: slot.isRunning,
     readGenerationSlot,
+    resolveSource,
     isHydrated: slot.isHydrated,
     autoGenerate,
     setAutoGenerate,

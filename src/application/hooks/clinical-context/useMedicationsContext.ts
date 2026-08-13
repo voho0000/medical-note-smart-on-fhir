@@ -6,7 +6,11 @@ import { useMemo } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
-import { pickAiMedicationName } from "@/src/shared/utils/fhir-display-helpers"
+import type { MedicationEntity } from "@/src/core/entities/clinical-data.entity"
+import {
+  medicationSourceCode,
+  pickAiMedicationName,
+} from "@/src/shared/utils/fhir-display-helpers"
 import { routeAbbr } from "@/src/shared/utils/route-display"
 import { useNow } from "@/src/shared/hooks/use-now.hook"
 import {
@@ -30,6 +34,11 @@ interface MedSummary {
   state: 'current' | 'ended' | 'other'
   status: string
   isChronic: boolean
+  /** Exact source product code used to resolve the adjacent governed
+   * terminology. Kept on the same summary row so A/B/C medicines cannot pick
+   * up one another's ingredient or ATC classification. */
+  drugCode?: string
+  drugTerminology?: MedicationEntity['drugTerminology']
   /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
   refillCount?: number
   /** Prescribing / dispensing facility (MedicationRequest.requester.display).
@@ -95,6 +104,8 @@ function summarize(
     state,
     status,
     isChronic: isChronicMedicationRecord(med),
+    drugCode: medicationSourceCode(med) || undefined,
+    drugTerminology: med.drugTerminology,
     org: med.requester?.display,
   }
 }
@@ -104,6 +115,44 @@ function summarize(
  *  source. */
 function isPharmacyOrg(org?: string): boolean {
   return /藥局|藥房/.test(org ?? '')
+}
+
+function formatNhiTerminology(m: MedSummary): string | undefined {
+  const terminology = m.drugTerminology
+  if (!terminology) return undefined
+
+  const atcNames = [terminology.atcNameEn, terminology.atcNameZh]
+    .filter((value, index, values): value is string =>
+      Boolean(value?.trim()) && values.indexOf(value) === index,
+    )
+  const subgroupNames = [
+    terminology.atcLevel2NameEn,
+    terminology.atcLevel2NameZh,
+  ].filter((value, index, values): value is string =>
+    Boolean(value?.trim()) && values.indexOf(value) === index,
+  )
+  const fields = [
+    m.drugCode ? `NHI code=${m.drugCode}` : undefined,
+    terminology.ingredientText
+      ? `ingredient/strength=${terminology.ingredientText}`
+      : undefined,
+    terminology.officialNameZh
+      ? `official product zh=${terminology.officialNameZh}`
+      : undefined,
+    terminology.officialNameEn
+      ? `official product en=${terminology.officialNameEn}`
+      : undefined,
+    terminology.doseForm ? `dose form=${terminology.doseForm}` : undefined,
+    terminology.atcCode
+      ? `ATC=${terminology.atcCode}${atcNames.length > 0 ? ` · ${atcNames.join(' / ')}` : ''}`
+      : undefined,
+    terminology.atcLevel2Code
+      ? `ATC therapeutic subgroup=${terminology.atcLevel2Code}${subgroupNames.length > 0 ? ` · ${subgroupNames.join(' / ')}` : ''}`
+      : undefined,
+    `source=${terminology.source}@${terminology.snapshotId}`,
+  ].filter((value): value is string => Boolean(value))
+
+  return `[NHI terminology matched to this exact medication record: ${fields.join('; ')}]`
 }
 
 function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string {
@@ -126,6 +175,8 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string 
   if (m.refillCount && m.refillCount > 1) {
     parts.push(`(${m.refillCount} refills)`)
   }
+  const terminology = formatNhiTerminology(m)
+  if (terminology) parts.push(terminology)
   const statusSemantics = m.status === 'entered-in-error'
     ? '; INVALIDATED—do not treat as a medication'
     : m.status === 'draft'
@@ -171,6 +222,8 @@ function dedupByDrug(meds: MedSummary[]): MedSummary[] {
       existing.dose = m.dose ?? existing.dose
       existing.frequency = m.frequency ?? existing.frequency
       existing.route = m.route ?? existing.route
+      existing.drugCode = m.drugCode ?? existing.drugCode
+      existing.drugTerminology = m.drugTerminology ?? existing.drugTerminology
     }
     // Keep earliest startedOn so "since" stays meaningful.
     if (m.startedOn && (!existing.startedOn || m.startedOn < existing.startedOn)) {
@@ -272,7 +325,11 @@ export function useMedicationsContext(
     }
 
     if (items.length === 0) return null
-    items.push('', 'Record-fidelity note: visit-linked medication records may also appear under their visit; do not count repeated records as separate prescriptions.')
+    items.push(
+      '',
+      'Record-fidelity note: visit-linked medication records may also appear under their visit; do not count repeated records as separate prescriptions.',
+      'Terminology note: each NHI terminology block belongs only to the medication row that contains it. It can establish that product\'s ingredient/strength, dose form, and ATC classification, but it does not establish why this patient received it, actual use/adherence, or clinical outcome.',
+    )
     return { title: "Patient's Medications", items }
   }, [includeMedications, clinicalData, filters, nowMs])
 }

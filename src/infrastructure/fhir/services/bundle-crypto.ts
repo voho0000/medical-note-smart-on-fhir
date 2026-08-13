@@ -87,6 +87,20 @@ export async function getSessionBundleKey(opts?: { create?: boolean }): Promise<
   }
 }
 
+/** Start a fresh encryption boundary for a newly imported Bundle. A browser
+ * may clone sessionStorage when a page opens another tab; rotating here keeps
+ * the new tab's patient payload and AI caches cryptographically independent
+ * from the opener after its own import begins. */
+export async function rotateSessionBundleKey(): Promise<CryptoKey | null> {
+  if (typeof window === 'undefined' || !window.crypto?.subtle) return null
+  try {
+    window.sessionStorage.removeItem(KEY_STORAGE)
+  } catch {
+    return null
+  }
+  return getSessionBundleKey({ create: true })
+}
+
 export function clearSessionBundleKey(): void {
   try {
     window.sessionStorage.removeItem(KEY_STORAGE)

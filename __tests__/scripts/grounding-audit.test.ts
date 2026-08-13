@@ -1,13 +1,15 @@
-// The deterministic "second pass": a bundle-grounded audit that catches
-// hallucinations mere citation-resolution misses. Empirically an LLM verifier
-// (flash-lite / flash-preview) MISSED the fabricated 內視鏡 these tests pin;
-// this deterministic check does not, and it does not false-flag a legitimate
-// "arrange an echo" recommendation.
-import { auditSummaryGrounding, auditSafetyGrounding } from '@/scripts/lib/grounding-audit'
+// The deterministic audit catches unsupported examination names that mere
+// citation-resolution misses, while retaining legitimate recommendations and
+// prose found inside decoded clinical documents.
+import {
+  auditSummaryGrounding,
+  auditSafetyGrounding,
+  buildGroundingAuditInput,
+} from '@/scripts/lib/grounding-audit'
 
 // Bundle text that contains a chest X-ray + creatinine + ECG, but NO endoscopy
 // and NO echocardiogram.
-const bundleBlob = JSON.stringify({ reports: ['胸腔檢查', '肌酸酐、血', '心電圖'] })
+const clinicalEvidenceText = JSON.stringify({ reports: ['胸腔檢查', '肌酸酐、血', '心電圖'] })
 const catalog = [
   { key: 'L1', display: '胸腔檢查（各種角度部位）', resourceType: 'DiagnosticReport' },
   { key: 'L7', display: '肌酸酐、血', resourceType: 'DiagnosticReport' },
@@ -15,7 +17,7 @@ const catalog = [
   { key: 'L30', display: '腹部超音波，追蹤性', resourceType: 'DiagnosticReport' },
   { key: 'E5', display: '門診（K317 胃及十二指腸息肉）', resourceType: 'Encounter' },
 ]
-const input = { bundleBlob, catalog }
+const input = { clinicalEvidenceText, catalog }
 
 describe('auditSummaryGrounding', () => {
   it('flags a problem whose basis names an absent endoscopy', () => {
@@ -75,6 +77,74 @@ describe('auditSummaryGrounding', () => {
       timeline: [{ label: '胸部X光追蹤', ref: 'L1' }],
     }
     expect(auditSummaryGrounding(ai, input)).toEqual([])
+  })
+
+  it('searches decoded free text from a Base64 HTML discharge summary', () => {
+    const html = '<html><body><p>PANENDOSCOPY. Impression: Reflux esophagitis and erythematous gastritis.</p></body></html>'
+    const clinicalData = {
+      documentReferences: [{
+        id: 'discharge-1',
+        status: 'current',
+        type: { text: '出院病摘', coding: [{ code: '18842-5' }] },
+        content: [{
+          attachment: {
+            contentType: 'text/html',
+            title: '出院病摘',
+            data: Buffer.from(html, 'utf8').toString('base64'),
+          },
+        }],
+      }],
+    }
+    const decodedInput = buildGroundingAuditInput(clinicalData, [{
+      key: 'D1',
+      display: '出院病摘',
+      resourceType: 'DocumentReference',
+      resourceId: 'discharge-1',
+    }])
+    const ai = {
+      timeline: [{
+        label: '住院期間接受上消化道內視鏡檢查，顯示逆流性食道炎與胃炎',
+        ref: 'D1',
+        documentEvidence: [{
+          source: 'D1',
+          quote: 'PANENDOSCOPY. Impression: Reflux esophagitis and erythematous gastritis.',
+        }],
+      }],
+    }
+
+    expect(decodedInput.clinicalEvidenceText).not.toContain('內視鏡')
+    expect(decodedInput.clinicalEvidenceText).toContain('PANENDOSCOPY')
+    expect(auditSummaryGrounding(ai, decodedInput)).toEqual([])
+  })
+
+  it('flags a free-text document claim when its original-language quote is missing or changed', () => {
+    const inputWithDocument = {
+      clinicalEvidenceText: 'PANENDOSCOPY. Impression: Reflux esophagitis.',
+      catalog: [{
+        key: 'D1',
+        display: '出院病摘',
+        resourceType: 'DocumentReference',
+        resourceId: 'discharge-1',
+        getContentText: () => 'PANENDOSCOPY. Impression: Reflux esophagitis.',
+      }],
+    }
+    const missing = {
+      timeline: [{ label: '接受胃鏡檢查', ref: 'D1' }],
+    }
+    const translatedInsteadOfQuoted = {
+      timeline: [{
+        label: '接受胃鏡檢查',
+        ref: 'D1',
+        documentEvidence: [{ source: 'D1', quote: '接受胃鏡檢查' }],
+      }],
+    }
+
+    expect(auditSummaryGrounding(missing, inputWithDocument)).toEqual([
+      expect.stringContaining('missing verbatim document evidence for D1'),
+    ])
+    expect(auditSummaryGrounding(translatedInsteadOfQuoted, inputWithDocument)).toEqual([
+      expect.stringContaining('document evidence quote not found verbatim in D1'),
+    ])
   })
 })
 

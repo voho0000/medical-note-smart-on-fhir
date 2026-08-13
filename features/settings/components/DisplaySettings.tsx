@@ -18,7 +18,7 @@ import { useTheme } from '@/src/application/providers/theme.provider'
 import { useFontSize, type FontSize } from '@/src/application/providers/font-size.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
-import { useFhirContext, LOCAL_BUNDLE_FHIR_URL } from '@/src/application/hooks/chat/use-fhir-context.hook'
+import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
@@ -41,7 +41,7 @@ export function DisplaySettings() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const hasConnectionInfo = !!(fhirServerUrl || patientId)
-  const isLocalBundle = fhirServerUrl === LOCAL_BUNDLE_FHIR_URL
+  const isLocalBundle = isLocalBundleFhirUrl(fhirServerUrl)
   const fhirServerDisplay = isLocalBundle
     ? ((t.connectionInfo as any)?.localBundle ?? '本地匯入 FHIR Bundle')
     : fhirServerUrl

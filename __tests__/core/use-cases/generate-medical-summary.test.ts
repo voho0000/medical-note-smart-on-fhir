@@ -6,11 +6,25 @@ import {
   buildSourceCatalog,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
+  getSourceCatalog,
   scopeDocumentSources,
   classifyEncounterClass,
   normaliseSummarySourceKey,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
-import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import {
+  MEDICAL_SUMMARY_CARD_REGISTRY,
+  registeredMedicalSummaryCards,
+} from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import {
+  listClinicalDocuments,
+  resolveSelectedDocuments,
+} from '@/src/core/utils/clinical-documents.utils'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import {
+  DEFAULT_DATA_FILTERS,
+  DEFAULT_DATA_SELECTION,
+} from '@/src/shared/constants/data-selection.constants'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -84,6 +98,69 @@ describe('buildSourceCatalog', () => {
     })
     expect(byKey.get('L1')).toMatchObject({ resourceId: 'rep-1', display: 'HbA1c' })
     expect(byKey.get('C1')).toMatchObject({ resourceId: 'cond-1' })
+  })
+
+  it('cites Health Bank lab Observations without indexing their bridge-generated report containers', () => {
+    const catalog = buildSourceCatalog({
+      diagnosticReports: [
+        {
+          id: 'synthetic-cbc',
+          meta: { source: 'nhi-fhir-bridge/scraper' },
+          category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+          code: { text: 'CBC' },
+          result: [{ reference: 'Observation/hb' }],
+          effectiveDateTime: '2026-05-05',
+        },
+        {
+          id: 'real-r8-report',
+          meta: {
+            source: 'https://nhi-fhir-bridge.github.io/source/health-bank-sdk-json',
+            tag: [{
+              system: 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section',
+              code: 'r8',
+            }],
+          },
+          category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }],
+          code: { text: 'Chest X-ray' },
+          conclusion: 'No acute pulmonary finding.',
+          effectiveDateTime: '2026-05-04',
+        },
+      ],
+      observations: [{
+        id: 'hb',
+        meta: { source: 'nhi-fhir-bridge/scraper' },
+        code: { text: 'Hb' },
+        effectiveDateTime: '2026-05-05',
+        valueQuantity: { value: 9.2, unit: 'g/dL' },
+      }],
+    })
+
+    expect(catalog.find((source) => source.resourceId === 'synthetic-cbc')).toBeUndefined()
+    expect(catalog.find((source) => source.resourceId === 'hb')).toMatchObject({
+      key: 'O1',
+      resourceType: 'Observation',
+      display: 'Hb',
+    })
+    expect(catalog.find((source) => source.resourceId === 'real-r8-report')).toMatchObject({
+      key: 'L2',
+      resourceType: 'DiagnosticReport',
+    })
+  })
+
+  it('does not classify an ordinary server DiagnosticReport as a synthetic Health Bank grouping', () => {
+    const catalog = buildSourceCatalog({
+      diagnosticReports: [{
+        id: 'server-cbc',
+        category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+        code: { text: 'CBC' },
+        result: [{ reference: 'Observation/server-hb' }],
+        effectiveDateTime: '2026-05-05',
+      }],
+    })
+
+    expect(catalog).toEqual([
+      expect.objectContaining({ resourceId: 'server-cbc', resourceType: 'DiagnosticReport' }),
+    ])
   })
 
   it('uses English encounter type and ICD display while preserving the organization', () => {
@@ -297,9 +374,11 @@ describe('buildSourceCatalog — clinical documents', () => {
 
 describe('buildLongitudinalInvestigationContext', () => {
   it('surfaces serial labs and imaging from all available reports so they are not labeled single', () => {
+    const bridgeLabMeta = { meta: { source: 'nhi-fhir-bridge/scraper' } }
     const input = {
       diagnosticReports: [
         {
+          ...bridgeLabMeta,
           id: 'a1c-new',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -307,6 +386,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-new' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-old',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -314,6 +394,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-old' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-mid-1',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -321,6 +402,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-mid-1' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-mid-2',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -328,6 +410,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-mid-2' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'psa-new',
           category: [{ text: 'Laboratory' }],
           code: { text: 'PSA' },
@@ -335,6 +418,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-psa-new' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'psa-old',
           category: [{ text: 'Laboratory' }],
           code: { text: 'PSA' },
@@ -400,11 +484,11 @@ describe('buildLongitudinalInvestigationContext', () => {
 
     expect(context).toContain('NOT a single result')
     expect(context).not.toContain('6.7 % (2025-12-09;')
-    expect(context).toContain('HbA1c: 7 % (2026-01-08;')
-    expect(context).toContain('6.8 % (2026-03-10;')
-    expect(context).toContain('6.6 % (2026-06-02;')
-    expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10;')
-    expect(context).toContain('0.64 ng/mL (2026-06-02;')
+    expect(context).toContain('HbA1c: 7 % (2026-01-08; O4)')
+    expect(context).toContain('6.8 % (2026-03-10; O3)')
+    expect(context).toContain('6.6 % (2026-06-02; O1)')
+    expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10; O6)')
+    expect(context).toContain('0.64 ng/mL (2026-06-02; O2)')
     expect(context).toContain('胸腔檢查:')
     expect(context).toContain('2026-05-25;')
     expect(context).toContain('2026-06-02;')
@@ -601,6 +685,87 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
+  it('builds one batch from the six registered cards with Safety last', () => {
+    const cards = registeredMedicalSummaryCards(input)
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(cards.map((card) => card.id)).toEqual([
+      'priorities',
+      'problems',
+      'timeline',
+      'investigations',
+      'medications',
+      'safety',
+    ])
+    expect(prompt).toContain('Generate all 6 registered cards')
+    expect(prompt).not.toContain('Output ONLY a JSON object matching this schema')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+    expect(prompt).toContain('<<<END_MEDIPRISMA_MODULE:safety>>>')
+    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
+      .toBeGreaterThan(prompt.indexOf('<<<END_MEDIPRISMA_MODULE:medications>>>'))
+    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+  })
+
+  it('puts the compact priorities card first for a local endpoint', () => {
+    const cards = registeredMedicalSummaryCards({
+      ...input,
+      harnessProfile: 'local-small',
+    })
+
+    expect(cards.map((card) => card.id)).toEqual([
+      'priorities',
+      'medications',
+      'problems',
+      'timeline',
+      'investigations',
+      'safety',
+    ])
+  })
+
+  it('supports removing a card without adding an orchestration branch', () => {
+    const cards = registeredMedicalSummaryCards(input, [
+      'priorities',
+      'problems',
+      'timeline',
+      'investigations',
+      'medications',
+    ])
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(MEDICAL_SUMMARY_CARD_REGISTRY.safety.id).toBe('safety')
+    expect(prompt).toContain('Generate all 5 registered cards')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+  })
+
+  it('builds one retry batch containing only the failed registered cards', () => {
+    const cards = registeredMedicalSummaryCards(input, [
+      'problems',
+      'timeline',
+      'investigations',
+    ])
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('Generate all 3 registered cards')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:timeline>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:investigations>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:priorities>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:medications>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+  })
+
   it('can build a smaller requested-module batch for local-model A/B evaluation', () => {
     const messages = useCase.buildBatchModuleMessages(input, [
       'medications',
@@ -764,6 +929,20 @@ describe('modular summary generation contract', () => {
       .toEqual([])
   })
 
+  it('does not treat a parseable streaming block as complete before its closing marker', () => {
+    const openBlock = [
+      '<<<MEDIPRISMA_MODULE:problems>>>',
+      JSON.stringify({ problems: [] }),
+    ].join('\n')
+
+    expect(useCase.parseBatchModuleResult('problems', openBlock)?.problems).toEqual([])
+    expect(useCase.hasCompleteBatchModuleBlock('problems', openBlock)).toBe(false)
+    expect(useCase.hasCompleteBatchModuleBlock(
+      'problems',
+      `${openBlock}\n<<<END_MEDIPRISMA_MODULE:problems>>>`,
+    )).toBe(true)
+  })
+
   it('repairs harmless citation formatting and reports only truly unknown keys', () => {
     const problems = useCase.parseModuleResult('problems', JSON.stringify({
       problems: [{
@@ -850,6 +1029,29 @@ describe('medication education prompt contract', () => {
     expect(prompt).toContain('do not create a reconciliation item merely to ask how often')
     expect(prompt).toContain('A single completed historical chronic prescription is NOT enough')
     expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
+  })
+
+  it('uses exact same-row NHI terminology ahead of administrative categories', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('NHI terminology matched to this exact medication record')
+    expect(prompt).toContain('never transfer terminology between medication rows')
+    expect(prompt).toContain('take precedence over MedicationRequest.category')
+    expect(prompt).toContain('source/administrative metadata')
+    expect(prompt).toContain('does NOT establish this patient\'s indication')
+    expect(prompt).toContain('valid for EVERY medicine in that item')
+    expect(prompt).toContain('Never copy a mechanism, expected effect, or adverse-effect reminder')
+
+    const localPrompt = useCase.buildModuleMessages({
+      ...input,
+      audience: 'medical',
+      harnessProfile: 'local-small',
+    }, 'medications')[0].content
+    expect(localPrompt).toContain('same-row NHI terminology block')
+    expect(localPrompt).toContain('overrides a conflicting administrative MedicationRequest.category')
+    expect(localPrompt).toContain('Never transfer terminology across rows')
+    expect(localPrompt).toContain('one medicine cannot inherit another medicine\'s mechanism or adverse effects')
   })
 
   it('asks for cross-record medication insight beyond classification', () => {
@@ -1320,6 +1522,90 @@ describe('finalizeResult', () => {
     expect(num('M1')).toBeLessThan(num('C1'))
   })
 
+  it('preserves the model medication group so terminology mistakes remain visible', () => {
+    const medications = [{
+      id: 'betmiga',
+      status: 'active',
+      authoredOn: '2026-07-01',
+      medicationCodeableConcept: {
+        coding: [{
+          system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+          code: 'BC26216100',
+          display: 'Betmiga Prolonged-release Tablets 50mg',
+        }],
+      },
+      // Deliberately conflicting source/administrative label.
+      category: [{ text: '抗膽鹼藥物', coding: [{ display: 'ANTICHOLINERGICS' }] }],
+      drugTerminology: {
+        source: 'nhi-official-drug-master' as const,
+        snapshotId: 'nhi-drug-terminology-20260728',
+        ingredientText: 'Mirabegron 50 MG',
+        atcCode: 'G04BD12',
+        atcNameEn: 'mirabegron',
+        atcLevel2Code: 'G04',
+        atcLevel2NameZh: '泌尿系統用藥',
+        atcLevel2NameEn: 'UROLOGICALS',
+      },
+    }]
+    const medicationCatalog = buildSourceCatalog({ medications })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: {
+        regimen: [{
+          group: '抗膽鹼藥物',
+          name: 'Betmiga Prolonged-release Tablets 50mg',
+          sources: ['M1'],
+        }],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: false,
+    })
+
+    expect(result.medicationReview.regimen[0]).toMatchObject({
+      group: '抗膽鹼藥物',
+      name: 'Betmiga Prolonged-release Tablets 50mg',
+    })
+
+    const treatmentAreaResult = useCase.finalizeResult({
+      ...ai,
+      medicationReview: {
+        ...ai.medicationReview,
+        regimen: [{
+          group: '攝護腺／膀胱',
+          name: 'Betmiga Prolonged-release Tablets 50mg',
+          sources: ['M1'],
+        }],
+      },
+    }, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: false,
+    })
+    expect(treatmentAreaResult.medicationReview.regimen[0].group)
+      .toBe('攝護腺／膀胱')
+
+    const strictResult = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: true,
+    })
+    expect(strictResult.medicationReview.regimen[0].group)
+      .toBe('抗膽鹼藥物')
+  })
+
   it('passes the clinician overview through and grounds condition-without-therapy on condition/lab keys', () => {
     const ai = {
       headline: 'h',
@@ -1596,43 +1882,47 @@ describe('finalizeResult', () => {
     expect(result.medicationReview.regimen).toEqual([])
   })
 
-  it('keeps demo Forxiga while excluding completed-only Uretropic history', () => {
+  it('keeps the latest demo Forxiga while excluding completed-only Uretropic history', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bundle = require('../../../public/demo/demo-bundle.json') as {
-      entry: Array<{ resource: Record<string, unknown> & { resourceType?: string } }>
-    }
-    const medications = bundle.entry
-      .map((entry) => entry.resource)
-      .filter((resource) => resource.resourceType === 'MedicationRequest') as unknown as MedicationEntity[]
-    const demoCatalog = buildSourceCatalog({ medications })
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const parsedData = LocalBundleService.parse(bundle)
+    expect(parsedData).not.toBeNull()
+    const includedDocumentIds = resolveSelectedDocuments(
+      listClinicalDocuments(parsedData!.collection),
+      'latestAdmission',
+      [],
+    ).map((document) => document.id)
+    const scopedClinicalData = scopeClinicalDataForAi(
+      parsedData!.collection,
+      DEFAULT_DATA_SELECTION,
+      DEFAULT_DATA_FILTERS,
+      includedDocumentIds,
+    )
+    const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { demoMedicalSummarySnapshots } = require('../../../src/infrastructure/demo/demo-ai-snapshots')
     const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots.medical))
     expect(parsed).not.toBeNull()
 
     const result = useCase.finalizeResult(parsed!, demoCatalog, {
-      clinicalData: { medications },
+      clinicalData: scopedClinicalData,
       audience: 'medical',
       locale: 'zh-TW',
     })
     expect(result.medicationReview.regimen).toHaveLength(8)
-    expect(result.medicationReview.overview).toContain('進階治療型態')
-    expect(result.medicationReview.regimen[0]).toMatchObject({
-      group: '血糖／腎臟',
-      name: 'Forxiga Film-coated Tablets 10mg',
-    })
+    expect(result.medicationReview.overview).toContain('2026年7至8月')
     const forxiga = result.medicationReview.regimen.find(
       (item) => item.name.includes('Forxiga'),
     )
 
-    expect(forxiga).toMatchObject({ group: '血糖／腎臟', sig: undefined })
+    expect(forxiga).toMatchObject({ group: '血糖／腎臟', name: 'Forxiga 10mg', sig: undefined })
     expect(result.medicationReview.regimen.some((item) => item.group === '同次慢箋')).toBe(false)
     expect(result.medicationReview.regimen.find((item) => item.name.includes('PATEAR')))
-      .toMatchObject({ group: '眼表潤滑' })
+      .toMatchObject({ group: '眼科' })
     expect(result.medicationReview.regimen.some((item) => item.name.includes('URETROPIC'))).toBe(false)
     expect(result.medicationReview.changes).toEqual([])
-    expect(result.medicationReview.regimen.find((item) => item.group === '青光眼')?.name)
-      .toContain('三種降眼壓藥併用')
+    expect(result.medicationReview.regimen.find((item) => item.group === '眼科')?.name)
+      .toContain('Brimonin')
     // Exactly ONE reconciliation item survives the quality bar. Deliberately
     // absent: the Alphagan P → Brimonin same-institution brand switch (a clean
     // sequential switch answers itself from the record) and an Imimine
@@ -1644,13 +1934,20 @@ describe('finalizeResult', () => {
         text: expect.stringContaining('Sennosides'),
       }),
     ])
-    const citedResourceIds = forxiga?.sourceKeys.map(
-      (key) => demoCatalog.find((source) => source.key === key)?.resourceId,
+    const citedSources = forxiga?.sourceKeys.map(
+      (key) => demoCatalog.find((source) => source.key === key),
+    ) ?? []
+    const forxigaMedications = (scopedClinicalData.medications ?? []).filter((medication) =>
+      medication.medicationCodeableConcept?.coding?.some((coding) =>
+        coding.display?.includes('Forxiga'),
+      ),
     )
-    expect(citedResourceIds).toEqual(expect.arrayContaining([
-      'demo-medicationrequest-29', // continuous / 慢箋 evidence
-      'demo-medicationrequest-99', // latest pharmacy record
-    ]))
+    const latestForxiga = [...forxigaMedications]
+      .sort((a, b) => (b.authoredOn ?? '').localeCompare(a.authoredOn ?? ''))[0]
+
+    expect(citedSources).not.toContain(undefined)
+    expect(citedSources.every((source) => source?.display.includes('Forxiga'))).toBe(true)
+    expect(citedSources.map((source) => source?.resourceId)).toContain(latestForxiga?.id)
   })
 
   it('rescues quoted key phrases when zero highlights survive', () => {

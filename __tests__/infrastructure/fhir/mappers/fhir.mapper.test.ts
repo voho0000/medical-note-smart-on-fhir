@@ -484,6 +484,28 @@ describe('FhirMapper', () => {
       expect(result.identifier?.[0].value).toBe('ACC-123')
       expect(result.imagingStudy).toEqual([{ reference: 'ImagingStudy/study-1' }])
     })
+
+    it('preserves the live NHI Viewer request extension without resolving a URL', () => {
+      const extension = [{
+        url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request',
+        extension: [
+          { url: 'version', valueInteger: 1 },
+          { url: 'proc-id', valueCode: 'IMUE0130' },
+          { url: 'patient-context-hash', valueString: 'a'.repeat(64) },
+          { url: 'ipl-case-seq-no', valueString: 'CASE-123' },
+        ],
+      }]
+      const result = FhirMapper.toDiagnosticReport({
+        resourceType: 'DiagnosticReport',
+        id: 'dr-live-viewer',
+        status: 'final',
+        code: { text: 'Chest CT' },
+        extension,
+      }, [])
+
+      expect(result.extension).toEqual(extension)
+      expect(JSON.stringify(result)).not.toContain('nhi.gov.tw')
+    })
   })
 
   describe('toImagingStudy', () => {

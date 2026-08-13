@@ -10,7 +10,7 @@ import {
 } from '@/src/shared/utils/context-budget'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
-export type ClinicalContextFitTier = 'full' | 'compact' | 'tight'
+export type ClinicalContextFitTier = 'full' | 'prioritized' | 'trimmed' | 'compact' | 'tight'
 
 /** Structural counterpart of the application-layer ConsumerProfile. Keeping
  * this core utility independent of React/provider code makes it reusable in
@@ -67,15 +67,28 @@ function capLabDepth(
   return value === 'latest' || value === '3' ? value : '3'
 }
 
+const MIN_REQUEST_OVERHEAD_RESERVE = 8_000
+const MAX_REQUEST_OVERHEAD_RESERVE = 32_000
+const REQUEST_OVERHEAD_RESERVE_FRACTION = 0.15
+
 /**
- * Keep selected clinical text well below the raw input ceiling. The remaining
- * space is intentionally substantial: structured summary requests also carry
- * the source catalog, longitudinal evidence, safety rules, JSON contracts and
- * language instructions.
+ * Reserve a bounded amount for system instructions, output contracts and the
+ * source catalog instead of limiting every model to a fixed fraction of its
+ * window. Small windows keep at least 8K of headroom; larger windows reserve
+ * 15%, capped at 32K so a large model can use the capacity it actually has.
+ * The complete assembled request is still checked against the hard usable
+ * limit immediately before generation.
  */
 export function clinicalContextTokenTarget(contextLimit: number): number {
   const usable = Math.max(1, Math.round(contextLimit) - DEFAULT_RESPONSE_RESERVE)
-  return Math.max(1, Math.floor(usable * 0.55))
+  const requestOverheadReserve = Math.min(
+    MAX_REQUEST_OVERHEAD_RESERVE,
+    Math.max(
+      MIN_REQUEST_OVERHEAD_RESERVE,
+      Math.ceil(usable * REQUEST_OVERHEAD_RESERVE_FRACTION),
+    ),
+  )
+  return Math.max(1, usable - requestOverheadReserve)
 }
 
 /**
@@ -93,7 +106,9 @@ export function buildClinicalContextFitCandidate(
     documentMode: base.documentMode ?? 'latestAdmission',
     documentIds: [...(base.documentIds ?? [])],
   }
-  if (tier === 'full') return { tier, profile: normalizedBase }
+  if (tier === 'full' || tier === 'prioritized' || tier === 'trimmed') {
+    return { tier, profile: normalizedBase }
+  }
 
   const compact = tier === 'compact'
   const filters: DataFilters = {
@@ -172,7 +187,9 @@ export function buildClinicalContextFitCandidate(
 export function nextClinicalContextFitTier(
   tier: ClinicalContextFitTier,
 ): ClinicalContextFitTier {
-  if (tier === 'full') return 'compact'
+  if (tier === 'full') return 'trimmed'
+  if (tier === 'prioritized') return 'trimmed'
+  if (tier === 'trimmed') return 'compact'
   return 'tight'
 }
 
@@ -226,6 +243,18 @@ export function formatClinicalContextAdaptationNotice(
   locale: string,
 ): string {
   const contextLabel = formatApproxTokenCount(adaptation.contextLimit)
+  if (adaptation.tier === 'prioritized') {
+    const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
+    return locale === 'zh-TW'
+      ? `已依模型 ${contextLabel} 內容視窗，逐筆保留活動中問題、過敏、目前用藥、異常與最新檢驗及近期重要紀錄，再從最舊且低優先的資料開始縮減至約 ${adaptedLabel} tokens。來源索引已依實際保留內容重建；你儲存的資料範圍沒有變更。`
+      : `For this model's ${contextLabel}-token context window, active problems, allergies, current medications, abnormal/latest tests, and recent important records were retained first; older low-priority records were then removed record by record to about ${adaptedLabel} tokens. The source index was rebuilt from the retained content, and your saved data scope was not changed.`
+  }
+  if (adaptation.tier === 'trimmed') {
+    const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
+    return locale === 'zh-TW'
+      ? `已依模型 ${contextLabel} 內容視窗，保留原本資料類別與時間範圍，僅將超出預算的文字漸進縮減至約 ${adaptedLabel} tokens，並優先保留高優先段落與最新紀錄。你儲存的資料範圍沒有變更。`
+      : `For this model's ${contextLabel}-token context window, the original categories and time ranges were kept while excess text was progressively reduced to about ${adaptedLabel} tokens, prioritizing high-value sections and the newest records. Your saved data scope was not changed.`
+  }
   const scopeDescription = adaptation.tier === 'compact'
     ? locale === 'zh-TW'
       ? '最多最近 6 個月的主要病歷、每項最多 3 筆檢驗，以及最近一次出院病摘'

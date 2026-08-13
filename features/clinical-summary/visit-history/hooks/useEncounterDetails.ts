@@ -12,7 +12,11 @@ import {
   compareTestsByPreferred,
 } from "@/src/shared/utils/lab-categories"
 import { decodeBase64Utf8 } from "@/src/shared/utils/base64.utils"
-import type { Observation, ReportImage, Row } from "@/features/clinical-summary/reports/types"
+import type { NhiViewerAction, Observation, ReportImage, Row } from "@/features/clinical-summary/reports/types"
+import {
+  getNhiViewerActions,
+  isTrustedLegacyNhiViewerAttachment,
+} from "@/features/clinical-summary/reports/utils/nhi-viewer-request"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -349,9 +353,10 @@ function getDiagnosticReportCategoryText(report: any): string {
   return text && text !== '—' ? text : 'Report'
 }
 
-function collectReportPayload(report: any): { text: string; images: ReportImage[] } {
+function collectReportPayload(report: any): { text: string; images: ReportImage[]; viewerActions: NhiViewerAction[] } {
   const parts: string[] = []
   const images: ReportImage[] = []
+  const viewerActions = getNhiViewerActions(report)
 
   if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
     parts.push(report.conclusion.trim())
@@ -372,6 +377,9 @@ function collectReportPayload(report: any): { text: string; images: ReportImage[
 
   if (Array.isArray(report?.presentedForm)) {
     for (const form of report.presentedForm) {
+      if (isTrustedLegacyNhiViewerAttachment(form)) {
+        continue
+      }
       const contentType = (form?.contentType || '').toLowerCase()
       if (form?._imageRef) {
         images.push({
@@ -403,10 +411,16 @@ function collectReportPayload(report: any): { text: string; images: ReportImage[
     }
   }
 
-  return { text: parts.join('\n\n'), images }
+  return { text: parts.join('\n\n'), images, viewerActions }
 }
 
-function toEncounterReportRow(report: any, title: string, text: string, images: ReportImage[]): Row {
+function toEncounterReportRow(
+  report: any,
+  title: string,
+  text: string,
+  images: ReportImage[],
+  viewerActions: NhiViewerAction[],
+): Row {
   const rawDate = getDiagnosticReportDate(report)
   const status = report?.status
   const reportId = report?.id || `encounter-report-${Math.random().toString(36).slice(2, 10)}`
@@ -429,6 +443,7 @@ function toEncounterReportRow(report: any, title: string, text: string, images: 
     institution: getDiagnosticReportInstitution(report),
     effectiveDate: rawDate,
     images: images.length > 0 ? images : undefined,
+    viewerActions: viewerActions.length > 0 ? viewerActions : undefined,
   }
 }
 
@@ -605,7 +620,7 @@ export function useEncounterDetails(
         // test rows above. Surface it as its own row — otherwise a linked EKG
         // etc. is invisible under the visit despite the encounter link.
         const payload = collectReportPayload(report)
-        if (payload.text || payload.images.length > 0) {
+        if (payload.text || payload.images.length > 0 || payload.viewerActions.length > 0) {
           const reportId = report?.id || `${encounterId}-report-${entry.reports.length}`
           if (!entry.reports.some((r) => r.id === reportId)) {
             const title = getCodeText(report?.code) || "Report"
@@ -615,7 +630,7 @@ export function useEncounterDetails(
               conclusion: payload.text,
               effectiveDateTime: getDiagnosticReportDate(report),
               status: report?.status,
-              row: toEncounterReportRow(report, title, payload.text, payload.images),
+              row: toEncounterReportRow(report, title, payload.text, payload.images, payload.viewerActions),
             })
           }
         }

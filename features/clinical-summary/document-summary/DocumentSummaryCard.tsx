@@ -27,6 +27,7 @@ import { FeatureCard } from '@/src/shared/components'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
+import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
@@ -130,7 +131,11 @@ function DocumentEntryCard({
   const periodStr = formatPeriod(entry.period)
   const resourceType = entry.sourceKind === 'composition' ? 'Composition' : 'DocumentReference'
   const [forceExpandKey, setForceExpandKey] = useState<number>()
-  const handleResourceMatch = useCallback((sequence: number) => setForceExpandKey(sequence), [])
+  const [evidenceQuote, setEvidenceQuote] = useState<string>()
+  const handleResourceMatch = useCallback((sequence: number, target: ResourceNavTarget) => {
+    setEvidenceQuote(target.evidenceQuote)
+    setForceExpandKey(sequence)
+  }, [])
   const anchorRef = useResourceAnchor<HTMLLIElement>(resourceType, entry.id, handleResourceMatch)
 
   // 「AI 翻譯解讀」— on-demand per document (民眾 feature). Plain-text extraction
@@ -387,6 +392,7 @@ function DocumentEntryCard({
           attachment={entry.attachment}
           defaultExpanded={autoExpand}
           forceExpandKey={forceExpandKey}
+          evidenceQuote={evidenceQuote}
           rightControl={rightButton}
           labels={{
             bodyHeader: strings.htmlBodyHeader,

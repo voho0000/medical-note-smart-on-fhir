@@ -22,7 +22,7 @@
 "use client"
 
 import { useState } from 'react'
-import { AlertTriangle, Building2, ChevronDown, FileText, ImageIcon, PanelRight } from 'lucide-react'
+import { AlertTriangle, Building2, ChevronDown, ExternalLink, FileText, ImageIcon, PanelRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -33,6 +33,7 @@ import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+import { NhiViewerActions } from './NhiViewerActions'
 
 interface MultiRegionStudyCardProps {
   row: Row
@@ -86,15 +87,17 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
   // the rest of the app's "collapse by default for multi-item containers"
   // pattern (DocumentSummaryCard list, VisitItem accordion, etc.).
   const [expanded, setExpanded] = useState(false)
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const tm = (t as any).reports?.multiRegion || {
     title: 'Same-day same-code studies',
     ambiguityWarning:
       'NHI uses one health-record code for every CT body part (e.g. head CT and chest CT are both billed as 33070B), so multiple body parts imaged on the same day arrive as several distinct records. Because NHI provides no body-part field, the app cannot automatically tell which report belongs to which image set — please rely on the image content itself.',
     narrativeSection: 'reports',
     imageSection: 'image sets',
+    viewerSection: 'NHI viewer links',
     reportLabel: 'Report',
     imageLabel: 'Image set',
+    viewerLabel: 'NHI DICOM Viewer',
     noNarrative: 'No written report attached',
     viewImages: 'View images',
     imagesCount: 'images',
@@ -102,8 +105,11 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
   }
 
   const sub = row.groupedRows ?? []
+  const viewerSection = tm.viewerSection ?? (locale === 'zh-TW' ? '健保影像 Viewer 連結' : 'NHI viewer links')
+  const viewerLabel = tm.viewerLabel ?? (locale === 'zh-TW' ? '健保 DICOM Viewer' : 'NHI DICOM Viewer')
   const narratives = sub.filter((r) => getNarrativeText(r).length > 0)
   const imageSets = sub.filter((r) => (r.images?.length ?? 0) > 0)
+  const viewerRows = sub.filter((r) => (r.viewerActions?.length ?? 0) > 0)
   const dateStr = formatDate(row.effectiveDate)
 
   return (
@@ -153,6 +159,12 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
                 <span className="inline-flex items-center gap-0.5">
                   <ImageIcon className="h-3 w-3 shrink-0" aria-hidden />
                   {imageSets.length} {tm.imageSection}
+                </span>
+              )}
+              {viewerRows.length > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+                  {viewerRows.length} {viewerSection}
                 </span>
               )}
             </div>
@@ -216,9 +228,48 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
               ))}
             </section>
           )}
+
+          {viewerRows.length > 0 && (
+            <section className="space-y-1.5">
+              <SectionDivider
+                icon={<ExternalLink className="h-3 w-3" />}
+                label={`${viewerRows.length} ${viewerSection}`}
+              />
+              {viewerRows.map((r, i) => (
+                <ViewerSubCard
+                  key={r.id}
+                  row={r}
+                  index={i}
+                  viewerLabel={viewerLabel}
+                />
+              ))}
+            </section>
+          )}
         </div>
       )}
     </Card>
+  )
+}
+
+function ViewerSubCard({
+  row,
+  index,
+  viewerLabel,
+}: {
+  row: Row
+  index: number
+  viewerLabel: string
+}) {
+  return (
+    <div className="rounded-md border border-border bg-background px-2.5 py-2 shadow-sm">
+      <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-foreground">
+        <span className="shrink-0 select-none font-semibold tabular-nums text-amber-700">
+          {circled(index)}
+        </span>
+        <span>{viewerLabel} {circled(index)}</span>
+      </div>
+      <NhiViewerActions actions={row.viewerActions} />
+    </div>
   )
 }
 

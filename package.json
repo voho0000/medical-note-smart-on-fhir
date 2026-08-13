@@ -40,6 +40,7 @@
     "loop:log": "node scripts/loop/log.mjs",
     "eval:onprem-models": "node scripts/run-onprem-model-eval.mjs",
     "eval:onprem-patients": "node scripts/run-onprem-patient-eval.mjs",
+    "eval:onprem-patient-summaries": "node scripts/run-onprem-patient-summary-eval.mjs",
     "audit:onprem-content": "node scripts/run-onprem-content-audit.mjs",
     "version": "node scripts/write-version.mjs && git add public/version.json",
     "lint": "eslint ."

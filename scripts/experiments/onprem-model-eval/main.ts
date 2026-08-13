@@ -23,10 +23,15 @@ import { generateInsightUseCase } from '@/src/core/use-cases/clinical-insights/g
 import {
   MEDICAL_SUMMARY_MODULE_IDS,
   type MedicalSummaryAiResult,
+  type MedicalSummaryCardId,
   type MedicalSummaryModuleId,
   type MedicalSummaryModuleResultMap,
   type SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
+import {
+  registeredMedicalSummaryCards,
+  type MedicalSummaryCardAggregate,
+} from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { sampleDataSource } from '@/__tests__/infrastructure/ai/tools/fixtures'
@@ -60,7 +65,11 @@ const syntheticAge = now.getFullYear() - syntheticBirthDate.getFullYear() - (
 
 type Phase = 'all' | 'summary' | 'custom-summary' | 'chat'
 type Audience = 'medical' | 'patient'
-type SummaryStrategy = 'single' | 'single-retry-missing' | 'split-3-2'
+type SummaryStrategy =
+  | 'registered-batch-3-attempts'
+  | 'single'
+  | 'single-retry-missing'
+  | 'split-3-2'
 type CustomSummaryStrategy = 'legacy' | 'grounded'
 
 interface CliOptions {
@@ -117,6 +126,14 @@ interface SummaryRunRecord {
   strategy: SummaryStrategy
   repetition: number
   requestCount: number
+  /** Cumulative valid registered cards after each request. Present only for
+   * the production-mirroring registered-card strategy. */
+  completedCardsByAttempt?: number[]
+  /** First attempt on which all six cards were valid, or null if exhausted. */
+  completedAttempt?: number | null
+  /** A run passes prompt-fit only when all six cards are valid by attempt 2. */
+  promptFitOk?: boolean
+  thirdAttemptRequired?: boolean
   ok: boolean
   latencyMs: number
   parsedModules: number
@@ -202,9 +219,16 @@ function parseArgs(argv: string[]): CliOptions {
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > 100) {
     throw new Error('--repeat must be an integer from 1 to 100')
   }
-  const summaryStrategies = (parseCsv(read('--summary-strategies')) ?? ['single']) as SummaryStrategy[]
-  if (summaryStrategies.some((strategy) => !['single', 'single-retry-missing', 'split-3-2'].includes(strategy))) {
-    throw new Error('--summary-strategies must contain single, single-retry-missing, and/or split-3-2')
+  const summaryStrategies = (
+    parseCsv(read('--summary-strategies')) ?? ['registered-batch-3-attempts']
+  ) as SummaryStrategy[]
+  if (summaryStrategies.some((strategy) => ![
+    'registered-batch-3-attempts',
+    'single',
+    'single-retry-missing',
+    'split-3-2',
+  ].includes(strategy))) {
+    throw new Error('--summary-strategies must contain registered-batch-3-attempts, single, single-retry-missing, and/or split-3-2')
   }
   const customSummaryStrategies = (parseCsv(read('--custom-summary-strategies')) ?? ['grounded']) as CustomSummaryStrategy[]
   if (customSummaryStrategies.some((strategy) => !['legacy', 'grounded'].includes(strategy))) {
@@ -706,6 +730,7 @@ function mergeParsedModules(
 }
 
 const SUMMARY_STRATEGY_GROUPS: Record<SummaryStrategy, readonly (readonly MedicalSummaryModuleId[])[]> = {
+  'registered-batch-3-attempts': [],
   single: [MEDICAL_SUMMARY_MODULE_IDS],
   'single-retry-missing': [MEDICAL_SUMMARY_MODULE_IDS],
   'split-3-2': [
@@ -722,6 +747,167 @@ function addUsage(left: UsageRecord, right: UsageRecord): UsageRecord {
   }
 }
 
+const REGISTERED_CARD_MAX_ATTEMPTS = 3
+
+async function runRegisteredCardSummaryCase(
+  endpoint: string,
+  apiKey: string,
+  model: string,
+  fixture: SummaryFixture,
+  repetition: number,
+  options: CliOptions,
+): Promise<SummaryRunRecord> {
+  const startedAt = Date.now()
+  const outputs: string[] = []
+  let usage = emptyUsage()
+  let requestCount = 0
+  let lastRequestError: string | undefined
+  try {
+    const promptInput = {
+      clinicalContext: fixture.clinicalContext,
+      catalog: fixture.catalog,
+      locale: 'zh-TW' as const,
+      audience: fixture.audience,
+      harnessProfile: 'local-small' as const,
+    }
+    const cards = registeredMedicalSummaryCards(promptInput)
+    let aggregate: MedicalSummaryCardAggregate = {
+      summary: generateMedicalSummaryUseCase.createEmptyAiResult(),
+    }
+    const accepted = new Map<MedicalSummaryCardId, unknown>()
+    const completedCardsByAttempt: number[] = []
+    const finishReasons: string[] = []
+    let thirdAttemptRequired = false
+
+    for (let attempt = 1; attempt <= REGISTERED_CARD_MAX_ATTEMPTS; attempt += 1) {
+      const pendingCards = cards.filter((card) => !accepted.has(card.id))
+      if (pendingCards.length === 0) break
+      if (attempt === 3) thirdAttemptRequired = true
+
+      requestCount += 1
+      try {
+        const messages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
+          promptInput,
+          pendingCards.map((card) => card.buildBatchInstruction(promptInput)),
+        )
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            connection: 'close',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: false,
+            temperature: 0,
+            ...(/^gpt-oss(?::|-)/i.test(model) ? { reasoning_effort: 'low' } : {}),
+          }),
+          signal: AbortSignal.timeout(options.requestTimeoutMs),
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const body = await response.json() as {
+          message?: string
+          choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
+          usage?: unknown
+        }
+        const output = body.choices?.[0]?.message?.content ?? body.message ?? ''
+        outputs.push(output)
+        usage = addUsage(usage, normalizeUsage(body.usage))
+        if (body.choices?.[0]?.finish_reason) finishReasons.push(body.choices[0].finish_reason)
+        lastRequestError = undefined
+
+        pendingCards.forEach((card) => {
+          const parsed = card.parseBatch(output, fixture.catalog)
+          const invalidKeys = parsed && card.findUnknownSourceKeys
+            ? card.findUnknownSourceKeys(parsed, fixture.catalog)
+            : []
+          if (!parsed || invalidKeys.length > 0) return
+          accepted.set(card.id, parsed)
+          aggregate = card.apply(aggregate, parsed, fixture.catalog)
+        })
+      } catch (error) {
+        // Match production resilience: a transport failure leaves every pending
+        // card eligible for the next combined attempt instead of ending the run.
+        lastRequestError = safeError(error, apiKey)
+      }
+      completedCardsByAttempt.push(accepted.size)
+    }
+
+    const acceptedValues = Object.fromEntries(accepted)
+    const sourceKeys = collectSourceKeys(acceptedValues)
+    const validKeys = new Set(fixture.catalog.map((entry) => entry.key))
+    const invalidSourceKeys = [...new Set(sourceKeys.filter((key) => !validKeys.has(key)))]
+    const detectedSimplifiedCharacters = simplifiedCharacters(JSON.stringify(acceptedValues))
+    const semanticFailures = [
+      ...fixture.evaluate(aggregate.summary),
+      ...(detectedSimplifiedCharacters.length > 0
+        ? [`Simplified Chinese: ${detectedSimplifiedCharacters.join('')}`]
+        : []),
+    ]
+    const totalCards = cards.length
+    const completedAttemptIndex = completedCardsByAttempt.findIndex((count) => count === totalCards)
+    const completedAttempt = completedAttemptIndex >= 0 ? completedAttemptIndex + 1 : null
+    const ok = accepted.size === totalCards &&
+      invalidSourceKeys.length === 0 && semanticFailures.length === 0
+    const promptFitOk = ok && completedAttempt !== null && completedAttempt <= 2
+
+    return {
+      phase: 'summary',
+      model,
+      caseId: fixture.id,
+      audience: fixture.audience,
+      strategy: 'registered-batch-3-attempts',
+      repetition,
+      requestCount,
+      completedCardsByAttempt,
+      completedAttempt,
+      promptFitOk,
+      thirdAttemptRequired,
+      ok,
+      latencyMs: Date.now() - startedAt,
+      parsedModules: accepted.size,
+      totalModules: totalCards,
+      citationCount: sourceKeys.length,
+      invalidSourceKeys,
+      semanticFailures,
+      simplifiedCharacters: detectedSimplifiedCharacters,
+      finishReason: finishReasons.join(','),
+      usage,
+      outputSha256: sha256(outputs.join('\n\n')),
+      ...(options.includeOutput ? { output: outputs.join('\n\n') } : {}),
+      ...(!ok && lastRequestError ? { error: lastRequestError } : {}),
+    }
+  } catch (error) {
+    return {
+      phase: 'summary',
+      model,
+      caseId: fixture.id,
+      audience: fixture.audience,
+      strategy: 'registered-batch-3-attempts',
+      repetition,
+      requestCount,
+      completedCardsByAttempt: [],
+      completedAttempt: null,
+      promptFitOk: false,
+      thirdAttemptRequired: false,
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      parsedModules: 0,
+      totalModules: 6,
+      citationCount: 0,
+      invalidSourceKeys: [],
+      semanticFailures: [],
+      simplifiedCharacters: [],
+      usage,
+      outputSha256: sha256(outputs.join('\n\n')),
+      ...(options.includeOutput && outputs.length > 0 ? { output: outputs.join('\n\n') } : {}),
+      error: safeError(error, apiKey),
+    }
+  }
+}
+
 async function runSummaryCase(
   endpoint: string,
   apiKey: string,
@@ -731,6 +917,16 @@ async function runSummaryCase(
   repetition: number,
   options: CliOptions,
 ): Promise<SummaryRunRecord> {
+  if (strategy === 'registered-batch-3-attempts') {
+    return runRegisteredCardSummaryCase(
+      endpoint,
+      apiKey,
+      model,
+      fixture,
+      repetition,
+      options,
+    )
+  }
   const startedAt = Date.now()
   const outputs: string[] = []
   let usage = emptyUsage()
@@ -1147,6 +1343,9 @@ function average(values: number[]): number {
   return values.length > 0 ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0
 }
 
+const SUMMARY_PROMPT_FIT_MIN_RUNS = 30
+const SUMMARY_PROMPT_FIT_MIN_RATE = 0.9
+
 function createReport(records: RunRecord[], timestamp: string): string {
   const lines = [
     '# On-prem model evaluation',
@@ -1171,6 +1370,33 @@ function createReport(records: RunRecord[], timestamp: string): string {
     const tokens = rows.reduce((sum, record) => sum + record.usage.totalTokens, 0)
     const requests = rows.reduce((sum, record) => sum + record.requestCount, 0) / rows.length
     lines.push(`| ${model} | ${strategy} | ${passed}/${rows.length} (${percent(passed, rows.length)}) | ${parsed}/${modules} (${percent(parsed, modules)}) | ${requests.toFixed(1)} | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
+  }
+  lines.push(
+    '',
+    '### Six-card prompt-fit gate',
+    '',
+    `A model is eligible only with at least ${SUMMARY_PROMPT_FIT_MIN_RUNS} runs, at least ${Math.round(SUMMARY_PROMPT_FIT_MIN_RATE * 100)}% end-to-end success by attempt 2, and 100% final success after the third-attempt fallback. A third attempt may recover the UI but never retroactively passes that run's prompt-fit check.`,
+    '',
+    '| Model | Runs | Complete by attempt 2 | Entered attempt 3 | Final after attempt 3 | Verdict |',
+    '|---|---:|---:|---:|---:|---|',
+  )
+  const registeredSummaryRecords = summaryRecords.filter(
+    (record) => record.strategy === 'registered-batch-3-attempts',
+  )
+  for (const model of [...new Set(registeredSummaryRecords.map((record) => record.model))]) {
+    const rows = registeredSummaryRecords.filter((record) => record.model === model)
+    const promptFitPassed = rows.filter((record) => record.promptFitOk).length
+    const enteredThirdAttempt = rows.filter((record) => record.thirdAttemptRequired).length
+    const finalPassed = rows.filter((record) => record.ok).length
+    const enoughRuns = rows.length >= SUMMARY_PROMPT_FIT_MIN_RUNS
+    const passed = enoughRuns &&
+      promptFitPassed / rows.length >= SUMMARY_PROMPT_FIT_MIN_RATE &&
+      finalPassed === rows.length
+    const verdict = enoughRuns ? (passed ? 'PASS' : 'FAIL') : 'INSUFFICIENT SAMPLE'
+    lines.push(`| ${model} | ${rows.length} | ${promptFitPassed}/${rows.length} (${percent(promptFitPassed, rows.length)}) | ${enteredThirdAttempt}/${rows.length} (${percent(enteredThirdAttempt, rows.length)}) | ${finalPassed}/${rows.length} (${percent(finalPassed, rows.length)}) | ${verdict} |`)
+  }
+  if (registeredSummaryRecords.length === 0) {
+    lines.push('| n/a | 0 | n/a | n/a | n/a | NOT RUN |')
   }
   lines.push('', '## Custom Summary', '', '| Model | Prompt | End-to-end | Grounding / language | Avg latency | Total tokens |', '|---|---|---:|---:|---:|---:|')
   const customSummaryRecords = records.filter((record): record is CustomSummaryRunRecord => record.phase === 'custom-summary')
@@ -1259,9 +1485,17 @@ export async function main(): Promise<void> {
       ...(result.phase === 'summary'
         ? {
             strategy: result.strategy,
-            requestCount: result.requestCount,
-            parsedModules: `${result.parsedModules}/${result.totalModules}`,
-            semanticFailures: result.semanticFailures,
+             requestCount: result.requestCount,
+             parsedModules: `${result.parsedModules}/${result.totalModules}`,
+             ...(result.completedCardsByAttempt
+               ? {
+                   completedCardsByAttempt: result.completedCardsByAttempt,
+                   completedAttempt: result.completedAttempt,
+                   promptFitOk: result.promptFitOk,
+                   thirdAttemptRequired: result.thirdAttemptRequired,
+                 }
+               : {}),
+             semanticFailures: result.semanticFailures,
           }
         : result.phase === 'custom-summary'
         ? {

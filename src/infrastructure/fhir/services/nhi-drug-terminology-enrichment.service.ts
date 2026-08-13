@@ -16,6 +16,10 @@ const NHI_DRUG_CODE_SYSTEM =
   'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
 const ATC_HIERARCHY_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
+export const NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM =
+  'https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy'
+export const NHI_DRUG_ENRICHMENT_POLICY_VERSION =
+  'latest-covered-record-for-newer-prescriptions-v1'
 
 type FhirResource = Record<string, unknown> & {
   resourceType?: string
@@ -147,12 +151,43 @@ function notApplicableReport(
   }
 }
 
+function withAppEnrichmentPolicyTag(resource: FhirResource): FhirResource {
+  const meta = resource.meta && typeof resource.meta === 'object'
+    ? resource.meta as Record<string, unknown>
+    : {}
+  const existingTags = Array.isArray(meta.tag)
+    ? meta.tag.filter(
+      (tag: unknown) =>
+        !tag
+        || typeof tag !== 'object'
+        || (tag as { system?: unknown }).system
+          !== NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+    )
+    : []
+  return {
+    ...resource,
+    meta: {
+      ...meta,
+      tag: [
+        ...existingTags,
+        {
+          system: NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+          code: NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+          display: 'Use the latest covered drug record for newer prescriptions',
+        },
+      ],
+    },
+  }
+}
+
 /**
  * Enrich a local FHIR Bundle without changing any source clinical fields.
  *
  * The 12 MB terminology snapshot is loaded only after an exact NHI drug code
- * and an authoredOn prescription date have both been found. Missing,
- * ambiguous, out-of-range, and conflicting inputs fail closed.
+ * and an authoredOn prescription date have both been found. Dates covered by
+ * the snapshot retain strict point-in-time matching. A newer prescription is
+ * matched against the latest date covered by the bundled snapshot so an exact
+ * code still receives the newest terminology known to the App.
  */
 export async function enrichBundleWithNhiDrugTerminology(
   bundle: Record<string, unknown>,
@@ -226,8 +261,15 @@ export async function enrichBundleWithNhiDrugTerminology(
         ]),
       ).entries(),
     ]
+    const latestCoveredDate =
+      terminology.NHI_DRUG_TERMINOLOGY_MANIFEST.latestCoveredDate
     const { resolutions } = terminology.resolveManyNhiDrugTerminologies(
-      uniqueInputs.map(([, input]) => input),
+      uniqueInputs.map(([, input]) => ({
+        ...input,
+        prescriptionDate: input.prescriptionDate > latestCoveredDate
+          ? latestCoveredDate
+          : input.prescriptionDate,
+      })),
     )
     const resolutionByKey = new Map(
       uniqueInputs.map(([key], index) => [key, resolutions[index]]),
@@ -260,9 +302,11 @@ export async function enrichBundleWithNhiDrugTerminology(
         (byResolutionStatus[resolution.status] ?? 0) + 1
       if (resolution.status !== 'resolved' || !resolution.record) continue
 
-      const knowledge = terminology.buildMedicationKnowledge(
-        resolution.record,
-      ) as FhirResource
+      const knowledge = withAppEnrichmentPolicyTag(
+        terminology.buildMedicationKnowledge(
+          resolution.record,
+        ) as FhirResource,
+      )
       if (typeof knowledge.id !== 'string' || !knowledge.id) continue
       const existingKnowledge = knowledgeById.get(knowledge.id)
       const existingHasHierarchyTag = Array.isArray(
@@ -271,6 +315,13 @@ export async function enrichBundleWithNhiDrugTerminology(
         (tag: any) =>
           tag?.system === ATC_HIERARCHY_TAG_SYSTEM
           && typeof tag?.code === 'string',
+      )
+      const existingHasCurrentPolicyTag = Array.isArray(
+        (existingKnowledge as any)?.meta?.tag,
+      ) && (existingKnowledge as any).meta.tag.some(
+        (tag: any) =>
+          tag?.system === NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM
+          && tag?.code === NHI_DRUG_ENRICHMENT_POLICY_VERSION,
       )
       const existingClassifications = Array.isArray(
         (existingKnowledge as any)?.medicineClassification?.[0]?.classification,
@@ -298,6 +349,7 @@ export async function enrichBundleWithNhiDrugTerminology(
           ),
       )
       const existingIsCurrent = existingHasHierarchyTag
+        && existingHasCurrentPolicyTag
         && (!existingHasFullAtc || existingHasLevel2)
       const effectiveKnowledge =
         existingKnowledge && existingIsCurrent ? existingKnowledge : knowledge

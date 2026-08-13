@@ -9,7 +9,7 @@ let fittedClinicalInput = {
   clinicalContext: '病'.repeat(3_000),
   inputSignature: 'scope-1',
   contextAdaptation: null as null | {
-    tier: 'compact'
+    tier: 'compact' | 'prioritized'
     contextLimit: number
     targetTokens: number
     originalTokens: number
@@ -108,7 +108,7 @@ describe('ContextTokenMeter overflow guidance', () => {
       clinicalContext: '病'.repeat(900),
       inputSignature: 'scope-1',
       contextAdaptation: {
-        tier: 'compact',
+        tier: 'prioritized',
         contextLimit: 32_768,
         targetTokens: 15_822,
         originalTokens: 20_000,
@@ -123,8 +123,10 @@ describe('ContextTokenMeter overflow guidance', () => {
     const fittedScope = screen.getByTestId('model-fitted-scope')
     expect(fittedScope).toHaveTextContent('原始選擇約 2k tokens')
     expect(fittedScope).toHaveTextContent('本次實際送出約 600 tokens')
+    expect(fittedScope).toHaveTextContent('逐筆保留活動中問題、過敏、目前用藥')
+    expect(fittedScope).toHaveTextContent('來源索引已依實際保留內容重建')
     expect(fittedScope).toHaveTextContent('你儲存的資料範圍沒有變更')
-    expect(fittedScope).toHaveTextContent('切回較大模型會自動恢復')
+    expect(fittedScope).toHaveTextContent('控制項維持原本資料範圍')
   })
 
   it('shows destination-neutral size guidance for external AI export', () => {

@@ -16,6 +16,9 @@ export interface ResourceNavTarget {
   /** For the fallback toast ("2026-06-02 胸腔檢查"). */
   display?: string
   date?: string
+  /** Verbatim original-language excerpt to reveal inside a free-text clinical
+   *  document after its resource card opens. */
+  evidenceQuote?: string
   /** Reports-card destination beyond the owning top-level tab. */
   reportView?: 'cumulative'
   /** Cumulative lab sub-panel (cbc, chem, tumor, …). */

@@ -36,6 +36,15 @@ export interface Identifier {
   use?: string
 }
 
+/** Minimal recursive FHIR R4 Extension shape used by imported resources. */
+export interface FhirExtension {
+  url?: string
+  extension?: FhirExtension[]
+  valueInteger?: number
+  valueCode?: string
+  valueString?: string
+}
+
 // Observation Types
 export interface ObservationComponent {
   code?: CodeableConcept
@@ -104,9 +113,11 @@ export interface DiagnosticReport {
   conclusionCode?: CodeableConcept[]
   imagingStudy?: Reference[]
   note?: Array<{ text?: string }>
+  extension?: FhirExtension[]
   presentedForm?: Array<{
     contentType?: string
     title?: string
+    url?: string
     // base64 (no `data:<mime>;base64,` prefix) — bridge v0.14.0+ inline imaging
     data?: string
     size?: number

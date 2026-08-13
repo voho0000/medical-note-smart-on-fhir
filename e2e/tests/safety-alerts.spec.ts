@@ -2,12 +2,12 @@ import { test, expect, type Page } from '@playwright/test'
 import { importBundle } from '../fixtures/import'
 import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 
-// The Medical Summary action launches two independently validated pipelines in
-// one batch. Route each request to a valid deterministic payload so these tests
-// exercise the current unified UI without a real model or network.
+// The Medical Summary action generates all registered cards in one validated
+// batch. Return every exact module block so these tests exercise the current
+// unified UI without a real model or network.
 const TEST_MODEL_ID = 'gpt-5.4-nano'
 
-const SAFETY_JSON = JSON.stringify({
+const SAFETY_RESULT = {
   scannedCount: 12,
   alerts: [
     {
@@ -25,18 +25,28 @@ const SAFETY_JSON = JSON.stringify({
       category: 'duplicate',
     },
   ],
-})
+}
 
-const SUMMARY_JSON = JSON.stringify({
-  headline: '跨院病歷測試摘要',
-  summary: [{ text: '已完成測試資料彙整。', emphasis: false, sources: [] }],
-  investigations: [],
-  medicationEducation: [],
-  medicationReview: { regimen: [], changes: [], reconciliation: [] },
-  problems: [],
-  decisions: [],
-  timeline: [],
-})
+const moduleBlock = (id: string, value: unknown) => [
+  `<<<MEDIPRISMA_MODULE:${id}>>>`,
+  JSON.stringify(value),
+  `<<<END_MEDIPRISMA_MODULE:${id}>>>`,
+].join('\n')
+
+const SUMMARY_BATCH_MARKDOWN = [
+  moduleBlock('priorities', {
+    headline: '跨院病歷測試摘要',
+    summary: [{ text: '已完成測試資料彙整。', emphasis: false, sources: [] }],
+  }),
+  moduleBlock('problems', { problems: [] }),
+  moduleBlock('timeline', { timeline: [] }),
+  moduleBlock('investigations', { investigations: [] }),
+  moduleBlock('medications', {
+    medicationEducation: [],
+    medicationReview: { regimen: [], changes: [], reconciliation: [] },
+  }),
+  moduleBlock('safety', SAFETY_RESULT),
+].join('\n')
 
 async function mockUnifiedSummary(page: Page, autoGenerate = false) {
   await page.addInitScript(
@@ -45,20 +55,12 @@ async function mockUnifiedSummary(page: Page, autoGenerate = false) {
         state: { autoGenerate, modelId },
         version: 0,
       }))
-      localStorage.setItem('safety-alerts-prefs', JSON.stringify({
-        state: { autoScan: autoGenerate, modelId },
-        version: 0,
-      }))
     },
     { modelId: TEST_MODEL_ID, autoGenerate },
   )
   await mockAiStream(page, {
     model: TEST_MODEL_ID,
-    markdown: SUMMARY_JSON,
-    replies: [
-      { includes: 'clinical medication-safety reviewer', markdown: SAFETY_JSON },
-      { includes: 'structured cross-hospital patient summary', markdown: SUMMARY_JSON },
-    ],
+    markdown: SUMMARY_BATCH_MARKDOWN,
   })
 }
 
@@ -79,7 +81,7 @@ test.describe('safety alerts (mocked)', () => {
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible()
   })
 
-  test('model picker lists gated models and syncs the unified summary choice', async ({ page }) => {
+  test('model picker lists gated models and persists the unified summary choice', async ({ page }) => {
     await importBundle(page)
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
 
@@ -96,12 +98,12 @@ test.describe('safety alerts (mocked)', () => {
     await page.getByRole('menuitem', { name: /Claude Haiku 4\.5/ }).click()
     await expect(summaryPanel.getByTestId('model-picker-trigger')).toContainText('Claude Haiku 4.5')
 
-    // One user-facing model choice is persisted to both underlying pipelines,
-    // while the independent chat model remains untouched.
+    // The registered-card summary is the only runtime preference owner. The
+    // legacy safety store is a migration surface and the chat model is separate.
     await expect.poll(() => page.evaluate(() => localStorage.getItem('medical-summary-prefs') || ''))
       .toContain('claude-haiku-4-5')
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('safety-alerts-prefs') || ''))
-      .toContain('claude-haiku-4-5')
+    const legacySafetyPrefs = await page.evaluate(() => localStorage.getItem('safety-alerts-prefs') || '')
+    expect(legacySafetyPrefs).not.toContain('claude-haiku-4-5')
     const chatPrefs = await page.evaluate(() => localStorage.getItem('ai-config-storage') || '')
     expect(chatPrefs).not.toContain('claude-haiku-4-5')
   })
@@ -122,10 +124,10 @@ test.describe('safety alerts (mocked)', () => {
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
-    expect(await getChatCallCount(page)).toBeGreaterThanOrEqual(2)
+    expect(await getChatCallCount(page)).toBe(1)
 
-    // Both results come back from encrypted cache. The mock counter resets per
-    // navigation, so 0 proves neither pipeline was billed again.
+    // The unified result comes back from encrypted cache. The mock counter
+    // resets per navigation, so 0 proves the batch was not billed again.
     await page.reload()
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()

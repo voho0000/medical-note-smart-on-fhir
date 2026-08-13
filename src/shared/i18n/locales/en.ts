@@ -1299,9 +1299,9 @@ export const en = {
     careDisciplineLabel: 'Care discipline',
     careDisciplines: {
       all: 'All',
-      western: 'Western medicine',
-      tcm: 'Chinese medicine',
-      dental: 'Dentistry',
+      western: 'Western Medicine',
+      tcm: 'Traditional Chinese Medicine',
+      dental: 'Dental',
     },
     physician: 'Physician:',
     reason: 'Reason:',

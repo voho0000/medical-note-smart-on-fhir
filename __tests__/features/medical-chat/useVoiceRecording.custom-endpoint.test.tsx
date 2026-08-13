@@ -7,6 +7,7 @@ import {
   customOpenAiModelIdForProfile,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 const mockSetIsAsrLoading = jest.fn()
 const mockToastError = jest.fn()
@@ -205,6 +206,37 @@ describe('useVoiceRecording custom endpoint lifecycle', () => {
       await transcription
     })
     expect(onTranscriptReady).toHaveBeenCalledWith('from A')
+  })
+
+  it('aborts and discards a transcription after a same-tab Bundle replacement', async () => {
+    let finishFetch!: (response: ReturnType<typeof successfulResponse>) => void
+    let signal!: AbortSignal
+    mockFetch.mockImplementationOnce(async (_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal
+      return await new Promise<ReturnType<typeof successfulResponse>>((resolve) => {
+        finishFetch = resolve
+      })
+    })
+    const onTranscriptReady = jest.fn()
+    const { result } = renderHook(() => (
+      useVoiceRecording(onTranscriptReady, CUSTOM_OPENAI_MODEL_ID)
+    ))
+    beginRecording(result)
+
+    let transcription!: Promise<void>
+    act(() => {
+      transcription = result.current.onRecordingStop('', audioBlob)
+    })
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1))
+
+    act(() => window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT)))
+    expect(signal.aborted).toBe(true)
+    await act(async () => {
+      finishFetch(successfulResponse('patient A transcript'))
+      await transcription
+    })
+
+    expect(onTranscriptReady).not.toHaveBeenCalled()
   })
 
   it.each([

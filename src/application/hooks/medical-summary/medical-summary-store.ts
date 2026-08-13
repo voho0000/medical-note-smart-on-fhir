@@ -11,11 +11,9 @@ import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.e
 
 export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
-// v14: unknown model-issued source keys are retained as claim-level warnings
-// instead of module errors. Do not restore v13 GROUNDING_FAILED entries: their
-// parsed card payload was discarded, so only a fresh run can recover it for
-// the warning-first display.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary14', scanKey)
+// v15: every registered card, including Safety, lives in one result artifact
+// and one cache entry. Older summary-only entries intentionally regenerate.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary15', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

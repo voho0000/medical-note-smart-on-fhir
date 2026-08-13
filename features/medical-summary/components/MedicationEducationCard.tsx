@@ -9,10 +9,10 @@ import { ChevronDown, CircleCheckBig, HeartHandshake, Pill } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
-  ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface MedicationEducationCardProps {
   result: MedicalSummaryResult
@@ -60,9 +60,11 @@ export function MedicationEducationCard({
 
       <div className="space-y-1.5">
         {visible.map((item, index) => {
-          const sources = item.sourceKeys
-            .map((key) => byKey.get(key))
-            .filter((source): source is ResolvedSourceRef => source !== undefined)
+          const sources = resolveClaimSources(
+            item.sourceKeys,
+            byKey,
+            item.documentEvidence,
+          )
 
           return (
             <article key={`${item.name}-${index}`} className="rounded-md border bg-teal-50/45 px-2.5 py-2 dark:bg-teal-950/15">

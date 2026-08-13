@@ -76,6 +76,19 @@ describe('prepareImagesForStorage', () => {
     expect(refs).toEqual(['img_0', 'img_1', 'img_2'])
   })
 
+  it('prefixes image refs with the import scope for cross-tab isolation', () => {
+    const bundleA = makeBundle([{ contentType: 'image/png', data: PNG_B64 }])
+    const bundleB = makeBundle([{ contentType: 'image/png', data: PNG_B64 }])
+
+    const storedA = prepareImagesForStorage(bundleA, 'import-a')
+    const storedB = prepareImagesForStorage(bundleB, 'import-b')
+
+    expect(storedA[0].id).toBe('import-a:img_0')
+    expect(storedB[0].id).toBe('import-b:img_0')
+    expect((bundleA.entry[1].resource as any).presentedForm[0]._imageRef).toBe('import-a:img_0')
+    expect((bundleB.entry[1].resource as any).presentedForm[0]._imageRef).toBe('import-b:img_0')
+  })
+
   it('leaves non-image attachments untouched', () => {
     const bundle = makeBundle([
       { contentType: 'application/pdf', title: 'Report.pdf', data: PNG_B64 },

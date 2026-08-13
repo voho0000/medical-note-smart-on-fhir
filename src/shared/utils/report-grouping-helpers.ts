@@ -8,17 +8,51 @@ interface CodeableConcept {
 
 interface DiagnosticReportLike {
   meta?: {
+    source?: string
     tag?: Array<{ system?: string; code?: string; display?: string }>
   }
   category?: CodeableConcept | CodeableConcept[]
   code?: CodeableConcept
+  result?: Array<{ reference?: string }>
+  conclusion?: string
+  conclusionCode?: unknown
   imagingStudy?: Array<{ reference?: string }>
+  note?: Array<{ text?: string }>
+  presentedForm?: Array<unknown>
 }
 
 export type ReportGroup = 'lab' | 'imaging' | 'procedures' | 'vitals' | 'other'
 
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
+
+/**
+ * The NHI bridge turns Health Bank laboratory Observations into lightweight
+ * DiagnosticReports so the Reports UI can group and navigate them. Those
+ * reports are presentation containers, not an additional clinical source:
+ * their only evidence is `result`, which points back to the original
+ * Observations. Keep genuine report resources (r8 imaging/pathology, narrative
+ * conclusions, attachments, and non-bridge FHIR DiagnosticReports) citable.
+ */
+export function isNhiBridgeSyntheticLabReport(report: DiagnosticReportLike): boolean {
+  if (!report.meta?.source?.toLowerCase().includes('nhi-fhir-bridge')) return false
+  if (inferGroupFromCategory(report.category) !== 'lab') return false
+  if (!(report.result ?? []).some((reference) => Boolean(reference?.reference))) return false
+
+  const hasConclusion = Boolean(report.conclusion?.trim())
+  const hasConclusionCode = Array.isArray(report.conclusionCode)
+    ? report.conclusionCode.length > 0
+    : Boolean(report.conclusionCode)
+  const hasNarrativeNote = (report.note ?? []).some((note) => Boolean(note?.text?.trim()))
+  const hasReportAttachment = (report.presentedForm ?? []).length > 0
+  const hasImagingStudy = (report.imagingStudy ?? []).length > 0
+
+  return !hasConclusion
+    && !hasConclusionCode
+    && !hasNarrativeNote
+    && !hasReportAttachment
+    && !hasImagingStudy
+}
 
 // 健康存摺 SDK r8 combines imaging and pathology reports. Older converted
 // bundles did not preserve that source-section signal, so their NHI order code

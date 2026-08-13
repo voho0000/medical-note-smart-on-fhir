@@ -14,6 +14,7 @@ import {
 } from '@/src/shared/utils/openai-compatible.utils'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 interface RecordingSession {
   customModelId: string | null
@@ -82,6 +83,17 @@ export function useVoiceRecording(
   // the old endpoint's response.
   useEffect(() => {
     mountedRef.current = true
+    const resetForBundle = () => {
+      requestSequenceRef.current += 1
+      activeTranscriptionRef.current?.controller.abort()
+      activeTranscriptionRef.current = null
+      recordingSessionRef.current = null
+      stopRecordingRef.current()
+      setIsRecording(false)
+      setIsAsrLoading(false)
+      setAsrError(null)
+      stopTimer()
+    }
     const unsubscribe = useAiConfigStore.subscribe((state, previousState) => {
       if (state.openAiCompatibleProfiles === previousState.openAiCompatibleProfiles) return
       const active = activeTranscriptionRef.current
@@ -98,10 +110,12 @@ export function useVoiceRecording(
         active.controller.abort()
       }
     })
+    window.addEventListener(BUNDLE_CHANGED_EVENT, resetForBundle)
 
     return () => {
       mountedRef.current = false
       unsubscribe()
+      window.removeEventListener(BUNDLE_CHANGED_EVENT, resetForBundle)
       activeTranscriptionRef.current?.controller.abort()
       activeTranscriptionRef.current = null
       recordingSessionRef.current = null

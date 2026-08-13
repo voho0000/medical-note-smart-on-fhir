@@ -8,7 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useFhirContext, LOCAL_BUNDLE_FHIR_URL } from "@/src/application/hooks/chat/use-fhir-context.hook"
+import { useFhirContext, isLocalBundleFhirUrl } from "@/src/application/hooks/chat/use-fhir-context.hook"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 export function ConnectionInfo() {
@@ -19,7 +19,7 @@ export function ConnectionInfo() {
     return null
   }
 
-  const isLocalBundle = fhirServerUrl === LOCAL_BUNDLE_FHIR_URL
+  const isLocalBundle = isLocalBundleFhirUrl(fhirServerUrl)
   const fhirServerDisplay = isLocalBundle
     ? ((t.connectionInfo as any)?.localBundle ?? '本地匯入 FHIR Bundle')
     : fhirServerUrl

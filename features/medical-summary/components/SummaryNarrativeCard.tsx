@@ -9,10 +9,10 @@
 import { Loader2 } from "lucide-react"
 import type {
   MedicalSummaryResult,
-  ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface SummaryNarrativeCardProps {
   result: MedicalSummaryResult
@@ -49,9 +49,11 @@ export function SummaryNarrativeCard({
         <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">{result.headline}</p>
         <p className="mt-1 text-[0.8125rem] leading-normal text-foreground">
           {result.summary.map((seg, i) => {
-            const sources = seg.sourceKeys
-              .map((k) => byKey.get(k))
-              .filter((s): s is ResolvedSourceRef => s !== undefined)
+            const sources = resolveClaimSources(
+              seg.sourceKeys,
+              byKey,
+              seg.documentEvidence,
+            )
             const sup = (
               <SourceSup
                 sources={sources}

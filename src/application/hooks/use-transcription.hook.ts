@@ -5,6 +5,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { TranscribeAudioUseCase } from '@/src/core/use-cases/transcription/transcribe-audio.use-case'
 import { TranscriptionService } from '@/src/infrastructure/ai/services/transcription.service'
 import type { TranscriptionResponse } from '@/src/core/entities/ai.entity'
+import { readTabLocalImportId } from '@/src/infrastructure/fhir/services/local-bundle-scope'
 
 export function useTranscription(apiKey: string | null = null) {
   const [isLoading, setIsLoading] = useState(false)
@@ -26,6 +27,7 @@ export function useTranscription(apiKey: string | null = null) {
     async (audioBlob: Blob): Promise<TranscriptionResponse | null> => {
       setIsLoading(true)
       setError(null)
+      const importId = readTabLocalImportId()
 
       try {
         const result = await transcribeAudioUseCase.execute({
@@ -33,8 +35,9 @@ export function useTranscription(apiKey: string | null = null) {
           model: 'whisper-1'
         })
 
-        return result
+        return readTabLocalImportId() === importId ? result : null
       } catch (err) {
+        if (readTabLocalImportId() !== importId) return null
         const message = err instanceof Error ? err.message : 'Failed to transcribe audio'
         setError(message)
         return null

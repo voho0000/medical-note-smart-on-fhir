@@ -13,9 +13,8 @@ export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
 export interface VisitRecord {
   id: string
   type: VisitType
-  /** NHI care discipline. Bridge v1.6 emits explicit tcm-outpatient and
-   *  dental-outpatient encounter-kind codes; all other encounter kinds belong
-   *  to the existing western-medicine stream. */
+  /** Medical system, derived from explicit serviceType codings first. AMB only
+   *  identifies an ambulatory encounter and is never evidence of western care. */
   careDiscipline: VisitCareDiscipline
   date: string
   /** Encounter.period.end — discharge date for inpatient stays; absent for
@@ -30,6 +29,63 @@ export interface VisitRecord {
   status: string
   department?: string
   physician?: string
+}
+
+const HL7_SERVICE_TYPE_SYSTEM = 'http://terminology.hl7.org/codesystem/service-type'
+const SNOMED_CT_SYSTEM = 'http://snomed.info/sct'
+const TW_CORE_DEPARTMENT_SYSTEMS = new Set([
+  'https://twcore.mohw.gov.tw/ig/twcore/codesystem/medical-consultation-department-nhi-tw',
+  'https://twcore.mohw.gov.tw/ig/twcore/codesystem/medical-treatment-department-nhi-tw',
+])
+// Read-only compatibility for bundles produced during the short-lived custom
+// service-domain transition. New exporters must emit TW Core department #60.
+const LEGACY_NHI_CLINICAL_SERVICE_DOMAIN_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/codesystem/clinical-service-domain'
+
+// HL7 Service Type: Endodontic through Prosthodontic.
+const HL7_DENTAL_SERVICE_CODES = new Set(['87', '88', '89', '90', '91', '92', '93', '94'])
+// HL7 Service Type: Acupuncture and Chinese Herbal Medicine.
+const HL7_TCM_SERVICE_CODES = new Set(['13', '18'])
+
+// Dental specialties included by the TW Core medical-department value set.
+const TW_CORE_DENTAL_SNOMED_CODES = new Set([
+  '722163006', // Dentistry
+  '408441001', // Endodontics
+  '408461007', // Periodontics
+  '394608004', // Orthodontics
+  '394607009', // Pediatric dentistry
+  '408465003', // Oral and maxillofacial surgery
+])
+const TW_CORE_DENTAL_DEPARTMENT_CODES = new Set([
+  '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', 'GA',
+])
+
+function normalizeCodeSystem(system: unknown): string {
+  return String(system ?? '').replace(/\/+$/, '').toLowerCase()
+}
+
+function isTwCoreDepartmentSystem(system: string): boolean {
+  return TW_CORE_DEPARTMENT_SYSTEMS.has(system)
+}
+
+/**
+ * NHI sources may append visit metadata to a facility display, for example
+ * "臺北榮總;門診;0601160016". Visit history labels and filters only need the
+ * human-readable institution name.
+ */
+function getInstitutionName(display: unknown): string {
+  if (typeof display !== 'string') return ''
+  const name = display.split(/[;；]/, 1)[0].trim()
+  return name || display.trim()
+}
+
+function getServiceTypeConcepts(serviceType: any): any[] {
+  const entries = Array.isArray(serviceType) ? serviceType : [serviceType]
+  // R4 uses CodeableConcept directly. R5 uses CodeableReference, whose coded
+  // form is held in `.concept`; accepting both keeps imported bundles portable.
+  return entries
+    .filter(Boolean)
+    .map((entry: any) => entry?.concept ?? entry)
 }
 
 function localizeEncounterChannel(channel: string, locale: string): string {
@@ -63,10 +119,24 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         const classCode = (encounter.class?.code || encounter.class?.display || '').toLowerCase()
         const reasonText = (encounter.reasonCode?.[0]?.text || '').toLowerCase()
         // NHI Taiwan may encode type in serviceType or type[].text instead of class.code
-        const serviceTypeText = (
-          encounter.serviceType?.coding?.[0]?.display ||
-          encounter.serviceType?.text || ''
-        ).toLowerCase()
+        const serviceTypeConcepts = getServiceTypeConcepts(encounter.serviceType)
+        const serviceTypeCodings = serviceTypeConcepts.flatMap((concept: any) =>
+          concept?.coding ?? [],
+        )
+        const serviceTypeDisplay = serviceTypeConcepts
+          .flatMap((concept: any) => [
+            concept?.text,
+            ...(concept?.coding ?? []).map((coding: any) => coding?.display),
+          ])
+          .find(Boolean)
+        const serviceTypeText = serviceTypeConcepts
+          .flatMap((concept: any) => [
+            concept?.text,
+            ...(concept?.coding ?? []).map((coding: any) => coding?.display),
+          ])
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
         // Prefer the v0.9.2 kind-by-system lookup over array index — bridge
         // v0.9.1 and earlier always put kind in type[0], but FHIR R4 doesn't
         // guarantee that order, so we look it up by coding.system when
@@ -79,17 +149,52 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           encounter.type?.[0]?.text ||
           ''
         ).toLowerCase()
-        // Health Bank / bridge v1.6 carries TCM and dental visits as explicit
-        // encounter-kind codes. Text fallbacks keep older bridge bundles usable
-        // without guessing from the institution name.
-        const careDiscipline: VisitCareDiscipline =
-          kindCode === 'tcm-outpatient' || typeText.includes('中醫') ||
-          typeText.includes('traditional chinese medicine')
+        // Care discipline is a terminology decision: scan every coding without
+        // relying on array order, display, text, or the AMB encounter class.
+        const hasCodedDiscipline = (
+          codings: any[],
+          discipline: Exclude<VisitCareDiscipline, 'western'>,
+        ) => codings.some((coding: any) => {
+          const system = normalizeCodeSystem(coding?.system)
+          const code = String(coding?.code ?? '').toUpperCase()
+
+          if (system === HL7_SERVICE_TYPE_SYSTEM) {
+            return discipline === 'dental'
+              ? HL7_DENTAL_SERVICE_CODES.has(code)
+              : discipline === 'tcm' && HL7_TCM_SERVICE_CODES.has(code)
+          }
+          if (system === SNOMED_CT_SYSTEM) {
+            return discipline === 'dental' && TW_CORE_DENTAL_SNOMED_CODES.has(code)
+          }
+          if (system === LEGACY_NHI_CLINICAL_SERVICE_DOMAIN_SYSTEM) {
+            return discipline === 'tcm' && code === 'TRADITIONAL-CHINESE-MEDICINE'
+          }
+          if (isTwCoreDepartmentSystem(system)) {
+            return discipline === 'dental'
+              ? TW_CORE_DENTAL_DEPARTMENT_CODES.has(code)
+              : discipline === 'tcm' && code === '60'
+          }
+          return false
+        })
+        // Explicit serviceType always wins over the legacy Encounter.type kind.
+        // TCM is checked before dental so the result is deterministic even for
+        // a malformed CodeableConcept containing contradictory concepts.
+        const serviceDiscipline: VisitCareDiscipline | undefined =
+          hasCodedDiscipline(serviceTypeCodings, 'tcm')
             ? 'tcm'
-            : kindCode === 'dental-outpatient' || typeText.includes('牙科') ||
-              typeText.includes('牙醫') || typeText.includes('dental')
+            : hasCodedDiscipline(serviceTypeCodings, 'dental')
+              ? 'dental'
+              : undefined
+        // Health Bank bridge v1.6 used explicit type codes. Retain those as a
+        // read-only fallback after standard serviceType codings.
+        const careDiscipline: VisitCareDiscipline =
+          serviceDiscipline ?? (
+            kindCode === 'tcm-outpatient'
+              ? 'tcm'
+              : kindCode === 'dental-outpatient'
               ? 'dental'
               : 'western'
+          )
         const kindCodes = (encounter.type ?? []).flatMap((concept: any) =>
           (concept?.coding ?? []).map((coding: any) =>
             String(coding?.code ?? '').toLowerCase(),
@@ -136,8 +241,8 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         
         const isUuid = (s: string) =>
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
-        const providerDisplay = encounter.serviceProvider?.display
-        const locationDisplay = encounter.location?.[0]?.location?.display
+        const providerDisplay = getInstitutionName(encounter.serviceProvider?.display)
+        const locationDisplay = getInstitutionName(encounter.location?.[0]?.location?.display)
         // Institution: prefer the service provider (hospital). Falls back to
         // location if the provider is missing or a raw UUID.
         const institution = (providerDisplay && !isUuid(providerDisplay))
@@ -168,7 +273,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         let department = v092Channel ||
                         encounter.type?.[0]?.coding?.[0]?.display ||
                         encounter.type?.[0]?.text ||
-                        encounter.serviceType?.coding?.[0]?.display ||
+                        serviceTypeDisplay ||
                         ''
         if (!v092Channel) {
           // Only strip kind words when we're in the legacy fallback path —

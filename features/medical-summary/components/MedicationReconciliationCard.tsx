@@ -7,12 +7,14 @@ import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
+  DocumentEvidence,
   MedicalSummaryResult,
   MedicationChangeType,
   ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface MedicationReconciliationCardProps {
   result: MedicalSummaryResult
@@ -74,9 +76,8 @@ export function MedicationReconciliationCard({
   if (total === 0) return null
 
   const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
-  const sourcesFor = (keys: string[]) => keys
-    .map((key) => byKey.get(key))
-    .filter((source): source is ResolvedSourceRef => source !== undefined)
+  const sourcesFor = (keys: string[], evidence?: DocumentEvidence[]) =>
+    resolveClaimSources(keys, byKey, evidence)
 
   const regimen = showAll ? review.regimen : review.regimen.slice(0, INITIAL_REGIMEN)
   const changes = showAll ? review.changes : review.changes.slice(0, INITIAL_CHANGES)
@@ -102,7 +103,7 @@ export function MedicationReconciliationCard({
           <h4 className="mb-1 text-[0.625rem] font-semibold text-muted-foreground">{regimenTitle}</h4>
           <div className="divide-y divide-border/70 rounded-md border border-border/80">
             {regimen.map((item, index) => {
-              const sources = sourcesFor(item.sourceKeys)
+              const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
               const meta = sourceMeta(latestSource(sources))
               return (
                 <div key={`${item.name}-${index}`} className="flex min-w-0 items-start gap-2 px-2.5 py-1.5">
@@ -132,7 +133,7 @@ export function MedicationReconciliationCard({
           <h4 className="mb-1 text-[0.625rem] font-semibold text-muted-foreground">{changesTitle}</h4>
           <div className="space-y-1">
             {changes.map((item, index) => {
-              const sources = sourcesFor(item.sourceKeys)
+              const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
               const meta = sourceMeta(latestSource(sources))
               return (
                 <div key={`${item.medication}-${index}`} className="rounded-md bg-muted/45 px-2.5 py-1.5">
@@ -159,7 +160,7 @@ export function MedicationReconciliationCard({
           <h4 className="mb-1 text-[0.625rem] font-semibold text-muted-foreground">{reconciliationTitle}</h4>
           <div className="divide-y divide-border/70 rounded-md border border-amber-200/70 bg-amber-50/35 dark:border-amber-900/50 dark:bg-amber-950/10">
             {reconciliation.map((item, index) => {
-              const sources = sourcesFor(item.sourceKeys)
+              const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
               return (
                 <p key={`${item.text}-${index}`} className="px-2.5 py-1.5 text-[0.75rem] leading-snug text-foreground/90">
                   {item.text}

@@ -30,6 +30,9 @@ const SCHEMA_HINT =
   '"category": "renal|bleeding|critical-lab|duplicate|allergy|monitoring|other", ' +
   '"recommendation": "<optional next step>"}]}'
 
+const SAFETY_BATCH_BLOCK_START = '<<<MEDIPRISMA_MODULE:safety>>>'
+const SAFETY_BATCH_BLOCK_END = '<<<END_MEDIPRISMA_MODULE:safety>>>'
+
 // Appended to both prompts. "high" only stays useful if it's RARE — over-
 // rating common, usually-appropriate geriatric prescribing (e.g. an
 // anticholinergic BPH/OAB drug in an older man, which is near-universal and
@@ -161,6 +164,28 @@ const SYSTEM_PATIENT =
   NO_POSITIONAL_RULE +
   SOURCE_RULE
 
+// The shared briefing prompt already supplies the language, untrusted-data,
+// SOURCE LIST, evidence, and JSON-only contracts. Embedding SYSTEM_MEDICAL or
+// SYSTEM_PATIENT here used to repeat the entire standalone Safety prompt and
+// made this one card larger than the other five cards combined. Keep only the
+// Safety-specific decision rules that materially change its output.
+const BATCH_SAFETY_CORE_RULES =
+  'Review renal dosing, bleeding or multiple antithrombotics, critical/abnormal labs, duplicate therapy, documented allergy conflicts, and missing monitoring systematically. ' +
+  'Return each distinct risk once; an empty alerts array is valid. Put the actual triggering value, medicine, and/or date in "detail" and human-readable support in "evidence"; cite only direct SOURCE LIST keys in "sources". ' +
+  'Severity uses TIME-TO-HARM: use "high" only for a specific serious harm plausible within days to a few weeks when prompt action could avert it, and name that harm in "detail". Use "medium" for review items, chronic-stable or mildly abnormal findings, ordinary polypharmacy, dosing worth confirming, and monitoring gaps; use "low" for information. Duplicate and monitoring categories are never high. ' +
+  'Recency: do not call a lab or vital current/recent unless it is within about 3 months of the newest record; never combine old and recent readings as if concurrent. ' +
+  'Drug properties must be accurate: name only medicines known to have the stated property; tamsulosin and mosapride are not anticholinergic, while imipramine and tolterodine are. Omit an uncertain attribution. ' +
+  'Duplicate therapy requires the same or same-class additive medicine prescribed by TWO DIFFERENT non-pharmacy facilities with overlapping supply. A prescribing facility plus its dispensing pharmacy, or same-facility refills, is one therapy and must not be flagged. Cite the overlapping MedicationRequest keys and name both prescribers with dates. If the overlap creates acute bleeding or another harm, use that harm category instead of duplicate. ' +
+  'A document may support an explicitly recorded diagnosis, but never claim an endoscopy, biopsy, imaging result, or other procedure unless the document text explicitly records it. ' +
+  'Keep title, detail, and recommendation self-contained; never refer to content as above, below, or as follows. Order alerts by severity.'
+
+const BATCH_SAFETY_MEDICAL_RULES =
+  'Write concise clinician-facing medication-safety alerts. A recommendation may propose verification, monitoring, specialist review, or prompt action appropriate to the calibrated severity; do not invent a treatment change.'
+
+const BATCH_SAFETY_PATIENT_RULES =
+  'Write calm, plain-language reminders for a patient. Briefly explain necessary terms, give a concrete next step or relevant specialty, and never tell the patient to start, stop, or change a medicine without their clinician or pharmacist. ' +
+  'Do not imply that a medicine caused a frightening past event or use alarming headings. For medication review, mention specific symptoms only as conditional signs to discuss if they occur; otherwise omit the item rather than undermine a prescription without a patient-specific reason.'
+
 export interface GenerateSafetyAlertsInput {
   clinicalContext: string
   /** Patient-specific values to mask again at the final outbound boundary. */
@@ -246,6 +271,42 @@ export class GenerateSafetyAlertsUseCase {
         ),
       },
     ]
+  }
+
+  /** Compact prompt fragment embedded in the shared card briefing. Common
+   * evidence/language/output rules come from that outer prompt; this fragment
+   * contains only Safety-specific decisions and its schema. */
+  buildBatchModuleInstruction(
+    input: Pick<GenerateSafetyAlertsInput, 'audience' | 'locale'>,
+  ): string {
+    return [
+      'SAFETY MODULE RULES:',
+      input.audience === 'patient'
+        ? BATCH_SAFETY_PATIENT_RULES
+        : BATCH_SAFETY_MEDICAL_RULES,
+      BATCH_SAFETY_CORE_RULES,
+      'Return this module with the exact markers and no prose inside the block:',
+      SAFETY_BATCH_BLOCK_START,
+      SCHEMA_HINT,
+      SAFETY_BATCH_BLOCK_END,
+    ].join('\n\n')
+  }
+
+  hasCompleteBatchModuleBlock(text: string): boolean {
+    const startIndex = text.indexOf(SAFETY_BATCH_BLOCK_START)
+    return startIndex >= 0 && text.indexOf(SAFETY_BATCH_BLOCK_END, startIndex) >= 0
+  }
+
+  parseBatchModuleResult(
+    text: string,
+    catalog?: SummarySourceCatalogEntry[],
+  ): SafetyScanResult | null {
+    const startIndex = text.indexOf(SAFETY_BATCH_BLOCK_START)
+    if (startIndex < 0) return null
+    const contentStart = startIndex + SAFETY_BATCH_BLOCK_START.length
+    const endIndex = text.indexOf(SAFETY_BATCH_BLOCK_END, contentStart)
+    if (endIndex < 0) return null
+    return this.parseScanResult(text.slice(contentStart, endIndex), catalog)
   }
 
   /**

@@ -18,6 +18,23 @@ function render(encounters: any[], locale: 'en' | 'zh-TW' = 'zh-TW') {
 }
 
 describe('useVisitHistory — bridge bug regression locks', () => {
+  describe('institution display cleanup', () => {
+    it('shows only the institution name when NHI appends visit type and institution code', () => {
+      const { result } = render([{
+        id: 'enc-composite-institution',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        period: { start: '2026-08-13' },
+        serviceProvider: { display: '臺北榮總;門診;0601160016' },
+        location: [{ location: { display: '臺北榮總；門診；0601160016' } }],
+      }])
+
+      expect(result.current[0].institution).toBe('臺北榮總')
+      expect(result.current[0].location).toBe('臺北榮總')
+    })
+  })
+
   describe('pharmacy subtitle dedup (pre-v0.9.2 fallback)', () => {
     // Pre-v0.9.2 bridges packed "藥局" into type[0].text alone — same
     // single field that NHI uses for the data channel. Without the
@@ -178,13 +195,12 @@ describe('useVisitHistory — bridge bug regression locks', () => {
 
   describe('NHI care-discipline classification', () => {
     it.each([
-      ['western', 'outpatient', '門診'],
-      ['tcm', 'tcm-outpatient', '中醫門診'],
-      ['dental', 'dental-outpatient', '牙科門診'],
+      ['western', 'outpatient'],
+      ['tcm', 'tcm-outpatient'],
+      ['dental', 'dental-outpatient'],
     ])('classifies %s from the bridge v1.6 encounter-kind code', (
       expectedDiscipline,
       kindCode,
-      kindText,
     ) => {
       const { result } = render([{
         id: `enc-${kindCode}`,
@@ -192,11 +208,9 @@ describe('useVisitHistory — bridge bug regression locks', () => {
         class: { code: 'AMB' },
         type: [
           {
-            text: kindText,
             coding: [{
               system: ENCOUNTER_KIND_SYSTEM,
               code: kindCode,
-              display: kindText,
             }],
           },
           {
@@ -215,22 +229,198 @@ describe('useVisitHistory — bridge bug regression locks', () => {
       expect(result.current[0].type).toBe('outpatient')
     })
 
-    it.each([
-      ['tcm', '中醫門診'],
-      ['dental', '牙醫門診'],
-    ])('falls back to legacy %s text when the code is absent', (
-      expectedDiscipline,
-      kindText,
-    ) => {
+    it('falls back to western for an ordinary AMB encounter with no discipline coding', () => {
       const { result } = render([{
-        id: `legacy-${expectedDiscipline}`,
+        id: 'ordinary-amb',
         status: 'finished',
         class: { code: 'AMB' },
-        type: [{ text: kindText }],
-        period: { start: '2025-04-11T00:00:00+08:00' },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].type).toBe('outpatient')
+      expect(result.current[0].careDiscipline).toBe('western')
+    })
+
+    it('keeps read-only compatibility with the transitional custom TCM code', () => {
+      const { result } = render([{
+        id: 'legacy-custom-tcm',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        serviceType: {
+          coding: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/clinical-service-domain',
+            code: 'traditional-chinese-medicine',
+          }],
+        },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].type).toBe('outpatient')
+      expect(result.current[0].careDiscipline).toBe('tcm')
+    })
+
+    it('classifies Medcloud General Dental serviceType as dental', () => {
+      const { result } = render([{
+        id: 'medcloud-dental',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{
+          text: '門診',
+          coding: [{
+            system: ENCOUNTER_KIND_SYSTEM,
+            code: 'outpatient',
+            display: '門診',
+          }],
+        }],
+        serviceType: {
+          coding: [{
+            system: 'http://terminology.hl7.org/CodeSystem/service-type',
+            code: '88',
+            display: 'General Dental',
+          }],
+        },
+        period: { start: '2024-09-26' },
+      }])
+
+      expect(result.current[0].type).toBe('outpatient')
+      expect(result.current[0].careDiscipline).toBe('dental')
+    })
+
+    it.each([
+      ['dental', 'http://terminology.hl7.org/CodeSystem/service-type', '87'],
+      ['dental', 'http://terminology.hl7.org/CodeSystem/service-type', '88'],
+      ['dental', 'http://terminology.hl7.org/CodeSystem/service-type', '94'],
+      ['dental', 'http://snomed.info/sct', '722163006'],
+      ['dental', 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-treatment-department-nhi-tw', '50'],
+      ['tcm', 'http://terminology.hl7.org/CodeSystem/service-type', '13'],
+      ['tcm', 'http://terminology.hl7.org/CodeSystem/service-type', '18'],
+    ])('classifies standard %s coding from %s#%s', (
+      expectedDiscipline,
+      system,
+      code,
+    ) => {
+      const { result } = render([{
+        id: `standard-${code}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        // No display on purpose: this verifies code-system matching rather
+        // than allowing the multilingual text fallback to satisfy the test.
+        serviceType: { coding: [{ system, code }] },
+        period: { start: '2026-08-12' },
       }])
 
       expect(result.current[0].careDiscipline).toBe(expectedDiscipline)
+    })
+
+    it.each([
+      ['SNOMED first', [
+        { system: 'http://snomed.info/sct', code: '722163006' },
+        { system: 'HTTP://TERMINOLOGY.HL7.ORG/CodeSystem/Service-Type', code: '88' },
+      ]],
+      ['HL7 first', [
+        { system: 'HTTP://TERMINOLOGY.HL7.ORG/CodeSystem/Service-Type', code: '88' },
+        { system: 'http://snomed.info/sct', code: '722163006' },
+      ]],
+    ])('classifies multi-coding dental serviceType with %s', (_case, coding) => {
+      const { result } = render([{
+        id: `multi-dental-${_case}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        serviceType: { coding },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current).toHaveLength(1)
+      expect(result.current[0].careDiscipline).toBe('dental')
+    })
+
+    it('prioritizes explicit serviceType over a conflicting legacy type code', () => {
+      const { result } = render([{
+        id: 'service-type-wins',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{
+          coding: [{
+            system: ENCOUNTER_KIND_SYSTEM,
+            code: 'tcm-outpatient',
+          }],
+        }],
+        serviceType: {
+          coding: [{
+            system: 'http://terminology.hl7.org/CodeSystem/service-type',
+            code: '88',
+          }],
+        },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe('dental')
+    })
+
+    it('classifies the official versioned TW Core TCM code without display or text', () => {
+      const { result } = render([{
+        id: 'tw-core-tcm',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        serviceType: {
+          coding: [{
+            system: 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-consultation-department-nhi-tw',
+            version: '2024-05-27',
+            code: '60',
+          }],
+        },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].type).toBe('outpatient')
+      expect(result.current[0].careDiscipline).toBe('tcm')
+    })
+
+    it.each([
+      [
+        'unknown code',
+        'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-consultation-department-nhi-tw',
+        '99',
+      ],
+      [
+        'wrong system',
+        'https://example.org/CodeSystem/medical-consultation-department-nhi-tw',
+        '60',
+      ],
+    ])('does not classify TCM from the %s', (_case, system, code) => {
+      const { result } = render([{
+        id: `not-tcm-${_case}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        serviceType: { coding: [{ system, code }] },
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe('western')
+    })
+
+    it('accepts the FHIR R5 CodeableReference serviceType shape', () => {
+      const { result } = render([{
+        id: 'r5-dental',
+        status: 'finished',
+        class: { coding: [{ code: 'AMB' }] },
+        type: [{ text: '門診' }],
+        serviceType: [{
+          concept: {
+            coding: [{
+              system: 'http://snomed.info/sct',
+              code: '408461007',
+            }],
+          },
+        }],
+        period: { start: '2026-08-12' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe('dental')
     })
   })
 

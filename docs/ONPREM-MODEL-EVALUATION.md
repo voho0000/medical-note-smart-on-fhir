@@ -39,17 +39,30 @@ npm.cmd run eval:onprem-models -- --phase custom-summary --models tvghbrain3.5,g
 npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
 npm.cmd run eval:onprem-models -- --phase chat --models gpt-oss:120b
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5 --summary-cases cross-hospital-current-medications --summary-strategies single,single-retry-missing,split-3-2 --repeat 10
+npm.cmd run eval:onprem-models -- --phase summary --models gpt-oss:120b --summary-strategies registered-batch-3-attempts --repeat 6
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases broad-health-summary --repeat 10
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases current-guideline-no-patient-data --repeat 10
 ```
 
-`--repeat` repeats each selected case without retaining full outputs. Summary
-strategies compare one full batch, one full batch followed by at most two
-retries for missing or ungrounded modules (matching production), and a fixed
-3+2 split. A parsed card that cites a source key absent from the supplied
-catalog is rejected before scoring and enters the same limited retry path. The
-report records request count, latency, parsing/grounding scores, language and
-safety failures, and provider-reported tokens.
+`--repeat` repeats each selected case without retaining full outputs. The
+default `registered-batch-3-attempts` strategy mirrors production: all six
+registered cards (including Safety) start in one request, every remaining
+invalid card shares one progressively smaller retry request, and the run stops
+after at most three total attempts. The older `single`,
+`single-retry-missing`, and `split-3-2` strategies remain available only for
+historical comparisons. A parsed card that cites a source key absent from the
+supplied catalog is rejected before scoring and enters the same limited retry
+path. The report records card completion after each attempt, whether attempt 3
+was required, latency, parsing/grounding scores, language and safety failures,
+and provider-reported tokens.
+
+The six-card prompt-fit release gate uses whole runs, not the average of six
+independent card scores. A run passes prompt-fit only when all six cards pass
+parsing, grounding, and scenario checks by the end of attempt 2. Attempt 3 is a
+production fallback; it may recover the visible result but does not retroactively
+pass that run. A model verdict requires at least 30 runs, at least 90% prompt-fit
+success, and 100% final completion after attempt 3. With the five built-in
+summary cases, `--repeat 6` supplies the minimum 30-run sample.
 
 The evaluator treats the data-scope selector as an authorization boundary:
 fixtures that require FHIR tools run in patient scope, while tool-less general

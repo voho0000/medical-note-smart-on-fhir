@@ -51,6 +51,9 @@ interface QueryOptions {
 interface StreamOptions extends QueryOptions {
   onChunk?: (chunk: string) => void
   onComplete?: (fullText: string) => void
+  /** Optional caller-owned signal for aborting only this transport attempt.
+   * Operation-level stop() remains responsible for cancelling the full job. */
+  signal?: AbortSignal
   /** Structured generators must not parse or persist a partial response after
    * an explicit user stop. Other callers keep the historical partial-text
    * behaviour by leaving this false. */
@@ -218,6 +221,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         liveConfig.openAiCompatibleProfiles,
       )
       const abortController = new AbortController()
+      const onAttemptAbort = () => abortController.abort(streamOptions?.signal?.reason)
+      if (streamOptions?.signal?.aborted) abortController.abort(streamOptions.signal.reason)
+      else streamOptions?.signal?.addEventListener('abort', onAttemptAbort, { once: true })
       abortControllersRef.current.set(abortController, {
         operationKey: streamOptions?.operationKey,
         modelId,
@@ -307,7 +313,15 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         return fullText
       } catch (err) {
         if (abortController.signal.aborted) {
-          record('aborted', err instanceof Error ? err.message : 'The operation was aborted')
+          const abortReason = abortController.signal.reason
+          record(
+            'aborted',
+            abortReason instanceof Error
+              ? abortReason.message
+              : err instanceof Error
+                ? err.message
+                : 'The operation was aborted',
+          )
           if (streamOptions?.throwOnAbort) {
             if (err instanceof Error && err.name === 'AbortError') throw err
             const abortError = new Error('The operation was aborted')
@@ -328,6 +342,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         options.onError?.(errorMessage)
         throw err
       } finally {
+        streamOptions?.signal?.removeEventListener('abort', onAttemptAbort)
         abortControllersRef.current.delete(abortController)
         setIsLoading(abortControllersRef.current.size > 0)
       }

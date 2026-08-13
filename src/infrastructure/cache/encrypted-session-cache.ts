@@ -14,6 +14,10 @@ import {
   decryptBytes,
   type EncryptedRecord,
 } from '@/src/infrastructure/fhir/services/bundle-crypto'
+import {
+  localImportScopeSegment,
+  readTabLocalImportId,
+} from '@/src/infrastructure/fhir/services/local-bundle-scope'
 
 /** localStorage-serialisable form of an EncryptedRecord (binary → base64). */
 interface StoredRecord {
@@ -107,25 +111,64 @@ export function removeEncryptedCache(key: string): void {
 // Shared namespace for AI-derived result caches (safety scans, insights, …) so
 // they can all be purged together when the user clears their data.
 const AI_RESULT_PREFIX = 'mediprisma:ai-result:'
+const MAX_AI_RESULT_CACHE_AGE_MS = 12 * 60 * 60 * 1000
 
-/** Cache key for an AI result, e.g. aiResultCacheKey('insights', patientId). */
-export function aiResultCacheKey(scope: string, id: string): string {
-  return `${AI_RESULT_PREFIX}${scope}:${id}`
+function aiResultNamespace(importId: string | null): string {
+  return `${AI_RESULT_PREFIX}${localImportScopeSegment(importId)}:`
 }
 
-/** Drop EVERY AI result cache — call when the user clears their bundle so a
- *  re-import of the same patient starts fresh instead of showing stale output. */
-export function purgeAiResultCaches(): void {
+/** Cache key for an AI result, e.g. aiResultCacheKey('insights', patientId). */
+export function aiResultCacheKey(
+  scope: string,
+  id: string,
+  importId = readTabLocalImportId(),
+): string {
+  return `${aiResultNamespace(importId)}${scope}:${id}`
+}
+
+/** Drop only this tab/import's AI result caches. Another MediPrisma tab may be
+ * displaying a different patient and must keep its independently-owned work. */
+export function purgeAiResultCaches(importId = readTabLocalImportId()): void {
+  if (typeof window === 'undefined') return
+  try {
+    const namespace = aiResultNamespace(importId)
+    const keys: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith(namespace)) keys.push(key)
+    }
+    keys.forEach((key) => window.localStorage.removeItem(key))
+  } catch {
+    // ignore
+  }
+}
+
+/** Sweep expired result ciphertext across every import namespace without
+ * touching another tab's still-live (<12h) results. StoredRecord.savedAt is
+ * non-PHI metadata and can be checked without that tab's encryption key. */
+export function purgeExpiredAiResultCaches(now = Date.now()): void {
   if (typeof window === 'undefined') return
   try {
     const keys: string[] = []
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i)
-      if (key && key.startsWith(AI_RESULT_PREFIX)) keys.push(key)
+      if (key?.startsWith(AI_RESULT_PREFIX)) keys.push(key)
     }
-    keys.forEach((key) => window.localStorage.removeItem(key))
+    for (const key of keys) {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(key) ?? '') as Partial<StoredRecord>
+        if (
+          typeof stored.savedAt !== 'number'
+          || now - stored.savedAt > MAX_AI_RESULT_CACHE_AGE_MS
+        ) {
+          window.localStorage.removeItem(key)
+        }
+      } catch {
+        window.localStorage.removeItem(key)
+      }
+    }
   } catch {
-    // ignore
+    // Best-effort cache hygiene.
   }
 }
 

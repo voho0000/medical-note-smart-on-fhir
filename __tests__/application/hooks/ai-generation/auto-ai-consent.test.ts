@@ -375,17 +375,17 @@ describe('source-aware automatic AI consent', () => {
     expect(getAutoAiRealDataDecision()).toBe('manual')
   })
 
-  it('rejects a cloned receipt when the encrypted Bundle has another import id', () => {
+  it('rejects a receipt when this tab has moved to another import id', () => {
     hasLocalData.mockReturnValue(true)
-    localStorage.setItem('fhir_bundle_override', 'import:bundle-a')
+    sessionStorage.setItem('fhir_bundle_override', 'import:bundle-a')
     startLocalImportAiConsent('bundle-a', NOW)
     markLocalImportAiConsentReady('bundle-a', NOW)
     recordLocalImportAiDecision('bundle-a', 'auto', NOW + 1)
     expect(canAutoRunAi(getAutoAiConsentState(NOW + 1))).toBe(true)
 
-    // Simulates another tab replacing the origin-wide IndexedDB/marker while
-    // this tab retained a cloned A:auto receipt in sessionStorage.
-    localStorage.setItem('fhir_bundle_override', 'import:bundle-b')
+    // A same-tab replacement must rotate the local authorization scope. A
+    // different tab has its own sessionStorage pointer and cannot affect this.
+    sessionStorage.setItem('fhir_bundle_override', 'import:bundle-b')
 
     expect(getAutoAiConsentState(NOW + 2)).toEqual({
       source: 'local',
@@ -401,11 +401,11 @@ describe('source-aware automatic AI consent', () => {
 
   it('binds the demo marker to the active Bundle id', () => {
     hasLocalData.mockReturnValue(true)
-    localStorage.setItem('fhir_bundle_override', 'import:real-a')
-    localStorage.setItem(DEMO_FLAG_KEY, 'demo-b')
+    sessionStorage.setItem('fhir_bundle_override', 'import:real-a')
+    sessionStorage.setItem(DEMO_FLAG_KEY, 'demo-b')
     expect(getAutoAiConsentState(NOW).source).toBe('local')
 
-    localStorage.setItem(DEMO_FLAG_KEY, 'real-a')
+    sessionStorage.setItem(DEMO_FLAG_KEY, 'real-a')
     expect(getAutoAiConsentState(NOW).source).toBe('demo')
   })
 

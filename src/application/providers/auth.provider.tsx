@@ -313,9 +313,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // survive logout and be fully readable by the next person at the
       // workstation.
       await serializeLocalBundleMutation(async () => {
+        const importId = LocalBundleService.getActiveImportId()
         clearLocalImportAiConsent()
         await LocalBundleService.clear()
-        purgeAiResultCaches()
+        purgeAiResultCaches(importId)
         // Same signal an import/clear dispatches — resets in-memory AI-result
         // stores and lets every useImportBundle instance drop its state.
         notifyBundleChanged()

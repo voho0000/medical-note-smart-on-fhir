@@ -168,6 +168,7 @@ function arrange({
     generationSlotKey: summaryGenerationSlotKey,
     isCurrentSlotGenerating: summaryCurrentSlotGenerating,
     readGenerationSlot: readSummaryGenerationSlot,
+    resolveSource: jest.fn(),
     isHydrated: summaryHydrated,
     autoGenerate: summaryAuto,
     setAutoGenerate: setSummaryAuto,
@@ -218,11 +219,11 @@ describe('useMedicalSummaryOrchestrator', () => {
     jest.useRealTimers()
   })
 
-  it('runs summary and safety as one user-facing generation action', async () => {
+  it('runs all six cards through one briefing generation call', async () => {
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
-    expect(safetyGenerate).toHaveBeenCalledTimes(1)
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('does not start manual generation when required demographics are cancelled', async () => {
@@ -515,12 +516,8 @@ describe('useMedicalSummaryOrchestrator', () => {
     const safetyA = { alerts: [{ id: 'safety-a' }] }
     const summaryB = { headline: 'summary B' }
     let finishSummary!: () => void
-    let finishSafety!: () => void
     summaryGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
       finishSummary = resolve
-    }))
-    safetyGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finishSafety = resolve
     }))
     arrange({
       summaryResult: summaryA,
@@ -552,7 +549,7 @@ describe('useMedicalSummaryOrchestrator', () => {
     act(() => { generation = result.current.generate() })
     await waitFor(() => {
       expect(summaryGenerate).toHaveBeenCalledTimes(1)
-      expect(safetyGenerate).toHaveBeenCalledTimes(1)
+      expect(safetyGenerate).not.toHaveBeenCalled()
     })
 
     expect(result.current.result).toBe(summaryA)
@@ -560,22 +557,16 @@ describe('useMedicalSummaryOrchestrator', () => {
 
     await act(async () => {
       finishSummary()
-      finishSafety()
       await generation
     })
   })
 
-  it('runs local summary and safety requests sequentially', async () => {
+  it('uses one combined request for a local model', async () => {
     const order: string[] = []
     summaryGenerate.mockImplementationOnce(async () => {
       order.push('summary:start')
       await Promise.resolve()
       order.push('summary:end')
-    })
-    safetyGenerate.mockImplementationOnce(async () => {
-      order.push('safety:start')
-      await Promise.resolve()
-      order.push('safety:end')
     })
     arrange({
       summaryModel: CUSTOM_OPENAI_MODEL_ID,
@@ -588,9 +579,8 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(order).toEqual([
       'summary:start',
       'summary:end',
-      'safety:start',
-      'safety:end',
     ])
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('stops both pipelines and does not start queued local safety work', async () => {
@@ -733,7 +723,7 @@ describe('useMedicalSummaryOrchestrator', () => {
       finishFirstSummary()
       await firstGeneration
     })
-    expect(safetyGenerate).toHaveBeenCalledTimes(1)
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('does not start queued local safety work after a Bundle replacement', async () => {
@@ -798,14 +788,14 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
-  it('keeps the prior complete pair when stopping after local summary has finished', async () => {
+  it('keeps both completed cards from a combined request when it is stopped', async () => {
     const oldSummary = { headline: 'old summary' }
     const oldSafety = { alerts: [{ id: 'old-safety' }] }
     const newSummary = { headline: 'cancelled batch summary' }
-    let finishSafety!: () => void
-    summaryGenerate.mockImplementationOnce(async () => undefined)
-    safetyGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finishSafety = resolve
+    const newSafety = { alerts: [{ id: 'combined-safety' }] }
+    let finishBriefing!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finishBriefing = resolve
     }))
     arrange({
       summaryResult: oldSummary,
@@ -817,47 +807,46 @@ describe('useMedicalSummaryOrchestrator', () => {
     const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
     let generation!: Promise<void>
     act(() => { generation = result.current.generate() })
-    await waitFor(() => expect(safetyGenerate).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
 
     arrange({
       summaryResult: newSummary,
-      safetyResult: oldSafety,
+      safetyResult: newSafety,
+      summaryGenerating: true,
       safetyGenerating: true,
       summaryModel: CUSTOM_OPENAI_MODEL_ID,
       safetyModel: CUSTOM_OPENAI_MODEL_ID,
     })
     rerender()
-    expect(result.current.result).toEqual(oldSummary)
-    expect(result.current.safetyResult).toEqual(oldSafety)
+    await waitFor(() => expect(result.current.result).toEqual(newSummary))
+    expect(result.current.safetyResult).toEqual(newSafety)
 
     act(() => result.current.cancelGeneration())
-    expect(restoreSummaryGenerationSlot).toHaveBeenCalledWith(
-      expect.stringContaining('ctx-input-a'),
-      oldSummary,
-    )
+    expect(restoreSummaryGenerationSlot).not.toHaveBeenCalled()
     expect(restoreSafetyGenerationSlot).not.toHaveBeenCalled()
     await act(async () => {
-      finishSafety()
+      finishBriefing()
       await generation
     })
 
     arrange({
       summaryResult: newSummary,
-      safetyResult: oldSafety,
+      safetyResult: newSafety,
       summaryModel: CUSTOM_OPENAI_MODEL_ID,
       safetyModel: CUSTOM_OPENAI_MODEL_ID,
     })
     rerender()
 
     await waitFor(() => expect(result.current.isStopping).toBe(false))
-    expect(result.current.result).toEqual(oldSummary)
-    expect(result.current.safetyResult).toEqual(oldSafety)
+    expect(result.current.result).toEqual(newSummary)
+    expect(result.current.safetyResult).toEqual(newSafety)
+    expect(safetyGenerate).not.toHaveBeenCalled()
     expect(result.current.summaryError).toBeNull()
     expect(result.current.safetyError).toBeNull()
     expect(recordGenerationCompletion).not.toHaveBeenCalled()
   })
 
-  it('ignores stale safety slot state until the local sequential safety job actually starts', async () => {
+  it('tracks summary and Safety completion from the same local request', async () => {
     const oldSummary = {
       headline: 'old summary',
       generation: {
@@ -892,15 +881,11 @@ describe('useMedicalSummaryOrchestrator', () => {
       issue: null,
     }
     let finishSummary!: () => void
-    let finishSafety!: () => void
     summaryGenerate.mockImplementationOnce(async () => {
       summarySlot = { ...summarySlot, isRunning: true, error: null }
+      safetySlot = { ...safetySlot, isRunning: true, error: null }
       await new Promise<void>((resolve) => { finishSummary = resolve })
       summarySlot = { result: newSummary, isRunning: false, error: null, issue: null }
-    })
-    safetyGenerate.mockImplementationOnce(async () => {
-      safetySlot = { ...safetySlot, isRunning: true, error: null }
-      await new Promise<void>((resolve) => { finishSafety = resolve })
       safetySlot = { result: newSafety, isRunning: false, error: null, issue: null }
     })
     arrange({
@@ -925,17 +910,11 @@ describe('useMedicalSummaryOrchestrator', () => {
 
     await act(async () => {
       finishSummary()
-      await Promise.resolve()
-    })
-    await waitFor(() => expect(safetyGenerate).toHaveBeenCalledTimes(1))
-    expect(recordGenerationCompletion).not.toHaveBeenCalled()
-
-    await act(async () => {
-      finishSafety()
       await generation
     })
     await act(async () => undefined)
 
+    expect(safetyGenerate).not.toHaveBeenCalled()
     expect(recordGenerationCompletion).toHaveBeenCalledTimes(1)
     expect(recordGenerationCompletion).toHaveBeenCalledWith(expect.objectContaining({
       slotKey: 'summary-slot-local',
@@ -944,11 +923,10 @@ describe('useMedicalSummaryOrchestrator', () => {
     }))
   })
 
-  it('keeps a local manual batch active until the sequential safety job settles', async () => {
-    let finishSafety!: () => void
-    summaryGenerate.mockImplementationOnce(async () => undefined)
-    safetyGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finishSafety = resolve
+  it('keeps a local manual batch active until the combined request settles', async () => {
+    let finishBriefing!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finishBriefing = resolve
     }))
     arrange({
       summaryModel: CUSTOM_OPENAI_MODEL_ID,
@@ -961,17 +939,18 @@ describe('useMedicalSummaryOrchestrator', () => {
       generation = result.current.generate()
     })
 
-    await waitFor(() => expect(safetyGenerate).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
     expect(result.current.isGenerating).toBe(true)
+    expect(safetyGenerate).not.toHaveBeenCalled()
 
     await act(async () => {
-      finishSafety()
+      finishBriefing()
       await generation
     })
     expect(result.current.isGenerating).toBe(false)
   })
 
-  it('keeps staggered auto summary and safety work in one atomic timed batch', async () => {
+  it('publishes staggered auto summary progress within one timed batch', async () => {
     jest.useFakeTimers()
     jest.setSystemTime(new Date('2026-07-20T01:00:00.000Z'))
     arrange({
@@ -996,7 +975,8 @@ describe('useMedicalSummaryOrchestrator', () => {
       },
     }
     // Summary has settled, while the independently hydrated safety hook has
-    // not started yet. Do not publish or stop the timer in this false gap.
+    // not started yet. Publish the validated summary but keep the batch timer
+    // and the pending safety state active.
     arrange({
       summaryResult: generatedSummary,
       safetyResult: null,
@@ -1006,8 +986,9 @@ describe('useMedicalSummaryOrchestrator', () => {
 
     expect(result.current.isGenerating).toBe(true)
     expect(result.current.activeBatchId).toBe(batchId)
-    expect(result.current.result).toBeNull()
+    expect(result.current.result).toBe(generatedSummary)
     expect(result.current.safetyResult).toBeNull()
+    expect(result.current.isSafetyGenerating).toBe(true)
     expect(recordGenerationCompletion).not.toHaveBeenCalled()
 
     arrange({
@@ -1473,11 +1454,12 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(result.current.activeGeneration).toBeNull()
   })
 
-  it('retries only the failed pipeline', async () => {
+  it('routes a failed card through the combined retry runner', async () => {
     arrange({ summaryError: 'failed' })
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
     await act(async () => result.current.retryFailed())
-    expect(summaryGenerate).toHaveBeenCalledTimes(1)
+    expect(summaryRetryFailedModules).toHaveBeenCalledTimes(1)
+    expect(summaryGenerate).not.toHaveBeenCalled()
     expect(safetyGenerate).not.toHaveBeenCalled()
     expect(recordGenerationCompletion).not.toHaveBeenCalled()
   })
@@ -1486,12 +1468,12 @@ describe('useMedicalSummaryOrchestrator', () => {
     arrange({
       summaryResult: {
         headline: '',
-        moduleErrors: { priorities: 'PARSE_FAILED' },
+        cardErrors: { priorities: 'PARSE_FAILED' },
       },
     })
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
 
-    expect(result.current.summaryModuleErrors).toEqual({ priorities: 'PARSE_FAILED' })
+    expect(result.current.cardErrors).toEqual({ priorities: 'PARSE_FAILED' })
     expect(result.current.hasCompleteResult).toBe(false)
 
     await act(async () => result.current.retryFailed())
@@ -1564,7 +1546,30 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(mockRecordTodayLocalImportAiDecision).toHaveBeenCalledWith('manual')
   })
 
-  it('publishes refreshed summary and safety results together after a batch settles', async () => {
+  it('shows validated summary cards while the same summary stream is still running', async () => {
+    const oldSummary = { headline: 'old summary' }
+    const oldSafety = { alerts: [{ id: 'old' }] }
+    const partialSummary = {
+      headline: '',
+      problems: [{ label: 'validated first card' }],
+    }
+    arrange({ summaryResult: oldSummary, safetyResult: oldSafety, summaryGenerating: true })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    arrange({
+      summaryResult: partialSummary,
+      safetyResult: oldSafety,
+      summaryGenerating: true,
+    })
+    rerender()
+
+    expect(result.current.result).toBe(partialSummary)
+    expect(result.current.safetyResult).toBe(oldSafety)
+    expect(result.current.isSummaryGenerating).toBe(true)
+    expect(result.current.isGenerating).toBe(true)
+  })
+
+  it('publishes each refreshed pipeline as soon as it settles', async () => {
     const oldSummary = { headline: 'old summary' }
     const oldSafety = { alerts: [{ id: 'old' }] }
     arrange({ summaryResult: oldSummary, safetyResult: oldSafety, summaryGenerating: true })
@@ -1573,12 +1578,14 @@ describe('useMedicalSummaryOrchestrator', () => {
 
     arrange({
       summaryResult: { headline: 'new summary' },
-      safetyResult: { alerts: [{ id: 'new' }] },
-      summaryGenerating: true,
+      safetyResult: oldSafety,
+      safetyGenerating: true,
     })
     rerender()
-    expect(result.current.result).toEqual(oldSummary)
+    await waitFor(() => expect(result.current.result).toEqual({ headline: 'new summary' }))
     expect(result.current.safetyResult).toEqual(oldSafety)
+    expect(result.current.isGenerating).toBe(true)
+    expect(result.current.isSafetyGenerating).toBe(true)
 
     arrange({
       summaryResult: { headline: 'new summary' },

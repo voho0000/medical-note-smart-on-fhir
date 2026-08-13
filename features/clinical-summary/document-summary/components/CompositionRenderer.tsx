@@ -115,8 +115,9 @@ export function CompositionRenderer({
   const [openSections, setOpenSections] = useState(defaultValue)
   // Adult preventive care remains a continuous report, but ONE document-level
   // toggle lets readers reclaim space without turning every chapter back into
-  // its own collapsible card. The requested default is still fully expanded.
-  const [continuousOpen, setContinuousOpen] = useState(true)
+  // its own collapsible card. Keep it collapsed until the reader opens it or
+  // source navigation targets this document.
+  const [continuousOpen, setContinuousOpen] = useState(false)
   const allSectionValuesKey = renderableSections.map((_, index) => `section-${index}`).join('|')
 
   useEffect(() => {

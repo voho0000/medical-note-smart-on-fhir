@@ -1,4 +1,8 @@
-import { enrichBundleWithNhiDrugTerminology } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
+import {
+  enrichBundleWithNhiDrugTerminology,
+  NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+  NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+} from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const NHI_DRUG_CODE_SYSTEM =
@@ -97,6 +101,13 @@ describe('App-side NHI drug terminology enrichment', () => {
     ])
     expect(knowledge).toMatchObject({
       resourceType: 'MedicationKnowledge',
+      meta: {
+        tag: expect.arrayContaining([{
+          system: NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+          code: NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+          display: 'Use the latest covered drug record for newer prescriptions',
+        }]),
+      },
       code: {
         coding: [{
           system: NHI_DRUG_CODE_SYSTEM,
@@ -142,6 +153,57 @@ describe('App-side NHI drug terminology enrichment', () => {
         what: {
           identifier: { value: 'atc-level2-2026' },
         },
+      }],
+    })
+  })
+
+  it('uses the latest covered drug record when a prescription is newer than the snapshot', async () => {
+    const sourceRequest = medicationRequest({
+      authoredOn: '2026-08-12T00:00:00+08:00',
+      medicationCodeableConcept: {
+        coding: [{
+          system: NHI_DRUG_CODE_SYSTEM,
+          code: 'AB45993100',
+          display: 'ACTEIN EFFERVESCENT TABLETS 600MG',
+        }],
+        text: '愛克痰發泡錠600毫克',
+      },
+    })
+    const source = bundleWith(
+      { resourceType: 'Patient', id: 'p1' },
+      sourceRequest,
+    )
+
+    const result = await enrichBundleWithNhiDrugTerminology(source)
+    const request = resources(result.bundle, 'MedicationRequest')[0]
+    const knowledge = resources(result.bundle, 'MedicationKnowledge')[0]
+
+    expect(result.report).toMatchObject({
+      status: 'enriched',
+      eligibleRequestCount: 1,
+      linkedRequestCount: 1,
+      atcResolvedCount: 1,
+      byResolutionStatus: { resolved: 1 },
+    })
+    expect(request.authoredOn).toBe(sourceRequest.authoredOn)
+    expect(request.medicationCodeableConcept).toEqual(
+      sourceRequest.medicationCodeableConcept,
+    )
+    expect(request.supportingInformation).toEqual([
+      { reference: `MedicationKnowledge/${knowledge.id}` },
+    ])
+    expect(knowledge).toMatchObject({
+      code: {
+        coding: [{
+          system: NHI_DRUG_CODE_SYSTEM,
+          version: 'nhi-drug-terminology-20260728',
+          code: 'AB45993100',
+          display: 'ACTEIN EFFERVESCENT TABLETS 600MG',
+        }],
+        text: '愛克痰發泡錠600毫克',
+      },
+      ingredient: [{
+        itemCodeableConcept: { text: 'ACETYLCYSTEINE 600 MG' },
       }],
     })
   })
@@ -316,5 +378,62 @@ describe('App-side NHI drug terminology enrichment', () => {
       save.mock.calls[0][0] as Record<string, any>,
       'MedicationKnowledge',
     )).toHaveLength(1)
+  })
+
+  it('re-runs enrichment once for a stored bundle created under the older date policy', async () => {
+    const previouslyEnriched = await enrichBundleWithNhiDrugTerminology(
+      bundleWith(
+        { resourceType: 'Patient', id: 'p1' },
+        medicationRequest(),
+      ),
+    )
+    const stored = JSON.parse(
+      JSON.stringify(previouslyEnriched.bundle),
+    ) as Record<string, any>
+    for (const knowledge of resources(stored, 'MedicationKnowledge')) {
+      knowledge.meta.tag = knowledge.meta.tag.filter(
+        (tag: any) => tag?.system !== NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+      )
+    }
+    stored.entry.push({
+      resource: medicationRequest({
+        id: 'mr-future',
+        authoredOn: '2026-08-12T00:00:00+08:00',
+        medicationCodeableConcept: {
+          coding: [{
+            system: NHI_DRUG_CODE_SYSTEM,
+            code: 'AB45993100',
+          }],
+          text: '愛克痰發泡錠600毫克',
+        },
+      }),
+    })
+    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
+
+    const parsed = await LocalBundleService.parseStored()
+
+    expect(parsed?.collection.medications.find(
+      (medication) => medication.id === 'mr-future',
+    )?.drugTerminology).toMatchObject({
+      officialNameEn: 'ACTEIN EFFERVESCENT TABLETS 600MG',
+      ingredientText: 'ACETYLCYSTEINE 600 MG',
+    })
+    expect(save).toHaveBeenCalledTimes(1)
+    const saved = save.mock.calls[0][0] as Record<string, any>
+    expect(resources(saved, 'MedicationKnowledge')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          meta: expect.objectContaining({
+            tag: expect.arrayContaining([
+              expect.objectContaining({
+                system: NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+                code: NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+              }),
+            ]),
+          }),
+        }),
+      ]),
+    )
   })
 })
