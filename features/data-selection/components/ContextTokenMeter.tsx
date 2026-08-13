@@ -233,9 +233,14 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
             )}
           </p>
           <p className="mt-0.5 opacity-80">
-            {locale === 'zh-TW'
-              ? '下方控制項與「預覽」已同步顯示本次實際範圍；切回較大模型會自動恢復原本儲存的設定。'
-              : 'The controls and Preview now show the effective scope for this run; switching back to a larger model restores your saved settings.'}
+            {fittedClinicalInput.contextAdaptation.tier === 'prioritized' ||
+            fittedClinicalInput.contextAdaptation.tier === 'trimmed'
+              ? locale === 'zh-TW'
+                ? '下方控制項維持原本資料範圍；「預覽」顯示本次按 token 預算漸進保留的實際內容。'
+                : 'The controls keep the original data scope; Preview shows the content progressively retained for this run’s token budget.'
+              : locale === 'zh-TW'
+                ? '下方控制項與「預覽」已同步顯示本次實際範圍；切回較大模型會自動恢復原本儲存的設定。'
+                : 'The controls and Preview now show the effective scope for this run; switching back to a larger model restores your saved settings.'}
           </p>
         </div>
       ) : null}

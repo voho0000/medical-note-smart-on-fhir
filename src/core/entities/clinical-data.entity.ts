@@ -116,9 +116,11 @@ export interface MedicationEntity {
     }>
   }
   /**
-   * FHIR R4 MedicationRequest.category — drug class / therapeutic group.
+   * FHIR R4 MedicationRequest.category — source/administrative category.
    * Bridge v0.6.10+ sends Chinese in `text` (e.g. "降血壓藥") and English
-   * in `coding[].display` (e.g. "HYPOTENSIVE AGENTS").
+   * in `coding[].display` (e.g. "HYPOTENSIVE AGENTS"). It is useful as a
+   * fallback label, but must not override exact NHI ingredient/ATC terminology
+   * or be treated by itself as a pharmacologic mechanism.
    */
   category?: Array<{
     text?: string

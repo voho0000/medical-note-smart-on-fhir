@@ -57,6 +57,88 @@ describe('useMedicationsContext full export', () => {
     localStorage.removeItem('medical-note-audience')
   })
 
+  it('pairs each medication with only its own exact NHI terminology', () => {
+    const clinicalData = {
+      medications: [{
+        id: 'betmiga',
+        status: 'active',
+        authoredOn: '2026-07-01',
+        medicationCodeableConcept: {
+          text: '貝坦利持續性藥效錠50毫克',
+          coding: [{
+            system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+            code: 'BC26216100',
+            display: 'Betmiga Prolonged-release Tablets 50mg',
+          }],
+        },
+        drugTerminology: {
+          source: 'nhi-official-drug-master',
+          snapshotId: 'nhi-drug-terminology-20260728',
+          officialNameZh: '貝坦利持續性藥效錠50毫克',
+          officialNameEn: 'Betmiga Prolonged-release Tablets 50mg',
+          ingredientText: 'Mirabegron 50 MG',
+          doseForm: '持續性藥效錠',
+          atcCode: 'G04BD12',
+          atcNameEn: 'mirabegron',
+          atcLevel2Code: 'G04',
+          atcLevel2NameZh: '泌尿系統用藥',
+          atcLevel2NameEn: 'UROLOGICALS',
+        },
+      }, {
+        id: 'other-drug',
+        status: 'active',
+        authoredOn: '2026-07-02',
+        medicationCodeableConcept: {
+          coding: [{
+            system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+            code: 'B000000100',
+            display: 'Drug B 10mg',
+          }],
+        },
+        drugTerminology: {
+          source: 'nhi-official-drug-master',
+          snapshotId: 'nhi-drug-terminology-20260728',
+          ingredientText: 'INGREDIENT B 10 MG',
+          atcCode: 'A01AA01',
+          atcNameEn: 'ingredient-b',
+          atcLevel2Code: 'A01',
+          atcLevel2NameEn: 'STOMATOLOGICAL PREPARATIONS',
+        },
+      }],
+    }
+
+    const { result } = renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'all',
+      } as any),
+      { wrapper: Wrapper },
+    )
+
+    const betmiga = result.current?.items.find((item) =>
+      item.includes('Betmiga Prolonged-release Tablets 50mg'),
+    ) ?? ''
+    const other = result.current?.items.find((item) =>
+      item.includes('Drug B 10mg'),
+    ) ?? ''
+
+    expect(betmiga).toContain('NHI terminology matched to this exact medication record')
+    expect(betmiga).toContain('NHI code=BC26216100')
+    expect(betmiga).toContain('ingredient/strength=Mirabegron 50 MG')
+    expect(betmiga).toContain('official product zh=貝坦利持續性藥效錠50毫克')
+    expect(betmiga).toContain('dose form=持續性藥效錠')
+    expect(betmiga).toContain('ATC=G04BD12 · mirabegron')
+    expect(betmiga).toContain('ATC therapeutic subgroup=G04 · UROLOGICALS / 泌尿系統用藥')
+    expect(betmiga).not.toContain('INGREDIENT B')
+
+    expect(other).toContain('ingredient/strength=INGREDIENT B 10 MG')
+    expect(other).not.toContain('Mirabegron')
+    expect(result.current?.items.join('\n')).toContain(
+      'each NHI terminology block belongs only to the medication row that contains it',
+    )
+  })
+
   it('lists past medications instead of replacing them with an omitted count', () => {
     const clinicalData = {
       medications: [pastMedication(1), pastMedication(2), pastMedication(3)],

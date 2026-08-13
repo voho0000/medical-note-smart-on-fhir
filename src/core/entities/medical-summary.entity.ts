@@ -98,12 +98,25 @@ const clampedKeys = (max: number) =>
 const clampedRequiredKeys = (max: number) =>
   z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
 
+// Verification-only metadata for claims translated or paraphrased from a
+// free-text clinical document. The quote must remain in the document's
+// original language so an offline checker can verify it without maintaining
+// an unbounded bilingual dictionary of examinations, diagnoses, and findings.
+export const DocumentEvidenceSchema = z.object({
+  source: z.string().min(1),
+  quote: clampedText(240),
+})
+export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema>
+const optionalDocumentEvidence = () =>
+  z.array(DocumentEvidenceSchema).max(4).optional()
+
 // One narrative segment. `emphasis` segments render as highlights; `sources`
 // hold catalog keys (e.g. "E1") — never free-text citations.
 export const SummarySegmentSchema = z.object({
   text: clampedText(400),
   emphasis: z.boolean().optional().default(false),
   sources: clampedKeys(6),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 export const SummaryDecisionSchema = z.object({
@@ -111,6 +124,7 @@ export const SummaryDecisionSchema = z.object({
   urgency: z.enum(SUMMARY_URGENCIES),
   rationale: z.string().transform((s) => (s.length > 400 ? s.slice(0, 400) : s)).optional(),
   sources: clampedKeys(6),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 // Timeline pick: the model only CHOOSES an event (by catalog key) and labels
@@ -119,6 +133,7 @@ export const TimelinePickSchema = z.object({
   ref: z.string().min(1),
   label: clampedText(200),
   category: z.string().optional(),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 // Inferred active-problem list: the model synthesises problems from ALL data
@@ -134,6 +149,7 @@ export const SummaryProblemSchema = z.object({
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
   sources: clampedRequiredKeys(6),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 // A compact, disease-relevant lab / imaging analysis. The model writes the
@@ -148,6 +164,7 @@ export const SummaryInvestigationSchema = z.object({
   /** One short, patient-specific interpretation of why the result matters. */
   interpretation: clampedText(400),
   sources: clampedRequiredKeys(8),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 // Patient-facing medication education. This intentionally describes how a
@@ -159,6 +176,7 @@ export const SummaryMedicationEducationSchema = z.object({
   benefit: clampedText(400),
   attention: clampedText(400),
   sources: clampedRequiredKeys(8),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 const SummaryMedicationRegimenSchema = z.object({
@@ -166,6 +184,7 @@ const SummaryMedicationRegimenSchema = z.object({
   name: clampedText(160),
   sig: z.string().transform((s) => (s.length > 240 ? s.slice(0, 240) : s)).optional(),
   sources: clampedRequiredKeys(8),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 const SummaryMedicationChangeSchema = z.object({
@@ -173,12 +192,14 @@ const SummaryMedicationChangeSchema = z.object({
   medication: clampedText(160),
   summary: clampedText(320),
   sources: clampedRequiredKeys(8),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 const SummaryMedicationReconciliationItemSchema = z.object({
   reason: z.string().optional(),
   text: clampedText(320),
   sources: clampedRequiredKeys(8),
+  documentEvidence: optionalDocumentEvidence(),
 })
 
 export const SummaryMedicationReviewSchema = z.object({
@@ -314,6 +335,10 @@ export interface ResolvedSourceRef {
   date?: string
   endDate?: string
   organization?: string
+  /** Claim-specific verbatim excerpt used to pinpoint a cited free-text
+   *  document. Never populated on the global source index; cards attach it
+   *  while resolving the sources for one claim. */
+  evidenceQuote?: string
 }
 
 export interface SummaryTimelineEvent {
@@ -330,6 +355,7 @@ export interface SummaryTimelineEvent {
   resourceId: string
   /** For category 'encounter': 住院/急診/門診, derived from Encounter.class. */
   encounterClass?: EncounterClass
+  documentEvidence?: DocumentEvidence[]
 }
 
 export interface SummaryProblem {
@@ -342,6 +368,7 @@ export interface SummaryProblem {
    *  finalize; rendered amber — shown, not hidden — so the clinician knows to
    *  verify that citation instead of trusting the pill. */
   suspectSourceKeys?: string[]
+  documentEvidence?: DocumentEvidence[]
 }
 
 export interface SummaryInvestigation {
@@ -351,6 +378,7 @@ export interface SummaryInvestigation {
   trend: string
   interpretation: string
   sourceKeys: string[]
+  documentEvidence?: DocumentEvidence[]
 }
 
 export interface SummaryMedicationEducation {
@@ -358,6 +386,7 @@ export interface SummaryMedicationEducation {
   benefit: string
   attention: string
   sourceKeys: string[]
+  documentEvidence?: DocumentEvidence[]
 }
 
 export interface SummaryMedicationReview {
@@ -367,17 +396,20 @@ export interface SummaryMedicationReview {
     name: string
     sig?: string
     sourceKeys: string[]
+    documentEvidence?: DocumentEvidence[]
   }>
   changes: Array<{
     type: MedicationChangeType
     medication: string
     summary: string
     sourceKeys: string[]
+    documentEvidence?: DocumentEvidence[]
   }>
   reconciliation: Array<{
     reason: MedicationReconciliationReason
     text: string
     sourceKeys: string[]
+    documentEvidence?: DocumentEvidence[]
   }>
 }
 
@@ -400,7 +432,12 @@ export interface MedicalSummaryResult {
    * not a separately validated or cached pipeline. */
   safety?: SafetyScanResult
   headline: string
-  summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
+  summary: Array<{
+    text: string
+    emphasis: boolean
+    sourceKeys: string[]
+    documentEvidence?: DocumentEvidence[]
+  }>
   investigations: SummaryInvestigation[]
   medicationEducation: SummaryMedicationEducation[]
   medicationReview: SummaryMedicationReview
@@ -410,6 +447,7 @@ export interface MedicalSummaryResult {
     urgency: SummaryUrgency
     rationale?: string
     sourceKeys: string[]
+    documentEvidence?: DocumentEvidence[]
   }>
   timeline: SummaryTimelineEvent[]
   /** Unique cited sources in first-appearance order, matching the RENDER

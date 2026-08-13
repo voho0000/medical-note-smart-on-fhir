@@ -6,15 +6,25 @@ import {
   buildSourceCatalog,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
+  getSourceCatalog,
   scopeDocumentSources,
   classifyEncounterClass,
   normaliseSummarySourceKey,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
-import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import {
   MEDICAL_SUMMARY_CARD_REGISTRY,
   registeredMedicalSummaryCards,
 } from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import {
+  listClinicalDocuments,
+  resolveSelectedDocuments,
+} from '@/src/core/utils/clinical-documents.utils'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import {
+  DEFAULT_DATA_FILTERS,
+  DEFAULT_DATA_SELECTION,
+} from '@/src/shared/constants/data-selection.constants'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -1021,6 +1031,29 @@ describe('medication education prompt contract', () => {
     expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
   })
 
+  it('uses exact same-row NHI terminology ahead of administrative categories', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('NHI terminology matched to this exact medication record')
+    expect(prompt).toContain('never transfer terminology between medication rows')
+    expect(prompt).toContain('take precedence over MedicationRequest.category')
+    expect(prompt).toContain('source/administrative metadata')
+    expect(prompt).toContain('does NOT establish this patient\'s indication')
+    expect(prompt).toContain('valid for EVERY medicine in that item')
+    expect(prompt).toContain('Never copy a mechanism, expected effect, or adverse-effect reminder')
+
+    const localPrompt = useCase.buildModuleMessages({
+      ...input,
+      audience: 'medical',
+      harnessProfile: 'local-small',
+    }, 'medications')[0].content
+    expect(localPrompt).toContain('same-row NHI terminology block')
+    expect(localPrompt).toContain('overrides a conflicting administrative MedicationRequest.category')
+    expect(localPrompt).toContain('Never transfer terminology across rows')
+    expect(localPrompt).toContain('one medicine cannot inherit another medicine\'s mechanism or adverse effects')
+  })
+
   it('asks for cross-record medication insight beyond classification', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'medical' })
     const prompt = messages[0].content
@@ -1489,6 +1522,90 @@ describe('finalizeResult', () => {
     expect(num('M1')).toBeLessThan(num('C1'))
   })
 
+  it('preserves the model medication group so terminology mistakes remain visible', () => {
+    const medications = [{
+      id: 'betmiga',
+      status: 'active',
+      authoredOn: '2026-07-01',
+      medicationCodeableConcept: {
+        coding: [{
+          system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+          code: 'BC26216100',
+          display: 'Betmiga Prolonged-release Tablets 50mg',
+        }],
+      },
+      // Deliberately conflicting source/administrative label.
+      category: [{ text: '抗膽鹼藥物', coding: [{ display: 'ANTICHOLINERGICS' }] }],
+      drugTerminology: {
+        source: 'nhi-official-drug-master' as const,
+        snapshotId: 'nhi-drug-terminology-20260728',
+        ingredientText: 'Mirabegron 50 MG',
+        atcCode: 'G04BD12',
+        atcNameEn: 'mirabegron',
+        atcLevel2Code: 'G04',
+        atcLevel2NameZh: '泌尿系統用藥',
+        atcLevel2NameEn: 'UROLOGICALS',
+      },
+    }]
+    const medicationCatalog = buildSourceCatalog({ medications })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: {
+        regimen: [{
+          group: '抗膽鹼藥物',
+          name: 'Betmiga Prolonged-release Tablets 50mg',
+          sources: ['M1'],
+        }],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: false,
+    })
+
+    expect(result.medicationReview.regimen[0]).toMatchObject({
+      group: '抗膽鹼藥物',
+      name: 'Betmiga Prolonged-release Tablets 50mg',
+    })
+
+    const treatmentAreaResult = useCase.finalizeResult({
+      ...ai,
+      medicationReview: {
+        ...ai.medicationReview,
+        regimen: [{
+          group: '攝護腺／膀胱',
+          name: 'Betmiga Prolonged-release Tablets 50mg',
+          sources: ['M1'],
+        }],
+      },
+    }, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: false,
+    })
+    expect(treatmentAreaResult.medicationReview.regimen[0].group)
+      .toBe('攝護腺／膀胱')
+
+    const strictResult = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+      strictGrounding: true,
+    })
+    expect(strictResult.medicationReview.regimen[0].group)
+      .toBe('抗膽鹼藥物')
+  })
+
   it('passes the clinician overview through and grounds condition-without-therapy on condition/lab keys', () => {
     const ai = {
       headline: 'h',
@@ -1765,43 +1882,47 @@ describe('finalizeResult', () => {
     expect(result.medicationReview.regimen).toEqual([])
   })
 
-  it('keeps demo Forxiga while excluding completed-only Uretropic history', () => {
+  it('keeps the latest demo Forxiga while excluding completed-only Uretropic history', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bundle = require('../../../public/demo/demo-bundle.json') as {
-      entry: Array<{ resource: Record<string, unknown> & { resourceType?: string } }>
-    }
-    const medications = bundle.entry
-      .map((entry) => entry.resource)
-      .filter((resource) => resource.resourceType === 'MedicationRequest') as unknown as MedicationEntity[]
-    const demoCatalog = buildSourceCatalog({ medications })
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const parsedData = LocalBundleService.parse(bundle)
+    expect(parsedData).not.toBeNull()
+    const includedDocumentIds = resolveSelectedDocuments(
+      listClinicalDocuments(parsedData!.collection),
+      'latestAdmission',
+      [],
+    ).map((document) => document.id)
+    const scopedClinicalData = scopeClinicalDataForAi(
+      parsedData!.collection,
+      DEFAULT_DATA_SELECTION,
+      DEFAULT_DATA_FILTERS,
+      includedDocumentIds,
+    )
+    const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { demoMedicalSummarySnapshots } = require('../../../src/infrastructure/demo/demo-ai-snapshots')
     const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots.medical))
     expect(parsed).not.toBeNull()
 
     const result = useCase.finalizeResult(parsed!, demoCatalog, {
-      clinicalData: { medications },
+      clinicalData: scopedClinicalData,
       audience: 'medical',
       locale: 'zh-TW',
     })
     expect(result.medicationReview.regimen).toHaveLength(8)
-    expect(result.medicationReview.overview).toContain('進階治療型態')
-    expect(result.medicationReview.regimen[0]).toMatchObject({
-      group: '血糖／腎臟',
-      name: 'Forxiga Film-coated Tablets 10mg',
-    })
+    expect(result.medicationReview.overview).toContain('2026年7至8月')
     const forxiga = result.medicationReview.regimen.find(
       (item) => item.name.includes('Forxiga'),
     )
 
-    expect(forxiga).toMatchObject({ group: '血糖／腎臟', sig: undefined })
+    expect(forxiga).toMatchObject({ group: '血糖／腎臟', name: 'Forxiga 10mg', sig: undefined })
     expect(result.medicationReview.regimen.some((item) => item.group === '同次慢箋')).toBe(false)
     expect(result.medicationReview.regimen.find((item) => item.name.includes('PATEAR')))
-      .toMatchObject({ group: '眼表潤滑' })
+      .toMatchObject({ group: '眼科' })
     expect(result.medicationReview.regimen.some((item) => item.name.includes('URETROPIC'))).toBe(false)
     expect(result.medicationReview.changes).toEqual([])
-    expect(result.medicationReview.regimen.find((item) => item.group === '青光眼')?.name)
-      .toContain('三種降眼壓藥併用')
+    expect(result.medicationReview.regimen.find((item) => item.group === '眼科')?.name)
+      .toContain('Brimonin')
     // Exactly ONE reconciliation item survives the quality bar. Deliberately
     // absent: the Alphagan P → Brimonin same-institution brand switch (a clean
     // sequential switch answers itself from the record) and an Imimine
@@ -1816,23 +1937,17 @@ describe('finalizeResult', () => {
     const citedSources = forxiga?.sourceKeys.map(
       (key) => demoCatalog.find((source) => source.key === key),
     ) ?? []
-    const forxigaMedications = medications.filter((medication) =>
+    const forxigaMedications = (scopedClinicalData.medications ?? []).filter((medication) =>
       medication.medicationCodeableConcept?.coding?.some((coding) =>
         coding.display?.includes('Forxiga'),
       ),
     )
     const latestForxiga = [...forxigaMedications]
       .sort((a, b) => (b.authoredOn ?? '').localeCompare(a.authoredOn ?? ''))[0]
-    const continuousForxiga = forxigaMedications.find((medication) =>
-      medication.courseOfTherapyType?.coding?.some((coding) => coding.code === 'continuous'),
-    )
 
     expect(citedSources).not.toContain(undefined)
     expect(citedSources.every((source) => source?.display.includes('Forxiga'))).toBe(true)
-    expect(citedSources.map((source) => source?.resourceId)).toEqual(expect.arrayContaining([
-      latestForxiga?.id,
-      continuousForxiga?.id,
-    ]))
+    expect(citedSources.map((source) => source?.resourceId)).toContain(latestForxiga?.id)
   })
 
   it('rescues quoted key phrases when zero highlights survive', () => {

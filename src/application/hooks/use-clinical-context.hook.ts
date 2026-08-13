@@ -40,6 +40,9 @@ export { ClinicalContextSection }
 export interface UseClinicalContextOptions {
   /** Transient model-fit view. The saved Data Selection profile is untouched. */
   profile?: ConsumerProfile
+  /** Already-scoped transient FHIR view used by model-aware record
+   * prioritization. The normal query result remains untouched. */
+  clinicalDataOverride?: ClinicalData | null
   /** Shared maximum for selected document bodies in this generated context. */
   documentTokenBudget?: number
 }
@@ -59,7 +62,10 @@ export function useClinicalContext(
   const { patient } = usePatient()
   const nowMs = useNow()
 
-  const clinicalData = (useClinicalData() as ClinicalData | null) ?? null
+  const queriedClinicalData = (useClinicalData() as ClinicalData | null) ?? null
+  const clinicalData = options.clinicalDataOverride === undefined
+    ? queriedClinicalData
+    : options.clinicalDataOverride
 
   // Hook-driven sections (richer formatting than registry can provide)
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)

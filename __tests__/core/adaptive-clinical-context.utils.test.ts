@@ -17,11 +17,15 @@ const fullProfile = {
 }
 
 describe('adaptive clinical context', () => {
-  it('leaves prompt/schema headroom inside a 32k model window', () => {
-    const target = clinicalContextTokenTarget(32_768)
-    expect(target).toBeLessThan(20_000)
-    expect(target).toBeGreaterThan(12_000)
+  it('uses bounded dynamic headroom instead of discarding a fixed window percentage', () => {
+    expect(clinicalContextTokenTarget(32_768)).toBe(20_768)
+    expect(clinicalContextTokenTarget(120_000)).toBe(98_600)
+    expect(clinicalContextTokenTarget(262_144)).toBe(226_144)
     expect(clinicalContextTokenTarget(1_024)).toBe(1)
+  })
+
+  it('keeps a 74k clinical selection intact inside a 120k model window', () => {
+    expect(74_000).toBeLessThan(clinicalContextTokenTarget(120_000))
   })
 
   it('builds a compact transient view without mutating the saved profile', () => {

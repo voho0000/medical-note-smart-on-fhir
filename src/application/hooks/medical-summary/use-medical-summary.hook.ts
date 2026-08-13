@@ -41,6 +41,7 @@ import {
   DEMO_SAFETY_SCAN_GENERATION,
   demoMedicalSummarySnapshots,
   demoSafetyScanSnapshots,
+  remapDemoSnapshotSourceKeys,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
   medicalSummaryStore,
@@ -556,11 +557,18 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   // reply, so citations verify against the real catalog.
   const demoSeed = useCallback((ctx: AiSlotDemoContext): MedicalSummaryResult | null => {
     const demoAudience = ctx.audience === 'patient' ? 'patient' : 'medical'
-    const snapshot = demoMedicalSummarySnapshots[demoAudience]
+    const snapshot = remapDemoSnapshotSourceKeys(
+      demoMedicalSummarySnapshots[demoAudience],
+      ctx.catalog,
+    )
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return null
+    const safetySnapshot = remapDemoSnapshotSourceKeys(
+      demoSafetyScanSnapshots[demoAudience],
+      ctx.catalog,
+    )
     const safety = MEDICAL_SUMMARY_CARD_REGISTRY.safety.parseRetry(
-      JSON.stringify(demoSafetyScanSnapshots[demoAudience]),
+      JSON.stringify(safetySnapshot),
       ctx.catalog,
     )
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {

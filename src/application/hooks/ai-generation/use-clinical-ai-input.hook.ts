@@ -13,7 +13,6 @@ import {
   buildClinicalContextFitCandidate,
   clinicalContextTokenTarget,
   fitClinicalContextTextToTokenBudget,
-  nextClinicalContextFitTier,
   type ClinicalContextAdaptation,
   type ClinicalContextFitTier,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
@@ -31,6 +30,8 @@ import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-c
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
+import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
+import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -77,7 +78,9 @@ export function clinicalAiSourceSignature(
   catalog: SummarySourceCatalogEntry[],
 ): string {
   return contentSignature([
-    'clinical-ai-source-v2',
+    // v3 invalidates summaries generated before exact per-row NHI terminology
+    // was included in the AI medication context and conflict policy.
+    'clinical-ai-source-v3',
     JSON.stringify(patient ?? null),
     JSON.stringify(profile),
     JSON.stringify(clinicalData),
@@ -196,13 +199,27 @@ export function useClinicalAiInput(
     () => buildClinicalContextFitCandidate(activeProfile, activeTier, targetTokens),
     [activeProfile, activeTier, targetTokens],
   )
+  const prioritizedResult = useMemo(
+    () => (
+      activeTier === 'prioritized' && baseScopedClinicalData
+        ? prioritizeClinicalDataForTokenBudget(
+            baseScopedClinicalData as Partial<ClinicalDataCollection>,
+            targetTokens,
+            fitState.originalTokens,
+          )
+        : null
+    ),
+    [activeTier, baseScopedClinicalData, fitState.originalTokens, targetTokens],
+  )
   const {
     getFormattedClinicalContext,
     getFullClinicalContext,
     includedDocumentIds,
   } = useClinicalContext(consumer, {
     profile: fitCandidate.profile,
-    documentTokenBudget: fitCandidate.documentTokenBudget,
+    clinicalDataOverride: prioritizedResult?.data as ClinicalData | undefined,
+    documentTokenBudget:
+      prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
   })
 
   const candidateClinicalContext = useMemo(
@@ -217,36 +234,32 @@ export function useClinicalAiInput(
     () => estimateTokens(candidateClinicalContext),
     [candidateClinicalContext],
   )
-  const needsSmallerTier =
-    Boolean(fitKey) &&
-    candidateTokens > targetTokens &&
-    activeTier !== 'tight'
+  const needsSmallerTier = Boolean(fitKey) &&
+    activeTier === 'full' &&
+    candidateTokens > targetTokens
 
   useEffect(() => {
     if (!fitKey || !rawDataReady) return
-    // The state machine evaluates only one profile per render: full → compact
-    // → tight. This avoids constructing every possible context up front.
+    // First render measures the complete saved selection. Only an over-budget
+    // result activates record-level prioritization on the next render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFitState((current) => {
       if (current.key !== fitKey) {
         if (candidateTokens <= targetTokens) return current
         return {
           key: fitKey,
-          tier: 'compact',
+          tier: 'prioritized',
           originalTokens: candidateTokens,
         }
       }
-      if (candidateTokens <= targetTokens || current.tier === 'tight') return current
-      return {
-        ...current,
-        tier: nextClinicalContextFitTier(current.tier),
-      }
+      return current
     })
   }, [candidateTokens, fitKey, rawDataReady, targetTokens])
 
   const clinicalContext = useMemo(
     () => (
-      activeTier === 'tight' && candidateTokens > targetTokens
+      (activeTier === 'prioritized' || activeTier === 'trimmed' || activeTier === 'tight') &&
+      candidateTokens > targetTokens
         ? fitClinicalContextTextToTokenBudget(candidateClinicalContext, targetTokens)
         : candidateClinicalContext
     ),
@@ -254,7 +267,7 @@ export function useClinicalAiInput(
   )
   const formattedClinicalContext = useMemo(
     () => (
-      activeTier === 'tight' &&
+      (activeTier === 'prioritized' || activeTier === 'trimmed' || activeTier === 'tight') &&
       estimateTokens(candidateFormattedClinicalContext) > targetTokens
         ? fitClinicalContextTextToTokenBudget(
             candidateFormattedClinicalContext,
@@ -266,15 +279,18 @@ export function useClinicalAiInput(
   )
 
   const scopedClinicalData = useMemo(
-    () => (rawDataReady && clinicalData
-      ? scopeClinicalDataForAi(
+    () => (prioritizedResult
+      ? prioritizedResult.data as ClinicalAiDataInput
+      : rawDataReady && clinicalData
+        ? scopeClinicalDataForAi(
           clinicalData as unknown as Partial<ClinicalDataCollection>,
           fitCandidate.profile.selection,
           fitCandidate.profile.filters,
           includedDocumentIds,
         ) as ClinicalAiDataInput
-      : null),
+        : null),
     [
+      prioritizedResult,
       rawDataReady,
       clinicalData,
       fitCandidate.profile.selection,

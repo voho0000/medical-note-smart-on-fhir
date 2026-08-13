@@ -18,6 +18,33 @@ describe('document source navigation expansion', () => {
     await waitFor(() => expect(screen.getByText('出院病摘記載胃潰瘍')).toBeInTheDocument())
   })
 
+  it('scrolls to and highlights an original-language evidence quote', async () => {
+    const scrollIntoView = jest.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    const { container } = render(
+      <HtmlDocumentRenderer
+        attachment={{
+          contentType: 'text/html',
+          data: Buffer.from(
+            '<p>PANENDOSCOPY.</p><p>Impression: <b>Reflux esophagitis</b> and erythematous gastritis.</p>',
+          ).toString('base64'),
+        }}
+        forceExpandKey={3}
+        evidenceQuote="PANENDOSCOPY. Impression: Reflux esophagitis and erythematous gastritis."
+        labels={{ bodyHeader: '文件內容', noContent: '無內容', externalUrl: '外部文件' }}
+      />,
+    )
+
+    await waitFor(() => {
+      const marks = container.querySelectorAll('mark[data-document-evidence]')
+      expect(marks.length).toBeGreaterThan(0)
+      expect(scrollIntoView).toHaveBeenCalled()
+    })
+  })
+
   it('opens Composition sections when a citation navigates to it', async () => {
     render(
       <CompositionRenderer

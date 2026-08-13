@@ -11,10 +11,10 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
   ProblemKind,
-  ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 // A care plan / discharge summary is a structured clinical record → reads as
 // more authoritative (blue "紀錄"); everything else is a pattern inference
@@ -78,9 +78,11 @@ export function ProblemListCard({
       <div className="@container">
         <div className="grid grid-cols-1 gap-x-5 @min-[32rem]:grid-cols-2">
         {visible.map((p, i) => {
-          const sources = p.sourceKeys
-            .map((k) => byKey.get(k))
-            .filter((s): s is ResolvedSourceRef => s !== undefined)
+          const sources = resolveClaimSources(
+            p.sourceKeys,
+            byKey,
+            p.documentEvidence,
+          )
           // Finalize-detected evidence-type mismatches (依據:心電圖 citing a
           // chest X-ray) tint that citation amber instead of hiding it.
           const suspectKeys = p.suspectSourceKeys?.length

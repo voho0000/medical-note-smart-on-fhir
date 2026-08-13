@@ -155,6 +155,9 @@ export function CrossFacilityTimeline({
                         resourceId: event.resourceId,
                         display: event.label,
                         date: event.date,
+                        evidenceQuote: event.documentEvidence?.find(
+                          (evidence) => evidence.source === event.key,
+                        )?.quote,
                       })
                     }
                     className="group -mx-1 -my-0.5 w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/50"

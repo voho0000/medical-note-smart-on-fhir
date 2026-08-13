@@ -7,11 +7,11 @@ import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
-  ResolvedSourceRef,
   SummaryUrgency,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 const URGENCY_STYLES: Record<SummaryUrgency, { box: string; badge: string }> = {
   high: {
@@ -74,9 +74,11 @@ export function DecisionList({
       <div className="space-y-1.5">
         {visible.map((d, i) => {
           const style = URGENCY_STYLES[d.urgency]
-          const sources = d.sourceKeys
-            .map((k) => byKey.get(k))
-            .filter((s): s is ResolvedSourceRef => s !== undefined)
+          const sources = resolveClaimSources(
+            d.sourceKeys,
+            byKey,
+            d.documentEvidence,
+          )
           return (
             <div key={i} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>
               <div className="flex items-start gap-2">
