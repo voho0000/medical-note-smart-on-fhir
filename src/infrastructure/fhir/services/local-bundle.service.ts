@@ -26,7 +26,11 @@ import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
-import { enrichBundleWithNhiDrugTerminology } from './nhi-drug-terminology-enrichment.service'
+import {
+  enrichBundleWithNhiDrugTerminology,
+  NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
+  NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+} from './nhi-drug-terminology-enrichment.service'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   applyUserEnteredPatientProfile,
@@ -611,13 +615,21 @@ function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
         (tag: any) => tag?.system === NHI_DRUG_SNAPSHOT_TAG_SYSTEM,
       ))
   if (governedKnowledge.length === 0) return false
-  return governedKnowledge.every((resource: any) =>
+  const hasCurrentHierarchy = governedKnowledge.every((resource: any) =>
     Array.isArray(resource.meta?.tag)
     && resource.meta.tag.some(
       (tag: any) =>
         tag?.system === ATC_HIERARCHY_TAG_SYSTEM
         && typeof tag?.code === 'string',
     ))
+  const hasCurrentAppPolicy = governedKnowledge.some((resource: any) =>
+    Array.isArray(resource.meta?.tag)
+    && resource.meta.tag.some(
+      (tag: any) =>
+        tag?.system === NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM
+        && tag?.code === NHI_DRUG_ENRICHMENT_POLICY_VERSION,
+    ))
+  return hasCurrentHierarchy && hasCurrentAppPolicy
 }
 
 function terminologyFromMedicationKnowledge(
@@ -1338,11 +1350,11 @@ export const LocalBundleService = {
     let bundle = await this.load()
     if (!bundle) return null
 
-    // Bundles persisted before App-side drug terminology existed do not carry
-    // MedicationKnowledge, so medical users would fall back to the source
-    // Chinese product name after a reload. Upgrade them once, locally and
-    // fail-closed, then re-encrypt the enriched FHIR under the same import id.
-    // The raw SDK JSON is neither needed nor recovered.
+    // Bundles persisted before App-side drug terminology existed, or before
+    // the current exact-code/latest-covered-date policy, do not carry the
+    // current policy tag. Upgrade them once locally, then re-encrypt the
+    // enriched FHIR under the same import id. The raw SDK JSON is neither
+    // needed nor recovered.
     if (!hasNhiDrugTerminologyKnowledge(bundle)) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
