@@ -1813,12 +1813,25 @@ describe('finalizeResult', () => {
         text: expect.stringContaining('Sennosides'),
       }),
     ])
-    const citedResourceIds = forxiga?.sourceKeys.map(
-      (key) => demoCatalog.find((source) => source.key === key)?.resourceId,
+    const citedSources = forxiga?.sourceKeys.map(
+      (key) => demoCatalog.find((source) => source.key === key),
+    ) ?? []
+    const forxigaMedications = medications.filter((medication) =>
+      medication.medicationCodeableConcept?.coding?.some((coding) =>
+        coding.display?.includes('Forxiga'),
+      ),
     )
-    expect(citedResourceIds).toEqual(expect.arrayContaining([
-      'demo-medicationrequest-29', // continuous / 慢箋 evidence
-      'demo-medicationrequest-99', // latest pharmacy record
+    const latestForxiga = [...forxigaMedications]
+      .sort((a, b) => (b.authoredOn ?? '').localeCompare(a.authoredOn ?? ''))[0]
+    const continuousForxiga = forxigaMedications.find((medication) =>
+      medication.courseOfTherapyType?.coding?.some((coding) => coding.code === 'continuous'),
+    )
+
+    expect(citedSources).not.toContain(undefined)
+    expect(citedSources.every((source) => source?.display.includes('Forxiga'))).toBe(true)
+    expect(citedSources.map((source) => source?.resourceId)).toEqual(expect.arrayContaining([
+      latestForxiga?.id,
+      continuousForxiga?.id,
     ]))
   })
 
