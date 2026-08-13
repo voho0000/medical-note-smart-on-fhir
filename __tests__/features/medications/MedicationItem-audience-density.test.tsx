@@ -13,6 +13,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
     locale: 'zh-TW',
     t: {
       medications: {
+        daysLeft: '剩 {n} 天',
         executionPeriod: '執行',
         terminologySource: '健保署藥品主檔補充',
         terminologyIngredientLabel: '成分／含量',
@@ -146,5 +147,22 @@ describe('MedicationItem audience-aware compact terminology', () => {
       '執行 2025/05/20–2025/05/21、2025/05/22–2025/05/28',
     )
     expect(container.firstElementChild?.children).toHaveLength(2)
+  })
+
+  it('keeps the days-left badge inside constrained parent layouts', () => {
+    mockAudience = 'medical'
+    const medication = {
+      ...medicationRow(
+        'ACETYLCYSTEINE 600 MG',
+        'ACTEIN EFFERVESCENT TABLETS 600MG',
+      ),
+      daysRemaining: 2,
+    }
+    const { container } = render(<MedicationItem medication={medication} />)
+
+    const row = container.firstElementChild
+    const badge = screen.getByText('剩 2 天')
+    expect(row).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
+    expect(badge).toHaveClass('shrink-0')
   })
 })
