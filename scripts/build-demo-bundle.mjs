@@ -76,7 +76,7 @@ const FAKE_DOCTORS = [
 // both the narrative harvester and the residual leak gate.
 const isTitleOrDept = (s) =>
   /科$/.test(s) ||
-  /^(主治|主任|住院|總|實習|值班|經治|代理|門診|急診|專科|護理|個管|放射|麻醉|病理|核醫|家醫|身心|中醫|牙)/.test(s)
+  /^(主治|主任|住院|總|實習|值班|經治|代理|門診|急診|專科|護理|個管|放射|麻醉|病理|核醫|家醫|身心|中醫|牙|請洽詢)/.test(s)
 
 // Institution suffix matcher + generic words that are NOT a specific institution
 // name (so we neither replace nor flag them).
@@ -149,6 +149,10 @@ const getDate = (r) =>
 const cmpRecent = (a, b) => String(getDate(b)).localeCompare(String(getDate(a)))
 const isCat = (r, code) =>
   (r.category || []).some((c) => (c.coding || []).some((x) => x.code === code))
+const isAdultPreventiveComposition = (r) =>
+  r.resourceType === 'Composition' &&
+  ((r.type?.coding || []).some((coding) => coding.system === 'http://loinc.org' && coding.code === '75484-6') ||
+    /成人預防保健/.test(`${r.type?.text || ''} ${r.title || ''}`))
 
 // ===========================================================================
 // 1. SELECT a representative subset
@@ -194,6 +198,21 @@ byType('Observation')
   .forEach((o) => keptObs.set(o.id, o))
 
 const keptDocs = byType('DocumentReference').sort(cmpRecent).slice(0, TARGET.dischargeSummaries)
+// Keep the latest adult preventive-care report and every Observation referenced
+// by its sections so the document renders as a complete, navigable report.
+const keptPreventiveCompositions = byType('Composition')
+  .filter(isAdultPreventiveComposition)
+  .sort(cmpRecent)
+  .slice(0, 1)
+for (const composition of keptPreventiveCompositions) {
+  for (const section of composition.section || []) {
+    for (const entry of section.entry || []) {
+      const observationId = String(entry.reference || '').split('/').pop()
+      const observation = obsById.get(observationId)
+      if (observation) keptObs.set(observation.id, observation)
+    }
+  }
+}
 const keptProc = byType('Procedure')
 const keptImm = byType('Immunization')
 const keptCare = byType('CarePlan')
@@ -257,12 +276,13 @@ const collectEnc = (r) => {
   if (top) referencedEnc.add(String(top).split('/').pop())
   for (const ce of r.context?.encounter || []) if (ce?.reference) referencedEnc.add(String(ce.reference).split('/').pop())
 }
-;[...keptLabDRs, ...keptTextRad, ...keptImageRad, ...keptMeds, ...keptDocs, ...keptProc, ...keptObs.values()].forEach(collectEnc)
+;[...keptLabDRs, ...keptTextRad, ...keptImageRad, ...keptMeds, ...keptDocs, ...keptPreventiveCompositions, ...keptProc, ...keptObs.values()].forEach(collectEnc)
 inpatientEnc.forEach((e) => referencedEnc.add(e.id))
 const keptEnc = [...referencedEnc].map((id) => encById.get(id)).filter(Boolean)
 
 const kept = [
   patient,
+  ...keptPreventiveCompositions,
   ...keptDocs,
   ...keptImageRad,
   ...keptTextRad,
@@ -571,16 +591,16 @@ console.log(`   ${bannersCropped} ultrasound banner(s) cropped`)
 // 5. LEAK GATE — refuse to write if any original PII token survives
 // ===========================================================================
 // In incremental mode, preserve the complete committed demo history and its
-// stable resource ids. Only append encounters and medications newer than the
-// latest corresponding resource already in the demo. References between the
-// new resources are remapped to ids that continue the existing sequence.
+// stable resource ids. Append newer encounters/medications plus the latest
+// adult preventive-care Composition and its referenced Observations. Reuse
+// matching Observations already present in the demo and remap every reference.
 let finalResources = out
 let finalEntries = out.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r }))
 if (LATEST_ONLY) {
-  const incrementalTypes = new Set(['Encounter', 'MedicationRequest'])
+  const recentTypes = new Set(['Encounter', 'MedicationRequest'])
   const baseResources = baseBundle.entry.map((e) => e?.resource).filter(Boolean)
   const cutoffs = new Map()
-  for (const type of incrementalTypes) {
+  for (const type of recentTypes) {
     const dates = baseResources
       .filter((r) => r.resourceType === type)
       .map(getDate)
@@ -589,12 +609,63 @@ if (LATEST_ONLY) {
     cutoffs.set(type, dates.at(-1) || '')
   }
 
-  const additions = out.filter((r) =>
-    incrementalTypes.has(r.resourceType) &&
+  const recentAdditions = out.filter((r) =>
+    recentTypes.has(r.resourceType) &&
     getDate(r) > cutoffs.get(r.resourceType),
   )
+  const preventiveKey = (r) => `${getDate(r)}|${r.type?.coding?.[0]?.code || ''}|${r.title || ''}`
+  const existingPreventiveKeys = new Set(
+    baseResources.filter(isAdultPreventiveComposition).map(preventiveKey),
+  )
+  const preventiveCompositions = out.filter((r) =>
+    isAdultPreventiveComposition(r) && !existingPreventiveKeys.has(preventiveKey(r)),
+  )
+
+  const outByRef = new Map(out.map((r) => [`${r.resourceType}/${r.id}`, r]))
+  const preventiveObservationRefs = new Set()
+  for (const composition of preventiveCompositions) {
+    for (const section of composition.section || []) {
+      for (const entry of section.entry || []) {
+        if (entry.reference?.startsWith('Observation/')) preventiveObservationRefs.add(entry.reference)
+      }
+    }
+  }
+  const codeKey = (code) => {
+    const coding = (code?.coding || []).find((item) => item.system === 'http://loinc.org') || code?.coding?.[0]
+    return coding ? `${coding.system || ''}|${coding.code || ''}` : code?.text || ''
+  }
+  const quantityKey = (quantity) => quantity
+    ? [quantity.value, quantity.unit || quantity.code || '']
+    : null
+  const observationFingerprint = (r) => JSON.stringify([
+    String(getDate(r)).slice(0, 10),
+    codeKey(r.code),
+    quantityKey(r.valueQuantity),
+    r.valueString ?? r.valueCodeableConcept ?? r.valueBoolean ?? null,
+    (r.component || []).map((component) => [
+      codeKey(component.code),
+      quantityKey(component.valueQuantity),
+      component.valueString ?? component.valueCodeableConcept ?? component.valueBoolean ?? null,
+    ]),
+  ])
+  const baseObservationByFingerprint = new Map(
+    baseResources
+      .filter((r) => r.resourceType === 'Observation')
+      .map((r) => [observationFingerprint(r), r]),
+  )
   const incrementalIdMap = new Map()
-  for (const type of incrementalTypes) {
+  const preventiveObservations = []
+  for (const ref of preventiveObservationRefs) {
+    const observation = outByRef.get(ref)
+    if (!observation) continue
+    const existing = baseObservationByFingerprint.get(observationFingerprint(observation))
+    if (existing) incrementalIdMap.set(ref, `Observation/${existing.id}`)
+    else preventiveObservations.push(observation)
+  }
+
+  const additions = [...recentAdditions, ...preventiveObservations, ...preventiveCompositions]
+  const additionTypes = new Set(additions.map((r) => r.resourceType))
+  for (const type of additionTypes) {
     const prefix = `demo-${type.toLowerCase()}-`
     let next = baseResources
       .filter((r) => r.resourceType === type && r.id?.startsWith(prefix))
@@ -629,7 +700,7 @@ if (LATEST_ONLY) {
     ...baseBundle.entry,
     ...appended.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r })),
   ]
-  console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters and ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications`)
+  console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters, ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications, ${appended.filter((r) => r.resourceType === 'Composition').length} preventive report, and ${appended.filter((r) => r.resourceType === 'Observation').length} report observations`)
 }
 
 const finalBundle = {

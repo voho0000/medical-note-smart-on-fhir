@@ -53,13 +53,18 @@ describe('preventive-care Composition continuous document mode', () => {
     )
 
     const article = container.querySelector('[data-continuous-composition="true"]')
-    const sectionGrid = container.querySelector('[data-preventive-section-grid="true"]')
     expect(article).toHaveAttribute('data-composition-layout', 'preventive-care')
     expect(article).toHaveClass('@container')
-    expect(sectionGrid).toHaveClass('grid', 'grid-cols-1', '@min-[52rem]:grid-cols-2')
-    expect(screen.getByRole('button', { name: '收合全文' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '展開全文' })).toHaveAttribute('aria-expanded', 'false')
     expect(within(article as HTMLElement).getByText('3 個章節')).toBeInTheDocument()
+    expect(screen.queryByText('成人預防保健總覽')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '一般檢查' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '展開全文' }))
+    expect(screen.getByRole('button', { name: '收合全文' })).toHaveAttribute('aria-expanded', 'true')
     expect(within(article as HTMLElement).getByText('成人預防保健總覽')).toBeInTheDocument()
+    const sectionGrid = container.querySelector('[data-preventive-section-grid="true"]')
+    expect(sectionGrid).toHaveClass('grid', 'grid-cols-1', '@min-[52rem]:grid-cols-2')
     expect(article!.querySelector('[data-composition-narrative="true"]')).toHaveClass(
       'text-xs',
       'leading-normal',
