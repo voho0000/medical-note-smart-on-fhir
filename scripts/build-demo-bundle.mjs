@@ -1,6 +1,7 @@
 // Build the bundled demo ("試用資料 / 示範病人") from a REAL NHI 健保存摺 export.
 //
 //   node scripts/build-demo-bundle.mjs [path-to-real-bundle.json]
+//   node scripts/build-demo-bundle.mjs --latest-only [path-to-real-bundle.json]
 //
 // The real source NEVER enters git. This script reads it from outside the repo,
 // (1) trims it to a representative subset, (2) recompresses embedded images,
@@ -20,6 +21,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import demoLabDedupe from './demo-lab-dedupe.cjs'
@@ -31,8 +33,17 @@ const REPO = path.resolve(__dirname, '..')
 
 const DEFAULT_SRC =
   '/Users/kuoyihsin/Downloads/nhi-P10109XXXX-20230613-20260613-v0.18.12-img.json'
-const SRC = process.argv[2] || DEFAULT_SRC
 const OUT = path.join(REPO, 'public/demo/demo-bundle.json')
+const args = process.argv.slice(2)
+const LATEST_ONLY = args.includes('--latest-only')
+const SRC = args.find((arg) => arg !== '--latest-only') || DEFAULT_SRC
+const baseBundle = LATEST_ONLY
+  ? JSON.parse(execFileSync('git', ['show', 'HEAD:public/demo/demo-bundle.json'], {
+      cwd: REPO,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+    }))
+  : null
 
 // ---- target volumes (the "balanced ~225" plan) -----------------------------
 const TARGET = {
@@ -90,6 +101,7 @@ const INSTITUTION_MAP = {
   '臺北榮總': '示範榮恩醫學中心',
   '中國附醫': '示範華佗醫學中心',
   '嘉基醫院': '示範嘉恩醫院',
+  '戴德森嘉基': '示範嘉恩醫院',
   '中國北港醫': '示範北辰醫院',
   // long / narrative forms of the same hospitals → same fake, so the demo never
   // shows one real hospital under two different names.
@@ -114,6 +126,9 @@ function die(msg) {
   process.exit(1)
 }
 if (!fs.existsSync(SRC)) die(`source not found: ${SRC}\nPass the real bundle path as the first argument.`)
+if (LATEST_ONLY && (baseBundle?.resourceType !== 'Bundle' || !Array.isArray(baseBundle.entry))) {
+  die('--latest-only requires a valid public/demo/demo-bundle.json in HEAD')
+}
 
 const raw = JSON.parse(fs.readFileSync(SRC, 'utf8'))
 if (raw.resourceType !== 'Bundle' || !Array.isArray(raw.entry)) die('source is not a FHIR Bundle')
@@ -404,9 +419,19 @@ const fakeInstitution = (() => {
 for (const tok of institutionTokens) repl.set(tok, fakeInstitution(tok))
 
 for (const tok of birthTokens) {
-  // YYYY-MM-DD → same year/month, day = 15
+  // YYYY-MM-DD → same year/month, day = 15. Some NHI narrative fields mask
+  // the month/day as XX even though Patient.birthDate is complete; normalize
+  // those variants to the same fake DOB so the source token cannot survive.
   const m = /^(\d{4})-(\d{2})-\d{2}/.exec(tok)
-  repl.set(tok, m ? `${m[1]}-${m[2]}-${FAKE.birthDay}` : tok)
+  const patientBirth = /^(\d{4})-(\d{2})-\d{2}/.exec(patient.birthDate || '')
+  const samePatientYear = /^(\d{4})-XX-XX$/i.exec(tok)
+  const fakeBirth = m
+    ? `${m[1]}-${m[2]}-${FAKE.birthDay}`
+    : samePatientYear && patientBirth?.[1] === samePatientYear[1]
+      ? `${patientBirth[1]}-${patientBirth[2]}-${FAKE.birthDay}`
+      : null
+  if (!fakeBirth) die(`unsupported birth-date token: ${tok}`)
+  repl.set(tok, fakeBirth)
 }
 // institution / personnel codes → obviously-fake all-zero codes (same length),
 // distinct per source code so they don't all collapse together.
@@ -545,15 +570,77 @@ console.log(`   ${bannersCropped} ultrasound banner(s) cropped`)
 // ===========================================================================
 // 5. LEAK GATE — refuse to write if any original PII token survives
 // ===========================================================================
+// In incremental mode, preserve the complete committed demo history and its
+// stable resource ids. Only append encounters and medications newer than the
+// latest corresponding resource already in the demo. References between the
+// new resources are remapped to ids that continue the existing sequence.
+let finalResources = out
+let finalEntries = out.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r }))
+if (LATEST_ONLY) {
+  const incrementalTypes = new Set(['Encounter', 'MedicationRequest'])
+  const baseResources = baseBundle.entry.map((e) => e?.resource).filter(Boolean)
+  const cutoffs = new Map()
+  for (const type of incrementalTypes) {
+    const dates = baseResources
+      .filter((r) => r.resourceType === type)
+      .map(getDate)
+      .filter(Boolean)
+      .sort()
+    cutoffs.set(type, dates.at(-1) || '')
+  }
+
+  const additions = out.filter((r) =>
+    incrementalTypes.has(r.resourceType) &&
+    getDate(r) > cutoffs.get(r.resourceType),
+  )
+  const incrementalIdMap = new Map()
+  for (const type of incrementalTypes) {
+    const prefix = `demo-${type.toLowerCase()}-`
+    let next = baseResources
+      .filter((r) => r.resourceType === type && r.id?.startsWith(prefix))
+      .map((r) => Number(r.id.slice(prefix.length)))
+      .filter(Number.isFinite)
+      .reduce((max, n) => Math.max(max, n), 0)
+    for (const r of additions.filter((candidate) => candidate.resourceType === type)) {
+      next++
+      incrementalIdMap.set(`${type}/${r.id}`, `${type}/${prefix}${next}`)
+    }
+  }
+  const appended = JSON.parse(JSON.stringify(additions))
+  const remapIncrementalRefs = (node) => {
+    if (Array.isArray(node)) return node.forEach(remapIncrementalRefs)
+    if (node && typeof node === 'object') {
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'reference' && typeof value === 'string' && incrementalIdMap.has(value)) {
+          node[key] = incrementalIdMap.get(value)
+        } else {
+          remapIncrementalRefs(value)
+        }
+      }
+    }
+  }
+  for (const r of appended) {
+    const newRef = incrementalIdMap.get(`${r.resourceType}/${r.id}`)
+    r.id = newRef.split('/').pop()
+    remapIncrementalRefs(r)
+  }
+  finalResources = [...baseResources, ...appended]
+  finalEntries = [
+    ...baseBundle.entry,
+    ...appended.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r })),
+  ]
+  console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters and ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications`)
+}
+
 const finalBundle = {
   resourceType: 'Bundle',
   type: 'collection',
-  entry: out.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r })),
+  entry: finalEntries,
 }
 const serialized = JSON.stringify(finalBundle)
 // also build a "fully-decoded" view (HTML un-base64'd) for the leak scan
 let decodedView = serialized
-for (const r of out) {
+for (const r of finalResources) {
   if (r.resourceType === 'DocumentReference') {
     for (const c of r.content || []) {
       if (c.attachment?.data && /html|text/.test(c.attachment.contentType || '')) {
@@ -622,8 +709,8 @@ fs.writeFileSync(OUT, JSON.stringify(finalBundle))
 const sizeMB = (fs.statSync(OUT).size / 1024 / 1024).toFixed(2)
 
 const hist = {}
-for (const r of out) hist[r.resourceType] = (hist[r.resourceType] || 0) + 1
-console.log('\n✅ demo bundle written:', path.relative(REPO, OUT), `(${sizeMB} MB, ${out.length} resources)`)
+for (const r of finalResources) hist[r.resourceType] = (hist[r.resourceType] || 0) + 1
+console.log('\n✅ demo bundle written:', path.relative(REPO, OUT), `(${sizeMB} MB, ${finalResources.length} resources)`)
 console.log('   histogram:', JSON.stringify(hist))
 console.log(`   lab cross-link dedupe: removed ${demoLabDedup.removedIds.length}`)
 console.log('   leak gate: PASSED — no original PII tokens survive')
