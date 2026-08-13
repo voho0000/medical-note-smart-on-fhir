@@ -68,6 +68,17 @@ function isTwCoreDepartmentSystem(system: string): boolean {
   return TW_CORE_DEPARTMENT_SYSTEMS.has(system)
 }
 
+/**
+ * NHI sources may append visit metadata to a facility display, for example
+ * "臺北榮總;門診;0601160016". Visit history labels and filters only need the
+ * human-readable institution name.
+ */
+function getInstitutionName(display: unknown): string {
+  if (typeof display !== 'string') return ''
+  const name = display.split(/[;；]/, 1)[0].trim()
+  return name || display.trim()
+}
+
 function getServiceTypeConcepts(serviceType: any): any[] {
   const entries = Array.isArray(serviceType) ? serviceType : [serviceType]
   // R4 uses CodeableConcept directly. R5 uses CodeableReference, whose coded
@@ -230,8 +241,8 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         
         const isUuid = (s: string) =>
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
-        const providerDisplay = encounter.serviceProvider?.display
-        const locationDisplay = encounter.location?.[0]?.location?.display
+        const providerDisplay = getInstitutionName(encounter.serviceProvider?.display)
+        const locationDisplay = getInstitutionName(encounter.location?.[0]?.location?.display)
         // Institution: prefer the service provider (hospital). Falls back to
         // location if the provider is missing or a raw UUID.
         const institution = (providerDisplay && !isUuid(providerDisplay))

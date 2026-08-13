@@ -18,6 +18,23 @@ function render(encounters: any[], locale: 'en' | 'zh-TW' = 'zh-TW') {
 }
 
 describe('useVisitHistory — bridge bug regression locks', () => {
+  describe('institution display cleanup', () => {
+    it('shows only the institution name when NHI appends visit type and institution code', () => {
+      const { result } = render([{
+        id: 'enc-composite-institution',
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: '門診' }],
+        period: { start: '2026-08-13' },
+        serviceProvider: { display: '臺北榮總;門診;0601160016' },
+        location: [{ location: { display: '臺北榮總；門診；0601160016' } }],
+      }])
+
+      expect(result.current[0].institution).toBe('臺北榮總')
+      expect(result.current[0].location).toBe('臺北榮總')
+    })
+  })
+
   describe('pharmacy subtitle dedup (pre-v0.9.2 fallback)', () => {
     // Pre-v0.9.2 bridges packed "藥局" into type[0].text alone — same
     // single field that NHI uses for the data channel. Without the
