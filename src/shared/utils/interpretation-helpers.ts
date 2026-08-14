@@ -159,7 +159,7 @@ export interface InterpretationTag {
   style: string
 }
 
-function getInterpretationCode(concept?: CodeableConcept | CodeableConcept[]): string {
+export function getInterpretationCode(concept?: CodeableConcept | CodeableConcept[]): string {
   const c = firstConcept(concept)
   const raw = c?.coding?.[0]?.code || c?.coding?.[0]?.display || c?.text || ""
   return (raw || "").toString().toUpperCase()

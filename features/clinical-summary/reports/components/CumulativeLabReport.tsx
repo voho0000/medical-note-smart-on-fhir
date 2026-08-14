@@ -6,7 +6,7 @@
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   DropdownMenu,
@@ -21,6 +21,23 @@ import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categor
 import { getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
 import type { AnalyteNameMode } from "@/src/shared/utils/lab-normalize"
 import { useReportNameMode } from "../context/report-name-mode.context"
+import { useOptionalRightDetail } from "@/src/application/providers/right-detail.provider"
+import {
+  buildLabTrendSeries,
+  type LabTrendSeries,
+} from "@/src/shared/utils/lab-trend.utils"
+import {
+  CumulativeLabTrendDetail,
+  CumulativeLabTrendDialog,
+} from "./CumulativeLabTrendDetail"
+
+const EMPTY_TREND_SERIES = new Map<string, LabTrendSeries>()
+
+interface OpenTrendRequest {
+  series: LabTrendSeries
+  title: string
+  sourceId: string
+}
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -70,12 +87,18 @@ function LabPivotTable({
   focusAnalyteKey,
   focusNonce,
   nameMode,
+  trendSeries,
+  activeTrendSourceId,
+  onOpenTrend,
 }: {
   pivot: LabPivot
   fullHeight?: boolean
   focusAnalyteKey?: string
   focusNonce?: number
   nameMode: AnalyteNameMode
+  trendSeries: Map<string, LabTrendSeries>
+  activeTrendSourceId?: string
+  onOpenTrend: (request: OpenTrendRequest) => void
 }) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
@@ -207,24 +230,22 @@ function LabPivotTable({
             {flatTests.map((test) => {
               const { name, abbr } = columnParts(test.testKey, test.displayName)
               const isFocused = test.testKey === focusAnalyteKey
+              const series = trendSeries.get(test.mapKey)
+              const sourceId = `cumulative-trend:${pivot.category.id}:${test.mapKey}`
+              const isTrendActive = activeTrendSourceId === sourceId
+              const canTrend = series?.chartable === true
               const showInferredUnitInHeader =
                 inferredUnitInHeader.get(test.mapKey) === true
-              return (
-                <th
-                  key={test.mapKey}
-                  data-lab-test-key={test.testKey}
-                  className={isFocused
-                    ? "bg-teal-100 text-teal-900 ring-2 ring-inset ring-teal-500 border-b border-l px-1 py-1.5 text-center font-semibold align-bottom min-w-[46px] dark:bg-teal-950/60 dark:text-teal-100"
-                    : "bg-muted/80 backdrop-blur border-b border-l px-1 py-1.5 text-center font-medium align-bottom min-w-[46px]"}
-                >
-                  <div className="mx-auto max-w-[4.5rem] leading-tight break-words">{name}</div>
+              const heading = (
+                <>
+                  <div className="flex items-start justify-center gap-1 leading-tight">
+                    <span className="max-w-[4.5rem] break-words">{name}</span>
+                    {canTrend && (
+                      <TrendingUp className="mt-px h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                    )}
+                  </div>
                   {(abbr || test.unit) && (
                     <div className="text-[0.625rem] font-normal text-muted-foreground leading-tight whitespace-nowrap">
-                      {/* Second line: English short code + unit. No parens — the
-                          code is already on its own line. A middot separates the
-                          code from the unit (matches the app's "·" convention)
-                          when both are present; medical audience shows the unit
-                          alone (abbr is null). */}
                       {abbr ?? ''}{abbr && test.unit ? ' · ' : ''}{test.unit ?? ''}
                     </div>
                   )}
@@ -236,6 +257,38 @@ function LabPivotTable({
                         : 'The SDK did not provide a unit; this column unit was inferred under an audited policy'}
                     >
                       {locale.startsWith('zh') ? '推估單位' : 'inferred unit'}
+                    </div>
+                  )}
+                </>
+              )
+              return (
+                <th
+                  key={test.mapKey}
+                  data-lab-test-key={test.testKey}
+                  data-trend-active={isTrendActive ? 'true' : undefined}
+                  className={isFocused || isTrendActive
+                    ? "bg-teal-100 text-teal-900 ring-2 ring-inset ring-teal-500 border-b border-l p-0 text-center font-semibold align-bottom min-w-[46px] dark:bg-teal-950/60 dark:text-teal-100"
+                    : "bg-muted/80 backdrop-blur border-b border-l p-0 text-center font-medium align-bottom min-w-[46px]"}
+                >
+                  {canTrend && series ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenTrend({
+                        series,
+                        sourceId,
+                        title: abbr ? `${name} (${abbr})` : name,
+                      })}
+                      className="flex min-h-11 w-full min-w-11 flex-col items-center justify-end px-1 py-1.5 transition-colors hover:bg-primary/10 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                      aria-label={locale.startsWith('zh')
+                        ? `查看 ${name} 趨勢，共 ${series.chartPoints.length} 筆可比較結果`
+                        : `View ${name} trend, ${series.chartPoints.length} comparable results`}
+                      title={locale.startsWith('zh') ? `查看 ${name} 趨勢` : `View ${name} trend`}
+                    >
+                      {heading}
+                    </button>
+                  ) : (
+                    <div className="flex min-h-11 min-w-11 flex-col items-center justify-end px-1 py-1.5">
+                      {heading}
                     </div>
                   )}
                 </th>
@@ -319,6 +372,8 @@ export function CumulativeLabReport({
   const nameMode = useReportNameMode()
   const pivots = useLabPivot(observations, nameMode)
   const { t } = useLanguage()
+  const rightDetail = useOptionalRightDetail()
+  const [dialogTrend, setDialogTrend] = useState<OpenTrendRequest | null>(null)
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
 
   // Show every category tab, even when the patient has no data — pinnedColumns
@@ -347,6 +402,51 @@ export function CumulativeLabReport({
   const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
     ? activeCategoryId
     : internalActiveId
+
+  const activePivot = pivots[activeId]
+  const activeTrendSeries = useMemo(() => {
+    if (!activePivot) return EMPTY_TREND_SERIES
+    return new Map(activePivot.rows.map((row) => [
+      row.mapKey,
+      buildLabTrendSeries(observations, {
+        categoryId: activePivot.category.id,
+        mapKey: row.mapKey,
+        testKey: row.testKey,
+        displayName: row.displayName,
+        nameMode,
+      }),
+    ]))
+  }, [activePivot, nameMode, observations])
+
+  const activeTrendSourceId = dialogTrend?.sourceId
+    ?? (rightDetail?.detail?.sourceId.startsWith('cumulative-trend:')
+      ? rightDetail.detail.sourceId
+      : undefined)
+
+  const openTrend = (request: OpenTrendRequest) => {
+    const canUseRightPane = !fullHeight
+      && !!rightDetail
+      && typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(min-width: 768px)').matches
+
+    if (canUseRightPane) {
+      setDialogTrend(null)
+      rightDetail.showDetail({
+        sourceId: request.sourceId,
+        title: (
+          <span className="inline-flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
+            {request.title} · {(t.reports as any).cumulativeTrend?.title ?? '趨勢'}
+          </span>
+        ),
+        node: <CumulativeLabTrendDetail key={request.sourceId} series={request.series} />,
+      })
+      return
+    }
+
+    setDialogTrend(request)
+  }
 
   // Measure the real tab bar rather than relying on a screen-size breakpoint:
   // the left report pane can be resized independently from the window. The
@@ -506,10 +606,24 @@ export function CumulativeLabReport({
               focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
               focusNonce={focusNonce}
               nameMode={nameMode}
+              trendSeries={p.category.id === activeId ? activeTrendSeries : EMPTY_TREND_SERIES}
+              activeTrendSourceId={activeTrendSourceId}
+              onOpenTrend={openTrend}
             />
           </TabsContent>
         ))}
       </Tabs>
+      {dialogTrend && (
+        <CumulativeLabTrendDialog
+          key={dialogTrend.sourceId}
+          title={`${dialogTrend.title} · ${(t.reports as any).cumulativeTrend?.title ?? '趨勢'}`}
+          series={dialogTrend.series}
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialogTrend(null)
+          }}
+        />
+      )}
     </div>
   )
 }

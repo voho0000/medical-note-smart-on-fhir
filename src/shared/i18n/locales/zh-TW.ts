@@ -984,6 +984,10 @@ export const zhTW = {
     },
     cumulativeShowMore: '查看更多',
     cumulativeShowLess: '收合',
+    cumulativeTrend: {
+      title: '檢驗趨勢',
+      hint: '點檢驗名稱查看趨勢',
+    },
     cumulativeCategories: {
       cbc: '血液',
       coag: '凝血',

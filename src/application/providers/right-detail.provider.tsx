@@ -51,3 +51,12 @@ export function useRightDetail(): RightDetailContextValue {
   if (!ctx) throw new Error("useRightDetail must be used within RightDetailProvider")
   return ctx
 }
+
+/**
+ * Optional access for reusable leaf components that also render in isolated
+ * tests or embeds. The full app provides the context; without it, callers can
+ * fall back to an in-place dialog instead of crashing.
+ */
+export function useOptionalRightDetail(): RightDetailContextValue | null {
+  return useContext(RightDetailContext)
+}

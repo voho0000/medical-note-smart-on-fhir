@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
+import { Menu, Maximize2, Minimize2, Search, X, Loader2, TrendingUp } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -554,7 +554,11 @@ export function ReportsCard() {
             the large empty band of the first iteration while preventing the
             setting from competing with either level of navigation. */}
         {activeTab === 'cumulative' && (
-          <div className="mb-0.5 flex h-7 shrink-0 items-center justify-end px-1">
+          <div className="mb-0.5 flex h-7 shrink-0 items-center justify-between gap-2 px-1">
+            <span className="hidden min-w-0 items-center gap-1 text-[0.6875rem] text-muted-foreground sm:inline-flex">
+              <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="truncate">{(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}</span>
+            </span>
             <ReportNameModeSwitch />
           </div>
         )}
