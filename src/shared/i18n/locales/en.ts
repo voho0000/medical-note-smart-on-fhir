@@ -982,6 +982,10 @@ export const en = {
     },
     cumulativeShowMore: 'More',
     cumulativeShowLess: 'Less',
+    cumulativeTrend: {
+      title: 'Lab trend',
+      hint: 'Select a test name to view its trend',
+    },
     cumulativeCategories: {
       cbc: 'CBC',
       coag: 'Coag',

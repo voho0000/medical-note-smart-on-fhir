@@ -25,7 +25,7 @@ export function RightDetailPane({
           onClick={onClose}
           title={t.common.close}
           aria-label={t.common.close}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
           {t.common.close}

@@ -124,6 +124,13 @@ function PageContent() {
   // change so one patient's detail never lingers onto the next.
   const { detail, clearDetail } = useRightDetail()
   useEffect(() => {
+    if (!detail || !isLargeScreen) return
+    const timer = window.setTimeout(() => {
+      setCollapsed((current) => (current === 'right' ? null : current))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [detail, isLargeScreen])
+  useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
   useEffect(() => {

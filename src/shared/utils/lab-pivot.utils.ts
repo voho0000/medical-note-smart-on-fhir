@@ -153,7 +153,7 @@ function canonicalTestKey(obs: any): string {
 // categorization already told us it's a glucose measurement.
 const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC'])
 
-function buildTestEntry(
+export function getLabPivotTestIdentity(
   obs: any,
   categoryId?: string,
   nameMode: AnalyteNameMode = 'standardized',
@@ -262,7 +262,7 @@ export function buildLabPivots(
       if (!date) continue
       dateSet.add(date)
 
-      const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id, nameMode)
+      const { mapKey, testKey, displayName } = getLabPivotTestIdentity(obs, cat.id, nameMode)
       const fv = formatValue(obs)
       const { value, unit, numericValue, interpretationCode, status, unitInferred } = fv
       const { isAbnormal } = fv
