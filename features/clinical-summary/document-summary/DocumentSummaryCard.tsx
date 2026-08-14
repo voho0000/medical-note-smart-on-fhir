@@ -28,6 +28,7 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
+import { RIGHT_PANE_ACTION_CLASSES } from '@/src/shared/config/ui-theme.config'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
@@ -224,10 +225,9 @@ function DocumentEntryCard({
       title={isRightActive ? '已在右側面板展開' : '在右側面板展開文件'}
       aria-label="在右側面板展開文件"
       className={cn(
-        'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
-        isRightActive
-          ? 'border-primary bg-primary/10 text-primary'
-          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+        RIGHT_PANE_ACTION_CLASSES,
+        'px-1 py-0.5',
+        isRightActive && 'border-primary bg-primary/10 text-primary',
       )}
     >
       <PanelRight className="h-3.5 w-3.5" />

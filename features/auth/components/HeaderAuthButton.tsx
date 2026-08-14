@@ -56,9 +56,15 @@ export function HeaderAuthButton() {
 
   if (ENV_CONFIG.offlineMode) {
     return (
-      <Button variant="outline" size="sm" className="h-9 gap-2" disabled>
-        <ShieldCheck className="h-4 w-4 text-emerald-600" />
-        <span className="hidden sm:inline">{t.settings.openAiCompatibleGroupLabel}</span>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0"
+        aria-label={t.settings.openAiCompatibleGroupLabel}
+        disabled
+      >
+        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+        <span className="max-md:hidden">{t.settings.openAiCompatibleGroupLabel}</span>
       </Button>
     )
   }
@@ -70,9 +76,14 @@ export function HeaderAuthButton() {
       <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 h-9">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0"
+              aria-label={t.auth.guest}
+            >
               <Gift className="h-4 w-4" />
-              <span className="hidden sm:inline">{t.auth.guest}</span>
+              <span className="max-md:hidden">{t.auth.guest}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -107,10 +118,11 @@ export function HeaderAuthButton() {
           size="sm"
           variant="outline"
           onClick={() => setShowAuthDialog(true)}
-          className="gap-2 h-9"
+          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0"
+          aria-label={t.auth.signIn}
         >
           <LogIn className="h-4 w-4" />
-          <span className="hidden sm:inline">{t.auth.signIn}</span>
+          <span className="max-md:hidden">{t.auth.signIn}</span>
         </Button>
         <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
       </>
@@ -120,9 +132,14 @@ export function HeaderAuthButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 h-9">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0"
+          aria-label={user.displayName || user.email?.split('@')[0] || t.auth.signedInAs}
+        >
           <User className="h-4 w-4" />
-          <span className="hidden sm:inline">{user.displayName || user.email?.split('@')[0]}</span>
+          <span className="max-w-32 truncate max-md:hidden">{user.displayName || user.email?.split('@')[0]}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

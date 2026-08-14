@@ -1,12 +1,14 @@
 // Improved Medication List Component with Collapsible Sections
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { ChevronDown, ChevronRight, History } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
-import type { MedicationRow } from '../types'
+import { cn } from "@/src/shared/utils/cn.utils"
+import type { MedicationNameMode, MedicationRow } from '../types'
 import { MedicationItem } from './MedicationItem'
 import { MedicationHistoryList } from './MedicationHistoryList'
 import { useGroupedMedications } from '../hooks/useGroupedMedications'
@@ -22,6 +24,9 @@ interface MedicationListProps {
   showSourceChip?: boolean
   sourceChipStatementLabel?: string
   sourceChipStatementTooltip?: string
+  nameMode?: MedicationNameMode
+  showNameModeSwitch?: boolean
+  onNameModeChange?: (mode: MedicationNameMode) => void
 }
 
 export function MedicationList({
@@ -31,23 +36,35 @@ export function MedicationList({
   showSourceChip = false,
   sourceChipStatementLabel,
   sourceChipStatementTooltip,
+  nameMode = 'ingredient',
+  showNameModeSwitch = false,
+  onNameModeChange,
 }: MedicationListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
+  const [showActive, setShowActive] = useState(true)
   const [showInactive, setShowInactive] = useState(false)
+  const activeListId = useId()
+  const nameModeSwitchId = useId()
   const { activeMedications, inactiveMedicationGroups } = useGroupedMedications(medications)
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
+    const targetInActive = activeMedications.some((medication) =>
+      medication.id === pending.resourceId,
+    )
     const targetInHistory = inactiveMedicationGroups.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    if (!targetInHistory) return
-    const timer = window.setTimeout(() => setShowInactive(true), 0)
+    if (!targetInActive && !targetInHistory) return
+    const timer = window.setTimeout(() => {
+      if (targetInActive) setShowActive(true)
+      if (targetInHistory) setShowInactive(true)
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [pending, navSeq, inactiveMedicationGroups])
+  }, [pending, navSeq, activeMedications, inactiveMedicationGroups])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">{t.common.loading}</div>
@@ -55,7 +72,7 @@ export function MedicationList({
 
   if (error) {
     return (
-      <div className="text-sm text-red-600">
+      <div className="text-sm text-destructive">
         {error instanceof Error ? error.message : String(error)}
       </div>
     )
@@ -66,26 +83,96 @@ export function MedicationList({
   }
 
   const totalInactive = inactiveMedicationGroups.reduce((sum, group) => sum + group.count, 0)
+  const nameDisplay = mt.nameDisplay ?? {
+    label: '藥名顯示方式',
+    ingredient: '成分名',
+    product: '商品名',
+  }
 
   return (
     <div className="space-y-4">
       {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
         <div className="space-y-1.5">
-          <h3 className="text-sm font-semibold text-foreground">
-            {mt.currentlyInUse} ({activeMedications.length})
-          </h3>
-          <div className="space-y-0">
-            {activeMedications.map((medication) => (
-              <MedicationItem
-                key={medication.id}
-                medication={medication}
-                showSourceChip={showSourceChip}
-                sourceChipStatementLabel={sourceChipStatementLabel}
-                sourceChipStatementTooltip={sourceChipStatementTooltip}
-              />
-            ))}
+          <div className="flex min-h-8 items-center justify-between gap-2">
+            <h3 className="min-w-0 text-sm font-semibold text-foreground">
+              <button
+                type="button"
+                aria-expanded={showActive}
+                aria-controls={activeListId}
+                onClick={() => setShowActive((visible) => !visible)}
+                className="-ml-2 inline-flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                {showActive
+                  ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+                  : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />}
+                <span className="truncate">
+                  {mt.currentlyInUse} ({activeMedications.length})
+                </span>
+              </button>
+            </h3>
+            {showNameModeSwitch && onNameModeChange && (
+              <div
+                role="group"
+                aria-label={nameDisplay.label}
+                className="inline-flex min-h-8 shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"
+              >
+                <button
+                  type="button"
+                  onClick={() => onNameModeChange('ingredient')}
+                  aria-pressed={nameMode === 'ingredient'}
+                  className={cn(
+                    'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                    nameMode === 'ingredient' && 'font-medium text-foreground',
+                  )}
+                >
+                  {nameDisplay.ingredient}
+                </button>
+                <label
+                  htmlFor={nameModeSwitchId}
+                  className="inline-flex h-8 w-9 cursor-pointer items-center justify-center"
+                >
+                  <Switch
+                    id={nameModeSwitchId}
+                    checked={nameMode === 'product'}
+                    onCheckedChange={(checked) => onNameModeChange(checked ? 'product' : 'ingredient')}
+                    aria-label={nameDisplay.label}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => onNameModeChange('product')}
+                  aria-pressed={nameMode === 'product'}
+                  className={cn(
+                    'rounded-sm px-1 py-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                    nameMode === 'product' && 'font-medium text-foreground',
+                  )}
+                >
+                  {nameDisplay.product}
+                </button>
+              </div>
+            )}
           </div>
+          {showActive && (
+            <ul
+              id={activeListId}
+              data-medication-list-surface="grouped"
+              className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
+            >
+              {activeMedications.map((medication) => (
+                <li key={medication.id} className="min-w-0">
+                  <MedicationItem
+                    medication={medication}
+                    showSourceChip={showSourceChip}
+                    sourceChipStatementLabel={sourceChipStatementLabel}
+                    sourceChipStatementTooltip={sourceChipStatementTooltip}
+                    nameMode={nameMode}
+                    grouped
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -108,7 +195,7 @@ export function MedicationList({
           </Button>
 
           {showInactive && (
-            <MedicationHistoryList groups={inactiveMedicationGroups} />
+            <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
           )}
         </div>
       )}

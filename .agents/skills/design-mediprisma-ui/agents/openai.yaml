@@ -1,0 +1,4 @@
+interface:
+  display_name: "MediPrisma Clinical UI"
+  short_description: "設計與檢查可信、低干擾的 MediPrisma 臨床介面"
+  default_prompt: "Use $design-mediprisma-ui to redesign and verify this MediPrisma interface."

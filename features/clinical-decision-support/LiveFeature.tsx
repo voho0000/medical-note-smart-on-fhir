@@ -275,10 +275,10 @@ export default function LiveClinicalDecisionSupportFeature() {
             onSelect={setRequestedPackId}
           />
           <div className="flex shrink-0 items-center gap-1.5">
-            <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-200">
+            <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
               {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
             </Badge>
-            <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200">
+            <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200">
               {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
             </Badge>
           </div>

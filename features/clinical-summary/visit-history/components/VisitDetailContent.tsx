@@ -25,7 +25,8 @@ const COLLAPSE_THRESHOLDS = {
   diagnoses: 6,
   tests: 20,
   medications: 10,
-  procedures: Infinity, // procedures are rarely numerous; always show.
+  reports: 6,
+  procedures: 3,
 } as const
 
 interface VisitDetailContentProps {
@@ -110,7 +111,7 @@ export function VisitDetailContent({
           collapseThreshold={COLLAPSE_THRESHOLDS.tests}
           rightBadges={
             abnormalCount > 0 ? (
-              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 normal-case">
+              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 normal-case dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                 {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
               </span>
             ) : undefined
@@ -149,7 +150,7 @@ export function VisitDetailContent({
         <EncounterSection
           title={t.visitHistory.examReports}
           count={details.reports.length}
-          collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
+          collapseThreshold={COLLAPSE_THRESHOLDS.reports}
         >
           <div className="grid min-w-0 max-w-full gap-0 mt-2 overflow-hidden">
             {details.reports.map((report) => (
@@ -167,13 +168,14 @@ export function VisitDetailContent({
           count={details.medications.length}
           collapseThreshold={COLLAPSE_THRESHOLDS.medications}
         >
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0 mt-2">
+          <div className="@container mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] divide-y divide-border/70 overflow-hidden rounded-md border border-border/80 bg-card/45 dark:bg-card/55">
             {details.isMultiDay && details.medSeries.length > 0 ? (
               details.medSeries.map((s) => (
                 <MedTrendRow
                   key={s.id}
                   series={s}
                   showExecutionPeriods={showMedicationExecutionPeriods}
+                  grouped
                 />
               ))
             ) : (
@@ -186,6 +188,7 @@ export function VisitDetailContent({
                       ? [med.executionPeriod]
                       : undefined
                   }
+                  grouped
                 />
               ))
             )}
@@ -199,7 +202,7 @@ export function VisitDetailContent({
           count={details.procedures.length}
           collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
         >
-          <div className="grid gap-2 mt-2">
+          <div className="mt-1.5 divide-y divide-border/70 overflow-hidden rounded-md border bg-background dark:bg-card/35">
             {details.procedures.map((procedure) => (
               <ProcedureRow key={procedure.id} procedure={procedure} />
             ))}

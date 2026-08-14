@@ -52,6 +52,8 @@ interface ModelPickerProps {
   align?: "start" | "end"
   /** Dense header variant: hide the prefix and size to the actual model name. */
   compact?: boolean
+  /** Optional host-specific trigger sizing without changing other AI features. */
+  triggerClassName?: string
 }
 
 export function ModelPicker({
@@ -62,6 +64,7 @@ export function ModelPicker({
   agentModeActive = false,
   align = "end",
   compact = false,
+  triggerClassName,
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
@@ -122,6 +125,7 @@ export function ModelPicker({
           className={cn(
             "flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted",
             compact && "max-w-[14rem]",
+            triggerClassName,
           )}
         >
           {/* The 「模型：」 prefix follows the app's below-sm density rule
@@ -147,7 +151,7 @@ export function ModelPicker({
             {effectiveLabel}
           </span>
           {agentModeActive && usesStandardChat(effectiveModelId) ? (
-            <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300 sm:inline">
+            <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300 sm:inline">
               {t.modelPicker.standardChatMode}
             </span>
           ) : null}
@@ -205,7 +209,7 @@ export function ModelPicker({
                     {entry.label}
                   </span>
                   {entryUsesStandardChat && !configureRequired ? (
-                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
                       {t.modelPicker.standardChatMode}
                     </span>
                   ) : null}

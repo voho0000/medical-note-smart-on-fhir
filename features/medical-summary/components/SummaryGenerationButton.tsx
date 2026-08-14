@@ -79,8 +79,8 @@ export function SummaryGenerationButton({
       size="sm"
       variant="outline"
       className={stopAvailable || isStopping
-        ? "h-7 gap-1 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-        : "h-7 gap-1 px-2 text-xs"}
+        ? "h-[44px] gap-1 px-2 text-xs text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive hover:shadow-none lg:h-7"
+        : "h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"}
       disabled={isStopping || (!stopAvailable && isRestoring)}
       title={label}
       aria-label={label}

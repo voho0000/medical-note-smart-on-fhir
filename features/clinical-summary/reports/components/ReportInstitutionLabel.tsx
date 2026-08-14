@@ -3,6 +3,7 @@
 import { Building2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { REPORT_SOURCE_TONE } from './report-color-roles'
 
 /** Remove a source-system code appended as the final delimited segment. */
 export function formatReportInstitution(institution: string): string {
@@ -24,7 +25,8 @@ export function ReportInstitutionLabel({
       <TooltipTrigger asChild>
         <span
           className={cn(
-            'inline-flex min-w-0 items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80',
+            'inline-flex min-w-0 items-center gap-1 text-xs',
+            REPORT_SOURCE_TONE,
             className,
           )}
           aria-label={displayInstitution}

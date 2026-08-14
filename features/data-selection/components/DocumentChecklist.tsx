@@ -105,7 +105,7 @@ export function DocumentChecklist({
                 <span className="flex items-center gap-1.5">
                   <span className={`truncate ${checked ? '' : 'text-muted-foreground'}`}>{d.title}</span>
                   {d.isDischargeSummary && (
-                    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[0.625rem] text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[0.625rem] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                       {ds.dischargeBadge ?? '出院病摘'}
                     </span>
                   )}

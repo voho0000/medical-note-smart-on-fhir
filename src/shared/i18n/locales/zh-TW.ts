@@ -65,6 +65,11 @@ export const zhTW = {
     moreMenu: '更多',
     collapseHeader: '收合頁首列',
     expandHeader: '展開頁首列',
+    resizePanels: '調整臨床摘要與功能面板寬度',
+    collapseClinicalSummary: '收合臨床摘要面板',
+    expandClinicalSummary: '展開臨床摘要面板',
+    collapseFeatures: '收合功能面板',
+    expandFeatures: '展開功能面板',
   },
 
   // 共用就地模型選擇器（對話／自訂摘要／醫療摘要標頭）
@@ -94,7 +99,7 @@ export const zhTW = {
     ipsExport: '匯出',
     medicalCalculator: '計算機',
     personalizedEducation: '個人化衛教',
-    personalizedGuidance: '個人化指引',
+    personalizedGuidance: '個人化照護指引',
     settings: '設定',
     // Right-panel overflow menu (tabs collapsed out of the tab bar)
     more: '更多',
@@ -760,6 +765,8 @@ export const zhTW = {
     refillsLabel: '領藥次數',
     refillsSince: '起累計',
     refillTimes: '次',
+    refillSummary: '累計 {count} 次',
+    refillSummarySince: '累計 {count} 次 · {date} 起',
     billingIcdLabel: '申報碼',
     billingIcdTooltip: '此 ICD 碼來自處方／健保申報紀錄，是為了申報或開藥方便而填入，不一定代表已確診。實際確診請以「診斷」頁籤為準。',
     terminologySource: '健保署藥品主檔補充',
@@ -773,6 +780,11 @@ export const zhTW = {
     terminologySnapshotLabel: '藥典版本',
     viewList: '清單',
     viewTimeline: '時間軸',
+    nameDisplay: {
+      label: '藥名顯示方式',
+      ingredient: '成分名',
+      product: '商品名',
+    },
     openTimelineRight: '在右側面板展開時間軸（與清單並排）',
     searchPlaceholder: '搜尋藥名、分類、機構、日期…',
     searchNoMatch: '無符合的藥物',
@@ -793,6 +805,7 @@ export const zhTW = {
     timelineDrugCount: '種藥',
     timelineAcute: '急性',
     timelineToday: '今日',
+    timelineAfterToday: '今日後',
     timelineEmpty: '此時段內無用藥紀錄',
     timelineOtherCategory: '其他',
     timelineAtcCategories: {
@@ -825,6 +838,7 @@ export const zhTW = {
     routeLabel: '途徑',
     durationLabel: '天數',
     durationDaysUnit: '天',
+    durationCompact: '{n} 天',
     noDetail: '無詳細資訊',
     // MedicationItem 狀態徽章
     statusEnded: '已結束',

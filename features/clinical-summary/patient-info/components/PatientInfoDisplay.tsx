@@ -106,7 +106,7 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
 
 function UserEnteredBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex rounded-full border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] leading-none text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+    <span className="inline-flex rounded-full border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] leading-none text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
       {label}
     </span>
   )

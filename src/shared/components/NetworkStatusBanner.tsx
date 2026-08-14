@@ -48,7 +48,7 @@ export function NetworkStatusBanner() {
 
   if (!browserOnline) {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
         <WifiOff className="h-3.5 w-3.5 shrink-0" />
         <span>{t.connectivity.offline}</span>
       </div>
@@ -57,7 +57,7 @@ export function NetworkStatusBanner() {
 
   if (firestoreConnection === 'cache' || firestoreConnection === 'unavailable') {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
         <span>{t.connectivity.cloudUnavailable}</span>
       </div>
@@ -66,7 +66,7 @@ export function NetworkStatusBanner() {
 
   if (showSlowSync) {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-sky-300 bg-sky-50 px-3 py-1.5 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/60 dark:text-sky-100">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-sky-300 bg-sky-50 px-3 py-1.5 text-xs text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100">
         <CloudUpload className="h-3.5 w-3.5 shrink-0 animate-pulse" />
         <span>{t.connectivity.pendingSync}</span>
       </div>
@@ -75,7 +75,7 @@ export function NetworkStatusBanner() {
 
   if (chatSyncStatus === 'error') {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-red-300 bg-red-50 px-3 py-1.5 text-xs text-red-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100">
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
         <span>{t.connectivity.syncError}</span>
       </div>
@@ -84,7 +84,7 @@ export function NetworkStatusBanner() {
 
   if (showSynced) {
     return (
-      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100">
+      <div role="status" className="flex items-center justify-center gap-2 rounded-b-md border border-t-0 border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
         <span>{t.connectivity.synced}</span>
       </div>

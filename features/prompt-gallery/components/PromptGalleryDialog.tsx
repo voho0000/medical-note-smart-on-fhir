@@ -16,7 +16,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TAB_ACTIVE_CLASSES, BADGE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import {
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 import {
   Select,
   SelectContent,
@@ -186,26 +189,26 @@ export function PromptGalleryDialog({
             </div>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2 h-11 p-1">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-1 flex-col gap-0 overflow-hidden">
+            <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
               <TabsTrigger 
                 value="all" 
-                className={`flex items-center gap-2 ${TAB_ACTIVE_CLASSES.chat}`}
+                className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
               >
                 <Library className="h-4 w-4" />
                 {t.promptGallery.allPrompts}
               </TabsTrigger>
               <TabsTrigger 
                 value="my" 
-                className={`flex items-center gap-2 ${TAB_ACTIVE_CLASSES.clinical}`}
+                className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
                 disabled={!user}
               >
                 <User className="h-4 w-4" />
                 {t.promptGallery.myPrompts}
                 {user && myPromptsHook.prompts.length > 0 && (
-                  <Badge className={`ml-1 ${BADGE_CLASSES.clinical}`}>
+                  <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">
                     {myPromptsHook.prompts.length}
-                  </Badge>
+                  </span>
                 )}
               </TabsTrigger>
             </TabsList>

@@ -52,7 +52,7 @@ function CompactValue({
   const valueClass = cn(
     "text-[0.8125rem] font-bold tabular-nums",
     isLong ? ["shrink truncate", maxWidthClassName] : "shrink-0",
-    abnormal ? "text-red-600 dark:text-red-400" : "text-foreground",
+    abnormal ? "text-clinical-abnormal" : "text-foreground",
   )
 
   if (!isLong) return <span className={valueClass}>{value}</span>
@@ -120,7 +120,7 @@ function RangeUnassessedBadge({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0 cursor-help items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+        <span className="inline-flex shrink-0 cursor-help items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
           {label}
         </span>
       </TooltipTrigger>
@@ -163,7 +163,7 @@ export function CompactLabResultRow({
       onKeyDown={onKeyDown}
       className={cn(
         "flex w-full min-w-0 max-w-full items-center gap-x-1.5 overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5",
-        abnormal && "border-red-200 bg-red-50/30 dark:border-red-800/50 dark:bg-red-950/10",
+        abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
       )}
     >

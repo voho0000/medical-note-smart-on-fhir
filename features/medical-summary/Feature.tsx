@@ -35,6 +35,10 @@ import { toast } from "sonner"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import { InfoHint } from "@/src/shared/components/InfoHint"
 import {
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
+import {
   MODEL_PREF_DEFAULTS,
   useModelPref,
   useSetModelFor,
@@ -793,16 +797,16 @@ export default function MedicalSummaryFeature() {
         className="gap-2"
       >
       <div className="flex flex-wrap items-center gap-1.5 @min-[36rem]:flex-nowrap">
-        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary" />
         <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
-        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
+        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary">
           {ms.badge}
         </span>
-        <TabsList className="h-7 w-auto rounded-lg p-0.5 shadow-none">
+        <TabsList className={`${SUBTAB_LIST_CLASSES} w-auto`}>
           <TabsTrigger
             value="standard"
             aria-label={ms.standardSummaryTab}
-            className="min-w-14 rounded-md px-2 py-0.5 text-xs focus-visible:border-teal-500 focus-visible:ring-teal-400/40 data-[state=active]:border-teal-300 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800 dark:data-[state=active]:border-teal-700 dark:data-[state=active]:bg-teal-950/70 dark:data-[state=active]:text-teal-200"
+            className={`${SUBTAB_TRIGGER_CLASSES} min-w-14 text-xs`}
           >
             {ms.standardSummaryTabShort}
           </TabsTrigger>
@@ -810,19 +814,19 @@ export default function MedicalSummaryFeature() {
             value="custom"
             title={ms.customInsightsSubtitle}
             aria-label={ms.customSummaryTab}
-            className="group relative min-w-16 rounded-md px-2 py-0.5 text-xs focus-visible:border-violet-500 focus-visible:ring-violet-400/40 data-[state=active]:border-violet-300 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:border-violet-700 dark:data-[state=active]:bg-violet-950/70 dark:data-[state=active]:text-violet-200"
+            className={`${SUBTAB_TRIGGER_CLASSES} group min-w-16 text-xs`}
           >
             <span>{ms.customSummaryTabShort}</span>
             {visibleInsightCount > 0 ? (
-              <span className="rounded-full bg-muted px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground group-data-[state=active]:bg-violet-200 group-data-[state=active]:text-violet-800 dark:group-data-[state=active]:bg-violet-800 dark:group-data-[state=active]:text-violet-100">
+              <span className="text-[0.625rem] font-normal tabular-nums text-muted-foreground">
                 {visibleInsightCount}
               </span>
             ) : null}
             {customGenerating ? (
-              <Loader2 className="h-3 w-3 animate-spin text-violet-500" aria-label={ms.customGenerating} />
+              <Loader2 className="h-3 w-3 animate-spin text-violet-500 dark:text-primary" aria-label={ms.customGenerating} />
             ) : customUnread ? (
               <span
-                className="h-2 w-2 rounded-full bg-violet-500"
+                className="h-2 w-2 rounded-full bg-primary"
                 title={ms.customSummaryUnread}
                 aria-label={ms.customSummaryUnread}
               />
@@ -840,6 +844,7 @@ export default function MedicalSummaryFeature() {
               onSelect={setModel}
               tooltip={t.safetyAlerts.modelTooltip}
               compact
+              triggerClassName="min-h-[44px] shadow-none lg:min-h-8"
             />
           ) : (
             <ModelPicker
@@ -849,13 +854,14 @@ export default function MedicalSummaryFeature() {
               tooltip={t.modelPicker.insightsTooltip}
               align="end"
               compact
+              triggerClassName="min-h-[44px] shadow-none lg:min-h-8"
             />
           )}
           {activeView === "standard" && contextAdaptation ? (
             <InfoHint
               aria-label={ms.adaptedScopeLabel}
               side="bottom"
-              className="h-7 shrink-0 gap-1 rounded-md border border-violet-300 bg-violet-50 px-1.5 text-violet-700 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-950/70 dark:hover:text-violet-100"
+              className="h-7 shrink-0 gap-1 rounded-md border border-violet-300 bg-violet-50 px-1.5 text-violet-700 hover:bg-violet-100 hover:text-violet-900 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/15 dark:hover:text-primary"
               contentClassName="max-w-[min(90vw,24rem)] text-left leading-relaxed"
               label={(
                 <span className="hidden text-[0.6875rem] font-medium @min-[44rem]:inline">
@@ -891,7 +897,7 @@ export default function MedicalSummaryFeature() {
               type="button"
               size="sm"
               variant="outline"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"
               onClick={() => openCustomManager()}
               title={`${ms.manageCustomInsights}。${ms.customManagerDescription}`}
               aria-label={ms.manageCustomInsights}
@@ -906,7 +912,7 @@ export default function MedicalSummaryFeature() {
                 type="button"
                 size="sm"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
-                className="h-7 gap-1 px-2 text-xs"
+                className="h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"
                 title={ms.summaryControls}
                 aria-label={ms.summaryControls}
               >
@@ -917,7 +923,7 @@ export default function MedicalSummaryFeature() {
             <PopoverContent align="end" className="w-64 space-y-1 p-2">
               {activeView === "standard" ? (
                 <label
-                  className="flex cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                  className="flex min-h-[44px] cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
                   title={ms.autoGenerateTooltip}
                 >
                   <span className="font-medium text-foreground">{ms.autoGenerate}</span>
@@ -929,7 +935,7 @@ export default function MedicalSummaryFeature() {
                 data-testid="medical-summary-data-scope-trigger"
                 size="sm"
                 variant="ghost"
-                className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                className="h-[44px] w-full justify-start gap-2 px-2 text-xs lg:h-8"
                 onClick={() => {
                   setSummarySettingsOpen(false)
                   setDataScopeOpen(true)
@@ -945,7 +951,7 @@ export default function MedicalSummaryFeature() {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                  className="h-[44px] w-full justify-start gap-2 px-2 text-xs lg:h-8"
                   onClick={() => {
                     setSummarySettingsOpen(false)
                     setLayoutOpen(true)

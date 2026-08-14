@@ -23,6 +23,8 @@ export type DurationLike = Duration
 export type PeriodLike = Period
 export type Medication = MedicationRequest
 
+export type MedicationNameMode = 'ingredient' | 'product'
+
 export interface MedicationExecutionPeriod {
   /** Source-reported execution start; kept as ISO/FHIR date or dateTime. */
   start?: string
@@ -37,8 +39,8 @@ export interface MedicationRow {
    *  ingredient name. */
   drugKey?: string
   title: string
-  /** Optional product/brand name shown after the medical ingredient title on
-   *  the same line. Patient rows intentionally leave this empty. */
+  /** Optional official product/brand name used when the list's name display
+   *  switch is set to product. Patient rows intentionally leave this empty. */
   secondaryTitle?: string
   status: string
   dose?: string

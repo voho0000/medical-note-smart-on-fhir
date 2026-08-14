@@ -3,7 +3,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -12,10 +12,15 @@ import {
   useResourceNavigationStore,
   leftTabForResourceType,
 } from "@/src/application/stores/resource-navigation.store"
-import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import { LEFT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
 import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
 import { SdkSourceLimitationsBanner } from "@/features/clinical-summary/components/SdkSourceLimitationsBanner"
 import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import {
+  ClinicalTabContentFrame,
+  ClinicalTabList,
+  ClinicalTabTrigger,
+} from "@/src/shared/components/clinical-workspace"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -24,7 +29,7 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
   const features = getFeaturesForTab(tabId)
   
   return (
-    <ScrollArea className="h-full pr-2">
+    <ScrollArea className="h-full">
       {/*
         CSS containment (`contain: inline-size`) decouples this wrapper's
         intrinsic width from its children's content size. Without this,
@@ -32,12 +37,15 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
         grows with the widest child (wide tables in CumulativeLabReport),
         pushing absolute-positioned UI like the expand button off-screen.
       */}
-      <div className="space-y-3 w-full" style={{ contain: 'inline-size' }}>
+      <ClinicalTabContentFrame
+        className="space-y-3 pb-3 pt-2"
+        style={{ contain: 'inline-size' }}
+      >
         {features.map(feature => {
           const Component = feature.component
           return <Component key={feature.id} />
         })}
-      </div>
+      </ClinicalTabContentFrame>
     </ScrollArea>
   )
 }
@@ -116,7 +124,7 @@ export default function ClinicalSummaryFeature() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] flex-col" data-tour="left-panel">
+    <div className="flex h-full flex-col" data-tour="left-panel">
       <SdkSourceLimitationsBanner />
       <FhirDataIssuesBanner />
       <Tabs
@@ -128,7 +136,7 @@ export default function ClinicalSummaryFeature() {
           setActiveTab(value)
           clearDetail()
         }}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col xl:gap-0"
       >
         {/* Grid columns are driven by the registered tab count so adding /
             removing tabs in feature-registry.ts doesn't need a layout edit.
@@ -136,37 +144,30 @@ export default function ClinicalSummaryFeature() {
             length, so the column template goes via inline style. The label
             already uses `truncate` + a `title` tooltip, so narrower per-tab
             widths still render the full label on hover. */}
-        <TabsList
+        <ClinicalTabList
           data-tour="left-tabs"
-          // shrink-0: without it the flex column squeezes this h-12 bar by a
-          // few px when a tab's content is tall (e.g. 報告), so the tab bar
-          // jumped height between tabs. Pin it so the height is stable.
-          className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
+          className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
         >
           {tabs.map(tab => {
             const theme = getTabTheme(tab.id)
             const Icon = theme.icon
-            const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.clinical
             return (
-              <TabsTrigger
+              <ClinicalTabTrigger
                 key={tab.id}
                 value={tab.id}
                 data-tour={`left-tab-${tab.id}`}
-                // px-1 keeps the icon+label centred at narrow widths (was
-                // overflowing the trigger with the default px-3 once we
-                // packed 5 tabs into the same width as 4).
-                className={`text-sm font-semibold min-w-0 px-1 flex items-center gap-1.5 ${activeClasses}`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate" title={getTabLabel(tab)}>{getTabLabel(tab)}</span>
-              </TabsTrigger>
+                icon={Icon}
+                iconVisibility="desktop"
+                label={getTabLabel(tab)}
+                className="px-1"
+              />
             )
           })}
-        </TabsList>
+        </ClinicalTabList>
 
         {tabs.map(tab => (
-          <TabsContent key={tab.id} value={tab.id} className="flex-1 mt-1">
+          <TabsContent key={tab.id} value={tab.id} className="mt-1 flex-1 xl:mt-0">
             <TabFeatureContent tabId={tab.id} />
           </TabsContent>
         ))}

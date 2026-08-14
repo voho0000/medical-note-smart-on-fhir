@@ -150,4 +150,25 @@ describe('CumulativeLabReport mixed-unit fallback', () => {
         .filter((element) => element.textContent === '推估單位'),
     ).toHaveLength(1)
   })
+
+  it('uses the theme-aware clinical color for abnormal values', () => {
+    render(
+      <CumulativeLabReport
+        observations={[
+          {
+            id: 'hb-high',
+            code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7' }] },
+            valueQuantity: { value: 18.2, unit: 'g/dL', code: 'g/dL', system: 'http://unitsofmeasure.org' },
+            interpretation: [{ coding: [{ code: 'H', display: 'High' }] }],
+            effectiveDateTime: '2026-08-12',
+          },
+        ]}
+      />,
+      { wrapper: TestProviders },
+    )
+
+    const abnormalCell = screen.getByText('18.2').closest('td')
+    expect(abnormalCell).toHaveClass('text-clinical-abnormal')
+    expect(abnormalCell).not.toHaveClass('text-red-600')
+  })
 })

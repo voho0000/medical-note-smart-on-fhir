@@ -20,12 +20,12 @@ import { resolveClaimSources } from "../utils/resolve-claim-sources"
 // more authoritative (blue "紀錄"); everything else is a pattern inference
 // (amber "推斷"). Label text comes from i18n via the `badgeLabel` map.
 const KIND_BADGE: Record<ProblemKind, string> = {
-  careplan: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
-  discharge: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
-  diagnosis: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  lab: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  medication: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  other: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+  careplan: "bg-blue-100 text-blue-700 dark:bg-primary/10 dark:text-primary",
+  discharge: "bg-blue-100 text-blue-700 dark:bg-primary/10 dark:text-primary",
+  diagnosis: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  lab: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  medication: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  other: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
 }
 
 interface ProblemListCardProps {
@@ -128,7 +128,7 @@ export function ProblemListCard({
         <button
           type="button"
           onClick={() => setShowAll((value) => !value)}
-          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          className="mt-2 flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

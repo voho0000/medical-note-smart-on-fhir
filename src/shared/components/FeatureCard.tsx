@@ -26,7 +26,6 @@ export function FeatureCard({
   title,
   featureId,
   icon: customIcon,
-  colorKey: customColorKey,
   isLoading = false,
   error = null,
   isEmpty = false,
@@ -37,22 +36,24 @@ export function FeatureCard({
   // Get theme from registry or use defaults
   const theme = featureId ? FEATURE_CARD_THEMES[featureId] : null
   const Icon = customIcon || theme?.icon
-  const colorKey = customColorKey || theme?.colorKey || 'clinical'
-  const borderColor = UI_COLORS[colorKey].light.border
   const hasTitle = !!title
 
   return (
-    // Base Card is `flex flex-col gap-6 py-6` (shadcn). That 24px flex-gap +
-    // 24px vertical padding makes the title↔content spacing feel too airy for
-    // dense clinical cards, so tighten both here — this is the single shared
-    // wrapper every feature card renders through, so the change applies
-    // uniformly. twMerge lets gap-2/py-3 override the base gap-6/py-6. py-3
-    // (12px) keeps every clinical card's top padding consistent with the
-    // reports card.
-    <Card className={`border-l-4 ${borderColor} gap-2 py-3`}>
+  // Base Card is `flex flex-col gap-6 py-6` (shadcn). That 24px flex-gap +
+  // 24px vertical padding makes the title↔content spacing feel too airy for
+  // dense clinical cards, so tighten both here — this is the single shared
+  // wrapper every feature card renders through, so the change applies
+  // uniformly. A neutral boundary replaces per-feature accent stripes:
+  // clinical color is reserved for status, severity, and selected state.
+    <Card className="gap-2 rounded-lg border-border bg-card py-3 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none">
       {hasTitle && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
+            <span
+              data-slot="clinical-section-marker"
+              aria-hidden="true"
+              className="h-4 w-0.5 shrink-0 rounded-sm bg-primary/70"
+            />
             {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
             {title}
           </CardTitle>

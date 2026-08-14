@@ -15,6 +15,9 @@ jest.mock('@/src/application/providers/language.provider', () => ({
       medications: {
         daysLeft: '剩 {n} 天',
         executionPeriod: '執行',
+        durationCompact: '{n} 天',
+        refillSummary: '累計 {count} 次',
+        refillSummarySince: '累計 {count} 次 · {date} 起',
         terminologySource: '健保署藥品主檔補充',
         terminologyIngredientLabel: '成分／含量',
         terminologyOfficialNameZhLabel: '中文品名',
@@ -86,18 +89,21 @@ describe('MedicationItem audience-aware compact terminology', () => {
       .queryByText('ACTEIN EFFERVESCENT TABLETS 600MG')).not.toBeInTheDocument()
     expect(within(compactTitle)
       .queryByText('ACETYLCYSTEINE 600 MG')).not.toBeInTheDocument()
-    expect(within(container.firstElementChild?.children[1] as HTMLElement)
+    expect(within(container.querySelector('[data-medication-cell="clinical"]') as HTMLElement)
       .queryByText(/R05CB01/)).not.toBeInTheDocument()
     const tooltip = screen.getByTestId('medication-terminology-tooltip')
+    expect(tooltip).toHaveClass('bg-secondary', 'text-secondary-foreground', 'border-primary/20')
+    expect(tooltip).not.toHaveClass('bg-foreground', 'text-background')
     expect(within(tooltip).getByText('愛克痰發泡錠600毫克')).toBeInTheDocument()
     expect(within(tooltip).getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
     expect(within(tooltip).getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
     expect(within(tooltip).getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
     expect(compactTitle).toBeInTheDocument()
-    expect(container.firstElementChild?.children).toHaveLength(2)
+    expect(container.firstElementChild).toHaveAttribute('data-medication-row-layout', 'three-lane')
+    expect(container.querySelectorAll('[data-medication-cell]')).toHaveLength(3)
   })
 
-  it('shows ingredient first and product second on one line without inline ATC', () => {
+  it('defaults to the ingredient name only without inline product name or ATC', () => {
     mockAudience = 'medical'
     const { container } = render(
       <MedicationItem
@@ -109,16 +115,48 @@ describe('MedicationItem audience-aware compact terminology', () => {
     )
 
     expect(screen.getAllByText('ACETYLCYSTEINE 600 MG')).toHaveLength(2)
-    expect(screen.getAllByText(/ACTEIN EFFERVESCENT TABLETS 600MG/)).toHaveLength(2)
+    expect(screen.getAllByText(/ACTEIN EFFERVESCENT TABLETS 600MG/)).toHaveLength(1)
+    const compactTitle = container.querySelector('[tabindex="0"]') as HTMLElement
+    expect(within(compactTitle).getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
+    expect(within(compactTitle)
+      .queryByText(/ACTEIN EFFERVESCENT TABLETS 600MG/)).not.toBeInTheDocument()
     const tooltip = screen.getByTestId('medication-terminology-tooltip')
     expect(within(tooltip).getByText('愛克痰發泡錠600毫克')).toBeInTheDocument()
     expect(within(tooltip).getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
     expect(within(tooltip).getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
     expect(within(tooltip).getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
     expect(within(tooltip).getByText(/健保署藥品主檔補充/)).toBeInTheDocument()
-    const metadataLine = container.firstElementChild?.children[1]
-    expect(metadataLine).not.toHaveTextContent('R05CB01')
-    expect(container.firstElementChild?.children).toHaveLength(2)
+    const scheduleLine = container.querySelector('[data-medication-schedule]')
+    const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
+    const supplyLane = container.querySelector('[data-medication-cell="supply"]')
+    expect(scheduleLine).not.toHaveTextContent('R05CB01')
+    expect(scheduleLine).toHaveTextContent('2026/7/22 → 2026/8/12 (21 天)')
+    expect(scheduleLine).toHaveTextContent('長庚嘉義')
+    expect(clinicalLane).not.toHaveTextContent('R05CB01')
+    expect(supplyLane).toHaveTextContent('累計 15 次')
+    expect(screen.getByText('累計 15 次 · 2025/1/29 起').parentElement)
+      .not.toHaveAttribute('title')
+    expect(container.querySelectorAll('[data-medication-cell]')).toHaveLength(3)
+  })
+
+  it('shows only the product name when product mode is selected', () => {
+    mockAudience = 'medical'
+    const { container } = render(
+      <MedicationItem
+        medication={medicationRow(
+          'ACETYLCYSTEINE 600 MG',
+          'ACTEIN EFFERVESCENT TABLETS 600MG',
+        )}
+        nameMode="product"
+      />,
+    )
+
+    const compactTitle = container.querySelector('[tabindex="0"]') as HTMLElement
+    expect(within(compactTitle)
+      .getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
+    expect(within(compactTitle)
+      .queryByText('ACETYLCYSTEINE 600 MG')).not.toBeInTheDocument()
+    expect(screen.getAllByText('ACETYLCYSTEINE 600 MG')).toHaveLength(1)
   })
 
   it('shows exact inpatient execution periods on the shared compact row', () => {
@@ -142,11 +180,11 @@ describe('MedicationItem audience-aware compact terminology', () => {
       />,
     )
 
-    const metadataLine = container.firstElementChild?.children[1]
-    expect(metadataLine).toHaveTextContent(
+    const scheduleLine = container.querySelector('[data-medication-schedule]')
+    expect(scheduleLine).toHaveTextContent(
       '執行 2025/05/20–2025/05/21、2025/05/22–2025/05/28',
     )
-    expect(container.firstElementChild?.children).toHaveLength(2)
+    expect(container.querySelectorAll('[data-medication-cell]')).toHaveLength(3)
   })
 
   it('keeps the days-left badge inside constrained parent layouts', () => {
@@ -163,6 +201,70 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const row = container.firstElementChild
     const badge = screen.getByText('剩 2 天')
     expect(row).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
-    expect(badge).toHaveClass('shrink-0')
+    expect(row).toHaveClass('grid', 'bg-muted/40', 'py-1', 'dark:bg-muted/30')
+    expect(badge.closest('[data-medication-cell="supply"]')).toHaveClass('w-[4.75rem]')
+    expect(badge.parentElement).toHaveClass('w-full')
+  })
+
+  it('drops the individual card boundary inside a grouped medication surface', () => {
+    mockAudience = 'medical'
+    const { container } = render(
+      <MedicationItem medication={medicationRow('ACETYLCYSTEINE 600 MG')} grouped />,
+    )
+
+    const row = container.firstElementChild
+    expect(row).toHaveClass('rounded-none', 'border-0', 'bg-transparent')
+    expect(row).not.toHaveClass('rounded-md', 'bg-muted/40')
+  })
+
+  it('reserves the localized chronic-badge width when a row is not chronic', () => {
+    mockAudience = 'medical'
+    const medication = {
+      ...medicationRow(
+        'BRIMONIDINE TARTRATE 1.5 MG/ML',
+        'BRIMONIN OPHTHALMIC SOLUTION',
+      ),
+      category: '縮瞳劑',
+      isChronic: false,
+    }
+    const { container } = render(<MedicationItem medication={medication} />)
+
+    const chronicSlot = container.querySelector('[data-medication-chronic-slot]')
+    expect(chronicSlot).toHaveAttribute('data-visible', 'false')
+    expect(chronicSlot).toHaveAttribute('aria-hidden', 'true')
+    expect(chronicSlot).toHaveClass('invisible', 'shrink-0')
+    expect(chronicSlot).toHaveTextContent('慢箋')
+    expect(screen.getByText('縮瞳劑')).toBeInTheDocument()
+  })
+
+  it('gives category and ICD separate wide-layout rows instead of competing for one line', () => {
+    mockAudience = 'medical'
+    const medication = {
+      ...medicationRow(
+        'OXYBUTYNIN CHLORIDE 5 MG',
+        'DITROPAN TABLETS 5 MG',
+      ),
+      category: '生殖泌尿道平滑肌鬆弛劑',
+      icdCode: 'N40.0',
+      icdText: '良性攝護腺增生未伴有下泌尿道症狀',
+    }
+    const { container } = render(<MedicationItem medication={medication} />)
+
+    const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
+    const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑')
+    const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
+
+    expect(clinicalLane).toHaveClass('@min-[38rem]:h-10', '@min-[38rem]:grid-rows-2')
+    expect(category).toHaveClass('max-w-full')
+    expect(category).not.toHaveClass('max-w-[10rem]')
+    expect(icd.parentElement).toHaveClass('@min-[38rem]:row-start-2')
+    const icdTooltip = screen.getByTestId('medication-icd-tooltip')
+    expect(icdTooltip).toHaveClass(
+      'border-primary/20',
+      'bg-secondary',
+      'text-secondary-foreground',
+      'shadow-lg',
+    )
+    expect(icdTooltip).not.toHaveClass('bg-foreground', 'text-background')
   })
 })

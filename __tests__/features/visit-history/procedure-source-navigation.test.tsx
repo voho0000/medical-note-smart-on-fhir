@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import {
   ProcedureRow,
@@ -13,6 +13,10 @@ import { useResourceNavigationStore } from '@/src/application/stores/resource-na
 const PROCEDURE: EncounterProcedure = {
   id: 'procedure-1',
   title: 'Iliac vein stenting',
+  status: 'completed',
+  category: '門診治療／小處置',
+  performed: '2026-08-12T12:00:00+08:00',
+  performer: '長庚嘉義',
   report: [],
 }
 
@@ -60,5 +64,20 @@ describe('procedure source navigation', () => {
       pending: null,
       consumedSeq: 1,
     })
+  })
+
+  it('keeps visit procedures compact and omits the redundant completed status', () => {
+    render(
+      <LanguageProvider>
+        <ProcedureRow procedure={PROCEDURE} />
+      </LanguageProvider>,
+    )
+
+    const row = screen.getByText('Iliac vein stenting').closest('[data-slot="encounter-procedure"]')
+    expect(row).toHaveClass('px-3', 'py-2')
+    expect(row).not.toHaveClass('rounded-lg', 'shadow-sm')
+    expect(screen.getByText('門診治療／小處置')).toBeInTheDocument()
+    expect(screen.getByText('長庚嘉義')).toBeInTheDocument()
+    expect(screen.queryByText(/completed/i)).not.toBeInTheDocument()
   })
 })

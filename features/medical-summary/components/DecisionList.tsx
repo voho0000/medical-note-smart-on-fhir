@@ -15,16 +15,16 @@ import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 const URGENCY_STYLES: Record<SummaryUrgency, { box: string; badge: string }> = {
   high: {
-    box: "border-l-red-500 bg-red-50/70 dark:bg-red-950/25",
-    badge: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+    box: "bg-red-50/70 dark:bg-rose-500/[0.07]",
+    badge: "bg-red-100 text-red-700 dark:bg-rose-500/10 dark:text-rose-300",
   },
   medium: {
-    box: "border-l-amber-500 bg-amber-50/70 dark:bg-amber-950/25",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    box: "bg-amber-50/70 dark:bg-amber-500/[0.07]",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
   },
   low: {
-    box: "border-l-slate-400 bg-slate-50 dark:bg-slate-900/40",
-    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    box: "bg-slate-50 dark:bg-muted/35",
+    badge: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
   },
 }
 
@@ -80,7 +80,7 @@ export function DecisionList({
             d.documentEvidence,
           )
           return (
-            <div key={i} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>
+            <div key={i} className={cn("rounded-md px-2.5 py-2", style.box)}>
               <div className="flex items-start gap-2">
                 {showUrgency ? (
                   <span className={cn("mt-0.5 shrink-0 rounded-md px-1.5 py-px text-[0.625rem] font-bold", style.badge)}>
@@ -106,7 +106,7 @@ export function DecisionList({
         <button
           type="button"
           onClick={() => setShowAll((value) => !value)}
-          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          className="mt-2 flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

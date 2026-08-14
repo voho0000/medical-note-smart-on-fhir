@@ -652,7 +652,7 @@ export default function MedicalChat() {
                 onClick={handleToggleTemporaryMode}
                 className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs transition-colors ${
                   isTemporaryMode
-                    ? 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300'
+                    ? 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300'
                     : 'bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
                 title={
@@ -728,7 +728,7 @@ export default function MedicalChat() {
       
       <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded || !showHeader ? '' : 'border-t'}`}>
         {(patientError || clinicalDataError) && (
-          <div className="mx-4 mt-4 mb-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-sm">
+          <div className="mx-4 mt-4 mb-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-3 py-2 text-sm">
             <div className="font-medium text-amber-800 dark:text-amber-200 mb-1">{t.medicalChat.fhirDataWarning}</div>
             <div className="text-amber-700 dark:text-amber-300 text-xs">
               {patientError && <div>• {t.errors.fetchPatient}</div>}
@@ -777,8 +777,8 @@ export default function MedicalChat() {
             canExportAiExecution={!!chat.latestExecution && !chat.isLoading}
           />
           {showApiKeyWarning && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-3 py-2 text-xs">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
               <div className="flex-1 text-amber-800 dark:text-amber-200">
                 <div className="font-medium mb-1">
                   {isCustomEndpoint
@@ -808,7 +808,7 @@ export default function MedicalChat() {
           {isCustomEndpoint && isStandardChat && canUseChat && !localModeNoticeDismissed && (
             <div
               role="status"
-              className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/35 dark:text-sky-100"
+              className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-xs text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-100"
             >
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
               <div className="min-w-0 flex-1">
@@ -827,15 +827,15 @@ export default function MedicalChat() {
                 onClick={() => setLocalModeNoticeDismissed(true)}
                 aria-label={t.common.close}
                 title={t.common.close}
-                className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sky-700/70 transition-colors hover:bg-sky-100 hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-sky-200/70 dark:hover:bg-sky-900/60 dark:hover:text-sky-100"
+                className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sky-700/70 transition-colors hover:bg-sky-100 hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-sky-200/70 dark:hover:bg-sky-500/15 dark:hover:text-sky-100"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
           {isQuotaExceededError(chat.error) && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-3 py-2 text-xs">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
               <div className="flex-1 text-amber-800 dark:text-amber-200">
                 <div className="font-medium mb-1">{t.medicalChat.quotaBannerTitle}</div>
                 <div className="text-amber-700 dark:text-amber-300">
@@ -859,14 +859,14 @@ export default function MedicalChat() {
             </div>
           )}
           {isTemporaryMode && user && (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-xs text-purple-700 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300">
+            <div className="flex items-center justify-between gap-2 rounded-md border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-xs text-purple-700 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300">
               <span className="inline-flex items-center gap-1.5">
                 <MessageSquareDashed className="h-3.5 w-3.5" />
                 {(t.chat as any).temporaryModeBanner ?? '無痕對話 · 此對話不會被儲存'}
               </span>
               <button
                 onClick={handleToggleTemporaryMode}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-purple-100 dark:hover:bg-purple-900"
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-purple-100 dark:hover:bg-purple-500/15"
                 title={(t.chat as any).temporaryModeExit ?? '結束無痕對話'}
               >
                 <X className="h-3 w-3" />

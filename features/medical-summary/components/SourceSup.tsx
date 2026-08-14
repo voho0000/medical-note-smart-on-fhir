@@ -109,8 +109,8 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
             "relative before:absolute before:-inset-1.5 before:content-['']",
             "touch-manipulation transition-transform active:scale-90",
             hasWarning
-              ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-600/60 dark:bg-amber-950/50 dark:text-amber-300"
-              : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20",
+              ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+              : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/15",
             className,
           )}
         >
@@ -151,13 +151,13 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
               className={cn(
                 "group flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 -mx-1 text-left text-[0.7rem] leading-snug tabular-nums transition-colors",
                 s.verified && !isSuspect(s)
-                  ? "text-muted-foreground hover:bg-violet-50 hover:text-foreground dark:hover:bg-violet-500/10"
-                  : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30",
+                  ? "text-muted-foreground hover:bg-violet-50 hover:text-foreground dark:hover:bg-primary/10"
+                  : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
               )}
             >
               <b className={cn(
                 "shrink-0 font-bold",
-                s.verified && !isSuspect(s) ? "text-violet-600 dark:text-violet-400" : "text-amber-600 dark:text-amber-300",
+                s.verified && !isSuspect(s) ? "text-violet-600 dark:text-primary" : "text-amber-600 dark:text-amber-300",
               )}>{s.num}</b>
               <span className="min-w-0 flex-1">
                 {typeLabel(s.resourceType)}
@@ -169,7 +169,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
               </span>
               <ArrowUpRight className={cn(
                 "h-3 w-3 shrink-0 self-center opacity-60 transition-opacity group-hover:opacity-100",
-                s.verified && !isSuspect(s) ? "text-violet-400" : "text-amber-500",
+                s.verified && !isSuspect(s) ? "text-violet-400 dark:text-primary/70" : "text-amber-500",
               )} />
             </button>
           ) : (
@@ -180,7 +180,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                 s.verified && !isSuspect(s) ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300",
               )}
             >
-              <b className="shrink-0 font-bold text-violet-600 dark:text-violet-400">{s.num}</b>
+              <b className="shrink-0 font-bold text-violet-600 dark:text-primary">{s.num}</b>
               <span className="min-w-0">
                 {s.verified ? (
                   <>

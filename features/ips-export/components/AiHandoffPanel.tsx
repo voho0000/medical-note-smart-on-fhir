@@ -158,7 +158,7 @@ export function AiHandoffPanel() {
 
       <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-3 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="rounded-lg bg-teal-50 p-2 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
+          <div className="rounded-lg bg-teal-50 p-2 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
             <FileText className="h-4 w-4" />
           </div>
           <div className="min-w-0">
@@ -224,7 +224,7 @@ export function AiHandoffPanel() {
         )}
 
         {!maskIdentifiers && (
-          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
             {x.unmaskedWarning}
           </div>
         )}
@@ -262,7 +262,7 @@ export function AiHandoffPanel() {
 
       <div className="rounded-xl border bg-card p-4">
         <div className="mb-3 flex items-start gap-2">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-300" />
           <div>
             <h3 className="text-sm font-semibold">{x.destinationsTitle}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">{x.destinationsDescription}</p>
@@ -289,7 +289,7 @@ export function AiHandoffPanel() {
         <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
           <SheetHeader className="border-b bg-muted/20 px-5 py-4 pr-10">
             <SheetTitle className="flex items-center gap-2 text-base">
-              <Settings2 className="h-4 w-4 text-teal-600" />
+              <Settings2 className="h-4 w-4 text-teal-600 dark:text-teal-300" />
               {x.settingsTitle}
             </SheetTitle>
             <SheetDescription className="text-xs leading-relaxed">{x.settingsDescription}</SheetDescription>
@@ -324,7 +324,7 @@ export function AiHandoffPanel() {
               </div>
               <div className="border-t pt-5">
                 <div className="mb-3 flex items-start gap-2">
-                  <Database className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                  <Database className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-300" />
                   <div>
                     <h3 className="text-sm font-semibold">{x.chooseData}</h3>
                     <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.scopeDescription}</p>

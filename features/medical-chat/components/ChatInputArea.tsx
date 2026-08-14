@@ -120,7 +120,7 @@ export function ChatInputArea({
 
       {/* Error Display */}
       {images?.error && (
-        <div className="text-xs text-red-500 px-2 py-1 bg-red-50 dark:bg-red-950/30 rounded border border-red-200 dark:border-red-800">
+        <div className="text-xs text-destructive px-2 py-1 bg-red-50 dark:bg-rose-500/10 rounded border border-red-200 dark:border-rose-500/25">
           {images.error}
           <button
             onClick={images.clearError}
@@ -132,7 +132,7 @@ export function ChatInputArea({
       )}
 
       {replyDraft && (
-        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/70 dark:bg-blue-950/40 dark:text-blue-100">
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-100">
           <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
           <div className="min-w-0 flex-1">
             <div className="mb-0.5 font-medium">
@@ -148,7 +148,7 @@ export function ChatInputArea({
               onClick={onCancelReply}
               aria-label={(t.chat as any).cancelReply ?? 'Cancel reply'}
               title={(t.chat as any).cancelReply ?? 'Cancel reply'}
-              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-blue-700/70 hover:bg-blue-100 hover:text-blue-900 dark:text-blue-100/70 dark:hover:bg-blue-900/60 dark:hover:text-blue-50"
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-blue-700/70 hover:bg-blue-100 hover:text-blue-900 dark:text-blue-100/70 dark:hover:bg-blue-500/15 dark:hover:text-blue-50"
             >
               <X className="h-3.5 w-3.5" />
             </button>

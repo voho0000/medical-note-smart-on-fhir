@@ -51,7 +51,7 @@ export function PreviewTab({
           className="h-7 shrink-0 gap-1 px-2 text-xs"
           aria-label={copied ? t.common.copied : t.common.copy}
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-300" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? t.common.copied : t.common.copy}
         </Button>
       </div>
@@ -72,7 +72,7 @@ export function PreviewTab({
         />
       </div>
       {scopeNotice ? (
-        <div className="rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
+        <div className="rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-950 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100">
           {scopeNotice}
         </div>
       ) : null}

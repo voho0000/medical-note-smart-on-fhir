@@ -69,7 +69,7 @@ function LiveViewerButton({
       <span>{loading && locale === 'zh-TW' ? '開啟中…' : loading ? 'Opening…' : visibleLabel}</span>
     </>
   )
-  const className = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-sky-800 transition-colors hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-sky-300/50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-900/50'
+  const className = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-sky-800 transition-colors hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-sky-300/50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/15'
 
   if (nestedInButton) {
     return (
@@ -164,7 +164,7 @@ export function NhiViewerActions({
             if (opened) opened.opener = null
           }
         }}
-        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
         aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${label}`}
         title={legacyHint}
       >
@@ -181,7 +181,7 @@ export function NhiViewerActions({
         referrerPolicy="no-referrer"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
-        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
         aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${label}`}
         title={legacyHint}
       >

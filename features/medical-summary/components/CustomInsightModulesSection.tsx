@@ -45,7 +45,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
               <div className="mb-2 flex flex-wrap items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-300" />
                     <h4 className="truncate text-[0.8125rem] font-semibold text-foreground" title={panel.title}>{panel.title}</h4>
                     {panel.autoGenerate ? (
                       <span className="rounded bg-muted px-1 py-0.5 text-[0.5625rem] font-medium text-muted-foreground">
@@ -94,13 +94,13 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
               </div>
 
               {status.error ? (
-                <div className="flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                <div className="flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:bg-rose-500/10 dark:text-rose-300">
                   <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>{status.error.message}</span>
                 </div>
               ) : status.isLoading && !hasResponse ? (
                 <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 animate-pulse text-violet-500" />
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse text-violet-500 dark:text-violet-300" />
                   {labels.customGenerating}
                 </div>
               ) : hasResponse ? (

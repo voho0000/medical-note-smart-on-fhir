@@ -20,7 +20,7 @@ export function SdkSourceLimitationsBanner() {
   )
 
   return (
-    <details className="mb-1 shrink-0 rounded-md border border-sky-300/70 bg-sky-50 px-3 py-2 text-xs text-sky-950 dark:border-sky-700 dark:bg-sky-950/30 dark:text-sky-100">
+    <details className="mb-1 shrink-0 rounded-md border border-sky-300/70 bg-sky-50 px-3 py-2 text-xs text-sky-950 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100">
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
         <DatabaseZap className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">

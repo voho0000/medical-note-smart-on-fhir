@@ -58,7 +58,7 @@ export function ErrorMessage({ error, context, onRetry }: ErrorMessageProps) {
     
     return (
       <div className="space-y-2 text-sm">
-        <div className="flex items-start gap-2 text-amber-600 dark:text-amber-500">
+        <div className="flex items-start gap-2 text-amber-600 dark:text-amber-300">
           <ServerCrash className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-medium">{t.errors.fhirServerUnavailable}</div>

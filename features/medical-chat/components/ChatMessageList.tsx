@@ -175,7 +175,7 @@ const MessageItem = memo(function MessageItem({
         {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
           <>
             <span>•</span>
-            <span className="flex items-center gap-1 text-blue-500">
+            <span className="flex items-center gap-1 text-blue-500 dark:text-blue-300">
               <Sparkles className="h-3 w-3" />
               <span className="font-medium">
                 {message.toolCalls.includes('searchMedicalLiterature') ? 'Perplexity' : 'FHIR'}
@@ -288,7 +288,7 @@ const MessageItem = memo(function MessageItem({
           >
             {copied ? (
               <>
-                <Check className="h-3 w-3 text-green-600" />
+                <Check className="h-3 w-3 text-green-600 dark:text-green-300" />
                 {t.common.copied}
               </>
             ) : (

@@ -14,6 +14,10 @@ const medication = {
       display: 'Source English name',
     }],
   },
+  category: [{
+    text: '痰液溶解劑 (MUCOLYTIC AGENTS)',
+    coding: [{ code: 'mucolytic', display: 'MUCOLYTIC AGENTS' }],
+  }],
   drugTerminology: {
     source: 'nhi-official-drug-master',
     snapshotId: 'nhi-drug-terminology-20260728',
@@ -63,6 +67,19 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     )
 
     expect(result.current[0].title).toBe('官方中文藥名')
+  })
+
+  it('shows only the category language selected by the UI locale', () => {
+    const zh = renderHook(() =>
+      useMedicationRows([medication], 'medical', 'zh-TW'),
+    )
+    const en = renderHook(() =>
+      useMedicationRows([medication], 'medical', 'en'),
+    )
+
+    expect(zh.result.current[0].category).toBe('痰液溶解劑')
+    expect(en.result.current[0].category).toBe('MUCOLYTIC AGENTS')
+    expect(zh.result.current[0].searchHaystack).toContain('mucolytic agents')
   })
 
   it('does not replace a zh-TW patient source name with an English-only enrichment', () => {

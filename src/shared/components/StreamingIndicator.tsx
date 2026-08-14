@@ -7,7 +7,7 @@ import { Sparkles } from "lucide-react"
 export function StreamingIndicator({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground" role="status" aria-live="polite">
-      <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse" aria-hidden="true" />
+      <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse dark:text-blue-300" aria-hidden="true" />
       <span className="inline-flex items-center gap-1" aria-hidden="true">
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500/80 animate-bounce [animation-delay:-0.3s]" />
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500/80 animate-bounce [animation-delay:-0.15s]" />

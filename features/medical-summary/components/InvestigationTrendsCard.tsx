@@ -34,33 +34,33 @@ const DIRECTION_STYLE: Record<
   { box: string; badge: string; icon: typeof TrendingUp }
 > = {
   improving: {
-    box: "border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20",
-    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    box: "bg-emerald-50/60 dark:bg-emerald-500/[0.07]",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
     icon: TrendingUp,
   },
   stable: {
-    box: "border-l-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
-    badge: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+    box: "bg-blue-50/50 dark:bg-blue-500/[0.07]",
+    badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
     icon: Minus,
   },
   worsening: {
-    box: "border-l-red-500 bg-red-50/60 dark:bg-red-950/20",
-    badge: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+    box: "bg-red-50/60 dark:bg-rose-500/[0.07]",
+    badge: "bg-red-100 text-red-700 dark:bg-rose-500/10 dark:text-rose-300",
     icon: TrendingDown,
   },
   fluctuating: {
-    box: "border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    box: "bg-amber-50/60 dark:bg-amber-500/[0.07]",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
     icon: Shuffle,
   },
   single: {
-    box: "border-l-slate-400 bg-slate-50/70 dark:bg-slate-900/40",
-    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    box: "bg-slate-50/70 dark:bg-muted/35",
+    badge: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
     icon: Activity,
   },
   unknown: {
-    box: "border-l-slate-300 bg-slate-50/50 dark:bg-slate-900/30",
-    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    box: "bg-slate-50/50 dark:bg-muted/25",
+    badge: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
     icon: Activity,
   },
 }
@@ -146,9 +146,9 @@ export function InvestigationTrendsCard({
           )
 
           return (
-            <article key={`${item.label}-${index}`} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>
+            <article key={`${item.label}-${index}`} className={cn("rounded-md px-2.5 py-2", style.box)}>
               <div className="flex flex-wrap items-start gap-1.5">
-                <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+                <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-primary/80" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
                     {item.label}
@@ -181,7 +181,7 @@ export function InvestigationTrendsCard({
                     aria-busy={isOpeningCumulative}
                     aria-label={`${isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}: ${item.label}`}
                     title={`${openCumulativeLabel}: ${item.label}`}
-                    className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-teal-200 bg-background/80 px-1.5 py-0.5 font-medium text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-wait disabled:opacity-80 dark:border-teal-700/60 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                    className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 font-medium text-primary transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-80 lg:min-h-8"
                   >
                     {isOpeningCumulative ? (
                       <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
@@ -200,7 +200,7 @@ export function InvestigationTrendsCard({
         <button
           type="button"
           onClick={() => setShowAll((value) => !value)}
-          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          className="mt-2 flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

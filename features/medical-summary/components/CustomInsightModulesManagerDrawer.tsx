@@ -31,7 +31,7 @@ export function CustomInsightModulesManagerDrawer({
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
         <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-violet-500" />
+            <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-300" />
             {labels.customManagerTitle}
           </SheetTitle>
           <SheetDescription className="text-xs">{labels.customManagerDescription}</SheetDescription>

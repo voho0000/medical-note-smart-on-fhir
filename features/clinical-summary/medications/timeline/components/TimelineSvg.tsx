@@ -11,10 +11,16 @@
 // — for 50+ drugs we revisit.
 "use client"
 
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import type { CategoryGroup, RefillBar, TimelineDrug } from '../hooks/useMedicationTimeline'
+import {
+  medicationAcuteFutureTimelineBarClass,
+  medicationAcuteTimelineBarClass,
+  medicationChronicFutureTimelineBarClass,
+  medicationChronicTimelineBarClass,
+} from '../../components/medication-chip-styles'
 
 interface TimelineSvgProps {
   categories: CategoryGroup[]
@@ -31,14 +37,9 @@ const BAR_HEIGHT = 10
 const BAR_VERTICAL_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2
 const CATEGORY_GAP = 4
 
-const CHRONIC_FILL = '#a78bfa'      // violet-400
-const CHRONIC_STROKE = '#7c3aed'    // violet-600
-const ACUTE_FILL = '#cbd5e1'        // slate-300
-const ACUTE_STROKE = '#475569'      // slate-600
-const TODAY_LINE = '#ef4444'        // red-500
-
 interface HoverState {
   bar: RefillBar
+  segment: 'elapsed' | 'future'
   drugName: string
   drugProductName?: string
   drugTerminology?: TimelineDrug['drugTerminology']
@@ -52,25 +53,61 @@ function shortYmd(ms: number): string {
 }
 
 /**
- * Build year ticks for the X-axis. Returns an array of tick positions in
- * pixels with associated year labels.
+ * Build adaptive time ticks instead of showing only year boundaries. A
+ * three-month view otherwise has a blank axis for most of the year, which
+ * makes refill positions needlessly hard to interpret.
  */
-function buildYearTicks(domainStartMs: number, domainEndMs: number, chartWidth: number, xScale: (ms: number) => number) {
-  const startYear = new Date(domainStartMs).getFullYear()
-  const endYear = new Date(domainEndMs).getFullYear()
-  const ticks: { x: number; label: string }[] = []
-  for (let y = startYear; y <= endYear; y++) {
-    const ms = new Date(`${y}-01-01T00:00:00`).getTime()
-    if (ms < domainStartMs || ms > domainEndMs) continue
-    ticks.push({ x: xScale(ms), label: String(y) })
+function buildTimeTicks(
+  domainStartMs: number,
+  domainEndMs: number,
+  chartWidth: number,
+  xScale: (ms: number) => number,
+  locale: string,
+) {
+  const spanDays = (domainEndMs - domainStartMs) / 86_400_000
+  const stepMonths = spanDays <= 400 ? 1 : spanDays <= 1_600 ? 3 : 12
+  const start = new Date(domainStartMs)
+  const candidates = [domainStartMs]
+
+  let cursor: Date
+  if (stepMonths === 12) {
+    cursor = new Date(start.getFullYear() + 1, 0, 1)
+  } else if (stepMonths === 3) {
+    const nextQuarterMonth = Math.floor(start.getMonth() / 3) * 3 + 3
+    cursor = new Date(start.getFullYear(), nextQuarterMonth, 1)
+  } else {
+    cursor = new Date(start.getFullYear(), start.getMonth() + 1, 1)
   }
-  return ticks
+
+  while (cursor.getTime() < domainEndMs) {
+    candidates.push(cursor.getTime())
+    cursor = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth() + stepMonths,
+      1,
+    )
+  }
+
+  const formatter = new Intl.DateTimeFormat(locale, {
+    year: spanDays > 400 ? 'numeric' : '2-digit',
+    month: spanDays > 1_600 ? undefined : 'short',
+    day: spanDays <= 100 ? 'numeric' : undefined,
+  })
+
+  let previousX = -Infinity
+  return candidates.flatMap((ms) => {
+    const x = xScale(ms)
+    if (x - previousX < 48 || x > chartWidth - 28) return []
+    previousX = x
+    return [{ x, label: formatter.format(new Date(ms)) }]
+  })
 }
 
 export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: TimelineSvgProps) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const [hover, setHover] = useState<HoverState | null>(null)
+  const [todayMs] = useState(() => Date.now())
   const mt = (t.medications as any)
 
   if (categories.length === 0 || width < 200) return null
@@ -97,8 +134,14 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
   }
   const totalHeight = cursorY
 
-  const yearTicks = buildYearTicks(domainStartMs, domainEndMs, chartWidth, xScale)
-  const todayX = xScale(Date.now())
+  const timeTicks = buildTimeTicks(
+    domainStartMs,
+    domainEndMs,
+    chartWidth,
+    xScale,
+    locale,
+  )
+  const todayX = xScale(todayMs)
   const tooltipWidth = Math.min(280, width - 8)
 
   return (
@@ -110,39 +153,26 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
         onMouseLeave={() => setHover(null)}
       >
         {/* ── X-axis: year labels + grid lines ──────────────────────── */}
-        {yearTicks.map((tk) => (
+        {timeTicks.map((tk) => (
           <g key={`tick-${tk.label}`}>
             <line
               x1={LABEL_COLUMN_WIDTH + tk.x}
               x2={LABEL_COLUMN_WIDTH + tk.x}
               y1={AXIS_HEIGHT - 2}
               y2={totalHeight}
-              stroke="#e5e7eb"
               strokeWidth={1}
+              className="stroke-border"
             />
             <text
               x={LABEL_COLUMN_WIDTH + tk.x + 3}
               y={14}
               fontSize={11}
-              fill="#6b7280"
+              className="fill-muted-foreground"
             >
               {tk.label}
             </text>
           </g>
         ))}
-
-        {/* ── Today line ────────────────────────────────────────────── */}
-        {todayX >= 0 && todayX <= chartWidth && (
-          <line
-            x1={LABEL_COLUMN_WIDTH + todayX}
-            x2={LABEL_COLUMN_WIDTH + todayX}
-            y1={AXIS_HEIGHT - 2}
-            y2={totalHeight}
-            stroke={TODAY_LINE}
-            strokeWidth={1}
-            strokeDasharray="2,2"
-          />
-        )}
 
         {/* ── Rows ──────────────────────────────────────────────────── */}
         {rows.map((row, idx) => {
@@ -154,17 +184,17 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                   y={row.y}
                   width={width}
                   height={CATEGORY_HEADER_HEIGHT}
-                  fill="#f1f5f9"
+                  className="fill-muted/55"
                 />
                 <text
                   x={6}
                   y={row.y + 14}
                   fontSize={11}
                   fontWeight={600}
-                  fill="#334155"
+                  className="fill-foreground"
                 >
                   {row.group.label}{' '}
-                  <tspan fontWeight={400} fill="#64748b">
+                  <tspan fontWeight={400} className="fill-muted-foreground">
                     ({row.group.drugs.length})
                   </tspan>
                 </text>
@@ -195,7 +225,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    color: drug.isChronic ? '#5b21b6' : '#1f2937',
+                    color: 'var(--foreground)',
                     fontWeight: drug.isChronic ? 600 : 500,
                   }}
                 >
@@ -207,39 +237,91 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               {drug.bars.map((bar) => {
                 const x1 = xScale(bar.startMs)
                 const x2 = xScale(bar.endMs)
-                const w = Math.max(x2 - x1, 1)
+                const hasElapsedSegment = bar.startMs < todayMs
+                const hasFutureSegment = bar.endMs > todayMs
+                const elapsedEndX = xScale(Math.min(bar.endMs, todayMs))
+                const futureStartX = xScale(Math.max(bar.startMs, todayMs))
+
+                const showBarHover = (
+                  e: MouseEvent<SVGRectElement>,
+                  segment: HoverState['segment'],
+                ) => {
+                  const rect = (e.target as SVGRectElement).getBoundingClientRect()
+                  const containerRect = (e.target as SVGRectElement)
+                    .closest('svg')
+                    ?.getBoundingClientRect()
+                  setHover({
+                    bar,
+                    segment,
+                    drugName: drug.drugName,
+                    drugProductName: drug.drugProductName,
+                    drugTerminology: drug.drugTerminology,
+                    xPx: rect.left - (containerRect?.left ?? 0) + rect.width / 2,
+                    yPx: rect.top - (containerRect?.top ?? 0),
+                  })
+                }
+
                 return (
-                  <rect
-                    key={bar.refillId}
-                    x={LABEL_COLUMN_WIDTH + x1}
-                    y={row.y + BAR_VERTICAL_OFFSET}
-                    width={w}
-                    height={BAR_HEIGHT}
-                    fill={drug.isChronic ? CHRONIC_FILL : ACUTE_FILL}
-                    stroke={drug.isChronic ? CHRONIC_STROKE : ACUTE_STROKE}
-                    strokeWidth={0.5}
-                    rx={2}
-                    onMouseEnter={(e) => {
-                      const rect = (e.target as SVGRectElement).getBoundingClientRect()
-                      const containerRect = (e.target as SVGRectElement)
-                        .closest('svg')
-                        ?.getBoundingClientRect()
-                      setHover({
-                        bar,
-                        drugName: drug.drugName,
-                        drugProductName: drug.drugProductName,
-                        drugTerminology: drug.drugTerminology,
-                        xPx: rect.left - (containerRect?.left ?? 0) + rect.width / 2,
-                        yPx: rect.top - (containerRect?.top ?? 0),
-                      })
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
+                  <g key={bar.refillId}>
+                    {hasElapsedSegment && (
+                      <rect
+                        data-timeline-segment="elapsed"
+                        x={LABEL_COLUMN_WIDTH + x1}
+                        y={row.y + BAR_VERTICAL_OFFSET}
+                        width={Math.max(elapsedEndX - x1, 1)}
+                        height={BAR_HEIGHT}
+                        strokeWidth={0.5}
+                        rx={1}
+                        className={
+                          drug.isChronic
+                            ? medicationChronicTimelineBarClass
+                            : medicationAcuteTimelineBarClass
+                        }
+                        onMouseEnter={(e) => showBarHover(e, 'elapsed')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    )}
+                    {hasFutureSegment && (
+                      <rect
+                        data-timeline-segment="future"
+                        x={LABEL_COLUMN_WIDTH + futureStartX}
+                        y={row.y + BAR_VERTICAL_OFFSET}
+                        width={Math.max(x2 - futureStartX, 1)}
+                        height={BAR_HEIGHT}
+                        strokeWidth={0.75}
+                        strokeDasharray="2 1.5"
+                        rx={1}
+                        className={
+                          drug.isChronic
+                            ? medicationChronicFutureTimelineBarClass
+                            : medicationAcuteFutureTimelineBarClass
+                        }
+                        onMouseEnter={(e) => showBarHover(e, 'future')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    )}
+                  </g>
                 )
               })}
             </g>
           )
         })}
+
+        {/* Keep today above the medication segments so the transition
+            boundary remains visible; pointer events stay with the bars. */}
+        {todayX >= 0 && todayX <= chartWidth && (
+          <line
+            data-timeline-today
+            x1={LABEL_COLUMN_WIDTH + todayX}
+            x2={LABEL_COLUMN_WIDTH + todayX}
+            y1={AXIS_HEIGHT - 2}
+            y2={totalHeight}
+            strokeWidth={1}
+            strokeDasharray="2,2"
+            pointerEvents="none"
+            className="stroke-destructive"
+          />
+        )}
       </svg>
 
       {/* ── Hover tooltip ──────────────────────────────────────────── */}
@@ -256,6 +338,12 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           {hover.drugProductName && (
             <div className="truncate text-[0.6875rem] text-muted-foreground">
               {hover.drugProductName}
+            </div>
+          )}
+          {hover.segment === 'future' && (
+            <div className="mb-1 inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
+              <span className="inline-block h-1.5 w-3 rounded-[1px] border border-dashed border-muted-foreground/70 bg-muted/25" />
+              {mt.timelineAfterToday ?? 'After today'}
             </div>
           )}
           {hover.drugTerminology && (

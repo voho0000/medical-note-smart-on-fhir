@@ -36,12 +36,12 @@ const INITIAL_CHANGES = 2
 const INITIAL_RECONCILIATION = 2
 
 const CHANGE_STYLES: Record<MedicationChangeType, string> = {
-  new: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-  stopped: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  resumed: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
-  changed: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  "cross-facility": "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-  uncertain: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  new: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+  stopped: "bg-slate-100 text-slate-700 dark:bg-muted/70 dark:text-muted-foreground",
+  resumed: "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
+  changed: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  "cross-facility": "bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
+  uncertain: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
 }
 
 function latestSource(sources: ResolvedSourceRef[]) {
@@ -107,7 +107,7 @@ export function MedicationReconciliationCard({
               const meta = sourceMeta(latestSource(sources))
               return (
                 <div key={`${item.name}-${index}`} className="flex min-w-0 items-start gap-2 px-2.5 py-1.5">
-                  <span className="mt-px shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  <span className="mt-px shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-slate-700 dark:bg-muted/70 dark:text-muted-foreground">
                     {item.group}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -158,7 +158,7 @@ export function MedicationReconciliationCard({
       {reconciliation.length > 0 ? (
         <div className={cn((regimen.length > 0 || changes.length > 0) && "mt-2")}>
           <h4 className="mb-1 text-[0.625rem] font-semibold text-muted-foreground">{reconciliationTitle}</h4>
-          <div className="divide-y divide-border/70 rounded-md border border-amber-200/70 bg-amber-50/35 dark:border-amber-900/50 dark:bg-amber-950/10">
+          <div className="divide-y divide-border/70 rounded-md border border-amber-200/70 bg-amber-50/35 dark:border-amber-500/20 dark:bg-amber-500/[0.05]">
             {reconciliation.map((item, index) => {
               const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
               return (
@@ -176,7 +176,7 @@ export function MedicationReconciliationCard({
         <button
           type="button"
           onClick={() => setShowAll((value) => !value)}
-          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          className="mt-2 flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

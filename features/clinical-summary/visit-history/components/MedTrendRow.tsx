@@ -19,6 +19,7 @@ interface MedTrendRowProps {
   series: EncounterMedSeries
   defaultExpanded?: boolean
   showExecutionPeriods?: boolean
+  grouped?: boolean
 }
 
 /** Render the date range header (e.g. "05-18 ~ 05-22"). Falls back to the
@@ -34,6 +35,7 @@ export function MedTrendRow({
   series,
   defaultExpanded = false,
   showExecutionPeriods = false,
+  grouped = false,
 }: MedTrendRowProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
@@ -52,10 +54,11 @@ export function MedTrendRow({
   // MedicationItem is the only medication-row renderer in the app. This
   // component contributes just the multi-day refill disclosure control.
   return (
-    <div className="space-y-0.5">
+    <div className="@container space-y-0.5">
       <MedicationItem
         medication={latest}
         executionPeriods={executionPeriods}
+        grouped={grouped}
       />
       {isFoldable && (
         <button

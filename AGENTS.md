@@ -21,3 +21,10 @@ red on a two-line version bump.
 - Confirm the live identity with the read-only command `gh api user --jq .login` before reporting that authentication is valid or invalid.
 - If the network-enabled checks cannot run, report that authentication could not be verified; do not report that the token expired or is invalid.
 - Never print, copy, persist, or expose the GitHub token itself.
+
+## UI design guidance
+
+- Before creating, changing, or reviewing rendered UI, read the repository root `DESIGN.md`.
+- Use the repository skill in `.agents/skills/design-mediprisma-ui/`.
+- Prefer existing tokens and shared primitives over one-off values.
+- Verify material UI changes with relevant tests, lint, a production build, and real browser checks.

@@ -41,7 +41,7 @@ export function CareRemindersSafetyCard({
         className="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
       >
         <span className="min-w-0 flex-1">{title}</span>
-        {updatingExistingResult ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-violet-500" /> : null}
+        {updatingExistingResult ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-violet-500 dark:text-violet-300" /> : null}
       </h3>
       <SafetyAlertsPanel
         result={result}

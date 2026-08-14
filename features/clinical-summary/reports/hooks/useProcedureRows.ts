@@ -234,7 +234,12 @@ export function useProcedureRows(procedures: any[]) {
         // with DiagnosticReport-derived rows (which use the report's raw id).
         id: `procedure:${stableRowId}`,
         title: f.title,
-        meta: `Procedure • ${procedure?.status || "—"}`,
+        // Completion is implicit for health-passbook procedures. Use the
+        // clinically meaningful category in the date tooltip instead of a
+        // repeated English status such as "completed".
+        meta: f.category && f.category !== "—"
+          ? f.category
+          : (t.procedures.title || "Procedure"),
         obs: [observation],
         group: "procedures" as const,
         institution: f.performer,

@@ -86,8 +86,8 @@ const SECONDARY_ACTION_BUTTON_CLASS = cn(
   'h-8 flex-1 border-teal-200 bg-teal-50/60 text-teal-800 shadow-none',
   'hover:border-teal-300 hover:bg-teal-100/70 hover:text-teal-900',
   'focus-visible:border-teal-500 focus-visible:ring-teal-500/25',
-  'dark:border-teal-800/80 dark:bg-teal-950/25 dark:text-teal-200',
-  'dark:hover:border-teal-700 dark:hover:bg-teal-950/50 dark:hover:text-teal-100',
+  'dark:border-primary/30 dark:bg-primary/10 dark:text-primary',
+  'dark:hover:border-primary/45 dark:hover:bg-primary/15 dark:hover:text-primary',
   'sm:min-w-32 sm:flex-none',
 )
 
@@ -95,14 +95,14 @@ const PRIMARY_ACTION_BUTTON_CLASS = cn(
   'h-8 flex-1 bg-teal-600 text-white shadow-sm shadow-teal-600/15',
   'hover:bg-teal-700 hover:shadow-md hover:shadow-teal-600/20',
   'focus-visible:border-teal-500 focus-visible:ring-teal-500/30',
-  'dark:bg-teal-500 dark:text-teal-950 dark:shadow-teal-950/30',
-  'dark:hover:bg-teal-400 dark:hover:text-teal-950',
+  'dark:bg-primary dark:text-primary-foreground dark:shadow-none',
+  'dark:hover:bg-primary/90 dark:hover:text-primary-foreground',
   'sm:min-w-32 sm:flex-none',
 )
 
 const ACTION_INFO_CLASS = cn(
   'h-8 w-8 shrink-0 hover:bg-teal-50 hover:text-teal-700',
-  'dark:hover:bg-teal-950/40 dark:hover:text-teal-300',
+  'dark:hover:bg-primary/10 dark:hover:text-primary',
 )
 
 const COMPACT_INPUT_CLASS = 'h-9 py-1.5 text-base sm:h-8 sm:py-1 sm:text-sm'
@@ -1023,9 +1023,9 @@ export function OpenAiCompatibleSettings({
                     className={cn(
                       'inline-flex shrink-0 rounded-full border px-1.5 py-0.5 font-medium',
                       contextWindowSource === 'detected'
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
                         : contextWindowSource === 'manual'
-                          ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'
+                          ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300'
                           : 'border-border bg-muted/60 text-muted-foreground',
                     )}
                   >
@@ -1151,7 +1151,7 @@ export function OpenAiCompatibleSettings({
                     className={cn(
                       'flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded px-1 py-1.5 text-center transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 sm:gap-1.5 sm:px-2',
                       agentMode === option.value
-                        ? 'bg-background text-teal-800 shadow-sm dark:text-teal-200'
+                        ? 'bg-background text-teal-800 shadow-sm dark:text-primary'
                         : 'hover:bg-muted/40',
                       busy && 'cursor-not-allowed opacity-50',
                     )}
@@ -1184,9 +1184,9 @@ export function OpenAiCompatibleSettings({
                   className={cn(
                     'shrink-0 rounded-full border px-2 py-0.5 text-[0.6875rem] font-medium',
                     agentCapability === 'verified' &&
-                      'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                      'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
                     agentCapability === 'unsupported' &&
-                      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+                      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
                     agentCapability === 'unknown' &&
                       'border-border bg-background text-muted-foreground',
                   )}
@@ -1211,9 +1211,9 @@ export function OpenAiCompatibleSettings({
       {testState && (
         <div className={cn(
           'flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs',
-          testState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
-          testState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
-          testState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+          testState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+          testState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+          testState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300',
         )} role={testState.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
           {testState.tone === 'success'
             ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1225,9 +1225,9 @@ export function OpenAiCompatibleSettings({
       {agentTestState && (
         <div className={cn(
           'flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs',
-          agentTestState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
-          agentTestState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
-          agentTestState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+          agentTestState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+          agentTestState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+          agentTestState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300',
         )} role={agentTestState.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
           {agentTestState.tone === 'success'
             ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1332,7 +1332,7 @@ export function OpenAiCompatibleSettings({
                 checked={saved.enabled}
                 onCheckedChange={handleEnabledChange}
                 disabled={busy}
-                className="data-[state=checked]:bg-teal-600 focus-visible:ring-teal-500/30 dark:data-[state=checked]:bg-teal-500"
+                className="data-[state=checked]:bg-teal-600 focus-visible:ring-primary/30 dark:data-[state=checked]:bg-primary"
               />
             </div>
           )}

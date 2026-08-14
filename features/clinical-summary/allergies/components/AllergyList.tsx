@@ -15,7 +15,7 @@ export function AllergyList({ allergies, isLoading, error }: AllergyListProps) {
   
   if (error) {
     return (
-      <div className="text-sm text-red-600">
+      <div className="text-sm text-destructive">
         {error instanceof Error ? error.message : String(error)}
       </div>
     )

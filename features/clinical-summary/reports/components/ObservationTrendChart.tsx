@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, LabelList } from 'recharts'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
 import { formatNumberSmart } from '../utils/number-format.utils'
@@ -41,20 +41,6 @@ export function niceAxis(
 }
 
 export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps) {
-  // recharts needs a concrete colour (not a CSS class); read the theme's card
-  // background once via a lazy initializer so the dot "donut" ring matches the
-  // light/dark background. Client-only (this chart lives in a click-mounted
-  // dialog, never SSR'd), so reading the DOM here is safe.
-  const [cardColor] = useState(() => {
-    if (typeof document === 'undefined') return '#ffffff'
-    try {
-      const hsl = getComputedStyle(document.documentElement).getPropertyValue('--card').trim()
-      return hsl ? `hsl(${hsl})` : '#ffffff'
-    } catch {
-      return '#ffffff'
-    }
-  })
-
   const chartData = useMemo(() => {
     return data
       .filter((item) => typeof item.value === 'number')
@@ -98,9 +84,10 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
     )
   }
 
-  const LINE = '#3b82f6'
-  const ABNORMAL = '#ef4444'
-  const BAND = '#22c55e'
+  const LINE = 'var(--primary)'
+  const ABNORMAL = 'var(--clinical-abnormal)'
+  const BAND = 'var(--chart-2)'
+  const CARD = 'var(--card)'
 
   // Shorter on phones so the chart doesn't eat ~70% of the viewport above the
   // data table; full height from sm up. Pure CSS (SSR-safe, no hydration).
@@ -132,12 +119,12 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: 'hsl(var(--background))',
-            border: '1px solid hsl(var(--border))',
+            backgroundColor: 'var(--background)',
+            border: '1px solid var(--border)',
             borderRadius: '8px',
             fontSize: '12px',
           }}
-          labelStyle={{ color: 'hsl(var(--foreground))' }}
+          labelStyle={{ color: 'var(--foreground)' }}
           formatter={(value) => {
             if (typeof value !== 'number') return ['', '數值']
             const flag = isAbnormal(value) ? ' ⚠' : ''
@@ -154,7 +141,7 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
             fill={BAND}
             fillOpacity={0.1}
             stroke="none"
-            label={{ value: '正常範圍', position: 'insideTopRight', fontSize: 10, fill: '#16a34a' }}
+            label={{ value: '正常範圍', position: 'insideTopRight', fontSize: 10, fill: BAND }}
           />
         )}
         {referenceRange?.low !== undefined && (
@@ -181,12 +168,12 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
                 cy={cy}
                 r={4}
                 fill={abnormal ? ABNORMAL : LINE}
-                stroke={cardColor}
+                stroke={CARD}
                 strokeWidth={1.5}
               />
             )
           }}
-          activeDot={{ r: 6, fill: LINE, stroke: cardColor, strokeWidth: 2 }}
+          activeDot={{ r: 6, fill: LINE, stroke: CARD, strokeWidth: 2 }}
         >
           {/* Always-on value labels above each point (not just on hover). */}
           <LabelList
@@ -200,7 +187,7 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
                   x={x}
                   y={y - 10}
                   textAnchor="middle"
-                  style={{ fontSize: 11, fontWeight: 500, fill: isAbnormal(value) ? ABNORMAL : 'hsl(var(--foreground))' }}
+                  style={{ fontSize: 11, fontWeight: 500, fill: isAbnormal(value) ? ABNORMAL : 'var(--foreground)' }}
                 >
                   {formatNumberSmart(value)}
                 </text>

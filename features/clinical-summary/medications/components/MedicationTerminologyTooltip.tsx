@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/components/clinical-metadata-styles'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { MedicationRow } from '../types'
 
@@ -61,17 +62,17 @@ export function MedicationTerminologyTooltip({
       <TooltipContent
         data-testid="medication-terminology-tooltip"
         sideOffset={4}
-        className="max-w-[min(92vw,30rem)] whitespace-normal text-xs leading-relaxed"
+        className={`${clinicalTooltipSurfaceClass} max-w-[min(92vw,30rem)] whitespace-normal text-xs leading-relaxed`}
       >
         <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-left">
           {rows.map(([label, value]) => (
             <div key={label} className="contents">
-              <dt className="text-background/70">{label}</dt>
+              <dt className="text-secondary-foreground/65">{label}</dt>
               <dd className="min-w-0 break-words font-medium">{value}</dd>
             </div>
           ))}
         </dl>
-        <div className="mt-1.5 border-t border-background/20 pt-1 text-[0.6875rem] text-background/75">
+        <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1 text-[0.6875rem] text-secondary-foreground/70">
           {mt.terminologySource ?? 'NHI drug master'}
           {' · '}
           {mt.terminologySnapshotLabel ?? 'Version'}: {terminology.snapshotId}

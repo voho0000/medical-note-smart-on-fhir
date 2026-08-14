@@ -15,6 +15,30 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 
+/** Keep descriptive drug classes aligned with the UI language. Some bridge
+ *  payloads carry a bilingual zh label such as
+ *  "痰液溶解劑 (MUCOLYTIC AGENTS)" in `text`; the compact row should not
+ *  spend space repeating the English translation on a Chinese UI. */
+function localizedMedicationCategory(concept: any, locale: string): string {
+  const raw = pickByLocale(concept, locale).replace(/\s+/g, ' ').trim()
+  if (!raw) return ''
+
+  const trailingParenthetical = raw.match(/\s*[（(]([^()（）]*[A-Za-z][^()（）]*)[)）]\s*$/)
+  if (locale === 'en') {
+    if (trailingParenthetical) {
+      const prefix = raw.slice(0, trailingParenthetical.index).trim()
+      if (/[\u3400-\u9fff]/.test(prefix)) {
+        return trailingParenthetical[1].trim()
+      }
+    }
+    return raw
+  }
+
+  return raw
+    .replace(/\s*[（(][^()（）]*[A-Za-z][^()（）]*[)）]\s*$/, '')
+    .trim() || raw
+}
+
 export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
@@ -194,10 +218,8 @@ export function useMedicationRows(
       // Follow UI locale, NOT audience — medical professionals on a zh-TW
       // UI still expect 降血壓藥 because category is a descriptor (not a
       // technical pharmacology name like the drug itself).
-      const categoryRaw = pickByLocale(med?.category?.[0], locale)
-      const category = categoryRaw
-        ? categoryRaw.replace(/\s+/g, ' ').trim() || undefined
-        : undefined
+      const categoryRaw = localizedMedicationCategory(med?.category?.[0], locale)
+      const category = categoryRaw || undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
       // ICD descriptions follow UI locale, NOT audience: medical users on a

@@ -174,22 +174,22 @@ export function getInterpretationTag(concept?: CodeableConcept | CodeableConcept
 
   if (["H", "HI", "HIGH", "ABOVE", ">", "HH", "CRIT-HI"].includes(code)) {
     label = code === "HH" ? "Critical High" : "High"
-    style = "bg-red-100 text-red-700 border border-red-200"
+    style = "border border-red-200 bg-red-100 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
   } else if (["L", "LO", "LOW", "BELOW", "<", "LL", "CRIT-LO"].includes(code)) {
     label = code === "LL" ? "Critical Low" : "Low"
-    style = "bg-blue-100 text-blue-700 border border-blue-200"
+    style = "border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
   } else if (["A", "AA", "ABN", "ABNORMAL"].includes(code)) {
     label = "Abnormal"
-    style = "bg-amber-100 text-amber-700 border border-amber-200"
+    style = "border border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
   } else if (["POS", "POSITIVE", "DETECTED", "REACTIVE"].includes(code)) {
     label = "Positive"
-    style = "bg-orange-100 text-orange-700 border border-orange-200"
+    style = "border border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300"
   } else if (["NEG", "NEGATIVE", "NOT DETECTED", "NONREACTIVE", "NR"].includes(code)) {
     label = "Negative"
-    style = "bg-emerald-100 text-emerald-700 border border-emerald-200"
+    style = "border border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
   } else if (["N", "NORMAL"].includes(code)) {
     label = "Normal"
-    style = "bg-gray-100 text-gray-600 border border-gray-200"
+    style = "border border-gray-200 bg-gray-100 text-gray-600 dark:border-border dark:bg-muted dark:text-muted-foreground"
   }
 
   return { label, style }

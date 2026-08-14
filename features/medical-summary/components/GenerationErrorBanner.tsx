@@ -45,7 +45,7 @@ export function GenerationErrorBanner({
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300"
+      className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-rose-500/10 dark:text-rose-300"
     >
       <AlertCircle className="h-4 w-4 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start">
@@ -92,7 +92,7 @@ export function GenerationErrorBanner({
         onClick={() => setDismissed(true)}
         aria-label={closeLabel}
         title={closeLabel}
-        className="-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-red-100 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:hover:bg-red-900/60"
+        className="-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-red-100 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:hover:bg-rose-500/15"
       >
         <X className="h-4 w-4" />
       </button>

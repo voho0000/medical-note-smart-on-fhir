@@ -4,7 +4,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
+import {
+  CARD_BORDER_CLASSES,
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Menu, Maximize2, Minimize2, Search, X, Loader2, TrendingUp } from "lucide-react"
@@ -16,6 +20,7 @@ import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
 import { useGroupedRows } from './hooks/useGroupedRows'
+import { useReportTabCounts } from './hooks/useReportTabCounts'
 import { groupMultiRegionStudies } from './utils/multi-region-grouping'
 import { groupLabReportsByDay } from './utils/lab-day-grouping'
 import { ReportsTabContent } from './components/ReportsTabContent'
@@ -26,6 +31,7 @@ import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
 import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
+import { REPORT_ACTIVE_CONTROL_TONE } from './components/report-color-roles'
 import {
   PROCEDURE_CATEGORY_CODES,
   type ProcedureCategoryCode,
@@ -41,6 +47,7 @@ const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
 type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
+const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden rounded-lg border-border shadow-none hover:shadow-none`
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -137,6 +144,18 @@ export function ReportsCard() {
   const effectiveNameMode: AnalyteNameMode = NAME_MODE_TABS.has(activeTab)
     ? nameMode
     : 'standardized'
+
+  // The source resources are already cached by useClinicalData. Build only a
+  // lightweight identity/category index here so tab counts are useful on the
+  // cumulative view without paying for report text decoding, localization, or
+  // full Row construction. The exact rendered counts take over as soon as the
+  // raw-report pipeline is enabled.
+  const initialTabCounts = useReportTabCounts(
+    diagnosticReports,
+    imagingStudies,
+    observations,
+    procedures,
+  )
 
   const { reportRows, seenIds } = useReportsData(
     rawReportsEnabled ? diagnosticReports : EMPTY_RESOURCES,
@@ -348,21 +367,27 @@ export function ReportsCard() {
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
     const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
-    const withCount = (label: string, count: number) => rawReportsEnabled
-      ? `${label} (${count})`
-      : label
+    const exactCounts = {
+      all: groupedRows.all.length,
+      lab: labRows.length,
+      imaging: imagingRows.length,
+      vitals: groupedRows.vitals.length,
+      procedures: filteredProcedureRows.length,
+    }
+    const displayCounts = rawReportsEnabled ? exactCounts : initialTabCounts
+    const withCount = (label: string, count: number) => `${label} (${count})`
     const configs = [
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
-      { value: "all", label: withCount(reportTabs.all, groupedRows.all.length), rows: groupedRows.all, isCumulative: false },
+      { value: "all", label: withCount(reportTabs.all, displayCounts.all), rows: groupedRows.all, isCumulative: false },
       // Badge count follows the active view (day groups vs single items),
       // matching the imaging precedent: the number shown = cards clickable.
-      { value: "lab", label: withCount(reportTabs.lab, labRows.length), rows: labRows, isCumulative: false },
+      { value: "lab", label: withCount(reportTabs.lab, displayCounts.lab), rows: labRows, isCumulative: false },
       // Tab badge count reflects the post-grouping list (a 6-row multi-region
       // CT now reads as 1 row in the badge), so the number a user sees and
       // the cards they can click on match.
-      { value: "imaging", label: withCount(reportTabs.imaging, imagingRows.length), rows: imagingRows, isCumulative: false },
-      { value: "vitals", label: withCount(reportTabs.vitals, groupedRows.vitals.length), rows: groupedRows.vitals, isCumulative: false },
-      { value: "procedures", label: withCount(reportTabs.procedures, filteredProcedureRows.length), rows: filteredProcedureRows, isCumulative: false },
+      { value: "imaging", label: withCount(reportTabs.imaging, displayCounts.imaging), rows: imagingRows, isCumulative: false },
+      { value: "vitals", label: withCount(reportTabs.vitals, displayCounts.vitals), rows: groupedRows.vitals, isCumulative: false },
+      { value: "procedures", label: withCount(reportTabs.procedures, displayCounts.procedures), rows: filteredProcedureRows, isCumulative: false },
     ]
     // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
     return configs.filter(
@@ -374,6 +399,7 @@ export function ReportsCard() {
     filteredProcedureRows,
     groupedRows,
     imagingRows,
+    initialTabCounts,
     labRows,
     procedures.length,
     rawReportsEnabled,
@@ -438,7 +464,7 @@ export function ReportsCard() {
 
   if (isLoading) {
     return (
-      <Card className={CARD_BORDER_CLASSES.clinical}>
+      <Card className={REPORT_CARD_CLASS}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -451,11 +477,11 @@ export function ReportsCard() {
 
   if (error) {
     return (
-      <Card className={CARD_BORDER_CLASSES.clinical}>
+      <Card className={REPORT_CARD_CLASS}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-red-600">
+        <CardContent className="text-sm text-destructive">
           {t.common.error}: {error?.message || t.errors.unknown}
         </CardContent>
       </Card>
@@ -472,7 +498,7 @@ export function ReportsCard() {
     || procedures.length > 0
   if (!hasReportResources) {
     return (
-      <Card className={CARD_BORDER_CLASSES.clinical}>
+      <Card className={REPORT_CARD_CLASS}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -487,7 +513,8 @@ export function ReportsCard() {
     <button
       type="button"
       onClick={() => setExpanded(!expanded)}
-      className="absolute top-2 right-2 z-30 inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-border bg-background/95 text-muted-foreground hover:bg-accent hover:text-foreground shadow-sm transition-colors"
+      aria-label={expanded ? 'Minimize' : 'Expand to fullscreen'}
+      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8 lg:min-w-8 lg:px-2"
       title={expanded ? 'Minimize' : 'Expand to fullscreen'}
     >
       {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -503,7 +530,7 @@ export function ReportsCard() {
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
         {/* Desktop tabs */}
-        <TabsList data-tour="report-tabs" className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto gap-0 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears on the tab the user is currently switching to,
             // for the duration of useTransition's pending window. Tells the
@@ -515,7 +542,7 @@ export function ReportsCard() {
                 key={tab.value}
                 value={tab.value}
                 data-tour={`report-tab-${tab.value}`}
-                className={`!flex-none !min-w-fit px-2 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
+                className={`${SUBTAB_TRIGGER_CLASSES} !flex-none !min-w-fit whitespace-nowrap capitalize`}
               >
                 {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                 {tab.label}
@@ -528,7 +555,7 @@ export function ReportsCard() {
         <div data-tour="report-tabs" className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="w-full justify-between">
+              <Button variant="outline" className="min-h-[44px] w-full justify-between shadow-none hover:shadow-none">
                 <span className="truncate inline-flex items-center gap-1">
                   {pendingTab && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
                   {tabConfigs.find(t => t.value === (pendingTab ?? activeTab))?.label || tabConfigs[0]?.label}
@@ -541,7 +568,7 @@ export function ReportsCard() {
                 <DropdownMenuItem
                   key={tab.value}
                   onClick={() => handleTabChange(tab.value)}
-                  className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
+                  className={activeTab === tab.value ? REPORT_ACTIVE_CONTROL_TONE : ""}
                 >
                   {tab.label}
                 </DropdownMenuItem>
@@ -554,7 +581,7 @@ export function ReportsCard() {
             the large empty band of the first iteration while preventing the
             setting from competing with either level of navigation. */}
         {activeTab === 'cumulative' && (
-          <div className="mb-0.5 flex h-7 shrink-0 items-center justify-between gap-2 px-1">
+          <div className="mb-0.5 flex min-h-[44px] shrink-0 items-center justify-between gap-2 px-1 lg:min-h-8">
             <span className="hidden min-w-0 items-center gap-1 text-[0.6875rem] text-muted-foreground sm:inline-flex">
               <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
               <span className="truncate">{(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}</span>
@@ -624,7 +651,7 @@ export function ReportsCard() {
                       aria-pressed={labByDay === opt.byDay}
                       className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                         labByDay === opt.byDay
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                          ? REPORT_ACTIVE_CONTROL_TONE
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
@@ -718,7 +745,7 @@ export function ReportsCard() {
     return (
       <>
         {/* Placeholder to maintain layout in original spot */}
-        <Card className={`${CARD_BORDER_CLASSES.clinical} opacity-30 pointer-events-none`}>
+        <Card className={`${REPORT_CARD_CLASS} pointer-events-none opacity-30`}>
           <CardContent className="px-4 pb-4 h-40 flex items-center justify-center text-muted-foreground">
             <Maximize2 className="h-6 w-6 mr-2" />
             <span className="text-sm">Reports expanded — click outside to close</span>
@@ -745,9 +772,9 @@ export function ReportsCard() {
   return (
     // pt-3 halves the Card's default pt-6 (24px → 12px) so the report group
     // tabs sit closer to the card's top edge.
-    <Card className={`${CARD_BORDER_CLASSES.clinical} relative w-full max-w-full pt-3`}>
+    <Card className={`${REPORT_CARD_CLASS} relative w-full max-w-full pt-3`}>
       {expandButton}
-      <CardContent className="px-4 pb-4 min-w-0">
+      <CardContent className="min-w-0 px-3 pb-3 sm:px-4 sm:pb-4">
         {reportsContent}
       </CardContent>
     </Card>

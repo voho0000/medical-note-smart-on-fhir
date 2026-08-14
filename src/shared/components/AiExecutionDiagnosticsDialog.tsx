@@ -85,12 +85,12 @@ function statusLabel(
 
 function statusClass(status: AiExecutionDiagnosticsPreviewRecord["status"]) {
   if (status === "completed") {
-    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200"
   }
   if (status === "aborted") {
-    return "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+    return "bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200"
   }
-  return "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+  return "bg-red-100 text-red-800 dark:bg-rose-500/10 dark:text-rose-200"
 }
 
 function DataSection({ label, value }: { label: string; value: unknown }) {
@@ -125,7 +125,7 @@ export function AiExecutionDiagnosticsDialog({
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 sm:px-6 sm:py-5">
           <DialogTitle>{labels.title}</DialogTitle>
           <DialogDescription>{labels.description}</DialogDescription>
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/35 dark:text-amber-100">
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{labels.privacyNotice}</span>
           </div>

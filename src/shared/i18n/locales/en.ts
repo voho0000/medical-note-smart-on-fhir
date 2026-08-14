@@ -63,6 +63,11 @@ export const en = {
     moreMenu: 'More',
     collapseHeader: 'Collapse header',
     expandHeader: 'Expand header',
+    resizePanels: 'Resize clinical summary and feature panels',
+    collapseClinicalSummary: 'Collapse clinical summary panel',
+    expandClinicalSummary: 'Expand clinical summary panel',
+    collapseFeatures: 'Collapse features panel',
+    expandFeatures: 'Expand features panel',
   },
 
   // Shared in-panel model picker (chat / custom-summary / medical-summary headers)
@@ -91,7 +96,7 @@ export const en = {
     medicalSummary: 'Summary',
     ipsExport: 'Export',
     medicalCalculator: 'Calculator',
-    personalizedEducation: 'Personalized education',
+    personalizedEducation: 'Education',
     personalizedGuidance: 'Care guidance',
     settings: 'Settings',
     // Right-panel overflow menu (tabs collapsed out of the tab bar)
@@ -759,6 +764,8 @@ export const en = {
     refillsLabel: 'Refills',
     refillsSince: 'since',
     refillTimes: 'times',
+    refillSummary: '{count} refills',
+    refillSummarySince: '{count} refills · since {date}',
     billingIcdLabel: 'Billing ICD',
     billingIcdTooltip: 'ICD code recorded on the prescription for billing/dispensing purposes. May not reflect a confirmed clinical diagnosis — refer to the Diagnoses tab for confirmed conditions.',
     terminologySource: 'Enriched from NHI drug master',
@@ -772,6 +779,11 @@ export const en = {
     terminologySnapshotLabel: 'Drug-master version',
     viewList: 'List',
     viewTimeline: 'Timeline',
+    nameDisplay: {
+      label: 'Drug name display',
+      ingredient: 'Ingredient',
+      product: 'Product',
+    },
     openTimelineRight: 'Open the timeline in the right panel (side-by-side with the list)',
     searchPlaceholder: 'Search name, class, facility, date…',
     searchNoMatch: 'No matching medications',
@@ -792,6 +804,7 @@ export const en = {
     timelineDrugCount: 'drugs',
     timelineAcute: 'acute',
     timelineToday: 'Today',
+    timelineAfterToday: 'After today',
     timelineEmpty: 'No medications in this range',
     timelineOtherCategory: 'Other',
     timelineAtcCategories: {
@@ -824,6 +837,7 @@ export const en = {
     routeLabel: 'Route',
     durationLabel: 'Duration',
     durationDaysUnit: 'days',
+    durationCompact: '{n}d',
     noDetail: 'No detailed information available',
     // MedicationItem status badges
     statusEnded: 'ended',

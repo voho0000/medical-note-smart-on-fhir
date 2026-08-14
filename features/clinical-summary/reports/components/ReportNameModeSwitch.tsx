@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from 'react'
 import { Switch } from '@/components/ui/switch'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -8,6 +9,7 @@ import { useReportNameModeControl } from '../context/report-name-mode.context'
 export function ReportNameModeSwitch({ className }: { className?: string }) {
   const { t } = useLanguage()
   const { mode, onChange } = useReportNameModeControl()
+  const switchId = useId()
   if (!onChange) return null
 
   const labels = (t.reports as any).nameDisplay || {
@@ -17,24 +19,41 @@ export function ReportNameModeSwitch({ className }: { className?: string }) {
   }
 
   return (
-    <div className={cn('inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground', className)}>
+    <div
+      role="group"
+      aria-label={labels.label}
+      className={cn('inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground lg:min-h-8', className)}
+    >
       <button
         type="button"
         onClick={() => onChange('original')}
-        className={mode === 'original' ? 'font-medium text-foreground' : 'hover:text-foreground'}
+        aria-pressed={mode === 'original'}
+        className={cn(
+          'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
+          mode === 'original' && 'font-medium text-foreground',
+        )}
       >
         {labels.original}
       </button>
-      <Switch
-        checked={mode === 'standardized'}
-        onCheckedChange={(checked) => onChange(checked ? 'standardized' : 'original')}
-        aria-label={labels.label}
-        className="scale-90"
-      />
+      <label
+        htmlFor={switchId}
+        className="inline-flex h-[44px] w-[44px] cursor-pointer items-center justify-center lg:h-8 lg:w-10"
+      >
+        <Switch
+          id={switchId}
+          checked={mode === 'standardized'}
+          onCheckedChange={(checked) => onChange(checked ? 'standardized' : 'original')}
+          aria-label={labels.label}
+        />
+      </label>
       <button
         type="button"
         onClick={() => onChange('standardized')}
-        className={mode === 'standardized' ? 'font-medium text-foreground' : 'hover:text-foreground'}
+        aria-pressed={mode === 'standardized'}
+        className={cn(
+          'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
+          mode === 'standardized' && 'font-medium text-foreground',
+        )}
       >
         {labels.standardized}
       </button>

@@ -158,14 +158,14 @@ export function IpsDataScopePanel({ bundle, curatedData }: IpsDataScopePanelProp
   return (
     <div className="space-y-3">
       {snomedCodedCount > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
           <BadgeCheck className="h-4 w-4 shrink-0" />
           <span>{x.snomedCoded.replace('{count}', String(snomedCodedCount))}</span>
         </div>
       )}
 
       {aiInferredCount > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+        <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
           <Sparkles className="h-4 w-4 shrink-0" />
           <span>{x.aiInferred.replace('{count}', String(aiInferredCount))}</span>
         </div>

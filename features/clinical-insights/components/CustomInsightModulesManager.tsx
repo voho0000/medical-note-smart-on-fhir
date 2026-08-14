@@ -135,11 +135,11 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
 
           <div className="ml-auto flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-1 text-[0.625rem] font-medium text-muted-foreground">
-              <Eye className="h-3 w-3 text-violet-500" />
+              <Eye className="h-3 w-3 text-violet-500 dark:text-violet-300" />
               {summaryModuleCount}/{MAX_SUMMARY_INSIGHT_MODULES} {t.settings.moduleVisibleShort}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-1 text-[0.625rem] font-medium text-muted-foreground">
-              <Zap className="h-3 w-3 text-amber-500" />
+              <Zap className="h-3 w-3 text-amber-500 dark:text-amber-300" />
               {autoModuleCount}/{MAX_AUTO_INSIGHT_MODULES} {t.settings.moduleAutoShort}
             </span>
             <ModelPicker
@@ -208,7 +208,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
                 className={cn(
                   "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
                   panel.id === resolvedActiveId
-                    ? "border-violet-300 bg-violet-50 text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100"
+                    ? "border-violet-300 bg-violet-50 text-violet-950 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100"
                     : "border-transparent hover:border-border hover:bg-background",
                 )}
               >
@@ -220,8 +220,8 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium" title={panel.title}>{panel.title}</p>
                     <div className="mt-1 flex items-center gap-1">
-                      {panel.showInSummary ? <Eye className="h-3 w-3 text-violet-500" /> : null}
-                      {panel.autoGenerate ? <Zap className="h-3 w-3 text-amber-500" /> : null}
+                      {panel.showInSummary ? <Eye className="h-3 w-3 text-violet-500 dark:text-violet-300" /> : null}
+                      {panel.autoGenerate ? <Zap className="h-3 w-3 text-amber-500 dark:text-amber-300" /> : null}
                       {!panel.showInSummary && !panel.autoGenerate ? (
                         <span className="text-[0.5625rem] text-muted-foreground">{t.settings.moduleLibraryOnly}</span>
                       ) : null}
@@ -234,7 +234,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
 
           <div className="space-y-1 border-t p-2">
             <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs" onClick={() => setShowGalleryDialog(true)}>
-              <Library className="h-3.5 w-3.5 text-violet-500" />
+              <Library className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
               {t.promptGallery?.browseGallery || "Browse Gallery"}
             </Button>
             <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground" onClick={() => void resetPanels()}>

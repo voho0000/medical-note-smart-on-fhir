@@ -17,22 +17,22 @@ export function StatusBadge({ status, type }: StatusBadgeProps) {
 
   // Clinical Status Colors (light + dark)
   const clinicalColors: Record<string, string> = {
-    'active': 'bg-red-50 text-red-700 ring-red-200 font-semibold dark:bg-red-950/50 dark:text-red-300 dark:ring-red-800',
-    'recurrence': 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:ring-orange-800',
-    'relapse': 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:ring-orange-800',
+    'active': 'bg-red-50 text-red-700 ring-red-200 font-semibold dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25',
+    'recurrence': 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/25',
+    'relapse': 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/25',
     'inactive': 'bg-gray-50 text-gray-600 ring-gray-200 dark:bg-muted dark:text-muted-foreground dark:ring-border',
-    'remission': 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-800',
-    'resolved': 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-800',
+    'remission': 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/25',
+    'resolved': 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25',
   }
 
   // Verification Status Colors (light + dark)
   const verificationColors: Record<string, string> = {
-    'confirmed': 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-800',
-    'unconfirmed': 'bg-amber-50 text-amber-600 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800',
-    'provisional': 'bg-yellow-50 text-yellow-700 ring-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:ring-yellow-800',
-    'differential': 'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:ring-purple-800',
-    'refuted': 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/50 dark:text-red-300 dark:ring-red-800',
-    'entered-in-error': 'bg-red-50 text-red-600 ring-red-200 dark:bg-red-950/50 dark:text-red-300 dark:ring-red-800',
+    'confirmed': 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/25',
+    'unconfirmed': 'bg-amber-50 text-amber-600 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/25',
+    'provisional': 'bg-yellow-50 text-yellow-700 ring-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-300 dark:ring-yellow-500/25',
+    'differential': 'bg-purple-50 text-purple-700 ring-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-purple-500/25',
+    'refuted': 'bg-red-50 text-red-700 ring-red-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25',
+    'entered-in-error': 'bg-red-50 text-red-600 ring-red-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/25',
   }
 
   const colorMap = type === 'clinical' ? clinicalColors : verificationColors

@@ -113,7 +113,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
   // render as a bold divider heading instead of a name/value row.
   if (detailsOnly && hasComponents) {
     return (
-      <div className="space-y-0">
+      <div className={`flex min-w-0 flex-wrap items-baseline gap-x-5 gap-y-1 px-2.5 py-2 ${nested ? 'pl-6' : ''}`}>
         {observation.component!.map((component, idx) => {
           const procedureChild = component as typeof component & {
             _isProcedureChild?: boolean
@@ -129,9 +129,9 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
             return (
               <div
                 key={idx}
-                className={`mt-1 grid min-w-0 grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)] gap-x-4 gap-y-0.5 border-t px-2.5 py-2 ${nested ? 'pl-6' : ''}`}
+                className="mt-1 grid min-w-0 basis-full grid-cols-1 gap-x-4 gap-y-0.5 border-t pt-2 sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)]"
               >
-                <div className="row-span-2 min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground">
+                <div className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground sm:row-span-2">
                   {heading}
                 </div>
                 <div className="min-w-0 text-xs leading-snug text-foreground">
@@ -184,16 +184,13 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
           return (
             <div
               key={idx}
-              className={`grid min-w-0 grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)] items-start gap-x-4 px-2.5 py-0 first:pt-2 last:pb-2 hover:bg-muted/60 ${nested ? 'pl-6' : ''}`}
+              className="flex min-w-0 max-w-full items-baseline gap-x-1.5 text-[0.8125rem] leading-snug"
             >
-              <span aria-hidden="true" />
-              <span className="flex min-w-0 items-baseline gap-x-2 text-[0.8125rem] leading-snug">
-                <span className="shrink-0 text-muted-foreground">
-                  {cName || '—'}
-                </span>
-                <span className="min-w-0 whitespace-normal break-words font-bold text-foreground">
-                  {cValue}
-                </span>
+              <span className="shrink-0 text-muted-foreground">
+                {cName || '—'}
+              </span>
+              <span className="min-w-0 whitespace-normal break-words font-semibold text-foreground">
+                {cValue}
               </span>
             </div>
           )

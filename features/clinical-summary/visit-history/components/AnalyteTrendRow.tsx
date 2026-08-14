@@ -114,7 +114,7 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
     <div
       className={cn(
         "rounded-lg border bg-muted/40",
-        hasAnyAbnormal && "border-red-200 bg-red-50/30 dark:border-red-800/50 dark:bg-red-950/10",
+        hasAnyAbnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
       )}
     >
       <CompactLabResultRow

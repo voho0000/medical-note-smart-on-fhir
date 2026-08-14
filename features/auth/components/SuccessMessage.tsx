@@ -21,8 +21,8 @@ export function SuccessMessage({
   const isSuccess = variant === 'success'
   
   return (
-    <Alert className={isSuccess ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" : ""}>
-      <AlertCircle className={`h-4 w-4 ${isSuccess ? 'text-green-600 dark:text-green-500' : ''}`} />
+    <Alert className={isSuccess ? "bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30" : ""}>
+      <AlertCircle className={`h-4 w-4 ${isSuccess ? 'text-green-600 dark:text-green-300' : ''}`} />
       <AlertTitle className={isSuccess ? "text-green-800 dark:text-green-200" : ""}>
         {title}
       </AlertTitle>

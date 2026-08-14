@@ -57,8 +57,8 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <Alert className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 relative">
-      <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+    <Alert className="bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 relative">
+      <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-300" />
       <button
         onClick={() => setDismissed(true)}
         className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
@@ -85,7 +85,7 @@ export function EmailVerificationBanner() {
               disabled={checking}
               variant="outline"
               size="sm"
-              className="border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+              className="border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500/40 dark:text-green-300 dark:hover:bg-green-500/10"
             >
               {checking 
                 ? (locale === 'zh-TW' ? '檢查中...' : 'Checking...') 
@@ -96,7 +96,7 @@ export function EmailVerificationBanner() {
               disabled={sending}
               variant="outline"
               size="sm"
-              className="border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+              className="border-amber-300 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/10"
             >
               {sending 
                 ? (locale === 'zh-TW' ? '發送中...' : 'Sending...') 

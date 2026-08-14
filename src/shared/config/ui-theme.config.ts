@@ -21,10 +21,11 @@ import {
   ListChecks,
   FileOutput,
   Calculator,
-  BookOpen,
   BookOpenCheck,
+  GraduationCap,
   type LucideIcon
 } from 'lucide-react'
+import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 
 // ============================================================================
 // COLOR DEFINITIONS - Consistent with Prompt Gallery
@@ -36,14 +37,14 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-blue-100',
       text: 'text-blue-700',
-      border: 'border-l-blue-500',
+      border: 'border-border',
       activeBg: 'bg-blue-100',
       activeText: 'text-blue-700',
     },
     dark: {
       bg: 'dark:bg-blue-900/50',
       text: 'dark:text-blue-300',
-      border: 'border-l-blue-500',
+      border: 'border-border',
       activeBg: 'dark:bg-blue-900/50',
       activeText: 'dark:text-blue-300',
     },
@@ -54,14 +55,14 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-violet-100',
       text: 'text-violet-700',
-      border: 'border-l-violet-500',
+      border: 'border-border',
       activeBg: 'bg-violet-100',
       activeText: 'text-violet-700',
     },
     dark: {
       bg: 'dark:bg-violet-900/50',
       text: 'dark:text-violet-300',
-      border: 'border-l-violet-500',
+      border: 'border-border',
       activeBg: 'dark:bg-violet-900/50',
       activeText: 'dark:text-violet-300',
     },
@@ -72,14 +73,14 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-emerald-100',
       text: 'text-emerald-700',
-      border: 'border-l-emerald-500',
+      border: 'border-border',
       activeBg: 'bg-emerald-100',
       activeText: 'text-emerald-700',
     },
     dark: {
       bg: 'dark:bg-emerald-900/50',
       text: 'dark:text-emerald-300',
-      border: 'border-l-emerald-500',
+      border: 'border-border',
       activeBg: 'dark:bg-emerald-900/50',
       activeText: 'dark:text-emerald-300',
     },
@@ -90,14 +91,14 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-amber-100',
       text: 'text-amber-700',
-      border: 'border-l-amber-500',
+      border: 'border-border',
       activeBg: 'bg-amber-100',
       activeText: 'text-amber-700',
     },
     dark: {
       bg: 'dark:bg-amber-900/50',
       text: 'dark:text-amber-300',
-      border: 'border-l-amber-500',
+      border: 'border-border',
       activeBg: 'dark:bg-amber-900/50',
       activeText: 'dark:text-amber-300',
     },
@@ -108,14 +109,14 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-teal-100',
       text: 'text-teal-700',
-      border: 'border-l-teal-500',
+      border: 'border-border',
       activeBg: 'bg-teal-100',
       activeText: 'text-teal-700',
     },
     dark: {
       bg: 'dark:bg-teal-900/50',
       text: 'dark:text-teal-300',
-      border: 'border-l-teal-500',
+      border: 'border-border',
       activeBg: 'dark:bg-teal-900/50',
       activeText: 'dark:text-teal-300',
     },
@@ -126,16 +127,16 @@ export const UI_COLORS = {
     light: {
       bg: 'bg-slate-100',
       text: 'text-slate-700',
-      border: 'border-l-slate-500',
+      border: 'border-border',
       activeBg: 'bg-slate-100',
       activeText: 'text-slate-700',
     },
     dark: {
-      bg: 'dark:bg-slate-800/50',
-      text: 'dark:text-slate-300',
-      border: 'border-l-slate-500',
-      activeBg: 'dark:bg-slate-800/50',
-      activeText: 'dark:text-slate-300',
+      bg: 'dark:bg-muted/50',
+      text: 'dark:text-muted-foreground',
+      border: 'border-border',
+      activeBg: 'dark:bg-muted/50',
+      activeText: 'dark:text-muted-foreground',
     },
   },
 } as const
@@ -176,10 +177,10 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     icon: BookOpenCheck,
     colorKey: 'clinical',
   },
-  'personalized-education': {
-    id: 'personalized-education',
-    icon: BookOpen,
-    colorKey: 'clinical',
+  [PERSONALIZED_EDUCATION_FEATURE_ID]: {
+    id: PERSONALIZED_EDUCATION_FEATURE_ID,
+    icon: GraduationCap,
+    colorKey: 'selection',
   },
   'settings': {
     id: 'settings',
@@ -251,24 +252,44 @@ export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: k
  * Dark mode: subtle backgrounds with ring borders
  */
 export const TAB_ACTIVE_CLASSES = {
-  summary: 'data-[state=active]:bg-teal-100 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-500/10 dark:data-[state=active]:text-teal-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-teal-500/30',
-  chat: 'data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-500/10 dark:data-[state=active]:text-blue-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-blue-500/30',
-  insight: 'data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30',
-  selection: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30',
-  settings: 'data-[state=active]:bg-slate-100 data-[state=active]:text-slate-700 dark:data-[state=active]:bg-slate-500/10 dark:data-[state=active]:text-slate-300 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-slate-500/30',
-  clinical: 'data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30',
+  summary: 'data-[state=active]:bg-teal-100 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
+  chat: 'data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
+  insight: 'data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
+  selection: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
+  settings: 'data-[state=active]:bg-slate-100 data-[state=active]:text-slate-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
+  clinical: 'data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-primary dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-primary/25',
 } as const
 
 /**
- * Card left border classes - use these directly in Card components
+ * Nested workspace tabs use the same flat, line-selected grammar as the
+ * primary navigation. They stay touch-sized below xl and become compact on
+ * pointer-oriented desktop layouts.
+ */
+export const SUBTAB_LIST_CLASSES =
+  'h-auto min-h-[44px] rounded-none border-x-0 border-t-0 border-b border-border bg-transparent p-0 shadow-none xl:min-h-[24px]'
+
+export const SUBTAB_TRIGGER_CLASSES =
+  "relative min-h-[44px] min-w-0 rounded-none border-0 bg-transparent px-2 py-0 text-sm font-medium text-muted-foreground shadow-none transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-transparent after:content-[''] hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=active]:after:bg-primary dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent xl:min-h-[24px]"
+
+/**
+ * Entry points that dock existing clinical content into the right pane.
+ * Keep the control visibly button-like on desktop; transparent borders made
+ * this existing action look absent after the shell was flattened.
+ */
+export const RIGHT_PANE_ACTION_CLASSES =
+  'hidden cursor-pointer items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-none transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:inline-flex'
+
+/**
+ * Card boundary classes. Routine feature cards use one neutral boundary;
+ * color is reserved for states, warnings, and selected controls.
  */
 export const CARD_BORDER_CLASSES = {
-  summary: 'border-l-4 border-l-teal-500',
-  chat: 'border-l-4 border-l-blue-500',
-  insight: 'border-l-4 border-l-violet-500',
-  selection: 'border-l-4 border-l-amber-500',
-  settings: 'border-l-4 border-l-slate-500',
-  clinical: 'border-l-4 border-l-emerald-500',
+  summary: 'border-border',
+  chat: 'border-border',
+  insight: 'border-border',
+  selection: 'border-border',
+  settings: 'border-border',
+  clinical: 'border-border',
 } as const
 
 /**
@@ -279,7 +300,7 @@ export const BADGE_CLASSES = {
   chat: 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 border-0',
   insight: 'bg-violet-200 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400 border-0',
   selection: 'bg-amber-200 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400 border-0',
-  settings: 'bg-slate-200 text-slate-800 dark:bg-slate-500/20 dark:text-slate-400 border-0',
+  settings: 'bg-slate-200 text-slate-800 dark:bg-muted dark:text-muted-foreground border-0',
   clinical: 'bg-emerald-200 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 border-0',
 } as const
 
@@ -323,5 +344,5 @@ export function getActiveTabClasses(colorKey: keyof typeof UI_COLORS): string {
  * @deprecated Use getCardClasses() instead
  */
 export function getBorderClass(colorKey: keyof typeof UI_COLORS): string {
-  return UI_COLORS[colorKey].light.border
+  return CARD_BORDER_CLASSES[colorKey]
 }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { ReportRow } from '@/features/clinical-summary/reports/components/ReportRow'
 import type { Row } from '@/features/clinical-summary/reports/types'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -45,5 +45,14 @@ describe('ReportRow mobile actions', () => {
     expect(header).toHaveClass('flex-col', 'sm:flex-row')
     expect(header?.parentElement).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
     expect(aiButton.parentElement).toHaveClass('flex-wrap', 'justify-start', 'sm:flex-nowrap', 'sm:justify-end')
+
+    const rightPaneButton = screen.getByRole('button', { name: '在右側面板展開全文' })
+    expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-border', 'bg-background')
+
+    fireEvent.click(rightPaneButton)
+    expect(rightPaneButton).toHaveClass('border-primary', 'bg-primary/10', 'text-primary')
+
+    fireEvent.click(rightPaneButton)
+    expect(rightPaneButton).toHaveClass('border-border', 'bg-background')
   })
 })

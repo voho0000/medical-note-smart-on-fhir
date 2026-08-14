@@ -30,6 +30,7 @@ import { countAbnormalInRows } from '../utils/lab-day-grouping'
 import { ReportRow } from './ReportRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
+import { REPORT_ABNORMAL_TONE, REPORT_CATEGORY_TONE } from './report-color-roles'
 
 interface LabDayGroupCardProps {
   row: Row
@@ -145,7 +146,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">
           {dayLabel}
         </span>
-        <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+        <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}>
           {categoryLabel}
         </span>
         {row.institution && (
@@ -155,7 +156,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
           {(tr.labDayCount as string).replace('{n}', String(itemCount))}
         </span>
         {abnormalCount > 0 && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', REPORT_ABNORMAL_TONE)}>
             <AlertCircle className="h-3 w-3" />
             {(tr.abnormalCount as string).replace('{n}', String(abnormalCount))}
           </span>

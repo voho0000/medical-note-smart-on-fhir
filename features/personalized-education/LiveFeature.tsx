@@ -12,7 +12,7 @@ import { createPatientEducationContext } from './patient-context'
 function LoadingState() {
   return (
     <div
-      className="mx-auto w-full max-w-3xl animate-pulse space-y-4 px-3 py-6 sm:px-5"
+      className="mx-auto w-full max-w-3xl animate-pulse space-y-4 py-6"
       aria-label="正在整理個人化衛教"
     >
       <div className="h-5 w-24 rounded bg-muted" />
@@ -25,7 +25,7 @@ function LoadingState() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="mx-auto w-full max-w-3xl px-3 py-8 sm:px-5">
+    <div className="mx-auto w-full max-w-3xl py-8">
       <div className="border border-destructive/40 bg-destructive/5 px-4 py-4">
         <h1 className="font-semibold text-foreground">目前無法整理衛教</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">

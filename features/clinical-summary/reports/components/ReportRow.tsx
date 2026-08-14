@@ -8,6 +8,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
+import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
@@ -26,6 +27,7 @@ import { CompactLabResultRow } from '@/features/clinical-summary/components/Comp
 import { LabDayGroupCard } from './LabDayGroupCard'
 import { NhiViewerActions } from './NhiViewerActions'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
+import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
@@ -44,7 +46,7 @@ function BridgeDupBadge({ count }: { count: number }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[0.625rem] font-medium text-amber-800 cursor-help"
+          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[0.625rem] font-medium text-amber-800 cursor-help dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
           aria-label={tooltip}
         >
           ⚠ {bd?.label ?? 'dup'} ×{count}
@@ -668,14 +670,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                         onClick={openReportRight}
                         aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
                         className={cn(
-                          // A real, self-evident button (visible border + fill) —
-                          // the old transparent ghost icon read as non-interactive
-                          // and first-time users missed it. Neutral grey so it
-                          // stays secondary to the primary-blue 「AI 翻譯解讀」button.
-                          'hidden md:inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors',
-                          isReportRightActive
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border bg-muted/40 text-muted-foreground hover:border-foreground/30 hover:bg-muted hover:text-foreground',
+                          RIGHT_PANE_ACTION_CLASSES,
+                          'gap-1 px-2 py-1 text-xs font-medium',
+                          isReportRightActive && 'border-primary bg-primary/10 text-primary',
                         )}
                       >
                         <PanelRight className="h-3.5 w-3.5" />
@@ -881,7 +878,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {accordionDateLabel}</span>
           )}
           {abnormalCount > 0 && (
-            <span className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0 text-[0.6875rem] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            <span className={cn('inline-flex items-center rounded-full px-1.5 py-0 text-[0.6875rem] font-medium', REPORT_ABNORMAL_TONE)}>
               {abnormalCount} 異常
             </span>
           )}
@@ -911,9 +908,15 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             className={cn(
               'items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0',
               panelHasNarrative && 'flex-wrap gap-y-1 sm:flex-nowrap',
+              row.group === 'procedures' && 'flex-wrap gap-y-1 sm:flex-nowrap',
             )}
           >
-            <div className="flex min-w-0 basis-[45%] shrink-0 grow-0 items-center gap-1.5">
+            <div
+              className={cn(
+                'flex min-w-0 shrink-0 grow-0 items-center gap-1.5',
+                row.group === 'procedures' ? 'flex-1 basis-0' : 'basis-[45%]',
+              )}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="truncate text-[0.8125rem] font-semibold text-foreground">
@@ -938,7 +941,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               </span>
             )}
             {abnormalCount > 0 && (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0 text-[0.625rem] font-medium', REPORT_ABNORMAL_TONE)}>
                 <AlertCircle className="h-3 w-3" />
                 {abnormalCount} 異常
               </span>
@@ -946,7 +949,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             {/* Same-session sub-procedures grouped via Procedure.partOf —
                 tells the user this one title expands to several. */}
             {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
-              <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+              <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-primary/10 dark:text-primary">
                 +{row.relatedCount} 相關處置
               </span>
             )}
@@ -958,6 +961,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               className={cn(
                 'ml-auto flex shrink-0 items-center gap-2',
                 panelHasNarrative && 'order-last w-full min-w-0 flex-wrap justify-start gap-1.5 sm:order-none sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2',
+                row.group === 'procedures' && 'max-sm:order-last max-sm:w-full max-sm:flex-wrap max-sm:justify-start max-sm:gap-1.5',
               )}
             >
               {hasViewerActions && <NhiViewerActions actions={viewerActions} nestedInButton />}
@@ -1013,10 +1017,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                   title={isPanelRightActive ? '已在右側面板展開' : '在右側面板展開細項'}
                   aria-label="在右側面板展開細項"
                   className={cn(
-                    'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
-                    isPanelRightActive
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+                    RIGHT_PANE_ACTION_CLASSES,
+                    'px-1 py-0.5',
+                    isPanelRightActive && 'border-primary bg-primary/10 text-primary',
                   )}
                 >
                   <PanelRight className="h-3.5 w-3.5" />

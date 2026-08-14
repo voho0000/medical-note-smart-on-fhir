@@ -2,15 +2,108 @@
 //
 // Renders when neither a SMART-on-FHIR launch nor a locally-imported bundle
 // is available. Replaces the empty/erroring panels with a friendly intro
-// and three enlarged source cards (local import / demo / SMART) as the main
-// call-to-action, over a full-area drag-and-drop zone.
+// and a compact source chooser over a full-area drag-and-drop zone.
 "use client"
 
 import { useCallback, useRef, useState } from 'react'
-import { Download, FlaskConical, Hospital, Shield } from 'lucide-react'
+import {
+  ChevronRight,
+  Download,
+  FlaskConical,
+  Hospital,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
 import { BundleFileInput, type BundleFileInputHandle } from '@/features/import-bundle/components/BundleFileInput'
+import { cn } from '@/src/shared/utils/cn.utils'
+
+interface WelcomeSourceOptionProps {
+  icon: LucideIcon
+  title: string
+  description: string
+  tone?: 'default' | 'featured' | 'informational'
+  onClick?: () => void
+  disabled?: boolean
+  testId?: string
+}
+
+function WelcomeSourceOption({
+  icon: Icon,
+  title,
+  description,
+  tone = 'default',
+  onClick,
+  disabled,
+  testId,
+}: WelcomeSourceOptionProps) {
+  const interactive = Boolean(onClick)
+  const content = (
+    <>
+      <div
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:mb-5',
+          tone === 'informational'
+            ? 'bg-muted text-muted-foreground'
+            : tone === 'featured'
+              ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-emerald-950'
+            : 'bg-primary/10 text-primary',
+        )}
+      >
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold text-foreground sm:text-lg">
+          {title}
+        </h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground sm:mt-2">
+          {description}
+        </p>
+      </div>
+      {interactive && (
+        <ChevronRight
+          className={cn(
+            'h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:mt-auto sm:self-end sm:pt-4',
+            tone === 'featured'
+              ? 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+              : 'group-hover:text-primary',
+          )}
+          aria-hidden="true"
+        />
+      )}
+    </>
+  )
+  const className = cn(
+    'group grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-lg border p-4 text-left sm:flex sm:min-h-52 sm:flex-col sm:p-6',
+    tone === 'featured' &&
+      'border-emerald-300/80 bg-emerald-50/65 hover:border-emerald-500/70 hover:bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/[0.07] dark:hover:border-emerald-400/45 dark:hover:bg-emerald-500/[0.10]',
+    tone === 'default' &&
+      'border-border bg-card hover:border-primary/40 hover:bg-primary/[0.03]',
+    tone === 'informational' &&
+      'border-dashed border-border bg-muted/30',
+  )
+
+  if (!interactive) {
+    return <div className={className}>{content}</div>
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      className={cn(
+        className,
+        'cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        tone === 'featured' ? 'focus-visible:ring-emerald-500' : 'focus-visible:ring-primary',
+      )}
+    >
+      {content}
+    </button>
+  )
+}
 
 export function WelcomeOnboarding() {
   const { t } = useLanguage()
@@ -80,15 +173,16 @@ export function WelcomeOnboarding() {
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className={`relative flex h-full w-full items-center justify-center px-4 py-8 transition-colors ${
-        isDragging ? 'bg-blue-50/60 dark:bg-blue-950/30' : ''
-      }`}
+      className={cn(
+        'relative flex min-h-full w-full items-start justify-center bg-muted/35 px-4 py-8 transition-colors dark:bg-background sm:items-center sm:px-6 lg:py-12',
+        isDragging && 'bg-primary/[0.09] dark:bg-primary/[0.08]',
+      )}
     >
       {/* Drag-over overlay — covers the screen with a dashed border so the
           drop target is unambiguous. */}
       {isDragging && (
-        <div className="pointer-events-none absolute inset-4 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/80 backdrop-blur-sm dark:border-blue-400 dark:bg-blue-950/60">
-          <div className="flex flex-col items-center gap-2 text-blue-700 dark:text-blue-300">
+        <div className="pointer-events-none absolute inset-4 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/95">
+          <div className="flex flex-col items-center gap-2 text-primary">
             <Download className="h-10 w-10" />
             <p className="text-base font-semibold">
               {w.dropHere ?? 'Drop FHIR Bundle to import'}
@@ -97,8 +191,8 @@ export function WelcomeOnboarding() {
         </div>
       )}
 
-      <div className="w-full max-w-4xl text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden">
+      <div className="w-full max-w-5xl text-center">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center overflow-hidden">
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`}
             alt="App Icon"
@@ -106,88 +200,61 @@ export function WelcomeOnboarding() {
           />
         </div>
 
-        <h2 className="mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-2xl font-semibold tracking-tight text-transparent sm:text-3xl">
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {w.title ?? 'Welcome'}
         </h2>
-
-        <p className="mx-auto mb-8 max-w-md text-sm text-muted-foreground sm:text-base">
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           {w.description ?? 'Import a FHIR Bundle or launch from your EHR to get started.'}
         </p>
 
         {loading && (
-          <p className="mb-4 text-sm text-blue-600 dark:text-blue-400">
+          <p className="mt-4 text-sm text-primary" role="status" aria-live="polite">
             {i18n.importing}…
           </p>
         )}
         {error && (
-          <p className="mb-4 text-sm text-destructive">{error}</p>
+          <p className="mt-4 text-sm text-destructive" role="alert">{error}</p>
         )}
 
-        {/* Three enlarged source cards ARE the primary call-to-action now —
-            the standalone import button was removed; the local card opens the
-            same file picker, and full-page drag-and-drop still works. */}
-        <div className="grid gap-5 text-left sm:grid-cols-3">
-          {/* Local-import card — clickable, opens the file picker. */}
-          <button
-            type="button"
+        {/* The welcome screen is an entry point, not a dense clinical view.
+            Three source options make the available paths understandable at
+            a glance while a shared component keeps their structure aligned. */}
+        <section className="mt-8 grid gap-3 sm:grid-cols-3 lg:gap-4">
+          <WelcomeSourceOption
+            icon={Download}
+            title={w.localTitle ?? 'Local FHIR Bundle'}
+            description={w.localDesc ?? 'Import a JSON bundle — data stays in your browser.'}
             onClick={() => localCardFileRef.current?.open()}
             disabled={loading}
-            className="group flex flex-col rounded-2xl border border-border/60 bg-card/50 p-6 cursor-pointer shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 hover:shadow-md dark:hover:border-blue-700 dark:hover:bg-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 transition-transform group-hover:scale-105 dark:bg-blue-950 dark:text-blue-400">
-              <Download className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-base font-semibold sm:text-lg">{w.localTitle ?? 'Local FHIR Bundle'}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {w.localDesc ?? 'Import a JSON bundle — data stays in your browser.'}
-            </p>
-          </button>
+          />
 
-          {/* Demo card — clickable, loads the bundled anonymised demo patient
-              through the same import path. Green accent so it reads as the
-              low-commitment "just try it" option. */}
-          <button
-            type="button"
+          <WelcomeSourceOption
+            icon={FlaskConical}
+            title={w.demoTitle ?? 'Try demo data'}
+            description={w.demoDesc ?? 'Load an anonymised sample patient — explore without importing anything.'}
+            tone="featured"
             onClick={handleLoadDemo}
             disabled={loading}
-            data-testid="welcome-demo-card"
-            className="group flex flex-col rounded-2xl border border-emerald-200 bg-emerald-50/40 p-6 cursor-pointer shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-50/70 hover:shadow-md dark:border-emerald-900 dark:bg-emerald-950/20 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 transition-transform group-hover:scale-105 dark:bg-emerald-950 dark:text-emerald-400">
-              <FlaskConical className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-base font-semibold sm:text-lg">{w.demoTitle ?? 'Try demo data'}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {w.demoDesc ?? 'Load an anonymised sample patient — explore without importing anything.'}
-            </p>
-          </button>
+            testId="welcome-demo-card"
+          />
 
-          {/* SMART-on-FHIR card — purely informational. There's no client-
-              side action a welcome-screen user can take here; they need
-              to launch from the hospital EHR. Styled as a static info
-              block (no hover, no cursor-pointer) so it doesn't lie about
-              being interactive. */}
-          <div className="flex flex-col rounded-2xl border border-dashed border-border/50 bg-muted/30 p-6">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
-              <Hospital className="h-6 w-6" />
-            </div>
-            <h3 className="mb-2 text-base font-semibold sm:text-lg">{w.smartTitle ?? 'SMART-on-FHIR'}</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {w.smartDesc ?? 'Launch from a hospital EHR — patient data loads automatically.'}
-            </p>
+          <WelcomeSourceOption
+            icon={Hospital}
+            title={w.smartTitle ?? 'SMART-on-FHIR'}
+            description={w.smartDesc ?? 'Launch from a hospital EHR — patient data loads automatically.'}
+            tone="informational"
+          />
+        </section>
+
+        <div className="mt-6 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-5">
+          <p>{w.dragHint ?? 'Tip: you can also drag a .json file anywhere on this screen to import.'}</p>
+          <div className="flex items-center gap-2">
+            <Shield className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{w.privacyNote ?? 'Imported bundles stay in your browser only.'}</span>
           </div>
         </div>
 
-        <p className="mt-5 text-xs text-muted-foreground">
-          {w.dragHint ?? 'Tip: you can also drag a .json file anywhere on this screen to import.'}
-        </p>
-
         <BundleFileInput ref={localCardFileRef} importFile={importFile} />
-
-        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Shield className="h-3.5 w-3.5" />
-          <span>{w.privacyNote ?? 'Imported bundles stay in your browser only.'}</span>
-        </div>
       </div>
     </div>
   )

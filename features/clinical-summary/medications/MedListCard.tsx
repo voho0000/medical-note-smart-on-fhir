@@ -20,7 +20,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { FeatureCard } from "@/src/shared/components"
-import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import { RIGHT_PANE_ACTION_CLASSES, SUBTAB_LIST_CLASSES, SUBTAB_TRIGGER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useMedications } from './hooks/useMedications'
 import { useMedicationRows } from './hooks/useMedicationRows'
@@ -35,6 +35,7 @@ import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
 import { AllergyList } from '../allergies/components/AllergyList'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
+import type { MedicationNameMode } from './types'
 
 type DataTab = 'medications' | 'allergies' | 'vaccines'
 type MedView = 'list' | 'timeline'
@@ -59,6 +60,7 @@ export function MedListCard() {
 
   const [tab, setTab] = useState<DataTab>('medications')
   const [view, setView] = useState<MedView>('list')
+  const [nameMode, setNameMode] = useState<MedicationNameMode>('ingredient')
   const [searchQuery, setSearchQuery] = useState('')
   const tourActive = useLeftBrowserTourStore((state) => state.active)
   const tourStep = useLeftBrowserTourStore((state) => state.stepId)
@@ -105,6 +107,7 @@ export function MedListCard() {
   const tabVaccinesLabel = mt.tabVaccines ?? '疫苗'
   const listLabel = mt.viewList ?? '清單'
   const timelineLabel = mt.viewTimeline ?? '時間軸'
+  const hasProductNames = rows.some((row) => Boolean(row.secondaryTitle))
 
   // 向右展開：push the timeline into the right pane so the list (left) and the
   // timeline (right) show side-by-side. Kept in sync with the search filter.
@@ -184,20 +187,22 @@ export function MedListCard() {
       isEmpty={isEmpty}
       emptyMessage={t.medications.noData}
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full">
-        {/* Top tab bar (matches ReportsCard styling) */}
-        <TabsList data-tour="medication-tabs" className="!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full gap-0">
+        <TabsList
+          data-tour="medication-tabs"
+          className={cn(SUBTAB_LIST_CLASSES, "!flex !justify-start mb-2 w-full min-w-0 shrink-0 !flex-nowrap gap-0 overflow-x-auto")}
+        >
           {tabConfigs.map((c) => (
             <TabsTrigger
               key={c.value}
               value={c.value}
               className={cn(
-                '!flex-1 !min-w-fit px-3 text-sm whitespace-nowrap inline-flex items-center gap-1',
-                TAB_ACTIVE_CLASSES.clinical,
+                SUBTAB_TRIGGER_CLASSES,
+                '!flex-1 !min-w-fit inline-flex items-center gap-1 whitespace-nowrap',
               )}
             >
               {c.label}
-              <span className="rounded-full bg-muted/70 px-1 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
+              <span className="text-[0.6875rem] font-normal tabular-nums text-muted-foreground">
                 {c.count}
               </span>
             </TabsTrigger>
@@ -234,10 +239,9 @@ export function MedListCard() {
                   title={mt.openTimelineRight ?? '時間軸移到右側面板並排顯示'}
                   aria-label={mt.openTimelineRight ?? '時間軸移到右側面板'}
                   className={cn(
-                    'hidden md:inline-flex items-center rounded-md border px-2 py-1 text-xs transition-colors',
-                    isTimelineRight
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    RIGHT_PANE_ACTION_CLASSES,
+                    'gap-1 px-2 py-1 text-xs font-medium',
+                    isTimelineRight && 'border-primary bg-primary/10 text-primary',
                   )}
                 >
                   <PanelRight className="h-3.5 w-3.5" />
@@ -295,6 +299,9 @@ export function MedListCard() {
               showSourceChip={sourceMix === 'mixed'}
               sourceChipStatementLabel={sourceChipStatement}
               sourceChipStatementTooltip={sourceHintStatement}
+              nameMode={nameMode}
+              showNameModeSwitch={hasProductNames}
+              onNameModeChange={setNameMode}
             />
           ) : (
             <div data-tour="medication-timeline">

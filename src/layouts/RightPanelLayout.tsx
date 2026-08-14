@@ -4,8 +4,8 @@
 
 import { ComponentType, memo, ReactNode, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
-import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Check, ChevronDown, MoreHorizontal, SlidersHorizontal } from "lucide-react"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -23,7 +23,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
-import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import { RIGHT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
 // RightPanelProvider moved to AppProviders (app-level) in v0.4.0 so the
 // header's overflow menu can navigate to right-panel tabs (e.g. open
 // Settings → 顯示). Only useRightPanel is imported here now.
@@ -31,6 +31,11 @@ import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
+import {
+  ClinicalTabContentFrame,
+  ClinicalTabList,
+  ClinicalTabTrigger,
+} from "@/src/shared/components/clinical-workspace"
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -169,9 +174,9 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
   // remain sticky against the panel's own scrollport.
   if (feature.scrollMode === 'panel') {
     return (
-      <div className="py-2 pr-2">
+      <ClinicalTabContentFrame className="py-2">
         <Component />
-      </div>
+      </ClinicalTabContentFrame>
     )
   }
 
@@ -185,18 +190,18 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
   // (= viewport width, content wraps).
   if (feature.id !== 'medical-chat') {
     return (
-      <ScrollArea className="h-full pr-2 [&_[data-radix-scroll-area-viewport]>div]:!block">
-        <div className="py-2">
+      <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <ClinicalTabContentFrame className="py-2">
           <Component />
-        </div>
+        </ClinicalTabContentFrame>
       </ScrollArea>
     )
   }
 
   return (
-    <div className="h-full">
+    <ClinicalTabContentFrame className="h-full py-2">
       <Component />
-    </div>
+    </ClinicalTabContentFrame>
   )
 })
 
@@ -273,6 +278,13 @@ function RightPanelContentInner() {
 
   // Helper to get tab label (supports i18n)
   const getTabLabel = (feature: RightPanelFeatureConfig): string => {
+    if (
+      feature.id === PERSONALIZED_EDUCATION_FEATURE_ID &&
+      audience === 'medical'
+    ) {
+      return t.tabs.personalizedGuidance
+    }
+
     const key = feature.tabLabel as keyof typeof t.tabs
     return t.tabs[key] || feature.name
   }
@@ -285,36 +297,28 @@ function RightPanelContentInner() {
   const renderTrigger = (feature: RightPanelFeatureConfig) => {
     const theme = getTabTheme(feature.id)
     const Icon = theme.icon
-    const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.settings
     const label = getTabLabel(feature)
     const accessibleLabel = feature.badge ? `${label} · ${feature.badge}` : label
     return (
-      <TabsTrigger
+      <ClinicalTabTrigger
         key={feature.id}
         value={feature.id}
         data-tour={`right-tab-${feature.id}`}
-        className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
+        icon={Icon}
+        label={label}
+        labelVisibility={feature.iconOnly ? "never" : "always"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        {/* Below sm the multi-way grid leaves ~50px per tab — a 2-3 char
-            truncated label is noise, so go icon-only (title + aria-label
-            keep the name reachable). iconOnly features skip the label at
-            every width. */}
-        {!feature.iconOnly && (
-          <span className="truncate hidden sm:inline">{label}</span>
-        )}
-        {feature.badge && (
+        suffix={feature.badge ? (
           <Badge
             variant="outline"
-            className="hidden border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 sm:inline-flex dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+            className="border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
             aria-hidden="true"
           >
             {feature.badge}
           </Badge>
-        )}
-      </TabsTrigger>
+        ) : undefined}
+      />
     )
   }
 
@@ -327,7 +331,7 @@ function RightPanelContentInner() {
         {feature.badge && (
           <Badge
             variant="outline"
-            className="ml-auto border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+            className="ml-auto border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
           >
             {feature.badge}
           </Badge>
@@ -339,16 +343,47 @@ function RightPanelContentInner() {
   const showOverflowMenu = overflowFeatures.length > 0
   const columnCount =
     pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + (showOverflowMenu ? 1 : 0) + lockedFeatures.length
+  const activeFeature = features.find((feature) => feature.id === effectiveTab) ?? features[0]
+  const ActiveFeatureIcon = activeFeature ? getTabTheme(activeFeature.id).icon : SlidersHorizontal
+  const activeFeatureLabel = activeFeature ? getTabLabel(activeFeature) : t.header.features
 
   return (
     <Tabs
       value={effectiveTab}
       onValueChange={setActiveTab}
-      className="h-full flex flex-col"
+      className="flex h-full flex-col xl:gap-0"
     >
-      <TabsList
+      {/* On phones the page-level 臨床摘要／功能 switch is already one
+          persistent navigation row. Use one labeled picker here instead of a
+          second row of ambiguous icon-only tabs. */}
+      <div className="shrink-0 border-b bg-background p-1 xl:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm font-medium text-foreground shadow-none transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`${t.header.features}: ${activeFeatureLabel}`}
+          >
+            <ActiveFeatureIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">{activeFeatureLabel}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+            {features.map((feature) => (
+              <DropdownMenuItem
+                key={feature.id}
+                onSelect={() => setActiveTab(feature.id)}
+                className="min-h-[44px] gap-2"
+              >
+                {renderMenuItemContent(feature)}
+                {feature.id === effectiveTab && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <ClinicalTabList
         data-tour="right-tabs"
-        className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
+        className="grid gap-1 max-xl:hidden"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
         {pinnedFeatures.map(renderTrigger)}
@@ -360,12 +395,12 @@ function RightPanelContentInner() {
           <DropdownMenu>
             <DropdownMenuTrigger
               data-tour="right-tabs-overflow"
-              className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
+              className="flex min-w-0 items-center justify-center gap-1.5 rounded-none text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
               title={t.tabs.more}
               aria-label={t.tabs.more}
             >
               <MoreHorizontal className="h-4 w-4 shrink-0" />
-              <span className="truncate hidden sm:inline">{t.tabs.more}</span>
+              <span className="truncate">{t.tabs.more}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {overflowFeatures.map(feature => (
@@ -400,14 +435,14 @@ function RightPanelContentInner() {
           </DropdownMenu>
         ) : null}
         {lockedFeatures.map(renderTrigger)}
-      </TabsList>
+      </ClinicalTabList>
 
       {features.map(feature => (
         <TabsContent
           key={feature.id}
           value={feature.id}
           data-tour={`right-content-${feature.id}`}
-          className={feature.contentClassName || 'flex-1 mt-1'}
+          className={`${feature.contentClassName || 'flex-1 mt-1'} xl:mt-0`}
           forceMount={feature.forceMount ? true : undefined}
         >
           <FeatureTabContent feature={feature} />

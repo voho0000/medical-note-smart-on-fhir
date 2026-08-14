@@ -27,6 +27,7 @@ import { Card } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
+import { RIGHT_PANE_ACTION_CLASSES } from '@/src/shared/config/ui-theme.config'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { Row } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
@@ -113,7 +114,7 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
   const dateStr = formatDate(row.effectiveDate)
 
   return (
-    <Card className="border-l-4 border-l-amber-400 bg-amber-50/20 dark:bg-amber-500/5">
+    <Card className="rounded-lg border-border bg-amber-50/20 shadow-none hover:shadow-none dark:bg-amber-500/5">
       {/* Header — always visible, click to toggle the body. Carries enough
           info (type + count + ⚠ ambiguity hint + date + institution +
           narrative/image counts as small chips) for the user to decide
@@ -122,19 +123,19 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full px-3 py-2 text-left hover:bg-amber-50/40 dark:hover:bg-amber-500/10 transition-colors rounded-t-xl"
+        className="w-full rounded-t-lg px-3 py-2 text-left transition-colors hover:bg-amber-50/40 dark:hover:bg-amber-500/10"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm">{row.title}</span>
-              <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-semibold text-amber-900">
+              <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                 {sub.length} 項
               </span>
               {row.hasAmbiguity && (
                 <span
                   title={tm.ambiguityWarning}
-                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-medium text-amber-900"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
                   健保碼共用
@@ -263,7 +264,7 @@ function ViewerSubCard({
   return (
     <div className="rounded-md border border-border bg-background px-2.5 py-2 shadow-sm">
       <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-foreground">
-        <span className="shrink-0 select-none font-semibold tabular-nums text-amber-700">
+        <span className="shrink-0 select-none font-semibold tabular-nums text-amber-700 dark:text-amber-300">
           {circled(index)}
         </span>
         <span>{viewerLabel} {circled(index)}</span>
@@ -357,7 +358,7 @@ function NarrativeSubCard({
         aria-expanded={expanded}
         className="w-full cursor-pointer px-2.5 py-1.5 text-left flex items-start gap-2 hover:bg-muted/40 transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded-md"
       >
-        <span className="text-amber-700 font-semibold text-sm shrink-0 select-none tabular-nums">
+        <span className="text-amber-700 font-semibold text-sm shrink-0 select-none tabular-nums dark:text-amber-300">
           {circled(index)}
         </span>
         <div className="flex-1 min-w-0">
@@ -396,10 +397,9 @@ function NarrativeSubCard({
                 onClick={openRight}
                 aria-label="在右側面板展開全文"
                 className={cn(
-                  'hidden md:inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors',
-                  isRightActive
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-muted/40 text-muted-foreground hover:border-foreground/30 hover:bg-muted hover:text-foreground',
+                  RIGHT_PANE_ACTION_CLASSES,
+                  'px-2 py-1 text-xs font-medium',
+                  isRightActive && 'border-primary bg-primary/10 text-primary',
                 )}
               >
                 <PanelRight className="h-3.5 w-3.5" />
@@ -458,7 +458,7 @@ function ImageSetSubCard({
   return (
     <div className="rounded-md border border-border bg-background shadow-sm">
       <div className="px-2.5 py-2 flex items-start gap-2">
-        <span className="text-amber-700 font-semibold text-sm shrink-0 select-none tabular-nums">
+        <span className="text-amber-700 font-semibold text-sm shrink-0 select-none tabular-nums dark:text-amber-300">
           {circled(index)}
         </span>
         <div className="flex-1 min-w-0">
