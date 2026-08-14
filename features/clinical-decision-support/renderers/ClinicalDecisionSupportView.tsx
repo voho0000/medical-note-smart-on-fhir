@@ -48,19 +48,19 @@ interface ClinicalDecisionSupportViewProps {
 }
 
 const statusStyle: Record<CdssStatus, string> = {
-  actionable: 'bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100',
-  'needs-data': 'bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200',
-  review: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-200',
-  'no-action': 'bg-emerald-100 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-200',
+  actionable: 'bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-secondary',
+  'needs-data': 'bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200',
+  review: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-200',
+  'no-action': 'bg-emerald-100 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200',
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
-  recommended: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
-  consider: 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200',
-  covered: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
-  'not-covered': 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200',
-  'needs-data': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  'no-special-rule': 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200',
+  recommended: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
+  consider: 'bg-blue-100 text-blue-900 dark:bg-blue-500/10 dark:text-blue-200',
+  covered: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
+  'not-covered': 'bg-rose-100 text-rose-900 dark:bg-rose-500/10 dark:text-rose-200',
+  'needs-data': 'bg-amber-100 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200',
+  'no-special-rule': 'bg-blue-100 text-blue-900 dark:bg-blue-500/10 dark:text-blue-200',
   'not-applicable': 'bg-muted text-muted-foreground',
 }
 
@@ -1156,8 +1156,8 @@ function DcsiModuleDetail({
           className={cn(
             'ml-auto h-6 w-fit px-2 text-xs',
             dcsi.isComplete
-              ? 'bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100'
-              : 'bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200',
+              ? 'bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-secondary'
+              : 'bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200',
           )}
         >
           {assessedLabel}
@@ -2149,7 +2149,7 @@ export function ClinicalDecisionSupportView({
               className={cn(
                 'border-b border-border last:border-b-0',
                 recommendation.status === 'no-action'
-                  && 'bg-emerald-50/50 dark:bg-emerald-950/20',
+                  && 'bg-emerald-50/50 dark:bg-emerald-500/[0.07]',
               )}
               data-testid={`cdss-recommendation-${recommendation.id}`}
             >
@@ -2161,7 +2161,7 @@ export function ClinicalDecisionSupportView({
                   'grid min-h-11 w-full select-text gap-2 px-3 py-2.5 text-left transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   recommendation.status === 'no-action'
-                    ? 'hover:bg-emerald-100/50 dark:hover:bg-emerald-950/35'
+                    ? 'hover:bg-emerald-100/50 dark:hover:bg-emerald-500/10'
                     : 'hover:bg-muted/30',
                   '@min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3',
                   isExpanded && 'bg-muted/25',
@@ -2215,7 +2215,7 @@ export function ClinicalDecisionSupportView({
                       {moduleName}
                     </PreviewTextTooltip>
                     {isRiskStratification ? (
-                      <Badge className="h-5 shrink-0 bg-violet-100 px-1.5 text-[11px] text-violet-900 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-200">
+                      <Badge className="h-5 shrink-0 bg-violet-100 px-1.5 text-[11px] text-violet-900 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-200">
                         <Gauge className="mr-1 h-3.5 w-3.5" />
                         {isEnglish ? 'Risk stratification' : '風險分層'}
                       </Badge>
@@ -2350,7 +2350,7 @@ export function ClinicalDecisionSupportView({
           return (
             <article
               key={check.id}
-              className="border-b border-border bg-emerald-50/50 last:border-b-0 dark:bg-emerald-950/20"
+              className="border-b border-border bg-emerald-50/50 last:border-b-0 dark:bg-emerald-500/[0.07]"
               data-testid={`cdss-automated-check-row-${check.id}`}
             >
               <div className="grid min-h-11 gap-2 px-3 py-2.5 text-left @min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3">

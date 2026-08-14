@@ -18,13 +18,11 @@ interface PromptCardProps {
 // Type color configurations (supports light/dark mode)
 const TYPE_COLORS = {
   chat: {
-    border: 'border-l-blue-500',
-    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
     icon: MessageSquare,
   },
   summary: {
-    border: 'border-l-teal-500',
-    badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300',
+    badge: 'bg-teal-100 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
     icon: ClipboardList,
   },
 }
@@ -41,10 +39,6 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
     .filter((tag) => tag !== '衛教' && tag !== '民眾版')
     .slice(0, 2)
   
-  // Get primary type for border color (first type in array)
-  const primaryType = prompt.types[0] || 'chat'
-  const typeConfig = TYPE_COLORS[primaryType as keyof typeof TYPE_COLORS] || TYPE_COLORS.chat
-
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'chat':
@@ -67,7 +61,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
 
   return (
     <Card 
-      className={`!py-0 !gap-0 flex flex-col hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer border-l-4 ${typeConfig.border} hover:ring-2 hover:ring-primary/20`}
+      className="!gap-0 !py-0 flex cursor-pointer flex-col rounded-lg border-border shadow-none transition-colors hover:bg-muted/40 hover:shadow-none"
       onClick={() => onPreview(prompt)}
     >
       <CardHeader className="!pb-0 !pt-2 !px-3">
@@ -88,12 +82,12 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
             )
           })}
           {isMyPrompt && (
-            <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
+            <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 border-0">
               {t.promptGallery.myBadge}
             </Badge>
           )}
           {isPopular && (
-            <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+            <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0 dark:text-orange-300" />
           )}
         </div>
       </CardHeader>
@@ -131,7 +125,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
 
         <div className="flex items-center gap-1 text-[0.625rem] text-muted-foreground h-[16px]">
           {isPopular ? (
-            <Flame className="h-2.5 w-2.5 text-orange-500" />
+            <Flame className="h-2.5 w-2.5 text-orange-500 dark:text-orange-300" />
           ) : (
             <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" />
           )}

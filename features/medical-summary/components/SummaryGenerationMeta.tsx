@@ -85,8 +85,8 @@ function RunningGenerationMeta({
       aria-live="off"
       aria-label={ariaLabel}
     >
-      <Loader2 aria-hidden="true" className="h-3 w-3 shrink-0 animate-spin text-teal-600" />
-      <span className="shrink-0 font-medium text-teal-700 dark:text-teal-300">
+      <Loader2 aria-hidden="true" className="h-3 w-3 shrink-0 animate-spin text-teal-600 dark:text-primary" />
+      <span className="shrink-0 font-medium text-teal-700 dark:text-primary">
         {runningLabel}
       </span>
       <span aria-hidden="true" className="shrink-0">·</span>

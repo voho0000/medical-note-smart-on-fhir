@@ -334,7 +334,7 @@ export function VisitHistoryCard() {
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>
         ) : error ? (
-          <div className="text-sm text-red-600">
+          <div className="text-sm text-destructive">
             {error instanceof Error ? error.message : t.errors.fetchClinicalData}
           </div>
         ) : visitHistory.length === 0 ? (

@@ -152,7 +152,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               className={errors.email ? "border-red-500" : ""}
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email}</p>
+              <p className="text-sm text-red-500 dark:text-red-300">{errors.email}</p>
             )}
             <p className="text-sm text-muted-foreground">
               {t.feedback?.emailDescription || "用於聯繫和追蹤問題處理進度"}
@@ -178,7 +178,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                 </SelectContent>
               </Select>
               {errors.issueType && (
-                <p className="text-sm text-red-500">{errors.issueType}</p>
+                <p className="text-sm text-red-500 dark:text-red-300">{errors.issueType}</p>
               )}
             </div>
 
@@ -211,7 +211,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
             {errors.description && (
-              <p className="text-sm text-red-500">{errors.description}</p>
+              <p className="text-sm text-red-500 dark:text-red-300">{errors.description}</p>
             )}
             <p className="text-sm text-muted-foreground">
               {t.feedback?.descriptionHint || "至少 20 個字元"}
@@ -235,9 +235,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
           </div>
 
           {submitStatus === "success" && (
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <Alert className="bg-green-50 border-green-200 dark:border-green-500/30 dark:bg-green-500/10">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-300" />
+              <AlertDescription className="text-green-800 dark:text-green-300">
                 {t.feedback?.successMessage || "問題回報已成功送出！感謝您的回饋。"}
               </AlertDescription>
             </Alert>

@@ -2,7 +2,10 @@
 
 import { useCallback, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import {
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
@@ -117,16 +120,16 @@ export function DataSelectionPanel({
           {t.dataSelection.scopeDescription}
         </p>
       ) : null}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-        <TabsList className="grid h-9 w-full grid-cols-2 gap-1 border border-border/50 bg-muted/40 p-1">
-          <TabsTrigger value="selection" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full gap-0">
+        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
+          <TabsTrigger value="selection" className={SUBTAB_TRIGGER_CLASSES}>
             {t.dataSelection.title}
           </TabsTrigger>
-          <TabsTrigger value="preview" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>
+          <TabsTrigger value="preview" className={SUBTAB_TRIGGER_CLASSES}>
             {t.common.preview}
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="selection">
+        <TabsContent value="selection" className="mt-4">
           <DataSelectionTab
             clinicalData={clinicalData}
             dataCategories={dataCategories}
@@ -146,7 +149,7 @@ export function DataSelectionPanel({
             showTemplates={showTemplates}
           />
         </TabsContent>
-        <TabsContent value="preview">
+        <TabsContent value="preview" className="mt-4">
           <PreviewTab
             formattedClinicalContext={activeTab === 'preview'
               ? fittedClinicalInput.contextAdaptation

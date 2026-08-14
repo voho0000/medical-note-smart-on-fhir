@@ -14,7 +14,7 @@ export function ClinicalHandoffCard({
 
   return (
     <section
-      className="rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-3 dark:border-blue-900 dark:bg-blue-950/20"
+      className="rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-3 dark:border-blue-500/25 dark:bg-blue-500/[0.07]"
       aria-labelledby="cdss-clinical-handoff-title"
       data-testid="cdss-clinical-handoff"
     >
@@ -40,7 +40,7 @@ export function ClinicalHandoffCard({
           type="button"
           variant="outline"
           size="sm"
-          className="shrink-0 border-blue-300 bg-background text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-200 dark:hover:bg-blue-950"
+          className="shrink-0 border-blue-300 bg-background text-blue-800 hover:bg-blue-100 dark:border-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-500/10"
           onClick={() => void copy(handoff.copyText)}
         >
           {copied ? (
@@ -53,7 +53,7 @@ export function ClinicalHandoffCard({
           </span>
         </Button>
       </div>
-      <p className="mt-2 flex items-start gap-1.5 border-t border-blue-200/80 pt-2 text-[11px] leading-relaxed text-muted-foreground dark:border-blue-900/80">
+      <p className="mt-2 flex items-start gap-1.5 border-t border-blue-200/80 pt-2 text-[11px] leading-relaxed text-muted-foreground dark:border-blue-500/20">
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         {handoff.safetyNote}
       </p>

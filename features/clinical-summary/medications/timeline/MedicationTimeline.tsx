@@ -11,6 +11,11 @@ import { useAudience } from '@/src/application/providers/audience.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useMedicationTimeline, type TimeRange } from './hooks/useMedicationTimeline'
 import { TimelineSvg } from './components/TimelineSvg'
+import {
+  medicationAcuteSwatchClass,
+  medicationChronicSwatchClass,
+  medicationFutureTimelineSwatchClass,
+} from '../components/medication-chip-styles'
 
 const RANGES: TimeRange[] = ['3m', '6m', '1y', '3y', 'all']
 
@@ -80,63 +85,85 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
 
   return (
     <div className="space-y-2">
-      {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-muted-foreground mr-1">
-          {mt.timelineRangeLabel ?? '時段'}:
-        </span>
-        {RANGES.map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRange(r)}
-            className={cn(
-              'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
-              range === r
-                ? 'bg-primary text-primary-foreground'
-                : 'border bg-background text-foreground hover:bg-muted',
-            )}
+      {/* ── Compact toolbar + legend ────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            {mt.timelineRangeLabel ?? '時段'}
+          </span>
+          <div
+            role="group"
+            aria-label={mt.timelineRangeLabel ?? '時段'}
+            className="inline-flex min-w-0 overflow-hidden rounded-md border bg-background"
           >
-            {rangeLabels[r]}
-          </button>
-        ))}
-      </div>
+            {RANGES.map((r, index) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={range === r}
+                onClick={() => setRange(r)}
+                className={cn(
+                  'min-h-11 min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-3',
+                  range === r
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                  index === 0 && 'border-l-0',
+                )}
+              >
+                {rangeLabels[r]}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* ── Summary line ────────────────────────────────────────────── */}
-      {/* The chronic / acute counts carry their own colour swatch (matching the
-          bar colours), so a separate 慢箋/急性 legend below would just repeat the
-          text — only the 今日 key remains in the legend. */}
-      <div className="text-xs text-muted-foreground">
-        {data.totalDrugs > 0 ? (
-          <>
-            {data.totalDrugs} {mt.timelineDrugCount ?? 'drugs'} ·{' '}
-            <span className="inline-flex items-center gap-1 align-middle text-violet-700">
-              <span className="inline-block h-2 w-3 rounded-sm bg-violet-400 border border-violet-600" />
-              {data.chronicCount} {mt.chronic ?? '慢箋'}
-            </span>{' '}
-            ·{' '}
-            <span className="inline-flex items-center gap-1 align-middle text-slate-700">
-              <span className="inline-block h-2 w-3 rounded-sm bg-slate-300 border border-slate-600" />
-              {data.acuteCount} {mt.timelineAcute ?? 'acute'}
-            </span>{' '}
-            ·{' '}
-            {/* 今日 (red dashed line) key inline on the same row, not a separate
-                legend line below. */}
-            <span className="inline-flex items-center gap-1 align-middle">
-              <span className="inline-block h-px w-3 border-t border-dashed border-red-500" />
-              {mt.timelineToday ?? 'Today'}
-            </span>
-          </>
-        ) : (
-          mt.timelineEmpty ?? '此時段內無用藥紀錄'
-        )}
+        {/* Text labels accompany every swatch so the chart never requires
+            colour-only interpretation. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
+          {data.totalDrugs > 0 ? (
+            <>
+              <span className="font-medium text-foreground">
+                {data.totalDrugs} {mt.timelineDrugCount ?? 'drugs'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn(
+                    "inline-block h-2 w-3 rounded-[2px] border",
+                    medicationChronicSwatchClass,
+                  )}
+                />
+                {data.chronicCount} {mt.chronic ?? '慢箋'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn(
+                    "inline-block h-2 w-3 rounded-[2px] border",
+                    medicationAcuteSwatchClass,
+                  )}
+                />
+                {data.acuteCount} {mt.timelineAcute ?? 'acute'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block h-px w-3 border-t border-dashed border-destructive" />
+                {mt.timelineToday ?? 'Today'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn(
+                    "inline-block h-2 w-3 rounded-[2px] border",
+                    medicationFutureTimelineSwatchClass,
+                  )}
+                />
+                {mt.timelineAfterToday ?? 'After today'}
+              </span>
+            </>
+          ) : (
+            mt.timelineEmpty ?? '此時段內無用藥紀錄'
+          )}
+        </div>
       </div>
-
-      {/* Legend is folded into the summary row above (慢箋/急性 swatches on the
-          counts, 今日 key inline) — no separate legend line. */}
 
       {/* ── Timeline SVG ─────────────────────────────────────────────── */}
-      <div ref={containerRef} className="w-full overflow-hidden rounded-md border bg-background">
+      <div ref={containerRef} className="w-full overflow-hidden rounded-md border bg-card">
         {containerWidth > 0 && data.categories.length > 0 && (
           <TimelineSvg
             categories={data.categories}

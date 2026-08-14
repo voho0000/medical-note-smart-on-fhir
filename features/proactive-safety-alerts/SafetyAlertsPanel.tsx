@@ -89,7 +89,7 @@ export function SafetyAlertsPanel({
                   .replace("{count}", String(result.alerts.length))}
               </p>
             ) : result.alerts.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-md bg-green-50 dark:bg-green-950/40 px-2.5 py-1.5 text-xs text-green-700 dark:text-green-300">
+              <div className="flex items-center gap-2 rounded-md bg-green-50 dark:bg-green-500/10 px-2.5 py-1.5 text-xs text-green-700 dark:text-green-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {sa.emptyNoRisk}
               </div>
@@ -99,14 +99,14 @@ export function SafetyAlertsPanel({
           )}
 
           {error ? (
-            <div className="flex items-center gap-2 rounded-md bg-red-50 dark:bg-red-950/40 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">
+            <div className="flex items-center gap-2 rounded-md bg-red-50 dark:bg-rose-500/10 px-2.5 py-1.5 text-xs text-red-700 dark:text-rose-300">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1">{error === "PARSE_FAILED" ? sa.parseError : error}</span>
               {onRetry ? (
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-red-200 dark:border-red-800 px-2 py-0.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-red-200 dark:border-rose-500/30 px-2 py-0.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-rose-500/15 transition-colors"
                 >
                   <RefreshCw className="h-3 w-3" />
                   {retryLabel}

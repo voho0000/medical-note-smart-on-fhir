@@ -104,12 +104,12 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: 'hsl(var(--background))',
-            border: '1px solid hsl(var(--border))',
+            backgroundColor: 'var(--background)',
+            border: '1px solid var(--border)',
             borderRadius: '6px',
             fontSize: '12px',
           }}
-          labelStyle={{ color: 'hsl(var(--foreground))' }}
+          labelStyle={{ color: 'var(--foreground)' }}
           formatter={(value, name) => {
             if (typeof value !== 'number') return ['', String(name ?? '')]
             return [`${formatNumberSmart(value)} ${unit || ''}`, String(name ?? '')]
@@ -128,13 +128,13 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
             dot={{
               r: 5,
               fill: comp.color,
-              stroke: '#1e293b',
+              stroke: 'var(--card)',
               strokeWidth: 1
             }}
             activeDot={{
               r: 7,
               fill: comp.color,
-              stroke: '#1e293b',
+              stroke: 'var(--card)',
               strokeWidth: 2
             }}
             connectNulls

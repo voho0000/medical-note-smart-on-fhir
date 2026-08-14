@@ -38,19 +38,19 @@ interface MedicalSummaryCardNavProps {
 }
 
 const CARD_ICON: Record<MedicalSummaryCardId, { icon: LucideIcon; className: string }> = {
-  problems: { icon: ListChecks, className: "text-violet-500" },
-  timeline: { icon: Clock3, className: "text-teal-500" },
-  safety: { icon: ShieldAlert, className: "text-blue-500" },
-  decisions: { icon: ClipboardCheck, className: "text-amber-500" },
-  investigations: { icon: ChartNoAxesCombined, className: "text-cyan-600 dark:text-cyan-400" },
-  medications: { icon: Pill, className: "text-emerald-600 dark:text-emerald-400" },
+  problems: { icon: ListChecks, className: "text-muted-foreground" },
+  timeline: { icon: Clock3, className: "text-muted-foreground" },
+  safety: { icon: ShieldAlert, className: "text-muted-foreground" },
+  decisions: { icon: ClipboardCheck, className: "text-muted-foreground" },
+  investigations: { icon: ChartNoAxesCombined, className: "text-muted-foreground" },
+  medications: { icon: Pill, className: "text-muted-foreground" },
 }
 
 const CHIP_CLASS =
-  "inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:border-teal-300 hover:bg-teal-50/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40 dark:hover:border-teal-500/40 dark:hover:bg-teal-950/20"
+  "inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-sm border-0 bg-transparent px-2 py-1 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8"
 
 const ACTIVE_CHIP_CLASS =
-  "border-teal-500/60 bg-teal-50 text-teal-800 ring-1 ring-teal-500/10 hover:border-teal-500/70 hover:bg-teal-100/70 hover:text-teal-900 dark:border-teal-500/50 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-950/80 dark:hover:text-teal-50"
+  "bg-muted text-primary hover:bg-muted hover:text-primary"
 
 /**
  * Optional accelerator for the long structured-summary page. Its input is the
@@ -106,7 +106,7 @@ export function MedicalSummaryCardNav({
     <nav
       aria-label={ariaLabel}
       data-tour="medical-summary-card-nav"
-      className="sticky top-0 z-20 -mx-1 border-y border-border/60 bg-background/95 py-1.5 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-background/80"
+      className="sticky top-0 z-20 -mx-1 border-y border-border/60 bg-background py-1.5"
     >
       <div className="flex min-w-0 flex-nowrap items-center gap-1.5 px-1">
         <div
@@ -138,7 +138,7 @@ export function MedicalSummaryCardNav({
                   {item.count !== undefined ? (
                     <span className={cn(
                       "font-semibold tabular-nums",
-                      isActive ? "text-teal-900 dark:text-teal-50" : "text-foreground",
+                      isActive ? "text-primary" : "text-foreground",
                     )}>
                       {item.count}
                     </span>
@@ -153,7 +153,7 @@ export function MedicalSummaryCardNav({
           activeGeneration={activeGeneration}
           runningLabel={runningLabel}
           runningAriaTemplate={runningAriaTemplate}
-          className="ml-auto max-w-[min(48%,24rem)] shrink-0 text-[0.625rem]"
+          className="ml-auto max-w-[min(48%,24rem)] shrink-0 text-xs"
         />
       </div>
     </nav>

@@ -19,7 +19,7 @@ import { BundleFileInput, type BundleFileInputHandle } from "./components/Bundle
 
 interface ImportBundleButtonProps {
   /**
-   * When true, hide the text label on mobile (<640px) — only the
+   * When true, hide the text label on mobile (<768px) — only the
    * download icon shows. Used in the header where space is tight and
    * the button sits among other already-iconified controls.
    *
@@ -57,16 +57,19 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
               disabled={loading}
               title={i18n.exitDemo}
               aria-label={i18n.exitDemo}
-              className="group flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-50"
+              className="group flex h-auto w-auto items-center justify-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-1 dark:ring-inset dark:ring-emerald-500/25 dark:hover:bg-emerald-500/15 max-md:h-[44px] max-md:w-[44px] max-md:rounded-md max-md:p-0"
             >
               <FlaskConical className="h-3 w-3" />
-              {i18n.demoData}
-              <X className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100" />
+              <span className="max-md:hidden">{i18n.demoData}</span>
+              <X className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100 max-md:hidden" />
             </button>
           ) : (
-            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            <span
+              className="flex h-auto w-auto items-center justify-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-1 dark:ring-inset dark:ring-amber-500/25 max-md:h-[44px] max-md:w-[44px] max-md:rounded-md max-md:p-0"
+              title={i18n.localData}
+            >
               <Database className="h-3 w-3" />
-              {i18n.localData}
+              <span className="max-md:hidden">{i18n.localData}</span>
             </span>
           )
         )}
@@ -78,7 +81,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 text-destructive hover:text-destructive"
+            className="h-9 w-9 text-destructive hover:text-destructive max-md:h-[44px] max-md:w-[44px]"
             onClick={() => setConfirmClearOpen(true)}
             title={i18n.clearTitle}
             aria-label={i18n.clearTitle}
@@ -89,8 +92,8 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
         <Button
           variant="outline"
           size="sm"
-          className={`h-9 gap-1.5 text-xs sm:text-sm ${
-            iconOnlyOnMobile ? 'px-2 sm:px-3' : 'px-3'
+          className={`h-9 gap-1.5 text-xs shadow-none hover:shadow-none sm:text-sm max-md:h-[44px] ${
+            iconOnlyOnMobile ? 'w-auto px-3 max-md:w-[44px] max-md:px-0' : 'px-3'
           }`}
           onClick={() => fileRef.current?.open()}
           disabled={loading}
@@ -102,7 +105,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
               header uses this. Without the flag the label always shows,
               which the welcome-screen CTA needs because it's the main
               call-to-action and shouldn't be ambiguous. */}
-          <span className={iconOnlyOnMobile ? 'hidden sm:inline' : ''}>
+          <span className={iconOnlyOnMobile ? 'max-md:hidden' : ''}>
             {loading ? i18n.importing : i18n.button}
           </span>
         </Button>

@@ -195,7 +195,7 @@ function FirstRunOnboardingFlow({
               </DialogHeader>
               <div className="rounded-lg border bg-muted/40 p-4">
                 <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                  <Lock className="h-4 w-4 text-emerald-600" />
+                  <Lock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   {ob.privacyTitle}
                 </div>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
@@ -225,7 +225,7 @@ function FirstRunOnboardingFlow({
                   }}
                   className="group flex flex-col items-start gap-3 rounded-lg border-2 border-border p-5 text-left transition-colors hover:border-primary hover:bg-accent focus:border-primary focus:outline-none"
                 >
-                  <Stethoscope className="h-8 w-8 text-blue-600 group-hover:text-primary" />
+                  <Stethoscope className="h-8 w-8 text-blue-600 group-hover:text-primary dark:text-blue-400" />
                   <div className="space-y-1">
                     <div className="font-semibold">{t.audience.onboarding.medicalCardTitle}</div>
                     <div className="text-sm text-muted-foreground">{t.audience.onboarding.medicalCardDescription}</div>
@@ -239,7 +239,7 @@ function FirstRunOnboardingFlow({
                   }}
                   className="group flex flex-col items-start gap-3 rounded-lg border-2 border-border p-5 text-left transition-colors hover:border-primary hover:bg-accent focus:border-primary focus:outline-none"
                 >
-                  <User className="h-8 w-8 text-purple-600 group-hover:text-primary" />
+                  <User className="h-8 w-8 text-purple-600 group-hover:text-primary dark:text-purple-400" />
                   <div className="space-y-1">
                     <div className="font-semibold">{t.audience.onboarding.patientCardTitle}</div>
                     <div className="text-sm text-muted-foreground">{t.audience.onboarding.patientCardDescription}</div>
@@ -255,14 +255,14 @@ function FirstRunOnboardingFlow({
                 <>
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-teal-600" />
+                      <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                       {ob.demoAutoScanTitle}
                     </DialogTitle>
                     <DialogDescription>{ob.demoAutoScanBody}</DialogDescription>
                   </DialogHeader>
-                  <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-4 dark:border-teal-900 dark:bg-teal-950/25">
+                  <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-4 dark:border-teal-500/25 dark:bg-teal-500/[0.07]">
                     <div className="mb-1.5 flex items-center gap-2 font-semibold text-foreground">
-                      <Sparkles className="h-4 w-4 text-teal-600" />
+                      <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                       {ob.demoAutoScanReadyTitle}
                     </div>
                     <p className="text-sm leading-relaxed text-muted-foreground">{ob.demoAutoScanReadyDesc}</p>
@@ -276,7 +276,7 @@ function FirstRunOnboardingFlow({
                 <>
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-teal-600" />
+                      <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                       {ob.autoScanTitle}
                     </DialogTitle>
                     <DialogDescription>
@@ -371,14 +371,14 @@ function FirstRunOnboardingFlow({
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <LogIn className="h-5 w-5 text-blue-600" />
+                  <LogIn className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   {ob.signInTitle}
                 </DialogTitle>
                 <DialogDescription>{ob.signInBody}</DialogDescription>
               </DialogHeader>
               <div className="rounded-lg bg-muted p-3 text-sm">
                 <p className="mb-1 flex items-center gap-1.5 font-medium">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-300" />
                   {ob.signInBenefitsTitle}
                 </p>
                 <ul className="space-y-1 text-muted-foreground">

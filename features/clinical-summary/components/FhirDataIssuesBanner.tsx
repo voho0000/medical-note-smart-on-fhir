@@ -40,7 +40,7 @@ export function FhirDataIssuesBanner() {
     <details
       className={`mb-1 shrink-0 rounded-md border px-3 py-2 text-xs ${
         hasBlockingQueryIssues
-          ? 'border-amber-400/60 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100'
+          ? 'border-amber-400/60 bg-amber-50 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
           : 'border-border bg-muted/50 text-muted-foreground'
       }`}
     >

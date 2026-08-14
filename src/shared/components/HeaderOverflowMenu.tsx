@@ -52,15 +52,15 @@ export function HeaderOverflowMenu({
   const { setActiveTab } = useRightPanel()
 
   return (
-    // `sm:hidden` — desktop hides the whole menu. The Audience/Language
-    // chips that this menu replaces are visible at the same breakpoint.
-    <div className="sm:hidden">
+    // Keep the compact menu through tablet widths; the full Audience/Language
+    // controls return only once the two-panel workspace has desktop room.
+    <div className="lg:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9"
+            className="h-[44px] w-[44px] shadow-none hover:shadow-none"
             aria-label={(t.header as any)?.moreMenu ?? '更多'}
           >
             <MoreHorizontal className="h-4 w-4" />

@@ -876,7 +876,7 @@ function TopicView({
   const moduleTone = section?.tone === 'attention'
     ? {
         label: '這次先留意',
-        badge: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+        badge: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200',
         accent: 'border-amber-400 dark:border-amber-700',
       }
     : definition.groupId === 'medication' && section
@@ -886,7 +886,7 @@ function TopicView({
             : medicationFact?.detail.includes('用藥陳述')
               ? '有用藥紀錄'
               : '用藥提醒',
-          badge: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200',
+          badge: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200',
           accent: 'border-sky-400 dark:border-sky-700',
         }
       : section
@@ -1041,7 +1041,7 @@ function TopicView({
 
 function NoEligiblePack() {
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6" data-testid="education-no-pack">
+    <main className="mx-auto w-full max-w-3xl py-8" data-testid="education-no-pack">
       <h1 className="text-2xl font-bold text-foreground">
         這份紀錄沒有可以個人化的衛教主題
       </h1>
@@ -1153,7 +1153,7 @@ export default function PersonalizedEducationFeature({
 
   return (
     <main
-      className="@container mx-auto w-full max-w-[72rem] px-4 pb-12 sm:px-6 print:max-w-none print:px-0"
+      className="@container mx-auto w-full max-w-[72rem] pb-12 print:max-w-none"
       data-education-print-root
     >
       <style jsx global>{`
@@ -1410,7 +1410,7 @@ export default function PersonalizedEducationFeature({
               <CareSummary summary={careSummary} />
               {safetyItems.length > 0 ? (
                 <section
-                  className="mt-6 border-t border-rose-300 pt-5 dark:border-rose-800"
+                  className="mt-6 border-t border-rose-300 pt-5 dark:border-rose-500/30"
                   aria-labelledby="education-safety-title"
                   data-testid="education-safety-summary"
                 >

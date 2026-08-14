@@ -67,7 +67,7 @@ export function MedicationEducationCard({
           )
 
           return (
-            <article key={`${item.name}-${index}`} className="rounded-md border bg-teal-50/45 px-2.5 py-2 dark:bg-teal-950/15">
+            <article key={`${item.name}-${index}`} className="rounded-md border bg-teal-50/45 px-2.5 py-2 dark:bg-teal-500/[0.06]">
               <div className="flex items-start gap-1.5">
                 <Pill className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground">
@@ -90,7 +90,7 @@ export function MedicationEducationCard({
                   </p>
                 </div>
                 <div className="flex items-start gap-1.5 text-[0.6875rem] leading-snug">
-                  <CircleCheckBig className="mt-px h-3 w-3 shrink-0 text-blue-500" />
+                  <CircleCheckBig className="mt-px h-3 w-3 shrink-0 text-blue-500 dark:text-blue-300" />
                   <p className="min-w-0 text-muted-foreground">
                     <span className="font-semibold text-foreground/75">{attentionLabel}：</span>
                     {item.attention}
@@ -106,7 +106,7 @@ export function MedicationEducationCard({
         <button
           type="button"
           onClick={() => setShowAll((value) => !value)}
-          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          className="mt-2 flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
@@ -114,7 +114,7 @@ export function MedicationEducationCard({
         </button>
       ) : null}
 
-      <p className="mt-2 border-t border-teal-100 pt-1.5 text-[0.625rem] leading-snug text-muted-foreground dark:border-teal-900/50">
+      <p className="mt-2 border-t border-teal-100 pt-1.5 text-[0.625rem] leading-snug text-muted-foreground dark:border-teal-500/20">
         {disclaimer}
       </p>
     </section>

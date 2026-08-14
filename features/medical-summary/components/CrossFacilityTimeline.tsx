@@ -17,28 +17,28 @@ import type { ResourceNavTarget } from "@/src/application/stores/resource-naviga
 
 const CATEGORY_STYLES: Record<TimelineCategory, { pill: string; dot: string }> = {
   diagnosis: {
-    pill: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
-    dot: "bg-violet-500",
+    pill: "bg-violet-100 text-violet-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-violet-500 dark:bg-muted-foreground",
   },
   procedure: {
-    pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-    dot: "bg-emerald-500",
+    pill: "bg-emerald-100 text-emerald-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-emerald-500 dark:bg-muted-foreground",
   },
   medication: {
-    pill: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
-    dot: "bg-blue-500",
+    pill: "bg-blue-100 text-blue-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-blue-500 dark:bg-muted-foreground",
   },
   encounter: {
-    pill: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    pill: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
     dot: "bg-slate-400",
   },
   lab: {
-    pill: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
-    dot: "bg-teal-500",
+    pill: "bg-teal-100 text-teal-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-teal-500 dark:bg-muted-foreground",
   },
   followup: {
-    pill: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300",
-    dot: "bg-cyan-500",
+    pill: "bg-cyan-100 text-cyan-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-cyan-500 dark:bg-muted-foreground",
   },
 }
 
@@ -46,15 +46,15 @@ const CATEGORY_STYLES: Record<TimelineCategory, { pill: string; dot: string }> =
 // grey "encounter" style: admissions and ER visits should read at a glance.
 const ENCOUNTER_CLASS_STYLES: Record<EncounterClass, { pill: string; dot: string }> = {
   inpatient: {
-    pill: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
-    dot: "bg-indigo-500",
+    pill: "bg-indigo-100 text-indigo-700 dark:bg-secondary/70 dark:text-secondary-foreground/80",
+    dot: "bg-indigo-500 dark:bg-muted-foreground",
   },
   emergency: {
-    pill: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
-    dot: "bg-red-500",
+    pill: "bg-red-100 text-red-700 dark:bg-clinical-abnormal/10 dark:text-clinical-abnormal",
+    dot: "bg-red-500 dark:bg-clinical-abnormal",
   },
   outpatient: {
-    pill: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    pill: "bg-slate-100 text-slate-600 dark:bg-muted/70 dark:text-muted-foreground",
     dot: "bg-slate-400",
   },
 }
@@ -160,7 +160,7 @@ export function CrossFacilityTimeline({
                         )?.quote,
                       })
                     }
-                    className="group -mx-1 -my-0.5 w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/50"
+                    className="group -mx-1 -my-0.5 min-h-[44px] w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/50 lg:min-h-8"
                   >
                     {inner}
                   </button>
@@ -176,7 +176,7 @@ export function CrossFacilityTimeline({
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="mt-1.5 flex min-h-[44px] items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
           aria-expanded={showAll}
         >
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

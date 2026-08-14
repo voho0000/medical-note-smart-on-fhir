@@ -167,7 +167,7 @@ export function ChatToolbar({
             : t.chat.patientDataOffEnable}
           className={`h-7 shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none ${
             patientDataDisabled
-              ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-900/60'
+              ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/15'
               : 'text-muted-foreground'
           }`}
         >

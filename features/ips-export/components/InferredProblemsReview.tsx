@@ -97,7 +97,7 @@ export function InferredProblemsReview({
   const hasIcdRows = icdRowCount > 0
 
   return (
-    <div className="space-y-3 rounded-md border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/20">
+    <div className="space-y-3 rounded-md border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-500/25 dark:bg-violet-500/[0.07]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Title doubles as the panel's collapse toggle; the confirmed count
             stays visible while collapsed so hidden state isn't lost. */}
@@ -108,7 +108,7 @@ export function InferredProblemsReview({
           aria-expanded={panelOpen}
         >
           {panelOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          <Sparkles className="h-4 w-4 text-violet-500" />
+          <Sparkles className="h-4 w-4 text-violet-500 dark:text-violet-300" />
           {p.title}
           {!panelOpen && confirmedCount > 0 && (
             <span className="ml-1 text-xs font-normal text-violet-700 dark:text-violet-300">
@@ -260,7 +260,7 @@ function InferredProblemRow({
         {sub && <span className="hidden truncate text-xs text-muted-foreground sm:inline">{sub}</span>}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {problem.origin === 'summary' && (
-            <span className="rounded border border-sky-200 bg-sky-100 px-1 py-0.5 text-[0.625rem] font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+            <span className="rounded border border-sky-200 bg-sky-100 px-1 py-0.5 text-[0.625rem] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
               {p.fromSummary}
             </span>
           )}
@@ -271,11 +271,11 @@ function InferredProblemRow({
                   {p.visits.replace('{count}', String(visitCount))}
                 </span>
               ) : null}
-              <span className="rounded border border-slate-200 bg-slate-100 px-1 py-0.5 text-[0.625rem] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
+              <span className="rounded border border-slate-200 bg-slate-100 px-1 py-0.5 text-[0.625rem] font-medium text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
                 {p.visitIcd}
               </span>
               <span
-                className="rounded border border-amber-300 bg-amber-100 px-1 py-0.5 text-[0.625rem] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                className="rounded border border-amber-300 bg-amber-100 px-1 py-0.5 text-[0.625rem] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
                 title={p.unconfirmed}
               >
                 {p.unconfirmed}
@@ -345,8 +345,8 @@ function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low'
   const { t } = useLanguage()
   const labels = t.ipsExport.inferredProblems.confidence
   const styles: Record<typeof confidence, string> = {
-    high: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
-    medium: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900',
+    high: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
+    medium: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30',
     low: 'bg-muted text-muted-foreground border-border',
   }
   return (

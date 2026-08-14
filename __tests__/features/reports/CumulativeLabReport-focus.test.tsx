@@ -46,7 +46,7 @@ describe('CumulativeLabReport analyte focus', () => {
 
     const crpHeader = container.querySelector<HTMLElement>('[data-lab-test-key="CRP"]')
     expect(crpHeader).not.toBeNull()
-    expect(crpHeader).toHaveClass('ring-teal-500')
+    expect(crpHeader).toHaveClass('border-b-primary', 'bg-primary/10')
     await waitFor(() => {
       expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: 'smooth' })
     })

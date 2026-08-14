@@ -193,7 +193,7 @@ export function PatientDemographicsEditorDialog({
             </p>
           </div>
 
-          <div className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50/70 p-3 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          <div className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50/70 p-3 text-xs text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-200">
             <LockKeyhole className="mt-0.5 size-4 shrink-0" />
             <span>{t.patient.localProfilePrivacy}</span>
           </div>

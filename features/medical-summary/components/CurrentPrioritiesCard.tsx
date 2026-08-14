@@ -66,18 +66,18 @@ export function CurrentPrioritiesCard({
 
   return (
     <section
-      className="overflow-hidden rounded-lg border border-teal-200/80 bg-card shadow-sm dark:border-teal-900/70"
+      className="overflow-hidden rounded-lg border border-border bg-card"
       aria-labelledby="current-priorities-title"
     >
-      <div className="bg-teal-50/60 px-3.5 py-3 dark:bg-teal-950/20">
+      <div className="bg-primary/[0.035] px-3.5 py-3 dark:bg-primary/[0.055]">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-600 text-white shadow-sm dark:bg-teal-500 dark:text-teal-950">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ShieldCheck className="h-4 w-4" />
           </div>
           <h3 id="current-priorities-title" className="min-w-0 flex-1 text-sm font-semibold text-foreground">
             {title}
           </h3>
-          {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" /> : null}
+          {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500 dark:text-violet-300" /> : null}
         </div>
         <p className="mt-2 text-[0.875rem] font-semibold leading-snug text-foreground @min-[48rem]:text-[0.9375rem]">
           {result.headline}
@@ -107,7 +107,7 @@ export function CurrentPrioritiesCard({
           <button
             type="button"
             onClick={() => setSummaryExpanded((value) => !value)}
-            className="mt-1 inline-flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+            className="mt-1 inline-flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
             aria-expanded={summaryExpanded}
           >
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", summaryExpanded && "rotate-180")} />
@@ -116,7 +116,7 @@ export function CurrentPrioritiesCard({
         ) : null}
       </div>
 
-      <p className="border-t border-border px-3.5 py-1.5 text-[0.625rem] leading-snug text-muted-foreground/70">
+      <p className="border-t border-border px-3.5 py-1.5 text-xs leading-snug text-muted-foreground">
         {generatedByLine}
       </p>
     </section>

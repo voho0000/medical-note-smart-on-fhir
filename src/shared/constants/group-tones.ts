@@ -27,35 +27,35 @@ export interface GroupTone {
 
 export const GROUP_TONES: Record<GroupToneName, GroupTone> = {
   teal: {
-    toneClass: 'text-teal-700 dark:text-teal-300',
-    dividerClass: 'bg-teal-200/90 dark:bg-teal-800/70',
+    toneClass: 'text-teal-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-teal-200/90 dark:bg-border',
   },
   orange: {
-    toneClass: 'text-orange-700 dark:text-orange-300',
-    dividerClass: 'bg-orange-200/90 dark:bg-orange-800/70',
+    toneClass: 'text-orange-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-orange-200/90 dark:bg-border',
   },
   cyan: {
-    toneClass: 'text-cyan-700 dark:text-cyan-300',
-    dividerClass: 'bg-cyan-200/90 dark:bg-cyan-800/70',
+    toneClass: 'text-cyan-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-cyan-200/90 dark:bg-border',
   },
   violet: {
-    toneClass: 'text-violet-700 dark:text-violet-300',
-    dividerClass: 'bg-violet-200/90 dark:bg-violet-800/70',
+    toneClass: 'text-violet-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-violet-200/90 dark:bg-border',
   },
   rose: {
-    toneClass: 'text-rose-700 dark:text-rose-300',
-    dividerClass: 'bg-rose-200/90 dark:bg-rose-800/70',
+    toneClass: 'text-rose-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-rose-200/90 dark:bg-border',
   },
   blue: {
-    toneClass: 'text-blue-700 dark:text-blue-300',
-    dividerClass: 'bg-blue-200/90 dark:bg-blue-800/70',
+    toneClass: 'text-blue-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-blue-200/90 dark:bg-border',
   },
   pink: {
-    toneClass: 'text-pink-700 dark:text-pink-300',
-    dividerClass: 'bg-pink-200/90 dark:bg-pink-800/70',
+    toneClass: 'text-pink-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-pink-200/90 dark:bg-border',
   },
   indigo: {
-    toneClass: 'text-indigo-700 dark:text-indigo-300',
-    dividerClass: 'bg-indigo-200/90 dark:bg-indigo-800/70',
+    toneClass: 'text-indigo-700 dark:text-secondary-foreground/80',
+    dividerClass: 'bg-indigo-200/90 dark:bg-border',
   },
 }

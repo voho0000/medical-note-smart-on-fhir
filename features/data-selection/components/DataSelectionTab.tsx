@@ -52,10 +52,9 @@ const subscribeToHydration = () => () => undefined
 const getClientHydrationSnapshot = () => true
 const getServerHydrationSnapshot = () => false
 
-// Active segment in the 編輯對象 / 情境 pill toggles — light amber to match the
-// data-selection tab accent (so the selected option reads as selected, not just
-// a white gap).
-const ACTIVE_SEGMENT = 'bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-500/20 dark:text-amber-300'
+// Selection follows the workspace interaction colour. Amber is reserved for
+// context-budget warnings and missing information.
+const ACTIVE_SEGMENT = 'bg-primary/10 text-primary shadow-sm'
 
 export function DataSelectionTab({
   clinicalData,

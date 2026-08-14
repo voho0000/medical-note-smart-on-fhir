@@ -56,10 +56,10 @@ type StatusTone = "success" | "muted" | "warning"
 
 function statusClass(tone: StatusTone): string {
   if (tone === "success") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
   }
   if (tone === "warning") {
-    return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+    return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
   }
   return "border-border bg-muted/40 text-muted-foreground"
 }
@@ -326,7 +326,7 @@ export function ModelAndKeySettings({
       <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNoteShort}</p>
 
       {offlineMode ? (
-        <div className="flex items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/20">
+        <div className="flex items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 dark:border-emerald-500/25 dark:bg-emerald-500/[0.07]">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium">{t.settings.offlineDeployment}</p>

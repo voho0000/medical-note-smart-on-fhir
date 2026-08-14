@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import {
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 import { useObservationHistory, useComponentHistory, useCompositeHistory, useReportHistory } from '../hooks/useObservationHistory'
 import { ObservationTrendChart } from './ObservationTrendChart'
 import { MultiLineTrendChart } from './MultiLineTrendChart'
@@ -160,10 +163,10 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="table" className="w-full mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="table" className={TAB_ACTIVE_CLASSES.clinical}>歷史記錄</TabsTrigger>
-            <TabsTrigger value="chart" className={TAB_ACTIVE_CLASSES.clinical}>趨勢圖表</TabsTrigger>
+        <Tabs defaultValue="table" className="mt-4 w-full gap-0">
+          <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
+            <TabsTrigger value="table" className={SUBTAB_TRIGGER_CLASSES}>歷史記錄</TabsTrigger>
+            <TabsTrigger value="chart" className={SUBTAB_TRIGGER_CLASSES}>趨勢圖表</TabsTrigger>
           </TabsList>
 
           <TabsContent value="table" className="mt-4">

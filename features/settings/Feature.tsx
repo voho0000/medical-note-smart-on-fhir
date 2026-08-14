@@ -3,7 +3,11 @@
 import { useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
+import {
+  CARD_BORDER_CLASSES,
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
@@ -32,16 +36,16 @@ export function SettingsFeature() {
   
   return (
     <div className="space-y-4">
-      <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
-          <TabsTrigger value="ai" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
+      <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="gap-0">
+        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
+          <TabsTrigger value="ai" className={`${SUBTAB_TRIGGER_CLASSES} overflow-hidden`}>
             <span className="truncate" title={t.settings.aiPreferences}>{t.settings.aiPreferences}</span>
           </TabsTrigger>
-          <TabsTrigger value="display" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
+          <TabsTrigger value="display" className={`${SUBTAB_TRIGGER_CLASSES} overflow-hidden`}>
             <span className="truncate" title={(t.settings as any).display ?? '顯示與關於'}>{(t.settings as any).display ?? '顯示與關於'}</span>
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="ai" className="space-y-6">
+        <TabsContent value="ai" className="mt-4 space-y-6">
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <ModelAndKeySettings
@@ -51,7 +55,7 @@ export function SettingsFeature() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="display" className="space-y-4">
+        <TabsContent value="display" className="mt-4 space-y-4">
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <DisplaySettings />

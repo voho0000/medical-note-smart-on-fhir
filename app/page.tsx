@@ -21,8 +21,7 @@ import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useEffect, useRef, useState } from "react"
-import { cn } from "@/src/shared/utils/cn.utils"
-import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
+import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
@@ -30,6 +29,15 @@ import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-fea
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { useAutoAiConsentState } from "@/src/application/hooks/ai-generation/auto-ai-consent"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
+import {
+  ClinicalMobilePanelSwitcher,
+  ClinicalPatientContext,
+  ClinicalWorkspaceDivider,
+  ClinicalWorkspaceMain,
+  ClinicalWorkspacePanel,
+  ClinicalWorkspaceRail,
+  ClinicalWorkspaceRoot,
+} from "@/src/shared/components/clinical-workspace"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -138,7 +146,7 @@ function PageContent() {
   }, [clearDetail, rightTourActive])
 
   return (
-    <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
+    <ClinicalWorkspaceRoot>
       {headerCollapsed ? (
         // Slim strip — reclaims the full header height for the panels. The
         // whole strip is the expand affordance; the app icon + chevron make it
@@ -149,32 +157,36 @@ function PageContent() {
           aria-expanded={false}
           aria-label={t.header.expandHeader}
           title={t.header.expandHeader}
-          className="group shrink-0 border-b bg-white/80 backdrop-blur-md shadow-sm flex items-center justify-center gap-1.5 py-1 text-muted-foreground hover:bg-blue-50/60 hover:text-blue-600 transition-colors"
+          className="group flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 border-b bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:min-h-8"
         >
           <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="" className="h-4 w-4 object-contain opacity-70" />
           <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
         </button>
       ) : (
-      <header className="relative shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-2 sm:px-6 sm:py-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
+      <header className="relative shrink-0 border-b border-border bg-card px-3 py-1.5 sm:px-4">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 items-center justify-center overflow-hidden max-[359px]:hidden">
               <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-base sm:text-lg md:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
+            <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+              <span>MediPrisma</span>
+              <span className="max-lg:hidden"> · SMART on FHIR</span>
+            </h1>
           </div>
+          <ClinicalPatientContext patient={patient} />
           {/* Header right cluster — kept lean (v0.4.0).
               Less-used controls (theme, version, feedback, connection
               info) live inside HeaderOverflowMenu (kebab); audience +
               language collapse into the same menu only on mobile so the
               bar never wraps on narrow screens. */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
             {/* iconOnlyOnMobile: header is space-constrained, so the
                 "匯入資料" label collapses on phones. The Welcome screen
                 mounts the same component without this flag so its big
                 CTA always reads as a labeled button. */}
             <ImportBundleButton iconOnlyOnMobile />
-            <div className="hidden sm:flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 max-lg:hidden lg:gap-3">
               <AudienceSwitcher />
               <LanguageSwitcher />
             </div>
@@ -187,21 +199,21 @@ function PageContent() {
             />
           </div>
         </div>
-        {/* Centred collapse handle — straddles the header's bottom edge so it
-            shares the same horizontal centre as the expand strip, giving the
-            toggle one consistent spot. Bordered pill so the chevron reads as a
-            button (a flat icon got mistaken for decoration). */}
+        {/* Keep the collapse handle fully inside the header. Letting it
+            straddle the bottom edge covered the compact desktop tab row. */}
         <button
           type="button"
           onClick={() => setHeaderCollapsed(true)}
           aria-label={t.header.collapseHeader}
           title={t.header.collapseHeader}
-          className="absolute left-1/2 bottom-0 z-20 -translate-x-1/2 translate-y-1/2 inline-flex items-center justify-center rounded-full border border-border bg-background px-3 py-0.5 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground transition-colors"
+          className="absolute bottom-0 left-1/2 z-20 inline-flex min-h-8 min-w-[44px] -translate-x-1/2 items-center justify-center rounded-t-md border border-b-0 border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary max-md:hidden"
         >
           <ChevronUp className="h-4 w-4" />
         </button>
       </header>
       )}
+
+      <ClinicalPatientContext patient={patient} variant="mobile" />
       
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
@@ -216,120 +228,75 @@ function PageContent() {
         </main>
       ) : (
       <>
-      {/* Mobile Tab Switcher - Only visible on small screens */}
-      <div className="md:hidden flex border-b bg-white/80 backdrop-blur-md">
-        <button
-          onClick={() => setMobileView('left')}
-          className={`flex-1 px-4 py-3 min-h-[44px] text-sm font-medium transition-colors ${
-            mobileView === 'left'
-              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          {t.header.clinicalSummary || '臨床摘要'}
-        </button>
-        <button
-          onClick={() => setMobileView('right')}
-          className={`flex-1 px-4 py-3 min-h-[44px] text-sm font-medium transition-colors ${
-            mobileView === 'right'
-              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          {t.header.features || '功能'}
-        </button>
-      </div>
+      <ClinicalMobilePanelSwitcher
+        activePanel={mobileView}
+        leftLabel={t.header.clinicalSummary}
+        rightLabel={t.header.features}
+        onChange={setMobileView}
+      />
 
-      {/* Tablet (md, split) uses tighter gap/padding than desktop so the two
-          ~360px panels keep more usable width; desktop gets the roomier p-6/gap-6. */}
-      <main className="flex flex-1 flex-col md:flex-row gap-2 sm:gap-3 md:gap-3 lg:gap-4 overflow-hidden p-2 sm:p-3 md:p-3 lg:p-4" ref={containerRef}>
+      <ClinicalWorkspaceMain ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
-          <button
-            type="button"
+          <ClinicalWorkspaceRail
             onClick={() => setCollapsed(null)}
-            title={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
-            aria-label={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
-            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+            label={t.header.expandClinicalSummary}
+            iconDirection="right"
           >
-            <ChevronsRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
-              {t.header.clinicalSummary || '臨床摘要'}
-            </span>
-          </button>
+            {t.header.clinicalSummary}
+          </ClinicalWorkspaceRail>
         )}
 
         {/* Left Panel - Clinical Summary */}
-        <section
-          className={cn(
-            "w-full md:w-auto min-h-0 overflow-y-auto flex-1",
-            mobileView === 'left' ? 'block' : 'hidden',
+        <ClinicalWorkspacePanel
+          aria-label={t.header.clinicalSummary}
+          mobileActive={mobileView === 'left'}
+          desktopState={
             collapsed === 'left'
-              ? 'md:hidden'
+              ? 'collapsed'
               : collapsed === 'right'
-                ? 'md:block md:flex-1'
-                : 'md:block md:flex-initial',
-          )}
-          style={isLargeScreen && collapsed === null ? { width: `${leftWidth}%` } : undefined}
+                ? 'fill'
+                : 'split'
+          }
+          desktopWidth={
+            isLargeScreen && collapsed === null ? `${leftWidth}%` : undefined
+          }
         >
           {/* Per-panel boundary: a render crash in one panel must not white-screen the other */}
           <ErrorBoundary>
             <ClinicalSummaryFeature />
           </ErrorBoundary>
-        </section>
+        </ClinicalWorkspacePanel>
 
         {/* Resizable Divider with always-visible collapse controls. Hidden on mobile. */}
         {collapsed === null && (
-          <div className="hidden md:flex group relative w-2 shrink-0 items-center justify-center">
-            {/* Full-height drag hit-area (extends past the visible bar) */}
-            <div
-              className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize rounded-full bg-border/60 transition-colors group-hover:bg-primary/20 active:bg-primary/30"
-              onMouseDown={handleMouseDown}
-            />
-            {/* Collapse buttons — centered on the divider. Hidden while a
-                right-pane detail is open (向右展開): in that mode the detail
-                replaces the AI 功能 panel, so the collapse control moves to the
-                far-right 「功能」rail (added after the right section) and the
-                middle bar stays drag-only — no two competing collapse controls. */}
-            {!detail && (
-              <div className="absolute z-10 flex flex-col gap-1">
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => setCollapsed('left')}
-                  title="收合左欄"
-                  aria-label="收合左欄"
-                  className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
-                >
-                  <ChevronsLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => setCollapsed('right')}
-                  title="收合右欄"
-                  aria-label="收合右欄"
-                  className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
-                >
-                  <ChevronsRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
+          <ClinicalWorkspaceDivider
+            label={t.header.resizePanels}
+            onDragStart={handleMouseDown}
+            onCollapseLeft={() => setCollapsed('left')}
+            onCollapseRight={() => setCollapsed('right')}
+            leftCollapseLabel={t.header.collapseClinicalSummary}
+            rightCollapseLabel={t.header.collapseFeatures}
+            showCollapseActions={!detail}
+          />
         )}
 
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
-        <section
-          className={cn(
-            "w-full md:w-auto min-h-0 overflow-y-auto flex-1",
-            mobileView === 'right' ? 'block' : 'hidden',
+        <ClinicalWorkspacePanel
+          aria-label={t.header.features}
+          mobileActive={mobileView === 'right'}
+          desktopState={
             collapsed === 'right'
-              ? 'md:hidden'
+              ? 'collapsed'
               : collapsed === 'left'
-                ? 'md:block md:flex-1'
-                : 'md:block md:flex-initial',
-          )}
-          style={isLargeScreen && collapsed === null ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
+                ? 'fill'
+                : 'split'
+          }
+          desktopWidth={
+            isLargeScreen && collapsed === null
+              ? `${100 - leftWidth - 0.5}%`
+              : undefined
+          }
         >
           <ErrorBoundary>
             {detail ? (
@@ -340,50 +307,40 @@ function PageContent() {
               <RightPanelFeature />
             )}
           </ErrorBoundary>
-        </section>
+        </ClinicalWorkspacePanel>
 
         {/* Detail-mode rail (向右展開): the detail occupies the right column in
             place of the AI 功能 panel, so the collapse control sits here at the
             far right — clicking it brings the 功能 panel back (same as closing
             the detail). Only when not already collapsed. */}
         {detail && collapsed === null && (
-          <button
-            type="button"
+          <ClinicalWorkspaceRail
             onClick={clearDetail}
-            title={`顯示 ${t.header.features || '功能'} 面板`}
-            aria-label={`顯示 ${t.header.features || '功能'} 面板`}
-            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+            label={t.header.expandFeatures}
+            iconDirection="left"
           >
-            <ChevronsLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
-              {t.header.features || '功能'}
-            </span>
-          </button>
+            {t.header.features}
+          </ClinicalWorkspaceRail>
         )}
 
         {/* Right collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'right' && (
-          <button
-            type="button"
+          <ClinicalWorkspaceRail
             onClick={() => setCollapsed(null)}
-            title={`展開 ${t.header.features || '功能'}`}
-            aria-label={`展開 ${t.header.features || '功能'}`}
-            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+            label={t.header.expandFeatures}
+            iconDirection="left"
           >
-            <ChevronsLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
-              {t.header.features || '功能'}
-            </span>
-          </button>
+            {t.header.features}
+          </ClinicalWorkspaceRail>
         )}
-      </main>
+      </ClinicalWorkspaceMain>
       </>
       )}
 
       <FirstRunOnboardingDialog />
       <LeftBrowserTour eligible={tourEligible} />
       <RightFeatureTour />
-    </div>
+    </ClinicalWorkspaceRoot>
   )
 }
 

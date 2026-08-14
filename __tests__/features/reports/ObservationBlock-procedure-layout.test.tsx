@@ -30,15 +30,10 @@ describe('ObservationBlock procedure detail layout', () => {
     expect(value).toHaveClass('whitespace-normal', 'break-words')
     expect(value).not.toHaveClass('truncate')
     const detailLine = value.parentElement
-    const row = detailLine?.parentElement
-    expect(detailLine).toHaveClass('leading-snug')
-    expect(row).toHaveClass(
-      'grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)]',
-      'py-0',
-      'first:pt-2',
-      'last:pb-2',
-    )
-    expect(row?.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+    const row = value.parentElement
+    expect(row).toHaveClass('flex', 'items-baseline', 'leading-snug')
+    expect(row?.parentElement).toHaveClass('flex', 'flex-wrap', 'gap-x-5')
+    expect(value).toHaveClass('font-semibold')
     expect(detailLine).toHaveTextContent(`ICD-10-PCS${fullDisplay}`)
   })
 
@@ -67,11 +62,12 @@ describe('ObservationBlock procedure detail layout', () => {
     expect(block).not.toBeNull()
     expect(block).toHaveClass(
       'grid',
-      'grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)]',
+      'basis-full',
+      'sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)]',
       'gap-y-0.5',
-      'py-2',
+      'pt-2',
     )
-    expect(title).toHaveClass('row-span-2')
+    expect(title).toHaveClass('sm:row-span-2')
     expect(block).toHaveTextContent('ICD-10-PCS')
     expect(block).toHaveTextContent('0DNW4ZZ · 經皮內視鏡腹膜鬆解術')
     expect(block).toHaveTextContent('來源住院次處置')

@@ -17,7 +17,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { cn } from "@/src/shared/utils/cn.utils"
-import type { MedicationRow } from '../types'
+import type { MedicationNameMode, MedicationRow } from '../types'
 import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
@@ -61,9 +61,13 @@ function dateRangeOf(m: MedicationRow): string {
 
 interface MedicationHistoryListProps {
   groups: MedicationHistoryGroup[]
+  nameMode?: MedicationNameMode
 }
 
-export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
+export function MedicationHistoryList({
+  groups,
+  nameMode = 'ingredient',
+}: MedicationHistoryListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
   const [showInjectables, setShowInjectables] = useState(false)
@@ -99,9 +103,9 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
 
   return (
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
-      <ul className="space-y-0">
+      <ul className="space-y-1.5">
         {regular.map((group) => (
-          <HistoryRow key={group.key} group={group} mt={mt} />
+          <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
         ))}
       </ul>
 
@@ -125,9 +129,9 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
             </span>
           </button>
           {showInjectables && (
-            <ul className="space-y-0 px-1.5 pb-1.5">
+            <ul className="space-y-1.5 px-1.5 pb-1.5">
               {injectable.map((group) => (
-                <HistoryRow key={group.key} group={group} mt={mt} />
+                <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
               ))}
             </ul>
           )}
@@ -137,13 +141,25 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
   )
 }
 
-function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
+function HistoryRow({
+  group,
+  mt,
+  nameMode,
+}: {
+  group: MedicationHistoryGroup
+  mt: any
+  nameMode: MedicationNameMode
+}) {
   const { audience } = useAudience()
   const isMedical = audience === 'medical'
   const [open, setOpen] = useState(false)
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
   const latest = group.medications[0]
+  const displayMedicationTitle =
+    nameMode === 'product' && latest?.secondaryTitle
+      ? latest.secondaryTitle
+      : group.name
   const latestDate = latestDateOf(latest)
   const timesUnit = mt.refillTimes ?? '次'
   const fullMedicationTitle = [
@@ -166,12 +182,12 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
   }, [pending, navSeq, group.medications])
 
   return (
-    <li ref={groupAnchorRef} className="rounded-md border border-border/60">
+    <li ref={groupAnchorRef} className="rounded-md border border-border/75 bg-background/60 dark:bg-secondary/55">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-primary/[0.035] dark:hover:bg-secondary/70"
       >
         <ChevronRight
           className={cn(
@@ -190,18 +206,10 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
             tabIndex={latest?.drugTerminology ? 0 : undefined}
           >
             <span
-              className={cn(
-                "truncate text-[0.8125rem] font-medium",
-                isMedical && latest?.secondaryTitle ? "max-w-[62%] shrink-0" : "min-w-0",
-              )}
+              className="min-w-0 truncate text-[0.8125rem] font-medium"
             >
-              {group.name}
+              {displayMedicationTitle}
             </span>
-            {isMedical && latest?.secondaryTitle && (
-              <span className="min-w-0 truncate text-[0.6875rem] font-normal text-muted-foreground">
-                · {latest.secondaryTitle}
-              </span>
-            )}
           </span>
         </MedicationTerminologyTooltip>
         {latest?.category && (

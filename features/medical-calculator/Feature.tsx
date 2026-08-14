@@ -25,7 +25,7 @@ const SEV_TEXT: Record<Severity, string> = {
   normal: "text-emerald-600 dark:text-emerald-400",
   low: "text-sky-600 dark:text-sky-400",
   moderate: "text-amber-600 dark:text-amber-400",
-  high: "text-red-600 dark:text-red-400",
+  high: "text-red-600 dark:text-rose-300",
 }
 
 // An autofilled result is flagged stale past this age — old enough that
@@ -81,7 +81,7 @@ export default function MedicalCalculatorFeature() {
 
   if (selected) {
     return (
-      <div className="px-1">
+      <div>
         <CalculatorDetail
           calc={selected}
           onBack={() => setSelectedId(null)}
@@ -95,7 +95,7 @@ export default function MedicalCalculatorFeature() {
   const isEmpty = flatList !== null ? flatList.length === 0 : grouped.length === 0
 
   return (
-    <div className="space-y-2.5 px-1">
+    <div className="space-y-2.5">
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -231,7 +231,7 @@ function CalculatorCard({
           onOpen()
         }
       }}
-      className="cursor-pointer border-l-4 border-l-emerald-500 py-0 transition-colors hover:bg-muted/50"
+      className="cursor-pointer rounded-lg border-border py-0 shadow-none transition-colors hover:bg-muted/50 hover:shadow-none"
     >
       <CardContent className="flex items-start gap-2 px-3 py-2.5">
         <button
@@ -243,7 +243,7 @@ function CalculatorCard({
         >
           <Star className={`h-4 w-4 ${isFavorite ? "fill-amber-400 text-amber-500" : ""}`} />
         </button>
-        <Calculator className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <Calculator className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
           {(tags.purpose.length > 0 || tags.diseases.length > 0 || patientFillable) && (
             <div className="mb-1 flex flex-wrap items-center gap-1">
@@ -254,7 +254,7 @@ function CalculatorCard({
               )}
               {tags.purpose.map((p) => (
                 <span key={p} className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary/75" />
                   {tr(locale, PURPOSE_LABELS[p])}
                 </span>
               ))}
@@ -303,7 +303,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
         active
-          ? "border-emerald-500 bg-emerald-500 text-white dark:bg-emerald-600"
+          ? "border-primary bg-primary text-primary-foreground"
           : "border-border text-muted-foreground hover:bg-muted"
       }`}
     >

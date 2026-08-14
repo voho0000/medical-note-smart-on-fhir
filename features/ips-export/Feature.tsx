@@ -13,7 +13,11 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { AlertTriangle, FileOutput, Image as ImageIcon, Loader2, Settings2, ShieldCheck } from 'lucide-react'
-import { CARD_BORDER_CLASSES } from '@/src/shared/config/ui-theme.config'
+import {
+  CARD_BORDER_CLASSES,
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from '@/src/shared/config/ui-theme.config'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
@@ -101,14 +105,14 @@ export default function IpsExportFeature() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="px-1">
+      <div>
         <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{x.hubDescription}</p>
       </div>
       <Tabs defaultValue="ai" className="space-y-5">
-        <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl p-1 sm:max-w-md">
-          <TabsTrigger value="ai" className="text-sm">{x.aiUseTab}</TabsTrigger>
-          <TabsTrigger value="institution" className="text-sm">{x.institutionTab}</TabsTrigger>
+        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2 sm:max-w-md`}>
+          <TabsTrigger value="ai" className={SUBTAB_TRIGGER_CLASSES}>{x.aiUseTab}</TabsTrigger>
+          <TabsTrigger value="institution" className={SUBTAB_TRIGGER_CLASSES}>{x.institutionTab}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="ai">
@@ -147,10 +151,10 @@ export default function IpsExportFeature() {
 
           <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
             <div className="space-y-4 p-4 sm:p-5">
-              <div className={`rounded-xl border p-3 ${includePatientIdentifiers ? 'border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/30' : 'bg-card'}`}>
+              <div className={`rounded-xl border p-3 ${includePatientIdentifiers ? 'border-amber-300 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10' : 'bg-card'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-start gap-2">
-                    {includePatientIdentifiers ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" /> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />}
+                    {includePatientIdentifiers ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" /> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-300" />}
                     <div>
                       <label htmlFor="ips-include-identifiers" className="text-sm font-medium">{x.includeIdentifiers}</label>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

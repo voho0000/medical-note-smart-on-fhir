@@ -1,9 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { PanelRight } from "lucide-react"
+import { Building2, PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  CLINICAL_ABNORMAL_TONE,
+  CLINICAL_CATEGORY_TONE,
+  CLINICAL_LIST_ROW_HOVER_TONE,
+  CLINICAL_LIST_ROW_TONE,
+  CLINICAL_SOURCE_TONE,
+} from "@/features/clinical-summary/components/clinical-color-roles"
+import {
+  clinicalIcdChipClass,
+  clinicalIcdCodeClass,
+  clinicalIcdDescriptionClass,
+  clinicalIcdDescriptionToneClass,
+  clinicalIcdMoreButtonClass,
+  clinicalTooltipSurfaceClass,
+} from "@/features/clinical-summary/components/clinical-metadata-styles"
 import { VisitDetailContent, visitHasDetails } from "./VisitDetailContent"
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
@@ -12,6 +27,7 @@ import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
+import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
 
@@ -30,22 +46,20 @@ interface VisitItemProps {
 }
 
 const getTypeBadge = (type: VisitType, labels: any) => {
-  // Soft pastel tints (light bg + same-hue border/text) so the type badge sits
-  // in the same visual register as the rest of the UI's chips. The earlier
-  // solid blue / red / amber badges were too heavy against the light layout.
-  // 門診 blue · 急診 rose · 住院 violet — still distinct at a glance.
+  // Visit setting is classification, not status. Use the same emerald category
+  // role as grouped lab reports; emergency alone keeps the attention role.
   const typeMap: Record<VisitType, { label: string; className: string }> = {
-    outpatient: { label: labels.outpatient, className: 'border-blue-200 bg-blue-50 text-blue-700' },
-    'outpatient-or-emergency': { label: labels['outpatient-or-emergency'], className: 'border-sky-200 bg-sky-50 text-sky-700' },
-    inpatient:  { label: labels.inpatient,  className: 'border-violet-200 bg-violet-50 text-violet-700' },
-    emergency:  { label: labels.emergency,  className: 'border-rose-200 bg-rose-50 text-rose-700' },
-    home:       { label: labels.home,       className: '' },
-    virtual:    { label: labels.virtual,    className: '' },
-    pharmacy:   { label: labels.pharmacy || '藥局', className: '' },
-    other:      { label: labels.other,      className: '' },
+    outpatient: { label: labels.outpatient, className: CLINICAL_CATEGORY_TONE },
+    'outpatient-or-emergency': { label: labels['outpatient-or-emergency'], className: CLINICAL_CATEGORY_TONE },
+    inpatient:  { label: labels.inpatient,  className: CLINICAL_CATEGORY_TONE },
+    emergency:  { label: labels.emergency,  className: CLINICAL_ABNORMAL_TONE },
+    home:       { label: labels.home,       className: CLINICAL_CATEGORY_TONE },
+    virtual:    { label: labels.virtual,    className: CLINICAL_CATEGORY_TONE },
+    pharmacy:   { label: labels.pharmacy || '藥局', className: CLINICAL_CATEGORY_TONE },
+    other:      { label: labels.other,      className: CLINICAL_CATEGORY_TONE },
   }
   const { label, className } = typeMap[type] || typeMap.other
-  return <Badge variant="outline" className={cn("h-5 px-1.5 py-0 text-[0.6875rem]", className || undefined)}>{label}</Badge>
+  return <Badge variant="outline" className={cn("h-5 border-transparent px-1.5 py-0 text-[0.6875rem]", className)}>{label}</Badge>
 }
 
 const getCareDisciplineBadge = (
@@ -60,6 +74,50 @@ const getCareDisciplineBadge = (
     >
       {labels[discipline]}
     </Badge>
+  )
+}
+
+interface VisitStatProps {
+  kind: string
+  label: string
+  count: number
+  attention?: boolean
+  title?: string
+}
+
+/**
+ * Dense, scan-friendly visit metadata. Short visible labels are clearer than
+ * category icons in this clinical context and consume less width when used
+ * alone. The value keeps a small aligned surface for comparison; only abnormal
+ * results use the semantic attention colour.
+ */
+function VisitStat({ kind, label, count, attention = false, title }: VisitStatProps) {
+  return (
+    <span
+      data-visit-stat={kind}
+      aria-label={`${label} ${count}`}
+      title={title}
+      className="inline-flex h-5 min-w-0 items-center gap-1 border-l border-border/60 pl-1 text-[0.625rem] leading-none first:border-l-0 first:pl-0"
+    >
+      {attention ? (
+        <span
+          className={cn(
+            "inline-flex h-5 items-center gap-1 rounded-full px-1.5 font-medium",
+            CLINICAL_ABNORMAL_TONE,
+          )}
+        >
+          <span className="whitespace-nowrap">{label}</span>
+          <span className="tabular-nums">{count}</span>
+        </span>
+      ) : (
+        <>
+          <span className="whitespace-nowrap text-muted-foreground">{label}</span>
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-foreground/[0.06] px-1 font-semibold tabular-nums text-foreground/80 dark:bg-foreground/[0.08] dark:text-foreground/75">
+            {count}
+          </span>
+        </>
+      )}
+    </span>
   )
 }
 
@@ -93,6 +151,12 @@ export function VisitItem({
   const dateLabel = showRange
     ? `${startLabel} ~ ${formatDateUtil(visit.endDate as string, locale)}`
     : startLabel
+  const secondaryIcdCount = Math.max(0, reasonCodes.length - 1)
+  const icdToggleLabel = icdExpanded
+    ? (locale.startsWith('zh') ? '收合其他 ICD 碼' : 'Collapse additional ICD codes')
+    : (locale.startsWith('zh')
+      ? `預覽並展開其他 ${secondaryIcdCount} 個 ICD 碼`
+      : `Preview and expand ${secondaryIcdCount} additional ICD codes`)
 
   // Open this visit's detail in the right pane (向右展開). Reuses the very same
   // VisitDetailContent that renders inline.
@@ -129,6 +193,7 @@ export function VisitItem({
       data-tour="visit-tour-row"
       className={cn(
         "min-w-0 max-w-full overflow-hidden rounded-lg border transition-colors",
+        CLINICAL_LIST_ROW_TONE,
         // 向右展開 active: tint the whole row so it's clear which visit the
         // right pane is showing.
         isRightActive && "border-primary/40 bg-primary/5",
@@ -148,11 +213,14 @@ export function VisitItem({
             onToggle()
           }
         }}
-        className="w-full rounded-lg px-3 py-1 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
+        className={cn(
+          "w-full cursor-pointer rounded-lg px-3 py-1 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-ring/40",
+          CLINICAL_LIST_ROW_HOVER_TONE,
+        )}
       >
-        {/* Header: when/where on the left, the at-a-glance count pills pushed
+        {/* Header: when/where on the left, the at-a-glance counts pushed
             to the right (justify-between), then the expand chevron. A collapsed
-            visit stays ~2 short rows. The pills live in their own right cluster
+            visit stays ~2 short rows. Counts live in their own right cluster
             that wraps INTERNALLY (max-w cap) when they're many/wide, so the
             left date never gets orphaned onto its own line. */}
         <div className="flex items-center justify-between gap-1.5 leading-5">
@@ -161,53 +229,70 @@ export function VisitItem({
             {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
             {visit.location && (
               <span
-                className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0 text-[0.6875rem] text-muted-foreground"
+                className={cn(
+                  "inline-flex h-5 max-w-[9rem] shrink-0 items-center gap-1 text-[0.6875rem]",
+                  CLINICAL_SOURCE_TONE,
+                )}
                 title={visit.location}
               >
+                <Building2 className="h-3 w-3 shrink-0" aria-hidden />
                 <span className="truncate">{visit.location}</span>
               </span>
             )}
             <span className="min-w-0 truncate text-[0.9375rem] font-medium leading-5">{dateLabel}</span>
             {visit.status === "in-progress" && (
-              <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700">
+              <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
                 {t.visitHistory.inProgress}
               </Badge>
             )}
           </div>
-          {/* Right cluster: count pills (right-aligned, separated from the left
-              content) + the expand chevron. */}
-          <div className="shrink-0 flex flex-wrap items-center justify-end gap-1 max-w-[55%]">
+          {/* Right cluster: compact text labels with tabular values. Category
+              colour is neutral; abnormal is the sole attention colour. */}
+          <div className="shrink-0 flex max-w-[60%] flex-wrap items-center justify-end gap-x-1 gap-y-1">
             {details && (
               <>
                 {details.diagnoses.length > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] text-violet-700">
-                    {t.visitHistory.diagnoses} {details.diagnoses.length}
-                  </span>
+                  <VisitStat
+                    kind="diagnoses"
+                    label={t.visitHistory.diagnoses}
+                    count={details.diagnoses.length}
+                  />
                 )}
                 {details.tests.length > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0 text-[0.625rem] text-blue-700">
-                    {t.visitHistory.tests} {details.tests.length}
-                  </span>
+                  <VisitStat
+                    kind="tests"
+                    label={t.visitHistory.tests}
+                    count={details.tests.length}
+                  />
                 )}
                 {abnormalCount > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700">
-                    {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
-                  </span>
+                  <VisitStat
+                    kind="abnormal"
+                    label={(t.visitHistory as any).abnormal ?? 'Abnormal'}
+                    count={abnormalCount}
+                    attention
+                  />
                 )}
                 {details.medications.length > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-green-200 bg-green-50 px-1.5 py-0 text-[0.625rem] text-green-700">
-                    {t.visitHistory.medications} {details.medications.length}
-                  </span>
+                  <VisitStat
+                    kind="medications"
+                    label={t.visitHistory.medications}
+                    count={details.medications.length}
+                  />
                 )}
                 {details.reports.length > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-cyan-200 bg-cyan-50 px-1.5 py-0 text-[0.625rem] text-cyan-700 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-300">
-                    {t.visitHistory.examReports} {details.reports.length}
-                  </span>
+                  <VisitStat
+                    kind="reports"
+                    label={t.visitHistory.examReports}
+                    count={details.reports.length}
+                  />
                 )}
                 {details.procedures.length > 0 && (
-                  <span className="inline-flex h-5 items-center rounded-full border border-orange-200 bg-orange-50 px-1.5 py-0 text-[0.625rem] text-orange-700">
-                    {t.visitHistory.procedures} {details.procedures.length}
-                  </span>
+                  <VisitStat
+                    kind="procedures"
+                    label={t.visitHistory.procedures}
+                    count={details.procedures.length}
+                  />
                 )}
               </>
             )}
@@ -219,12 +304,12 @@ export function VisitItem({
             {docs.length > 0 && (() => {
               const hasDischarge = docs.some((d) => d.isDischargeSummary)
               return (
-                <span
+                <VisitStat
+                  kind="documents"
+                  label={hasDischarge ? docStrings.dischargeBadge : docStrings.documentBadge}
+                  count={docs.length}
                   title={hasDischarge ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
-                  className="inline-flex h-5 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] text-emerald-700"
-                >
-                  {hasDischarge ? docStrings.dischargeBadge : docStrings.documentBadge}
-                </span>
+                />
               )
             })()}
             {/* 向右展開 — show this visit's detail in the right pane (desktop
@@ -239,10 +324,9 @@ export function VisitItem({
                 title={(t.visitHistory as any).openRight ?? '在右側展開'}
                 aria-label={(t.visitHistory as any).openRight ?? '在右側展開'}
                 className={cn(
-                  "hidden h-5 w-5 md:inline-flex items-center justify-center rounded-md border p-0 transition-colors",
-                  isRightActive
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                  RIGHT_PANE_ACTION_CLASSES,
+                  "h-6 w-6 p-0",
+                  isRightActive && "border-primary bg-primary/10 text-primary",
                 )}
               >
                 <PanelRight className="h-3 w-3" />
@@ -258,7 +342,12 @@ export function VisitItem({
         </div>
 
         {(visit.department || visit.physician || visit.reason || visit.diagnosis) && (
-          <div className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-sm leading-5">
+          <div
+            className={cn(
+              "mt-0.5 flex min-w-0 gap-1 text-sm leading-5",
+              icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
+            )}
+          >
             {visit.department && (
               <span className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={visit.department}>
                 {visit.department}
@@ -270,7 +359,10 @@ export function VisitItem({
               </span>
             )}
             {visit.reason && (
-              <span className="flex min-w-0 flex-1 items-center gap-1">
+              <span className={cn(
+                "flex min-w-0 flex-1 gap-1",
+                icdExpanded ? "items-start" : "items-center",
+              )}>
                 <span
                   className="shrink-0 font-medium text-muted-foreground"
                   title={(t.visitHistory as any).icdCodesTooltip}
@@ -278,8 +370,17 @@ export function VisitItem({
                   {(t.visitHistory as any).recordedIcdCodes ?? t.visitHistory.reason}:{' '}
                 </span>
                 {hasIcdCodes ? (
-                  <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden align-middle">
-                    {/* Default: primary only. Click "+N" to reveal secondaries inline. */}
+                  <span
+                    data-icd-list-state={icdExpanded ? 'expanded' : 'collapsed'}
+                    className={cn(
+                      "min-w-0 gap-1 align-middle",
+                      icdExpanded
+                        ? "flex flex-1 flex-wrap items-start overflow-visible"
+                        : "inline-flex items-center overflow-hidden",
+                    )}
+                  >
+                    {/* Default: primary only. After explicit expansion, wrap
+                        complete diagnoses instead of requiring hover to read. */}
                     {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => {
                       const fullIcdLabel = [rc.code, rc.description].filter(Boolean).join(' ')
                       return (
@@ -290,11 +391,21 @@ export function VisitItem({
                               tabIndex={0}
                               onClick={(e) => e.stopPropagation()}
                               onMouseDown={(e) => e.stopPropagation()}
-                              className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
+                              className={cn(
+                                clinicalIcdChipClass,
+                                "cursor-text select-text",
+                                icdExpanded && "h-auto min-h-5 max-w-[18rem] items-start py-0.5",
+                              )}
                             >
-                              <span className="font-mono font-medium">{rc.code}</span>
+                              <span className={clinicalIcdCodeClass}>{rc.code}</span>
                               {rc.description && (
-                                <span className="min-w-0 truncate text-amber-700/80">
+                                <span className={icdExpanded
+                                  ? cn(
+                                    "min-w-0 whitespace-normal break-words text-clip leading-4",
+                                    clinicalIcdDescriptionToneClass,
+                                  )
+                                  : clinicalIcdDescriptionClass}
+                                >
                                   {rc.description}
                                 </span>
                               )}
@@ -302,7 +413,11 @@ export function VisitItem({
                           </TooltipTrigger>
                           <TooltipContent
                             side="top"
-                            className="max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed"
+                            data-testid="visit-icd-tooltip"
+                            className={cn(
+                              clinicalTooltipSurfaceClass,
+                              "max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed",
+                            )}
                           >
                             {fullIcdLabel}
                           </TooltipContent>
@@ -310,18 +425,65 @@ export function VisitItem({
                       )
                     })}
                     {hasSecondaryIcds && (
-                      <button
-                        type="button"
-                        title={(t.visitHistory as any).icdCodesTooltip}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIcdExpanded((v) => !v)
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex h-5 shrink-0 items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0 text-[0.6875rem] text-amber-700 hover:bg-amber-100 transition-colors"
-                      >
-                        {icdExpanded ? '−' : `+${reasonCodes.length - 1}`}
-                      </button>
+                      icdExpanded ? (
+                        <button
+                          type="button"
+                          aria-label={icdToggleLabel}
+                          aria-expanded
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setIcdExpanded(false)
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className={clinicalIcdMoreButtonClass}
+                        >
+                          −
+                        </button>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={icdToggleLabel}
+                              aria-expanded={false}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setIcdExpanded(true)
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className={clinicalIcdMoreButtonClass}
+                            >
+                              +{secondaryIcdCount}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            data-testid="secondary-icd-preview"
+                            className={cn(
+                              clinicalTooltipSurfaceClass,
+                              "max-h-[min(20rem,60vh)] max-w-[min(90vw,32rem)] overflow-y-auto p-2.5 text-xs leading-relaxed",
+                            )}
+                          >
+                            <div className="space-y-1.5">
+                              {reasonCodes.slice(1).map((rc, index) => (
+                                <div
+                                  key={`${rc.code}-preview-${index}`}
+                                  className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2"
+                                >
+                                  <span className="font-mono font-semibold text-secondary-foreground">
+                                    {rc.code}
+                                  </span>
+                                  {rc.description && (
+                                    <span className="whitespace-normal break-words text-secondary-foreground/80">
+                                      {rc.description}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      )
                     )}
                   </span>
                 ) : (

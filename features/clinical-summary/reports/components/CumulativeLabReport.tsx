@@ -30,6 +30,10 @@ import {
   CumulativeLabTrendDetail,
   CumulativeLabTrendDialog,
 } from "./CumulativeLabTrendDetail"
+import {
+  SUBTAB_LIST_CLASSES,
+  SUBTAB_TRIGGER_CLASSES,
+} from "@/src/shared/config/ui-theme.config"
 
 const EMPTY_TREND_SERIES = new Map<string, LabTrendSeries>()
 
@@ -72,7 +76,7 @@ function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
       title={label}
       aria-label={label}
       style={{
-        backgroundImage: 'repeating-linear-gradient(135deg, transparent 0, transparent 5px, hsl(var(--muted-foreground) / 0.16) 5px, hsl(var(--muted-foreground) / 0.16) 7px)',
+        backgroundImage: 'repeating-linear-gradient(135deg, transparent 0, transparent 5px, color-mix(in oklab, var(--muted-foreground) 18%, transparent) 5px, color-mix(in oklab, var(--muted-foreground) 18%, transparent) 7px)',
       }}
     >
       <span className="sr-only">{label}</span>
@@ -181,7 +185,10 @@ function LabPivotTable({
   return (
     <div
       ref={scrollContainerRef}
-      className={`w-full max-w-full overflow-x-auto overflow-y-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
+      role="region"
+      aria-label={`${categoryLabel}累積檢驗表，可水平捲動`}
+      tabIndex={0}
+      className={`w-full max-w-full overflow-x-auto overflow-y-auto ${heightClass} rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
       style={{ scrollbarWidth: 'thin' }}
     >
       <table className="text-xs border-collapse w-max min-w-full">
@@ -204,7 +211,7 @@ function LabPivotTable({
                   <th
                     key={`sg-${g.sg.id}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
+                    className="border-b border-l bg-muted/70 p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
                   >
                     {subgroupLabel(g.sg.id)}
                   </th>
@@ -212,7 +219,7 @@ function LabPivotTable({
                   <th
                     key={`sg-other-${i}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
+                    className="border-b border-l bg-muted/70 p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
                   >
                     {(t.reports as any).otherSubgroup ?? 'Other'}
                   </th>
@@ -267,8 +274,8 @@ function LabPivotTable({
                   data-lab-test-key={test.testKey}
                   data-trend-active={isTrendActive ? 'true' : undefined}
                   className={isFocused || isTrendActive
-                    ? "bg-teal-100 text-teal-900 ring-2 ring-inset ring-teal-500 border-b border-l p-0 text-center font-semibold align-bottom min-w-[46px] dark:bg-teal-950/60 dark:text-teal-100"
-                    : "bg-muted/80 backdrop-blur border-b border-l p-0 text-center font-medium align-bottom min-w-[46px]"}
+                    ? "min-w-[46px] border-b-2 border-b-primary border-l bg-primary/10 p-0 text-center align-bottom font-semibold text-foreground"
+                    : "min-w-[46px] border-b border-l bg-muted/80 p-0 text-center align-bottom font-medium"}
                 >
                   {canTrend && series ? (
                     <button
@@ -308,13 +315,12 @@ function LabPivotTable({
             </tr>
           )}
           {pivot.dates.map((date, dateIdx) => (
-            <tr key={date} className={dateIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-              {/* The sticky date column MUST be opaque — the row's bg-muted/20
-                  zebra tint is semi-transparent, so the previous bg-inherit let
-                  the value columns scroll through and overlap the dates. A solid
-                  opaque bg-background frozen column fixes it (the faint zebra
-                  difference vs the cell is imperceptible). */}
-              <td className="sticky left-0 z-10 bg-background border-r px-2 py-1 font-medium whitespace-nowrap">
+            <tr key={date} className={dateIdx % 2 === 0 ? 'bg-card' : 'bg-muted/20'}>
+              {/* The sticky date column must remain opaque so horizontally
+                  scrolling values never show through it. Keep it on the card
+                  surface rather than the darker app canvas: dense dark-mode
+                  tables then read as one calm sheet instead of black stripes. */}
+              <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
                 {formatDateLabel(date)}
               </td>
               {flatTests.map((test) => {
@@ -327,7 +333,7 @@ function LabPivotTable({
                 if (isMissingLabValue(cell.value)) {
                   return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
                 }
-                const cls = cell.isAbnormal ? 'text-red-600 font-medium' : 'text-foreground'
+                const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
                 return (
                   <td
                     key={test.mapKey}
@@ -525,14 +531,18 @@ export function CumulativeLabReport({
     <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
         <div className="relative flex min-w-0 items-center gap-2">
-          <TabsList ref={tabsViewportRef} className="!flex !flex-nowrap !justify-start flex-1 min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <TabsList
+            ref={tabsViewportRef}
+            aria-label={(t.reports as any).cumulative ?? '累積報告分類'}
+            className={`${SUBTAB_LIST_CLASSES} !flex min-w-0 flex-1 snap-x !flex-nowrap !justify-start gap-0 overflow-x-auto [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30`}
+          >
             {shownCats.map((p) => {
               const label = categoryLabels[p.category.id] || p.category.id
               return (
                 <TabsTrigger
                   key={p.category.id}
                   value={p.category.id}
-                  className="!flex-none !min-w-fit text-xs h-7 px-2 whitespace-nowrap data-[state=active]:bg-background"
+                  className={`${SUBTAB_TRIGGER_CLASSES} !min-w-fit !flex-none snap-start whitespace-nowrap text-xs`}
                 >
                   {label} ({p.dates.length})
                 </TabsTrigger>
@@ -548,7 +558,7 @@ export function CumulativeLabReport({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="!flex-none !min-w-fit inline-flex items-center gap-0.5 text-xs h-7 px-2 whitespace-nowrap rounded-sm text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+                    className="inline-flex min-h-[44px] !min-w-fit !flex-none snap-start items-center gap-0.5 whitespace-nowrap px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:min-h-[24px]"
                   >
                     {(t.reports as any).cumulativeShowMore || 'More'}
                     <ChevronDown className="h-3 w-3" />

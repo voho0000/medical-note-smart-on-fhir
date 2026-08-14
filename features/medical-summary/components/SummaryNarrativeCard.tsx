@@ -41,7 +41,7 @@ export function SummaryNarrativeCard({
     <div className="rounded-lg border border-border bg-card px-3 py-2.5">
       <h3 className="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
         {title}
-        {updating ? <Loader2 className="h-3 w-3 animate-spin text-violet-500" /> : null}
+        {updating ? <Loader2 className="h-3 w-3 animate-spin text-violet-500 dark:text-primary" /> : null}
       </h3>
       {/* Body caps then scrolls (title fixed above, responsibility
           footer fixed below) — a safety net; the narrative rarely overflows. */}
@@ -64,7 +64,7 @@ export function SummaryNarrativeCard({
             )
             return seg.emphasis ? (
               <span key={i}>
-                <span className="rounded bg-violet-100 px-1 font-semibold text-violet-900 dark:bg-violet-500/15 dark:text-violet-300">
+                <span className="rounded bg-violet-100 px-1 font-semibold text-violet-900 dark:bg-primary/10 dark:text-foreground">
                   {seg.text}
                 </span>
                 {sup}

@@ -24,10 +24,10 @@ import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 
 const SEVERITY_STYLES: Record<Severity, string> = {
-  normal: "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300",
-  low: "border-sky-500 bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300",
-  moderate: "border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300",
-  high: "border-red-500 bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-300",
+  normal: "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300",
+  low: "bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300",
+  moderate: "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300",
+  high: "bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-300",
 }
 
 /** Defensive guard around a calculator's `compute()` — a single formula bug
@@ -233,7 +233,7 @@ export function CalculatorDetail({
       )}
 
       {/* Result — compact so it doesn't dominate the panel. */}
-      <div className={`relative rounded-lg border border-l-4 px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : "border-l-muted"}`}>
+      <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
           <div className="absolute right-2 top-2 flex items-center gap-1">
             <button

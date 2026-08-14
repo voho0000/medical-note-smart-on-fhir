@@ -224,14 +224,14 @@ code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
               type="button"
               aria-pressed={selected}
               onClick={() => setFormat(option.id)}
-              className={`relative rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'border-teal-600 bg-teal-50/70 ring-1 ring-teal-600 dark:bg-teal-950/30' : 'bg-card hover:border-muted-foreground/40 hover:bg-muted/20'}`}
+              className={`relative rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : 'bg-card hover:border-muted-foreground/40 hover:bg-muted/20'}`}
             >
               {option.badge && (
                 <Badge variant={option.id === 'pdf' ? 'default' : 'secondary'} className="absolute right-3 top-3 text-[0.625rem]">
                   {option.badge}
                 </Badge>
               )}
-              <Icon className={`mb-3 h-5 w-5 ${selected ? 'text-teal-700 dark:text-teal-300' : 'text-muted-foreground'}`} />
+              <Icon className={`mb-3 h-5 w-5 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
               <p className="text-sm font-semibold">{option.title}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{option.description}</p>
             </button>
@@ -281,12 +281,12 @@ code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
               </div>
             )}
             <Button type="button" size="sm" variant="outline" className="ml-auto gap-1.5" onClick={() => requestAction('copy')}>
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? x.copied : format === 'json' ? x.copyJson : x.copyMarkdown}
             </Button>
             {validation && (
               <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={() => setShowChecks((value) => !value)}>
-                {validation.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}
+                {validation.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" /> : <XCircle className="h-4 w-4 text-destructive" />}
                 {validation.ok ? x.validation.pass : x.validation.fail}
               </Button>
             )}
@@ -296,7 +296,7 @@ code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
             <ul className="mb-3 space-y-1 rounded-lg border bg-muted/20 p-3">
               {validation.items.map((item) => (
                 <li key={item.id} className="flex items-start gap-2 text-xs">
-                  {item.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />}
+                  {item.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" /> : <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />}
                   <span className={item.ok ? 'text-muted-foreground' : 'text-destructive'}>{item.label}{!item.ok && item.detail ? ` - ${item.detail}` : ''}</span>
                 </li>
               ))}

@@ -1,6 +1,7 @@
 import { Building2 } from 'lucide-react'
 import type { ReportHistoryItem } from '../hooks/useObservationHistory'
 import { FormattedReportText } from './FormattedReportText'
+import { REPORT_SOURCE_TONE } from './report-color-roles'
 
 interface ReportHistoryListProps {
   data: ReportHistoryItem[]
@@ -31,7 +32,7 @@ export function ReportHistoryList({ data }: ReportHistoryListProps) {
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-medium text-foreground">{formatDate(item.date)}</span>
             {item.institution && (
-              <span className="inline-flex items-center gap-1 text-blue-600/80 dark:text-blue-400/80">
+              <span className={`inline-flex items-center gap-1 ${REPORT_SOURCE_TONE}`}>
                 <Building2 className="h-3 w-3" />
                 {item.institution}
               </span>

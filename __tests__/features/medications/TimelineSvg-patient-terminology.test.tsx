@@ -19,6 +19,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         terminologyAtcLevel2Label: 'ATC 第二層分類',
         terminologySnapshotLabel: '藥典版本',
         terminologySource: '健保署藥品主檔補充',
+        timelineAfterToday: '今日後',
       },
     },
   }),
@@ -72,7 +73,7 @@ describe('TimelineSvg patient terminology hover', () => {
       />,
     )
 
-    const bar = container.querySelector('rect[rx="2"]')
+    const bar = container.querySelector('rect[rx="1"]')
     expect(bar).not.toBeNull()
     fireEvent.mouseEnter(bar!)
 
@@ -80,5 +81,43 @@ describe('TimelineSvg patient terminology hover', () => {
     expect(screen.getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
     expect(screen.getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
     expect(screen.getByText('健保署藥品主檔補充')).toBeInTheDocument()
+  })
+
+  it('splits a medication period at today and marks the future portion with a dashed lighter segment', () => {
+    const todayMs = new Date('2026-07-08T12:00:00+08:00').getTime()
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(todayMs)
+    const domainStartMs = new Date('2026-06-01').getTime()
+    const domainEndMs = new Date('2026-08-01').getTime()
+
+    const { container } = render(
+      <TimelineSvg
+        categories={categories}
+        domainStartMs={domainStartMs}
+        domainEndMs={domainEndMs}
+        width={720}
+      />,
+    )
+
+    const elapsed = container.querySelector('[data-timeline-segment="elapsed"]')
+    const future = container.querySelector('[data-timeline-segment="future"]')
+    expect(elapsed).not.toBeNull()
+    expect(future).not.toBeNull()
+    expect(elapsed).toHaveClass('fill-teal-200', 'stroke-teal-700')
+    expect(future).toHaveClass('fill-teal-100', 'stroke-teal-500')
+    expect(future).toHaveAttribute('stroke-dasharray', '2 1.5')
+
+    const chartWidth = 720 - 180
+    const expectedFutureX = 180
+      + ((todayMs - domainStartMs) / (domainEndMs - domainStartMs)) * chartWidth
+    expect(Number(future?.getAttribute('x'))).toBeCloseTo(expectedFutureX, 5)
+    expect(container.querySelector('[data-timeline-today]')).toHaveAttribute(
+      'pointer-events',
+      'none',
+    )
+
+    fireEvent.mouseEnter(future!)
+    expect(screen.getByText('今日後')).toBeInTheDocument()
+
+    nowSpy.mockRestore()
   })
 })

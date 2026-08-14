@@ -19,7 +19,7 @@ export function DiagnosisList({ diagnoses, isLoading, error }: DiagnosisListProp
   }
 
   if (error) {
-    return <div className="text-sm text-red-600">{String(error)}</div>
+    return <div className="text-sm text-destructive">{String(error)}</div>
   }
 
   if (diagnoses.length === 0) {

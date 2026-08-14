@@ -2,6 +2,7 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import { getAuditedReferenceRangeBounds } from '@/src/shared/utils/interpretation-helpers'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
 import { formatNumberSmart } from '../utils/number-format.utils'
+import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 
 interface ObservationHistoryTableProps {
   data: ObservationHistoryItem[]
@@ -73,21 +74,21 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
   // default foreground colour and no badge, so the trend dialog doesn't
   // introduce styling that's absent from the rest of the app.
   const getValueStyle = (status: ReturnType<typeof getEffectiveStatus>) => {
-    if (status === 'high') return 'text-red-600 font-medium'
-    if (status === 'low') return 'text-orange-600 font-medium'
-    if (status === 'abnormal') return 'text-yellow-600 font-medium'
+    if (status === 'high') return 'text-clinical-abnormal font-medium'
+    if (status === 'low') return 'text-orange-600 font-medium dark:text-orange-300'
+    if (status === 'abnormal') return 'text-amber-600 font-medium dark:text-amber-300'
     return ''
   }
 
   const getStatusBadge = (status: ReturnType<typeof getEffectiveStatus>) => {
     if (status === 'high') {
-      return <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">偏高</span>
+      return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', REPORT_ABNORMAL_TONE)}>偏高</span>
     }
     if (status === 'low') {
-      return <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700">偏低</span>
+      return <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-1 dark:ring-inset dark:ring-orange-500/25">偏低</span>
     }
     if (status === 'abnormal') {
-      return <span className="inline-flex items-center rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-700">異常</span>
+      return <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-1 dark:ring-inset dark:ring-amber-500/25">異常</span>
     }
     return null
   }
@@ -130,7 +131,7 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
                     ? `${formatNumberSmart(item.value)} ${item.unit || ''}`
                     : item.value}
                   {item.unitInferred && (
-                    <span className="ml-1 text-[0.625rem] font-normal text-sky-700">
+                    <span className="ml-1 text-[0.625rem] font-normal text-sky-700 dark:text-sky-300">
                       推估單位
                     </span>
                   )}

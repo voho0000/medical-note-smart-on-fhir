@@ -228,7 +228,7 @@ function SharePromptDialogForm({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <Alert className="mb-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-900 dark:bg-blue-950/30">
+          <Alert className="mb-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-500/25 dark:bg-blue-500/10">
             <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <AlertTitle className="mb-0.5 text-sm">{t.promptGallery.sharePrivacyTitle}</AlertTitle>
             <AlertDescription className="text-xs leading-relaxed">
@@ -320,8 +320,8 @@ function SharePromptDialogForm({
                     <span className={cn(
                       'mt-0.5 rounded-md p-1.5',
                       isChat
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                        : 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300',
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
+                        : 'bg-teal-100 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
                     )}>
                       <TypeIcon className="h-4 w-4" />
                     </span>
@@ -474,8 +474,8 @@ function SharePromptDialogForm({
           )}
 
           {success && (
-            <Alert className="border-green-200 bg-green-50 dark:bg-green-950/30">
-              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" />
+            <Alert className="border-green-200 bg-green-50 dark:border-green-500/25 dark:bg-green-500/10">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-300" />
               <AlertDescription className="text-green-800 dark:text-green-200">
                 {t.promptGallery.shareSuccess}
               </AlertDescription>

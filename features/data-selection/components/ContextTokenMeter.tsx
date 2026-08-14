@@ -32,7 +32,7 @@ const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
 const LEVEL_TEXT: Record<ContextBudgetLevel, string> = {
   ok: "text-emerald-600 dark:text-emerald-400",
   warn: "text-amber-600 dark:text-amber-400",
-  over: "text-red-600 dark:text-red-400",
+  over: "text-red-600 dark:text-rose-300",
 }
 
 const DISTRIBUTION_COLORS = [
@@ -219,7 +219,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         <div
           role="note"
           data-testid="model-fitted-scope"
-          className="mt-2 rounded-md border border-violet-300 bg-violet-50 px-2.5 py-2 text-[0.6875rem] leading-relaxed text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100"
+          className="mt-2 rounded-md border border-violet-300 bg-violet-50 px-2.5 py-2 text-[0.6875rem] leading-relaxed text-violet-950 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100"
         >
           <p className="font-medium">
             {locale === 'zh-TW'
@@ -247,7 +247,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
       {overflowIssue ? (
         <div
           role="status"
-          className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+          className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
         >
           <p className="font-medium">
             {(ds.tokenMeterOverflowGuidance ?? "上次完整摘要輸入約 {request} tokens，超過可用的 {usable} tokens。")
@@ -269,7 +269,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         </div>
       ) : null}
       {!isExternalExport && budget.level === "over" && (
-        <p className="mt-1 text-[0.625rem] text-red-600 dark:text-red-400">
+        <p className="mt-1 text-[0.625rem] text-red-600 dark:text-rose-300">
           {ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}
         </p>
       )}

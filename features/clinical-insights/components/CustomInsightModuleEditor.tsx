@@ -87,12 +87,12 @@ export function CustomInsightModuleEditor({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="truncate text-sm font-semibold text-foreground">{panel.title || `${t.settings.tab} ${index + 1}`}</p>
             {panel.showInSummary ? (
-              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.625rem] font-medium text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.625rem] font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
                 {t.settings.showInMedicalSummary}
               </span>
             ) : null}
             {panel.autoGenerate ? (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.625rem] font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.625rem] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                 {t.settings.autoGenerateInsights}
               </span>
             ) : null}
@@ -186,7 +186,7 @@ export function CustomInsightModuleEditor({
 
         <div className="overflow-hidden rounded-lg border bg-muted/10">
           <div className="flex items-center gap-3 px-3 py-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
               <Eye className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -207,7 +207,7 @@ export function CustomInsightModuleEditor({
           <div className="border-t" />
 
           <div className="flex items-center gap-3 px-3 py-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
               <Zap className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">

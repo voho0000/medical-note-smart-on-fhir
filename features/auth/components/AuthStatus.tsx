@@ -49,7 +49,7 @@ export function AuthStatus() {
 
   if (ENV_CONFIG.offlineMode) {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-500/25 dark:bg-emerald-500/[0.07]">
         <div className="flex items-start gap-2">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
           <div>

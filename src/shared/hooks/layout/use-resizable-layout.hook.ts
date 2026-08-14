@@ -25,7 +25,7 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
 
   const [leftWidth, setLeftWidth] = useState(initialWidth)
   const [isDragging, setIsDragging] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLElement>(null)
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true)

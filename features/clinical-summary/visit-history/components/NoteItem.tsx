@@ -51,9 +51,9 @@ export function NoteItem({ note }: NoteItemProps) {
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {note.type === 'document' ? (
-                  <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                  <FileText className="h-4 w-4 text-blue-600 shrink-0 dark:text-blue-400" />
                 ) : (
-                  <FileCode className="h-4 w-4 text-purple-600 shrink-0" />
+                  <FileCode className="h-4 w-4 text-purple-600 shrink-0 dark:text-purple-400" />
                 )}
                 <span className="font-medium text-sm truncate">{note.title}</span>
               </div>

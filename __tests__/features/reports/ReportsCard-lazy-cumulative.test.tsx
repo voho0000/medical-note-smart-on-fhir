@@ -7,6 +7,7 @@ const mockUseReportsData = jest.fn((_reports: unknown[], _imagingStudies: unknow
   reportRows: [],
   seenIds: new Set<string>(),
 }))
+const mockUseReportTabCounts = jest.fn()
 
 const activeNameSwitches = () => screen.queryAllByRole('switch', { name: '名稱顯示' })
   .filter((element) => !element.closest('[data-slot="tabs-content"][data-state="inactive"]'))
@@ -47,6 +48,10 @@ jest.mock('@/features/clinical-summary/reports/hooks/useReportsData', () => ({
   ),
 }))
 
+jest.mock('@/features/clinical-summary/reports/hooks/useReportTabCounts', () => ({
+  useReportTabCounts: () => mockUseReportTabCounts(),
+}))
+
 jest.mock('@/features/clinical-summary/reports/hooks/useProcedureRows', () => ({
   useProcedureRows: () => [],
 }))
@@ -80,6 +85,13 @@ jest.mock('@/features/clinical-summary/reports/components/ReportsTabContent', ()
 describe('ReportsCard lazy cumulative loading', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockUseReportTabCounts.mockReturnValue({
+      all: 119,
+      lab: 31,
+      imaging: 7,
+      vitals: 10,
+      procedures: 2,
+    })
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       callback(0)
       return 1
@@ -99,7 +111,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       diagnosticReports: [],
       imagingStudies: [],
       observations: [{ id: 'obs-1', resourceType: 'Observation' }],
-      procedures: [],
+      procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
       isLoading: false,
       error: null,
     })
@@ -110,9 +122,30 @@ describe('ReportsCard lazy cumulative loading', () => {
   })
 
   it('keeps the cumulative report visible while raw report rows are deferred', () => {
+    const diagnosticReports = [{ id: 'report-1', resourceType: 'DiagnosticReport' }]
+    const imagingStudies = [{ id: 'study-1', resourceType: 'ImagingStudy' }]
+    mockUseClinicalData.mockReturnValue({
+      diagnosticReports,
+      imagingStudies,
+      observations: [{ id: 'obs-1', resourceType: 'Observation' }],
+      procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
+      isLoading: false,
+      error: null,
+    })
+
     render(<ReportsCard />)
 
-    expect(mockUseReportsData).toHaveBeenCalledWith([], [], 'standardized')
+    expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
+    expect(mockUseReportsData).not.toHaveBeenCalledWith(
+      diagnosticReports,
+      imagingStudies,
+      'standardized',
+    )
+    expect(screen.getByRole('tab', { name: '全部 (119)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '檢驗 (31)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
     expect(screen.getByTestId('cumulative-report')).toHaveTextContent('observations: 1')
     expect(screen.getByTestId('cumulative-report')).toHaveTextContent('category: chem')
     expect(screen.getByTestId('cumulative-report')).toHaveTextContent('focus: CRP')

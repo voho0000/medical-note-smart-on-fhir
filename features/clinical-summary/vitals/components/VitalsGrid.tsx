@@ -54,7 +54,7 @@ export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
   }
 
   if (error) {
-    return <div className="text-sm text-red-600">{error.message}</div>
+    return <div className="text-sm text-destructive">{error.message}</div>
   }
 
   // Show only the static / slow-changing measurements. RR / Temp / SpO2 are

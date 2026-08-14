@@ -11,18 +11,18 @@ import type { SafetyAlert, SafetySeverity } from "@/src/core/entities/safety-ale
 type RenderSources = (keys: string[], unsupportedKeys?: string[]) => ReactNode
 
 const SEVERITY_BADGE: Record<SafetySeverity, string> = {
-  high: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  low: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+  high: "bg-red-100 text-red-700 dark:bg-rose-500/10 dark:text-rose-300",
+  medium: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  low: "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
 }
 
 // Patient-facing reminders deliberately avoid the danger-red hierarchy used
 // for clinician risk triage. Importance remains visible, but the language and
 // colour communicate "what to notice first" rather than imminent harm.
 const PATIENT_SEVERITY_BADGE: Record<SafetySeverity, string> = {
-  high: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
-  medium: "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300",
-  low: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+  high: "bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200",
+  medium: "bg-teal-100 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300",
+  low: "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
 }
 
 // An AI claim must be auditable at a glance. When the alert cites source keys,
@@ -131,7 +131,7 @@ export function SafetyAlertCard({
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="mt-0.5 shrink-0 rounded-sm p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
+              className="mt-0.5 inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-sm p-0 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-muted-foreground lg:h-8 lg:w-8"
               aria-expanded={expanded}
               aria-label={
                 expanded
