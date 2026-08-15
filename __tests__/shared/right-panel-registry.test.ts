@@ -84,6 +84,14 @@ describe('right-panel registry', () => {
     ).toBe('Beta')
   })
 
+  it('keeps the personalized-education result mounted across tab switches', () => {
+    const education = getEnabledRightPanelFeatures().find(
+      (feature) => feature.id === 'personalized-education',
+    )
+
+    expect(education?.forceMount).toBe(true)
+  })
+
   it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {
     const medicalSummary = getEnabledRightPanelFeatures().find(
       (feature) => feature.id === 'medical-summary',

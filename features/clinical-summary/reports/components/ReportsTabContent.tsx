@@ -115,6 +115,11 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns its mutable measurement callbacks here.
   const virtualizer = useVirtualizer({
+    // Row measurement runs from the ref attachment/layout lifecycle. TanStack
+    // Virtual's default flushSync update is invalid while React is already
+    // committing that lifecycle (React 19 warns and may repeat the warning for
+    // every visible row). Let React schedule the measurement rerender instead.
+    useFlushSync: false,
     count: rows.length,
     enabled: isActive && (fullHeight ? !!scrollEl : !!externalScrollEl),
     getScrollElement: () => fullHeight ? scrollEl : externalScrollEl,

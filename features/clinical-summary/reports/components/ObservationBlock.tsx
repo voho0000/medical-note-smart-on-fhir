@@ -1,16 +1,15 @@
 // Observation Block Component - compact single-row display
-import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
-import { ObservationTrendDialog } from './ObservationTrendDialog'
-import { TrendingUp } from 'lucide-react'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { ObservationLongitudinalAction } from './ObservationLongitudinalAction'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -26,7 +25,7 @@ function ObsRow({
   interp,
   refText,
   rangeUnassessed,
-  onTrendClick,
+  titleAction,
   isLongText,
   refRangeAbnormal,
   nested,
@@ -37,7 +36,7 @@ function ObsRow({
   interp: ReturnType<typeof getInterpretationTag>
   refText: string
   rangeUnassessed?: boolean
-  onTrendClick?: () => void
+  titleAction?: ReactNode
   isLongText?: boolean
   refRangeAbnormal?: boolean
   nested?: boolean
@@ -56,16 +55,7 @@ function ObsRow({
       valueMaxWidthClassName={isLongText ? "max-w-[12rem]" : "max-w-[9rem]"}
       className="rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60"
       titleColumnClassName={nested ? "pl-4" : undefined}
-      titleActions={onTrendClick ? (
-          <button
-            type="button"
-            onClick={onTrendClick}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
-            aria-label="查看趨勢"
-          >
-            <TrendingUp className="h-4 w-4" />
-          </button>
-      ) : undefined}
+      titleActions={titleAction}
       trailingContent={originalValue && originalValue !== value ? (
         <span className="sr-only">原始值: {originalValue}</span>
       ) : undefined}
@@ -74,7 +64,6 @@ function ObsRow({
 }
 
 export function ObservationBlock({ observation, nested = false }: ObservationBlockProps) {
-  const [dialogOpen, setDialogOpen] = useState(false)
   // Display label is audience-aware: medical → canonical short code
   // (Na / K / BUN …); patient → long-form name in the active UI language
   // (中文：「鈉 / 鉀 / 尿素氮」; en: "Sodium / Potassium / BUN"). Sort and
@@ -107,6 +96,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
   const inferredUnitLabel = isInferredObservationUnit(observation)
     ? (locale.startsWith('zh') ? ' · 推估單位' : ' · inferred unit')
     : ''
+  const detailSourceId = `observation-longitudinal:${observation.id || `${title}:${observation.effectiveDateTime || ''}`}`
 
   // Procedure detail container: flat list of attribute rows, no main row.
   // Components flagged `_isSubHeader` (a grouped session's sub-procedure name)
@@ -215,8 +205,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
   }
 
   return (
-    <>
-      <div>
+    <div>
         {/* Main observation row */}
         <ObsRow
           name={title || '—'}
@@ -224,7 +213,14 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
           originalValue={originalPrimaryValue}
           interp={interp}
           refText={ref}
-          onTrendClick={!hasComponents ? () => setDialogOpen(true) : undefined}
+          titleAction={!hasComponents ? (
+            <ObservationLongitudinalAction
+              observation={observation}
+              title={title || '檢驗項目'}
+              sourceId={detailSourceId}
+              className="shrink-0"
+            />
+          ) : undefined}
           isLongText={isLongText}
           refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
           rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}
@@ -261,13 +257,6 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
             })}
           </div>
         )}
-      </div>
-
-      <ObservationTrendDialog
-        observation={observation}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
-    </>
+    </div>
   )
 }

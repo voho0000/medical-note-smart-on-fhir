@@ -5,13 +5,16 @@ import { ReportsTabContent } from '@/features/clinical-summary/reports/component
 
 const mockScrollToIndex = jest.fn()
 const mockScrollElement = jest.fn()
+const mockVirtualizerOptions: Array<{ useFlushSync?: boolean }> = []
 
-jest.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: (options: {
-    enabled: boolean
-    scrollMargin: number
-    getScrollElement: () => HTMLElement | null
-  }) => ({
+function mockUseVirtualizer(options: {
+  enabled: boolean
+  scrollMargin: number
+  getScrollElement: () => HTMLElement | null
+  useFlushSync?: boolean
+}) {
+  mockVirtualizerOptions.push(options)
+  return {
     getVirtualItems: () => options.enabled
       ? [{ index: 0, key: 'dr-row', start: 0 }]
       : [],
@@ -23,7 +26,11 @@ jest.mock('@tanstack/react-virtual', () => ({
     },
     measureElement: () => undefined,
     options: { scrollMargin: options.scrollMargin },
-  }),
+  }
+}
+
+jest.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: mockUseVirtualizer,
 }))
 
 jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
@@ -82,6 +89,7 @@ describe('ReportsTabContent source navigation', () => {
   beforeEach(() => {
     mockScrollToIndex.mockClear()
     mockScrollElement.mockClear()
+    mockVirtualizerOptions.length = 0
   })
 
   afterEach(() => {
@@ -114,6 +122,9 @@ describe('ReportsTabContent source navigation', () => {
     )
 
     await waitFor(() => {
+      expect(mockVirtualizerOptions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ useFlushSync: false }),
+      ]))
       expect(mockScrollToIndex).toHaveBeenCalledWith(0, { align: 'center' })
       expect(onScrollResolved).toHaveBeenCalledWith(7)
     }, { timeout: 1000 })

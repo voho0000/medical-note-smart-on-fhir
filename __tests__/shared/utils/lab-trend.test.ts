@@ -1,4 +1,8 @@
-import { buildLabTrendSeries, type LabTrendSelection } from '@/src/shared/utils/lab-trend.utils'
+import {
+  assessLabTrendCompatibility,
+  buildLabTrendSeries,
+  type LabTrendSelection,
+} from '@/src/shared/utils/lab-trend.utils'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 
 function selectionFor(observation: any, categoryId = 'chem'): LabTrendSelection {
@@ -13,6 +17,28 @@ function selectionFor(observation: any, categoryId = 'chem'): LabTrendSelection 
 }
 
 describe('buildLabTrendSeries', () => {
+  it('assesses unit compatibility from the selected points instead of all history', () => {
+    const fullHistory = assessLabTrendCompatibility([
+      { unit: 'pmol/L' },
+      { unit: 'ng/dL' },
+      { unit: 'ng/dL' },
+    ], 'endocrine')
+    const recentWindow = assessLabTrendCompatibility([
+      { unit: 'ng/dL' },
+      { unit: 'ng/dL' },
+    ], 'endocrine')
+
+    expect(fullHistory).toMatchObject({
+      chartable: false,
+      unavailableReason: 'mixed-units',
+    })
+    expect(recentWindow).toMatchObject({
+      chartable: true,
+      unit: 'ng/dL',
+      mixedUnits: false,
+    })
+  })
+
   it('normalizes values and matching reference ranges onto the cumulative-report unit', () => {
     const first = {
       id: 'crp-mg-l',

@@ -80,6 +80,14 @@ export interface LabTrendSeries {
   }
 }
 
+export interface LabTrendCompatibility {
+  chartable: boolean
+  unavailableReason?: LabTrendUnavailableReason
+  unit?: string
+  mixedUnits: boolean
+  mixedSpecimens: boolean
+}
+
 const INVALID_STATUSES = new Set(['entered-in-error', 'cancelled'])
 const PRELIMINARY_STATUSES = new Set(['registered', 'preliminary'])
 const CORRECTED_STATUSES = new Set(['amended', 'corrected'])
@@ -105,6 +113,36 @@ function compactUnit(unit: string | undefined): string {
     .replace(/\s+/g, '')
     .replace(/μ/g, 'µ')
     .toLowerCase() || '__missing__'
+}
+
+/**
+ * Assess whether a specific set of visible points can safely form one line.
+ * The same rule is used for the complete series and for each selected time
+ * window, so incompatible older history does not suppress a safe recent trend.
+ */
+export function assessLabTrendCompatibility(
+  points: ReadonlyArray<Pick<LabTrendPoint, 'unit' | 'specimen'>>,
+  categoryId: string,
+): LabTrendCompatibility {
+  const units = new Set(points.map((point) => compactUnit(point.unit)))
+  const mixedUnits = units.size > 1
+  const specimenKeys = new Set(points.map((point) => (
+    point.specimen?.normalize('NFKC').trim().toLowerCase() || '__missing__'
+  )))
+  const mixedSpecimens = categoryId === 'bloodgas' && specimenKeys.size > 1
+
+  let unavailableReason: LabTrendUnavailableReason | undefined
+  if (mixedUnits) unavailableReason = 'mixed-units'
+  else if (mixedSpecimens) unavailableReason = 'mixed-specimens'
+  else if (points.length < 2) unavailableReason = 'insufficient-points'
+
+  return {
+    chartable: !unavailableReason,
+    unavailableReason,
+    unit: mixedUnits ? undefined : points[0]?.unit,
+    mixedUnits,
+    mixedSpecimens,
+  }
 }
 
 function loincCode(observation: any): string | undefined {
@@ -279,13 +317,7 @@ export function buildLabTrendSeries(
   ))
 
   const chartPoints = points.filter((point) => point.plotEligible)
-  const units = new Set(chartPoints.map((point) => compactUnit(point.unit)))
-  const mixedUnits = units.size > 1
-
-  const specimenKeys = new Set(chartPoints.map((point) => (
-    point.specimen?.normalize('NFKC').trim().toLowerCase() || '__missing__'
-  )))
-  const mixedSpecimens = selection.categoryId === 'bloodgas' && specimenKeys.size > 1
+  const compatibility = assessLabTrendCompatibility(chartPoints, selection.categoryId)
 
   const rangeSignatures = new Set(chartPoints.map((point) => rangeSignature(point.referenceRange)))
   const allHaveNumericRange = chartPoints.length > 0 && chartPoints.every((point) => (
@@ -304,20 +336,15 @@ export function buildLabTrendSeries(
   }
   const sameDayMultiple = [...dayCounts.values()].some((count) => count > 1)
 
-  let unavailableReason: LabTrendUnavailableReason | undefined
-  if (mixedUnits) unavailableReason = 'mixed-units'
-  else if (mixedSpecimens) unavailableReason = 'mixed-specimens'
-  else if (chartPoints.length < 2) unavailableReason = 'insufficient-points'
-
   return {
     selection,
     points,
     chartPoints,
-    chartable: !unavailableReason,
-    unavailableReason,
-    unit: mixedUnits ? undefined : chartPoints[0]?.unit,
-    mixedUnits,
-    mixedSpecimens,
+    chartable: compatibility.chartable,
+    unavailableReason: compatibility.unavailableReason,
+    unit: compatibility.unit,
+    mixedUnits: compatibility.mixedUnits,
+    mixedSpecimens: compatibility.mixedSpecimens,
     sharedReferenceRange,
     referenceRangesVary,
     sameDayMultiple,

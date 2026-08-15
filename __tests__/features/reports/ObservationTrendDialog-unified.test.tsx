@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { ObservationTrendDialog } from '@/features/clinical-summary/reports/components/ObservationTrendDialog'
+import { ObservationTrendDetail } from '@/features/clinical-summary/reports/components/ObservationTrendDetail'
 
 const observations = [
   {
@@ -19,6 +19,11 @@ const observations = [
 ]
 
 let mockClinicalObservations = observations
+let mockObservationHistory: Array<{
+  id: string
+  date: string
+  value: string
+}> = []
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ observations: mockClinicalObservations, diagnosticReports: [], procedures: [] }),
@@ -37,7 +42,7 @@ jest.mock('@/features/clinical-summary/reports/context/report-name-mode.context'
 }))
 
 jest.mock('@/features/clinical-summary/reports/hooks/useObservationHistory', () => ({
-  useObservationHistory: () => [],
+  useObservationHistory: () => mockObservationHistory,
   useComponentHistory: () => [],
   useCompositeHistory: () => [],
   useReportHistory: () => [],
@@ -49,21 +54,19 @@ jest.mock('@/features/clinical-summary/reports/components/CumulativeLabTrendDeta
   ),
 }))
 
-describe('ObservationTrendDialog unified lab trend', () => {
+describe('ObservationTrendDetail unified right-pane content', () => {
   beforeEach(() => {
     mockClinicalObservations = observations
+    mockObservationHistory = []
   })
 
   it('uses the cumulative-report trend surface for a scalar lab observation', () => {
     render(
-      <ObservationTrendDialog
+      <ObservationTrendDetail
         observation={observations[1] as never}
-        open
-        onOpenChange={jest.fn()}
       />,
     )
 
-    expect(screen.getByRole('heading', { name: /CRP.*檢驗趨勢/ })).toBeInTheDocument()
     expect(screen.getByTestId('unified-lab-trend')).toHaveTextContent('2 points')
     expect(screen.queryByRole('tab', { name: '歷史記錄' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '趨勢圖表' })).not.toBeInTheDocument()
@@ -81,16 +84,41 @@ describe('ObservationTrendDialog unified lab trend', () => {
     }
 
     render(
-      <ObservationTrendDialog
+      <ObservationTrendDetail
         observation={uncategorizedNumericResult as never}
-        open
-        onOpenChange={jest.fn()}
       />,
     )
 
-    expect(screen.getByRole('heading', { name: /未分類數值檢驗.*檢驗趨勢/ })).toBeInTheDocument()
     expect(screen.getByTestId('unified-lab-trend')).toHaveTextContent('1 points')
     expect(screen.queryByRole('tab', { name: '歷史記錄' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '趨勢圖表' })).not.toBeInTheDocument()
+  })
+
+  it('shows history without an empty trend tab for a text result', () => {
+    mockClinicalObservations = []
+    mockObservationHistory = [{
+      id: 'culture-1',
+      date: '2026-08-12',
+      value: 'No growth',
+    }]
+    const textResult = {
+      id: 'culture-1',
+      status: 'final',
+      code: { text: 'Aerobic Culture', coding: [] },
+      effectiveDateTime: '2026-08-12',
+      valueString: 'No growth',
+    }
+
+    render(
+      <ObservationTrendDetail
+        observation={textResult as never}
+      />,
+    )
+
+    expect(screen.getByText('No growth')).toBeInTheDocument()
+    expect(screen.getByText('共 1 筆記錄')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '歷史記錄' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '趨勢圖表' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('unified-lab-trend')).not.toBeInTheDocument()
   })
 })

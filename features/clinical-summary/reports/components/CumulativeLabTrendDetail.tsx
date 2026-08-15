@@ -16,10 +16,11 @@ import {
 import { AlertTriangle, Clock3, Info, TrendingDown, TrendingUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import type {
-  LabTrendPoint,
-  LabTrendReferenceRange,
-  LabTrendSeries,
+import {
+  assessLabTrendCompatibility,
+  type LabTrendPoint,
+  type LabTrendReferenceRange,
+  type LabTrendSeries,
 } from '@/src/shared/utils/lab-trend.utils'
 import { formatNumberSmart } from '../utils/number-format.utils'
 import {
@@ -348,7 +349,7 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
   const [window, setWindow] = useState<TrendWindow>(() => defaultWindow(series))
 
   const latest = series.points.at(-1)
-  const previousComparable = series.chartable && series.chartPoints.length >= 2
+  const previousComparable = series.chartPoints.length >= 2
     ? series.chartPoints.at(-2)
     : undefined
   const delta = latest?.plotEligible && previousComparable && latest.unit === previousComparable.unit
@@ -365,6 +366,10 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
       point.timestamp >= start && point.timestamp <= end
     ))
   }, [series.chartPoints, timeScale])
+  const visibleCompatibility = useMemo(
+    () => assessLabTrendCompatibility(visiblePoints, series.selection.categoryId),
+    [series.selection.categoryId, visiblePoints],
+  )
   const chartReferenceRange = useMemo(
     () => resolveTrendChartReferenceRange({
       chartPoints: visiblePoints,
@@ -387,19 +392,19 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
       ? '部分單位由轉換器依已審核規則推估。'
       : 'Some units were inferred under an audited conversion policy.',
     mixedUnits: zh
-      ? '歷史結果包含無法安全合併的不同單位，因此不連成趨勢線。'
-      : 'Historical results contain incompatible units, so no trend line is drawn.',
+      ? '所選時間範圍包含無法安全合併的不同單位，因此不連成趨勢線。'
+      : 'The selected time range contains incompatible units, so no trend line is drawn.',
     mixedSpecimens: zh
-      ? '血氣結果包含不同檢體，需分開判讀，因此不連成同一條趨勢線。'
-      : 'Blood-gas results use different specimens and are not joined into one line.',
+      ? '所選時間範圍的血氣結果包含不同檢體，需分開判讀，因此不連成同一條趨勢線。'
+      : 'Blood-gas results in the selected range use different specimens and are not joined into one line.',
     insufficient: zh
       ? '至少需要兩筆具日期、可比較的精確數值才會顯示趨勢線。'
       : 'At least two dated, comparable exact values are required for a trend line.',
   }
 
-  const unavailableText = series.unavailableReason === 'mixed-units'
+  const unavailableText = visibleCompatibility.unavailableReason === 'mixed-units'
     ? strings.mixedUnits
-    : series.unavailableReason === 'mixed-specimens'
+    : visibleCompatibility.unavailableReason === 'mixed-specimens'
       ? strings.mixedSpecimens
       : strings.insufficient
 
@@ -476,10 +481,10 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
-        {series.chartable ? (
+        {visibleCompatibility.chartable ? (
           <TrendChart
             points={visiblePoints}
-            unit={series.unit}
+            unit={visibleCompatibility.unit}
             referenceRange={chartReferenceRange?.range}
             referenceRangeLabel={chartReferenceRange?.source === 'shared'
               ? (zh ? '共同參考範圍' : 'Shared range')

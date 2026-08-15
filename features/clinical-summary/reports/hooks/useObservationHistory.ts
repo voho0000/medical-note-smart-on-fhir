@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { getCodeableConceptText } from '../utils/fhir-helpers'
 
 export interface ObservationHistoryItem {
   id: string
@@ -184,7 +185,7 @@ export function useComponentHistory(observationCode?: string, componentNames?: s
   }, [observationCode, componentNames, observations])
 }
 
-export function useObservationHistory(observationCode?: string) {
+export function useObservationHistory(observationCode?: string, fallbackObservation?: any) {
   const { observations = [], diagnosticReports = [], procedures = [] } = useClinicalData()
 
   const history = useMemo(() => {
@@ -213,15 +214,29 @@ export function useObservationHistory(observationCode?: string) {
 
     const targetKey = canonicalTestKeyFromString(observationCode)
 
+    // A selected result may be nested inside a DiagnosticReport without being
+    // repeated in the bundle's top-level Observation list. Include it once so
+    // the history action never opens an empty dialog for the row just clicked.
+    const fallbackAlreadyLoaded = fallbackObservation && observations.some((obs: any) => (
+      obs === fallbackObservation
+      || (!!fallbackObservation.id && obs?.id === fallbackObservation.id)
+    ))
+    const sourceObservations = fallbackObservation && !fallbackAlreadyLoaded
+      ? [...observations, fallbackObservation]
+      : observations
+
     // Find all observations with matching code
-    observations.forEach((obs) => {
+    sourceObservations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
       const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
       // Match by canonical key (handles cross-institution name variants) or exact string
       if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
-        const value = obs.valueQuantity?.value ?? obs.valueString ?? '—'
+        const value = (obs.valueQuantity?.value
+          ?? obs.valueString
+          ?? getCodeableConceptText(obs.valueCodeableConcept))
+          || '—'
         const unit = obs.valueQuantity?.unit
         const date = obs.effectiveDateTime || ''
 
@@ -292,7 +307,7 @@ export function useObservationHistory(observationCode?: string) {
     })
 
     return items
-  }, [observationCode, observations, diagnosticReports, procedures])
+  }, [observationCode, observations, diagnosticReports, fallbackObservation, procedures])
 
   return history
 }
@@ -315,7 +330,7 @@ export function useReportHistory(reportCode?: string) {
     if (!target) return []
 
     const items: ReportHistoryItem[] = []
-    diagnosticReports.forEach((dr: any) => {
+    diagnosticReports.forEach((dr: any, index: number) => {
       // Derive the match key with the SAME fallback chain getCodeableConceptText
       // uses to build `rawTitle` upstream (text → coding[0].display →
       // coding[0].code). If these diverge, a report carrying only an NHI order
@@ -332,7 +347,7 @@ export function useReportHistory(reportCode?: string) {
       if (!conclusion && notes.length === 0) return
 
       items.push({
-        id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || Math.random()}`,
+        id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || index}`,
         date: dr.effectiveDateTime || dr.issued || '',
         conclusion,
         notes,

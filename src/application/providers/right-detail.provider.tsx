@@ -55,7 +55,7 @@ export function useRightDetail(): RightDetailContextValue {
 /**
  * Optional access for reusable leaf components that also render in isolated
  * tests or embeds. The full app provides the context; without it, callers can
- * fall back to an in-place dialog instead of crashing.
+ * omit the right-pane action instead of crashing or reviving a legacy popup.
  */
 export function useOptionalRightDetail(): RightDetailContextValue | null {
   return useContext(RightDetailContext)

@@ -3,7 +3,7 @@ import { useRef, useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
+import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -14,7 +14,7 @@ import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
 import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
-import { ObservationTrendDialog } from './ObservationTrendDialog'
+import { ObservationLongitudinalAction } from './ObservationLongitudinalAction'
 import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
@@ -385,17 +385,8 @@ function countAbnormal(obs: Observation[]): number {
 }
 
 function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
-  const [trendDialogOpen, setTrendDialogOpen] = useState(false)
-  // Separate "mounted" flag so the dialog (and its expensive history hooks)
-  // only enter the React tree after the user actually opens it the first
-  // time. We keep it mounted afterwards so re-opening is instant.
-  const [trendDialogMounted, setTrendDialogMounted] = useState(false)
-  const openTrendDialog = () => {
-    setTrendDialogMounted(true)
-    setTrendDialogOpen(true)
-  }
-  // Image lightbox — same lazy-mount discipline as the trend dialog: only enter
-  // the tree (and decode the multi-MB base64) after the user clicks the
+  // Image lightbox — only enter the tree (and decode the multi-MB base64) after
+  // the user clicks the
   // indicator. Kept mounted afterwards; the dialog itself revokes its Blob URLs
   // whenever it closes, so memory is released without unmounting.
   const [imageDialogOpen, setImageDialogOpen] = useState(false)
@@ -470,7 +461,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // Computed element (not an inner component) so the same reference is dropped
   // into whichever return branch renders — a `() => <Dialog/>` inner component
   // would get a fresh identity each render and remount the dialog (re-decoding
-  // images, losing open state). Mirrors how the trend dialog is inlined.
+  // images, losing open state).
   const imageLightbox = imageDialogMounted && hasImages ? (
     <ReportImageDialog
       images={images!}
@@ -484,27 +475,19 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     displayObs.length === 1 &&
     (!(displayObs[0].component) || displayObs[0].component.length === 0)
 
-  const renderTrendButton = (stopProp?: boolean) => (
-    <div
-      data-tour="report-trend"
-      onClick={(e) => {
-        if (stopProp) e.stopPropagation()
-        openTrendDialog()
-      }}
-      className="text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-      role="button"
-      tabIndex={0}
-      aria-label="查看趨勢"
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          if (stopProp) e.stopPropagation()
-          openTrendDialog()
-        }
-      }}
-    >
-      <TrendingUp className="h-4 w-4" />
-    </div>
+  const longitudinalSourceId = `report-longitudinal:${row.id}:${firstObs?.id || 'first'}`
+
+  const renderTrendButton = (stopPropagation?: boolean) => (
+    <ObservationLongitudinalAction
+      observation={firstObs}
+      title={row.title}
+      sourceId={longitudinalSourceId}
+      reportTitle={row.title}
+      reportLookupTitle={row.rawTitle}
+      as="div"
+      stopPropagation={stopPropagation}
+      dataTour="report-trend"
+    />
   )
 
   // Single-value report: compact display
@@ -607,7 +590,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               aria-expanded={hasText ? textExpanded : undefined}
               onClick={(e) => {
                 if (!hasText) return
-                if ((e.target as HTMLElement).closest('[aria-label="查看趨勢"]')) return
+                if ((e.target as HTMLElement).closest('[data-report-history-action]')) return
                 if ((e.target as HTMLElement).closest('[aria-label="查看影像"]')) return
                 setTextExpanded(!textExpanded)
               }}
@@ -751,15 +734,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             )}
           </div>
           {imageLightbox}
-          {trendDialogMounted && (
-            <ObservationTrendDialog
-              observation={firstObs}
-              reportTitle={row.title}
-              reportLookupTitle={row.rawTitle}
-              open={trendDialogOpen}
-              onOpenChange={setTrendDialogOpen}
-            />
-          )}
         </>
       )
     }
@@ -828,15 +802,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       <>
         {compactRow}
         {imageLightbox}
-        {trendDialogMounted && (
-          <ObservationTrendDialog
-            observation={firstObs}
-            reportTitle={row.title}
-            reportLookupTitle={row.rawTitle}
-            open={trendDialogOpen}
-            onOpenChange={setTrendDialogOpen}
-          />
-        )}
       </>
     )
   }
@@ -1051,23 +1016,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         </AccordionItem>
       </Accordion>
       {imageLightbox}
-      {/* Lazy-mount the trend dialog only after the user actually clicks
-          the trend button. The dialog runs four history hooks
-          (useObservationHistory + 3 variants), each of which iterates the
-          full observations array. With 500+ rows in the "全部" tab, eagerly
-          mounting the dialog inside every row meant 2000+ full-array
-          scans on every render — the real reason switching to "全部" felt
-          slow, not the row count itself. Once opened we keep it mounted
-          so re-opening is instant. */}
-      {trendDialogMounted && (
-        <ObservationTrendDialog
-          observation={firstObs}
-          reportTitle={row.title}
-          reportLookupTitle={row.rawTitle}
-          open={trendDialogOpen}
-          onOpenChange={setTrendDialogOpen}
-        />
-      )}
     </>
   )
 }

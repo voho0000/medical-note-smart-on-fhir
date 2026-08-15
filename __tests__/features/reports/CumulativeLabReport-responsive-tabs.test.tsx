@@ -43,6 +43,11 @@ describe('CumulativeLabReport responsive category tabs', () => {
     }
   })
 
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
   it('shows all categories when they fit and restores More when space shrinks', async () => {
     render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
 
@@ -65,7 +70,14 @@ describe('CumulativeLabReport responsive category tabs', () => {
     expect(screen.queryByRole('tab', { name: '病毒抗原 (0)' })).not.toBeInTheDocument()
   })
 
-  it('selects a new category before mounting its table, then keeps it ready', async () => {
+  it('performance contract: selects a category one paint before mounting its table', () => {
+    jest.useFakeTimers()
+    const frameCallbacks: FrameRequestCallback[] = []
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+
     render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
 
     const chemistryTab = screen.getByRole('tab', { name: '生化 (0)' })
@@ -73,10 +85,18 @@ describe('CumulativeLabReport responsive category tabs', () => {
 
     expect(chemistryTab).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('status')).toHaveTextContent('載入')
+    expect(screen.queryByRole('region', { name: /生化累積檢驗表/ })).not.toBeInTheDocument()
 
-    await waitFor(() => {
-      expect(screen.getByRole('region', { name: /生化累積檢驗表/ })).toBeInTheDocument()
+    act(() => {
+      frameCallbacks.splice(0).forEach((callback) => callback(16))
     })
+    expect(screen.getByRole('status')).toHaveTextContent('載入')
+    expect(screen.queryByRole('region', { name: /生化累積檢驗表/ })).not.toBeInTheDocument()
+
+    act(() => {
+      jest.runOnlyPendingTimers()
+    })
+    expect(screen.getByRole('region', { name: /生化累積檢驗表/ })).toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: '血液 (0)' }), {
       button: 0,

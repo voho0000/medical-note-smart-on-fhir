@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 
@@ -140,6 +140,7 @@ describe('ReportsCard lazy cumulative loading', () => {
   })
 
   afterEach(() => {
+    jest.useRealTimers()
     jest.restoreAllMocks()
     Object.defineProperty(window, 'requestIdleCallback', {
       configurable: true,
@@ -187,7 +188,13 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.queryByText('在選定的時間範圍內未找到報告。')).not.toBeInTheDocument()
   })
 
-  it('selects a raw report tab before its projection is enabled', async () => {
+  it('performance contract: selects a raw tab before any projection work is enabled', () => {
+    jest.useFakeTimers()
+    const frameCallbacks: FrameRequestCallback[] = []
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
     const diagnosticReports = [{ id: 'report-1', resourceType: 'DiagnosticReport' }]
     mockUseClinicalData.mockReturnValue({
       diagnosticReports,
@@ -200,7 +207,6 @@ describe('ReportsCard lazy cumulative loading', () => {
     useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
 
     render(<ReportsCard />)
-    await screen.findByTestId('cumulative-report')
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: /全部/ }), {
       button: 0,
@@ -212,14 +218,43 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'true')
     expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
 
-    await waitFor(() => {
-      expect(mockUseReportsData).toHaveBeenLastCalledWith(
-        diagnosticReports,
-        [],
-        'standardized',
-      )
+    // Even after the browser reaches the next frame, the heavy projection is
+    // still behind a timer/transition. This ordering is the performance
+    // contract: the selected state gets a paint opportunity first.
+    act(() => {
+      frameCallbacks.splice(0).forEach((callback) => callback(16))
     })
+    expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'true')
+
+    act(() => {
+      jest.runOnlyPendingTimers()
+    })
+
+    expect(mockUseReportsData).toHaveBeenLastCalledWith(
+      diagnosticReports,
+      [],
+      'standardized',
+    )
     expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'false')
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /影像/ }), {
+      button: 0,
+      ctrlKey: false,
+    })
+    expect(screen.getByRole('tab', { name: /影像/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('raw-report-all')).toBeInTheDocument()
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-active', 'false')
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /全部/ }), {
+      button: 0,
+      ctrlKey: false,
+    })
+    // Once visited, both raw views stay mounted and switching back requires no
+    // preparation phase or repeat projection.
+    expect(screen.getByRole('tab', { name: /全部/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'false')
+    expect(screen.getByTestId('raw-report-imaging')).toBeInTheDocument()
   })
 
   it('shares the name mode across cumulative, all, lab, imaging, and vitals tabs', async () => {
