@@ -9,7 +9,10 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { useLocalPatientProfile } from '@/src/application/hooks/patient/use-local-patient-profile.hook'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
-import type { UserEnteredPatientProfile } from '@/src/core/entities/patient.entity'
+import {
+  isValidPatientBirthDate,
+  type UserEnteredPatientProfile,
+} from '@/src/core/entities/patient.entity'
 import { usePatientInfo } from './hooks/usePatientInfo'
 import { PatientInfoDisplay } from './components/PatientInfoDisplay'
 import { PatientDemographicsEditorDialog } from './components/PatientDemographicsEditorDialog'
@@ -28,6 +31,21 @@ export function PatientInfoCard() {
   } = localProfile
 
   const errorObj = error ? new Error(String(error)) : null
+  const initialProfileValues = patientInfo ? {
+    name: patientInfo.name === t.patient.unknown
+      ? undefined
+      : patientInfo.name,
+    gender:
+      patient?.gender === 'male'
+      || patient?.gender === 'female'
+      || patient?.gender === 'other'
+        ? patient.gender
+        : undefined,
+    birthDate:
+      patient?.birthDate && isValidPatientBirthDate(patient.birthDate)
+        ? patient.birthDate
+        : undefined,
+  } : undefined
 
   const saveProfile = async (next: UserEnteredPatientProfile | null) => {
     await localProfile.saveProfile(next)
@@ -65,6 +83,7 @@ export function PatientInfoCard() {
           open
           onOpenChange={setEditorOpen}
           profile={profile}
+          initialValues={initialProfileValues}
           saving={savingProfile}
           onSave={saveProfile}
         />

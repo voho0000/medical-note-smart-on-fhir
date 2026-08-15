@@ -58,7 +58,7 @@ export interface CategoryGroup {
   label: string
   drugs: TimelineDrug[]
   chronicCount: number
-  acuteCount: number
+  nonChronicCount: number
 }
 
 export interface TimelineData {
@@ -69,7 +69,7 @@ export interface TimelineData {
   domainEndMs: number
   totalDrugs: number
   chronicCount: number
-  acuteCount: number
+  nonChronicCount: number
 }
 
 const RANGE_MONTHS: Record<TimeRange, number | null> = {
@@ -166,7 +166,7 @@ export function useMedicationTimeline(
       domainEndMs: Date.now(),
       totalDrugs: 0,
       chronicCount: 0,
-      acuteCount: 0,
+      nonChronicCount: 0,
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
 
@@ -317,14 +317,14 @@ export function useMedicationTimeline(
       if (existing) {
         existing.drugs.push(drug)
         if (drug.isChronic) existing.chronicCount++
-        else existing.acuteCount++
+        else existing.nonChronicCount++
       } else {
         groupsMap.set(drug.categoryKey, {
           key: drug.categoryKey,
           label: drug.categoryLabel,
           drugs: [drug],
           chronicCount: drug.isChronic ? 1 : 0,
-          acuteCount: drug.isChronic ? 0 : 1,
+          nonChronicCount: drug.isChronic ? 0 : 1,
         })
       }
     }
@@ -347,7 +347,7 @@ export function useMedicationTimeline(
       domainEndMs: domainMax,
       totalDrugs: drugs.length,
       chronicCount: drugs.filter(d => d.isChronic).length,
-      acuteCount: drugs.filter(d => !d.isChronic).length,
+      nonChronicCount: drugs.filter(d => !d.isChronic).length,
     }
   }, [medications, audience, range, fallbackCategoryLabel, locale, atcCategoryLabels])
 }

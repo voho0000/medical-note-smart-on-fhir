@@ -13,6 +13,7 @@
 //   fixed-height.
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import { Loader2 } from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Row } from '../types'
 import { ReportRow } from './ReportRow'
@@ -47,6 +48,10 @@ interface ReportsTabContentProps {
   scrollNonce?: number
   /** Called only after the target row is actually mounted and highlighted. */
   onScrollResolved?: (nonce?: number) => void
+  /** Raw report resources are being projected after the selected tab has
+   *  already painted. Prevent an empty-state flash during that first visit. */
+  isPreparing?: boolean
+  preparingLabel?: string
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -82,7 +87,7 @@ function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
   return lastOverflowCandidate
 }
 
-function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading' }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
   // this report, not to find its collapsed shell.
   const openIds = useMemo(() => {
@@ -211,7 +216,16 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
       forceMount={forceMount}
       className={fullHeight ? 'mt-0 flex-1 min-h-0' : 'mt-0'}
     >
-      {rows.length === 0 ? (
+      {isPreparing ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/25 px-4 text-sm text-muted-foreground"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <span>{preparingLabel}</span>
+        </div>
+      ) : rows.length === 0 ? (
         <div className="text-sm text-muted-foreground">
           {searchActive ? '沒有符合搜尋的報告' : 'No reports available in this category.'}
         </div>

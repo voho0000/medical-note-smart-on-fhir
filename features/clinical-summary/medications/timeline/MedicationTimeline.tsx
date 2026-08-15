@@ -12,9 +12,9 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import { useMedicationTimeline, type TimeRange } from './hooks/useMedicationTimeline'
 import { TimelineSvg } from './components/TimelineSvg'
 import {
-  medicationAcuteSwatchClass,
   medicationChronicSwatchClass,
   medicationFutureTimelineSwatchClass,
+  medicationNonChronicSwatchClass,
 } from '../components/medication-chip-styles'
 
 const RANGES: TimeRange[] = ['3m', '6m', '1y', '3y', 'all']
@@ -124,36 +124,60 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
               <span className="font-medium text-foreground">
                 {data.totalDrugs} {mt.timelineDrugCount ?? 'drugs'}
               </span>
-              <span className="inline-flex items-center gap-1">
-                <span
-                  className={cn(
-                    "inline-block h-2 w-3 rounded-[2px] border",
-                    medicationChronicSwatchClass,
-                  )}
-                />
-                {data.chronicCount} {mt.chronic ?? '慢箋'}
+              <span
+                role="group"
+                aria-label={mt.timelinePrescriptionType ?? 'Prescription type'}
+                className="inline-flex items-center gap-2 border-l border-border/80 pl-2"
+              >
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "inline-block h-2 w-3 rounded-[2px] border",
+                      medicationChronicSwatchClass,
+                    )}
+                  />
+                  <span>{mt.chronic ?? 'Chronic Rx'}</span>
+                  <span className="font-medium text-foreground">
+                    {data.chronicCount}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "inline-block h-2 w-3 rounded-[2px] border",
+                      medicationNonChronicSwatchClass,
+                    )}
+                  />
+                  <span>{mt.timelineNonChronic ?? 'Non-chronic Rx'}</span>
+                  <span className="font-medium text-foreground">
+                    {data.nonChronicCount}
+                  </span>
+                </span>
               </span>
-              <span className="inline-flex items-center gap-1">
-                <span
-                  className={cn(
-                    "inline-block h-2 w-3 rounded-[2px] border",
-                    medicationAcuteSwatchClass,
-                  )}
-                />
-                {data.acuteCount} {mt.timelineAcute ?? 'acute'}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="inline-block h-px w-3 border-t border-dashed border-destructive" />
-                {mt.timelineToday ?? 'Today'}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span
-                  className={cn(
-                    "inline-block h-2 w-3 rounded-[2px] border",
-                    medicationFutureTimelineSwatchClass,
-                  )}
-                />
-                {mt.timelineAfterToday ?? 'After today'}
+              <span
+                role="group"
+                aria-label={mt.timelineTimeMarkers ?? 'Time markers'}
+                className="inline-flex items-center gap-2 border-l border-border/80 pl-2"
+              >
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-px w-3 border-t border-dashed border-destructive"
+                  />
+                  {mt.timelineToday ?? 'Today'}
+                </span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "inline-block h-2 w-3 rounded-[2px] border",
+                      medicationFutureTimelineSwatchClass,
+                    )}
+                  />
+                  {mt.timelineAfterToday ?? 'After today'}
+                </span>
               </span>
             </>
           ) : (

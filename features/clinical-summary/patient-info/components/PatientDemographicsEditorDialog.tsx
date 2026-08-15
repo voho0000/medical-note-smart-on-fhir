@@ -25,12 +25,15 @@ import {
   createUserEnteredPatientProfile,
   isValidPatientBirthDate,
   type UserEnteredPatientProfile,
+  type UserEnteredPatientProfileInput,
 } from '@/src/core/entities/patient.entity'
 
 interface PatientDemographicsEditorDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   profile: UserEnteredPatientProfile | null
+  /** Source demographics used to prefill fields that have no local override. */
+  initialValues?: UserEnteredPatientProfileInput
   saving: boolean
   onSave: (profile: UserEnteredPatientProfile | null) => Promise<void>
   /** AI summaries need sex plus a birth year; the pencil editor remains optional. */
@@ -49,21 +52,25 @@ export function PatientDemographicsEditorDialog({
   open,
   onOpenChange,
   profile,
+  initialValues,
   saving,
   onSave,
   requiredForAi = false,
 }: PatientDemographicsEditorDialogProps) {
   const { t } = useLanguage()
-  const [name, setName] = useState(profile?.name ?? '')
+  const initialBirthDate = profile?.birthDate ?? initialValues?.birthDate ?? ''
+  const [name, setName] = useState(
+    profile?.name ?? initialValues?.name ?? '',
+  )
   const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>(
-    profile?.gender ?? '',
+    profile?.gender ?? initialValues?.gender ?? '',
   )
   const useBirthYearInput =
-    requiredForAi || /^\d{4}$/.test(profile?.birthDate ?? '')
+    requiredForAi || /^\d{4}$/.test(initialBirthDate)
   const [birthDate, setBirthDate] = useState(
     useBirthYearInput
-      ? profile?.birthDate?.slice(0, 4) ?? ''
-      : profile?.birthDate ?? '',
+      ? initialBirthDate.slice(0, 4)
+      : initialBirthDate,
   )
   const [error, setError] = useState('')
   const maxBirthDate = todayLocal()

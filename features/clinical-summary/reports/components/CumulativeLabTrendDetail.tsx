@@ -22,10 +22,13 @@ import type {
   LabTrendSeries,
 } from '@/src/shared/utils/lab-trend.utils'
 import { formatNumberSmart } from '../utils/number-format.utils'
+import {
+  buildTrendTimeScale,
+  type TrendTimeScale,
+  type TrendWindow,
+} from '../utils/trend-time-scale'
 import { niceAxis } from './ObservationTrendChart'
 import { cn } from '@/src/shared/utils/cn.utils'
-
-type TrendWindow = '6m' | '1y' | '3y' | 'all'
 
 interface CumulativeLabTrendDetailProps {
   series: LabTrendSeries
@@ -53,7 +56,6 @@ function formatAxisDate(timestamp: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
     year: '2-digit',
     month: '2-digit',
-    day: '2-digit',
   }).format(new Date(timestamp))
 }
 
@@ -92,15 +94,6 @@ function defaultWindow(series: LabTrendSeries): TrendWindow {
     : 'all'
 }
 
-function cutoffForWindow(latest: number, window: TrendWindow): number {
-  if (window === 'all') return Number.NEGATIVE_INFINITY
-  const date = new Date(latest)
-  if (window === '6m') date.setMonth(date.getMonth() - 6)
-  if (window === '1y') date.setFullYear(date.getFullYear() - 1)
-  if (window === '3y') date.setFullYear(date.getFullYear() - 3)
-  return date.getTime()
-}
-
 function differenceForDisplay(current: number, previous: number): number {
   const decimalPlaces = (value: number) => {
     const text = value.toString().toLowerCase()
@@ -109,6 +102,31 @@ function differenceForDisplay(current: number, previous: number): number {
   }
   const precision = Math.min(6, Math.max(decimalPlaces(current), decimalPlaces(previous)))
   return Number((current - previous).toFixed(precision))
+}
+
+export function shouldShowTrendPointLabel(
+  points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'>>,
+  index: number,
+): boolean {
+  return points.length <= 8
+    || points[index]?.abnormal === true
+    || index === points.length - 1
+}
+
+export function resolveTrendChartReferenceRange(
+  series: Pick<LabTrendSeries, 'chartPoints' | 'sharedReferenceRange'>,
+): { range: LabTrendReferenceRange; source: 'shared' | 'latest' } | undefined {
+  if (series.sharedReferenceRange) {
+    return { range: series.sharedReferenceRange, source: 'shared' }
+  }
+
+  const latestAvailable = [...series.chartPoints].reverse().find((point) => (
+    point.referenceRange?.low !== undefined || point.referenceRange?.high !== undefined
+  ))?.referenceRange
+
+  return latestAvailable
+    ? { range: latestAvailable, source: 'latest' }
+    : undefined
 }
 
 function TrendTooltip({
@@ -152,10 +170,14 @@ function TrendChart({
   points,
   unit,
   referenceRange,
+  referenceRangeLabel,
+  timeScale,
 }: {
   points: LabTrendPoint[]
   unit?: string
   referenceRange?: LabTrendReferenceRange
+  referenceRangeLabel: string
+  timeScale: TrendTimeScale
 }) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
@@ -187,16 +209,18 @@ function TrendChart({
     >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 24, right: 18, bottom: 6, left: 2 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             dataKey="timestamp"
             type="number"
             scale="time"
-            domain={['dataMin', 'dataMax']}
+            domain={timeScale.domain}
+            ticks={timeScale.ticks}
+            allowDataOverflow
             tickFormatter={(value: number) => formatAxisDate(value, locale)}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 10 }}
             tickLine={false}
-            minTickGap={38}
+            interval={0}
             padding={{ left: 18, right: 18 }}
             className="text-muted-foreground"
           />
@@ -231,22 +255,22 @@ function TrendChart({
             <ReferenceArea
               y1={referenceRange.low}
               y2={referenceRange.high}
-              fill="#22c55e"
+              fill="var(--chart-2)"
               fillOpacity={0.09}
               stroke="none"
               label={{
-                value: zh ? '共同參考範圍' : 'Shared range',
+                value: referenceRangeLabel,
                 position: 'insideTopRight',
                 fontSize: 10,
-                fill: '#15803d',
+                fill: 'var(--chart-2)',
               }}
             />
           )}
           {referenceRange?.low !== undefined && (
-            <ReferenceLine y={referenceRange.low} stroke="#16a34a" strokeOpacity={0.5} strokeDasharray="4 4" />
+            <ReferenceLine y={referenceRange.low} stroke="var(--chart-2)" strokeOpacity={0.55} strokeDasharray="4 4" />
           )}
           {referenceRange?.high !== undefined && (
-            <ReferenceLine y={referenceRange.high} stroke="#16a34a" strokeOpacity={0.5} strokeDasharray="4 4" />
+            <ReferenceLine y={referenceRange.high} stroke="var(--chart-2)" strokeOpacity={0.55} strokeDasharray="4 4" />
           )}
 
           <Line
@@ -289,9 +313,11 @@ function TrendChart({
             <LabelList
               dataKey="value"
               content={(props: any) => {
-                const { x, y, value, index, payload } = props
-                const point = payload as LabTrendPoint | undefined
-                const show = labelEveryPoint || point?.abnormal || index === points.length - 1
+                const { x, y, value, index } = props
+                const point = typeof index === 'number' ? points[index] : undefined
+                const show = typeof index === 'number'
+                  ? shouldShowTrendPointLabel(points, index)
+                  : labelEveryPoint
                 if (!show || x == null || y == null || typeof value !== 'number') return null
                 return (
                   <text
@@ -329,20 +355,31 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
     ? differenceForDisplay(latest.value, previousComparable.value)
     : undefined
 
+  const timeScale = useMemo(
+    () => buildTrendTimeScale(series.chartPoints, window),
+    [series.chartPoints, window],
+  )
   const visiblePoints = useMemo(() => {
-    const latestTimestamp = series.chartPoints.at(-1)?.timestamp
-    if (!latestTimestamp) return []
-    const cutoff = cutoffForWindow(latestTimestamp, window)
-    return series.chartPoints.filter((point) => point.timestamp >= cutoff)
-  }, [series.chartPoints, window])
+    const [start, end] = timeScale.domain
+    return series.chartPoints.filter((point) => (
+      point.timestamp >= start && point.timestamp <= end
+    ))
+  }, [series.chartPoints, timeScale])
+  const chartReferenceRange = useMemo(
+    () => resolveTrendChartReferenceRange({
+      chartPoints: visiblePoints,
+      sharedReferenceRange: series.sharedReferenceRange,
+    }),
+    [series.sharedReferenceRange, visiblePoints],
+  )
 
   const strings = {
     latest: zh ? '最新結果' : 'Latest result',
     previous: zh ? '較前次' : 'vs previous',
     history: zh ? '精確數值' : 'Exact results',
     rangeVaries: zh
-      ? '參考範圍依院所或日期不同；圖中不套用單一正常區間，請以各筆來源判讀為準。'
-      : 'Reference ranges vary by source or date. No single range is applied to the chart.',
+      ? '部分歷史參考範圍缺漏或依院所、日期不同；圖中綠色區域僅顯示最新可用參考範圍，仍請以各筆原始範圍判讀。'
+      : 'Some historical ranges are missing or vary by source or date. The green area shows only the latest available range; interpret each result using its original range.',
     sameDay: zh
       ? '含同日多筆結果；趨勢依來源時間排序，詳細時間保留於下方紀錄。'
       : 'Includes multiple same-day results; source times are preserved below.',
@@ -443,7 +480,11 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
           <TrendChart
             points={visiblePoints}
             unit={series.unit}
-            referenceRange={series.sharedReferenceRange}
+            referenceRange={chartReferenceRange?.range}
+            referenceRangeLabel={chartReferenceRange?.source === 'shared'
+              ? (zh ? '共同參考範圍' : 'Shared range')
+              : (zh ? '最新可用參考範圍' : 'Latest available range')}
+            timeScale={timeScale}
           />
         ) : (
           <div className="flex min-h-56 items-center justify-center p-6 text-center">

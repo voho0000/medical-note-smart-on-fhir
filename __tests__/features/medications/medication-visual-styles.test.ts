@@ -1,7 +1,4 @@
 import {
-  medicationAcuteSwatchClass,
-  medicationAcuteFutureTimelineBarClass,
-  medicationAcuteTimelineBarClass,
   medicationCategoryChipClass,
   medicationChronicBadgeClass,
   medicationChronicSwatchClass,
@@ -11,6 +8,9 @@ import {
   medicationIcdChipClass,
   medicationIcdCodeClass,
   medicationIcdDescriptionClass,
+  medicationNonChronicFutureTimelineBarClass,
+  medicationNonChronicSwatchClass,
+  medicationNonChronicTimelineBarClass,
   getMedicationDaysLeftBadgeClass,
   getMedicationStatusBadgeClass,
 } from '@/features/clinical-summary/medications/components/medication-chip-styles'
@@ -44,16 +44,16 @@ describe('medication status visual language', () => {
     expect(medicationCategoryChipClass).not.toMatch(/blue-|teal|emerald|amber/)
   })
 
-  it('uses one neutral family for acute medication timeline marks', () => {
-    expect(medicationAcuteSwatchClass).toContain('slate-')
-    expect(medicationAcuteTimelineBarClass).toContain('slate-')
+  it('uses one neutral family for non-chronic medication timeline marks', () => {
+    expect(medicationNonChronicSwatchClass).toContain('slate-')
+    expect(medicationNonChronicTimelineBarClass).toContain('slate-')
   })
 
   it('uses lighter type-aware colours plus a dashed key for after-today periods', () => {
     expect(medicationChronicFutureTimelineBarClass).toContain('fill-teal-100')
     expect(medicationChronicFutureTimelineBarClass).toContain('dark:fill-teal-950/70')
-    expect(medicationAcuteFutureTimelineBarClass).toContain('fill-slate-100')
-    expect(medicationAcuteFutureTimelineBarClass).toContain('dark:fill-slate-950/70')
+    expect(medicationNonChronicFutureTimelineBarClass).toContain('fill-slate-100')
+    expect(medicationNonChronicFutureTimelineBarClass).toContain('dark:fill-slate-950/70')
     expect(medicationFutureTimelineSwatchClass).toContain('border-dashed')
   })
 

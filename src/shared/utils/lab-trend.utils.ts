@@ -18,6 +18,14 @@ export interface LabTrendSelection {
   nameMode: AnalyteNameMode
 }
 
+/**
+ * Numeric laboratory observations occasionally arrive before their local/NHI
+ * code has been added to the cumulative-report taxonomy. Keep those scalar
+ * results on the audited trend surface instead of sending them back to the
+ * legacy history/chart dialog.
+ */
+export const UNCATEGORIZED_LAB_TREND_CATEGORY = '__uncategorized__'
+
 export interface LabTrendReferenceRange {
   low?: number
   high?: number
@@ -164,10 +172,11 @@ function sourceMatchesSelection(
   selection: LabTrendSelection,
 ): boolean {
   const category = categorizeObservation(observation)
-  if (category?.id !== selection.categoryId) return false
+  const categoryId = category?.id ?? UNCATEGORIZED_LAB_TREND_CATEGORY
+  if (categoryId !== selection.categoryId) return false
   const identity = getLabPivotTestIdentity(
     observation,
-    selection.categoryId,
+    category?.id,
     selection.nameMode,
   )
   return identity.mapKey === selection.mapKey

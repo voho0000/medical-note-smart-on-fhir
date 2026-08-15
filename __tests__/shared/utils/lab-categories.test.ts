@@ -127,13 +127,27 @@ describe('categorizeObservation — chem analytes that used to fall to 其他', 
   })
 
   describe('by text when LOINC is absent (foreign-bundle fallback)', () => {
-    it.each(['CO2', 'TCO2', 'Magnesium', 'Mg', 'NT-proBNP', 'proBNP'])(
+    it.each(['CO2', 'TCO2', 'Magnesium', 'Mg', 'NT-proBNP', 'proBNP', 'Ammonia', '血氨', '氨'])(
       '%s with no LOINC still categorises as chem',
       (text) => {
         const obs = { code: { text, coding: [] }, valueQuantity: { value: 1, unit: 'x' } }
         expect(categorizeObservation(obs)?.id).toBe('chem')
       },
     )
+  })
+
+  it('routes the NHI blood-ammonia order code to chemistry', () => {
+    const obs = {
+      code: {
+        text: '氨',
+        coding: [{
+          system: 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw',
+          code: '09037C',
+        }],
+      },
+      valueQuantity: { value: 33, unit: 'ug/dL' },
+    }
+    expect(categorizeObservation(obs)?.id).toBe('chem')
   })
 })
 

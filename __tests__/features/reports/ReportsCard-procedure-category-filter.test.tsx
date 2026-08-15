@@ -129,7 +129,7 @@ describe('ReportsCard procedure category badges', () => {
     const procedureTab = within(screen.getByTestId('tab-procedures'))
     expect(filterGroup).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /全部/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(procedureTab.getByText('舊版未分類處置')).toBeInTheDocument()
+    expect(await procedureTab.findByText('舊版未分類處置')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /重大處置/ }))
 

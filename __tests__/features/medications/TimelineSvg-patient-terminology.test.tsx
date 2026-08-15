@@ -29,7 +29,7 @@ const categories: CategoryGroup[] = [{
   key: 'atc-level2:R05',
   label: '咳嗽與感冒製劑',
   chronicCount: 1,
-  acuteCount: 0,
+  nonChronicCount: 0,
   drugs: [{
     drugKey: 'AC49322100',
     drugName: '愛克痰發泡錠600毫克',

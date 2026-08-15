@@ -7,6 +7,17 @@ import {
   RightDetailProvider,
   useRightDetail,
 } from '@/src/application/providers/right-detail.provider'
+import { buildLabTrendSeries } from '@/src/shared/utils/lab-trend.utils'
+
+jest.mock('@/src/shared/utils/lab-trend.utils', () => {
+  const actual = jest.requireActual('@/src/shared/utils/lab-trend.utils')
+  return {
+    ...actual,
+    buildLabTrendSeries: jest.fn(actual.buildLabTrendSeries),
+  }
+})
+
+const mockBuildLabTrendSeries = jest.mocked(buildLabTrendSeries)
 
 const observations = [
   {
@@ -46,8 +57,13 @@ function Providers({ children, detailHost = false }: { children: ReactNode; deta
 describe('CumulativeLabReport trend entry', () => {
   const originalMatchMedia = window.matchMedia
 
+  beforeEach(() => {
+    mockBuildLabTrendSeries.mockClear()
+  })
+
   afterEach(() => {
     Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia })
+    jest.restoreAllMocks()
   })
 
   it('opens a shared right-pane trend on desktop and keeps the selected column highlighted', () => {
@@ -62,8 +78,13 @@ describe('CumulativeLabReport trend entry', () => {
       </Providers>,
     )
 
+    // Building the table and changing categories must not construct one full
+    // trend series per analyte. Only the analyte the user opens is expanded.
+    expect(mockBuildLabTrendSeries).not.toHaveBeenCalled()
+
     fireEvent.click(screen.getByRole('button', { name: /查看 CRP 趨勢/ }))
 
+    expect(mockBuildLabTrendSeries).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('right-detail-host')).toBeInTheDocument()
     expect(screen.getByTestId('cumulative-trend-detail')).toHaveTextContent('最新結果')
     expect(container.querySelector('[data-lab-test-key="CRP"]')).toHaveAttribute('data-trend-active', 'true')

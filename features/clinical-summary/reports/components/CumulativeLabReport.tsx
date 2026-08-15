@@ -5,8 +5,8 @@
 // Categories tabs: CBC, 生化, 血糖, 癌症指數, 尿液.
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
-import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, TrendingUp } from "lucide-react"
+import { startTransition, useEffect, useMemo, useRef, useState } from "react"
+import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   DropdownMenu,
@@ -35,10 +35,18 @@ import {
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
 
-const EMPTY_TREND_SERIES = new Map<string, LabTrendSeries>()
-
 interface OpenTrendRequest {
   series: LabTrendSeries
+  title: string
+  sourceId: string
+}
+
+interface OpenTrendTarget {
+  categoryId: string
+  mapKey: string
+  testKey: string
+  displayName: string
+  nameMode: AnalyteNameMode
   title: string
   sourceId: string
 }
@@ -91,7 +99,6 @@ function LabPivotTable({
   focusAnalyteKey,
   focusNonce,
   nameMode,
-  trendSeries,
   activeTrendSourceId,
   onOpenTrend,
 }: {
@@ -100,9 +107,8 @@ function LabPivotTable({
   focusAnalyteKey?: string
   focusNonce?: number
   nameMode: AnalyteNameMode
-  trendSeries: Map<string, LabTrendSeries>
   activeTrendSourceId?: string
-  onOpenTrend: (request: OpenTrendRequest) => void
+  onOpenTrend: (target: OpenTrendTarget) => void
 }) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
@@ -237,10 +243,9 @@ function LabPivotTable({
             {flatTests.map((test) => {
               const { name, abbr } = columnParts(test.testKey, test.displayName)
               const isFocused = test.testKey === focusAnalyteKey
-              const series = trendSeries.get(test.mapKey)
               const sourceId = `cumulative-trend:${pivot.category.id}:${test.mapKey}`
               const isTrendActive = activeTrendSourceId === sourceId
-              const canTrend = series?.chartable === true
+              const canTrend = test.trendChartable === true
               const showInferredUnitInHeader =
                 inferredUnitInHeader.get(test.mapKey) === true
               const heading = (
@@ -277,18 +282,22 @@ function LabPivotTable({
                     ? "min-w-[46px] border-b-2 border-b-primary border-l bg-primary/10 p-0 text-center align-bottom font-semibold text-foreground"
                     : "min-w-[46px] border-b border-l bg-muted/80 p-0 text-center align-bottom font-medium"}
                 >
-                  {canTrend && series ? (
+                  {canTrend ? (
                     <button
                       type="button"
                       onClick={() => onOpenTrend({
-                        series,
+                        categoryId: pivot.category.id,
+                        mapKey: test.mapKey,
+                        testKey: test.testKey,
+                        displayName: test.displayName,
+                        nameMode,
                         sourceId,
                         title: abbr ? `${name} (${abbr})` : name,
                       })}
                       className="flex min-h-11 w-full min-w-11 flex-col items-center justify-end px-1 py-1.5 transition-colors hover:bg-primary/10 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       aria-label={locale.startsWith('zh')
-                        ? `查看 ${name} 趨勢，共 ${series.chartPoints.length} 筆可比較結果`
-                        : `View ${name} trend, ${series.chartPoints.length} comparable results`}
+                        ? `查看 ${name} 趨勢`
+                        : `View ${name} trend`}
                       title={locale.startsWith('zh') ? `查看 ${name} 趨勢` : `View ${name} trend`}
                     >
                       {heading}
@@ -408,28 +417,56 @@ export function CumulativeLabReport({
   const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
     ? activeCategoryId
     : internalActiveId
+  // A category's table remains mounted after the first visit. New categories
+  // select immediately and show a compact preparation state for one paint,
+  // keeping a large table mount out of the pointer/keyboard event itself.
+  const [readyCategoryIds, setReadyCategoryIds] = useState<Set<string>>(
+    () => new Set([activeId]),
+  )
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null)
 
-  const activePivot = pivots[activeId]
-  const activeTrendSeries = useMemo(() => {
-    if (!activePivot) return EMPTY_TREND_SERIES
-    return new Map(activePivot.rows.map((row) => [
-      row.mapKey,
-      buildLabTrendSeries(observations, {
-        categoryId: activePivot.category.id,
-        mapKey: row.mapKey,
-        testKey: row.testKey,
-        displayName: row.displayName,
-        nameMode,
-      }),
-    ]))
-  }, [activePivot, nameMode, observations])
+  useEffect(() => {
+    const categoryToPrepare = pendingCategoryId
+      ?? (readyCategoryIds.has(activeId) ? null : activeId)
+    if (!categoryToPrepare || readyCategoryIds.has(categoryToPrepare)) return
+    let timer: number | undefined
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        startTransition(() => {
+          setReadyCategoryIds((previous) => previous.has(categoryToPrepare)
+            ? previous
+            : new Set(previous).add(categoryToPrepare))
+          setPendingCategoryId((current) => current === categoryToPrepare ? null : current)
+        })
+      }, 0)
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [activeId, pendingCategoryId, readyCategoryIds])
 
   const activeTrendSourceId = dialogTrend?.sourceId
     ?? (rightDetail?.detail?.sourceId.startsWith('cumulative-trend:')
       ? rightDetail.detail.sourceId
       : undefined)
 
-  const openTrend = (request: OpenTrendRequest) => {
+  const openTrend = (target: OpenTrendTarget) => {
+    const series = buildLabTrendSeries(observations, {
+      categoryId: target.categoryId,
+      mapKey: target.mapKey,
+      testKey: target.testKey,
+      displayName: target.displayName,
+      nameMode: target.nameMode,
+    })
+    // Availability is indexed during the pivot build. Keep this final guard so
+    // a source update between render and click can never open an unsafe chart.
+    if (!series.chartable) return
+    const request: OpenTrendRequest = {
+      series,
+      title: target.title,
+      sourceId: target.sourceId,
+    }
     const canUseRightPane = !fullHeight
       && !!rightDetail
       && typeof window !== 'undefined'
@@ -508,6 +545,7 @@ export function CumulativeLabReport({
 
   const setActiveId = (id: string) => {
     setInternalActiveId(id)
+    if (!readyCategoryIds.has(id)) setPendingCategoryId(id)
     onCategoryChange?.(id)
   }
   const revealCategory = (id: string) => {
@@ -608,18 +646,29 @@ export function CumulativeLabReport({
           <TabsContent
             key={p.category.id}
             value={p.category.id}
+            forceMount={readyCategoryIds.has(p.category.id) || undefined}
             className={fullHeight ? 'mt-1 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-1 min-w-0 w-full max-w-full overflow-hidden'}
           >
-            <LabPivotTable
-              pivot={p}
-              fullHeight={fullHeight}
-              focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
-              focusNonce={focusNonce}
-              nameMode={nameMode}
-              trendSeries={p.category.id === activeId ? activeTrendSeries : EMPTY_TREND_SERIES}
-              activeTrendSourceId={activeTrendSourceId}
-              onOpenTrend={openTrend}
-            />
+            {readyCategoryIds.has(p.category.id) ? (
+              <LabPivotTable
+                pivot={p}
+                fullHeight={fullHeight}
+                focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
+                focusNonce={focusNonce}
+                nameMode={nameMode}
+                activeTrendSourceId={activeTrendSourceId}
+                onOpenTrend={openTrend}
+              />
+            ) : (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/25 px-4 text-sm text-muted-foreground"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <span>{t.common.loading}</span>
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>

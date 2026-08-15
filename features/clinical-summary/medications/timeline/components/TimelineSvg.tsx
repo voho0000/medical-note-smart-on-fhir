@@ -16,10 +16,10 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import type { CategoryGroup, RefillBar, TimelineDrug } from '../hooks/useMedicationTimeline'
 import {
-  medicationAcuteFutureTimelineBarClass,
-  medicationAcuteTimelineBarClass,
   medicationChronicFutureTimelineBarClass,
   medicationChronicTimelineBarClass,
+  medicationNonChronicFutureTimelineBarClass,
+  medicationNonChronicTimelineBarClass,
 } from '../../components/medication-chip-styles'
 
 interface TimelineSvgProps {
@@ -275,7 +275,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                         className={
                           drug.isChronic
                             ? medicationChronicTimelineBarClass
-                            : medicationAcuteTimelineBarClass
+                            : medicationNonChronicTimelineBarClass
                         }
                         onMouseEnter={(e) => showBarHover(e, 'elapsed')}
                         style={{ cursor: 'pointer' }}
@@ -294,7 +294,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                         className={
                           drug.isChronic
                             ? medicationChronicFutureTimelineBarClass
-                            : medicationAcuteFutureTimelineBarClass
+                            : medicationNonChronicFutureTimelineBarClass
                         }
                         onMouseEnter={(e) => showBarHover(e, 'future')}
                         style={{ cursor: 'pointer' }}

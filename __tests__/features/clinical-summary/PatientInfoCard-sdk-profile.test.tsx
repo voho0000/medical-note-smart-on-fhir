@@ -47,7 +47,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         userEntered: '自行填寫',
         addLocalProfile: '補充資料',
         editLocalProfile: '編輯資料',
-        profileDialogTitle: '補充病人基本資料',
+        profileDialogTitle: '補充或更新病人基本資料',
         profileDialogDescription: 'SDK 沒有提供結構化基本資料',
         namePlaceholder: '輸入姓名（選填）',
         leaveUnknown: '維持未知',
@@ -133,6 +133,22 @@ describe('PatientInfoCard SDK local profile', () => {
 
     expect(screen.getByRole('button', { name: '補充資料' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens the editor with demographics from the current patient', () => {
+    mockPatient = {
+      ...mockPatient,
+      name: [{ text: '陳○明' }],
+      gender: 'male',
+      birthDate: '1932-05-20',
+    }
+    render(<PatientInfoCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: '補充資料' }))
+
+    expect(screen.getByLabelText('姓名')).toHaveValue('陳○明')
+    expect(screen.getByRole('combobox', { name: '性別' })).toHaveTextContent('男性')
+    expect(screen.getByLabelText('出生日期')).toHaveValue('1932-05-20')
   })
 
   it('marks each demographic value supplied by the user', () => {

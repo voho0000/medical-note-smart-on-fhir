@@ -66,18 +66,18 @@ export const medicationChronicTimelineBarClass =
   "fill-teal-200 stroke-teal-700 dark:fill-teal-800/70 dark:stroke-teal-400"
 
 // A future segment retains its medication-type hue but lowers the visual
-// weight and adds a dashed outline. This keeps chronic/acute meaning intact
+// weight and adds a dashed outline. This keeps prescription-type meaning intact
 // while making "after today" readable without relying on colour alone.
 export const medicationChronicFutureTimelineBarClass =
   "fill-teal-100 stroke-teal-500 dark:fill-teal-950/70 dark:stroke-teal-400/80"
 
-export const medicationAcuteSwatchClass =
+export const medicationNonChronicSwatchClass =
   "border-slate-500 bg-slate-200 dark:border-muted-foreground dark:bg-muted"
 
-export const medicationAcuteTimelineBarClass =
+export const medicationNonChronicTimelineBarClass =
   "fill-slate-200 stroke-slate-500 dark:fill-muted dark:stroke-muted-foreground"
 
-export const medicationAcuteFutureTimelineBarClass =
+export const medicationNonChronicFutureTimelineBarClass =
   "fill-slate-100 stroke-slate-400 dark:fill-slate-950/70 dark:stroke-slate-400/80"
 
 export const medicationFutureTimelineSwatchClass =

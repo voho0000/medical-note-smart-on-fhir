@@ -1,7 +1,7 @@
 // Refactored ReportsCard Component
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -47,6 +47,7 @@ const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
 type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
+type RawPreparationPriority = 'idle' | 'after-paint'
 const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden rounded-lg border-border shadow-none hover:shadow-none`
 
 export function ReportsCard() {
@@ -58,10 +59,19 @@ export function ReportsCard() {
   // The cumulative destination only needs Observation pivots. Defer the much
   // heavier raw-report pipeline (DR grouping, narrative dedup, orphan rows,
   // day grouping) until a raw tab is actually requested.
-  const [rawReportsEnabled, setRawReportsEnabled] = useState(() => {
-    const pending = useResourceNavigationStore.getState().pending
-    return Boolean(pending && pending.reportView !== 'cumulative')
-  })
+  const initialPendingReport = useResourceNavigationStore.getState().pending
+  const [rawReportsEnabled, setRawReportsEnabled] = useState(false)
+  const [rawPreparationPriority, setRawPreparationPriority] =
+    useState<RawPreparationPriority | null>(() => (
+      initialPendingReport && initialPendingReport.reportView !== 'cumulative'
+        ? 'after-paint'
+        : null
+    ))
+  // The shell and tabs should be able to commit before the cumulative pivot is
+  // constructed. When Reports has been idle-mounted by the outer workspace,
+  // this preparation finishes invisibly; on an immediate user click, a compact
+  // loading state gets the first paint instead of a frozen old tab.
+  const [cumulativeReady, setCumulativeReady] = useState(false)
   // Lifted here (not inside CumulativeLabReport) so the selected cumulative
   // sub-category (生化 …) survives the fullscreen toggle, which remounts the
   // reports content under a different parent.
@@ -93,28 +103,82 @@ export function ReportsCard() {
   // a sub-tab is visited, it stays mounted so subsequent tab switches are
   // instant (the original perf goal).
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['cumulative']))
-  // Two-phase switch keeps the spinner-on-target-tab feedback for the
-  // rare case a tab is heavy to mount on its first visit. Phase 1 (urgent)
-  // sets pendingTab so the spinner appears immediately on the clicked tab.
-  // Phase 2 (next frame) actually swaps activeTab. With virtualization,
-  // the second phase is essentially free — only a viewport's worth of
-  // rows is ever mounted, no matter how big the tab is.
+  // A raw tab is selected immediately. If its shared row projection has not
+  // finished warming yet, that tab shows a small preparation state while the
+  // heavy work begins only after the selected state has painted.
   const [pendingTab, setPendingTab] = useState<string | null>(null)
   const handleTabChange = (val: string) => {
     setSearchQuery("")
-    setPendingTab(val)
-    requestAnimationFrame(() => {
-      if (val !== 'cumulative') setRawReportsEnabled(true)
-      setActiveTab(val)
-      setVisitedTabs(prev => prev.has(val) ? prev : new Set(prev).add(val))
+    setActiveTab(val)
+    setVisitedTabs(prev => prev.has(val) ? prev : new Set(prev).add(val))
+    if (val !== 'cumulative' && !rawReportsEnabled) {
+      setPendingTab(val)
+      setRawPreparationPriority('after-paint')
+    } else {
       setPendingTab(null)
-    })
+    }
   }
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [procedureCategoryFilter, setProcedureCategoryFilter] =
     useState<ProcedureCategoryFilter>('all')
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
+
+  useEffect(() => {
+    if (cumulativeReady) return
+    let timer: number | undefined
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        startTransition(() => setCumulativeReady(true))
+      }, 0)
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [cumulativeReady])
+
+  useEffect(() => {
+    if (rawReportsEnabled) return
+    const priority = rawPreparationPriority ?? (cumulativeReady ? 'idle' : null)
+    if (priority === null) return
+
+    let cancelled = false
+    let timer: number | undefined
+    let idleId: number | undefined
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const enableRawReports = () => {
+      if (cancelled) return
+      startTransition(() => {
+        setRawReportsEnabled(true)
+        setRawPreparationPriority(null)
+        setPendingTab(null)
+      })
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (priority === 'idle' && browserWindow.requestIdleCallback) {
+        idleId = browserWindow.requestIdleCallback(enableRawReports, { timeout: 1400 })
+      } else {
+        timer = window.setTimeout(
+          enableRawReports,
+          priority === 'after-paint' ? 0 : 160,
+        )
+      }
+    })
+
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+      if (idleId !== undefined) browserWindow.cancelIdleCallback?.(idleId)
+    }
+  }, [cumulativeReady, rawPreparationPriority, rawReportsEnabled])
 
   // Open a concrete raw-report view for the trend / imaging tour steps. The
   // report card unmounts when the outer tour moves away, so its normal default
@@ -130,14 +194,16 @@ export function ReportsCard() {
           : null
     if (!target) return
     const timer = window.setTimeout(() => {
-      if (target !== 'cumulative') setRawReportsEnabled(true)
+      if (target !== 'cumulative' && !rawReportsEnabled) {
+        setRawPreparationPriority('after-paint')
+        setPendingTab(target)
+      }
       setSearchQuery('')
-      setPendingTab(null)
       setActiveTab(target)
       setVisitedTabs((previous) => previous.has(target) ? previous : new Set(previous).add(target))
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [tourActive, tourStep])
+  }, [rawReportsEnabled, tourActive, tourStep])
   // The same preference follows the user across report views whose titles can
   // be normalized. Procedures have no matching control, so they retain their
   // established standardized labels.
@@ -155,6 +221,7 @@ export function ReportsCard() {
     imagingStudies,
     observations,
     procedures,
+    !rawReportsEnabled,
   )
 
   const { reportRows, seenIds } = useReportsData(
@@ -375,19 +442,21 @@ export function ReportsCard() {
       procedures: filteredProcedureRows.length,
     }
     const displayCounts = rawReportsEnabled ? exactCounts : initialTabCounts
-    const withCount = (label: string, count: number) => `${label} (${count})`
+    const withCount = (label: string, count?: number) => (
+      typeof count === 'number' ? `${label} (${count})` : label
+    )
     const configs = [
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
-      { value: "all", label: withCount(reportTabs.all, displayCounts.all), rows: groupedRows.all, isCumulative: false },
+      { value: "all", label: withCount(reportTabs.all, displayCounts?.all), rows: groupedRows.all, isCumulative: false },
       // Badge count follows the active view (day groups vs single items),
       // matching the imaging precedent: the number shown = cards clickable.
-      { value: "lab", label: withCount(reportTabs.lab, displayCounts.lab), rows: labRows, isCumulative: false },
+      { value: "lab", label: withCount(reportTabs.lab, displayCounts?.lab), rows: labRows, isCumulative: false },
       // Tab badge count reflects the post-grouping list (a 6-row multi-region
       // CT now reads as 1 row in the badge), so the number a user sees and
       // the cards they can click on match.
-      { value: "imaging", label: withCount(reportTabs.imaging, displayCounts.imaging), rows: imagingRows, isCumulative: false },
-      { value: "vitals", label: withCount(reportTabs.vitals, displayCounts.vitals), rows: groupedRows.vitals, isCumulative: false },
-      { value: "procedures", label: withCount(reportTabs.procedures, displayCounts.procedures), rows: filteredProcedureRows, isCumulative: false },
+      { value: "imaging", label: withCount(reportTabs.imaging, displayCounts?.imaging), rows: imagingRows, isCumulative: false },
+      { value: "vitals", label: withCount(reportTabs.vitals, displayCounts?.vitals), rows: groupedRows.vitals, isCumulative: false },
+      { value: "procedures", label: withCount(reportTabs.procedures, displayCounts?.procedures), rows: filteredProcedureRows, isCumulative: false },
     ]
     // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
     return configs.filter(
@@ -416,7 +485,7 @@ export function ReportsCard() {
   useEffect(() => {
     if (!navPending || navPending.reportView === 'cumulative' || rawReportsEnabled) return
     if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
-    const timer = window.setTimeout(() => setRawReportsEnabled(true), 0)
+    const timer = window.setTimeout(() => setRawPreparationPriority('after-paint'), 0)
     return () => window.clearTimeout(timer)
   }, [navPending, rawReportsEnabled])
 
@@ -532,10 +601,8 @@ export function ReportsCard() {
         {/* Desktop tabs */}
         <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto gap-0 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
-            // Spinner appears on the tab the user is currently switching to,
-            // for the duration of useTransition's pending window. Tells the
-            // user "your click registered, content is being prepared" instead
-            // of leaving the UI looking frozen.
+            // Spinner appears only while a first-time raw view is being
+            // prepared. The selected tab itself changes immediately.
             const showSpinner = pendingTab === tab.value
             return (
               <TabsTrigger
@@ -711,14 +778,25 @@ export function ReportsCard() {
               forceMount={keepMounted}
               className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
             >
-              <CumulativeLabReport
-                observations={observations}
-                fullHeight={expanded}
-                activeCategoryId={cumulativeCategoryId}
-                onCategoryChange={handleCumulativeCategoryChange}
-                focusAnalyteKey={cumulativeFocus?.analyteKey}
-                focusNonce={cumulativeFocus?.nonce}
-              />
+              {cumulativeReady ? (
+                <CumulativeLabReport
+                  observations={observations}
+                  fullHeight={expanded}
+                  activeCategoryId={cumulativeCategoryId}
+                  onCategoryChange={handleCumulativeCategoryChange}
+                  focusAnalyteKey={cumulativeFocus?.analyteKey}
+                  focusNonce={cumulativeFocus?.nonce}
+                />
+              ) : (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/25 px-4 text-sm text-muted-foreground"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>{t.common.loading}</span>
+                </div>
+              )}
             </TabsContent>
           ) : (
             <ReportsTabContent
@@ -734,6 +812,8 @@ export function ReportsCard() {
               scrollToId={navTarget?.tab === tab.value ? navTarget.id : null}
               scrollNonce={navTarget?.nonce}
               onScrollResolved={resolveNavTarget}
+              isPreparing={!rawReportsEnabled}
+              preparingLabel={t.common.loading}
             />
           )
         })}

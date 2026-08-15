@@ -39,6 +39,9 @@ export interface LabRow {
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
   subgroupId?: string         // assigned subgroup id (renal/liver/etc.)
+  /** Cheap availability index built during the pivot pass. Full trend point
+   *  details are constructed only after the user opens this analyte. */
+  trendChartable?: boolean
 }
 
 export interface LabPivot {
@@ -65,6 +68,24 @@ function isNumericCellValue(v: string | undefined): boolean {
 function cellContainsNumericValue(cell: LabCell): boolean {
   if (isNumericCellValue(cell.value)) return true
   return cell.allValues?.some(isNumericCellValue) ?? false
+}
+
+interface TrendAvailabilityStats {
+  pointCount: number
+  units: Set<string>
+  specimens: Set<string>
+}
+
+const INVALID_TREND_STATUSES = new Set(['entered-in-error', 'cancelled'])
+
+function compactTrendUnit(unit: string | undefined): string {
+  if (!unit) return '__missing__'
+  return unit
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/μ/g, 'µ')
+    .toLowerCase() || '__missing__'
 }
 
 // NOTE (2026-07-10): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
@@ -256,6 +277,7 @@ export function buildLabPivots(
 
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
+    const trendAvailability = new Map<string, TrendAvailabilityStats>()
 
     for (const obs of obsList) {
       const date = dateKey(obs.effectiveDateTime)
@@ -286,6 +308,7 @@ export function buildLabPivots(
       // stays correct. The raw row-by-row report uses a different path, untouched.
       let cellValue = value
       let cellUnit = unit
+      let trendUnit = unit
       if (numericValue !== undefined) {
         // Quantity.unit is human-readable and may use a local spelling such as
         // "/cumm", while Quantity.code is the machine-processable UCUM form
@@ -302,6 +325,35 @@ export function buildLabPivots(
           cellValue = String(norm.value)
           cellUnit = norm.unit
         }
+        trendUnit = norm?.unit ?? conversionUnit
+      }
+
+      // Trend buttons need only a yes/no availability signal while the table
+      // is switching categories. Collect it in this existing O(n) pivot pass
+      // instead of rescanning every Observation once per analyte.
+      const normalizedStatus = typeof obs.status === 'string'
+        ? obs.status.trim().toLowerCase()
+        : ''
+      const trendTimestamp = new Date(obs.effectiveDateTime).getTime()
+      const hasTrendPoint = numericValue !== undefined
+        && Number.isFinite(numericValue)
+        && Number.isFinite(trendTimestamp)
+        && !INVALID_TREND_STATUSES.has(normalizedStatus)
+        && !obs.valueQuantity?.comparator
+      if (hasTrendPoint) {
+        const stats = trendAvailability.get(mapKey) ?? {
+          pointCount: 0,
+          units: new Set<string>(),
+          specimens: new Set<string>(),
+        }
+        stats.pointCount += 1
+        stats.units.add(compactTrendUnit(trendUnit))
+        stats.specimens.add(
+          obs.specimen?.display?.normalize('NFKC').trim().toLowerCase()
+            || obs.specimen?.reference?.normalize('NFKC').trim().toLowerCase()
+            || '__missing__',
+        )
+        trendAvailability.set(mapKey, stats)
       }
 
       const cell: LabCell = {
@@ -378,6 +430,11 @@ export function buildLabPivots(
       row.unit = everyCellHasUnit && distinctUnits.size === 1
         ? distinctUnits.values().next().value
         : undefined
+      const trendStats = trendAvailability.get(row.mapKey)
+      row.trendChartable = !!trendStats
+        && trendStats.pointCount >= 2
+        && trendStats.units.size <= 1
+        && (cat.id !== 'bloodgas' || trendStats.specimens.size <= 1)
     }
 
     // Inject stub rows for pinned columns not present in patient data.

@@ -86,6 +86,9 @@ export const TEST_ALIASES: Record<string, string> = {
   // Protein
   TP: 'TP', 'TOTAL PROTEIN': 'TP',
   ALB: 'ALB', ALBUMIN: 'ALB', '白蛋白': 'ALB',
+  // Ammonia / blood ammonia (NHI 09037C). The one-character Chinese label is
+  // an exact alias only; it is never used as a substring classifier.
+  AMMONIA: 'AMMONIA', NH3: 'AMMONIA', '血氨': 'AMMONIA', '氨': 'AMMONIA',
   // BUN
   BUN: 'BUN', 'UREA NITROGEN': 'BUN', UREA: 'BUN',
   // Uric acid

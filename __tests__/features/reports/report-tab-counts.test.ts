@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useReportTabCounts } from '@/features/clinical-summary/reports/hooks/useReportTabCounts'
 import { calculateReportTabCounts } from '@/features/clinical-summary/reports/utils/report-tab-counts'
 
@@ -157,7 +157,24 @@ describe('calculateReportTabCounts', () => {
 })
 
 describe('useReportTabCounts', () => {
-  it('memoizes the result while all source-array references are unchanged', () => {
+  it('waits until after paint and browser idle, then preserves the result for stable resources', async () => {
+    const animationFrames: FrameRequestCallback[] = []
+    const idleCallbacks: IdleRequestCallback[] = []
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    })
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: jest.fn((callback: IdleRequestCallback) => {
+        idleCallbacks.push(callback)
+        return idleCallbacks.length
+      }),
+    })
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: jest.fn(),
+    })
     const diagnosticReports = [{
       id: 'dr-1',
       category: category('laboratory'),
@@ -182,10 +199,29 @@ describe('useReportTabCounts', () => {
         },
       },
     )
+    expect(result.current).toBeNull()
+
+    act(() => animationFrames.shift()?.(0))
+    expect(result.current).toBeNull()
+
+    act(() => idleCallbacks.shift()?.({
+      didTimeout: false,
+      timeRemaining: () => 20,
+    }))
+    await waitFor(() => expect(result.current).not.toBeNull())
     const first = result.current
 
     rerender({ diagnosticReports, imagingStudies, observations, procedures })
 
     expect(result.current).toBe(first)
+    jest.restoreAllMocks()
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: undefined,
+    })
   })
 })

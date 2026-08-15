@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { startTransition, useEffect, useRef, useState } from "react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
@@ -63,6 +63,12 @@ export default function ClinicalSummaryFeature() {
   // cited source clicked in the Medical Summary tab — can switch to the tab
   // owning that resource type before its anchor scroll-flashes the card.
   const [activeTab, setActiveTab] = useState(defaultTab)
+  // Keep a clinical tab mounted after its first visit. This prevents the
+  // Reports workspace (pivot tables, virtual lists, and their memoized data)
+  // from being destroyed whenever the clinician briefly checks another tab.
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(
+    () => new Set([defaultTab]),
+  )
   const tourActive = useLeftBrowserTourStore((state) => state.active)
   const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   const preTourTabRef = useRef<string | null>(null)
@@ -73,8 +79,14 @@ export default function ClinicalSummaryFeature() {
     if (!pending) return
     const target = leftTabForResourceType(pending.resourceType)
     if (target && tabs.some((tab) => tab.id === target)) {
-      setActiveTab(target)
-      clearDetail() // same contract as a manual tab switch
+      const timer = window.setTimeout(() => {
+        setMountedTabs((previous) => previous.has(target)
+          ? previous
+          : new Set(previous).add(target))
+        setActiveTab(target)
+        clearDetail() // same contract as a manual tab switch
+      }, 0)
+      return () => window.clearTimeout(timer)
     }
     // seq re-fires this even when navigating to the same target twice.
   }, [pending, seq, tabs, clearDetail])
@@ -90,7 +102,11 @@ export default function ClinicalSummaryFeature() {
 
     if (!tourActive && wasTourActiveRef.current) {
       wasTourActiveRef.current = false
-      setActiveTab(preTourTabRef.current ?? defaultTab)
+      const restoredTab = preTourTabRef.current ?? defaultTab
+      setMountedTabs((previous) => previous.has(restoredTab)
+        ? previous
+        : new Set(previous).add(restoredTab))
+      setActiveTab(restoredTab)
       preTourTabRef.current = null
       clearDetail()
       return
@@ -107,10 +123,55 @@ export default function ClinicalSummaryFeature() {
     })()
 
     if (targetTab && tabs.some((tab) => tab.id === targetTab)) {
+      setMountedTabs((previous) => previous.has(targetTab)
+        ? previous
+        : new Set(previous).add(targetTab))
       setActiveTab(targetTab)
     }
     if (tourStep !== 'right-pane') clearDetail()
   }, [activeTab, clearDetail, defaultTab, tabs, tourActive, tourStep])
+
+  // Warm only the Reports shell once the browser is idle. It remains hidden,
+  // but its own deferred workers can prepare counts and pivots without making
+  // the first click on 「報告」 carry the entire mount cost. Browsers without
+  // requestIdleCallback use a short post-paint fallback.
+  const hasReportsTab = tabs.some((tab) => tab.id === 'reports')
+  useEffect(() => {
+    if (!hasReportsTab || mountedTabs.has('reports')) return
+
+    let cancelled = false
+    let timer: number | undefined
+    let idleId: number | undefined
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const mountReports = () => {
+      if (cancelled) return
+      startTransition(() => {
+        setMountedTabs((previous) => previous.has('reports')
+          ? previous
+          : new Set(previous).add('reports'))
+      })
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (browserWindow.requestIdleCallback) {
+        idleId = browserWindow.requestIdleCallback(mountReports, { timeout: 1200 })
+      } else {
+        timer = window.setTimeout(mountReports, 160)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+      if (idleId !== undefined) browserWindow.cancelIdleCallback?.(idleId)
+    }
+  }, [hasReportsTab, mountedTabs])
 
   // Helper to get tab label (supports i18n)
   const getTabLabel = (tab: TabConfig): string => {
@@ -133,6 +194,9 @@ export default function ClinicalSummaryFeature() {
         // (向右展開) opened from the previous tab — the detail is tied to that
         // tab's content, so navigating away retracts it back to the AI panel.
         onValueChange={(value) => {
+          setMountedTabs((previous) => previous.has(value)
+            ? previous
+            : new Set(previous).add(value))
           setActiveTab(value)
           clearDetail()
         }}
@@ -167,7 +231,12 @@ export default function ClinicalSummaryFeature() {
         </ClinicalTabList>
 
         {tabs.map(tab => (
-          <TabsContent key={tab.id} value={tab.id} className="mt-1 flex-1 xl:mt-0">
+          <TabsContent
+            key={tab.id}
+            value={tab.id}
+            forceMount={mountedTabs.has(tab.id) || undefined}
+            className="mt-1 flex-1 xl:mt-0"
+          >
             <TabFeatureContent tabId={tab.id} />
           </TabsContent>
         ))}

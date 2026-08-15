@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -63,5 +63,27 @@ describe('CumulativeLabReport responsive category tabs', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '查看更多' })).toBeInTheDocument())
     expect(screen.queryByRole('tab', { name: '血氣 (0)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '病毒抗原 (0)' })).not.toBeInTheDocument()
+  })
+
+  it('selects a new category before mounting its table, then keeps it ready', async () => {
+    render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
+
+    const chemistryTab = screen.getByRole('tab', { name: '生化 (0)' })
+    fireEvent.mouseDown(chemistryTab, { button: 0, ctrlKey: false })
+
+    expect(chemistryTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('載入')
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /生化累積檢驗表/ })).toBeInTheDocument()
+    })
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '血液 (0)' }), {
+      button: 0,
+      ctrlKey: false,
+    })
+    fireEvent.mouseDown(chemistryTab, { button: 0, ctrlKey: false })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /生化累積檢驗表/ })).toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { TrendingUp } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -17,6 +18,14 @@ import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { categorizeObservation } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  buildLabTrendSeries,
+  UNCATEGORIZED_LAB_TREND_CATEGORY,
+} from '@/src/shared/utils/lab-trend.utils'
+import { CumulativeLabTrendDetail } from './CumulativeLabTrendDetail'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
@@ -36,6 +45,7 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
   const { audience } = useAudience()
   const { locale } = useLanguage()
   const nameMode = useReportNameMode()
+  const { observations = [] } = useClinicalData()
   // History queries match against canonical via canonicalTestKeyFromString
   // internally — pass the raw bridge text here so cross-institution name
   // variants still collapse correctly. The dialog *title* below is audience-
@@ -100,6 +110,29 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
     (hasComponents ? observation?.component?.[0]?.valueQuantity?.unit : undefined)
   const unitInferred = isInferredObservationUnit(observation)
   const referenceRange = observation?.referenceRange?.[0]
+  const unifiedTrendSeries = useMemo(() => {
+    if (!observation || hasComponents) return null
+    const category = categorizeObservation(observation)
+    const identity = getLabPivotTestIdentity(observation, category?.id, nameMode)
+    const observationAlreadyLoaded = observations.some((candidate: any) => (
+      candidate === observation
+      || (!!observation.id && candidate?.id === observation.id)
+    ))
+    // Some report rows contain a nested Observation that is not repeated in
+    // the top-level bundle. Include the selected result so even a one-point
+    // numeric history opens the same audited trend surface.
+    const trendSources = observationAlreadyLoaded
+      ? observations
+      : [...observations, observation]
+    const series = buildLabTrendSeries(trendSources, {
+      categoryId: category?.id ?? UNCATEGORIZED_LAB_TREND_CATEGORY,
+      mapKey: identity.mapKey,
+      testKey: identity.testKey,
+      displayName: dialogTitle || identity.displayName,
+      nameMode,
+    })
+    return series.points.length > 0 ? series : null
+  }, [dialogTitle, hasComponents, nameMode, observation, observations])
 
   // Text-based report (imaging / ECG / pathology) — chronological list of conclusions
   if (isReportSummary) {
@@ -117,6 +150,27 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
           <div className="mt-4">
             <ReportHistoryList data={reportHistory} />
           </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  // Scalar laboratory observations use the same audited trend surface as the
+  // cumulative report. Keeping the latest result, fixed-range chart and exact
+  // history together removes the extra legacy table/chart navigation layer.
+  if (unifiedTrendSeries) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-4 sm:p-6" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
+              {dialogTitle || observationCode || (locale.startsWith('zh') ? '檢驗項目' : 'Lab test')}
+              <span className="font-normal text-muted-foreground" aria-hidden="true">·</span>
+              <span>{locale.startsWith('zh') ? '檢驗趨勢' : 'Lab trend'}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <CumulativeLabTrendDetail series={unifiedTrendSeries} />
         </DialogContent>
       </Dialog>
     )

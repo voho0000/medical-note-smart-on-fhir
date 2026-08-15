@@ -10,7 +10,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         save: '儲存',
       },
       patient: {
-        profileDialogTitle: '補充病人基本資料',
+        profileDialogTitle: '補充或更新病人基本資料',
         profileDialogDescription: 'SDK 沒有提供結構化基本資料',
         aiProfileDialogTitle: '產生 AI 摘要前請補充基本資料',
         aiProfileDialogDescription: '性別與出生日期會影響摘要準確度',
@@ -38,6 +38,55 @@ jest.mock('@/src/application/providers/language.provider', () => ({
 }))
 
 describe('PatientDemographicsEditorDialog', () => {
+  it('prefills source demographics when there is no local profile', () => {
+    render(
+      <PatientDemographicsEditorDialog
+        open
+        onOpenChange={jest.fn()}
+        profile={null}
+        initialValues={{
+          name: '陳○明',
+          gender: 'male',
+          birthDate: '1932-05-20',
+        }}
+        saving={false}
+        onSave={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('姓名')).toHaveValue('陳○明')
+    expect(screen.getByRole('combobox', { name: '性別' })).toHaveTextContent('男性')
+    expect(screen.getByLabelText('出生日期')).toHaveValue('1932-05-20')
+  })
+
+  it('prefers an existing local override to source demographics', () => {
+    const profile: UserEnteredPatientProfile = {
+      source: 'user-entered',
+      name: '王小明',
+      gender: 'female',
+      birthDate: '1980-01-15',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+    }
+    render(
+      <PatientDemographicsEditorDialog
+        open
+        onOpenChange={jest.fn()}
+        profile={profile}
+        initialValues={{
+          name: '陳○明',
+          gender: 'male',
+          birthDate: '1932-05-20',
+        }}
+        saving={false}
+        onSave={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('姓名')).toHaveValue('王小明')
+    expect(screen.getByRole('combobox', { name: '性別' })).toHaveTextContent('女性')
+    expect(screen.getByLabelText('出生日期')).toHaveValue('1980-01-15')
+  })
+
   it('submits a normalized local profile', async () => {
     const onSave = jest.fn().mockResolvedValue(undefined)
     render(

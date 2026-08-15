@@ -79,7 +79,21 @@ jest.mock('@/features/clinical-summary/reports/components/CumulativeLabReport', 
 }))
 
 jest.mock('@/features/clinical-summary/reports/components/ReportsTabContent', () => ({
-  ReportsTabContent: () => null,
+  ReportsTabContent: ({
+    value,
+    isActive,
+    isPreparing,
+  }: {
+    value: string
+    isActive: boolean
+    isPreparing: boolean
+  }) => (
+    <div
+      data-testid={`raw-report-${value}`}
+      data-active={isActive ? 'true' : 'false'}
+      data-preparing={isPreparing ? 'true' : 'false'}
+    />
+  ),
 }))
 
 describe('ReportsCard lazy cumulative loading', () => {
@@ -95,6 +109,14 @@ describe('ReportsCard lazy cumulative loading', () => {
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       callback(0)
       return 1
+    })
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: jest.fn(() => 1),
+    })
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: jest.fn(),
     })
     useResourceNavigationStore.setState({
       pending: {
@@ -119,9 +141,17 @@ describe('ReportsCard lazy cumulative loading', () => {
 
   afterEach(() => {
     jest.restoreAllMocks()
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: undefined,
+    })
   })
 
-  it('keeps the cumulative report visible while raw report rows are deferred', () => {
+  it('paints the report shell before cumulative and raw report work begins', async () => {
     const diagnosticReports = [{ id: 'report-1', resourceType: 'DiagnosticReport' }]
     const imagingStudies = [{ id: 'study-1', resourceType: 'ImagingStudy' }]
     mockUseClinicalData.mockReturnValue({
@@ -135,6 +165,8 @@ describe('ReportsCard lazy cumulative loading', () => {
 
     render(<ReportsCard />)
 
+    expect(screen.queryByTestId('cumulative-report')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading')
     expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
     expect(mockUseReportsData).not.toHaveBeenCalledWith(
       diagnosticReports,
@@ -146,12 +178,48 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
-    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('observations: 1')
-    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('category: chem')
-    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('focus: CRP')
-    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('nonce: 1')
+    const cumulative = await screen.findByTestId('cumulative-report')
+    expect(cumulative).toHaveTextContent('observations: 1')
+    expect(cumulative).toHaveTextContent('category: chem')
+    expect(cumulative).toHaveTextContent('focus: CRP')
+    expect(cumulative).toHaveTextContent('nonce: 1')
     expect(screen.getByRole('switch', { name: '名稱顯示' })).toBeChecked()
     expect(screen.queryByText('在選定的時間範圍內未找到報告。')).not.toBeInTheDocument()
+  })
+
+  it('selects a raw report tab before its projection is enabled', async () => {
+    const diagnosticReports = [{ id: 'report-1', resourceType: 'DiagnosticReport' }]
+    mockUseClinicalData.mockReturnValue({
+      diagnosticReports,
+      imagingStudies: [],
+      observations: [{ id: 'obs-1', resourceType: 'Observation' }],
+      procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
+      isLoading: false,
+      error: null,
+    })
+    useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
+
+    render(<ReportsCard />)
+    await screen.findByTestId('cumulative-report')
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /全部/ }), {
+      button: 0,
+      ctrlKey: false,
+    })
+
+    expect(screen.getByRole('tab', { name: /全部/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'true')
+    expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
+
+    await waitFor(() => {
+      expect(mockUseReportsData).toHaveBeenLastCalledWith(
+        diagnosticReports,
+        [],
+        'standardized',
+      )
+    })
+    expect(screen.getByTestId('raw-report-all')).toHaveAttribute('data-preparing', 'false')
   })
 
   it('shares the name mode across cumulative, all, lab, imaging, and vitals tabs', async () => {
