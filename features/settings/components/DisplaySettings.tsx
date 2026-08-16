@@ -11,7 +11,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Moon, Sun, ExternalLink, Bug } from 'lucide-react'
+import { Moon, Sun, ExternalLink, Bug, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useTheme } from '@/src/application/providers/theme.provider'
@@ -20,6 +20,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
+import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
 import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
@@ -39,6 +40,7 @@ export function DisplaySettings() {
   const version = useAppVersion()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [featureRequestsOpen, setFeatureRequestsOpen] = useState(false)
 
   const hasConnectionInfo = !!(fhirServerUrl || patientId)
   const isLocalBundle = isLocalBundleFhirUrl(fhirServerUrl)
@@ -133,10 +135,16 @@ export function DisplaySettings() {
           <Label className="text-xs uppercase text-muted-foreground">
             {t.feedback?.title ?? '問題回報'}
           </Label>
-          <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
-            <Bug className="h-4 w-4" />
-            {(t.settings as any).openFeedback ?? '開啟回報表單'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
+              <Bug className="h-4 w-4" />
+              {(t.settings as any).openFeedback ?? '開啟回報表單'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setFeatureRequestsOpen(true)} className="gap-2">
+              <Lightbulb className="h-4 w-4" />
+              {t.featureRequests.openPool}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -184,7 +192,10 @@ export function DisplaySettings() {
       </div>
 
       {DEPLOYMENT_CONFIG.isCloud ? (
-        <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+        <>
+          <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+          <FeatureRequestPoolDialog open={featureRequestsOpen} onOpenChange={setFeatureRequestsOpen} />
+        </>
       ) : null}
     </div>
   )

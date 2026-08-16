@@ -62,6 +62,8 @@ const onPremAliases: Record<string, string> = {
     '@/src/infrastructure/onprem/chat/composition.chat.ts',
   '@/features/prompt-gallery/services/prompt-gallery.service':
     '@/features/prompt-gallery/services/prompt-gallery.onprem.service.ts',
+  '@/features/feature-request-pool/service':
+    '@/features/feature-request-pool/service.onprem.ts',
 };
 
 const onPremWebpackAliases = Object.fromEntries(

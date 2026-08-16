@@ -24,6 +24,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
+import { FeatureRequestPoolDialog } from "@/features/feature-request-pool"
 
 interface FeedbackDialogProps {
   open: boolean
@@ -36,6 +37,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle")
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [featureRequestsOpen, setFeatureRequestsOpen] = useState(false)
 
   const [formData, setFormData] = useState({
     email: "",
@@ -131,6 +133,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -164,9 +167,16 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               <Label htmlFor="issueType">{t.feedback?.issueType || "問題類型"} *</Label>
               <Select
                 value={formData.issueType}
-                onValueChange={(value) => setFormData({ ...formData, issueType: value })}
+                onValueChange={(value) => {
+                  if (value === "feature") {
+                    onOpenChange(false)
+                    setFeatureRequestsOpen(true)
+                    return
+                  }
+                  setFormData({ ...formData, issueType: value })
+                }}
               >
-                <SelectTrigger className={errors.issueType ? "border-red-500" : ""}>
+                <SelectTrigger id="issueType" className={errors.issueType ? "border-red-500" : ""}>
                   <SelectValue placeholder={t.feedback?.selectIssueType || "選擇類型"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -188,7 +198,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                 value={formData.severity}
                 onValueChange={(value) => setFormData({ ...formData, severity: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="severity">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -275,5 +285,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         </form>
       </DialogContent>
     </Dialog>
+    <FeatureRequestPoolDialog open={featureRequestsOpen} onOpenChange={setFeatureRequestsOpen} />
+    </>
   )
 }

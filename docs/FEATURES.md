@@ -39,6 +39,7 @@ Feature 不應：
 | `clinical-summary` | 左側病人、就診、報告、用藥、文件資料卡 | `feature-registry.ts` |
 | `data-selection` | 選擇 AI 摘要資料範圍與預覽 | `DataSelectionDrawer`、provider |
 | `feedback` | 回報問題／建議 | Header overflow；外部 URL 或 `/api/feedback` |
+| `feature-request-pool` | 公開瀏覽、許願、投票與進度追蹤 | 設定入口；Firestore `featureRequests` |
 | `import-bundle` | 匯入 JSON、載入 demo、清除本地資料 | `LocalBundleService` |
 | `ips-export` | 產生 IPS Bundle／Markdown、推論待確認問題 | `Feature.tsx`；人工逐項確認 |
 | `medical-calculator` | 58 個臨床公式／評分、病人數值帶入 | 10 類 calculator definitions；KFRE 核心可供個人化指引共用 |

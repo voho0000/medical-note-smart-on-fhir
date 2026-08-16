@@ -16,7 +16,7 @@ features/feedback/
 ```
 
 - `FeedbackButton` owns dialog open state and is mounted from `HeaderOverflowMenu`.
-- `FeedbackDialog` validates input, collects non-patient system metadata, chooses the endpoint, submits JSON, and shows success/error state.
+- `FeedbackDialog` validates input, collects non-patient system metadata, chooses the endpoint, submits JSON, and shows success/error state. Selecting `Feature Request` opens the shared feature-request pool instead of sending a private email.
 - `app/api/feedback/route.ts` is the optional same-repo Node endpoint; it is not part of static exports.
 
 ## Endpoint selection
@@ -29,7 +29,7 @@ When `NEXT_PUBLIC_PROXY_KEY` is present the client also sends `X-Client-Key`. Th
 
 ## Form contract
 
-Required fields: Email, issue type, description. Description must be at least 20 characters in the UI. Severity defaults to `medium`; reproduction steps are optional.
+Required fields for bug and issue reports: Email, issue type, description. Description must be at least 20 characters in the UI. Severity defaults to `medium`; reproduction steps are optional. Feature ideas use the separate `features/feature-request-pool` contract.
 
 Automatically collected fields are timestamp, user agent, screen resolution, browser language, current path, and FHIR server URL. `patientId` is intentionally excluded. Do not add patient name, id, Bundle fragments, chat content, tokens, or API keys to the payload.
 
