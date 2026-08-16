@@ -109,10 +109,12 @@ test.describe('AI chat streaming (mocked)', () => {
     await page.getByRole('button', { name: '傳送' }).click()
 
     // The stream stalls; within the idle timeout (4s) the assistant message must
-    // turn into a timeout error (getUserErrorMessage maps "timed out" → 逾時),
-    // NOT hang. Allow generous wall-clock for CI.
-    const reply = chatPanel(page).locator('.prose').last()
-    await expect(reply).toContainText('逾時', { timeout: 15_000 })
+    // expose a retryable timeout alert (getUserErrorMessage maps "timed out" →
+    // 逾時), while preserving the partial answer. Allow generous wall-clock
+    // for CI.
+    const timeoutAlert = chatPanel(page).getByRole('alert')
+    await expect(timeoutAlert).toContainText('逾時', { timeout: 15_000 })
+    await expect(timeoutAlert.getByRole('button', { name: '重試' })).toBeVisible()
     const elapsedMs = Date.now() - started
     console.log(`[e2e][stall] timed out + surfaced error in ${elapsedMs}ms`)
 

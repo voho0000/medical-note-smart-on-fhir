@@ -12,11 +12,12 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await openReportsSubTab(page, '生命徵象')
     // The composite-BP trend button (added so vital-sign BP rows get a trend).
     await page.getByRole('button', { name: '查看趨勢', exact: true }).first().click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    // Abbreviated component labels in the dialog (header / subtitle).
-    await expect(dialog.getByText(/SBP/).first()).toBeVisible()
-    await expect(dialog.getByText(/DBP/).first()).toBeVisible()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await expect(detailPanel).toContainText('Blood Pressure')
+    await detailPanel.getByRole('tab', { name: '趨勢圖表' }).click()
+    // Abbreviated component labels remain visible in the right-pane chart.
+    await expect(detailPanel.getByText(/SBP/).first()).toBeVisible()
+    await expect(detailPanel.getByText(/DBP/).first()).toBeVisible()
   })
 
   test('single-analyte trend shows the chart with always-on value labels and normal-range band', async ({ page }) => {
@@ -30,11 +31,10 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
     await expect(albuminRow).toBeVisible()
     await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('tab', { name: '趨勢圖表' }).click()
-    // Soft green normal-range band label + an always-on value label on a point.
-    await expect(dialog.getByText('正常範圍')).toBeVisible()
-    await expect(dialog.getByText('4.3').first()).toBeVisible()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await expect(detailPanel.getByRole('img', { name: /檢驗趨勢圖/ })).toBeVisible()
+    // Reference-range label + an always-on value label on a point.
+    await expect(detailPanel.getByText('共同參考範圍')).toBeVisible()
+    await expect(detailPanel.getByText('4.3').first()).toBeVisible()
   })
 })
