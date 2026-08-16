@@ -13,6 +13,7 @@ import {
   startLocalImportAiConsent,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { DEMO_FLAG_KEY } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { VGTPE_MEDCLOUD_LAUNCH_URL } from '@/src/application/launch/medcloud-launch-context'
 
 const mockOnboarding = {
   step: '步驟',
@@ -178,6 +179,25 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     expect(screen.getByText('醫療摘要產生方式')).toBeInTheDocument()
     expect(screen.queryByText('歡迎使用 MediPrisma')).not.toBeInTheDocument()
     expect(screen.getByText('步驟 1 / 1')).toBeInTheDocument()
+  })
+
+  it('does not show the generic auto-summary onboarding on the exact VGTPE Medcloud launch', () => {
+    mockOnboardingCompleted = true
+
+    render(<FirstRunOnboardingDialog launchHref={VGTPE_MEDCLOUD_LAUNCH_URL} />)
+
+    expect(screen.queryByText('醫療摘要產生方式')).not.toBeInTheDocument()
+    expect(localStorage.getItem(AUTO_AI_REAL_DATA_DECISION_KEY)).toBeNull()
+  })
+
+  it('keeps the generic consent gate for similar but non-allow-listed launch URLs', () => {
+    mockOnboardingCompleted = true
+
+    render(
+      <FirstRunOnboardingDialog launchHref="https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto" />,
+    )
+
+    expect(screen.getByText('醫療摘要產生方式')).toBeInTheDocument()
   })
 
   it('does not inherit a browser-wide auto choice for a new local import', () => {

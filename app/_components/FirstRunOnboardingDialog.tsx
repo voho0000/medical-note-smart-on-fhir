@@ -24,6 +24,7 @@ import { usePatient } from '@/src/application/hooks/patient/use-patient-query.ho
 import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding.hook'
+import { isVghtpeMedcloudLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
 import {
   clearTodayLocalImportAiDecision,
   type AutoAiConsentState,
@@ -39,10 +40,23 @@ import { AuthDialog } from '@/features/auth/components/AuthDialog'
 type StepId = 'welcome' | 'audience' | 'autoScan' | 'signIn'
 type AutoAiChoice = 'auto' | 'manual'
 
-export function FirstRunOnboardingDialog() {
+interface FirstRunOnboardingDialogProps {
+  /** Test seam only; production always reads the current page URL. */
+  launchHref?: string
+}
+
+export function FirstRunOnboardingDialog({ launchHref }: FirstRunOnboardingDialogProps = {}) {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const consentState = useAutoAiConsentState()
   const dataLoaded = !!patient && !patientLoading && !patientError
+  // The exact allow-listed Medcloud route has a credential-gated, one-shot
+  // summary runner of its own. It must not be interrupted by the browser-wide
+  // SMART/local auto-analysis decision dialog. A bad or absent Extension
+  // credential still cannot start AI generation; that gate remains in the
+  // Medcloud provider.
+  const medcloudLaunchOwnsAutoRun = isVghtpeMedcloudLaunchUrl(
+    launchHref ?? (typeof window === 'undefined' ? '' : window.location.href),
+  )
 
   // Recover a prompt for bundles retained from an older build, or for a page
   // reload that happened after the Bundle was saved but before its import flow
@@ -72,6 +86,7 @@ export function FirstRunOnboardingDialog() {
       key={consentContextKey}
       consentState={consentState}
       dataLoaded={dataLoaded}
+      suppressForMedcloudLaunch={medcloudLaunchOwnsAutoRun}
     />
   )
 }
@@ -79,9 +94,11 @@ export function FirstRunOnboardingDialog() {
 function FirstRunOnboardingFlow({
   consentState,
   dataLoaded,
+  suppressForMedcloudLaunch,
 }: {
   consentState: AutoAiConsentState
   dataLoaded: boolean
+  suppressForMedcloudLaunch: boolean
 }) {
   const { t } = useLanguage()
   const ob = t.onboarding
@@ -110,7 +127,10 @@ function FirstRunOnboardingFlow({
       ? consentState.decision === 'pending'
       : consentState.decision === null
   )
-  const open = onboardingReady && dataLoaded && (!completed || needsRealDataDecision)
+  const open = onboardingReady
+    && dataLoaded
+    && !suppressForMedcloudLaunch
+    && (!completed || needsRealDataDecision)
 
   const [stepIndex, setStepIndex] = useState(0)
   const [showAuth, setShowAuth] = useState(false)
