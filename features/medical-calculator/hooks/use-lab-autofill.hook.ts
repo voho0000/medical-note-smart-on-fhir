@@ -257,12 +257,34 @@ export function buildAutofill(
   return { resolve, sex }
 }
 
-export function useLabAutofill(): Autofill {
-  const { observations } = useClinicalData()
+export interface LabAutofillState {
+  autofill: Autofill
+  /**
+   * True while the patient's clinical data is still being fetched (initial
+   * load or a background refresh). Consumers MUST distinguish this from a
+   * settled empty result: an un-filled field during loading means "not known
+   * yet", while the same blank field after loading means "this patient has no
+   * such result" — and a clinician reading the second meaning into the first
+   * would draw a false clinical conclusion.
+   */
+  isLoading: boolean
+  /** Set when the fetch failed; autofill is empty for the same reason. */
+  error: Error | null
+  /** Re-run the clinical-data query after a failure. */
+  retry: () => Promise<void>
+}
+
+export function useLabAutofill(): LabAutofillState {
+  const { observations, isLoading, isFetching, error, refetch } = useClinicalData()
   const { patient } = usePatient()
 
-  return useMemo(
+  const autofill = useMemo(
     () => buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }),
     [observations, patient],
+  )
+
+  return useMemo(
+    () => ({ autofill, isLoading: isLoading || isFetching, error, retry: refetch }),
+    [autofill, isLoading, isFetching, error, refetch],
   )
 }

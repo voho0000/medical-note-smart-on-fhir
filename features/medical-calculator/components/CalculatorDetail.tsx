@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
+import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -33,12 +33,18 @@ const SEVERITY_STYLES: Record<Severity, string> = {
 /** Defensive guard around a calculator's `compute()` — a single formula bug
  *  (a hand-authored edge case someone missed) must degrade to "can't compute"
  *  for that one calculator, not crash the whole detail view / right panel. */
-function safeCompute(calc: CalculatorDef, values: CalcValues): ReturnType<CalculatorDef['compute']> {
+function safeCompute(
+  calc: CalculatorDef,
+  values: CalcValues,
+): { result: ReturnType<CalculatorDef['compute']>; crashed: boolean } {
   try {
-    return calc.compute(values)
+    return { result: calc.compute(values), crashed: false }
   } catch (err) {
     console.error(`[medical-calculator] compute() threw for "${calc.id}":`, err)
-    return null
+    // `crashed` keeps this distinguishable from "not enough inputs yet".
+    // Both used to render as a blank result area, which told a clinician who
+    // had filled every field that they hadn't.
+    return { result: null, crashed: true }
   }
 }
 
@@ -99,7 +105,18 @@ export function CalculatorDetail({
   onToggleFavorite: () => void
 }) {
   const { locale } = useLanguage()
-  const autofill = useLabAutofill()
+  const {
+    autofill,
+    isLoading: patientDataLoading,
+    error: patientDataError,
+    retry: retryPatientData,
+  } = useLabAutofill()
+  // Questionnaire-style calculators (GDS-15, PHQ-9…) have no `source` on any
+  // input, so a loading chart tells the user nothing — keep their view quiet.
+  const calcUsesPatientData = useMemo(
+    () => calc.inputs.some((input) => !!input.source),
+    [calc],
+  )
 
   const initial = useMemo(() => seed(calc, autofill), [calc, autofill])
   const [values, setValues] = useState<CalcValues>(initial.values)
@@ -109,7 +126,23 @@ export function CalculatorDetail({
   // equivalent-unit fills. Persists across manual edits (same scale).
   const [displayUnits, setDisplayUnits] = useState<Record<string, string>>(initial.units)
 
+  // Opening a calculator while the chart is still loading used to seed the
+  // inputs from an empty autofill and never revisit it — the fields stayed
+  // blank for good, with the "Refill" button hidden because nothing was
+  // filled. Re-seed when a newer autofill arrives, but never overwrite what
+  // the clinician has already typed. Adjusted during render (not in an
+  // effect) so the values land in the same paint.
+  const [edited, setEdited] = useState(false)
+  const [seededFrom, setSeededFrom] = useState(initial)
+  if (!edited && initial !== seededFrom) {
+    setSeededFrom(initial)
+    setValues(initial.values)
+    setFilled(initial.filled)
+    setDisplayUnits(initial.units)
+  }
+
   const setValue = useCallback((key: string, value: string) => {
+    setEdited(true)
     setValues((prev) => ({ ...prev, [key]: value }))
     setFilled((prev) => {
       if (!prev[key]) return prev
@@ -121,12 +154,13 @@ export function CalculatorDetail({
 
   const refill = useCallback(() => {
     const s = seed(calc, autofill)
+    setEdited(false)
     setValues(s.values)
     setFilled(s.filled)
     setDisplayUnits(s.units)
   }, [calc, autofill])
 
-  const result = useMemo(() => safeCompute(calc, values), [calc, values])
+  const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, values), [calc, values])
   const hasAnyAutofill = Object.keys(filled).length > 0
   const info = getCalcInfo(calc.id)
   const scoring = getCalcScoring(calc.id)
@@ -220,6 +254,40 @@ export function CalculatorDetail({
         </div>
       )}
 
+      {/* Why the fields are empty. Without this, an un-filled creatinine reads
+          as "this patient has no creatinine on file" when the chart is in fact
+          still loading or failed to load — a blank that states a clinical fact
+          the app has not established. */}
+      {calcUsesPatientData && patientDataLoading && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+          {zh
+            ? "病人資料載入中，尚未自動帶入。空白欄位不代表沒有這項檢驗。"
+            : "Loading patient data — autofill is pending. An empty field does not mean the result is absent."}
+        </div>
+      )}
+      {calcUsesPatientData && !patientDataLoading && patientDataError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            {zh
+              ? "無法讀取病人資料，自動帶入已停用；空白欄位不代表沒有這項檢驗，請自行填入或重試。"
+              : "Couldn't read patient data, so autofill is off. An empty field does not mean the result is absent — enter values manually or retry."}
+          </span>
+          <button
+            type="button"
+            onClick={() => { void retryPatientData() }}
+            className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-destructive/40 px-2 font-medium transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+          >
+            <RotateCw className="h-3 w-3" aria-hidden="true" />
+            {zh ? "重試" : "Retry"}
+          </button>
+        </div>
+      )}
+
       {/* Temporal-coherence warning: auto-filled values span different reports. */}
       {coherence && (
         <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50/70 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
@@ -281,6 +349,12 @@ export function CalculatorDetail({
                 {tr(locale, result.notes)}
               </div>
             )}
+          </div>
+        ) : computeCrashed ? (
+          <div className="text-sm text-destructive">
+            {zh
+              ? "無法計算此分數（公式發生錯誤）。請改用其他工具或人工核算，不要以空白視為正常。"
+              : "Couldn't compute this score (the formula errored). Use another tool or calculate manually — do not read the blank as normal."}
           </div>
         ) : (
           <div className="text-sm text-muted-foreground">

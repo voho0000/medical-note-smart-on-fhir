@@ -7,7 +7,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, ChevronRight, Calculator, Star, Clock, Users, Stethoscope } from "lucide-react"
+import { Search, ChevronRight, Calculator, Star, Clock, Loader2, Users, Stethoscope } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -15,7 +15,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
 import { CalculatorDetail } from "./components/CalculatorDetail"
-import { useLabAutofill } from "./hooks/use-lab-autofill.hook"
+import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
 import { computeAutofilledResult, relevanceScore } from "./autofill-compute"
 import { buildCalcList, forAudience as visibleForAudience, specialtiesPresent, type CalcFilter } from "./list-logic"
@@ -42,7 +42,7 @@ function daysAgo(iso: string): number | null {
 export default function MedicalCalculatorFeature() {
   const { locale } = useLanguage()
   const { audience } = useAudience()
-  const autofill = useLabAutofill()
+  const { autofill, isLoading: patientDataLoading, error: patientDataError } = useLabAutofill()
   const { favorites, toggleFavorite, isFavorite } = useCalcFavorites()
   const { recent, markUsed } = useCalcRecent()
   const zh = locale === "zh-TW"
@@ -111,8 +111,16 @@ export default function MedicalCalculatorFeature() {
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
           {zh ? "全部" : "All"}
         </FilterChip>
-        {/* "For this patient": calculators the loaded data can already drive. */}
-        {relevantCount > 0 && (
+        {/* "For this patient": calculators the loaded data can already drive.
+            While the chart is still loading the count is not zero — it is
+            unknown, so show a pending chip rather than silently omitting it
+            (which reads as "nothing applies to this patient"). */}
+        {patientDataLoading ? (
+          <FilterChip active={false} disabled onClick={() => {}}>
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {zh ? "此病人 …" : "For patient …"}
+          </FilterChip>
+        ) : relevantCount > 0 && (
           <FilterChip active={filter === "relevant"} onClick={() => setFilter("relevant")}>
             <Stethoscope className="h-3 w-3" />
             {zh ? `此病人 ${relevantCount}` : `For patient ${relevantCount}`}
@@ -149,7 +157,15 @@ export default function MedicalCalculatorFeature() {
               : filter === "recent"
                 ? (zh ? "尚無最近使用的計算機。" : "No recently used calculators yet.")
                 : filter === "relevant"
-                  ? (zh ? "目前載入的資料尚無法直接帶入任一計算機。" : "The loaded data can't drive any calculator yet.")
+                  // An empty "for this patient" list means three different
+                  // things; saying "no calculator applies" while the chart is
+                  // still loading (or failed to load) would state a clinical
+                  // fact the app has not established.
+                  ? patientDataLoading
+                    ? (zh ? "病人資料載入中…" : "Loading patient data…")
+                    : patientDataError
+                      ? (zh ? "無法讀取病人資料，暫時無法判斷可帶入的計算機。" : "Couldn't read patient data, so applicable calculators are unknown.")
+                      : (zh ? "目前載入的資料尚無法直接帶入任一計算機。" : "The loaded data can't drive any calculator yet.")
                   : (zh ? "找不到符合的計算機。" : "No matching calculators.")
             : (zh ? "找不到符合的計算機。" : "No matching calculators.")}
         </div>
@@ -205,7 +221,7 @@ function CalculatorCard({
 }: {
   calc: CalculatorDef
   locale: string
-  autofill: ReturnType<typeof useLabAutofill>
+  autofill: Autofill
   isFavorite: boolean
   /** In medical mode, flags a calculator a patient could self-complete (a
    *  questionnaire like GDS-15/PHQ-9) so the clinician can spot hand-off tools. */
@@ -296,12 +312,13 @@ function CalculatorCard({
   )
 }
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function FilterChip({ active, onClick, children, disabled }: { active: boolean; onClick: () => void; children: React.ReactNode; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+      disabled={disabled}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-70 ${
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border text-muted-foreground hover:bg-muted"
