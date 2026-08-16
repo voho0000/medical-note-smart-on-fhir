@@ -51,6 +51,7 @@ import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
+import { AnalyteSearchBox } from "./AnalyteSearchBox"
 
 interface OpenTrendRequest {
   series: LabTrendSeries
@@ -437,6 +438,20 @@ export function CumulativeLabReport({
   const hiddenCats = useMemo(() => nonEmpty.filter((p) => p.category.hiddenByDefault), [nonEmpty])
 
   const [internalActiveId, setInternalActiveId] = useState<string>(() => visibleCats[0]?.category.id || nonEmpty[0]?.category.id || 'cbc')
+  // Single focus channel fed by both sources — the parent's props (AI-citation
+  // navigation) and the in-table analyte search. Whichever acted last wins, and
+  // `seq` always advances so re-picking the same analyte re-runs the centring
+  // effect in LabPivotTable.
+  const [focusRequest, setFocusRequest] = useState<{ key: string; seq: number } | null>(
+    () => (focusAnalyteKey ? { key: focusAnalyteKey, seq: 0 } : null),
+  )
+  const [seenPropNonce, setSeenPropNonce] = useState(focusNonce)
+  if (focusNonce !== seenPropNonce) {
+    setSeenPropNonce(focusNonce)
+    if (focusAnalyteKey) {
+      setFocusRequest((previous) => ({ key: focusAnalyteKey, seq: (previous?.seq ?? 0) + 1 }))
+    }
+  }
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set())
   const tabsViewportRef = useRef<HTMLDivElement>(null)
   const allTabsMeasureRef = useRef<HTMLDivElement>(null)
@@ -577,6 +592,22 @@ export function CumulativeLabReport({
     if (!readyCategoryIds.has(id)) setPendingCategoryId(id)
     onCategoryChange?.(id)
   }
+
+  // Picking an analyte from the search box switches category and focuses the
+  // column. The nonce must change on every pick so choosing the same analyte
+  // twice re-runs the centring effect.
+  const pickAnalyte = (hit: { categoryId: string; testKey: string }) => {
+    if (hiddenCats.some((p) => p.category.id === hit.categoryId)) {
+      setRevealedIds((previous) => {
+        if (previous.has(hit.categoryId)) return previous
+        const next = new Set(previous)
+        next.add(hit.categoryId)
+        return next
+      })
+    }
+    setActiveId(hit.categoryId)
+    setFocusRequest((previous) => ({ key: hit.testKey, seq: (previous?.seq ?? 0) + 1 }))
+  }
   const revealCategory = (id: string) => {
     setRevealedIds((prev) => {
       const next = new Set(prev)
@@ -596,6 +627,18 @@ export function CumulativeLabReport({
 
   return (
     <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
+      {/* Analyte finder. Sits above the category strip because it is the way
+          out of "which tab is potassium in?" — the question that otherwise
+          costs a guess plus a long horizontal scroll. */}
+      <div className="mb-1 shrink-0">
+        <AnalyteSearchBox
+          pivots={nonEmpty}
+          categoryLabels={categoryLabels}
+          nameMode={nameMode}
+          onPick={pickAnalyte}
+          className="max-w-full sm:max-w-64"
+        />
+      </div>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
         <div className="relative flex min-w-0 items-center gap-2">
           <TabsList
@@ -682,8 +725,8 @@ export function CumulativeLabReport({
               <LabPivotTable
                 pivot={p}
                 fullHeight={fullHeight}
-                focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
-                focusNonce={focusNonce}
+                focusAnalyteKey={p.category.id === activeId ? focusRequest?.key : undefined}
+                focusNonce={focusRequest?.seq}
                 nameMode={nameMode}
                 activeTrendSourceId={activeTrendSourceId}
                 onOpenTrend={openTrend}
