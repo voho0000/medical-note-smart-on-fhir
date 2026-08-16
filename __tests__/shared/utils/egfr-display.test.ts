@@ -7,6 +7,7 @@
 import {
   getAnalyteLabel,
   getAnalyteCanonicalKey,
+  getAnalyteDisplayForMode,
   getAnalyteDisplayForObs,
   getAnalyteDisplayLabel,
 } from '@/src/shared/utils/lab-normalize'
@@ -30,6 +31,10 @@ describe('eGFR canonical keys (dual-formula split)', () => {
   it('splits by code.text method token when no distinct LOINC is present', () => {
     expect(getAnalyteCanonicalKey(textObs('eGFR (CKD-EPI)'))).toBe('EGFR(EPI)')
     expect(getAnalyteCanonicalKey(textObs('eGFR (MDRD)'))).toBe('EGFR(M)')
+  })
+
+  it('recognizes the NHI Chinese CKD-EPI source name without a LOINC', () => {
+    expect(getAnalyteCanonicalKey(textObs('腎絲球過濾率(新) ;(eGFR-CKD-EPI)'))).toBe('EGFR(EPI)')
   })
 
   it('routes bare eGFR (no formula, no LOINC) to the MDRD key by convention', () => {
@@ -67,6 +72,20 @@ describe('eGFR display fidelity (per-obs render path)', () => {
 
   it('a source that DOES state the method shows it faithfully (both directions)', () => {
     expect(getAnalyteDisplayForObs(loincObs('eGFR (CKD-EPI)', '62238-1'), 'medical', 'en')).toBe('eGFR (CKD-EPI)')
+  })
+})
+
+describe('eGFR name modes', () => {
+  const sourceName = '腎絲球過濾率(新) ;(eGFR-CKD-EPI)'
+  const observation = textObs(sourceName)
+
+  it('shows the canonical CKD-EPI name in standardized mode', () => {
+    expect(getAnalyteDisplayForMode(observation, 'medical', 'zh-TW', 'standardized')).toBe('EGFR(EPI)')
+    expect(getAnalyteDisplayForMode(observation, 'patient', 'zh-TW', 'standardized')).toBe('腎絲球過濾率 (CKD-EPI)')
+  })
+
+  it('keeps the hospital source name in original mode', () => {
+    expect(getAnalyteDisplayForMode(observation, 'medical', 'zh-TW', 'original')).toBe(sourceName)
   })
 })
 

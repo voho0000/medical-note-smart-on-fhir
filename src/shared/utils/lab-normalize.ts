@@ -160,6 +160,9 @@ export const TEST_ALIASES: Record<string, string> = {
   // the rawUpper form before parens-stripping, so these fire on the full text.
   'EGFR (CKD-EPI)': 'EGFR(EPI)', 'EGFR-EPI': 'EGFR(EPI)', 'EGFR CKD-EPI': 'EGFR(EPI)',
   'ESTIMATED GFR (CKD-EPI)': 'EGFR(EPI)',
+  // NHI source label observed without a LOINC. Keep the full raw-form alias:
+  // normalization removes an initial CJK name before it can inspect CKD-EPI.
+  '腎絲球過濾率(新) ;(EGFR-CKD-EPI)': 'EGFR(EPI)',
   'EGFR (MDRD)': 'EGFR(M)', 'EGFR-MDRD': 'EGFR(M)', 'EGFR MDRD': 'EGFR(M)',
   'ESTIMATED GFR (MDRD)': 'EGFR(M)',
   'CREATININE(U)': 'CREA', CREATININEU: 'CREA',
@@ -1313,17 +1316,19 @@ export function getOriginalAnalyteDisplayForObs(
   return '—'
 }
 
-/** UI-only name selector. Standardized deliberately delegates to the existing
- * resolver so the default reports experience remains byte-for-byte compatible. */
+/** UI-only name selector. Standardized mode always renders the canonical
+ * audience-aware name; original mode preserves the hospital source label. */
 export function getAnalyteDisplayForMode(
   obsOrComponent: { code?: any } | null | undefined,
   audience: AudienceMode,
   language: DisplayLang,
   mode: AnalyteNameMode = 'standardized',
 ): string {
-  return mode === 'original'
-    ? getOriginalAnalyteDisplayForObs(obsOrComponent)
-    : getAnalyteDisplayForObs(obsOrComponent, audience, language)
+  if (mode === 'original') return getOriginalAnalyteDisplayForObs(obsOrComponent)
+  const key = getAnalyteCanonicalKey(obsOrComponent)
+  return key
+    ? getAnalyteDisplayLabel(key, audience, language)
+    : pickFallbackDisplayForObs(obsOrComponent, language)
 }
 
 const EGFR_FAMILY_KEYS = new Set(['EGFR', 'EGFR(M)', 'EGFR(EPI)'])
