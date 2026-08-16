@@ -28,10 +28,11 @@ export function AudienceSwitcher() {
           variant="outline"
           size="sm"
           aria-label={t.audience.switcherLabel}
-          className="gap-2 border-border/40 hover:bg-accent hover:text-accent-foreground"
+          title={label}
+          className="h-9 w-auto gap-2 border-border/40 px-3 hover:bg-accent hover:text-accent-foreground @max-[72rem]:w-9 @max-[72rem]:px-0"
         >
           <Icon className="h-4 w-4" />
-          <span className="hidden sm:inline">{label}</span>
+          <span className="hidden sm:inline @max-[72rem]:hidden">{label}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

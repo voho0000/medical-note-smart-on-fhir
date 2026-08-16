@@ -42,7 +42,6 @@ export function ClinicalPatientContext({
     name,
     ageText,
     genderText,
-    patient.id ? `ID ${patient.id}` : null,
   ]
     .filter(Boolean)
     .join(" · ")
@@ -76,29 +75,6 @@ export function ClinicalPatientContext({
         ·
       </span>
       <span className="shrink-0">{genderText}</span>
-      {patient.id && (
-        <>
-          <span
-            aria-hidden="true"
-            className={cn(
-              "text-muted-foreground/45",
-              variant === "header" && "max-lg:hidden",
-              variant === "mobile" && "max-[420px]:hidden",
-            )}
-          >
-            ·
-          </span>
-          <span
-            className={cn(
-              "min-w-0 truncate tabular-nums",
-              variant === "header" && "max-lg:hidden",
-              variant === "mobile" && "max-[420px]:hidden",
-            )}
-          >
-            ID {patient.id}
-          </span>
-        </>
-      )}
     </div>
   )
 }

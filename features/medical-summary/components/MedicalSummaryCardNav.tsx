@@ -47,7 +47,7 @@ const CARD_ICON: Record<MedicalSummaryCardId, { icon: LucideIcon; className: str
 }
 
 const CHIP_CLASS =
-  "inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-sm border-0 bg-transparent px-2 py-1 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8"
+  "inline-flex min-h-[44px] shrink-0 items-center gap-[clamp(2px,calc(0.8cqw-1px),4px)] rounded-sm border-0 bg-transparent px-[clamp(0px,calc(1.5cqw-3px),8px)] py-1 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8"
 
 const ACTIVE_CHIP_CLASS =
   "bg-muted text-primary hover:bg-muted hover:text-primary"
@@ -108,13 +108,13 @@ export function MedicalSummaryCardNav({
       data-tour="medical-summary-card-nav"
       className="sticky top-0 z-20 -mx-1 border-y border-border/60 bg-background py-1.5"
     >
-      <div className="flex min-w-0 flex-nowrap items-center gap-1.5 px-1">
+      <div className="flex min-w-0 flex-nowrap items-center gap-[clamp(4px,0.8cqw,6px)] px-1">
         <div
           ref={scrollerRef}
           data-testid="medical-summary-card-nav-scroller"
-          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="min-w-0 flex-[0_1_auto] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <div className="flex min-w-max items-center gap-1">
+          <div className="flex min-w-max items-center gap-[clamp(2px,0.6cqw,4px)]">
             {items.map((item) => {
               const isActive = item.id === activeId
               const { icon: Icon, className: iconClassName } = CARD_ICON[item.id]
@@ -153,7 +153,7 @@ export function MedicalSummaryCardNav({
           activeGeneration={activeGeneration}
           runningLabel={runningLabel}
           runningAriaTemplate={runningAriaTemplate}
-          className="ml-auto max-w-[min(48%,24rem)] shrink-0 text-xs"
+          className="ml-auto min-w-0 max-w-[min(48%,24rem)] flex-1 text-xs"
         />
       </div>
     </nav>

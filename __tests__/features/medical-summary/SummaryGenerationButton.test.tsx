@@ -62,6 +62,31 @@ describe("SummaryGenerationButton", () => {
     expect(onResolveOverflow).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps a generous icon-only target when the summary panel is narrow", () => {
+    render(
+      <SummaryGenerationButton
+        isBusy={false}
+        isStopping={false}
+        isRestoring={false}
+        hasContextOverflow={false}
+        hasAnyResult
+        labels={labels}
+        onGenerate={jest.fn()}
+        onStop={jest.fn()}
+        onResolveOverflow={jest.fn()}
+      />,
+    )
+
+    const button = screen.getByRole("button", { name: "重新產生" })
+    expect(button).toHaveClass(
+      "@max-[36rem]:h-10",
+      "@max-[36rem]:w-10",
+      "@max-[36rem]:px-0",
+    )
+    expect(screen.getByText("重新產生")).toHaveClass("@max-[36rem]:hidden")
+    expect(button).toHaveAttribute("title", "重新產生")
+  })
+
   it("replaces the busy indicator with an actionable stop button", () => {
     const onGenerate = jest.fn()
     const onStop = jest.fn()

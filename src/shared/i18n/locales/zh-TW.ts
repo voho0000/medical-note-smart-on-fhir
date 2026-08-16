@@ -154,7 +154,7 @@ export const zhTW = {
   // 涵蓋邊界文案由此而來。
   medicalSummary: {
     title: '醫療摘要',
-    badge: 'AI 主動彙整',
+    badge: 'AI 彙整',
     narrativeTitle: '跨院病程摘要',
     investigationsTitle: '關鍵檢驗與檢查趨勢',
     investigationsSubtitle: '依目前問題挑選最相關的檢驗、病理與影像；單次結果不會誤判為趨勢。',
@@ -287,6 +287,7 @@ export const zhTW = {
     cardNavigation: '摘要卡片導覽',
     summaryGenerationProvenance: '由 {model} 於 {time} 產生',
     summaryGenerationProvenanceWithDuration: '由 {model} 於 {time} 產生，總耗時 {duration}',
+    summaryGenerationDateTimeLabel: '產生時間：',
     summaryGenerationDurationLabel: '耗時',
     summaryGenerationRunningLabel: '產生中',
     summaryGenerationRunningProvenance: '正在使用 {model} 產生摘要，已進行 {elapsed}',

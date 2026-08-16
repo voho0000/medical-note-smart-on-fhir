@@ -50,11 +50,16 @@ describe('MedicalSummaryCardNav', () => {
     expect(nav).toHaveClass('sticky', 'top-0')
     expect(nav).not.toHaveClass('overflow-x-auto')
     expect(scroller).toHaveClass('overflow-x-auto')
-    expect(scroller).toHaveClass('min-w-0', 'flex-1')
+    expect(scroller).toHaveClass('min-w-0', 'flex-[0_1_auto]')
+    expect(scroller).not.toHaveClass('flex-1')
     expect(layout).toHaveClass('flex-nowrap')
     expect(layout).not.toHaveClass('flex-wrap')
     expect(buttons.map((button) => button.textContent)).toEqual(['檢查3', '健康0', '用藥4'])
     expect(buttons[0]).toHaveAccessibleName('檢查趨勢 3')
+    expect(buttons[0]).toHaveClass(
+      'gap-[clamp(2px,calc(0.8cqw-1px),4px)]',
+      'px-[clamp(0px,calc(1.5cqw-3px),8px)]',
+    )
     expect(buttons[0]).toHaveAttribute('title', '關鍵檢驗與檢查趨勢')
     expect(buttons[0]).toHaveAttribute('aria-controls', 'medical-summary-card-investigations')
     expect(screen.queryByTestId('medical-summary-generation-meta')).not.toBeInTheDocument()
@@ -86,7 +91,7 @@ describe('MedicalSummaryCardNav', () => {
     expect(screen.getByRole('button', { name: '用藥 4' })).not.toHaveAttribute('aria-current')
   })
 
-  it('keeps generation provenance fixed at the far right outside the chip scroller', () => {
+  it('keeps generation provenance fixed at the far right outside the chip scroller', async () => {
     render(
       <MedicalSummaryCardNav
         items={items}
@@ -96,6 +101,7 @@ describe('MedicalSummaryCardNav', () => {
           modelName: 'MODEL_NAME',
           generatedAtIso: '2026-07-19T06:32:00.000Z',
           generatedAtText: '2026/07/19 14:32',
+          generatedAtLabel: '產生時間：',
           durationLabel: '耗時',
           durationText: '01:23',
           ariaLabel: '由 MODEL_NAME 於 2026/07/19 14:32 產生，總耗時 01:23',
@@ -106,17 +112,24 @@ describe('MedicalSummaryCardNav', () => {
     const scroller = screen.getByTestId('medical-summary-card-nav-scroller')
     const provenance = screen.getByTestId('medical-summary-generation-meta')
     expect(scroller).not.toContainElement(provenance)
-    expect(provenance).toHaveClass('ml-auto', 'max-w-[min(48%,24rem)]')
+    expect(provenance).toHaveClass(
+      'ml-auto',
+      'min-w-0',
+      'flex-1',
+      'max-w-[min(48%,24rem)]',
+    )
     expect(provenance).not.toHaveClass('max-w-full')
-    expect(provenance).toHaveTextContent('MODEL_NAME·2026/07/19 14:32·耗時 01:23')
+    expect(provenance).toHaveTextContent('MODEL_NAME·耗時 01:23')
+    expect(provenance).not.toHaveTextContent('2026/07/19 14:32')
     expect(provenance).toHaveAttribute(
       'aria-label',
       '由 MODEL_NAME 於 2026/07/19 14:32 產生，總耗時 01:23',
     )
-    expect(provenance.querySelector('time')).toHaveAttribute(
-      'datetime',
-      '2026-07-19T06:32:00.000Z',
-    )
+    fireEvent.focus(provenance)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent('MODEL_NAME')
+    expect(tooltip).toHaveTextContent('產生時間：2026/07/19 14:32')
+    expect(tooltip.querySelector('time')).toHaveAttribute('datetime', '2026-07-19T06:32:00.000Z')
   })
 
   it('shows the immutable running model and elapsed time, then clears its timer', () => {
@@ -164,6 +177,7 @@ describe('MedicalSummaryCardNav', () => {
           modelName: longModelName,
           generatedAtIso: '2026-07-20T08:44:00.000Z',
           generatedAtText: '2026/07/20 16:44',
+          generatedAtLabel: '產生時間：',
           durationLabel: '耗時',
           durationText: '07:59',
           ariaLabel: `由 ${longModelName} 於 2026/07/20 16:44 產生，總耗時 07:59`,
@@ -173,12 +187,14 @@ describe('MedicalSummaryCardNav', () => {
 
     const provenance = screen.getByTestId('medical-summary-generation-meta')
     const modelName = screen.getByText(longModelName)
-    expect(modelName).toHaveClass('max-w-[7rem]', 'truncate')
+    expect(modelName).toHaveClass('max-w-[10rem]', 'truncate')
     expect(provenance).toHaveAttribute('aria-label', expect.stringContaining(longModelName))
     expect(provenance).not.toHaveAttribute('title')
 
-    fireEvent.focus(modelName)
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(longModelName)
+    fireEvent.focus(provenance)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(longModelName)
+    expect(tooltip).toHaveTextContent('產生時間：2026/07/20 16:44')
   })
 
   it('shows pre-generated provenance without a fake date', () => {

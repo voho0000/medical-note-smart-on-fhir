@@ -140,7 +140,7 @@ function RightPanelContent() {
 
 export function RightPanelFeature() {
   return (
-    <div className="h-full flex flex-col" data-tour="right-panel">
+    <div className="@container flex h-full flex-col" data-tour="right-panel">
       <RightPanelContent />
     </div>
   )
@@ -322,7 +322,7 @@ function RightPanelContentInner() {
         data-tour={`right-tab-${feature.id}`}
         icon={Icon}
         label={label}
-        labelVisibility={feature.iconOnly ? "never" : "always"}
+        labelVisibility={feature.iconOnly ? "never" : "panel"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
         suffix={feature.badge ? (
@@ -367,12 +367,12 @@ function RightPanelContentInner() {
     <Tabs
       value={effectiveTab}
       onValueChange={setActiveTab}
-      className="flex h-full flex-col xl:gap-0"
+      className="flex h-full flex-col md:gap-0"
     >
       {/* On phones the page-level 臨床摘要／功能 switch is already one
           persistent navigation row. Use one labeled picker here instead of a
           second row of ambiguous icon-only tabs. */}
-      <div className="shrink-0 border-b bg-background p-1 xl:hidden">
+      <div className="shrink-0 border-b bg-background p-1 md:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger
             className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm font-medium text-foreground shadow-none transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -399,7 +399,7 @@ function RightPanelContentInner() {
 
       <ClinicalTabList
         data-tour="right-tabs"
-        className="grid gap-1 max-xl:hidden"
+        className="grid gap-1 max-md:hidden"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
         {pinnedFeatures.map(renderTrigger)}
@@ -458,7 +458,7 @@ function RightPanelContentInner() {
           key={feature.id}
           value={feature.id}
           data-tour={`right-content-${feature.id}`}
-          className={`${feature.contentClassName || 'flex-1 mt-1'} xl:mt-0`}
+          className={`${feature.contentClassName || 'flex-1 mt-1'} md:mt-0`}
           forceMount={feature.forceMount || visitedTabs.has(feature.id) ? true : undefined}
         >
           <FeatureTabContent feature={feature} />

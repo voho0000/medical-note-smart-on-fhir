@@ -7,7 +7,7 @@ import { TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/src/shared/utils/cn.utils"
 
 type IconVisibility = "always" | "desktop"
-type LabelVisibility = "always" | "sm" | "never"
+type LabelVisibility = "always" | "sm" | "panel" | "never"
 
 export function ClinicalTabList({
   className,
@@ -66,6 +66,7 @@ export function ClinicalTabTrigger({
           className={cn(
             "min-w-0 truncate",
             labelVisibility === "sm" && "max-sm:hidden",
+            labelVisibility === "panel" && "@max-[44rem]:hidden",
           )}
         >
           {label}

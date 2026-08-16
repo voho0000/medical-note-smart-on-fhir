@@ -559,12 +559,14 @@ export default function MedicalSummaryFeature() {
       locale,
       labelTemplate: ms.summaryGenerationProvenance,
       labelWithDurationTemplate: ms.summaryGenerationProvenanceWithDuration,
+      generatedAtLabel: ms.summaryGenerationDateTimeLabel,
       durationLabel: ms.summaryGenerationDurationLabel,
       preGeneratedLabel: ms.summaryPreGeneratedLabel,
       preGeneratedTemplate: ms.summaryPreGeneratedProvenance,
     })
   }, [
     locale,
+    ms.summaryGenerationDateTimeLabel,
     ms.summaryGenerationDurationLabel,
     ms.summaryGenerationProvenance,
     ms.summaryGenerationProvenanceWithDuration,
@@ -841,7 +843,7 @@ export default function MedicalSummaryFeature() {
         </TabsList>
         <div
           data-tour="medical-summary-controls"
-          className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5"
+          className="ml-0 flex min-w-0 basis-full flex-nowrap items-center justify-end gap-1.5 @min-[36rem]:ml-auto @min-[36rem]:basis-auto"
         >
           {activeView === "standard" ? (
             <ModelPicker
@@ -850,7 +852,7 @@ export default function MedicalSummaryFeature() {
               onSelect={setModel}
               tooltip={t.safetyAlerts.modelTooltip}
               compact
-              triggerClassName="min-h-[44px] shadow-none lg:min-h-8"
+              triggerClassName="min-h-[44px] max-w-[42cqw] text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
             />
           ) : (
             <ModelPicker
@@ -860,7 +862,7 @@ export default function MedicalSummaryFeature() {
               tooltip={t.modelPicker.insightsTooltip}
               align="end"
               compact
-              triggerClassName="min-h-[44px] shadow-none lg:min-h-8"
+              triggerClassName="min-h-[44px] max-w-[42cqw] text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
             />
           )}
           {activeView === "standard" && contextAdaptation ? (
@@ -918,12 +920,12 @@ export default function MedicalSummaryFeature() {
                 type="button"
                 size="sm"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
-                className="h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"
+                className="h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
                 title={ms.summaryControls}
                 aria-label={ms.summaryControls}
               >
                 <Settings2 className="h-3.5 w-3.5" />
-                {t.tabs.settings}
+                <span className="@max-[36rem]:hidden">{t.tabs.settings}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-1 p-2">

@@ -79,8 +79,8 @@ export function SummaryGenerationButton({
       size="sm"
       variant="outline"
       className={stopAvailable || isStopping
-        ? "h-[44px] gap-1 px-2 text-xs text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive hover:shadow-none lg:h-7"
-        : "h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"}
+        ? "h-[44px] shrink-0 gap-1 px-2 text-xs text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
+        : "h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"}
       disabled={isStopping || (!stopAvailable && isRestoring)}
       title={label}
       aria-label={label}
@@ -97,7 +97,7 @@ export function SummaryGenerationButton({
       ) : (
         <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
       )}
-      {label}
+      <span className="@max-[36rem]:hidden">{label}</span>
     </Button>
   )
 }

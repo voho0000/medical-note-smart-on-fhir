@@ -5,6 +5,7 @@ export interface MedicalSummaryGenerationInfo {
   modelName: string
   generatedAtIso?: string
   generatedAtText?: string
+  generatedAtLabel?: string
   durationLabel?: string
   durationText?: string
   ariaLabel: string
@@ -28,6 +29,7 @@ export function buildSummaryGenerationInfo({
   locale,
   labelTemplate,
   labelWithDurationTemplate,
+  generatedAtLabel,
   durationLabel,
   preGeneratedLabel,
   preGeneratedTemplate,
@@ -36,6 +38,7 @@ export function buildSummaryGenerationInfo({
   locale: string
   labelTemplate: string
   labelWithDurationTemplate: string
+  generatedAtLabel: string
   durationLabel: string
   preGeneratedLabel: string
   preGeneratedTemplate: string
@@ -80,6 +83,7 @@ export function buildSummaryGenerationInfo({
     modelName,
     generatedAtIso: generatedAt.toISOString(),
     generatedAtText,
+    generatedAtLabel,
     durationLabel: durationText ? durationLabel : undefined,
     durationText,
     ariaLabel,

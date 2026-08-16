@@ -32,7 +32,7 @@ function TruncatedModelName({ modelName }: { modelName: string }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="min-w-0 max-w-[7rem] cursor-help truncate focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="min-w-0 max-w-[10rem] cursor-help truncate focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           tabIndex={0}
         >
           {modelName}
@@ -117,14 +117,16 @@ export function SummaryGenerationMeta({
   }
   if (!generationInfo) return null
 
-  return (
+  const meta = (
     <div
       data-testid="medical-summary-generation-meta"
       className={cn(
         "flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-muted-foreground/80",
+        generationInfo.generatedAtText && "cursor-help focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         className,
       )}
       aria-label={generationInfo.ariaLabel}
+      tabIndex={generationInfo.generatedAtText ? 0 : undefined}
     >
       <Cpu aria-hidden="true" className="h-3 w-3 shrink-0" />
       {generationInfo.prefix ? (
@@ -133,18 +135,13 @@ export function SummaryGenerationMeta({
           <span aria-hidden="true" className="shrink-0">·</span>
         </>
       ) : null}
-      <TruncatedModelName modelName={generationInfo.modelName} />
-      {generationInfo.generatedAtIso && generationInfo.generatedAtText ? (
-        <>
-          <span aria-hidden="true" className="shrink-0">·</span>
-          <time
-            className="shrink-0 tabular-nums"
-            dateTime={generationInfo.generatedAtIso}
-          >
-            {generationInfo.generatedAtText}
-          </time>
-        </>
-      ) : null}
+      {generationInfo.generatedAtText ? (
+        <span className="min-w-0 max-w-[10rem] truncate">
+          {generationInfo.modelName}
+        </span>
+      ) : (
+        <TruncatedModelName modelName={generationInfo.modelName} />
+      )}
       {generationInfo.durationLabel && generationInfo.durationText ? (
         <>
           <span aria-hidden="true" className="shrink-0">·</span>
@@ -154,5 +151,28 @@ export function SummaryGenerationMeta({
         </>
       ) : null}
     </div>
+  )
+
+  if (!generationInfo.generatedAtIso || !generationInfo.generatedAtText) {
+    return meta
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{meta}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={4}
+        className="max-w-[min(90vw,32rem)] space-y-1 whitespace-normal text-left text-xs"
+      >
+        <div className="break-all font-medium">{generationInfo.modelName}</div>
+        <div>
+          {generationInfo.generatedAtLabel ?? null}
+          <time dateTime={generationInfo.generatedAtIso} className="tabular-nums">
+            {generationInfo.generatedAtText}
+          </time>
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }

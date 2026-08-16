@@ -6,6 +6,7 @@ import {
 const labels = {
   labelTemplate: "由 {model} 於 {time} 產生",
   labelWithDurationTemplate: "由 {model} 於 {time} 產生，總耗時 {duration}",
+  generatedAtLabel: "產生時間：",
   durationLabel: "耗時",
   preGeneratedLabel: "預產生",
   preGeneratedTemplate: "預產生摘要，由 {model} 建立",
@@ -31,6 +32,7 @@ describe("buildSummaryGenerationInfo", () => {
     expect(info).toMatchObject({
       modelName: "MODEL_NAME",
       generatedAtIso: new Date(completedAt).toISOString(),
+      generatedAtLabel: "產生時間：",
       durationLabel: "耗時",
       durationText: "01:23",
     })

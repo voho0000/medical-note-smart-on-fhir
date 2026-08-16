@@ -8,7 +8,7 @@
 import { useCallback, useRef, useState } from 'react'
 import {
   ChevronRight,
-  Download,
+  FileUp,
   FlaskConical,
   Hospital,
   Shield,
@@ -183,7 +183,7 @@ export function WelcomeOnboarding() {
       {isDragging && (
         <div className="pointer-events-none absolute inset-4 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/95">
           <div className="flex flex-col items-center gap-2 text-primary">
-            <Download className="h-10 w-10" />
+            <FileUp className="h-10 w-10" />
             <p className="text-base font-semibold">
               {w.dropHere ?? 'Drop FHIR Bundle to import'}
             </p>
@@ -221,7 +221,7 @@ export function WelcomeOnboarding() {
             a glance while a shared component keeps their structure aligned. */}
         <section className="mt-8 grid gap-3 sm:grid-cols-3 lg:gap-4">
           <WelcomeSourceOption
-            icon={Download}
+            icon={FileUp}
             title={w.localTitle ?? 'Local FHIR Bundle'}
             description={w.localDesc ?? 'Import a JSON bundle — data stays in your browser.'}
             onClick={() => localCardFileRef.current?.open()}

@@ -207,7 +207,7 @@ function PageContent() {
           <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
         </button>
       ) : (
-      <header className="relative shrink-0 border-b border-border bg-card px-3 py-1.5 sm:px-4">
+      <header className="@container relative shrink-0 border-b border-border bg-card px-3 py-1.5 sm:px-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 items-center justify-center overflow-hidden max-[359px]:hidden">
@@ -215,7 +215,7 @@ function PageContent() {
             </div>
             <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
               <span>MediPrisma</span>
-              <span className="max-lg:hidden"> · SMART on FHIR</span>
+              <span className="max-lg:hidden @max-[80rem]:hidden"> · SMART on FHIR</span>
             </h1>
           </div>
           <ClinicalPatientContext patient={patient} />
@@ -224,7 +224,7 @@ function PageContent() {
               info) live inside HeaderOverflowMenu (kebab); audience +
               language collapse into the same menu only on mobile so the
               bar never wraps on narrow screens. */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3 @max-[72rem]:gap-1">
             {/* iconOnlyOnMobile: header is space-constrained, so the
                 "匯入資料" label collapses on phones. The Welcome screen
                 mounts the same component without this flag so its big
@@ -250,9 +250,9 @@ function PageContent() {
           onClick={() => setHeaderCollapsed(true)}
           aria-label={t.header.collapseHeader}
           title={t.header.collapseHeader}
-          className="absolute bottom-0 left-1/2 z-20 inline-flex min-h-8 min-w-[44px] -translate-x-1/2 items-center justify-center rounded-t-md border border-b-0 border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary max-md:hidden"
+          className="absolute bottom-0 left-1/2 z-20 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center rounded-t-md border border-b-0 border-border bg-background/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary max-md:hidden"
         >
-          <ChevronUp className="h-4 w-4" />
+          <ChevronUp className="h-3 w-3" />
         </button>
       </header>
       )}
