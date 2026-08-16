@@ -44,7 +44,9 @@ function renderRow(row: Row) {
 }
 
 describe('ReportRow longitudinal right-pane behavior', () => {
-  it('opens a numeric result trend in the shared right pane without a dialog', () => {
+  // ObservationTrendDetail is loaded with next/dynamic (it owns every chart in
+  // the reports workspace), so the detail body arrives a tick after the click.
+  it('opens a numeric result trend in the shared right pane without a dialog', async () => {
     const row: Row = {
       id: 'crp-report',
       title: 'CRP',
@@ -66,7 +68,7 @@ describe('ReportRow longitudinal right-pane behavior', () => {
       'data-source-id',
       'report-longitudinal:crp-report:crp-observation',
     )
-    expect(screen.getByTestId('longitudinal-detail')).toHaveTextContent('crp-observation')
+    expect(await screen.findByTestId('longitudinal-detail')).toHaveTextContent('crp-observation')
     expect(screen.getByTestId('right-pane')).toHaveTextContent('CRP· 檢驗趨勢')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })

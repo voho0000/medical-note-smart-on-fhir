@@ -22,6 +22,9 @@ export class LocalBundleModeError extends Error {
 // `launch` + `iss` are present on the initial launch URL from the EHR.
 const SMART_URL_PARAMS = ['state', 'code', 'launch', 'iss']
 
+/** fhirclient's sessionStorage pointer to the active SMART state entry. */
+const SMART_STATE_POINTER_KEY = 'SMART_KEY'
+
 /**
  * Returns true when the app appears to be running inside a SMART OAuth
  * context — either a fresh launch / callback (params in the URL) or an
@@ -52,7 +55,7 @@ export function hasSmartContext(): boolean {
     // contains a real `tokenResponse.access_token` before treating the
     // session as live — otherwise stale pointers send us into
     // `oauth2.ready()` which throws "No 'state' parameter found."
-    const rawPointer = window.sessionStorage.getItem('SMART_KEY')
+    const rawPointer = window.sessionStorage.getItem(SMART_STATE_POINTER_KEY)
     if (!rawPointer) return false
     const stateKey = rawPointer.replace(/^"|"$/g, '')
     if (!stateKey) return false
@@ -83,6 +86,33 @@ export function shouldUseLocalBundle(): boolean {
  */
 export function hasAnyDataSource(): boolean {
   return hasSmartContext() || LocalBundleService.hasData()
+}
+
+/**
+ * Drop the live SMART session: fhirclient's cached token state (the
+ * `SMART_KEY` pointer *and* the entry it points at, which holds the access
+ * token) plus the in-memory client instance.
+ *
+ * Logout has to do this, not just clear the doctor's API keys. On a shared
+ * workstation the access token stays valid for its full lifetime, so a tab
+ * left open after "logout" would otherwise keep rendering — and keep making
+ * authenticated requests for — the previous patient's chart.
+ *
+ * Safe to call in local-bundle mode and when sessionStorage is unavailable.
+ */
+export function clearSmartSession(): void {
+  FhirClientService.getInstance().clearClient()
+  if (typeof window === 'undefined') return
+  try {
+    const rawPointer = window.sessionStorage.getItem(SMART_STATE_POINTER_KEY)
+    if (rawPointer) {
+      const stateKey = rawPointer.replace(/^"|"$/g, '')
+      if (stateKey) window.sessionStorage.removeItem(stateKey)
+    }
+    window.sessionStorage.removeItem(SMART_STATE_POINTER_KEY)
+  } catch {
+    // sessionStorage unavailable — the in-memory client is already dropped.
+  }
 }
 
 export class FhirClientService {

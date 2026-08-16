@@ -1,10 +1,25 @@
 import type { KeyboardEvent, MouseEvent } from 'react'
-import { History, TrendingUp } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { History, Loader2, TrendingUp } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useOptionalRightDetail } from '@/src/application/providers/right-detail.provider'
 import type { Observation } from '../types'
-import { ObservationTrendDetail } from './ObservationTrendDetail'
+
+// The trend detail owns every chart in the reports workspace, and charting is
+// the single heaviest dependency in the initial bundle. Nothing here renders
+// until the clinician opens a trend, so pay for it then.
+const ObservationTrendDetail = dynamic(
+  () => import('./ObservationTrendDetail').then((m) => m.ObservationTrendDetail),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      </div>
+    ),
+  },
+)
 
 type LongitudinalMode = 'trend' | 'history'
 
@@ -100,7 +115,10 @@ export function ObservationLongitudinalAction({
     'data-report-history-action': true,
     'data-tour': dataTour,
     className: cn(
-      'cursor-pointer rounded-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+      // Literal px, not rem: the root font-size drops to 12px on phones, so a
+      // rem-sized box here rendered as a ~12px tap target — and this is the
+      // entry point to every trend in the app. Desktop keeps the compact icon.
+      'inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors touch-manipulation hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:min-h-0 md:min-w-0',
       isActive && 'text-primary',
       className,
     ),

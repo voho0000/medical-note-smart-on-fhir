@@ -25,6 +25,7 @@ import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { clearSessionKey } from '@/src/shared/utils/crypto.utils'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { clearSmartSession } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
 import { clearLocalImportAiConsent } from '@/src/application/hooks/ai-generation/auto-ai-consent'
@@ -307,11 +308,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useAiConfigStore.getState().clearAllKeys()
       clearSessionKey()
 
-      // …and the previous PATIENT's data, not just the doctor's keys: the
+      // …and the previous PATIENT's data, not just the doctor's keys. Two
+      // separate sources have to go: the live SMART session (fhirclient's
+      // cached access token, still valid for its full lifetime — without this
+      // the chart stays readable and keeps fetching after "logout") and the
       // imported bundle (IndexedDB ciphertext + sessionStorage AES key +
-      // stored images + demo flag) and cached AI results would otherwise
-      // survive logout and be fully readable by the next person at the
-      // workstation.
+      // stored images + demo flag) plus cached AI results.
+      clearSmartSession()
+
       await serializeLocalBundleMutation(async () => {
         const importId = LocalBundleService.getActiveImportId()
         clearLocalImportAiConsent()

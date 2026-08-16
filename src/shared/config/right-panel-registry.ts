@@ -101,6 +101,9 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     tabLabel: 'medicalCalculator',
     order: 4,
     enabled: true,
+    // Deliberately NOT forceMount: that would pull the 57-calculator chunk on
+    // panel mount for every user. Half-filled scores are still preserved —
+    // RightPanelLayout keeps any tab mounted once it has been opened.
     contentClassName: 'flex-1 mt-1',
   },
   {

@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { ComponentType, memo, ReactNode, useEffect, useRef } from "react"
+import { ComponentType, memo, ReactNode, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { Check, ChevronDown, MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -263,6 +263,22 @@ function RightPanelContentInner() {
     ? activeTab
     : features[0]?.id ?? activeTab
 
+  // Sticky mount: once a tab has been opened it stays mounted for the rest of
+  // the session, so in-progress work (a half-filled calculator score, an
+  // expanded guidance panel) survives a tab switch. This is the cheap half of
+  // registry `forceMount` — it preserves the same state, but the feature's
+  // chunk is still fetched only when the user first opens it, instead of on
+  // panel mount for everyone.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  // Adjusted during render (not in an effect): React re-runs this component
+  // before committing, so the newly opened tab is already force-mounted in the
+  // same paint instead of one cascading render later.
+  if (effectiveTab && !visitedTabs.has(effectiveTab)) {
+    setVisitedTabs(new Set(visitedTabs).add(effectiveTab))
+  }
+
   // Tab-bar grouping is purely registry-driven (no feature ids here):
   // [pinned…] [temp trigger for an active overflow tab?] [more ▾] [pinLocked…]
   const {
@@ -443,7 +459,7 @@ function RightPanelContentInner() {
           value={feature.id}
           data-tour={`right-content-${feature.id}`}
           className={`${feature.contentClassName || 'flex-1 mt-1'} xl:mt-0`}
-          forceMount={feature.forceMount ? true : undefined}
+          forceMount={feature.forceMount || visitedTabs.has(feature.id) ? true : undefined}
         >
           <FeatureTabContent feature={feature} />
         </TabsContent>

@@ -15,7 +15,7 @@ import type { ChatDataScope, ChatMessage, ChatReplyReference } from "@/src/appli
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
-import { Check, Copy, Reply, Sparkles } from "lucide-react"
+import { AlertTriangle, Check, Copy, Reply, RotateCcw, Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -34,6 +34,8 @@ interface ChatMessageListProps {
   /** Sanitized logical-id → upstream-name mapping. Endpoint URLs and API keys
    * never need to enter this presentation component. */
   customModelDisplayNames?: Readonly<Record<string, string>>
+  /** Replay the failed turn. Rendered next to the error on a failed message. */
+  onRetry?: () => void
 }
 
 function getModelDisplayName(
@@ -79,12 +81,14 @@ const MessageItem = memo(function MessageItem({
   modelDisplayName,
   onReplyToSelection,
   replyDisabled,
+  onRetry,
 }: {
   message: ChatMessage
   t: any
   modelDisplayName: string
   onReplyToSelection?: (reply: ChatReplyReference) => void
   replyDisabled?: boolean
+  onRetry?: () => void
 }) {
   const { copied, copy } = useCopyToClipboard()
   const bubbleRef = useRef<HTMLDivElement | null>(null)
@@ -154,6 +158,13 @@ const MessageItem = memo(function MessageItem({
     window.getSelection()?.removeAllRanges()
   }
 
+  // A turn that failed before producing any text has nothing to put in a
+  // bubble — render only the error banner instead of an empty one. A turn
+  // that failed mid-answer keeps its bubble, with the banner underneath.
+  const showBubble = message.role !== "assistant"
+    || !!message.content
+    || !message.error
+
   return (
     <div
       className={cn(
@@ -193,6 +204,7 @@ const MessageItem = memo(function MessageItem({
             currentState={message.content}
           />
         )}
+        {showBubble && (
         <div
           ref={bubbleRef}
           onMouseUp={handleSelectionEnd}
@@ -279,6 +291,26 @@ const MessageItem = memo(function MessageItem({
             </button>
           )}
         </div>
+        )}
+        {message.error && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 self-start rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">{message.error}</span>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-destructive/40 px-2 font-medium transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                {t.errors.retry}
+              </button>
+            )}
+          </div>
+        )}
         {message.role === "assistant" && message.content && (
           <button
             type="button"
@@ -303,8 +335,10 @@ const MessageItem = memo(function MessageItem({
     </div>
   )
 }, (prevProps, nextProps) => {
-  return prevProps.message.id === nextProps.message.id && 
+  return prevProps.message.id === nextProps.message.id &&
          prevProps.message.content === nextProps.message.content &&
+         prevProps.message.error === nextProps.message.error &&
+         prevProps.onRetry === nextProps.onRetry &&
          prevProps.message.agentStates?.length === nextProps.message.agentStates?.length &&
          prevProps.message.replyTo?.messageId === nextProps.message.replyTo?.messageId &&
          prevProps.message.replyTo?.label === nextProps.message.replyTo?.label &&
@@ -321,6 +355,7 @@ export function ChatMessageList({
   scrollSignal,
   onReplyToSelection,
   customModelDisplayNames,
+  onRetry,
 }: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -396,6 +431,7 @@ export function ChatMessageList({
                 modelDisplayName={modelDisplayName}
                 onReplyToSelection={onReplyToSelection}
                 replyDisabled={isLoading}
+                onRetry={message.error ? onRetry : undefined}
               />
             )
           })

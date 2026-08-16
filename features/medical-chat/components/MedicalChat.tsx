@@ -554,8 +554,9 @@ export default function MedicalChat() {
     const last = chatMessages[chatMessages.length - 1]
     const content = (last?.content || "").trim()
     if (!last || last.role !== "assistant" || !content) return
-    // Skip the thinking placeholder and surfaced errors.
-    if (content.startsWith("🤔") || content.startsWith("❌")) return
+    // Skip the thinking placeholder and failed turns (a failed turn now keeps
+    // its partial text and carries the reason in `error`).
+    if (content.startsWith("🤔") || last.error) return
     if (lastSuggestedIdRef.current === last.id) return
     // The reader's own questions this session feed implicit personalisation; the
     // last one is the current question (buildMessages filters it out of "recent").
@@ -744,6 +745,7 @@ export default function MedicalChat() {
           customModelDisplayNames={customModelDisplayNames}
           scrollSignal={followupSuggestions.length}
           onReplyToSelection={handleReplyToSelection}
+          onRetry={chat.retryLastMessage}
           afterMessages={
             <SuggestionChips
               suggestions={followupSuggestions}

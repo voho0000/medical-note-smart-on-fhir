@@ -66,7 +66,10 @@ describe('CumulativeLabReport trend entry', () => {
     jest.restoreAllMocks()
   })
 
-  it('opens a shared right-pane trend on desktop and keeps the selected column highlighted', () => {
+  // The trend detail/dialog are loaded with next/dynamic (the charting library
+  // is the heaviest thing in the bundle and only a click needs it), so these
+  // assertions await the chunk instead of reading the DOM synchronously.
+  it('opens a shared right-pane trend on desktop and keeps the selected column highlighted', async () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: jest.fn().mockReturnValue({ matches: true }),
@@ -86,11 +89,11 @@ describe('CumulativeLabReport trend entry', () => {
 
     expect(mockBuildLabTrendSeries).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('right-detail-host')).toBeInTheDocument()
-    expect(screen.getByTestId('cumulative-trend-detail')).toHaveTextContent('最新結果')
+    expect(await screen.findByTestId('cumulative-trend-detail')).toHaveTextContent('最新結果')
     expect(container.querySelector('[data-lab-test-key="CRP"]')).toHaveAttribute('data-trend-active', 'true')
   })
 
-  it('uses a dialog below the split-view breakpoint', () => {
+  it('uses a dialog below the split-view breakpoint', async () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: jest.fn().mockReturnValue({ matches: false }),
@@ -104,7 +107,7 @@ describe('CumulativeLabReport trend entry', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /查看 CRP 趨勢/ }))
 
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /CRP.*檢驗趨勢/ })).toBeInTheDocument()
   })
 

@@ -20,7 +20,7 @@ import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layo
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
@@ -144,6 +144,50 @@ function PageContent() {
   useEffect(() => {
     if (rightTourActive) clearDetail()
   }, [clearDetail, rightTourActive])
+
+  // The feature panel stays mounted behind the detail, but hiding it collapses
+  // this section's scrollHeight, which clamps scrollTop to 0. Remember where
+  // the clinician was reading and put them back when the detail closes —
+  // otherwise every trend peek costs them their place in a long summary.
+  const rightPanelRef = useRef<HTMLElement | null>(null)
+  const featureScrollTopRef = useRef(0)
+  const hadDetailRef = useRef(false)
+  // Track the reading position continuously rather than reading it when the
+  // detail opens: by the time any effect runs, React has already hidden the
+  // feature panel, the section's scrollHeight has collapsed and the browser
+  // has clamped scrollTop to 0 — so the position is gone before we could
+  // sample it.
+  const handleRightPanelScroll = useCallback((event: UIEvent<HTMLElement>) => {
+    if (detail) return
+    featureScrollTopRef.current = event.currentTarget.scrollTop
+  }, [detail])
+
+  useLayoutEffect(() => {
+    const panel = rightPanelRef.current
+    const hasDetail = !!detail
+    const hadDetail = hadDetailRef.current
+    hadDetailRef.current = hasDetail
+    if (!panel) return
+    if (hasDetail || !hadDetail) return
+
+    // Coming back from the detail. The panel's cards re-lay out over the next
+    // few frames (several mount deferred), so a single assignment lands while
+    // the panel is still short and gets clamped back to 0. Re-apply until it
+    // sticks, with a hard frame budget so this can never spin.
+    const target = featureScrollTopRef.current
+    if (target <= 0) return
+    let framesLeft = 30
+    let frame = 0
+    const restore = () => {
+      panel.scrollTop = target
+      framesLeft -= 1
+      if (Math.abs(panel.scrollTop - target) > 1 && framesLeft > 0) {
+        frame = requestAnimationFrame(restore)
+      }
+    }
+    restore()
+    return () => cancelAnimationFrame(frame)
+  }, [detail])
 
   return (
     <ClinicalWorkspaceRoot>
@@ -283,6 +327,8 @@ function PageContent() {
 
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
         <ClinicalWorkspacePanel
+          ref={rightPanelRef}
+          onScroll={handleRightPanelScroll}
           aria-label={t.header.features}
           mobileActive={mobileView === 'right'}
           desktopState={
@@ -299,12 +345,19 @@ function PageContent() {
           }
         >
           <ErrorBoundary>
-            {detail ? (
+            {/* The detail view (lab trend, report image…) takes over this
+                column, but it must NOT unmount the feature panel: that aborts
+                an in-flight AI stream mid-answer and throws away calculator
+                inputs and IPS clinician confirmations. Hide it with CSS
+                instead — same approach as the mobile panel switch. `contents`
+                keeps the layout identical to rendering it directly. */}
+            <div className={detail ? 'hidden' : 'contents'}>
+              <RightPanelFeature />
+            </div>
+            {detail && (
               <RightDetailPane title={detail.title} onClose={clearDetail}>
                 {detail.node}
               </RightDetailPane>
-            ) : (
-              <RightPanelFeature />
             )}
           </ErrorBoundary>
         </ClinicalWorkspacePanel>

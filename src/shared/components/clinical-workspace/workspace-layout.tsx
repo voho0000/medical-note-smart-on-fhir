@@ -68,16 +68,20 @@ interface ClinicalWorkspacePanelProps
   desktopWidth?: CSSProperties["width"]
 }
 
-export function ClinicalWorkspacePanel({
+export const ClinicalWorkspacePanel = forwardRef<
+  HTMLElement,
+  ClinicalWorkspacePanelProps
+>(function ClinicalWorkspacePanel({
   mobileActive,
   desktopState,
   desktopWidth,
   className,
   style,
   ...props
-}: ClinicalWorkspacePanelProps) {
+}, ref) {
   return (
     <section
+      ref={ref}
       data-slot="clinical-workspace-panel"
       className={cn(
         "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto bg-panel md:w-auto md:rounded-lg",
@@ -96,7 +100,7 @@ export function ClinicalWorkspacePanel({
       {...props}
     />
   )
-}
+})
 
 interface ClinicalMobilePanelSwitcherProps {
   activePanel: "left" | "right"

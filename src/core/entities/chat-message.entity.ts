@@ -48,4 +48,10 @@ export interface ChatMessage {
   replyTo?: ChatReplyReference
   /** Scope active when this message was sent/generated. */
   dataScope?: ChatDataScope
+  /**
+   * Set when the turn failed. `content` deliberately keeps whatever had
+   * already streamed — a network blip 40 seconds into an answer must not
+   * erase it — and the UI renders this message alongside a retry action.
+   */
+  error?: string
 }

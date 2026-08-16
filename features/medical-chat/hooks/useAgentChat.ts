@@ -151,6 +151,25 @@ export function useAgentChat(
   const activeRequestRef = useRef<ActiveChatRequest | null>(null)
   const mountedRef = useRef(true)
   const hasReceivedChunkRef = useRef(false)
+  const lastAttemptRef = useRef<{
+    input: string
+    images?: ChatImage[]
+    replyTo?: ChatReplyReference | null
+    userMessageId: string
+    assistantMessageId: string
+  } | null>(null)
+  // Retry is dispatched via a token bump rather than called inline:
+  // handleSend closes over `chatMessages`, so re-sending in the same tick as
+  // the "remove the failed turn" update would replay the stale array and
+  // duplicate the question. Bumping a counter lets the effect below run once
+  // the removal has been committed.
+  const pendingRetryRef = useRef<{
+    input: string
+    images?: ChatImage[]
+    replyTo?: ChatReplyReference | null
+  } | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
+  const dispatchedRetryTokenRef = useRef(0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -319,6 +338,17 @@ export function useAgentChat(
         dataScope: turnDataScope,
         agentStates: isStandardChat ? undefined : [initialState],
       }])
+
+      // Everything `retryLastMessage` needs to replay this exact turn. The
+      // composer is cleared on send, so without this the typed question is
+      // only recoverable by retyping it.
+      lastAttemptRef.current = {
+        input,
+        images,
+        replyTo,
+        userMessageId: userMessage.id,
+        assistantMessageId,
+      }
 
       setIsLoading(true)
       setError(null)
@@ -664,8 +694,20 @@ export function useAgentChat(
         recordExecution('error', errorMessage)
         const errorObj = new Error(errorMessage)
         setError(errorObj)
+        // Keep whatever already streamed instead of replacing the answer with
+        // the error. A Wi-Fi blip late in a long answer used to destroy every
+        // token the clinician had already read; now the partial answer stays
+        // on screen and the failure is rendered as a separate, retryable
+        // banner. The thinking placeholder is not real output — drop it so an
+        // instant failure doesn't leave a stray "🤔 thinking…" bubble.
         setChatMessages((prev) =>
-          prev.map((m) => m.id === assistantMessageId ? { ...m, content: `❌ ${errorMessage}` } : m)
+          prev.map((m) => m.id === assistantMessageId
+            ? {
+                ...m,
+                content: m.content === thinkingMessage ? '' : m.content,
+                error: errorMessage,
+              }
+            : m)
         )
       } finally {
         clearPending()
@@ -702,6 +744,38 @@ export function useAgentChat(
     setIsLoading(false)
   }, [])
 
+  /**
+   * Replay the last failed turn: drop the failed exchange, then re-send the
+   * original question, images and reply reference. Without this a failure is
+   * a dead end — the composer was already cleared, so the only recovery was
+   * retyping the whole question.
+   */
+  const retryLastMessage = useCallback(() => {
+    const attempt = lastAttemptRef.current
+    if (!attempt || isLoading) return
+    setChatMessages((previous) => previous.filter((message) => (
+      message.id !== attempt.assistantMessageId
+      && message.id !== attempt.userMessageId
+    )))
+    pendingRetryRef.current = {
+      input: attempt.input,
+      images: attempt.images,
+      replyTo: attempt.replyTo,
+    }
+    setRetryToken((token) => token + 1)
+  }, [isLoading, setChatMessages])
+
+  useEffect(() => {
+    if (retryToken === dispatchedRetryTokenRef.current) return
+    dispatchedRetryTokenRef.current = retryToken
+    const attempt = pendingRetryRef.current
+    pendingRetryRef.current = null
+    if (!attempt) return
+    void handleSend(attempt.input, attempt.images, attempt.replyTo)
+  }, [retryToken, handleSend])
+
+  const canRetry = !!chatMessages.some((message) => !!message.error)
+
   return {
     messages: chatMessages,
     isLoading,
@@ -710,5 +784,7 @@ export function useAgentChat(
     handleSend,
     handleReset,
     stopGeneration,
+    retryLastMessage,
+    canRetry,
   }
 }

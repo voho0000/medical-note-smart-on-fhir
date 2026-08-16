@@ -6,6 +6,7 @@
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
 import { startTransition, useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -26,10 +27,26 @@ import {
   buildLabTrendSeries,
   type LabTrendSeries,
 } from "@/src/shared/utils/lab-trend.utils"
-import {
-  CumulativeLabTrendDetail,
-  CumulativeLabTrendDialog,
-} from "./CumulativeLabTrendDetail"
+// Trend charts pull in the whole charting library, but they only ever mount
+// after the clinician clicks a trend. Loading them eagerly put ~600KB of
+// parse work into first paint of the reports workspace — the most expensive
+// thing on an old hospital PC. next/dynamic options must be inline literals
+// (they are statically analysed), hence the repetition.
+const CumulativeLabTrendDetail = dynamic(
+  () => import("./CumulativeLabTrendDetail").then((m) => m.CumulativeLabTrendDetail),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      </div>
+    ),
+  },
+)
+const CumulativeLabTrendDialog = dynamic(
+  () => import("./CumulativeLabTrendDetail").then((m) => m.CumulativeLabTrendDialog),
+  { ssr: false },
+)
 import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
@@ -144,6 +161,48 @@ function LabPivotTable({
       + (header.offsetWidth / 2)
     container.scrollTo({ left: Math.max(0, centeredLeft), behavior: 'smooth' })
   }, [focusAnalyteKey, focusNonce, pivot.category.id, pivot.rows])
+
+  // Transposed layout (matches VGH 累積報告): dates = rows, tests = columns.
+  // Group columns by subgroup; render a top-row of subgroup headers spanning
+  // their member columns.
+  //
+  // Memoized on `pivot` because the unit pass walks EVERY cell of every
+  // column: on a years-of-data chemistry panel that is tens of thousands of
+  // cells, and this component re-renders on unrelated parent state (tab
+  // measurement, focus, dialog open).
+  const { groupedColumns, flatTests, inferredUnitInHeader } = useMemo(() => {
+    const subgroups = pivot.category.subgroups || []
+    const columns: { sg: LabSubgroup | null; tests: typeof pivot.rows }[] = []
+    if (subgroups.length > 0) {
+      for (const sg of subgroups) {
+        const members = pivot.rows.filter((r) => r.subgroupId === sg.id)
+        if (members.length > 0) columns.push({ sg, tests: members })
+      }
+      const orphans = pivot.rows.filter((r) => !r.subgroupId || !subgroups.some((s) => s.id === r.subgroupId))
+      if (orphans.length > 0) columns.push({ sg: null, tests: orphans })
+    } else {
+      columns.push({ sg: null, tests: pivot.rows })
+    }
+    const tests = columns.flatMap((g) => g.tests)
+    return {
+      groupedColumns: columns,
+      flatTests: tests,
+      inferredUnitInHeader: new Map(
+        tests.map((test) => {
+          const unitBearingCells = [...test.values.values()].filter(
+            (cell) => !isMissingLabValue(cell.value) && !!cell.unit,
+          )
+          return [
+            test.mapKey,
+            !!test.unit &&
+              unitBearingCells.length > 0 &&
+              unitBearingCells.every((cell) => cell.unitInferred),
+          ] as const
+        }),
+      ),
+    }
+  }, [pivot])
+
   // When there are no columns at all (no pinned columns and no data) show the
   // empty-state message. If there are columns but no data dates, fall through
   // so the column headers still render with a "no data" body row.
@@ -154,36 +213,6 @@ function LabPivotTable({
       </div>
     )
   }
-
-  // Transposed layout (matches VGH 累積報告): dates = rows, tests = columns.
-  // Group columns by subgroup; render a top-row of subgroup headers spanning
-  // their member columns.
-  const subgroups = pivot.category.subgroups || []
-  const groupedColumns: { sg: LabSubgroup | null; tests: typeof pivot.rows }[] = []
-  if (subgroups.length > 0) {
-    for (const sg of subgroups) {
-      const members = pivot.rows.filter((r) => r.subgroupId === sg.id)
-      if (members.length > 0) groupedColumns.push({ sg, tests: members })
-    }
-    const orphans = pivot.rows.filter((r) => !r.subgroupId || !subgroups.some((s) => s.id === r.subgroupId))
-    if (orphans.length > 0) groupedColumns.push({ sg: null, tests: orphans })
-  } else {
-    groupedColumns.push({ sg: null, tests: pivot.rows })
-  }
-  const flatTests = groupedColumns.flatMap((g) => g.tests)
-  const inferredUnitInHeader = new Map(
-    flatTests.map((test) => {
-      const unitBearingCells = [...test.values.values()].filter(
-        (cell) => !isMissingLabValue(cell.value) && !!cell.unit,
-      )
-      return [
-        test.mapKey,
-        !!test.unit &&
-          unitBearingCells.length > 0 &&
-          unitBearingCells.every((cell) => cell.unitInferred),
-      ] as const
-    }),
-  )
 
   const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
   const hasSubgroups = groupedColumns.some((g) => g.sg !== null)
