@@ -200,7 +200,6 @@ export default function MedicalSummaryFeature() {
     retryFailed,
     isGenerating: isBusy,
     isStopping,
-    isSummaryGenerating,
     isSafetyGenerating,
     isRestoring,
     summaryError,
@@ -277,7 +276,6 @@ export default function MedicalSummaryFeature() {
     medications: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
     safety: ms.careSafetyTitle,
   }), [isPatient, ms])
-  const hasCardErrors = Object.values(cardErrors).some(Boolean)
   const generationErrors = useMemo(() => {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
       const error = cardErrors[cardId]
@@ -804,17 +802,17 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-wrap items-center gap-1.5 @min-[36rem]:flex-nowrap">
-        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary" />
+      <div className="flex flex-nowrap items-center gap-1.5 @max-[19rem]:flex-wrap">
+        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary @max-[32rem]:hidden" />
         <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
-        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary">
+        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary @max-[32rem]:hidden">
           {ms.badge}
         </span>
         <TabsList className={`${SUBTAB_LIST_CLASSES} w-auto`}>
           <TabsTrigger
             value="standard"
             aria-label={ms.standardSummaryTab}
-            className={`${SUBTAB_TRIGGER_CLASSES} min-w-14 text-xs`}
+            className={`${SUBTAB_TRIGGER_CLASSES} min-w-[clamp(2.5rem,10cqw,3.5rem)] text-xs`}
           >
             {ms.standardSummaryTabShort}
           </TabsTrigger>
@@ -822,7 +820,7 @@ export default function MedicalSummaryFeature() {
             value="custom"
             title={ms.customInsightsSubtitle}
             aria-label={ms.customSummaryTab}
-            className={`${SUBTAB_TRIGGER_CLASSES} group min-w-16 text-xs`}
+            className={`${SUBTAB_TRIGGER_CLASSES} group min-w-[clamp(3rem,11cqw,4rem)] text-xs`}
           >
             <span>{ms.customSummaryTabShort}</span>
             {visibleInsightCount > 0 ? (
@@ -843,7 +841,7 @@ export default function MedicalSummaryFeature() {
         </TabsList>
         <div
           data-tour="medical-summary-controls"
-          className="ml-0 flex min-w-0 basis-full flex-nowrap items-center justify-end gap-1.5 @min-[36rem]:ml-auto @min-[36rem]:basis-auto"
+          className="ml-auto flex min-w-0 basis-0 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
         >
           {activeView === "standard" ? (
             <ModelPicker
@@ -852,7 +850,7 @@ export default function MedicalSummaryFeature() {
               onSelect={setModel}
               tooltip={t.safetyAlerts.modelTooltip}
               compact
-              triggerClassName="min-h-[44px] max-w-[42cqw] text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
+              triggerClassName="min-h-[44px] min-w-0 flex-1 basis-24 text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
             />
           ) : (
             <ModelPicker
@@ -862,7 +860,7 @@ export default function MedicalSummaryFeature() {
               tooltip={t.modelPicker.insightsTooltip}
               align="end"
               compact
-              triggerClassName="min-h-[44px] max-w-[42cqw] text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
+              triggerClassName="min-h-[44px] min-w-0 flex-1 basis-24 text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
             />
           )}
           {activeView === "standard" && contextAdaptation ? (
@@ -1110,9 +1108,6 @@ export default function MedicalSummaryFeature() {
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}
-              updating={isSummaryGenerating && (
-                !hasCardErrors || Boolean(cardErrors.priorities)
-              )}
             />
           ) : null}
 

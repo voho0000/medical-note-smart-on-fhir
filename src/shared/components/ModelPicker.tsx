@@ -128,23 +128,19 @@ export function ModelPicker({
             triggerClassName,
           )}
         >
-          {/* The 「模型：」 prefix follows the app's below-sm density rule
-              (labels drop, icons/values stay) — on phones the bordered pill +
-              tooltip carry the meaning. */}
-          <span className={cn("hidden shrink-0 sm:inline", compact && "sm:hidden")}>
+          {/* Compact toolbars omit the 「模型：」 prefix at every width; regular
+              pickers keep the app's below-sm density rule. The bordered trigger
+              and tooltip still carry the control's meaning. */}
+          <span className={cn("hidden shrink-0", !compact && "sm:inline")}>
             {t.modelPicker?.label ?? '模型'}：
           </span>
-          {/* Fixed-width name slot: the trigger keeps ONE size no matter which
-              model is picked. sm:w-36 (108px at this root font-size) sits just
-              past the longest label in the lineup ("Gemini 3 Flash Preview"
-              ≈105px) — resize this if a longer label joins, or it truncates.
-              Below sm a narrower slot truncates long names so the header strip
-              survives the signed-in button set on a phone. The slot may still
-              shrink (flex) when the host row is genuinely tight. */}
+          {/* Non-compact pickers keep a stable name slot. Compact toolbars use
+              a max-width instead, and min-w-0 lets the host flex row shrink the
+              name with an ellipsis before controls wrap or overlap. */}
           <span
             title={effectiveLabel}
             className={cn(
-              "truncate text-left font-medium text-foreground",
+              "min-w-0 truncate text-left font-medium text-foreground",
               compact ? "max-w-[12rem]" : "w-32 sm:w-36",
             )}
           >

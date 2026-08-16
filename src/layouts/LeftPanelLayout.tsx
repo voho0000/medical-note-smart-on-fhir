@@ -185,7 +185,7 @@ export default function ClinicalSummaryFeature() {
   }
 
   return (
-    <div className="flex h-full flex-col" data-tour="left-panel">
+    <div className="@container flex h-full flex-col" data-tour="left-panel">
       <SdkSourceLimitationsBanner />
       <FhirDataIssuesBanner />
       <Tabs
@@ -222,9 +222,8 @@ export default function ClinicalSummaryFeature() {
                 value={tab.id}
                 data-tour={`left-tab-${tab.id}`}
                 icon={Icon}
-                iconVisibility="desktop"
+                iconVisibility="responsive"
                 label={getTabLabel(tab)}
-                className="px-1"
               />
             )
           })}

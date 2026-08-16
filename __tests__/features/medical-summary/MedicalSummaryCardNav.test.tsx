@@ -50,7 +50,7 @@ describe('MedicalSummaryCardNav', () => {
     expect(nav).toHaveClass('sticky', 'top-0')
     expect(nav).not.toHaveClass('overflow-x-auto')
     expect(scroller).toHaveClass('overflow-x-auto')
-    expect(scroller).toHaveClass('min-w-0', 'flex-[0_1_auto]')
+    expect(scroller).toHaveClass('min-w-0', 'max-w-full', 'flex-none')
     expect(scroller).not.toHaveClass('flex-1')
     expect(layout).toHaveClass('flex-nowrap')
     expect(layout).not.toHaveClass('flex-wrap')
@@ -60,6 +60,7 @@ describe('MedicalSummaryCardNav', () => {
       'gap-[clamp(2px,calc(0.8cqw-1px),4px)]',
       'px-[clamp(0px,calc(1.5cqw-3px),8px)]',
     )
+    expect(buttons[0].querySelector('svg')).toHaveClass('@max-[28rem]:hidden')
     expect(buttons[0]).toHaveAttribute('title', '關鍵檢驗與檢查趨勢')
     expect(buttons[0]).toHaveAttribute('aria-controls', 'medical-summary-card-investigations')
     expect(screen.queryByTestId('medical-summary-generation-meta')).not.toBeInTheDocument()
@@ -115,8 +116,9 @@ describe('MedicalSummaryCardNav', () => {
     expect(provenance).toHaveClass(
       'ml-auto',
       'min-w-0',
-      'flex-1',
       'max-w-[min(48%,24rem)]',
+      'flex-1',
+      'justify-end',
     )
     expect(provenance).not.toHaveClass('max-w-full')
     expect(provenance).toHaveTextContent('MODEL_NAME·耗時 01:23')
@@ -152,6 +154,12 @@ describe('MedicalSummaryCardNav', () => {
 
     const provenance = screen.getByTestId('medical-summary-generation-meta')
     expect(provenance).toHaveTextContent('產生中·MODEL_NAME·00:00')
+    expect(screen.getByText('MODEL_NAME')).toHaveClass('flex-[0_1_auto]')
+    expect(screen.getByText('00:00')).toHaveClass(
+      'min-w-[5ch]',
+      'text-right',
+      'tabular-nums',
+    )
 
     act(() => jest.advanceTimersByTime(61_000))
 

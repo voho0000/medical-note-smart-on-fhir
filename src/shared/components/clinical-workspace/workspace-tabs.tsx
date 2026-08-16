@@ -6,8 +6,8 @@ import type { LucideIcon } from "lucide-react"
 import { TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/src/shared/utils/cn.utils"
 
-type IconVisibility = "always" | "desktop"
-type LabelVisibility = "always" | "sm" | "panel" | "never"
+type IconVisibility = "always" | "desktop" | "panel" | "responsive"
+type LabelVisibility = "always" | "sm" | "never"
 
 export function ClinicalTabList({
   className,
@@ -58,6 +58,9 @@ export function ClinicalTabTrigger({
           className={cn(
             "h-4 w-4 shrink-0",
             iconVisibility === "desktop" && "max-lg:hidden",
+            iconVisibility === "panel" && "@max-[28rem]:hidden",
+            iconVisibility === "responsive" &&
+              "max-xl:hidden @max-[28rem]:hidden",
           )}
         />
       )}
@@ -66,7 +69,6 @@ export function ClinicalTabTrigger({
           className={cn(
             "min-w-0 truncate",
             labelVisibility === "sm" && "max-sm:hidden",
-            labelVisibility === "panel" && "@max-[44rem]:hidden",
           )}
         >
           {label}

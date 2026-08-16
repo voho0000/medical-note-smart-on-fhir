@@ -1,7 +1,7 @@
 "use client"
 
 import { useLayoutEffect, useRef, useState } from "react"
-import { ChevronDown, Loader2, ShieldCheck } from "lucide-react"
+import { ChevronDown, ShieldCheck } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
@@ -19,7 +19,6 @@ interface CurrentPrioritiesCardProps {
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
-  updating?: boolean
 }
 
 export function CurrentPrioritiesCard({
@@ -31,7 +30,6 @@ export function CurrentPrioritiesCard({
   typeLabel,
   unverifiedLabel,
   onNavigate,
-  updating = false,
 }: CurrentPrioritiesCardProps) {
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [summaryOverflowing, setSummaryOverflowing] = useState(false)
@@ -77,7 +75,6 @@ export function CurrentPrioritiesCard({
           <h3 id="current-priorities-title" className="min-w-0 flex-1 text-sm font-semibold text-foreground">
             {title}
           </h3>
-          {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500 dark:text-violet-300" /> : null}
         </div>
         <p className="mt-2 text-[0.875rem] font-semibold leading-snug text-foreground @min-[48rem]:text-[0.9375rem]">
           {result.headline}

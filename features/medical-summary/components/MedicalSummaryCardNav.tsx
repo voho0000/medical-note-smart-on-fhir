@@ -112,7 +112,7 @@ export function MedicalSummaryCardNav({
         <div
           ref={scrollerRef}
           data-testid="medical-summary-card-nav-scroller"
-          className="min-w-0 flex-[0_1_auto] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="min-w-0 max-w-full flex-none overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="flex min-w-max items-center gap-[clamp(2px,0.6cqw,4px)]">
             {items.map((item) => {
@@ -133,7 +133,7 @@ export function MedicalSummaryCardNav({
                   aria-current={isActive ? "location" : undefined}
                   onClick={() => onJump(item.id)}
                 >
-                  <Icon aria-hidden="true" className={`h-3.5 w-3.5 ${iconClassName}`} />
+                  <Icon aria-hidden="true" className={`h-3.5 w-3.5 @max-[28rem]:hidden ${iconClassName}`} />
                   <span>{item.compactLabel ?? item.label}</span>
                   {item.count !== undefined ? (
                     <span className={cn(
@@ -153,7 +153,7 @@ export function MedicalSummaryCardNav({
           activeGeneration={activeGeneration}
           runningLabel={runningLabel}
           runningAriaTemplate={runningAriaTemplate}
-          className="ml-auto min-w-0 max-w-[min(48%,24rem)] flex-1 text-xs"
+          className="ml-auto min-w-0 max-w-[min(48%,24rem)] flex-1 justify-end text-xs"
         />
       </div>
     </nav>

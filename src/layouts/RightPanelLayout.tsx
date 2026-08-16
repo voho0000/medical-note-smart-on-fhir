@@ -330,8 +330,9 @@ function RightPanelContentInner() {
         value={feature.id}
         data-tour={`right-tab-${feature.id}`}
         icon={Icon}
+        iconVisibility={feature.iconOnly ? "always" : "responsive"}
         label={label}
-        labelVisibility={feature.iconOnly ? "never" : "panel"}
+        labelVisibility={feature.iconOnly ? "never" : "always"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
         suffix={feature.badge ? (
