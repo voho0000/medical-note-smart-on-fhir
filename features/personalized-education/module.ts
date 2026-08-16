@@ -11,6 +11,7 @@ export const PERSONALIZED_EDUCATION_MODULE = {
     name: 'Personalized Education',
     tabLabel: 'personalizedEducation',
     badge: 'Beta',
+    beta: true,
     // Occupies the same audience-specific slot as clinician guidance,
     // immediately to the right of the calculator.
     order: 5,

@@ -9,16 +9,21 @@ describe('right-panel registry', () => {
       'medical-summary',
       'medical-chat',
       'medical-calculator',
-      'personalized-education',
-      'clinical-decision-support',
       'ips-export',
       'settings',
     ])
     expect(featureIds).not.toContain('data-selection')
+    expect(featureIds).not.toContain('personalized-education')
+    expect(featureIds).not.toContain('clinical-decision-support')
+    expect(getEnabledRightPanelFeatures().find((feature) => feature.id === 'settings')?.iconOnly)
+      .not.toBe(true)
   })
 
   it('keeps education and CDSS as separate pinned modules', () => {
-    const features = getEnabledRightPanelFeatures()
+    const features = getEnabledRightPanelFeatures(undefined, {
+      betaFeaturesEnabled: true,
+      isAuthenticated: true,
+    })
     const defaults = groupRightPanelFeatures(features, {})
 
     expect(defaults.overflowFeatures.map((feature) => feature.id)).toEqual([])
@@ -52,11 +57,26 @@ describe('right-panel registry', () => {
     ])
   })
 
-  it('shows education only to citizens and guidance only to medical users', () => {
-    const patientIds = getEnabledRightPanelFeatures('patient').map(
+  it('shows each audience its Beta tab only after the user opts in', () => {
+    expect(getEnabledRightPanelFeatures('patient').map((feature) => feature.id))
+      .not.toContain('personalized-education')
+    expect(getEnabledRightPanelFeatures('medical').map((feature) => feature.id))
+      .not.toContain('clinical-decision-support')
+    expect(getEnabledRightPanelFeatures('patient', {
+      betaFeaturesEnabled: true,
+      isAuthenticated: false,
+    }).map((feature) => feature.id)).not.toContain('personalized-education')
+
+    const patientIds = getEnabledRightPanelFeatures('patient', {
+      betaFeaturesEnabled: true,
+      isAuthenticated: true,
+    }).map(
       (feature) => feature.id,
     )
-    const medicalIds = getEnabledRightPanelFeatures('medical').map(
+    const medicalIds = getEnabledRightPanelFeatures('medical', {
+      betaFeaturesEnabled: true,
+      isAuthenticated: true,
+    }).map(
       (feature) => feature.id,
     )
 
@@ -73,19 +93,28 @@ describe('right-panel registry', () => {
     )
 
     expect(
-      getEnabledRightPanelFeatures('patient').find(
+      getEnabledRightPanelFeatures('patient', {
+        betaFeaturesEnabled: true,
+        isAuthenticated: true,
+      }).find(
         (feature) => feature.id === 'personalized-education',
       )?.badge,
     ).toBe('Beta')
     expect(
-      getEnabledRightPanelFeatures('medical').find(
+      getEnabledRightPanelFeatures('medical', {
+        betaFeaturesEnabled: true,
+        isAuthenticated: true,
+      }).find(
         (feature) => feature.id === 'clinical-decision-support',
       )?.badge,
     ).toBe('Beta')
   })
 
   it('keeps the personalized-education result mounted across tab switches', () => {
-    const education = getEnabledRightPanelFeatures().find(
+    const education = getEnabledRightPanelFeatures(undefined, {
+      betaFeaturesEnabled: true,
+      isAuthenticated: true,
+    }).find(
       (feature) => feature.id === 'personalized-education',
     )
 

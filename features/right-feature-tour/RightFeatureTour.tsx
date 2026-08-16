@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   markRightFeatureTourSeen,
@@ -20,6 +22,7 @@ interface TourStep {
   lockTargetOnceResolved?: boolean
   highlightPadding?: number
   medicalOnly?: boolean
+  betaOnly?: boolean
   title: { 'zh-TW': string; en: string }
   body: { 'zh-TW': string; en: string }
   fallbackBody?: { 'zh-TW': string; en: string }
@@ -31,8 +34,8 @@ const STEPS: TourStep[] = [
     target: '[data-tour="right-tabs"]',
     title: { 'zh-TW': '右側是臨床工作區', en: 'The right side is your clinical workspace' },
     body: {
-      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、匯出與設定；醫療人員另可使用個人化指引。取消釘選的功能會收進「更多」選單。',
-      en: 'The tabs bring together the medical summary, clinical chat, calculators, export, and settings; clinicians also get personalised guidance. Unpinned tools move into More.',
+      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、匯出與設定；登入後可從設定中自行開啟 Beta 功能。取消釘選的功能會收進「更多」選單。',
+      en: 'The tabs bring together the medical summary, clinical chat, calculators, export, and settings. After signing in, Beta features can be enabled in Settings. Unpinned tools move into More.',
     },
   },
   {
@@ -127,6 +130,7 @@ const STEPS: TourStep[] = [
     target: '[data-tour="right-tab-clinical-decision-support"]',
     highlightPadding: 10,
     medicalOnly: true,
+    betaOnly: true,
     title: { 'zh-TW': '個人化指引對照病人狀況', en: 'Guidance connects recommendations to patient context' },
     body: {
       'zh-TW': '依病人條件整理符合的臨床指引、建議與依據，協助快速檢查照護缺口；它是決策支援，不會取代醫療人員判斷。',
@@ -149,8 +153,8 @@ const STEPS: TourStep[] = [
     highlightPadding: 10,
     title: { 'zh-TW': '設定集中管理模型、金鑰與顯示', en: 'Manage models, keys, and display settings' },
     body: {
-      'zh-TW': '可設定各功能使用的 AI 模型與連線方式，也能調整主題、字級與查看版本資訊。敏感金鑰只會在你設定後使用。',
-      en: 'Choose AI models and connections for each feature, adjust theme and text size, and view version information. Sensitive keys are used only after you configure them.',
+      'zh-TW': '可設定各功能使用的 AI 模型與連線方式，也能調整主題、字級與查看版本資訊；登入後還可開啟 Beta 功能。敏感金鑰只會在你設定後使用。',
+      en: 'Choose AI models and connections for each feature, adjust theme and text size, and view version information. After signing in, you can also enable Beta features. Sensitive keys are used only after you configure them.',
     },
   },
   {
@@ -208,6 +212,10 @@ function localeText(value: { 'zh-TW': string; en: string }, locale: string): str
 export function RightFeatureTour() {
   const { locale } = useLanguage()
   const { audience } = useAudience()
+  const { user } = useAuth()
+  const betaFeaturesEnabled = useBetaFeaturesStore((state) => (
+    user ? state.enabledByUser[user.uid] === true : false
+  ))
   const active = useRightFeatureTourStore((state) => state.active)
   const session = useRightFeatureTourStore((state) => state.session)
   const stop = useRightFeatureTourStore((state) => state.stop)
@@ -218,8 +226,11 @@ export function RightFeatureTour() {
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
 
   const steps = useMemo(
-    () => STEPS.filter((step) => !step.medicalOnly || audience === 'medical'),
-    [audience],
+    () => STEPS.filter((step) => (
+      (!step.medicalOnly || audience === 'medical')
+      && (!step.betaOnly || (Boolean(user) && betaFeaturesEnabled))
+    )),
+    [audience, betaFeaturesEnabled, user],
   )
   const step = steps[Math.min(stepIndex, Math.max(steps.length - 1, 0))]
 

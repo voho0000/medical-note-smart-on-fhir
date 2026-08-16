@@ -12,6 +12,8 @@ export interface RightPanelFeatureConfig {
   order: number
   /** Whether this feature is enabled */
   enabled: boolean
+  /** Experimental feature hidden unless the user explicitly enables Beta features. */
+  beta?: boolean
   /** Roles allowed to see this feature. Omit to show it to both roles. */
   audiences?: ReadonlyArray<'medical' | 'patient'>
   /**
@@ -115,7 +117,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     order: 7,
     enabled: true,
     pinLocked: true,
-    iconOnly: true,
     contentClassName: 'flex-1 mt-1',
   },
 ]
@@ -125,10 +126,15 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
  */
 export function getEnabledRightPanelFeatures(
   audience?: 'medical' | 'patient',
+  options: { betaFeaturesEnabled?: boolean; isAuthenticated?: boolean } = {},
 ): RightPanelFeatureConfig[] {
   return RIGHT_PANEL_FEATURES
     .filter((feature) => (
       feature.enabled
+      && (!feature.beta || (
+        options.isAuthenticated === true
+        && options.betaFeaturesEnabled === true
+      ))
       && (!audience || !feature.audiences || feature.audiences.includes(audience))
     ))
     .sort((a, b) => a.order - b.order)

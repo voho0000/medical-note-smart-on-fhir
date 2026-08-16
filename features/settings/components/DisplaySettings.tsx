@@ -14,14 +14,17 @@ import { useState } from 'react'
 import { Moon, Sun, ExternalLink, Bug, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { useTheme } from '@/src/application/providers/theme.provider'
 import { useFontSize, type FontSize } from '@/src/application/providers/font-size.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAuth } from '@/src/application/providers/auth.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
 import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
+import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
@@ -37,6 +40,11 @@ export function DisplaySettings() {
   const { theme, setTheme } = useTheme()
   const { fontSize, setFontSize } = useFontSize()
   const { t } = useLanguage()
+  const { user } = useAuth()
+  const betaFeaturesEnabled = useBetaFeaturesStore((state) => (
+    user ? state.enabledByUser[user.uid] === true : false
+  ))
+  const setBetaFeaturesEnabled = useBetaFeaturesStore((state) => state.setBetaFeaturesEnabled)
   const version = useAppVersion()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -99,6 +107,35 @@ export function DisplaySettings() {
           ))}
         </div>
       </div>
+
+      {/* Experimental clinical tools are visible only to signed-in users and
+          remain opt-in even after authentication. */}
+      {user ? (
+        <div className="space-y-3">
+          <Label className="text-xs uppercase text-muted-foreground">
+            {t.settings.betaFeatures}
+          </Label>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="beta-features-enabled" className="text-sm font-medium">
+                {t.settings.enableBetaFeatures}
+              </Label>
+              <p id="beta-features-description" className="text-xs leading-relaxed text-muted-foreground">
+                {t.settings.betaFeaturesDescription}
+              </p>
+            </div>
+            <Switch
+              id="beta-features-enabled"
+              checked={betaFeaturesEnabled}
+              onCheckedChange={(enabled) => {
+                if (user) setBetaFeaturesEnabled(user.uid, enabled)
+              }}
+              aria-describedby="beta-features-description"
+              className="mt-0.5"
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Connection info — only shown when bundle / SMART context is loaded */}
       {hasConnectionInfo && (
