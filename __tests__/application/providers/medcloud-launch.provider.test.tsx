@@ -7,11 +7,16 @@ import {
   VGTPE_TVGHBRAIN_PROFILE_ID,
 } from '@/src/application/launch/medcloud-launch-context'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
-import { useModelPrefsStore } from '@/src/application/stores/model-prefs.store'
+import {
+  MODEL_PREF_DEFAULTS,
+  useModelPrefsStore,
+} from '@/src/application/stores/model-prefs.store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 import { createEmptyOpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
+import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
 const ENCRYPTED_RUNTIME_SECRET =
@@ -170,6 +175,32 @@ describe('MedcloudLaunchProvider', () => {
 
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
     expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(useModelPrefsStore.getState().prefs).toEqual(MODEL_PREF_DEFAULTS)
+    expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
+    expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
+  })
+
+  it('recovers stale runtime-only preferences on a later launch without Medcloud parameters', async () => {
+    useModelPrefsStore.setState({
+      prefs: {
+        chat: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+        insights: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+      },
+    })
+    useSummaryPrefsStore.setState({ modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID })
+    useSafetyPrefsStore.setState({ modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID })
+
+    render(
+      <MedcloudLaunchProvider launchHref="https://mediprisma.tw/app/">
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    await waitFor(() => expect(useModelPrefsStore.getState().prefs).toEqual(
+      MODEL_PREF_DEFAULTS,
+    ))
+    expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
+    expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
   })
 
   it('ignores messages from a different origin', () => {

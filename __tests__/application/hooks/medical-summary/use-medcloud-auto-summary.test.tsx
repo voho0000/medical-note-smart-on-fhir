@@ -14,6 +14,7 @@ describe('useMedcloudAutoSummary', () => {
       isRestoring: boolean
     }) => useMedcloudAutoSummary({
       hasPatient: true,
+      hasTvghbrainSummary: false,
       dataReady: props.dataReady,
       isGenerating: false,
       isRestoring: props.isRestoring,
@@ -40,6 +41,7 @@ describe('useMedcloudAutoSummary', () => {
 
     renderHook(() => useMedcloudAutoSummary({
       hasPatient: true,
+      hasTvghbrainSummary: false,
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
@@ -49,5 +51,25 @@ describe('useMedcloudAutoSummary', () => {
 
     expect(generate).not.toHaveBeenCalled()
     expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBe('message-2')
+  })
+
+  it('consumes the launch without regenerating when this patient already has a tvghbrain summary', async () => {
+    const generate = jest.fn(async () => undefined)
+    useMedcloudLaunchStore.getState().queueSummary('message-existing')
+
+    renderHook(() => useMedcloudAutoSummary({
+      hasPatient: true,
+      hasTvghbrainSummary: true,
+      dataReady: true,
+      isGenerating: false,
+      isRestoring: false,
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+      generate,
+    }))
+
+    await waitFor(() => expect(
+      useMedcloudLaunchStore.getState().pendingSummaryMessageId,
+    ).toBeNull())
+    expect(generate).not.toHaveBeenCalled()
   })
 })

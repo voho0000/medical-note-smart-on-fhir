@@ -232,20 +232,23 @@ export function isOpenAiCompatibleRuntimeReady(
 }
 
 /** Resolve the chat execution path for a custom profile. Automatic mode is
- * deliberately fail-closed: only a verified tool-call probe enables the Agent.
- * Standard mode always disables Agent tools. Legacy manual-deep values are
- * normalized to automatic mode and therefore cannot bypass verification. */
+ * deliberately fail-closed except for an explicit, non-persisted attestation
+ * on a runtime-only launch profile; otherwise only a verified tool-call probe
+ * enables the Agent. Standard mode always disables Agent tools. */
 export function resolveOpenAiCompatibleConversationMode(
   profile: OpenAiCompatibleConfig | null | undefined,
 ): OpenAiCompatibleConversationMode {
   const agentMode = normalizeOpenAiCompatibleAgentMode(profile?.agentMode)
   if (agentMode === 'standard') return 'standard'
+  const runtimeProfile = profile as OpenAiCompatibleProfile | null | undefined
+  const hasTrustedRuntimeAttestation = runtimeProfile?.runtimeOnly === true &&
+    runtimeProfile.trustedAgentRuntime === true
   const hasVerifiedProbe = normalizeOpenAiCompatibleAgentCapability(
     profile?.agentCapability,
   ) === 'verified' && normalizeOpenAiCompatibleAgentCapabilityTestedAt(
     profile?.agentCapabilityTestedAt,
   ) !== null
-  return hasVerifiedProbe
+  return hasTrustedRuntimeAttestation || hasVerifiedProbe
     ? 'deep-agent'
     : 'standard'
 }

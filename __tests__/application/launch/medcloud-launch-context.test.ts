@@ -8,6 +8,7 @@ import {
   VGTPE_TVGHBRAIN_BASE_URL,
   VGTPE_TVGHBRAIN_MODEL_ID,
 } from '@/src/application/launch/medcloud-launch-context'
+import { resolveOpenAiCompatibleConversationMode } from '@/src/shared/utils/openai-compatible.utils'
 
 const ENCRYPTED_RUNTIME_SECRET =
   'a256gcm.v1.AAECAwQFBgcICQoL.xdA13rrC_SiHbJycmQY.VPy_M14qGoZF29EY9sG1Qw'
@@ -87,9 +88,11 @@ describe('medcloud launch context', () => {
     ).resolves.toBeNull()
   })
 
-  it('creates a direct runtime-only tvghbrain profile without a baked credential', () => {
-    expect(createVghtpeTvghbrainRuntimeProfile('extension-secret')).toMatchObject({
+  it('creates an Agent-enabled direct runtime-only tvghbrain profile without a baked credential', () => {
+    const profile = createVghtpeTvghbrainRuntimeProfile('extension-secret')
+    expect(profile).toMatchObject({
       runtimeOnly: true,
+      trustedAgentRuntime: true,
       enabled: true,
       baseUrl: VGTPE_TVGHBRAIN_BASE_URL,
       modelId: VGTPE_TVGHBRAIN_MODEL_ID,
@@ -99,6 +102,8 @@ describe('medcloud launch context', () => {
       contextWindowSource: 'suggested',
       agentMode: 'auto',
       agentCapability: 'unknown',
+      agentCapabilityTestedAt: null,
     })
+    expect(resolveOpenAiCompatibleConversationMode(profile)).toBe('deep-agent')
   })
 })

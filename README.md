@@ -49,7 +49,7 @@
 
 - **本地匯入的完整 FHIR Bundle 儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。Cloud 模式使用 AI 時，產生內容所需的選取資料會傳送至所選服務；內建模型可能經由 MediPrisma Firebase Functions 代理。On-prem 模式只允許送往同源、loopback 或部署者明列的院內 AI origin。
 - **API 金鑰**：Cloud provider keys 預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。Cloud 模式的自訂 OpenAI-compatible 端點可明確選擇瀏覽器直連，或對不支援 CORS 的白名單 provider 使用 Firebase Gateway；後者會讓提示、回應與自備 key 暫時經過 Firebase，畫面會先行提示。On-prem 只允許院內 direct endpoint。
-- **自訂模型深入對話**：每個端點預設採自動偵測且 fail closed；能力測試會送出正式 FHIR tool schemas，但只用合成文字與瀏覽器內隨機值，不讀取病歷或呼叫 FHIR server。只有完整串流 tool-call 往返成功才會使用 Agent；端點、模型、transport 或 key 改變時會重新驗證。使用者也可固定採標準對話。自訂 Agent 只取得瀏覽器綁定的 FHIR tools，不取得外部文獻搜尋工具。
+- **自訂模型深入對話**：每個端點預設採自動偵測且 fail closed；能力測試會送出正式 FHIR tool schemas，但只用合成文字與瀏覽器內隨機值，不讀取病歷或呼叫 FHIR server。只有完整串流 tool-call 往返成功才會使用 Agent；端點、模型、transport 或 key 改變時會重新驗證。北榮 Medcloud 精確參數啟動所建立的 runtime-only TVGHBRAIN 3.5 profile 是明確核准的例外，直接啟用 Agent 且不把信任旗標持久化。使用者也可固定採標準對話。自訂 Agent 只取得瀏覽器綁定的 FHIR tools，不取得外部文獻搜尋工具。
 - **對話紀錄**：Cloud 模式登入後，一般對話會儲存於 Firestore 並跨裝置同步；「無痕對話」不會儲存，訪客對話不會同步。On-prem 模式不初始化 Firestore，對話不跨裝置同步。
 - **回饋**：Cloud 模式表單不自動附加 patientId，並提醒不要在自由文字輸入病人識別資訊；FHIR server URL 仍可能透露機構。On-prem 模式不載入雲端回饋服務。
 - 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
@@ -64,7 +64,7 @@
 
 Cloud 模式不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫；自訂 OpenAI-compatible provider 若封鎖瀏覽器 CORS，可明確改選受限的 Firebase Gateway。**模型在各 AI 功能內就地選擇**（對話工具列、自訂模組管理 drawer、醫療摘要標頭，各自記憶）；付費模型未提供金鑰時自動以免費模型執行並如實顯示。
 
-On-prem 模式只顯示院內／地端 OpenAI-compatible profiles，不接受公共 provider key，也不會改走免費 cloud model。每個 profile 的 Agent mode 必須通過不讀取病歷的 tool-call capability probe；未驗證時使用標準對話。
+On-prem 模式只顯示院內／地端 OpenAI-compatible profiles，不接受公共 provider key，也不會改走免費 cloud model。每個一般 profile 的 Agent mode 必須通過不讀取病歷的 tool-call capability probe；未驗證時使用標準對話。北榮 Medcloud runtime-only TVGHBRAIN 3.5 profile 依固定啟動契約直接啟用 Agent。
 
 | 類別 | 模型 |
 |------|------|
@@ -276,7 +276,7 @@ One codebase supports two **build-time** profiles. Ports only let two local proc
 
 In cloud mode, requests without your own key go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly. Custom OpenAI-compatible providers that block browser CORS can explicitly use the restricted Firebase Gateway. **Models are picked inside each AI feature** (chat toolbar, custom-module manager, medical-summary header — each remembered separately); a premium pick without its key transparently runs — and displays — as the free model.
 
-On-prem mode shows only hospital/local OpenAI-compatible profiles. It rejects public-provider keys and never falls back to a free cloud model. Agent mode is enabled only after a synthetic, chart-free tool-call capability probe succeeds; otherwise the profile uses standard chat.
+On-prem mode shows only hospital/local OpenAI-compatible profiles. It rejects public-provider keys and never falls back to a free cloud model. Agent mode is enabled only after a synthetic, chart-free tool-call capability probe succeeds; otherwise the profile uses standard chat. The runtime-only TVGHBRAIN 3.5 profile created by the exact VGH-TPE Medcloud launch contract is an explicit non-persisted exception and starts in Agent mode.
 
 | Tier | Models |
 |------|--------|

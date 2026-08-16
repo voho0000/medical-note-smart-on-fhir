@@ -827,6 +827,9 @@ export const useAiConfigStore = create<AiConfigState>()(
         const normalized = {
           ...toOpenAiCompatibleProfile(profile.profileId, profile),
           runtimeOnly: true,
+          ...(profile.trustedAgentRuntime === true
+            ? { trustedAgentRuntime: true }
+            : {}),
         }
         const current = get().openAiCompatibleProfiles
         const next = [

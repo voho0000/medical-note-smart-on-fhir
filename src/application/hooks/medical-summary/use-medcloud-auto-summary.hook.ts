@@ -6,6 +6,7 @@ import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch
 
 interface UseMedcloudAutoSummaryOptions {
   hasPatient: boolean
+  hasTvghbrainSummary: boolean
   dataReady: boolean
   isGenerating: boolean
   isRestoring: boolean
@@ -18,6 +19,7 @@ interface UseMedcloudAutoSummaryOptions {
  * the lazy Medical Summary feature or the complete FHIR dataset is ready. */
 export function useMedcloudAutoSummary({
   hasPatient,
+  hasTvghbrainSummary,
   dataReady,
   isGenerating,
   isRestoring,
@@ -32,10 +34,14 @@ export function useMedcloudAutoSummary({
       !messageId ||
       !hasPatient ||
       !dataReady ||
-      isGenerating ||
       isRestoring ||
       modelId !== VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
     ) return
+    if (hasTvghbrainSummary) {
+      claimSummary(messageId)
+      return
+    }
+    if (isGenerating) return
     if (!claimSummary(messageId)) return
     void generate().catch(() => undefined)
   }, [
@@ -43,6 +49,7 @@ export function useMedcloudAutoSummary({
     dataReady,
     generate,
     hasPatient,
+    hasTvghbrainSummary,
     isGenerating,
     isRestoring,
     messageId,

@@ -26,10 +26,11 @@ export interface OpenAiCompatibleConfig {
    *  migrated as manual so a future probe cannot overwrite a legacy value. */
   contextWindowSource?: OpenAiCompatibleContextWindowSource
   /** User-selected conversation policy for this exact connection identity.
-   * `auto` trusts only a successful, patient-free tool-call capability probe;
+   * `auto` trusts a successful, patient-free tool-call capability probe, or an
+   * explicit non-persisted launch attestation on a runtime-only profile;
    * `standard` never sends Agent tools. Missing, legacy manual-deep, and
-   * identity-changed values normalize/reset to `auto`, which fails closed to
-   * standard chat until verified. */
+   * identity-changed values normalize/reset to `auto`, which otherwise fails
+   * closed to standard chat until verified. */
   agentMode?: OpenAiCompatibleAgentMode
   /** Result of the latest tool-call capability probe for this exact endpoint,
    * upstream model, transport, and credential. */
@@ -47,6 +48,10 @@ export interface OpenAiCompatibleProfile extends OpenAiCompatibleConfig {
   /** Ephemeral launch-managed profile. Its credential exists only in the
    * current page runtime and must never enter browser persistence. */
   runtimeOnly?: boolean
+  /** A launch integration may explicitly attest that its fixed upstream model
+   * supports the Agent contract. This is runtime-only trust metadata, never a
+   * substitute for or persisted result of the user endpoint capability probe. */
+  trustedAgentRuntime?: boolean
 }
 
 /** Keep the Settings list and every hydration/decryption pass bounded. Ten is

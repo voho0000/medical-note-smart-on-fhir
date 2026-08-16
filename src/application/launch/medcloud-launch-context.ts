@@ -153,6 +153,7 @@ export function createVghtpeTvghbrainRuntimeProfile(
   return {
     profileId: VGTPE_TVGHBRAIN_PROFILE_ID,
     runtimeOnly: true,
+    trustedAgentRuntime: true,
     enabled: true,
     baseUrl: VGTPE_TVGHBRAIN_BASE_URL,
     modelId: VGTPE_TVGHBRAIN_MODEL_ID,
@@ -163,6 +164,9 @@ export function createVghtpeTvghbrainRuntimeProfile(
     ),
     contextWindowSource: 'suggested',
     agentMode: 'auto',
+    // The runtime trust flag above is provisioned only by the authenticated
+    // VGH-TPE Extension contract. Keep probe metadata honest: the parameter
+    // path intentionally does not run the user-facing endpoint probe.
     agentCapability: 'unknown',
     agentCapabilityTestedAt: null,
   }
