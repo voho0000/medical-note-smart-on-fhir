@@ -10,19 +10,27 @@ import {
 import { ChevronsLeft, ChevronsRight } from "lucide-react"
 
 import { cn } from "@/src/shared/utils/cn.utils"
+import { useVisualViewport } from "@/src/shared/hooks/layout/use-visual-viewport.hook"
 
 export const ClinicalWorkspaceRoot = forwardRef<
   HTMLDivElement,
   ComponentPropsWithoutRef<"div">
->(function ClinicalWorkspaceRoot({ className, ...props }, ref) {
+>(function ClinicalWorkspaceRoot({ className, style, ...props }, ref) {
+  // Keeps the shell inside the keyboard-free area on iOS (see the hook).
+  useVisualViewport()
   return (
     <div
       ref={ref}
       data-slot="clinical-workspace"
       className={cn(
-        "flex h-svh flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)]",
+        "flex flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
         className,
       )}
+      style={{
+        // Falls back to the old behaviour wherever visualViewport is absent.
+        height: "var(--app-viewport-height, 100svh)",
+        ...style,
+      }}
       {...props}
     />
   )

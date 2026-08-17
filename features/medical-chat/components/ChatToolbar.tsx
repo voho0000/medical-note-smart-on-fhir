@@ -165,7 +165,7 @@ export function ChatToolbar({
           title={patientDataDisabled
             ? t.chat.patientDataOffDisable
             : t.chat.patientDataOffEnable}
-          className={`h-7 shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none ${
+          className={`h-7 max-md:h-11 shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none touch-manipulation ${
             patientDataDisabled
               ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/15'
               : 'text-muted-foreground'
@@ -186,7 +186,7 @@ export function ChatToolbar({
         title={canExportAiExecution
           ? t.chat.exportAiExecution
           : t.chat.exportAiExecutionUnavailable}
-        className="h-7 w-7 shrink-0 text-muted-foreground opacity-35 transition-opacity hover:opacity-100"
+        className="h-7 w-7 max-md:h-11 max-md:w-11 shrink-0 text-muted-foreground opacity-35 transition-opacity touch-manipulation hover:opacity-100"
       >
         <Bug className="h-3.5 w-3.5" />
       </Button>

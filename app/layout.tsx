@@ -55,7 +55,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Allow pinch-zoom — disabling it (maximum-scale=1, user-scalable=no)
             fails WCAG 1.4.4 and blocks low-vision users from zooming dense lab
             tables. The in-app font-size control complements, not replaces, zoom. */}
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* interactive-widget=resizes-content: the on-screen keyboard shrinks
+            the viewport instead of overlaying it, so a `h-svh` app shell keeps
+            its composer above the keyboard rather than behind it. */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+        />
       </head>
       <body suppressHydrationWarning>
         {children}

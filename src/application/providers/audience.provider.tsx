@@ -2,6 +2,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { AUDIENCE_CHANGED_EVENT } from './font-size.provider'
 
 export type Audience = 'medical' | 'patient'
 
@@ -34,6 +35,10 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(AUDIENCE_STORAGE_KEY, next)
     localStorage.setItem(AUDIENCE_SELECTED_KEY, '1')
     setHasSelected(true)
+    // FontSizeProvider sits above this one and cannot consume the context, so
+    // it listens for this instead: patients must not inherit the clinician's
+    // 12px phone root (audit C1).
+    window.dispatchEvent(new CustomEvent(AUDIENCE_CHANGED_EVENT))
   }
 
   return (

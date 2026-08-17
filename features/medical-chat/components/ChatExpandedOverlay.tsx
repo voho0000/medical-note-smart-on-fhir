@@ -24,8 +24,14 @@ export function ChatExpandedOverlay({ chatContent, onCollapse }: ChatExpandedOve
       </Card>
       
       {/* Fullscreen overlay - click outside to close */}
-      <div 
+      <div
         className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
+        // `inset-0` spans the layout viewport, which on iOS still includes the
+        // area the keyboard covers — the composer ends up behind it. Reserve
+        // the measured keyboard overlap (0 when no keyboard is up).
+        style={{
+          paddingBottom: "calc(var(--keyboard-inset, 0px) + env(safe-area-inset-bottom))",
+        }}
         onClick={onCollapse}
       >
         {/* Floating minimize button */}

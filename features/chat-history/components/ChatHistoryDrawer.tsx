@@ -149,7 +149,7 @@ export function ChatHistoryDrawer({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={t.chatHistory.searchPlaceholder}
-                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
+                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm max-md:text-[16px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {query && (
                   <button

@@ -19,6 +19,32 @@ const FONT_SIZE_PX: Record<FontSize, string> = {
 
 const STORAGE_KEY = "font-size"
 
+// Read directly rather than via useAudience(): this provider sits ABOVE
+// AudienceProvider in the tree. AudienceProvider announces changes with
+// AUDIENCE_CHANGED_EVENT so a mid-session switch re-evaluates the default.
+const AUDIENCE_STORAGE_KEY = "medical-note-audience"
+export const AUDIENCE_CHANGED_EVENT = "mediprisma:audience-changed"
+
+function storedAudience(): "medical" | "patient" {
+  try {
+    return localStorage.getItem(AUDIENCE_STORAGE_KEY) === "patient" ? "patient" : "medical"
+  } catch {
+    return "medical"
+  }
+}
+
+/**
+ * Phone default when the user has expressed no preference.
+ *
+ * Clinicians get the smallest root so dense cumulative tables fit without
+ * horizontal scrolling. Patients do NOT — they read prose, not pivot tables,
+ * and a 12px root rendered the summary body at ~10px and disclaimers at ~7.5px
+ * (audit C1). Keeping the normal 16px root is the accessible default for them.
+ */
+function phoneDefaultFor(audience: "medical" | "patient"): FontSize {
+  return audience === "patient" ? "base" : "xs"
+}
+
 interface FontSizeContextType {
   fontSize: FontSize
   setFontSize: (size: FontSize) => void
@@ -34,21 +60,32 @@ export function FontSizeProvider({ children }: { children: ReactNode }) {
   const [fontSize, setFontSizeState] = useState<FontSize>("base")
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as FontSize | null
-    if (stored && stored in FONT_SIZE_PX) {
-      // An explicit user choice always wins, on any device.
-      setFontSizeState(stored)
-      apply(stored)
-      return
+    const hasExplicitChoice = () => {
+      const stored = localStorage.getItem(STORAGE_KEY) as FontSize | null
+      return stored && stored in FONT_SIZE_PX ? stored : null
     }
-    // No saved preference: on a phone-width viewport (<768, the app's md split),
-    // default to the smallest size so dense clinical tables/cards fit without
-    // horizontal scroll. NOT persisted — it's a per-device default re-evaluated
-    // each load, so the same account on a desktop still gets the 16px base.
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setFontSizeState("xs")
-      apply("xs")
+
+    // No saved preference: pick a per-device default on a phone-width viewport
+    // (<768, the app's md split). NOT persisted — re-evaluated each load, so
+    // the same account on a desktop still gets the 16px base.
+    const applyDeviceDefault = () => {
+      const explicit = hasExplicitChoice()
+      if (explicit) {
+        // An explicit user choice always wins, on any device.
+        setFontSizeState(explicit)
+        apply(explicit)
+        return
+      }
+      const size = typeof window !== "undefined" && window.innerWidth < 768
+        ? phoneDefaultFor(storedAudience())
+        : "base"
+      setFontSizeState(size)
+      apply(size)
     }
+
+    applyDeviceDefault()
+    window.addEventListener(AUDIENCE_CHANGED_EVENT, applyDeviceDefault)
+    return () => window.removeEventListener(AUDIENCE_CHANGED_EVENT, applyDeviceDefault)
   }, [])
 
   const setFontSize = (size: FontSize) => {

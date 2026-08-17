@@ -185,7 +185,7 @@ export function ChatInputArea({
             placeholder={t.chat.placeholder}
             spellCheck={false}
             rows={1}
-            className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+            className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm max-md:text-[16px] ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
             style={{ minHeight: '44px', maxHeight: '200px' }}
           />
           {/* One-tap clear — handy on phones after accidentally tapping
@@ -196,7 +196,7 @@ export function ChatInputArea({
               onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
               aria-label={t.chat.clearInput}
               title={t.chat.clearInput}
-              className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
+              className="absolute top-2 right-2 flex h-7 w-7 max-md:h-11 max-md:w-11 items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 touch-manipulation hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
