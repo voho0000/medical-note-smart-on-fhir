@@ -675,7 +675,7 @@ export function ReportsCard() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="搜尋檢驗名稱、結果、機構、日期..."
-                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
+                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm max-md:text-[16px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
                   <button

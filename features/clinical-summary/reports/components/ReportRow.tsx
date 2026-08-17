@@ -441,7 +441,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         if (stopProp) e.stopPropagation()
         openImageDialog()
       }}
-      className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
+      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary md:min-h-0 md:min-w-0"
       role="button"
       tabIndex={0}
       aria-label="查看影像"
