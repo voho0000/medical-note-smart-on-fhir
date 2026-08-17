@@ -53,6 +53,7 @@ import {
 } from "@/src/shared/config/ui-theme.config"
 import { AnalyteSearchBox } from "./AnalyteSearchBox"
 import { ReportNameModeSwitch } from "./ReportNameModeSwitch"
+import type { TrendWindow } from "../utils/trend-time-scale"
 
 interface OpenTrendRequest {
   series: LabTrendSeries
@@ -87,6 +88,9 @@ interface CumulativeLabReportProps {
   focusAnalyteKey?: string
   /** Re-triggers focus when the same analyte is requested again. */
   focusNonce?: number
+  /** Last range explicitly selected by the user; shared across analytes. */
+  trendWindow?: TrendWindow
+  onTrendWindowChange?: (window: TrendWindow) => void
 }
 
 function formatDateLabel(d: string): string {
@@ -418,6 +422,8 @@ export function CumulativeLabReport({
   onCategoryChange,
   focusAnalyteKey,
   focusNonce,
+  trendWindow,
+  onTrendWindowChange,
 }: CumulativeLabReportProps) {
   const nameMode = useReportNameMode()
   const pivots = useLabPivot(observations, nameMode)
@@ -532,7 +538,14 @@ export function CumulativeLabReport({
             {request.title} · {(t.reports as any).cumulativeTrend?.title ?? '趨勢'}
           </span>
         ),
-        node: <CumulativeLabTrendDetail key={request.sourceId} series={request.series} />,
+        node: (
+          <CumulativeLabTrendDetail
+            key={request.sourceId}
+            series={request.series}
+            initialWindow={trendWindow}
+            onWindowChange={onTrendWindowChange}
+          />
+        ),
       })
       return
     }
@@ -766,6 +779,8 @@ export function CumulativeLabReport({
           key={dialogTrend.sourceId}
           title={`${dialogTrend.title} · ${(t.reports as any).cumulativeTrend?.title ?? '趨勢'}`}
           series={dialogTrend.series}
+          initialWindow={trendWindow}
+          onWindowChange={onTrendWindowChange}
           open
           onOpenChange={(open) => {
             if (!open) setDialogTrend(null)

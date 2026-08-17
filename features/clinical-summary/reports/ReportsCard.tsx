@@ -38,6 +38,7 @@ import {
 } from './utils/procedure-category'
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
+import type { TrendWindow } from './utils/trend-time-scale'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -92,6 +93,9 @@ export function ReportsCard() {
       : undefined
     return analyteKey ? { analyteKey, nonce: state.seq } : null
   })
+  // A trend range is a comparison preference, not an analyte default. Keep the
+  // user's explicit choice while they move between tests or fullscreen modes.
+  const [cumulativeTrendWindow, setCumulativeTrendWindow] = useState<TrendWindow>()
   const handleCumulativeCategoryChange = (categoryId: string) => {
     setCumulativeCategoryId(categoryId)
     setCumulativeFocus(null)
@@ -774,6 +778,8 @@ export function ReportsCard() {
                   onCategoryChange={handleCumulativeCategoryChange}
                   focusAnalyteKey={cumulativeFocus?.analyteKey}
                   focusNonce={cumulativeFocus?.nonce}
+                  trendWindow={cumulativeTrendWindow}
+                  onTrendWindowChange={setCumulativeTrendWindow}
                 />
               ) : (
                 <div className="space-y-2">

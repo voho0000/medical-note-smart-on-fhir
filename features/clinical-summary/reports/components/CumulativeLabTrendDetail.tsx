@@ -33,6 +33,9 @@ import { cn } from '@/src/shared/utils/cn.utils'
 
 interface CumulativeLabTrendDetailProps {
   series: LabTrendSeries
+  /** The last range explicitly chosen in the cumulative-report workspace. */
+  initialWindow?: TrendWindow
+  onWindowChange?: (window: TrendWindow) => void
 }
 
 interface CumulativeLabTrendDialogProps extends CumulativeLabTrendDetailProps {
@@ -343,10 +346,18 @@ function TrendChart({
   )
 }
 
-export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailProps) {
+export function CumulativeLabTrendDetail({
+  series,
+  initialWindow,
+  onWindowChange,
+}: CumulativeLabTrendDetailProps) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
-  const [window, setWindow] = useState<TrendWindow>(() => defaultWindow(series))
+  const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow(series))
+  const selectWindow = (value: TrendWindow) => {
+    setWindow(value)
+    onWindowChange?.(value)
+  }
 
   const latest = series.points.at(-1)
   const previousComparable = series.chartPoints.length >= 2
@@ -466,7 +477,7 @@ export function CumulativeLabTrendDetail({ series }: CumulativeLabTrendDetailPro
           <button
             key={value}
             type="button"
-            onClick={() => setWindow(value)}
+            onClick={() => selectWindow(value)}
             aria-pressed={window === value}
             className={cn(
               'min-h-11 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -576,6 +587,8 @@ export function CumulativeLabTrendDialog({
   series,
   open,
   onOpenChange,
+  initialWindow,
+  onWindowChange,
 }: CumulativeLabTrendDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -586,7 +599,11 @@ export function CumulativeLabTrendDialog({
             {title}
           </DialogTitle>
         </DialogHeader>
-        <CumulativeLabTrendDetail series={series} />
+        <CumulativeLabTrendDetail
+          series={series}
+          initialWindow={initialWindow}
+          onWindowChange={onWindowChange}
+        />
       </DialogContent>
     </Dialog>
   )
