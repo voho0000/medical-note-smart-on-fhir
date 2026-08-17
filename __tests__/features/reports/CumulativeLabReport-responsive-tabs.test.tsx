@@ -48,6 +48,27 @@ describe('CumulativeLabReport responsive category tabs', () => {
     jest.restoreAllMocks()
   })
 
+  it('keeps the trend hint in the zoomed-desktop utility row', () => {
+    const { container } = render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
+
+    const shortHint = screen.getByText('查看趨勢')
+    const fullHint = screen.getByText('點檢驗名稱查看趨勢')
+    expect(shortHint).toHaveClass('@min-[480px]:hidden')
+    expect(fullHint).toHaveClass('hidden', '@min-[480px]:block')
+    expect(shortHint.parentElement).toHaveClass('@min-[390px]:inline-flex', 'overflow-hidden')
+    expect(screen.getByRole('combobox', { name: '搜尋檢驗項目' }).parentElement).toHaveClass(
+      '@min-[390px]:max-w-[160px]',
+      '@min-[480px]:max-w-[220px]',
+      '@min-[640px]:max-w-[260px]',
+    )
+    expect(shortHint.parentElement?.parentElement).toHaveClass(
+      '@min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto]',
+      '@min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto]',
+      '@min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]',
+    )
+    expect(container.querySelector('.\\@container')).toBeInTheDocument()
+  })
+
   it('shows all categories when they fit and restores More when space shrinks', async () => {
     render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
 

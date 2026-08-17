@@ -633,22 +633,27 @@ export function CumulativeLabReport({
   return (
     <div className={fullHeight ? '@container flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : '@container space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
       {/* Cumulative utilities share one responsive row: finder left, trend
-          guidance centred, and naming mode right. At constrained panel widths
-          the non-essential hint drops first; only phone-narrow widths wrap. */}
-      <div className="mb-1 grid shrink-0 grid-cols-1 items-center gap-2 @min-[28rem]:grid-cols-[minmax(8rem,1fr)_auto] @min-[48rem]:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_auto]">
+          guidance centred, and naming mode right. Keep all three visible at
+          zoomed desktop widths; only genuinely narrow panels drop the hint. */}
+      <div className="mb-1 grid shrink-0 grid-cols-1 items-center gap-2 @min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto] @min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto] @min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]">
         <AnalyteSearchBox
           pivots={nonEmpty}
           categoryLabels={categoryLabels}
           nameMode={nameMode}
           onPick={pickAnalyte}
-          className="w-full min-w-0 @min-[48rem]:max-w-64"
+          className="w-full min-w-0 @min-[390px]:max-w-[160px] @min-[480px]:max-w-[220px] @min-[640px]:max-w-[260px]"
         />
-        <span className="hidden min-w-0 items-center justify-self-center gap-1 text-[0.6875rem] text-muted-foreground @min-[48rem]:inline-flex">
+        <span className="hidden min-w-0 max-w-full items-center justify-self-center gap-1 overflow-hidden text-[0.6875rem] text-muted-foreground @min-[390px]:inline-flex">
           <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-          <span className="truncate">{(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}</span>
+          <span className="block min-w-0 truncate @min-[480px]:hidden">
+            {(t.reports as any).cumulativeTrend?.hintShort ?? '查看趨勢'}
+          </span>
+          <span className="hidden min-w-0 truncate @min-[480px]:block">
+            {(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}
+          </span>
         </span>
-        <div className="justify-self-end @min-[28rem]:col-start-2 @min-[48rem]:col-start-3">
-          {nameModeControl ?? <ReportNameModeSwitch />}
+        <div className="justify-self-end @min-[390px]:col-start-3">
+          {nameModeControl ?? <ReportNameModeSwitch responsiveLabels />}
         </div>
       </div>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>

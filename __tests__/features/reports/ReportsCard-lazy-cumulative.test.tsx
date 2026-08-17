@@ -182,6 +182,12 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Expand to fullscreen' })).toHaveClass('@min-[1160px]:px-2')
+    expect(screen.getByText('Fullscreen')).toHaveClass('hidden', '@min-[1160px]:inline')
+    expect(document.querySelector('[data-tour="report-tabs"][role="tablist"]')).toHaveClass(
+      'pr-12',
+      '@min-[1160px]:pr-28',
+    )
     const cumulative = await screen.findByTestId('cumulative-report')
     expect(cumulative).toHaveTextContent('observations: 1')
     expect(cumulative).toHaveTextContent('category: chem')

@@ -964,7 +964,9 @@ export const zhTW = {
     nameDisplay: {
       label: '名稱顯示',
       original: '原始名稱',
+      originalShort: '原名',
       standardized: '標準化名稱',
+      standardizedShort: '標準',
     },
     labDayCount: '{n} 項檢驗',
     abnormalCount: '{n} 異常',
@@ -1007,6 +1009,7 @@ export const zhTW = {
     cumulativeTrend: {
       title: '檢驗趨勢',
       hint: '點檢驗名稱查看趨勢',
+      hintShort: '查看趨勢',
     },
     cumulativeCategories: {
       cbc: '血液',

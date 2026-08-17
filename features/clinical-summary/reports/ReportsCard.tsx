@@ -583,11 +583,11 @@ export function ReportsCard() {
       type="button"
       onClick={() => setExpanded(!expanded)}
       aria-label={expanded ? 'Minimize' : 'Expand to fullscreen'}
-      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8 lg:min-w-8 lg:px-2"
+      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8 lg:min-w-8 @min-[1160px]:px-2"
       title={expanded ? 'Minimize' : 'Expand to fullscreen'}
     >
       {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-      <span className="hidden sm:inline">{expanded ? 'Minimize' : 'Fullscreen'}</span>
+      <span className="hidden @min-[1160px]:inline">{expanded ? 'Minimize' : 'Fullscreen'}</span>
     </button>
   )
 
@@ -599,7 +599,7 @@ export function ReportsCard() {
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
         {/* Desktop tabs */}
-        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto gap-0 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto gap-0 pr-12 @min-[1160px]:pr-28 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears only while a first-time raw view is being
             // prepared. The selected tab itself changes immediately.
@@ -768,7 +768,7 @@ export function ReportsCard() {
               {cumulativeReady ? (
                 <CumulativeLabReport
                   observations={observations}
-                  nameModeControl={<ReportNameModeSwitch />}
+                  nameModeControl={<ReportNameModeSwitch responsiveLabels />}
                   fullHeight={expanded}
                   activeCategoryId={cumulativeCategoryId}
                   onCategoryChange={handleCumulativeCategoryChange}
@@ -831,7 +831,7 @@ export function ReportsCard() {
           onClick={() => setExpanded(false)}
         >
           <div
-            className="relative flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col overflow-hidden"
+            className="@container relative flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {expandButton}
@@ -845,7 +845,7 @@ export function ReportsCard() {
   return (
     // pt-3 halves the Card's default pt-6 (24px → 12px) so the report group
     // tabs sit closer to the card's top edge.
-    <Card className={`${REPORT_CARD_CLASS} relative w-full max-w-full pt-3`}>
+    <Card className={`${REPORT_CARD_CLASS} @container relative w-full max-w-full pt-3`}>
       {expandButton}
       <CardContent className="min-w-0 px-3 pb-3 sm:px-4 sm:pb-4">
         {reportsContent}

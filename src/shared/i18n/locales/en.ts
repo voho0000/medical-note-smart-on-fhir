@@ -963,7 +963,9 @@ export const en = {
     nameDisplay: {
       label: 'Name display',
       original: 'Original names',
+      originalShort: 'Original',
       standardized: 'Standardized names',
+      standardizedShort: 'Standard',
     },
     labDayCount: '{n} tests',
     abnormalCount: '{n} abnormal',
@@ -1006,6 +1008,7 @@ export const en = {
     cumulativeTrend: {
       title: 'Lab trend',
       hint: 'Select a test name to view its trend',
+      hintShort: 'View trend',
     },
     cumulativeCategories: {
       cbc: 'CBC',

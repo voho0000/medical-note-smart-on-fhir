@@ -6,7 +6,13 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useReportNameModeControl } from '../context/report-name-mode.context'
 
-export function ReportNameModeSwitch({ className }: { className?: string }) {
+export function ReportNameModeSwitch({
+  className,
+  responsiveLabels = false,
+}: {
+  className?: string
+  responsiveLabels?: boolean
+}) {
   const { t } = useLanguage()
   const { mode, onChange } = useReportNameModeControl()
   const switchId = useId()
@@ -15,7 +21,9 @@ export function ReportNameModeSwitch({ className }: { className?: string }) {
   const labels = (t.reports as any).nameDisplay || {
     label: '名稱顯示',
     original: '原始名稱',
+    originalShort: '原名',
     standardized: '標準化名稱',
+    standardizedShort: '標準',
   }
 
   return (
@@ -27,13 +35,23 @@ export function ReportNameModeSwitch({ className }: { className?: string }) {
       <button
         type="button"
         onClick={() => onChange('original')}
+        aria-label={labels.original}
         aria-pressed={mode === 'original'}
         className={cn(
           'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
           mode === 'original' && 'font-medium text-foreground',
         )}
       >
-        {labels.original}
+        {responsiveLabels ? (
+          <>
+            <span className="@min-[640px]:hidden" aria-hidden="true">
+              {labels.originalShort ?? labels.original}
+            </span>
+            <span className="hidden @min-[640px]:inline" aria-hidden="true">
+              {labels.original}
+            </span>
+          </>
+        ) : labels.original}
       </button>
       <label
         htmlFor={switchId}
@@ -49,13 +67,23 @@ export function ReportNameModeSwitch({ className }: { className?: string }) {
       <button
         type="button"
         onClick={() => onChange('standardized')}
+        aria-label={labels.standardized}
         aria-pressed={mode === 'standardized'}
         className={cn(
           'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
           mode === 'standardized' && 'font-medium text-foreground',
         )}
       >
-        {labels.standardized}
+        {responsiveLabels ? (
+          <>
+            <span className="@min-[640px]:hidden" aria-hidden="true">
+              {labels.standardizedShort ?? labels.standardized}
+            </span>
+            <span className="hidden @min-[640px]:inline" aria-hidden="true">
+              {labels.standardized}
+            </span>
+          </>
+        ) : labels.standardized}
       </button>
     </div>
   )
