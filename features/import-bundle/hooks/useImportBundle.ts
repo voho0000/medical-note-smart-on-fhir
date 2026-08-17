@@ -33,6 +33,9 @@ import {
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
 
+/** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
+const DEMO_FETCH_TIMEOUT_MS = 30_000
+
 export interface UseImportBundleReturn {
   /** Parse + persist a FHIR Bundle file. Throws on validation error;
    *  errors are also captured into the `error` state for UI use. */
@@ -174,7 +177,22 @@ export function useImportBundle(): UseImportBundleReturn {
         const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
         // Default caching (revalidates against the server) — NOT force-cache,
         // so a re-published demo bundle is never served stale.
-        const res = await fetch(`${base}/demo/demo-bundle.json`)
+        // Without a timeout a stalled connection left BOTH welcome-screen
+        // buttons disabled forever (they key off `loading`), with no error and
+        // no way back.
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), DEMO_FETCH_TIMEOUT_MS)
+        let res: Response
+        try {
+          res = await fetch(`${base}/demo/demo-bundle.json`, { signal: controller.signal })
+        } catch (fetchError) {
+          if (controller.signal.aborted) {
+            throw new Error('Loading the demo data timed out. Check the connection and try again.')
+          }
+          throw fetchError
+        } finally {
+          clearTimeout(timeoutId)
+        }
         if (!res.ok) throw new Error(`Failed to load demo data (${res.status})`)
         await persistBundle(await res.json(), true)
       })

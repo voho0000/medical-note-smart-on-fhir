@@ -340,9 +340,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchObservations(patientId: string): Promise<ObservationEntity[]> {
     try {
       // Fetch all observations (laboratory, procedure, etc.)
+      //
+      // _count=500 (matching DiagnosticReport) rather than 200: pagination is
+      // strictly sequential, so a years-of-data patient turned into dozens of
+      // serial round-trips that dominated the whole chart load on hospital
+      // Wi-Fi. Servers are free to return fewer per page; this only raises the
+      // ceiling we ask for.
       const response = await this.requestWithBasicFallback(
-        `Observation?patient=${patientId}&_count=200&_sort=-date`,
-        `Observation?patient=${patientId}&_count=200`,
+        `Observation?patient=${patientId}&_count=500&_sort=-date`,
+        `Observation?patient=${patientId}&_count=500`,
       )
 
       const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
@@ -358,8 +364,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchVitalSigns(patientId: string): Promise<ObservationEntity[]> {
     try {
       const response = await this.requestWithBasicFallback(
-        `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`,
-        `Observation?patient=${patientId}&category=vital-signs&_count=200`,
+        `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=500`,
+        `Observation?patient=${patientId}&category=vital-signs&_count=500`,
       )
       const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
       this.markQuerySuccess('Observation:vital-signs', 'Observation', result.length)

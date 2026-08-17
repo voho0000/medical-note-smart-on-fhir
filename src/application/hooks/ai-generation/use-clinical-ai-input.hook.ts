@@ -32,6 +32,8 @@ import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
+import { isDemoDataActive } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -133,6 +135,11 @@ export function useClinicalAiInput(
     ).map((document) => document.id)
   }, [rawDataReady, clinicalData, activeProfile])
 
+  // The demo chart is judged against its own as-of date, not the wall clock —
+  // otherwise its medications age out of scope and the pre-generated citations
+  // stop resolving. Real patients always use the real clock.
+  const scopeNowMs = clinicalNowMs(isDemoDataActive())
+
   const baseScopedClinicalData = useMemo(
     () => (rawDataReady && clinicalData
       ? scopeClinicalDataForAi(
@@ -140,6 +147,7 @@ export function useClinicalAiInput(
           activeProfile.selection,
           activeProfile.filters,
           baseDocumentIds,
+          scopeNowMs,
         ) as ClinicalAiDataInput
       : null),
     [
@@ -148,6 +156,7 @@ export function useClinicalAiInput(
       activeProfile.selection,
       activeProfile.filters,
       baseDocumentIds,
+      scopeNowMs,
     ],
   )
 
@@ -287,6 +296,7 @@ export function useClinicalAiInput(
           fitCandidate.profile.selection,
           fitCandidate.profile.filters,
           includedDocumentIds,
+          scopeNowMs,
         ) as ClinicalAiDataInput
         : null),
     [
@@ -296,6 +306,7 @@ export function useClinicalAiInput(
       fitCandidate.profile.selection,
       fitCandidate.profile.filters,
       includedDocumentIds,
+      scopeNowMs,
     ],
   )
   const catalog = useMemo(

@@ -22,6 +22,7 @@ import {
   DEFAULT_DATA_FILTERS,
   DEFAULT_DATA_SELECTION,
 } from '@/src/shared/constants/data-selection.constants'
+import { DEMO_DATA_AS_OF_MS } from '@/src/shared/constants/demo-data.constants'
 
 describe('demo clinical-insight snapshots', () => {
   it('selects the bundled snapshot without consulting a retained model preference', () => {
@@ -73,11 +74,17 @@ describe('demo medical-summary snapshots', () => {
       'latestAdmission',
       [],
     ).map((document) => document.id)
+    // Scope against the demo's own as-of date, exactly like the app does for
+    // demo data. Using the wall clock made this assertion decay: the bundle's
+    // 2026-07-20 dispensings passed their supply window on 2026-08-16 and
+    // dropped out of scope, breaking six citations that were correct when the
+    // snapshot was written.
     const scopedClinicalData = scopeClinicalDataForAi(
       parsedData!.collection,
       DEFAULT_DATA_SELECTION,
       DEFAULT_DATA_FILTERS,
       includedDocumentIds,
+      DEMO_DATA_AS_OF_MS,
     )
     const catalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     const catalogKeys = new Set(catalog.map((source) => source.key))
@@ -111,6 +118,77 @@ describe('demo medical-summary snapshots', () => {
         expect((alert.sources ?? []).filter((key) => !catalogKeys.has(key))).toEqual([])
       }
     }
+  })
+
+  it('pins the demo as-of date to the bundle it describes', () => {
+    // The whole point of the frozen clock is that it belongs to THIS bundle.
+    // If a regenerated demo moves the newest clinical event, the as-of date has
+    // to move with it — otherwise the scope silently drifts again.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const newestClinicalDate = bundle.entry
+      .map((entry: any) => {
+        const r = entry.resource
+        return r.authoredOn || r.effectiveDateTime || r.period?.start || r.context?.period?.start
+      })
+      .filter((value: unknown): value is string => typeof value === 'string')
+      .sort()
+      .at(-1)!
+
+    expect(Date.parse(newestClinicalDate)).toBeLessThanOrEqual(DEMO_DATA_AS_OF_MS)
+    // …and not so far ahead that the as-of date stops describing the bundle.
+    expect(DEMO_DATA_AS_OF_MS - Date.parse(newestClinicalDate))
+      .toBeLessThan(31 * 24 * 60 * 60 * 1000)
+  })
+
+  it('keeps every demo medication citation inside the as-of scope', async () => {
+    // Regression guard for the failure this pinning fixed: six citations
+    // (M16–M21) pointed at dispensings that had aged out of the "active"
+    // filter. A plain resolution check on the wall clock would start passing
+    // or failing depending on the day it ran.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
+    const parsedData = LocalBundleService.parse(enriched.bundle)!
+    const includedDocumentIds = resolveSelectedDocuments(
+      listClinicalDocuments(parsedData.collection),
+      'latestAdmission',
+      [],
+    ).map((document) => document.id)
+    const scoped = scopeClinicalDataForAi(
+      parsedData.collection,
+      DEFAULT_DATA_SELECTION,
+      DEFAULT_DATA_FILTERS,
+      includedDocumentIds,
+      DEMO_DATA_AS_OF_MS,
+    )
+    const catalogKeys = new Set(getSourceCatalog(scoped, 'zh-TW').map((source) => source.key))
+
+    const cited = new Set<string>()
+    const walk = (value: unknown, field?: string): void => {
+      if (Array.isArray(value)) {
+        if (field === 'sources' || field === 'sourceKeys') {
+          value.forEach((item) => { if (typeof item === 'string') cited.add(item) })
+          return
+        }
+        value.forEach((item) => walk(item, field))
+        return
+      }
+      if (value && typeof value === 'object') {
+        Object.entries(value).forEach(([key, item]) => walk(item, key))
+        return
+      }
+      if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
+    }
+    walk(demoMedicalSummarySnapshots.medical)
+    walk(demoMedicalSummarySnapshots.patient)
+    walk(demoSafetyScanSnapshots.medical)
+    walk(demoSafetyScanSnapshots.patient)
+
+    const unresolvable = [...cited]
+      .filter((key) => /^[A-Z]+\d+$/.test(key) && !catalogKeys.has(key))
+      .sort()
+    expect(unresolvable).toEqual([])
   })
 
   it('keeps exact NHI terminology from crossing between urinary medicine education items', () => {

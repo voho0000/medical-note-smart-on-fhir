@@ -164,7 +164,7 @@ export class FhirClientService {
 
   async request<T = any>(query: string): Promise<T> {
     const client = await this.getClient()
-    return await client.request(query)
+    return await requestWithTimeout<T>(client, query)
   }
 
   /**
@@ -181,13 +181,13 @@ export class FhirClientService {
    */
   async requestAllPages<T = any>(query: string, maxPages = 50): Promise<T> {
     const client = await this.getClient()
-    const first = await client.request<any>(query)
+    const first = await requestWithTimeout<any>(client, query)
     const entries: any[] = Array.isArray(first?.entry) ? [...first.entry] : []
 
     let next = nextPageUrl(first)
     let pages = 1
     while (next && pages < maxPages) {
-      const page = await client.request<any>(next)
+      const page = await requestWithTimeout<any>(client, next)
       if (Array.isArray(page?.entry)) entries.push(...page.entry)
       next = nextPageUrl(page)
       pages += 1
@@ -200,6 +200,45 @@ export class FhirClientService {
 
   clearClient(): void {
     this.client = null
+  }
+}
+
+/**
+ * Per-request ceiling. A stalled hospital Wi-Fi connection used to leave the
+ * whole chart on "載入中" forever — no timeout, no cancel, no error — because
+ * nothing ever rejected. Generous enough for a slow FHIR server returning a
+ * large page, short enough that a clinician learns something went wrong.
+ */
+export const FHIR_REQUEST_TIMEOUT_MS = 30_000
+
+export class FhirRequestTimeoutError extends Error {
+  constructor(public readonly query: string, public readonly timeoutMs: number) {
+    super(`FHIR request timed out after ${timeoutMs}ms: ${query.split('?')[0]}`)
+    this.name = 'FhirRequestTimeoutError'
+  }
+}
+
+/**
+ * Run one fhirclient request under an abort timeout. fhirclient forwards the
+ * RequestInit (including `signal`) to fetch, so the socket is actually torn
+ * down rather than merely ignored.
+ */
+async function requestWithTimeout<T>(
+  client: { request: (options: any) => Promise<any> },
+  url: string,
+  timeoutMs = FHIR_REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  // AbortController rather than AbortSignal.timeout(): older hospital
+  // Chrome/Edge builds are a target and predate the static helper.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await client.request({ url, signal: controller.signal })
+  } catch (error) {
+    if (controller.signal.aborted) throw new FhirRequestTimeoutError(url, timeoutMs)
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
 }
 

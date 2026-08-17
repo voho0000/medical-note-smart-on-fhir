@@ -3,6 +3,9 @@ import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '@/src/infrastructure/ai/utils/proxy-auth'
 import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
+/** Matches the 60s ceiling the OpenAI/Gemini services already enforce. */
+const PERPLEXITY_TIMEOUT_MS = 60_000
+
 export class PerplexityService {
   async searchLiterature(
     query: string, 
@@ -57,9 +60,14 @@ export class PerplexityService {
       }
     }
 
+    // The OpenAI/Gemini services already abort after 60s; this one did not, so
+    // a literature lookup on a stalled connection hung the agent turn forever.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), PERPLEXITY_TIMEOUT_MS)
     try {
       const response = await fetch(proxyUrl, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(ENV_CONFIG.proxyClientKey ? {'x-proxy-key': ENV_CONFIG.proxyClientKey} : {}),
@@ -100,8 +108,12 @@ export class PerplexityService {
       return {
         success: false,
         content: '',
-        error: error instanceof Error ? error.message : 'Proxy call failed'
+        error: controller.signal.aborted
+          ? `Literature search timed out after ${PERPLEXITY_TIMEOUT_MS / 1000}s.`
+          : error instanceof Error ? error.message : 'Proxy call failed'
       }
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 }
