@@ -177,13 +177,14 @@ export function useReportsData(
     // narratives collapse into one row. Never dedup these by report content or
     // ImagingStudy UID.
     const viewerReportsByKey = new Map<string, DiagnosticReport[]>()
+    let splitGroupIndex = 0
     const pushAsOwnGroup = (dr: DiagnosticReport) => {
       // Suffix with DR id so each split group gets a distinct key — keeps
       // the map insertion order stable and avoids accidental re-merging.
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
-      const key = `${text}|${date}|${inst}|${dr.id || Math.random().toString(36)}`
+      const key = `${text}|${date}|${inst}|${dr.id || `split-${splitGroupIndex++}`}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       viewerReportsByKey.set(key, [dr])
@@ -494,7 +495,7 @@ export function useReportsData(
         const summaryValue = summaryParts.join('\n\n')
         const summaryObservation: Observation = {
           resourceType: 'Observation',
-          id: head.id ? `dr-summary-${head.id}` : `dr-summary-${Math.random().toString(36).slice(2, 10)}`,
+          id: head.id ? `dr-summary-${head.id}` : `dr-summary-${groupOrder.indexOf(key) + 1}`,
           code: { text: 'Report Summary' },
           valueString: summaryValue || (attachments.length > 0 ? 'Supporting documents available' : ''),
           effectiveDateTime: rawDate,
@@ -639,7 +640,7 @@ export function useReportsData(
         : 'Imaging (inferred from test name/code)'
 
       rows.push({
-        id: head.id || Math.random().toString(36),
+        id: head.id || `report-${groupOrder.indexOf(key) + 1}`,
         title: deriveGroupTitle(displayTitle),
         // Raw bridge title (pre-display-enhancement) for history lookups —
         // useReportHistory matches this exactly against DiagnosticReport.code.text,

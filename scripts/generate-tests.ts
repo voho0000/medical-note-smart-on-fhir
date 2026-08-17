@@ -50,7 +50,6 @@ function getAllSourceFiles(dir: string, baseDir: string = dir): FileInfo[] {
 }
 
 function generateTestContent(fileInfo: FileInfo): string {
-  const importPath = fileInfo.srcPath.replace(/\.(ts|tsx)$/, '').replace(/^src\//, '@/src/').replace(/^features\//, '@/features/')
   const fileName = path.basename(fileInfo.srcPath, path.extname(fileInfo.srcPath))
   
   return `// Auto-generated test for ${fileName}

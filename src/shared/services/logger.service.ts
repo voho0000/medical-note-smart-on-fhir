@@ -3,8 +3,6 @@
  * Centralized logging with environment-aware behavior
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error'
-
 interface LogContext {
   [key: string]: any
 }

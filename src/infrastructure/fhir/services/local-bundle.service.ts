@@ -1310,7 +1310,6 @@ export const LocalBundleService = {
 
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
-    const obsMap = new Map(allObs.map((o: any) => [o.id, o]))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
     const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>

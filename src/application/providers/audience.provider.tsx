@@ -25,6 +25,9 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem(AUDIENCE_STORAGE_KEY)
     if (stored === 'medical' || stored === 'patient') {
+      // Restore after hydration so persisted browser state cannot make the
+      // first client render diverge from the server render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAudienceState(stored)
     }
     setHasSelected(localStorage.getItem(AUDIENCE_SELECTED_KEY) === '1')

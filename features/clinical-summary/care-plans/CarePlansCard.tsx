@@ -59,11 +59,22 @@ const STATUS_CHIP: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
 }
 
+function getStatusLabel(status: string | undefined, tt: Record<string, string>): string {
+  switch (status) {
+    case 'active': return tt.statusActive
+    case 'completed': return tt.statusCompleted
+    case 'revoked': return tt.statusRevoked
+    case 'on-hold': return tt.statusOnHold
+    case 'draft': return tt.statusDraft
+    default: return tt.statusUnknown
+  }
+}
+
 export function CarePlansCard() {
   const { t } = useLanguage()
   const { carePlans, isLoading, error } = useClinicalData()
 
-  const tt = (t as any).carePlans || {
+  const tt = useMemo(() => (t as any).carePlans || ({
     title: 'Care Plans',
     noData: 'No care plans recorded (not provided by source).',
     activities: 'Activities',
@@ -73,18 +84,7 @@ export function CarePlansCard() {
     statusOnHold: 'On hold',
     statusDraft: 'Draft',
     statusUnknown: 'Unknown',
-  }
-
-  const statusLabel = (status?: string): string => {
-    switch (status) {
-      case 'active': return tt.statusActive
-      case 'completed': return tt.statusCompleted
-      case 'revoked': return tt.statusRevoked
-      case 'on-hold': return tt.statusOnHold
-      case 'draft': return tt.statusDraft
-      default: return tt.statusUnknown
-    }
-  }
+  }), [t])
 
   const items = useMemo(() => {
     const list = Array.isArray(carePlans) ? carePlans : []
@@ -107,7 +107,7 @@ export function CarePlansCard() {
         // 收案醫療機構 — CarePlan.author.display (e.g. "中國北港醫").
         institution: cp.author?.display?.trim() || '',
         status: cp.status,
-        statusText: statusLabel(cp.status),
+        statusText: getStatusLabel(cp.status, tt),
         range,
         activities: getActivities(cp),
       }

@@ -14,7 +14,7 @@ interface Panel {
   prompt: string
 }
 
-export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: string, prompt: string) => void) {
+export function useInsightPanels(panels: Panel[], _onPromptUpdate?: (panelId: string, prompt: string) => void) {
   // Local state for temporary prompt edits
   const [localPrompts, setLocalPrompts] = useState<Record<string, string>>({})
 

@@ -82,6 +82,9 @@ function PageContent() {
         preTourLayoutRef.current = { mobileView, collapsed }
       }
       setMobileView(rightTourActive ? 'right' : 'left')
+      // Tour state is an external store event; revealing its panel is the
+      // synchronization this effect owns.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(null)
       return
     }
@@ -104,6 +107,9 @@ function PageContent() {
   useEffect(() => {
     if (!navPending) return
     setMobileView('left')
+    // Resource-navigation requests come from an external store and must make
+    // the target panel visible before anchor scrolling runs.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed((c) => (c === 'left' ? null : c))
   }, [navPending, navSeq, setMobileView])
 

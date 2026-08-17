@@ -60,7 +60,15 @@ const config = [
   {
     files: ["**/*.cjs"],
     rules: {
-      "@typescript-eslint/no-require-imports": "warn",
+      // CommonJS is the file format contract for these scripts.
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["jest.config.js"],
+    rules: {
+      // next/jest loads this configuration through CommonJS.
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 

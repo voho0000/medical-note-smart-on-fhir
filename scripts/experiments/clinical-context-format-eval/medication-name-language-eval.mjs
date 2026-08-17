@@ -335,7 +335,7 @@ async function main() {
   }
   fs.writeFileSync(
     path.join(OUT_DIR, 'medication-language-questions.json'),
-    JSON.stringify(QUESTIONS.map(({ facts, forbid, ...question }) => question), null, 2),
+    JSON.stringify(QUESTIONS.map(({ facts: _facts, forbid: _forbid, ...question }) => question), null, 2),
   )
 
   console.log(`records=${records.length}; english_name_coverage=${records.length - missingEnglish.length}/${records.length}`)

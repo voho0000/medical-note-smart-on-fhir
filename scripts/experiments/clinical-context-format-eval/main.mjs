@@ -425,7 +425,7 @@ async function main() {
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
   for (const [name, text] of Object.entries(arms)) fs.writeFileSync(path.join(OUT_DIR, `${name}.md`), text)
-  fs.writeFileSync(path.join(OUT_DIR, 'questions.json'), JSON.stringify(QUESTIONS.map(({ must, forbid, ...q }) => q), null, 2))
+  fs.writeFileSync(path.join(OUT_DIR, 'questions.json'), JSON.stringify(QUESTIONS.map(({ must: _must, forbid: _forbid, ...q }) => q), null, 2))
   fs.writeFileSync(path.join(OUT_DIR, 'offline-summary.md'), offline.markdown)
 
   console.log(`input chars=${source.length} lines=${source.split('\n').length}`)

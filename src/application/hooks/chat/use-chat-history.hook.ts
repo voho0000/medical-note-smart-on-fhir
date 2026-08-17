@@ -9,8 +9,9 @@ const repository = getChatSessionRepository()
 
 export function useChatHistory(patientId?: string, fhirServerUrl?: string) {
   const { user } = useAuth()
+  const userId = user?.uid
   const { data: sessions = [], isLoading, refetch } = useChatSessionsQuery(
-    user?.uid,
+    userId,
     patientId,
     fhirServerUrl
   )
@@ -21,21 +22,21 @@ export function useChatHistory(patientId?: string, fhirServerUrl?: string) {
   }, [refetch])
 
   const deleteSession = useCallback(async (sessionId: string) => {
-    if (!user?.uid || !patientId || !fhirServerUrl) return
+    if (!userId || !patientId || !fhirServerUrl) return
 
     try {
       const useCase = new DeleteChatSessionUseCase(repository)
-      await useCase.execute(sessionId, user.uid)
+      await useCase.execute(sessionId, userId)
       
       // Optimistically update React Query cache
-      removeSession(user.uid, patientId, fhirServerUrl, sessionId)
+      removeSession(userId, patientId, fhirServerUrl, sessionId)
       
       logger.info('[Chat History] Session deleted')
     } catch (error) {
       logger.error('[Chat History] Failed to delete session')
       throw error
     }
-  }, [user?.uid, patientId, fhirServerUrl, removeSession])
+  }, [userId, patientId, fhirServerUrl, removeSession])
 
   return {
     sessions,

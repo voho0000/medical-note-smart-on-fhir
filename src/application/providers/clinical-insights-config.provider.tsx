@@ -452,6 +452,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       loadFromLocalStorage()
     }
 
+    // Marks completion of the one-time browser/Firestore migration above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasLoadedFromStorage(true)
   }, [hasLoadedFromStorage, user?.uid, currentLang])
 
@@ -503,6 +505,9 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   // On language change: swap defaults for any audience that isn't customized
   useEffect(() => {
     if (!hasLoadedFromStorage) return
+    // Language is external preference state; replace only bundled defaults
+    // while preserving each audience's customized panels.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllPanels((prev) => {
       const next = prev.filter((p) => customByAudience[p.audience])
       ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
@@ -512,7 +517,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       })
       return next
     })
-  }, [currentLang, hasLoadedFromStorage]) // omit customByAudience to avoid loops
+  }, [currentLang, customByAudience, hasLoadedFromStorage])
 
   // Persist to localStorage for non-logged-in users
   useEffect(() => {
@@ -702,21 +707,18 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }, [audience])
 
-  const value = useMemo(
-    () => ({
-      panels,
-      addPanel,
-      updatePanel,
-      updatePanelAndSave,
-      removePanel,
-      resetPanels,
-      savePanels,
-      reorderPanels,
-      maxPanels: MAX_PANELS,
-      isSaving,
-    }),
-    [panels, reorderPanels, isSaving],
-  )
+  const value = {
+    panels,
+    addPanel,
+    updatePanel,
+    updatePanelAndSave,
+    removePanel,
+    resetPanels,
+    savePanels,
+    reorderPanels,
+    maxPanels: MAX_PANELS,
+    isSaving,
+  }
 
   return <ClinicalInsightsConfigContext.Provider value={value}>{children}</ClinicalInsightsConfigContext.Provider>
 }

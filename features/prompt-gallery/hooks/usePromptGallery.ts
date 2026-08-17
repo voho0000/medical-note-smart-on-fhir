@@ -55,6 +55,9 @@ export function usePromptGallery(options?: UsePromptGalleryOptions | PromptGalle
 
   // Fetch on mount and when filter/sort changes
   useEffect(() => {
+    // This effect deliberately starts synchronization with the remote gallery;
+    // loading/result state is updated by that request lifecycle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPrompts()
   }, [fetchPrompts])
 

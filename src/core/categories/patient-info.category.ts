@@ -10,7 +10,7 @@ export const patientInfoCategory: DataCategory = {
   group: 'patient',
   order: 0,
   
-  extractData: (clinicalData) => {
+  extractData: (_clinicalData) => {
     // Patient info is handled separately via usePatientContext
     // Return empty array as count is always 1
     return []

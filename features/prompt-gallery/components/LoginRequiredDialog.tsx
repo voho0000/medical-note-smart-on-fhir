@@ -38,19 +38,14 @@ export function LoginRequiredDialog({
   const { t } = useLanguage()
   const { user } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
-  const [wasLoggedOut, setWasLoggedOut] = useState(true)
-
-  // Track initial login state when dialog opens
-  useEffect(() => {
-    if (open) {
-      setWasLoggedOut(!user)
-    }
-  }, [open])
 
   // Detect when user successfully logs in
   useEffect(() => {
-    if (user && wasLoggedOut && showAuthDialog) {
+    if (user && showAuthDialog) {
       // User just logged in successfully
+      // Firebase auth is an external subscription; close the nested dialog
+      // when that subscription reports a successful login.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowAuthDialog(false)
       onOpenChange(false)
       
@@ -61,7 +56,7 @@ export function LoginRequiredDialog({
         }, 100)
       }
     }
-  }, [user, wasLoggedOut, showAuthDialog, onLoginSuccess, onOpenChange])
+  }, [user, showAuthDialog, onLoginSuccess, onOpenChange])
 
   const handleLogin = () => {
     onOpenChange(false)

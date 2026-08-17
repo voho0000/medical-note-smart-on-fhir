@@ -10,7 +10,7 @@
 // and dispenseRequest.expectedSupplyDuration.value = supply days. We build
 // a bar for each refill (start = authoredOn, end = start + supplyDays) and
 // group them by canonical drug key.
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import {
   isChronicPrescription,
@@ -158,12 +158,14 @@ export function useMedicationTimeline(
   locale: string = 'zh-TW',
   atcCategoryLabels: Record<string, string> = {},
 ): TimelineData {
+  const [now] = useState(() => Date.now())
+
   return useMemo(() => {
     const empty: TimelineData = {
       categories: [],
       drugs: [],
-      domainStartMs: Date.now(),
-      domainEndMs: Date.now(),
+      domainStartMs: now,
+      domainEndMs: now,
       totalDrugs: 0,
       chronicCount: 0,
       nonChronicCount: 0,
@@ -187,10 +189,13 @@ export function useMedicationTimeline(
 
     // ── Step 2: time range filter ───────────────────────────────────────
     const months = RANGE_MONTHS[range]
-    const now = Date.now()
     const rangeStart = months === null
       ? -Infinity
-      : new Date(new Date().setMonth(new Date().getMonth() - months)).getTime()
+      : (() => {
+          const start = new Date(now)
+          start.setMonth(start.getMonth() - months)
+          return start.getTime()
+        })()
 
     // ── Step 3: group MedicationRequest into drug → bars ──────────────────
     const drugsMap = new Map<string, TimelineDrug>()
@@ -349,5 +354,5 @@ export function useMedicationTimeline(
       chronicCount: drugs.filter(d => d.isChronic).length,
       nonChronicCount: drugs.filter(d => !d.isChronic).length,
     }
-  }, [medications, audience, range, fallbackCategoryLabel, locale, atcCategoryLabels])
+  }, [medications, audience, range, fallbackCategoryLabel, locale, atcCategoryLabels, now])
 }

@@ -83,7 +83,10 @@ export function IpsDataScopePanel({ bundle, curatedData }: IpsDataScopePanelProp
   const [expandedNarratives, setExpandedNarratives] = useState<Set<string>>(() => new Set())
 
   const composition = bundle.entry?.[0]?.resource
-  const sections = ((composition?.section as IpsCompositionSection[] | undefined) ?? [])
+  const sections = useMemo(
+    () => (composition?.section as IpsCompositionSection[] | undefined) ?? [],
+    [composition?.section],
+  )
 
   // Per-section selection edits ONLY the 'ips' profile.
   const { getProfile, updateSelectionFor, setFiltersFor } = useDataSelection()

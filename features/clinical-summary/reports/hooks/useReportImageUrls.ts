@@ -41,10 +41,7 @@ export async function resolveImageUrl(img: ReportImage): Promise<string> {
 export function useReportImageUrls(images: ReportImage[], enabled: boolean): string[] {
   const [urls, setUrls] = useState<string[]>([])
   useEffect(() => {
-    if (!enabled) {
-      setUrls([])
-      return
-    }
+    if (!enabled) return
     let cancelled = false
     const created: string[] = []
     ;(async () => {
@@ -65,5 +62,5 @@ export function useReportImageUrls(images: ReportImage[], enabled: boolean): str
       created.forEach((u) => u && URL.revokeObjectURL(u))
     }
   }, [enabled, images])
-  return urls
+  return enabled ? urls : []
 }

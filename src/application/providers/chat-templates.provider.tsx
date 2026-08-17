@@ -430,6 +430,8 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       loadFromLocalStorage()
     }
 
+    // Marks completion of the one-time browser/Firestore migration above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasLoadedFromStorage(true)
   }, [hasLoadedFromStorage, user?.uid, currentLang])
 
@@ -462,16 +464,12 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [user?.uid, hasLoadedFromStorage, isSyncing, currentLang])
 
-  // For non-logged-in users, the localStorage load above finishes loading immediately
-  useEffect(() => {
-    if (!hasLoadedFromStorage) return
-    if (user?.uid) return
-    setIsLoading(false)
-  }, [hasLoadedFromStorage, user?.uid])
-
   // When language changes, swap defaults for any audience that's not customized
   useEffect(() => {
     if (!hasLoadedFromStorage) return
+    // Language is external preference state; replace only bundled defaults
+    // while preserving each audience's customized templates.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllTemplates((prev) => {
       const next = prev.filter((t) => customByAudience[t.audience])
       ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
@@ -481,7 +479,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       })
       return next
     })
-  }, [currentLang, hasLoadedFromStorage]) // intentionally omit customByAudience to avoid loops
+  }, [currentLang, customByAudience, hasLoadedFromStorage])
 
   // Persist to localStorage for non-logged-in users
   useEffect(() => {
@@ -600,21 +598,18 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const value = useMemo(
-    () => ({
-      templates,
-      addTemplate,
-      updateTemplate,
-      removeTemplate,
-      moveTemplate,
-      resetTemplates,
-      saveTemplates,
-      maxTemplates: MAX_TEMPLATES,
-      isSaving,
-      isLoading,
-    }),
-    [templates, isSaving, isLoading],
-  )
+  const value = {
+    templates,
+    addTemplate,
+    updateTemplate,
+    removeTemplate,
+    moveTemplate,
+    resetTemplates,
+    saveTemplates,
+    maxTemplates: MAX_TEMPLATES,
+    isSaving,
+    isLoading: user?.uid ? isLoading : !hasLoadedFromStorage,
+  }
 
   return <ChatTemplatesContext.Provider value={value}>{children}</ChatTemplatesContext.Provider>
 }

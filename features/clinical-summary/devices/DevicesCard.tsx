@@ -33,7 +33,7 @@ export function DevicesCard() {
   const { t } = useLanguage()
   const { devices, isLoading, error } = useClinicalData()
 
-  const tt = (t as any).devices || {
+  const tt = useMemo(() => (t as any).devices || ({
     title: 'Medical Devices',
     noData: 'No devices recorded (not provided by source).',
     manufacturer: 'Manufacturer',
@@ -42,7 +42,7 @@ export function DevicesCard() {
     udi: 'UDI',
     statusActive: 'Active',
     statusInactive: 'Inactive',
-  }
+  }), [t])
 
   const items = useMemo(() => {
     const list = Array.isArray(devices) ? devices : []

@@ -32,7 +32,6 @@ const data = {
       content: [{ attachment: { contentType: 'text/html', data: btoa('<p>Older discharge</p>') } }],
     },
   ],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 describe('clinical-documents.utils', () => {
@@ -89,7 +88,6 @@ describe('clinical-documents.utils', () => {
           content: [{ attachment: { contentType: 'text/html', data: btoa('<p>y</p>') } }],
         },
       ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     expect(docs.find((d) => d.id === 'p1')!.date).toBe('2024-08-29')
     // Distinct period dates → correct newest-first order (no clustering).
@@ -117,7 +115,6 @@ describe('clinical-documents.utils', () => {
           { id: 'a', date: '2020-01-01' },
           { id: 'b', date: '2021-01-01' },
         ],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
       expect(resolveSelectedDocuments(noDischarge, 'latestAdmission', []).map((d) => d.id)).toEqual(['b'])
     })
@@ -130,7 +127,6 @@ describe('clinical-documents.utils', () => {
           type: { coding: [{ code: '18842-5' }] },
           content: [{ attachment: { contentType: 'text/html', data: btoa(`<p>note ${n}</p>`) } }],
         })),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
       // newest-first: d4, d3, d2, d1 → keep top 3
       expect(resolveSelectedDocuments(many, 'recentAdmissions', []).map((d) => d.id)).toEqual(['d4', 'd3', 'd2'])
@@ -144,7 +140,6 @@ describe('clinical-documents.utils', () => {
           { id: 'c', date: '2022-01-01' },
           { id: 'd', date: '2023-01-01' },
         ],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
       expect(resolveSelectedDocuments(noDischarge, 'recentAdmissions', []).map((d) => d.id)).toEqual(['d', 'c', 'b'])
     })
@@ -165,14 +160,12 @@ describe('clinical-documents.utils', () => {
         id: 'same-id',
         content: [{ attachment: { contentType: 'text/plain', data: btoa('patient A') } }],
       }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     const second = listClinicalDocuments({
       documentReferences: [{
         id: 'same-id',
         content: [{ attachment: { contentType: 'text/plain', data: btoa('patient B') } }],
       }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
     expect(first[0].text).toContain('patient A')
@@ -191,7 +184,6 @@ describe('clinical-documents.utils', () => {
           { attachment: { title: 'Remote', contentType: 'text/html', url: 'https://example.invalid/signed' } },
         ],
       }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
     expect(docs[0].text).toContain('Narrative:\nfirst body')
@@ -271,7 +263,6 @@ describe('clinical-documents.utils', () => {
           content: [{ attachment: { contentType: 'text/html', data: b64 } }],
         },
       ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     const text = docs[0].text
     expect(text).toContain('出院病摘')

@@ -1,5 +1,6 @@
 // Traditional Chinese (Taiwan) translations
 import type { Translation } from './en'
+import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 
 export const zhTW = {
   common: {
@@ -1863,7 +1864,6 @@ export const zhTW = {
   },
 
   auth: (() => {
-    const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {
     signInTitle: '登入',
     signUpTitle: '註冊',

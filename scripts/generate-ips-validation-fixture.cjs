@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS bootstrap is required before loading ts-node. */
-
 const fs = require('node:fs')
 const path = require('node:path')
 const Module = require('node:module')

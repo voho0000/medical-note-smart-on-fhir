@@ -22,18 +22,20 @@ export function useDataCategories(
 ) {
   const { t } = useLanguage()
   
-  // Create a stable hash of filters for dependency tracking
-  const filtersHash = useMemo(() => 
-    JSON.stringify(filters || {}), 
-    [filters]
-  )
+  // A structural key keeps the calculation stable when callers recreate an
+  // equivalent filter object. Rebuild the object from the key so the memo does
+  // not close over an untracked `filters` reference.
+  const filtersHash = JSON.stringify(filters || {})
   
   return useMemo(() => {
+    // The caller increments this key when registry-backed counts must be
+    // recomputed even if the collection reference itself did not change.
+    void filterKey
     // Get all registered categories from the registry
     const categories = dataCategoryRegistry.getAll()
     
     // Ensure filters is a valid object
-    const safeFilters: Partial<DataFilters> = filters || {}
+    const safeFilters = JSON.parse(filtersHash) as Partial<DataFilters>
     
     // Map registry categories to DataItem format
     return categories.map(category => {

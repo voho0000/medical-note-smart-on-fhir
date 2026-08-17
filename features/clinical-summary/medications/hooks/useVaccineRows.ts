@@ -64,7 +64,7 @@ export function useVaccineRows(
 
     const byKey = new Map<string, VaccineRow>()
 
-    for (const imm of immunizations) {
+    for (const [index, imm] of immunizations.entries()) {
       if (!imm) continue
       const key = vaccineKeyOf(imm)
       if (!key) continue
@@ -74,7 +74,7 @@ export function useVaccineRows(
       const provider = imm.performer?.[0]?.actor?.display?.trim() || undefined
 
       const dose: VaccineDoseEvent = {
-        id: imm.id || `${key}-${dateIso ?? Math.random().toString(36).slice(2)}`,
+        id: imm.id || `${key}-${dateIso ?? `idx-${index}`}`,
         date: dateIso,
         dateLabel,
         provider,

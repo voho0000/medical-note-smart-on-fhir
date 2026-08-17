@@ -1,4 +1,6 @@
 // English translations
+import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
+
 export const en = {
   common: {
     loading: 'Loading...',
@@ -1861,7 +1863,6 @@ export const en = {
   },
 
   auth: (() => {
-    const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {
     signInTitle: 'Sign In',
     signUpTitle: 'Sign Up',

@@ -43,6 +43,8 @@ export function useLocalStorage<T>({
       const stored = window.localStorage.getItem(key)
       if (stored !== null) {
         const parsed = deserializer(stored)
+        // Generic storage hydration must run after mount to remain SSR-safe.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setValue(parsed)
       }
     } catch (error) {

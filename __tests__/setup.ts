@@ -12,6 +12,8 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 // Global setup for all tests
 
 import '@testing-library/jest-dom'
+import * as nodeCrypto from 'crypto'
+import { TextDecoder, TextEncoder } from 'util'
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -61,7 +63,6 @@ global.sessionStorage = new LocalStorageMock()
 
 // Mock Web Crypto API for tests
 if (!global.crypto) {
-  const nodeCrypto = require('crypto')
   Object.defineProperty(global, 'crypto', {
     value: {
       getRandomValues: (arr: Uint8Array) => nodeCrypto.randomFillSync(arr),
@@ -73,7 +74,6 @@ if (!global.crypto) {
 
 // Mock TextEncoder and TextDecoder for crypto tests
 if (typeof global.TextEncoder === 'undefined') {
-  const { TextEncoder, TextDecoder } = require('util')
   global.TextEncoder = TextEncoder
   global.TextDecoder = TextDecoder
 }

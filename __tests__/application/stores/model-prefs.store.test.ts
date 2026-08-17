@@ -16,7 +16,7 @@ import {
 const loadStore = () => {
   let mod!: typeof import('@/src/application/stores/model-prefs.store')
   jest.isolateModules(() => {
-    mod = require('@/src/application/stores/model-prefs.store')
+    mod = jest.requireActual('@/src/application/stores/model-prefs.store')
   })
   return mod
 }

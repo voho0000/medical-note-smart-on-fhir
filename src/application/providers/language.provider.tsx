@@ -22,6 +22,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedLocale = localStorage.getItem(LOCALE_STORAGE_KEY) as Locale | null
     if (savedLocale && (savedLocale === 'en' || savedLocale === 'zh-TW')) {
+      // Restore after hydration so localStorage cannot change the first client
+      // render relative to the server-generated markup.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocaleState(savedLocale)
     } else {
       // Set default locale to zh-TW if no saved preference

@@ -14,12 +14,13 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light")
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
     const stored = localStorage.getItem("theme") as Theme | null
     if (stored) {
+      // Restore after hydration; reading localStorage in the initializer would
+      // make server and first-client markup disagree.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setThemeState(stored)
       document.documentElement.classList.toggle("dark", stored === "dark")
     }

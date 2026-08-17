@@ -45,7 +45,7 @@ export function useImageUpload() {
     }
   }, [])
 
-  const validateFile = (file: File): { error: string | null; warning: string | null } => {
+  const validateFile = useCallback((file: File): { error: string | null; warning: string | null } => {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return {
         error: t.chat.imageUpload.invalidType.replace('{type}', file.type),
@@ -71,7 +71,11 @@ export function useImageUpload() {
     }
     
     return { error: null, warning: null }
-  }
+  }, [
+    t.chat.imageUpload.fileTooLarge,
+    t.chat.imageUpload.invalidType,
+    t.chat.imageUpload.largeFileWarning,
+  ])
 
   const addImages = useCallback(async (files: File[]) => {
     // Use functional setState to get current state
@@ -158,7 +162,11 @@ export function useImageUpload() {
         error: error instanceof Error ? error.message : 'Failed to process image'
       }))
     }
-  }, [])
+  }, [
+    t.chat.imageUpload.tooManyImages,
+    t.chat.imageUpload.totalSizeExceeded,
+    validateFile,
+  ])
 
   const removeImage = useCallback((index: number) => {
     setState(prev => {

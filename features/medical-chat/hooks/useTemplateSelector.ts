@@ -42,6 +42,9 @@ export function useTemplateSelector() {
       typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null
     const isValid = stored ? templates.some((t) => t.id === stored) : false
 
+    // Restore only after hydration and after async templates have loaded; a
+    // lazy initializer would make the first client render differ from SSR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedTemplateId(isValid ? (stored as string) : templates[0].id)
     setHasInitialized(true)
   }, [templates, isLoading, hasInitialized])

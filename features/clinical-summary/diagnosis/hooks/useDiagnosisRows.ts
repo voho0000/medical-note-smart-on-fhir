@@ -7,7 +7,7 @@ export function useDiagnosisRows(conditions: any[]) {
   return useMemo<DiagnosisRow[]>(() => {
     if (!conditions || !Array.isArray(conditions)) return []
     
-    const rows = (conditions as Condition[]).map(condition => {
+    const rows = (conditions as Condition[]).map((condition, index) => {
       const categories: string[] = []
       if (condition.category) {
         condition.category.forEach((cat: Category) => {
@@ -21,7 +21,7 @@ export function useDiagnosisRows(conditions: any[]) {
       }
 
       return {
-        id: condition.id || Math.random().toString(36),
+        id: condition.id || `condition-${index}`,
         title: condition.code?.text || condition.code?.coding?.[0]?.display || 'Unknown',
         when: formatDate(condition.onsetDateTime || condition.recordedDate),
         clinical: typeof condition.clinicalStatus === 'string' 

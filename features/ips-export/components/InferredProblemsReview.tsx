@@ -31,11 +31,14 @@ function useElapsedSeconds(active: boolean): number {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     if (!active) return
-    setSeconds(0)
+    const resetId = window.setTimeout(() => setSeconds(0), 0)
     const id = setInterval(() => setSeconds((s) => s + 1), 1000)
-    return () => clearInterval(id)
+    return () => {
+      clearTimeout(resetId)
+      clearInterval(id)
+    }
   }, [active])
-  return seconds
+  return active ? seconds : 0
 }
 
 interface InferredProblemsReviewProps {

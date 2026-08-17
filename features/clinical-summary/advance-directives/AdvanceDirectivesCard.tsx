@@ -30,13 +30,13 @@ export function AdvanceDirectivesCard() {
   const { t } = useLanguage()
   const { consents, isLoading, error } = useClinicalData()
 
-  const tt = (t as any).advanceDirectives || {
+  const tt = useMemo(() => (t as any).advanceDirectives || ({
     title: 'Advance Directives',
     noData: 'No advance directives on record.',
     deny: 'Declined',
     permit: 'Agreed',
     unknown: 'Recorded',
-  }
+  }), [t])
 
   const items = useMemo(() => {
     const list = Array.isArray(consents) ? consents : []

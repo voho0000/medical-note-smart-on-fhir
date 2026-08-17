@@ -53,6 +53,9 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(RANGE_STORAGE_KEY)
+      // Post-hydration preference restore keeps the server and first client
+      // render identical while still honoring the saved range.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (isValidRange(stored)) setRangeState(stored)
     } catch { /* storage unavailable — silently keep default */ }
   }, [])
