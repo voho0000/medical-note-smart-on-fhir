@@ -147,50 +147,54 @@ export function InvestigationTrendsCard({
 
           return (
             <article key={`${item.label}-${index}`} className={cn("rounded-md px-2.5 py-2", style.box)}>
-              <div className="flex flex-wrap items-start gap-1.5">
-                <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-primary/80" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
-                    {item.label}
-                    <SourceSup
-                      sources={sources}
-                      typeLabel={typeLabel}
-                      unverifiedLabel={unverifiedLabel}
-                      onNavigate={onNavigate}
-                    />
-                  </p>
-                  <p className="mt-0.5 text-[0.8125rem] font-medium leading-snug tabular-nums text-foreground/90">
-                    {limitInvestigationTrendPoints(item.trend)}
-                  </p>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2">
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-primary/80" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
+                      {item.label}
+                      <SourceSup
+                        sources={sources}
+                        typeLabel={typeLabel}
+                        unverifiedLabel={unverifiedLabel}
+                        onNavigate={onNavigate}
+                      />
+                    </p>
+                    <p className="mt-0.5 text-[0.8125rem] font-medium leading-snug tabular-nums text-foreground/90">
+                      {limitInvestigationTrendPoints(item.trend)}
+                    </p>
+                  </div>
                 </div>
-                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-px text-[0.625rem] font-semibold", style.badge)}>
-                  <DirectionIcon className="h-3 w-3" aria-hidden="true" />
-                  {directionLabel(item.direction)}
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-start gap-1.5 pl-5 text-[0.65rem] leading-snug text-muted-foreground">
-                <span className="shrink-0 rounded bg-background/70 px-1.5 py-px font-medium">
-                  {kindLabel(item.kind)}
-                </span>
-                <p className="min-w-[12rem] flex-1 pt-px">{item.interpretation}</p>
-                {cumulativeTarget && onOpenCumulative ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenCumulative(cumulativeTarget)}
-                    disabled={isOpeningCumulative}
-                    aria-busy={isOpeningCumulative}
-                    aria-label={`${isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}: ${item.label}`}
-                    title={`${openCumulativeLabel}: ${item.label}`}
-                    className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 font-medium text-primary transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-80 lg:min-h-8"
-                  >
-                    {isOpeningCumulative ? (
-                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Table2 className="h-3 w-3" aria-hidden="true" />
-                    )}
-                    {isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}
-                  </button>
-                ) : null}
+                <div className="row-span-2 flex shrink-0 flex-col items-end gap-1.5">
+                  <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-px text-[0.625rem] font-semibold", style.badge)}>
+                    <DirectionIcon className="h-3 w-3" aria-hidden="true" />
+                    {directionLabel(item.direction)}
+                  </span>
+                  {cumulativeTarget && onOpenCumulative ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenCumulative(cumulativeTarget)}
+                      disabled={isOpeningCumulative}
+                      aria-busy={isOpeningCumulative}
+                      aria-label={`${isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}: ${item.label}`}
+                      title={`${openCumulativeLabel}: ${item.label}`}
+                      className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-center text-xs font-medium leading-tight text-primary transition-colors hover:bg-muted disabled:cursor-wait disabled:opacity-80 md:min-h-8"
+                    >
+                      {isOpeningCumulative ? (
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Table2 className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      {isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-1 flex min-w-0 flex-wrap items-start gap-1.5 pl-5 text-[0.65rem] leading-snug text-muted-foreground">
+                  <span className="shrink-0 rounded bg-background/70 px-1.5 py-px font-medium">
+                    {kindLabel(item.kind)}
+                  </span>
+                  <p className="min-w-0 flex-1 pt-px">{item.interpretation}</p>
+                </div>
               </div>
             </article>
           )

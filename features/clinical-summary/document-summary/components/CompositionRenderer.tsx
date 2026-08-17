@@ -9,7 +9,7 @@
 // dropped into a Visits-tab discharge-summary view alongside its Encounter.
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, FileText } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -32,6 +32,10 @@ interface CompositionRendererProps {
    *  or null if the key isn't translated. Passed in so the renderer stays
    *  free of i18n provider coupling. */
   resolveSectionLabel: (i18nKey: string) => string | null
+  /** Optional control placed beside the document-level chevron. Adult
+   *  preventive-care uses this for the same right-pane action placement as
+   *  discharge summaries. */
+  rightControl?: ReactNode
   /** Labels for the metadata strip. */
   labels: {
     documentDate: string
@@ -89,6 +93,7 @@ export function CompositionRenderer({
   defaultExpandFirst = false,
   forceExpandKey,
   resolveSectionLabel,
+  rightControl,
   labels,
 }: CompositionRendererProps) {
   const sections = Array.isArray(composition.section) ? composition.section : []
@@ -175,6 +180,7 @@ export function CompositionRenderer({
               <span className="text-xs font-normal text-muted-foreground">
                 {continuousOpen ? labels.collapseFullDocument : labels.expandFullDocument}
               </span>
+              {rightControl && <span className="mr-1 shrink-0">{rightControl}</span>}
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${continuousOpen ? 'rotate-180' : ''}`}
                 aria-hidden

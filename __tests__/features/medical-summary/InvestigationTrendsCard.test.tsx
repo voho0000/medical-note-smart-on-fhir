@@ -73,7 +73,14 @@ describe('InvestigationTrendsCard', () => {
   it('opens the exact cumulative target exposed for the investigation', () => {
     const onOpenCumulative = renderCard()
 
-    fireEvent.click(screen.getByRole('button', { name: '查看累積報告: 腎功能 (eGFR)' }))
+    const button = screen.getByRole('button', { name: '查看累積報告: 腎功能 (eGFR)' })
+    const directionBadge = screen.getByText('stable')
+    expect(button.parentElement).toHaveClass('flex-col', 'items-end')
+    expect(button.parentElement).toContainElement(directionBadge)
+    expect(button).toHaveClass('text-xs', 'px-1.5', 'md:min-h-8')
+    expect(button).not.toHaveClass('lg:min-h-8')
+
+    fireEvent.click(button)
     expect(onOpenCumulative).toHaveBeenCalledWith(target)
   })
 

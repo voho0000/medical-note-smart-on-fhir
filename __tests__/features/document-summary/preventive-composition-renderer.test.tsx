@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { CompositionRenderer } from '@/features/clinical-summary/document-summary/components/CompositionRenderer'
 
 const LABELS = {
@@ -99,6 +99,52 @@ describe('preventive-care Composition continuous document mode', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '展開全文' }))
     expect(screen.getByRole('button', { name: '收合全文' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('heading', { name: '一般檢查' })).toBeInTheDocument()
+  })
+
+  it('places the right-pane action inside the full-document row', () => {
+    const { container } = render(
+      <CompositionRenderer
+        composition={{
+          id: 'preventive-actions',
+          date: '2018-02-12',
+          type: { coding: [{ system: 'http://loinc.org', code: '75484-6' }] },
+          section: [{ title: '一般檢查', text: { div: '<div>檢查內容</div>' } }],
+        }}
+        resolveSectionLabel={() => null}
+        rightControl={<span role="button" aria-label="在右側面板展開文件">右欄</span>}
+        labels={LABELS}
+      />,
+    )
+
+    expect(screen.getAllByText('2018-02-12')).toHaveLength(1)
+    const fullDocumentButton = screen.getByRole('button', { name: '展開全文' })
+    expect(within(fullDocumentButton).getByRole('button', { name: '在右側面板展開文件' }))
+      .toBeInTheDocument()
+    expect(container.querySelector('[data-continuous-composition="true"]')).toContainElement(
+      screen.getByRole('button', { name: '在右側面板展開文件' }),
+    )
+  })
+
+  it('opens the full preventive document when rendered for a right-pane request', async () => {
+    render(
+      <CompositionRenderer
+        composition={{
+          id: 'preventive-right-pane',
+          type: { coding: [{ system: 'http://loinc.org', code: '75484-6' }] },
+          text: { status: 'generated', div: '<div><p>成人預防保健總覽</p></div>' },
+          section: [{ title: '一般檢查', text: { div: '<div>檢查內容</div>' } }],
+        }}
+        forceExpandKey={0}
+        resolveSectionLabel={() => null}
+        labels={LABELS}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '收合全文' })).toHaveAttribute('aria-expanded', 'true')
+    })
+    expect(screen.getByText('成人預防保健總覽')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '一般檢查' })).toBeInTheDocument()
   })
 

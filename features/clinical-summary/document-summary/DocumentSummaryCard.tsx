@@ -36,6 +36,7 @@ import { HtmlDocumentRenderer, HtmlDocumentBody } from './components/HtmlDocumen
 import { DocumentDetailDialog } from './components/DocumentDetailDialog'
 import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStrings } from './utils/strings'
 import { getDocumentPlainText } from './utils/document-text'
+import { isPreventiveMedicineComposition } from './utils/loinc-document-types'
 import type { DocumentEntry } from './types'
 
 
@@ -146,6 +147,8 @@ function DocumentEntryCard({
   const docPlainText = useMemo(() => getDocumentPlainText(entry), [entry])
   const canInterpret = docPlainText.trim().length > 0
   const interpretationMode = entry.isDischargeSummary ? 'long-document' : 'standard'
+  const isPreventiveComposition = entry.sourceKind === 'composition' &&
+    !!entry.composition && isPreventiveMedicineComposition(entry.composition)
 
   // 向右展開 — dock the full document (the same content the maximize dialog
   // shows) in the right pane to read it beside the list.
@@ -180,10 +183,14 @@ function DocumentEntryCard({
               autoGenerate={false}
             />
           )}
+          {/* Docking is an explicit request to read the document. Open its
+              full content immediately instead of presenting a second toggle
+              in the right pane. */}
           {entry.sourceKind === 'composition' && entry.composition ? (
             <CompositionRenderer
               composition={entry.composition}
               defaultExpandFirst
+              forceExpandKey={0}
               resolveSectionLabel={resolveSectionLabel}
               labels={{
                 documentDate: strings.documentDate,
@@ -267,15 +274,11 @@ function DocumentEntryCard({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Document date — only render when there's no period to anchor the
-              timeline. For DocumentReference 出院病摘 the bridge sets `date` to
-              the day NHI indexed the document (typically discharge day +0/+1),
-              which is essentially redundant with period.end and confused users
-              into reading it as the discharge date. The recording timestamp is
-              also visible inside the HTML body, so we lose nothing by dropping
-              it here. For Composition (IPS) the date IS the only temporal
-              anchor, so it stays. */}
-          {dateStr && !entry.period && (
+          {/* CompositionRenderer already owns Composition date metadata.
+              Keeping the same date here duplicated it on preventive-care
+              documents. Standalone DocumentReferences without a period still
+              need this header date as their only temporal anchor. */}
+          {dateStr && !entry.period && entry.sourceKind !== 'composition' && (
             <span className="text-[0.6875rem] tabular-nums text-muted-foreground">
               {dateStr}
             </span>
@@ -292,10 +295,10 @@ function DocumentEntryCard({
               }}
             />
           )}
-          {/* IPS compositions have per-section accordions (no single 文件內容
-              chevron), so their 向右展開 button lives here in the header.
-              Discharge summaries get it on the 文件內容 bar instead (below). */}
-          {entry.sourceKind === 'composition' && rightButton}
+          {/* Section-based compositions keep the action in the header. Adult
+              preventive-care has one document-level bar, so its action moves
+              there to match the discharge-summary interaction. */}
+          {entry.sourceKind === 'composition' && !isPreventiveComposition && rightButton}
           {/* Maximize button — opens the same content in a centred dialog
               at ~90vw so the discharge-summary tables breathe. The inline
               accordion below still works for quick previews. */}
@@ -376,6 +379,7 @@ function DocumentEntryCard({
           defaultExpandFirst={autoExpand}
           forceExpandKey={forceExpandKey}
           resolveSectionLabel={resolveSectionLabel}
+          rightControl={isPreventiveComposition ? rightButton : undefined}
           labels={{
             documentDate: strings.documentDate,
             author: strings.author,
