@@ -6,7 +6,7 @@ import type { EncounterDetails } from './useEncounterDetails'
 
 export interface VisitStats {
   hasTests: boolean
-  hasMedications: boolean
+  hasReports: boolean
   hasProcedures: boolean
   hasDiagnoses: boolean
   testCount: number
@@ -38,7 +38,7 @@ export function useVisitStats(
     encounterDetails.forEach((d, id) => {
       map.set(id, {
         hasTests:        d.tests.length > 0,
-        hasMedications:  d.medications.length > 0,
+        hasReports:      d.reports.length > 0,
         hasProcedures:   d.procedures.length > 0,
         hasDiagnoses:    d.diagnoses.length > 0,
         testCount:       d.tests.length,

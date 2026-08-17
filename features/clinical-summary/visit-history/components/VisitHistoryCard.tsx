@@ -6,6 +6,13 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
@@ -19,6 +26,7 @@ import { useDocumentSummaries } from "@/features/clinical-summary/document-summa
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import { VisitItem } from "./VisitItem"
+import { InstitutionFilterSelect } from "./InstitutionFilterSelect"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import {
   navigationEncounterId,
@@ -28,7 +36,7 @@ import {
 type VisitTypeFilter = 'all' | 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'pharmacy'
 type CareDisciplineFilter = 'all' | VisitCareDiscipline
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
-type ContentFlag = 'tests' | 'medications' | 'procedures' | 'discharge'
+type ContentFlag = 'tests' | 'reports' | 'procedures' | 'discharge'
 
 const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'outpatient-or-emergency', 'inpatient', 'emergency', 'pharmacy']
 const CARE_DISCIPLINES: CareDisciplineFilter[] = ['all', 'western', 'tcm', 'dental']
@@ -148,7 +156,7 @@ export function VisitHistoryCard() {
   const filteredVisits = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const wantsTests = contentFlags.has('tests')
-    const wantsMeds  = contentFlags.has('medications')
+    const wantsReports = contentFlags.has('reports')
     const wantsProcs = contentFlags.has('procedures')
     const wantsDischarge = contentFlags.has('discharge')
 
@@ -160,11 +168,11 @@ export function VisitHistoryCard() {
       // institution
       if (institutionFilter !== 'all' && v.institution !== institutionFilter) return false
       // content flags
-      if (wantsTests || wantsMeds || wantsProcs) {
+      if (wantsTests || wantsReports || wantsProcs) {
         const s = visitStats.get(v.id)
         if (!s) return false
         if (wantsTests && !s.hasTests) return false
-        if (wantsMeds  && !s.hasMedications) return false
+        if (wantsReports && !s.hasReports) return false
         if (wantsProcs && !s.hasProcedures) return false
       }
       // 含出院病摘 — only visits with a linked 出院病摘 / discharge summary.
@@ -395,70 +403,70 @@ export function VisitHistoryCard() {
             {/* ── Filters row: 就診類型 + 機構 (single-select dropdowns) followed
                 by the content toggles (multi-select) + result count — all the
                 filters grouped together, separate from search/sort above. ──── */}
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
               {/* NHI care discipline is independent from visit setting:
                   e.g. both western and dental records can be outpatient. */}
-              <select
+              <CompactFilterSelect
                 value={careDisciplineFilter}
-                onChange={(e) => handleCareDisciplineFilterChange(
-                  e.target.value as CareDisciplineFilter,
-                )}
-                className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
                 aria-label={vt.careDisciplineLabel}
-              >
-                {CARE_DISCIPLINES.map((discipline) => (
-                  <option key={discipline} value={discipline}>
-                    {vt.careDisciplines[discipline]} ({careDisciplineCounts[discipline]})
-                  </option>
-                ))}
-              </select>
+                triggerLabel={careDisciplineFilter === 'all'
+                  ? vt.careDisciplineCompact
+                  : vt.careDisciplines[careDisciplineFilter]}
+                options={CARE_DISCIPLINES.map((discipline) => ({
+                  value: discipline,
+                  label: discipline === 'all'
+                    ? vt.careDisciplineCompact
+                    : `${vt.careDisciplines[discipline]} (${careDisciplineCounts[discipline]})`,
+                }))}
+                onValueChange={(value) => handleCareDisciplineFilterChange(
+                  value as CareDisciplineFilter,
+                )}
+              />
               {/* 就診類型 is single-select (擇一), so a dropdown is both
                   semantically right and far more compact than five chips; counts
                   stay visible inside each option, e.g. "門診 (117)". */}
-              <select
+              <CompactFilterSelect
                 value={typeFilter}
-                onChange={(e) => handleFilterChange(e.target.value as VisitTypeFilter)}
-                className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
                 aria-label={(vt as any).typeLabel ?? '就診類型'}
-              >
-                {FILTER_TYPES.map((f) => {
-                  const label = f === 'all' ? vt.filterAll : vt.badges[f]
+                triggerLabel={typeFilter === 'all' ? vt.typeCompact : vt.badges[typeFilter]}
+                options={FILTER_TYPES.flatMap((f) => {
+                  const label = f === 'all' ? vt.typeCompact : vt.badges[f]
                   const count = counts[f]
-                  if (f !== 'all' && count === 0) return null
-                  return <option key={f} value={f}>{label} ({count})</option>
+                  if (f !== 'all' && count === 0) return []
+                  return [{ value: f, label: f === 'all' ? label : `${label} (${count})` }]
                 })}
-              </select>
+                onValueChange={(value) => handleFilterChange(value as VisitTypeFilter)}
+              />
               {institutions.length > 0 && (
-                <select
+                <InstitutionFilterSelect
                   value={institutionFilter}
-                  onChange={(e) => {
-                    setInstitutionFilter(e.target.value)
+                  institutions={institutions}
+                  allLabel={vt.institutionCompact}
+                  ariaLabel={vt.institutionAll}
+                  onValueChange={(value) => {
+                    setInstitutionFilter(value)
                     setExpandedVisitIds(new Set())
                     setVisibleCount(VISIT_PAGE_SIZE)
                   }}
-                  className="rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
-                  aria-label={vt.institutionAll}
-                >
-                  <option value="all">{vt.institutionAll}</option>
-                  {institutions.map((inst) => (
-                    <option key={inst} value={inst}>{inst}</option>
-                  ))}
-                </select>
+                />
               )}
               {/* Divider between the single-select filters and the content toggles */}
-              <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
+              <span className="mx-0.5 h-4 w-px shrink-0 bg-border @max-[36rem]:hidden" aria-hidden />
               <ContentToggle
-                label={vt.hasTests}
+                label={vt.tests}
+                accessibleLabel={vt.hasTests}
                 active={contentFlags.has('tests')}
                 onClick={() => toggleContent('tests')}
               />
               <ContentToggle
-                label={vt.hasMedications}
-                active={contentFlags.has('medications')}
-                onClick={() => toggleContent('medications')}
+                label={vt.examReportsShort}
+                accessibleLabel={vt.hasReports}
+                active={contentFlags.has('reports')}
+                onClick={() => toggleContent('reports')}
               />
               <ContentToggle
-                label={vt.hasProcedures}
+                label={vt.procedures}
+                accessibleLabel={vt.hasProcedures}
                 active={contentFlags.has('procedures')}
                 onClick={() => toggleContent('procedures')}
               />
@@ -466,7 +474,8 @@ export function VisitHistoryCard() {
                   (discharge summaries are inpatient-only and relatively rare). */}
               {hasAnyDischargeSummary && (
                 <ContentToggle
-                  label={(vt as any).hasDischarge ?? '含出院病摘'}
+                  label={(vt as any).dischargeShort ?? '病摘'}
+                  accessibleLabel={(vt as any).hasDischarge ?? '含出院病摘'}
                   active={contentFlags.has('discharge')}
                   onClick={() => toggleContent('discharge')}
                 />
@@ -475,17 +484,19 @@ export function VisitHistoryCard() {
                 <button
                   type="button"
                   onClick={clearAllFilters}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                  aria-label={vt.clearFilters}
+                  title={vt.clearFilters}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground @max-[36rem]:size-7 @max-[36rem]:justify-center @max-[36rem]:p-0"
                 >
                   <X className="h-3 w-3" />
-                  {vt.clearFilters}
+                  <span className="@max-[36rem]:hidden">{vt.clearFiltersShort}</span>
                 </button>
               )}
               {/* Result count — right-aligned at the end of the filters row. */}
               <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
                 {hasActiveFilters
-                  ? `${(vt.resultCount as string ?? 'Results')}: ${filteredVisits.length} / ${visitHistory.length}`
-                  : `${(vt.totalCount as string ?? 'Total')}: ${visitHistory.length}`}
+                  ? `${filteredVisits.length} / ${visitHistory.length} ${vt.recordsUnit}`
+                  : `${visitHistory.length} ${vt.recordsUnit}`}
               </span>
             </div>
 
@@ -545,14 +556,16 @@ export function VisitHistoryCard() {
 }
 
 function ContentToggle({
-  label, active, onClick,
-}: { label: string; active: boolean; onClick: () => void }) {
+  label, accessibleLabel, active, onClick,
+}: { label: string; accessibleLabel: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1.5",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -560,5 +573,41 @@ function ContentToggle({
     >
       {label}
     </button>
+  )
+}
+
+function CompactFilterSelect({
+  value,
+  triggerLabel,
+  options,
+  onValueChange,
+  'aria-label': ariaLabel,
+}: {
+  value: string
+  triggerLabel: string
+  options: Array<{ value: string; label: string }>
+  onValueChange: (value: string) => void
+  'aria-label': string
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger
+        size="sm"
+        aria-label={ariaLabel}
+        title={triggerLabel}
+        className="min-h-[44px] w-[3.75rem] shrink-0 gap-1.5 bg-background px-1.5 py-1 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7"
+      >
+        <SelectValue>
+          <span className="block min-w-0 truncate">{triggerLabel}</span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent align="start">
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} className="text-xs">
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

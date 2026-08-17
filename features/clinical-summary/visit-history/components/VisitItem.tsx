@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Building2, PanelRight } from "lucide-react"
+import { Building2, ChevronDown, PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   CLINICAL_ABNORMAL_TONE,
   CLINICAL_CATEGORY_TONE,
+  CLINICAL_INPATIENT_TONE,
   CLINICAL_LIST_ROW_HOVER_TONE,
   CLINICAL_LIST_ROW_TONE,
   CLINICAL_SOURCE_TONE,
@@ -46,12 +47,12 @@ interface VisitItemProps {
 }
 
 const getTypeBadge = (type: VisitType, labels: any) => {
-  // Visit setting is classification, not status. Use the same emerald category
-  // role as grouped lab reports; emergency alone keeps the attention role.
+  // Visit setting is classification, not status. Inpatient uses blue so it can
+  // be distinguished from outpatient at a glance; emergency keeps attention.
   const typeMap: Record<VisitType, { label: string; className: string }> = {
     outpatient: { label: labels.outpatient, className: CLINICAL_CATEGORY_TONE },
     'outpatient-or-emergency': { label: labels['outpatient-or-emergency'], className: CLINICAL_CATEGORY_TONE },
-    inpatient:  { label: labels.inpatient,  className: CLINICAL_CATEGORY_TONE },
+    inpatient:  { label: labels.inpatient,  className: CLINICAL_INPATIENT_TONE },
     emergency:  { label: labels.emergency,  className: CLINICAL_ABNORMAL_TONE },
     home:       { label: labels.home,       className: CLINICAL_CATEGORY_TONE },
     virtual:    { label: labels.virtual,    className: CLINICAL_CATEGORY_TONE },
@@ -138,6 +139,8 @@ export function VisitItem({
   const [icdExpanded, setIcdExpanded] = useState(false)
   const docs = documents ?? []
   const hasDetails = visitHasDetails(details, documents)
+  const hasVisitContext = Boolean(visit.department || visit.physician || visit.reason || visit.diagnosis)
+  const hasDischargeDocument = docs.some((document) => document.isDischargeSummary)
   const isRightActive = rightDetail?.sourceId === visit.id
   const showMedicationExecutionPeriods = visit.type === 'inpatient'
 
@@ -218,13 +221,15 @@ export function VisitItem({
           CLINICAL_LIST_ROW_HOVER_TONE,
         )}
       >
-        {/* Header: when/where on the left, the at-a-glance counts pushed
-            to the right (justify-between), then the expand chevron. A collapsed
-            visit stays ~2 short rows. Counts live in their own right cluster
-            that wraps INTERNALLY (max-w cap) when they're many/wide, so the
-            left date never gets orphaned onto its own line. */}
-        <div className="flex items-center justify-between gap-1.5 leading-5">
-          <div className="flex flex-1 items-center gap-x-1.5 overflow-hidden min-w-0">
+        {/* Two content rows share one fixed action column. The expand control
+            stays above the right-pane control, so document metadata and long
+            ICD text never move either action horizontally. */}
+        <div
+          data-testid="visit-row-grid"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] grid-rows-[auto_auto] gap-x-1.5"
+        >
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-between gap-1.5 leading-5">
+            <div className="flex min-w-0 flex-1 items-center gap-x-1.5 overflow-hidden">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
             {visit.location && (
@@ -239,7 +244,25 @@ export function VisitItem({
                 <span className="truncate">{visit.location}</span>
               </span>
             )}
-            <span className="min-w-0 truncate text-[0.9375rem] font-medium leading-5">{dateLabel}</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  aria-label={dateLabel}
+                  data-testid="visit-date-label"
+                  className="min-w-0 truncate text-[0.9375rem] font-medium leading-5"
+                >
+                  {dateLabel}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                data-testid="visit-date-tooltip"
+                className={clinicalTooltipSurfaceClass}
+              >
+                <span className="tabular-nums">{dateLabel}</span>
+              </TooltipContent>
+            </Tooltip>
             {visit.status === "in-progress" && (
               <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
                 {t.visitHistory.inProgress}
@@ -248,7 +271,7 @@ export function VisitItem({
           </div>
           {/* Right cluster: compact text labels with tabular values. Category
               colour is neutral; abnormal is the sole attention colour. */}
-          <div className="shrink-0 flex max-w-[60%] flex-wrap items-center justify-end gap-x-1 gap-y-1">
+            <div className="flex max-w-[60%] shrink-0 flex-wrap items-center justify-end gap-x-1 gap-y-1">
             {details && (
               <>
                 {details.diagnoses.length > 0 && (
@@ -283,8 +306,9 @@ export function VisitItem({
                 {details.reports.length > 0 && (
                   <VisitStat
                     kind="reports"
-                    label={t.visitHistory.examReports}
+                    label={t.visitHistory.examReportsShort}
                     count={details.reports.length}
+                    title={t.visitHistory.examReports}
                   />
                 )}
                 {details.procedures.length > 0 && (
@@ -296,73 +320,58 @@ export function VisitItem({
                 )}
               </>
             )}
-            {/* Linked-document indicator — at-a-glance marker that this visit
-                has a document to open in the expanded view. Only label it
-                「出院病摘」 when a linked doc is actually a discharge summary
-                (LOINC 18842-5); otherwise a generic 「病摘」 so a TW-PAS
-                事前審查申請病摘 / IPS / outpatient note isn't mislabelled. */}
-            {docs.length > 0 && (() => {
-              const hasDischarge = docs.some((d) => d.isDischargeSummary)
-              return (
-                <VisitStat
-                  kind="documents"
-                  label={hasDischarge ? docStrings.dischargeBadge : docStrings.documentBadge}
-                  count={docs.length}
-                  title={hasDischarge ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
-                />
-              )
-            })()}
-            {/* 向右展開 — show this visit's detail in the right pane (desktop
-                only; no side-by-side room on phones). Sits beside the ▼/▲
-                (向下展開) so the user picks per row. */}
-            {hasDetails && (
-              <button
-                type="button"
-                data-tour="visit-open-right"
-                onClick={openInRightPane}
-                onMouseDown={(e) => e.stopPropagation()}
-                title={(t.visitHistory as any).openRight ?? '在右側展開'}
-                aria-label={(t.visitHistory as any).openRight ?? '在右側展開'}
-                className={cn(
-                  RIGHT_PANE_ACTION_CLASSES,
-                  "h-6 w-6 p-0",
-                  isRightActive && "border-primary bg-primary/10 text-primary",
-                )}
-              >
-                <PanelRight className="h-3 w-3" />
-              </button>
-            )}
-            <span
-              className="text-xs text-muted-foreground leading-5"
-              title={hasDetails ? (isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails) : t.visitHistory.noDetails}
-            >
-              {hasDetails ? (isExpanded ? "▲" : "▼") : ""}
-            </span>
+            </div>
           </div>
-        </div>
 
-        {(visit.department || visit.physician || visit.reason || visit.diagnosis) && (
+          {hasDetails && (
+            <button
+              type="button"
+              data-testid="visit-expand-action"
+              aria-label={isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails}
+              aria-expanded={isExpanded}
+              title={isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails}
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggle()
+              }}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="col-start-2 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <ChevronDown
+                className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
+                aria-hidden
+              />
+            </button>
+          )}
+
+          {(hasVisitContext || docs.length > 0 || hasDetails) && (
           <div
             className={cn(
-              "mt-0.5 flex min-w-0 gap-1 text-sm leading-5",
+              "col-start-1 row-start-2 mt-0.5 flex min-w-0 items-end justify-between gap-2 text-sm leading-5",
               icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
             )}
           >
-            {visit.department && (
-              <span className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={visit.department}>
-                {visit.department}
-              </span>
-            )}
-            {visit.physician && (
-              <span className="max-w-[9rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={`${t.visitHistory.physician} ${visit.physician}`}>
-                {t.visitHistory.physician} {visit.physician}
-              </span>
-            )}
-            {visit.reason && (
-              <span className={cn(
+            <div
+              className={cn(
                 "flex min-w-0 flex-1 gap-1",
-                icdExpanded ? "items-start" : "items-center",
-              )}>
+                icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
+              )}
+            >
+              {visit.department && (
+                <span className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={visit.department}>
+                  {visit.department}
+                </span>
+              )}
+              {visit.physician && (
+                <span className="max-w-[9rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={`${t.visitHistory.physician} ${visit.physician}`}>
+                  {t.visitHistory.physician} {visit.physician}
+                </span>
+              )}
+              {visit.reason && (
+                <span className={cn(
+                  "flex min-w-0 flex-1 gap-1",
+                  icdExpanded ? "items-start" : "items-center",
+                )}>
                 <span
                   className="shrink-0 font-medium text-muted-foreground"
                   title={(t.visitHistory as any).icdCodesTooltip}
@@ -495,16 +504,49 @@ export function VisitItem({
                     {visit.reason}
                   </span>
                 )}
-              </span>
-            )}
-            {!visit.reason && visit.diagnosis && (
-              <span className="flex min-w-0 flex-1 items-center gap-1">
-                <span className="shrink-0 font-medium text-muted-foreground">{t.visitHistory.diagnosis}: </span>
-                <span className="min-w-0 truncate">{visit.diagnosis}</span>
-              </span>
-            )}
+                </span>
+              )}
+              {!visit.reason && visit.diagnosis && (
+                <span className="flex min-w-0 flex-1 items-center gap-1">
+                  <span className="shrink-0 font-medium text-muted-foreground">{t.visitHistory.diagnosis}: </span>
+                  <span className="min-w-0 truncate">{visit.diagnosis}</span>
+                </span>
+              )}
+            </div>
+
+            <div data-testid="visit-secondary-metadata" className="flex shrink-0 items-center justify-end gap-1">
+              {docs.length > 0 && (
+                <VisitStat
+                  kind="documents"
+                  label={hasDischargeDocument ? docStrings.dischargeBadge : docStrings.documentBadge}
+                  count={docs.length}
+                  title={hasDischargeDocument ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
+                />
+              )}
+            </div>
           </div>
-        )}
+          )}
+
+          {hasDetails && (
+            <div data-testid="visit-secondary-actions" className="col-start-2 row-start-2 flex h-6 w-6 items-center justify-center self-center">
+              <button
+                type="button"
+                data-tour="visit-open-right"
+                onClick={openInRightPane}
+                onMouseDown={(e) => e.stopPropagation()}
+                title={(t.visitHistory as any).openRight ?? '在右側展開'}
+                aria-label={(t.visitHistory as any).openRight ?? '在右側展開'}
+                className={cn(
+                  RIGHT_PANE_ACTION_CLASSES,
+                  "h-6 w-6 border-transparent bg-transparent p-0 text-muted-foreground/75 hover:border-border hover:bg-background/80 hover:text-foreground focus-visible:border-border focus-visible:bg-background",
+                  isRightActive && "border-primary bg-primary/10 text-primary",
+                )}
+              >
+                <PanelRight className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
 
       </div>
 

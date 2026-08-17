@@ -3,11 +3,13 @@ import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { RightDetailProvider } from '@/src/application/providers/right-detail.provider'
 import { VisitItem } from '@/features/clinical-summary/visit-history/components/VisitItem'
 
+const mockVisitHasDetails = jest.fn(() => false)
+
 jest.mock(
   '@/features/clinical-summary/visit-history/components/VisitDetailContent',
   () => ({
     VisitDetailContent: () => null,
-    visitHasDetails: () => false,
+    visitHasDetails: () => mockVisitHasDetails(),
   }),
 )
 
@@ -26,6 +28,7 @@ describe('VisitItem ICD tooltip', () => {
   })
 
   beforeEach(() => {
+    mockVisitHasDetails.mockReturnValue(false)
     localStorage.setItem('medical-note-locale', 'zh-TW')
   })
 
@@ -130,7 +133,9 @@ describe('VisitItem ICD tooltip', () => {
     expect(medicationStat).not.toHaveClass('bg-green-50')
 
     expect(screen.getByLabelText('檢驗 1').querySelector('svg')).toBeNull()
-    expect(screen.getByLabelText('檢查報告 1').querySelector('svg')).toBeNull()
+    const reportStat = screen.getByLabelText('檢查 1')
+    expect(reportStat).toHaveAttribute('title', '檢查報告')
+    expect(reportStat.querySelector('svg')).toBeNull()
     const abnormalStat = screen.getByLabelText('異常 2')
     expect(abnormalStat).toHaveAttribute('data-visit-stat', 'abnormal')
     expect(within(abnormalStat).getByText('異常').parentElement).toHaveClass('bg-red-100', 'text-red-700')
@@ -176,6 +181,83 @@ describe('VisitItem ICD tooltip', () => {
       'shadow-lg',
     )
     expect(tooltip).not.toHaveClass('bg-foreground', 'text-background')
+  })
+
+  it('shows the complete date range when the truncated date receives focus', async () => {
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <VisitItem
+            visit={{
+              id: 'visit-date-range',
+              type: 'inpatient',
+              careDiscipline: 'western',
+              date: '2025-05-18',
+              endDate: '2025-05-28',
+              icdCodes: [],
+              status: 'finished',
+            }}
+            isExpanded={false}
+            onToggle={() => undefined}
+          />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+
+    const dateLabel = screen.getByTestId('visit-date-label')
+    expect(dateLabel).toHaveClass('truncate')
+    expect(dateLabel).toHaveAttribute('aria-label', '2025/05/18 ~ 2025/05/28')
+
+    fireEvent.focus(dateLabel)
+
+    expect(await screen.findByTestId('visit-date-tooltip')).toHaveTextContent(
+      '2025/05/18 ~ 2025/05/28',
+    )
+  })
+
+  it('places the document label and right-pane action in the secondary row', () => {
+    mockVisitHasDetails.mockReturnValue(true)
+
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <VisitItem
+            visit={{
+              id: 'visit-secondary-actions',
+              type: 'inpatient',
+              careDiscipline: 'western',
+              date: '2025-05-18',
+              endDate: '2025-05-28',
+              reason: 'R04.2 咳血',
+              icdCodes: [{ code: 'R04.2', description: '咳血' }],
+              status: 'finished',
+            }}
+            documents={[{
+              id: 'discharge-summary',
+              date: '2025-05-28',
+              typeLabel: '出院病摘',
+              typeCode: '18842-5',
+              sourceKind: 'documentReference',
+              isIps: false,
+              isDischargeSummary: true,
+            }]}
+            isExpanded={false}
+            onToggle={() => undefined}
+          />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+
+    const rowGrid = screen.getByTestId('visit-row-grid')
+    const expandAction = within(rowGrid).getByTestId('visit-expand-action')
+    const secondaryMetadata = within(rowGrid).getByTestId('visit-secondary-metadata')
+    const secondaryActions = within(rowGrid).getByTestId('visit-secondary-actions')
+
+    expect(within(secondaryMetadata).getByLabelText('出院病摘 1')).toBeInTheDocument()
+    expect(within(secondaryActions).getByRole('button', { name: '在右側面板展開' }))
+      .toHaveClass('border-transparent', 'bg-transparent', 'hover:bg-background/80')
+    expect(expandAction).toHaveClass('col-start-2', 'row-start-1', 'h-6', 'w-6')
+    expect(secondaryActions).toHaveClass('col-start-2', 'row-start-2', 'h-6', 'w-6')
   })
 
   it('previews hidden ICDs on focus and wraps complete descriptions after expansion', async () => {

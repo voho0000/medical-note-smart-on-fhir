@@ -2,11 +2,15 @@
  * Shared colour roles for dense clinical lists.
  *
  * These roles keep visit and report metadata in the same visual language:
- * category = emerald, source = blue, attention = coral. Dark mode deliberately
- * collapses non-semantic category colour into the neutral secondary surface.
+ * category = emerald, inpatient = blue, source = blue, attention = coral.
+ * Dark mode deliberately collapses non-semantic category colour into the
+ * neutral secondary surface while retaining the inpatient distinction.
  */
 export const CLINICAL_CATEGORY_TONE =
   'bg-emerald-100 text-emerald-700 dark:bg-secondary/80 dark:text-secondary-foreground/85'
+
+export const CLINICAL_INPATIENT_TONE =
+  'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
 
 export const CLINICAL_SOURCE_TONE = 'text-blue-600/80 dark:text-primary/75'
 
