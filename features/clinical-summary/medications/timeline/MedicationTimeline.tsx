@@ -158,6 +158,19 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
               </span>
               <span
                 role="group"
+                aria-label={mt.timelineMedicationStatus ?? 'Medication status'}
+                className="inline-flex items-center gap-2 border-l border-border/80 pl-2"
+              >
+                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-2 w-3 rounded-[2px] border border-primary/20 bg-primary/[0.06] dark:bg-primary/10"
+                  />
+                  {mt.timelineCurrentMedication ?? 'Current medication'}
+                </span>
+              </span>
+              <span
+                role="group"
                 aria-label={mt.timelineTimeMarkers ?? 'Time markers'}
                 className="inline-flex items-center gap-2 border-l border-border/80 pl-2"
               >

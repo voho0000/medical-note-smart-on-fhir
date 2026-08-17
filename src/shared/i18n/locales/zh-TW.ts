@@ -806,6 +806,8 @@ export const zhTW = {
     timelineDrugCount: '種藥',
     timelinePrescriptionType: '處方類型',
     timelineNonChronic: '非慢箋',
+    timelineMedicationStatus: '用藥狀態',
+    timelineCurrentMedication: '目前用藥',
     timelineTimeMarkers: '時間標記',
     timelineToday: '今日',
     timelineAfterToday: '今日後',

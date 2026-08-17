@@ -203,8 +203,25 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           }
 
           const drug = row.drug
+          const isCurrent = drug.bars.some(
+            (bar) => bar.startMs <= todayMs && bar.endMs >= todayMs,
+          )
           return (
-            <g key={drug.drugKey}>
+            <g
+              key={drug.drugKey}
+              data-timeline-drug-current={isCurrent ? 'true' : 'false'}
+            >
+              {isCurrent ? (
+                <rect
+                  data-timeline-current-row
+                  aria-hidden="true"
+                  x={0}
+                  y={row.y}
+                  width={width}
+                  height={ROW_HEIGHT}
+                  className="fill-primary/[0.06] dark:fill-primary/10"
+                />
+              ) : null}
               {/* drug name label (left column) */}
               <foreignObject
                 x={4}

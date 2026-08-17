@@ -805,6 +805,8 @@ export const en = {
     timelineDrugCount: 'drugs',
     timelinePrescriptionType: 'Prescription type',
     timelineNonChronic: 'Non-chronic Rx',
+    timelineMedicationStatus: 'Medication status',
+    timelineCurrentMedication: 'Current medication',
     timelineTimeMarkers: 'Time markers',
     timelineToday: 'Today',
     timelineAfterToday: 'After today',

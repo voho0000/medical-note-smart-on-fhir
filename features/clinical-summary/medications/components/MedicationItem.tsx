@@ -223,7 +223,7 @@ export function MedicationItem({
       ref={anchorRef}
       data-medication-row-layout="three-lane"
       className={cn(
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden px-3 py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[38rem]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem] @min-[38rem]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden px-3 py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[26rem]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem] @min-[28rem]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem] @min-[32rem]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem] @min-[38rem]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem] @min-[38rem]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
         grouped
           ? "rounded-none border-0 bg-transparent"
           : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
@@ -265,12 +265,13 @@ export function MedicationItem({
 
       {/* Clinical lane: stable tag rail above a quiet, borderless ICD line.
           On narrow containers it drops below the identity/status pair; once
-          the panel reaches 38rem it becomes the fixed middle column. */}
+          the panel reaches 26rem it becomes a compact middle column, then
+          gains space progressively at 28rem, 32rem, and 38rem. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden @min-[38rem]:col-span-1 @min-[38rem]:col-start-2 @min-[38rem]:row-start-1 @min-[38rem]:h-10 @min-[38rem]:grid-cols-1 @min-[38rem]:grid-rows-2 @min-[38rem]:gap-x-0"
+        className="col-span-2 row-start-2 grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden @min-[26rem]:col-span-1 @min-[26rem]:col-start-2 @min-[26rem]:row-start-1 @min-[26rem]:h-10 @min-[26rem]:grid-cols-1 @min-[26rem]:grid-rows-2 @min-[26rem]:gap-x-0"
       >
-        <div className="col-start-2 row-start-1 flex h-5 min-w-0 items-center justify-end gap-1 overflow-hidden @min-[38rem]:col-start-1 @min-[38rem]:justify-start">
+        <div className="col-start-2 row-start-1 flex h-5 min-w-0 items-center justify-end gap-1 overflow-hidden @min-[26rem]:col-start-1 @min-[26rem]:justify-start">
           {medication.category && (
             <span
               title={medication.category}
@@ -321,7 +322,7 @@ export function MedicationItem({
           )}
         </div>
 
-        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center overflow-hidden @min-[38rem]:row-start-2">
+        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center overflow-hidden @min-[26rem]:row-start-2">
           {isMedical && medication.icdCode && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -357,7 +358,7 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[38rem]:col-start-3"
+        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[26rem]:col-start-3"
       >
         <div className="flex h-5 items-center">
           <Badge

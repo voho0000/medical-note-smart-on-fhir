@@ -254,10 +254,16 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑')
     const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
 
-    expect(clinicalLane).toHaveClass('@min-[38rem]:h-10', '@min-[38rem]:grid-rows-2')
+    expect(container.firstElementChild).toHaveClass(
+      '@min-[26rem]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem]',
+      '@min-[28rem]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem]',
+      '@min-[32rem]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem]',
+      '@min-[38rem]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem]',
+    )
+    expect(clinicalLane).toHaveClass('@min-[26rem]:h-10', '@min-[26rem]:grid-rows-2')
     expect(category).toHaveClass('max-w-full')
     expect(category).not.toHaveClass('max-w-[10rem]')
-    expect(icd.parentElement).toHaveClass('@min-[38rem]:row-start-2')
+    expect(icd.parentElement).toHaveClass('@min-[26rem]:row-start-2')
     const icdTooltip = screen.getByTestId('medication-icd-tooltip')
     expect(icdTooltip).toHaveClass(
       'border-primary/20',

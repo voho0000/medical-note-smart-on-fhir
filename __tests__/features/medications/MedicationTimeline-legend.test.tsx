@@ -17,6 +17,8 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         timelineDrugCount: '種藥',
         timelinePrescriptionType: '處方類型',
         timelineNonChronic: '非慢箋',
+        timelineMedicationStatus: '用藥狀態',
+        timelineCurrentMedication: '目前用藥',
         timelineTimeMarkers: '時間標記',
         timelineToday: '今日',
         timelineAfterToday: '今日後',
@@ -71,6 +73,9 @@ describe('MedicationTimeline legend', () => {
     expect(within(prescriptionTypes).getByText('非慢箋')).toBeInTheDocument()
     expect(within(prescriptionTypes).getByText('7')).toBeInTheDocument()
     expect(screen.queryByText('急性')).not.toBeInTheDocument()
+
+    const medicationStatus = screen.getByRole('group', { name: '用藥狀態' })
+    expect(within(medicationStatus).getByText('目前用藥')).toBeInTheDocument()
 
     const timeMarkers = screen.getByRole('group', { name: '時間標記' })
     expect(within(timeMarkers).getByText('今日')).toBeInTheDocument()

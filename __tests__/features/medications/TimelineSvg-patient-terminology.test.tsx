@@ -114,6 +114,10 @@ describe('TimelineSvg patient terminology hover', () => {
       'pointer-events',
       'none',
     )
+    const currentRow = container.querySelector('[data-timeline-current-row]')
+    expect(currentRow).not.toBeNull()
+    expect(currentRow).toHaveClass('fill-primary/[0.06]', 'dark:fill-primary/10')
+    expect(currentRow?.parentElement).toHaveAttribute('data-timeline-drug-current', 'true')
 
     fireEvent.mouseEnter(future!)
     expect(screen.getByText('今日後')).toBeInTheDocument()
