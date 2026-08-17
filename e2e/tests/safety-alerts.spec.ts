@@ -70,7 +70,7 @@ test.describe('safety alerts (mocked)', () => {
     await importBundle(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
-    await summaryPanel.getByRole('button', { name: '產生摘要' }).click()
+    await summaryPanel.getByTestId('medical-summary-empty-generate').click()
 
     await expect(summaryPanel.getByRole('heading', { name: '安全提醒與待處置事項' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()

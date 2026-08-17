@@ -1141,6 +1141,29 @@ export default function MedicalSummaryFeature() {
           <p className="pb-0.5 text-center text-[0.65rem] leading-snug text-muted-foreground/60">
             {ms.secondLayerNote}
           </p>
+
+          {!hasAnyResult && displayedGenerationErrors.length === 0 ? (
+            <div className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
+              <SummaryGenerationButton
+                presentation="empty"
+                isBusy={isBusy}
+                isStopping={isStopping}
+                isRestoring={isRestoring}
+                hasContextOverflow={Boolean(contextOverflowIssue)}
+                hasAnyResult={hasAnyResult}
+                labels={{
+                  generate: ms.generate,
+                  regenerate: ms.regenerate,
+                  stop: ms.stopGeneration,
+                  stopping: ms.stoppingGeneration,
+                  resolveOverflow: ms.contextOverflowGenerateAction,
+                }}
+                onGenerate={() => void generate()}
+                onStop={cancelGeneration}
+                onResolveOverflow={() => setOverflowResolutionOpen(true)}
+              />
+            </div>
+          ) : null}
         </>
       )}
         </TabsContent>

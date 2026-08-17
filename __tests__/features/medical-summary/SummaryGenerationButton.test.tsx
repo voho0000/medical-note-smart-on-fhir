@@ -87,6 +87,40 @@ describe("SummaryGenerationButton", () => {
     expect(button).toHaveAttribute("title", "重新產生")
   })
 
+  it("renders a larger primary action for the empty summary area", () => {
+    const onGenerate = jest.fn()
+    render(
+      <SummaryGenerationButton
+        presentation="empty"
+        isBusy={false}
+        isStopping={false}
+        isRestoring={false}
+        hasContextOverflow={false}
+        hasAnyResult={false}
+        labels={labels}
+        onGenerate={onGenerate}
+        onStop={jest.fn()}
+        onResolveOverflow={jest.fn()}
+      />,
+    )
+
+    const button = screen.getByTestId("medical-summary-empty-generate")
+    expect(button).toHaveClass(
+      "min-h-12",
+      "min-w-44",
+      "border-border",
+      "bg-secondary",
+      "text-base",
+      "text-secondary-foreground",
+      "shadow-none",
+    )
+    expect(button).not.toHaveClass("@max-[36rem]:w-10")
+    expect(screen.getByText("產生摘要")).not.toHaveClass("@max-[36rem]:hidden")
+
+    fireEvent.click(button)
+    expect(onGenerate).toHaveBeenCalledTimes(1)
+  })
+
   it("replaces the busy indicator with an actionable stop button", () => {
     const onGenerate = jest.fn()
     const onStop = jest.fn()
