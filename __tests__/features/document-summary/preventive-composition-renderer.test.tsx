@@ -56,7 +56,8 @@ describe('preventive-care Composition continuous document mode', () => {
     expect(article).toHaveAttribute('data-composition-layout', 'preventive-care')
     expect(article).toHaveClass('@container')
     expect(screen.getByRole('button', { name: '展開全文' })).toHaveAttribute('aria-expanded', 'false')
-    expect(within(article as HTMLElement).getByText('3 個章節')).toBeInTheDocument()
+    expect(within(article as HTMLElement).queryByText('3 個章節')).not.toBeInTheDocument()
+    expect(within(article as HTMLElement).queryByText('展開全文')).not.toBeInTheDocument()
     expect(screen.queryByText('成人預防保健總覽')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '一般檢查' })).not.toBeInTheDocument()
 
@@ -89,6 +90,8 @@ describe('preventive-care Composition continuous document mode', () => {
     const tableNarrative = tableSection?.children.item(1)
     expect(tableNarrative?.className).toContain('[&_table]:w-full')
     expect(tableNarrative?.className).toContain('[&_table]:table-fixed')
+    expect(tableNarrative?.className).toContain('[&_th]:text-left')
+    expect(tableNarrative?.className).toContain('clinical-empty-cell-hatch')
     expect(tableNarrative?.className).toContain('preventive-narrative')
     expect(screen.queryByRole('button', { name: /一般檢查|血壓|血脂肪/ })).not.toBeInTheDocument()
 

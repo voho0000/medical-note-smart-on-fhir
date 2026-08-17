@@ -50,7 +50,7 @@ interface CompositionRendererProps {
 }
 
 const PREVENTIVE_NARRATIVE_CLASSNAME =
-  'preventive-narrative prose prose-sm dark:prose-invert max-w-none break-words [&_ol]:my-1 [&_p]:my-1 [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_table]:my-1 [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_ul]:my-1'
+  'preventive-narrative clinical-empty-cell-hatch prose prose-sm dark:prose-invert max-w-none break-words [&_ol]:my-1 [&_p]:my-1 [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_table]:my-1 [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:px-1 [&_th]:py-0.5 [&_th]:text-left [&_th]:font-medium [&_th]:break-words [&_ul]:my-1'
 
 function formatDate(iso?: string): string {
   if (!iso) return ''
@@ -174,12 +174,6 @@ export function CompositionRenderer({
             >
               <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 font-medium">{labels.fullDocument}</span>
-              <span className="text-[0.6875rem] font-normal text-muted-foreground">
-                {labels.sectionCount.replace('{count}', String(renderableSections.length))}
-              </span>
-              <span className="text-xs font-normal text-muted-foreground">
-                {continuousOpen ? labels.collapseFullDocument : labels.expandFullDocument}
-              </span>
               {rightControl && <span className="mr-1 shrink-0">{rightControl}</span>}
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${continuousOpen ? 'rotate-180' : ''}`}

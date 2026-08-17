@@ -47,6 +47,13 @@
 
 :root {
   --radius: 0.5rem;
+  --clinical-missing-data-pattern: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 5px,
+    color-mix(in oklab, var(--muted-foreground) 18%, transparent) 5px,
+    color-mix(in oklab, var(--muted-foreground) 18%, transparent) 7px
+  );
   /* Frosted clinical blue: canvas → panel → card remain visibly layered. */
   --background: oklch(0.955 0.014 250);
   --panel: oklch(0.976 0.010 250);
@@ -165,6 +172,13 @@
    Tailwind to compile a pseudo-class inside an arbitrary selector. */
 .preventive-narrative col:first-child {
   width: 36%;
+}
+
+/* Source narratives stay verbatim. Visually mark only truly empty table cells
+   with the same missing-data hatch used by the cumulative lab report. */
+.clinical-empty-cell-hatch td:empty {
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+  background-image: var(--clinical-missing-data-pattern);
 }
 
 /* Thin, persistent scrollbar — signals scrollability for regions that overflow
