@@ -5,7 +5,7 @@
 // Categories tabs: CBC, 生化, 血糖, 癌症指數, 尿液.
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
-import { startTransition, useEffect, useMemo, useRef, useState } from "react"
+import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -52,6 +52,7 @@ import {
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
 import { AnalyteSearchBox } from "./AnalyteSearchBox"
+import { ReportNameModeSwitch } from "./ReportNameModeSwitch"
 
 interface OpenTrendRequest {
   series: LabTrendSeries
@@ -71,6 +72,9 @@ interface OpenTrendTarget {
 
 interface CumulativeLabReportProps {
   observations: any[]
+  /** Naming-mode control is owned by ReportsCard so it remains available
+   *  while cumulative data is preparing, but positioned in this toolbar. */
+  nameModeControl?: ReactNode
   /** When true, allow table to take more vertical space (e.g., parent fullscreen mode) */
   fullHeight?: boolean
   /** Active category id, lifted to the parent so the selected sub-tab (生化 …)
@@ -102,7 +106,7 @@ function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
       title={label}
       aria-label={label}
       style={{
-        backgroundImage: 'repeating-linear-gradient(135deg, transparent 0, transparent 5px, color-mix(in oklab, var(--muted-foreground) 18%, transparent) 5px, color-mix(in oklab, var(--muted-foreground) 18%, transparent) 7px)',
+        backgroundImage: 'var(--clinical-missing-data-pattern)',
       }}
     >
       <span className="sr-only">{label}</span>
@@ -408,6 +412,7 @@ function LabPivotTable({
 
 export function CumulativeLabReport({
   observations,
+  nameModeControl,
   fullHeight = false,
   activeCategoryId,
   onCategoryChange,
@@ -626,18 +631,25 @@ export function CumulativeLabReport({
   }
 
   return (
-    <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
-      {/* Analyte finder. Sits above the category strip because it is the way
-          out of "which tab is potassium in?" — the question that otherwise
-          costs a guess plus a long horizontal scroll. */}
-      <div className="mb-1 shrink-0">
+    <div className={fullHeight ? '@container flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : '@container space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
+      {/* Cumulative utilities share one responsive row: finder left, trend
+          guidance centred, and naming mode right. At constrained panel widths
+          the non-essential hint drops first; only phone-narrow widths wrap. */}
+      <div className="mb-1 grid shrink-0 grid-cols-1 items-center gap-2 @min-[28rem]:grid-cols-[minmax(8rem,1fr)_auto] @min-[48rem]:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_auto]">
         <AnalyteSearchBox
           pivots={nonEmpty}
           categoryLabels={categoryLabels}
           nameMode={nameMode}
           onPick={pickAnalyte}
-          className="max-w-full sm:max-w-64"
+          className="w-full min-w-0 @min-[48rem]:max-w-64"
         />
+        <span className="hidden min-w-0 items-center justify-self-center gap-1 text-[0.6875rem] text-muted-foreground @min-[48rem]:inline-flex">
+          <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <span className="truncate">{(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}</span>
+        </span>
+        <div className="justify-self-end @min-[28rem]:col-start-2 @min-[48rem]:col-start-3">
+          {nameModeControl ?? <ReportNameModeSwitch />}
+        </div>
       </div>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
         <div className="relative flex min-w-0 items-center gap-2">

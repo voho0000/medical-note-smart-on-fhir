@@ -11,7 +11,7 @@ import {
 } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Minimize2, Search, X, Loader2, TrendingUp } from "lucide-react"
+import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -644,19 +644,6 @@ export function ReportsCard() {
           </DropdownMenu>
         </div>
 
-        {/* Cumulative-only utility row. Keeping it deliberately short avoids
-            the large empty band of the first iteration while preventing the
-            setting from competing with either level of navigation. */}
-        {activeTab === 'cumulative' && (
-          <div className="mb-0.5 flex min-h-[44px] shrink-0 items-center justify-between gap-2 px-1 lg:min-h-8">
-            <span className="hidden min-w-0 items-center gap-1 text-[0.6875rem] text-muted-foreground sm:inline-flex">
-              <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-              <span className="truncate">{(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}</span>
-            </span>
-            <ReportNameModeSwitch />
-          </div>
-        )}
-
         {/* Search bar — hidden on cumulative tab */}
         {activeTab !== "cumulative" && (
           <div className="mb-3">
@@ -781,6 +768,7 @@ export function ReportsCard() {
               {cumulativeReady ? (
                 <CumulativeLabReport
                   observations={observations}
+                  nameModeControl={<ReportNameModeSwitch />}
                   fullHeight={expanded}
                   activeCategoryId={cumulativeCategoryId}
                   onCategoryChange={handleCumulativeCategoryChange}
@@ -788,13 +776,18 @@ export function ReportsCard() {
                   focusNonce={cumulativeFocus?.nonce}
                 />
               ) : (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/25 px-4 text-sm text-muted-foreground"
-                >
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  <span>{t.common.loading}</span>
+                <div className="space-y-2">
+                  <div className="flex min-h-[44px] justify-end lg:min-h-8">
+                    <ReportNameModeSwitch />
+                  </div>
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="flex min-h-24 items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/25 px-4 text-sm text-muted-foreground"
+                  >
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span>{t.common.loading}</span>
+                  </div>
                 </div>
               )}
             </TabsContent>

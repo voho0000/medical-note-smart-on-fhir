@@ -66,13 +66,16 @@ jest.mock('@/features/clinical-summary/reports/components/CumulativeLabReport', 
     activeCategoryId,
     focusAnalyteKey,
     focusNonce,
+    nameModeControl,
   }: {
     observations: unknown[]
     activeCategoryId?: string
     focusAnalyteKey?: string
     focusNonce?: number
+    nameModeControl?: ReactNode
   }) => (
     <div data-testid="cumulative-report">
+      {nameModeControl}
       observations: {observations.length}; category: {activeCategoryId}; focus: {focusAnalyteKey}; nonce: {focusNonce}
     </div>
   ),
