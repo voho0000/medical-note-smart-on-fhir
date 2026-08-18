@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Search, AlertCircle, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -74,6 +74,14 @@ export function VisitHistoryCard() {
   const [visibleCount, setVisibleCount] = useState(VISIT_PAGE_SIZE)
   const pendingNavigation = useResourceNavigationStore((state) => state.pending)
   const navigationSequence = useResourceNavigationStore((state) => state.seq)
+  const toggleVisit = useCallback((visitId: string) => {
+    setExpandedVisitIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(visitId)) next.delete(visitId)
+      else next.add(visitId)
+      return next
+    })
+  }, [])
 
   // ── Data derivation ────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
@@ -530,11 +538,7 @@ export function VisitHistoryCard() {
                     documents={docsByEncounter.get(visit.id)}
                     abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
                     isExpanded={expandedVisitIds.has(visit.id)}
-                    onToggle={() => setExpandedVisitIds((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(visit.id)) next.delete(visit.id); else next.add(visit.id)
-                      return next
-                    })}
+                    onToggle={toggleVisit}
                   />
                 ))}
                 {remainingVisits > 0 && (
