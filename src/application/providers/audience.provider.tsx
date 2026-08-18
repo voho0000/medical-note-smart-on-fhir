@@ -1,7 +1,7 @@
 // Audience Provider — switches default prompts between medical professional and patient/citizen perspectives.
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AUDIENCE_CHANGED_EVENT } from './font-size.provider'
 
 export type Audience = 'medical' | 'patient'
@@ -33,7 +33,7 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
     setHasSelected(localStorage.getItem(AUDIENCE_SELECTED_KEY) === '1')
   }, [])
 
-  const setAudience = (next: Audience) => {
+  const setAudience = useCallback((next: Audience) => {
     setAudienceState(next)
     localStorage.setItem(AUDIENCE_STORAGE_KEY, next)
     localStorage.setItem(AUDIENCE_SELECTED_KEY, '1')
@@ -42,10 +42,17 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
     // it listens for this instead: patients must not inherit the clinician's
     // 12px phone root (audit C1).
     window.dispatchEvent(new CustomEvent(AUDIENCE_CHANGED_EVENT))
-  }
+  }, [])
+
+  // Audience drives label/density decisions deep in the tree. A fresh value
+  // object per render re-rendered every consumer on unrelated parent state.
+  const value = useMemo<AudienceContextType>(
+    () => ({ audience, setAudience, hasSelected }),
+    [audience, setAudience, hasSelected],
+  )
 
   return (
-    <AudienceContext.Provider value={{ audience, setAudience, hasSelected }}>
+    <AudienceContext.Provider value={value}>
       {children}
     </AudienceContext.Provider>
   )

@@ -1,7 +1,7 @@
 // Language Provider
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, useEffect, type ReactNode } from 'react'
 import { locales, defaultLocale, type Locale } from '@/src/shared/i18n/i18n.config'
 import type { Translation } from '@/src/shared/i18n/locales/en'
 
@@ -32,15 +32,21 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const setLocale = (newLocale: Locale) => {
+  const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale)
     localStorage.setItem(LOCALE_STORAGE_KEY, newLocale)
-  }
+  }, [])
 
-  const t = locales[locale]
+  // Every consumer of this context re-renders whenever the value identity
+  // changes. A fresh object per provider render made a locale-independent
+  // parent re-render cascade through the whole workspace.
+  const value = useMemo<LanguageContextType>(
+    () => ({ locale, setLocale, t: locales[locale] }),
+    [locale, setLocale],
+  )
 
   return (
-    <LanguageContext.Provider value={{ locale, setLocale, t }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   )

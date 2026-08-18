@@ -27,10 +27,10 @@ import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import {
-  enrichBundleWithNhiDrugTerminology,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
   NHI_DRUG_ENRICHMENT_POLICY_VERSION,
 } from './nhi-drug-terminology-enrichment.service'
+import { enrichBundleWithNhiDrugTerminologyOffMainThread } from './nhi-drug-terminology-enrichment.worker-client'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   applyUserEnteredPatientProfile,
@@ -1358,7 +1358,10 @@ export const LocalBundleService = {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
         migration = (async () => {
-          const result = await enrichBundleWithNhiDrugTerminology(
+          // Worker-routed: this upgrade runs while the workspace is painting
+          // its first patient view, and the terminology snapshot's JSON.parse
+          // would otherwise hold the main thread for seconds.
+          const result = await enrichBundleWithNhiDrugTerminologyOffMainThread(
             bundle as Record<string, unknown>,
           )
           if (

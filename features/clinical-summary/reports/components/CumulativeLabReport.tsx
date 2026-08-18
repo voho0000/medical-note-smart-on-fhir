@@ -7,6 +7,7 @@
 // whole Reports section can be enlarged, not just this view.
 import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -93,6 +94,26 @@ interface CumulativeLabReportProps {
   onTrendWindowChange?: (window: TrendWindow) => void
 }
 
+// A chemistry pivot is mostly empty cells (tens of thousands of them on a
+// years-of-data panel). One shared style object keeps React from allocating —
+// and diffing — a new one per cell on every render.
+const MISSING_DATA_CELL_STYLE = {
+  backgroundImage: 'var(--clinical-missing-data-pattern)',
+} as const
+
+// Date rows below this count render in full: virtualization costs a scroll
+// subscription plus per-row measurement, which is pure overhead on the short
+// panels most patients have — and keeps existing behaviour bit-identical there.
+const VIRTUALIZE_DATE_ROW_THRESHOLD = 60
+// Compact single-line row at text-xs with py-1. Rows carrying a per-cell unit
+// or "推估單位" line are taller; measureElement corrects the estimate on mount.
+const ESTIMATED_DATE_ROW_HEIGHT = 28
+// The virtualizer measures the scroll container, which also holds the sticky
+// header. That makes its computed window a superset of the truly visible rows
+// (the header covers the top of the viewport), never a subset — so a modest
+// overscan is enough and no scrollMargin correction is needed.
+const DATE_ROW_OVERSCAN = 8
+
 function formatDateLabel(d: string): string {
   return d.length >= 10 ? `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}` : d
 }
@@ -109,9 +130,7 @@ function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
       className="border-l bg-muted/50 px-1 py-1 text-center"
       title={label}
       aria-label={label}
-      style={{
-        backgroundImage: 'var(--clinical-missing-data-pattern)',
-      }}
+      style={MISSING_DATA_CELL_STYLE}
     >
       <span className="sr-only">{label}</span>
       <span aria-hidden="true">&nbsp;</span>
@@ -138,7 +157,10 @@ function LabPivotTable({
 }) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  // Callback-ref-into-state (not useRef): the virtualizer must re-measure on
+  // the render in which the scroll container attaches, and a ref assignment
+  // does not schedule one. Same workaround as ReportsTabContent.
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
@@ -158,7 +180,7 @@ function LabPivotTable({
 
   useEffect(() => {
     if (!focusAnalyteKey) return
-    const container = scrollContainerRef.current
+    const container = scrollEl
     if (!container) return
     const header = Array.from(
       container.querySelectorAll<HTMLElement>('[data-lab-test-key]'),
@@ -169,7 +191,7 @@ function LabPivotTable({
       - (container.clientWidth / 2)
       + (header.offsetWidth / 2)
     container.scrollTo({ left: Math.max(0, centeredLeft), behavior: 'smooth' })
-  }, [focusAnalyteKey, focusNonce, pivot.category.id, pivot.rows])
+  }, [focusAnalyteKey, focusNonce, pivot.category.id, pivot.rows, scrollEl])
 
   // Transposed layout (matches VGH 累積報告): dates = rows, tests = columns.
   // Group columns by subgroup; render a top-row of subgroup headers spanning
@@ -212,6 +234,24 @@ function LabPivotTable({
     }
   }, [pivot])
 
+  // Every date row × analyte column is real DOM. A chemistry panel with years
+  // of data is hundreds of rows × dozens of columns — tens of thousands of
+  // cells — and visited categories stay mounted, so the cost never goes away
+  // after a tab switch. Past the threshold only the scrolled-to window renders.
+  const shouldVirtualizeRows = pivot.dates.length > VIRTUALIZE_DATE_ROW_THRESHOLD
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns its mutable measurement callbacks here.
+  const rowVirtualizer = useVirtualizer({
+    // Measurement runs from the ref-attachment lifecycle; TanStack's default
+    // flushSync update is invalid while React is already committing it.
+    useFlushSync: false,
+    count: pivot.dates.length,
+    enabled: shouldVirtualizeRows && !!scrollEl,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => ESTIMATED_DATE_ROW_HEIGHT,
+    overscan: DATE_ROW_OVERSCAN,
+    getItemKey: (index) => pivot.dates[index] ?? index,
+  })
+
   // When there are no columns at all (no pinned columns and no data) show the
   // empty-state message. If there are columns but no data dates, fall through
   // so the column headers still render with a "no data" body row.
@@ -226,9 +266,74 @@ function LabPivotTable({
   const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
   const hasSubgroups = groupedColumns.some((g) => g.sg !== null)
 
+  const virtualRows = shouldVirtualizeRows ? rowVirtualizer.getVirtualItems() : []
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length > 0
+    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+    : 0
+
+  // `measureRef` is only passed on the virtualized path — it is TanStack's
+  // measureElement, which needs the data-index attribute to identify the row.
+  const renderDateRow = (
+    date: string,
+    dateIdx: number,
+    measureRef?: (node: HTMLTableRowElement | null) => void,
+  ) => (
+    <tr
+      key={date}
+      data-index={dateIdx}
+      ref={measureRef}
+      className={dateIdx % 2 === 0 ? 'bg-card' : 'bg-muted/20'}
+    >
+      {/* The sticky date column must remain opaque so horizontally
+          scrolling values never show through it. Keep it on the card
+          surface rather than the darker app canvas: dense dark-mode
+          tables then read as one calm sheet instead of black stripes. */}
+      <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
+        {formatDateLabel(date)}
+      </td>
+      {flatTests.map((test) => {
+        const cell = test.values.get(date)
+        const showInferredUnitInHeader =
+          inferredUnitInHeader.get(test.mapKey) === true
+        if (!cell) {
+          return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
+        }
+        if (isMissingLabValue(cell.value)) {
+          return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
+        }
+        const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
+        return (
+          <td
+            key={test.mapKey}
+            className={`border-l px-1 py-1 text-center ${cls}`}
+            title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
+          >
+            <span>{cell.value}</span>
+            {!test.unit && cell.unit && (
+              <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
+                {cell.unit}
+              </div>
+            )}
+            {cell.unitInferred && !showInferredUnitInHeader && (
+              <div
+                className="text-[0.5625rem] font-normal leading-tight text-sky-700 dark:text-sky-300 whitespace-nowrap"
+                title={locale.startsWith('zh')
+                  ? '健康存摺 SDK 未提供單位；此單位由轉換器依規則推估'
+                  : 'The SDK did not provide a unit; the converter inferred it under an audited policy'}
+              >
+                {locale.startsWith('zh') ? '推估單位' : 'inferred unit'}
+              </div>
+            )}
+          </td>
+        )
+      })}
+    </tr>
+  )
+
   return (
     <div
-      ref={scrollContainerRef}
+      ref={setScrollEl}
       role="region"
       aria-label={`${categoryLabel}累積檢驗表，可水平捲動`}
       tabIndex={0}
@@ -361,53 +466,37 @@ function LabPivotTable({
               </td>
             </tr>
           )}
-          {pivot.dates.map((date, dateIdx) => (
-            <tr key={date} className={dateIdx % 2 === 0 ? 'bg-card' : 'bg-muted/20'}>
-              {/* The sticky date column must remain opaque so horizontally
-                  scrolling values never show through it. Keep it on the card
-                  surface rather than the darker app canvas: dense dark-mode
-                  tables then read as one calm sheet instead of black stripes. */}
-              <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
-                {formatDateLabel(date)}
-              </td>
-              {flatTests.map((test) => {
-                const cell = test.values.get(date)
-                const showInferredUnitInHeader =
-                  inferredUnitInHeader.get(test.mapKey) === true
-                if (!cell) {
-                  return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
-                }
-                if (isMissingLabValue(cell.value)) {
-                  return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
-                }
-                const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
-                return (
-                  <td
-                    key={test.mapKey}
-                    className={`border-l px-1 py-1 text-center ${cls}`}
-                    title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
-                  >
-                    <span>{cell.value}</span>
-                    {!test.unit && cell.unit && (
-                      <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
-                        {cell.unit}
-                      </div>
-                    )}
-                    {cell.unitInferred && !showInferredUnitInHeader && (
-                      <div
-                        className="text-[0.5625rem] font-normal leading-tight text-sky-700 dark:text-sky-300 whitespace-nowrap"
-                        title={locale.startsWith('zh')
-                          ? '健康存摺 SDK 未提供單位；此單位由轉換器依規則推估'
-                          : 'The SDK did not provide a unit; the converter inferred it under an audited policy'}
-                      >
-                        {locale.startsWith('zh') ? '推估單位' : 'inferred unit'}
-                      </div>
-                    )}
-                  </td>
+          {/* Padding-row virtualization rather than absolute positioning: a
+              <tbody> must hold contiguous rows for the sticky header and
+              sticky date column to keep their column alignment, so the
+              off-screen range collapses into two zero-content spacer rows.
+              Column widths are still driven by the always-rendered headers
+              (min-w-[46px]), so the visible window cannot re-flow them. */}
+          {shouldVirtualizeRows ? (
+            <>
+              {paddingTop > 0 && (
+                <tr aria-hidden="true" style={{ height: paddingTop }}>
+                  <td colSpan={flatTests.length + 1} className="p-0" />
+                </tr>
+              )}
+              {virtualRows.map((virtualRow) => {
+                const date = pivot.dates[virtualRow.index]
+                if (date === undefined) return null
+                return renderDateRow(
+                  date,
+                  virtualRow.index,
+                  rowVirtualizer.measureElement,
                 )
               })}
-            </tr>
-          ))}
+              {paddingBottom > 0 && (
+                <tr aria-hidden="true" style={{ height: paddingBottom }}>
+                  <td colSpan={flatTests.length + 1} className="p-0" />
+                </tr>
+              )}
+            </>
+          ) : (
+            pivot.dates.map((date, dateIdx) => renderDateRow(date, dateIdx))
+          )}
         </tbody>
       </table>
     </div>
