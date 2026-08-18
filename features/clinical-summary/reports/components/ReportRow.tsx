@@ -1,5 +1,6 @@
 // Report Row Component
-import { useRef, useState, memo } from 'react'
+import { useRef, useState, memo, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -7,6 +8,8 @@ import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info,
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { TapTooltip } from "@/src/shared/components/TapTooltip"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
@@ -59,6 +62,50 @@ function BridgeDupBadge({ count }: { count: number }) {
   )
 }
 
+/**
+ * Report title. It truncates to keep the row compact, so the full text lived
+ * only in a hover bubble — unreachable on an iPad. Two tap-friendly answers,
+ * picked by whether the row itself can open:
+ *  - a row that expands (long-text header, accordion panel) simply STOPS
+ *    truncating once open. The row's own tap is the reveal; putting a second
+ *    tap target on the title would steal the row's primary action.
+ *  - a row that cannot expand (image-only imaging report) gets a
+ *    tap-accessible bubble instead, since nothing else would ever show it.
+ * Desktop keeps the hover peek in both cases.
+ */
+function ReportTitle({
+  title,
+  children,
+  expanded,
+  expandable,
+  className,
+}: {
+  title: string
+  children: ReactNode
+  expanded: boolean
+  expandable: boolean
+  className: string
+}) {
+  if (expanded) {
+    return <span className={cn(className, 'whitespace-normal break-words')}>{children}</span>
+  }
+  if (!expandable) {
+    return (
+      <TapTooltip content={title} aria-label={title} className={cn(className, 'truncate')}>
+        {children}
+      </TapTooltip>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn(className, 'truncate')}>{children}</span>
+      </TooltipTrigger>
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function formatImageBytes(size?: number): string {
   if (!size || size <= 0) return ''
   const mb = size / (1024 * 1024)
@@ -78,7 +125,9 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
   const hasText = text.length > 0
   const hasImages = images.length > 0
   const urls = useReportImageUrls(images, hasImages)
-  const [copied, setCopied] = useState(false)
+  // Shared clipboard helper: it owns the transient 「已複製」 state and reports
+  // failure (http origin / denied permission) so the button can say so.
+  const { copied, copy: copyToClipboard } = useCopyToClipboard(1500)
   // Lazy-mount the full-screen lightbox only after the user clicks an image;
   // kept mounted afterwards so re-opening is instant. Inline images already
   // decode (via the hook) for the docked preview; the lightbox offers the
@@ -131,13 +180,7 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
   }
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch (err) {
-      console.warn('[ReportRow] Clipboard copy failed', err)
-    }
+    if (!await copyToClipboard(text)) toast.error(t.common.copyFailed)
   }
 
   const textBlock = hasText ? (
@@ -385,6 +428,7 @@ function countAbnormal(obs: Observation[]): number {
 }
 
 function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
+  const { t } = useLanguage()
   // Image lightbox — only enter the tree (and decode the multi-MB base64) after
   // the user clicks the
   // indicator. Kept mounted afterwards; the dialog itself revokes its Blob URLs
@@ -399,7 +443,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // members, or a search matching INSIDE the narrative (valueString), starts
   // this expanded — previously only accordion panels respected defaultOpen.
   const [textExpanded, setTextExpanded] = useState(() => defaultOpen.includes(row.id))
-  const [copied, setCopied] = useState(false)
+  // Mirror of the (uncontrolled) Accordion's open state — only used so the
+  // panel's truncated title can un-truncate once the user opens it.
+  const [panelExpanded, setPanelExpanded] = useState(() => defaultOpen.includes(row.id))
+  const { copied, copy: copyToClipboard } = useCopyToClipboard(1500)
   // 「AI 翻譯解讀」panel — opened per report on demand (民眾 feature). Host owns the
   // open state; the panel below self-generates on first open.
   const [interpretOpen, setInterpretOpen] = useState(false)
@@ -410,13 +457,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   const { detail: rightDetail, toggleDetail } = useRightDetail()
 
   const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch (err) {
-      console.warn('[ReportRow] Clipboard copy failed', err)
-    }
+    if (!await copyToClipboard(text)) toast.error(t.common.copyFailed)
   }
 
   // A procedure's details (status, date, performer, NHI/PCS codes, reason) live
@@ -603,12 +644,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               }}
             >
               <div className={cn('flex min-w-0 flex-1 items-center gap-1.5', hasText && 'w-full sm:w-auto')}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
-                  </TooltipTrigger>
-                  <TooltipContent>{row.title}</TooltipContent>
-                </Tooltip>
+                <ReportTitle
+                  title={row.title}
+                  expanded={hasText && textExpanded}
+                  expandable={hasText}
+                  className="text-sm font-semibold text-foreground"
+                >
+                  <HighlightText text={row.title} query={query} />
+                </ReportTitle>
                 {renderTrendButton()}
                 {hasImages && renderImageButton()}
               </div>
@@ -858,6 +901,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       <Accordion
         type="multiple"
         defaultValue={defaultOpen.includes(row.id) ? [row.id] : []}
+        onValueChange={(open) => setPanelExpanded(open.includes(row.id))}
         className="w-full min-w-0 max-w-full"
       >
         <AccordionItem
@@ -882,14 +926,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 row.group === 'procedures' ? 'flex-1 basis-0' : 'basis-[45%]',
               )}
             >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate text-[0.8125rem] font-semibold text-foreground">
-                    <HighlightText text={row.title} query={query} />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{row.title}</TooltipContent>
-              </Tooltip>
+              <ReportTitle
+                title={row.title}
+                expanded={panelExpanded}
+                expandable
+                className="text-[0.8125rem] font-semibold text-foreground"
+              >
+                <HighlightText text={row.title} query={query} />
+              </ReportTitle>
               {/* Single observation that expands to components (e.g. Blood
                   Pressure → systolic/diastolic) — surface its composite
                   trend here. Multi-item panels (length > 1) are skipped:

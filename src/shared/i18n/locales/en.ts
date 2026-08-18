@@ -1813,6 +1813,7 @@ export const en = {
     localStandardGeneralModeDescription: 'This custom model is answering in general-medicine mode. Records under Data Selection are not added to the prompt, and external literature search is unavailable.',
     localStandardModeSwitchHint: 'For Deep Chat, choose an Agent-capable model from the model menu above.',
     localStandardContextTooLarge: 'The selected records and conversation exceed this custom model’s available space. Narrow the scope under Data Selection and try again.',
+    saveMessageFailed: 'This message has not been saved to the cloud yet; the conversation is still on screen and saving will be retried.',
   },
 
   chatHistory: {
@@ -1841,6 +1842,8 @@ export const en = {
     deleteConfirmTitle: 'Delete this conversation?',
     deleteConfirmDescription: 'This conversation will be permanently deleted and cannot be recovered.',
     deleteFailed: 'Delete failed — please try again',
+    saveBeforeNewChatFailed: 'Saving the current conversation failed, so no new chat was started — this conversation is still here.',
+    loadFailed: 'Could not load that conversation — please try again',
   },
 
   connectionInfo: {
@@ -1918,6 +1921,10 @@ export const en = {
     guest: 'Guest',
     guestFreeTier: 'Free trial',
     signInForMore: 'Sign in for more free quota',
+    verificationEmailSent: 'Verification email resent — check your inbox (including spam).',
+    verificationEmailFailed: 'Could not send the verification email. Please try again shortly.',
+    verificationStillPending: 'Still not verified. Click the link in the email, then press “I’ve Verified” again.',
+    verificationCheckFailed: 'Could not check the verification status. Please try again shortly.',
   }
   })(),
 

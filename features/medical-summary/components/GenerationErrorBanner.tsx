@@ -57,35 +57,38 @@ export function GenerationErrorBanner({
             </p>
           ))}
         </div>
-        {hasActions ? (
-          <div className="flex shrink-0 flex-wrap gap-1.5">
-            {actions?.map((action) => (
-              <Button
-                key={action.label}
-                type="button"
-                onClick={action.onClick}
-                disabled={isBusy}
-                size="sm"
-                variant={action.variant ?? "outline"}
-                className="h-7 gap-1 px-2 text-xs"
-              >
-                {action.icon}
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        ) : !isBusy ? (
-          <Button
-            type="button"
-            onClick={onRetry}
-            size="sm"
-            variant="outline"
-            className="h-7 shrink-0 gap-1 px-2 text-xs"
-          >
-            <RefreshCw className="h-3 w-3" />
-            {retryLabel}
-          </Button>
-        ) : null}
+        {/* Retry is ALWAYS offered. The context-overflow variant used to replace
+            it with its resolution actions only — but narrowing the scope in
+            another drawer (or simply switching model) leaves the user with no
+            way to re-run from the banner that told them about the problem. */}
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          {actions?.map((action) => (
+            <Button
+              key={action.label}
+              type="button"
+              onClick={action.onClick}
+              disabled={isBusy}
+              size="sm"
+              variant={action.variant ?? "outline"}
+              className="h-7 gap-1 px-2 text-xs"
+            >
+              {action.icon}
+              {action.label}
+            </Button>
+          ))}
+          {!isBusy ? (
+            <Button
+              type="button"
+              onClick={onRetry}
+              size="sm"
+              variant={hasActions ? "ghost" : "outline"}
+              className="h-7 shrink-0 gap-1 px-2 text-xs"
+            >
+              <RefreshCw className="h-3 w-3" />
+              {retryLabel}
+            </Button>
+          ) : null}
+        </div>
       </div>
       <button
         type="button"

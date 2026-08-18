@@ -28,6 +28,7 @@ export function useChatHistoryDrawer(
   const [showStreamingConfirm, setShowStreamingConfirm] = useState(false)
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const { sessions, isLoading, deleteSession } = useChatHistory(patientId, fhirServerUrl)
   const { loadSession, startNewSession } = useChatSession()
   const { forceSave } = useAutoSaveChat({
@@ -70,6 +71,9 @@ export function useChatHistoryDrawer(
       setOpen(false)
     } catch (error) {
       console.error('Failed to load session:', error)
+      // Keep the drawer open — the user picked a conversation and nothing
+      // happened, so say why instead of leaving them tapping a dead row.
+      toast.error(t.chatHistory.loadFailed)
     }
   }
 
@@ -95,19 +99,27 @@ export function useChatHistoryDrawer(
     setPendingDeleteId(sessionId)
   }
 
+  // The dialog used to close on click, BEFORE the delete resolved: the row
+  // stayed in the list for a moment and a failure arrived with nothing on
+  // screen to explain it. Hold the dialog (with a pending state) until the
+  // delete settles, and keep it open on failure so retry is one tap away.
   const confirmDeleteSession = async () => {
     const sessionId = pendingDeleteId
-    setPendingDeleteId(null)
-    if (!sessionId) return
+    if (!sessionId || isDeleting) return
+    setIsDeleting(true)
     try {
       await deleteSession(sessionId)
+      setPendingDeleteId(null)
     } catch (error) {
       console.error('Failed to delete session:', error)
       toast.error(t.chatHistory.deleteFailed)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
   const cancelDeleteSession = () => {
+    if (isDeleting) return
     setPendingDeleteId(null)
   }
 
@@ -136,9 +148,11 @@ export function useChatHistoryDrawer(
       setOpen(false)
     } catch (error) {
       console.error('Failed to save before new chat:', error)
-      // Still allow new chat even if save fails
-      startNewSession(patientId ? 'patient' : 'general')
-      setOpen(false)
+      // The save is what makes starting over safe. Discarding an unsaved
+      // conversation because the save failed is exactly the data loss the
+      // force-save exists to prevent — keep the conversation, say so, and let
+      // the user press 新對話 again once the connection is back.
+      toast.error(t.chatHistory.saveBeforeNewChatFailed)
     }
   }
 
@@ -157,6 +171,7 @@ export function useChatHistoryDrawer(
     handleLoadSession,
     handleDeleteSession,
     pendingDeleteId,
+    isDeleting,
     confirmDeleteSession,
     cancelDeleteSession,
     handleNewChat,

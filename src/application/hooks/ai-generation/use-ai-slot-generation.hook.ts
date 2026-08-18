@@ -106,8 +106,6 @@ export interface AiSlotGenerationConfig<T> {
    *  wait for dataReady (a run over partial data would cache a misleadingly
    *  thin result for 12h). */
   requireDataReadyToGenerate: boolean
-  /** Optional test seam checked before user pick (safety: window.__safetyModelId). */
-  resolveModelOverride?: () => string | undefined
   /** Module-level store from createAiResultStore<T>(). */
   store: AiResultStore<T>
   /** Slot key → encrypted-session-cache key. MUST keep the feature's
@@ -190,7 +188,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     selectedModelId,
     autoRunEnabled,
     requireDataReadyToGenerate,
-    resolveModelOverride,
     store,
     cacheKeyFor,
     cacheMaxAgeMs,
@@ -216,30 +213,26 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   } = useAllApiKeys()
   const { audience } = useAudience()
 
-  // The model actually used — test seam → user pick (key-gated → free base) →
-  // default. A stranded premium pick falls back to the free base. It's part of
-  // the slot key, so every model keeps its OWN result / loading / error slot,
-  // and an in-flight generation keeps running and lands in its own model's
-  // slot. Features may retain the last result as a presentation fallback while
-  // the newly selected model waits for an explicit run.
+  // The model actually used — user pick (key-gated → free base) → default. A
+  // stranded premium pick falls back to the free base. It's part of the slot
+  // key, so every model keeps its OWN result / loading / error slot, and an
+  // in-flight generation keeps running and lands in its own model's slot.
+  // Features may retain the last result as a presentation fallback while the
+  // newly selected model waits for an explicit run.
   const selectedOpenAiCompatible = useMemo(
     () => resolveOpenAiCompatibleProfile(selectedModelId, openAiCompatibleProfiles),
     [selectedModelId, openAiCompatibleProfiles],
   )
-  const resolvedModelId = useMemo(() => {
-    const override = resolveModelOverride?.()
-    if (typeof override === 'string' && override) return override
-    return gateModelForKeys(
-      selectedModelId,
-      {
-        openAiKey: apiKey,
-        geminiKey,
-        claudeKey,
-        customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
-      },
-      defaultModelId,
-    )
-  }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, selectedOpenAiCompatible, defaultModelId])
+  const resolvedModelId = useMemo(() => gateModelForKeys(
+    selectedModelId,
+    {
+      openAiKey: apiKey,
+      geminiKey,
+      claudeKey,
+      customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
+    },
+    defaultModelId,
+  ), [selectedModelId, apiKey, geminiKey, claudeKey, selectedOpenAiCompatible, defaultModelId])
 
   const openAiCompatible = useMemo(
     () => resolveOpenAiCompatibleProfile(resolvedModelId, openAiCompatibleProfiles),

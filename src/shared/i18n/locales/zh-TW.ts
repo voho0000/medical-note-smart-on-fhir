@@ -1814,6 +1814,7 @@ export const zhTW = {
     localStandardGeneralModeDescription: '此自訂模型目前以一般醫學模式回答；系統不會把「資料選擇」中的病歷放進提示，也不會搜尋外部文獻。',
     localStandardModeSwitchHint: '如需深入對話，請從上方模型選單改選支援 Agent 的模型。',
     localStandardContextTooLarge: '已選病歷與對話內容超過自訂模型的可用空間。請縮小「資料選擇」範圍後重試。',
+    saveMessageFailed: '這則訊息尚未存到雲端；對話仍在畫面上，稍後會自動再試。',
   },
 
   chatHistory: {
@@ -1842,6 +1843,8 @@ export const zhTW = {
     deleteConfirmTitle: '刪除對話？',
     deleteConfirmDescription: '此對話將被永久刪除，無法復原。',
     deleteFailed: '刪除失敗，請稍後再試',
+    saveBeforeNewChatFailed: '儲存目前對話失敗，因此沒有開新對話——這則對話仍保留在畫面上。',
+    loadFailed: '載入這則對話失敗，請稍後再試',
   },
 
   connectionInfo: {
@@ -1919,6 +1922,10 @@ export const zhTW = {
     guest: '訪客',
     guestFreeTier: '免費試用中',
     signInForMore: '登入解鎖更多免費額度',
+    verificationEmailSent: '驗證信已重新發送，請檢查收件匣（含垃圾郵件）。',
+    verificationEmailFailed: '驗證信發送失敗，請稍後再試。',
+    verificationStillPending: '還沒收到驗證結果。請先點擊信中的連結，再按一次「我已驗證」。',
+    verificationCheckFailed: '無法確認驗證狀態，請稍後再試。',
   }
   })(),
 

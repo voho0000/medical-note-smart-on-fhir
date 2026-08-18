@@ -12,9 +12,11 @@
 
 import { useEffect } from 'react'
 import { Languages, Sparkles, Loader2, RotateCw, AlertTriangle, Copy, Check } from 'lucide-react'
-import { useState } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { isQuotaExceededError } from '@/src/core/errors'
+import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { MarkdownRenderer } from '@/src/shared/components/MarkdownRenderer'
 import {
   useReportInterpretation,
@@ -46,10 +48,28 @@ function getLabels(locale: string) {
     error: zh
       ? 'AI 產生失敗，請稍後再試一次。'
       : 'AI generation failed. Please try again in a moment.',
+    errorNotRetryable: zh
+      ? '這次不是暫時性問題，重新產生也不會成功。'
+      : 'This is not a transient failure — regenerating will not help.',
     disclaimer: zh
       ? '本翻譯與解讀由 AI 產生，可能有誤，僅供幫助理解；報告的正確意義與後續處置，請以您的醫師解釋為準。'
       : 'This translation and explanation is AI-generated, may contain errors, and is only to aid understanding; for the correct meaning of the report and any next steps, defer to your doctor’s explanation.',
   }
+}
+
+// Quota and sign-in / API-key failures are the two causes a reader can act on
+// (wait for tomorrow's reset, sign in, add a key) — and the two that never
+// improve by pressing 重新產生. Everything else (network blip, timeout,
+// unparseable reply) keeps the retry button. Matched against the ALREADY-MAPPED
+// message the hook stores, which is what getUserErrorMessage produced.
+const NON_RETRYABLE_ERROR_PATTERN =
+  /訪客連線失敗|內建額度僅供登入|API Key 錯誤|配額或帳單問題|sign-?in required|invalid api key|billing/i
+
+function describeInterpretationError(error: string, labels: Labels) {
+  // 'PARSE_FAILED' is an internal sentinel, not something to show a patient.
+  if (error === 'PARSE_FAILED') return { message: labels.error, retryable: true }
+  const blocked = isQuotaExceededError(error) || NON_RETRYABLE_ERROR_PATTERN.test(error)
+  return { message: error, retryable: !blocked }
 }
 
 interface ReportInterpretationPanelProps extends UseReportInterpretationArgs {
@@ -70,6 +90,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
   const labels = getLabels(locale)
   const { result, isGenerating, error, isHydrated, generate, regenerate } =
     useReportInterpretation(hookArgs)
+  const errorView = error ? describeInterpretationError(error, labels) : null
 
   // Auto-generate on mount only in auto mode. generate() is a no-op if a cached
   // result already exists for this key, so this never double-bills.
@@ -119,20 +140,30 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
         </div>
       )}
 
-      {error && !isGenerating && (
-        <div className="flex items-center justify-between gap-2 py-1.5">
-          <span className="flex items-center gap-1.5 text-xs text-destructive">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            {labels.error}
+      {/* Show the CAUSE the hook already mapped (quota exhausted, sign-in
+          required, key rejected…) instead of a blanket 請稍後再試 that sends the
+          reader to retry something that cannot succeed. */}
+      {errorView && !isGenerating && (
+        <div className="flex items-start justify-between gap-2 py-1.5">
+          <span className="flex min-w-0 items-start gap-1.5 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 break-words">
+              {errorView.message}
+              {!errorView.retryable && (
+                <span className="mt-0.5 block text-muted-foreground">{labels.errorNotRetryable}</span>
+              )}
+            </span>
           </span>
-          <button
-            type="button"
-            onClick={() => void regenerate()}
-            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
-          >
-            <RotateCw className="h-3 w-3" />
-            {labels.regenerate}
-          </button>
+          {errorView.retryable && (
+            <button
+              type="button"
+              onClick={() => void regenerate()}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
+            >
+              <RotateCw className="h-3 w-3" />
+              {labels.regenerate}
+            </button>
+          )}
         </div>
       )}
 
@@ -212,7 +243,10 @@ function FooterBar({
   result: { translation: string; summary: string; findings: string; watchFor?: string }
   onRegenerate: () => void
 }) {
-  const [copied, setCopied] = useState(false)
+  const { t } = useLanguage()
+  // Shared clipboard helper — it owns the transient 「已複製」 state and reports
+  // failure so a blocked clipboard doesn't look like a successful copy.
+  const { copied, copy } = useCopyToClipboard(1500)
   const handleCopy = async () => {
     const parts = [
       `【${labels.translationHeading}】\n${result.translation}`,
@@ -220,13 +254,7 @@ function FooterBar({
       `【${labels.findingsLabel}】\n${result.findings}`,
       result.watchFor ? `【${labels.watchForLabel}】\n${result.watchFor}` : '',
     ].filter(Boolean)
-    try {
-      await navigator.clipboard.writeText(parts.join('\n\n'))
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch (err) {
-      console.warn('[ReportInterpretation] copy failed', err)
-    }
+    if (!await copy(parts.join('\n\n'))) toast.error(t.common.copyFailed)
   }
   return (
     <div className="flex items-center gap-3">

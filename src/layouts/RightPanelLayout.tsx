@@ -38,6 +38,7 @@ import {
   ClinicalTabList,
   ClinicalTabTrigger,
 } from "@/src/shared/components/clinical-workspace"
+import { usePanelScrollMemory } from "./use-panel-scroll-memory"
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -272,6 +273,12 @@ function RightPanelContentInner() {
     ? activeTab
     : features[0]?.id ?? activeTab
 
+  const { hostRef: scrollMemoryHostRef, captureBeforeSwitch } = usePanelScrollMemory(effectiveTab)
+  const changeTab = (next: string) => {
+    captureBeforeSwitch()
+    setActiveTab(next)
+  }
+
   // Sticky mount: once a tab has been opened it stays mounted for the rest of
   // the session, so in-progress work (a half-filled calculator score, an
   // expanded guidance panel) survives a tab switch. This is the cheap half of
@@ -376,9 +383,12 @@ function RightPanelContentInner() {
   return (
     <Tabs
       value={effectiveTab}
-      onValueChange={setActiveTab}
+      onValueChange={changeTab}
       className="flex h-full flex-col md:gap-0"
     >
+      {/* Anchor for the per-tab scroll memory: it walks up from here to find
+          the panel that actually scrolls. */}
+      <div ref={scrollMemoryHostRef} className="hidden" aria-hidden />
       {/* On phones the page-level 臨床摘要／功能 switch is already one
           persistent navigation row. Use one labeled picker here instead of a
           second row of ambiguous icon-only tabs. */}
@@ -396,7 +406,7 @@ function RightPanelContentInner() {
             {features.map((feature) => (
               <DropdownMenuItem
                 key={feature.id}
-                onSelect={() => setActiveTab(feature.id)}
+                onSelect={() => changeTab(feature.id)}
                 className="min-h-[44px] gap-2"
               >
                 {renderMenuItemContent(feature)}
@@ -432,7 +442,7 @@ function RightPanelContentInner() {
               {overflowFeatures.map(feature => (
                 <DropdownMenuItem
                   key={feature.id}
-                  onSelect={() => setActiveTab(feature.id)}
+                  onSelect={() => changeTab(feature.id)}
                 >
                   {renderMenuItemContent(feature)}
                 </DropdownMenuItem>

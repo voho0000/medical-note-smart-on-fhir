@@ -49,6 +49,7 @@ export function ChatHistoryDrawer({
     handleLoadSession,
     handleDeleteSession,
     pendingDeleteId,
+    isDeleting,
     confirmDeleteSession,
     cancelDeleteSession,
     handleNewChat,
@@ -224,9 +225,19 @@ export function ChatHistoryDrawer({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelDeleteSession}>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteSession} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {t.common.delete}
+            <AlertDialogCancel onClick={cancelDeleteSession} disabled={isDeleting}>{t.common.cancel}</AlertDialogCancel>
+            {/* The dialog stays up until the delete resolves, so the action
+                keeps the user informed instead of vanishing mid-request.
+                preventDefault stops Radix closing it on click. */}
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDeleteSession()
+              }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? t.common.deleting : t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

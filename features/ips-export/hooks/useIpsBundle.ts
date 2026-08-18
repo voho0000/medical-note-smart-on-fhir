@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatientQuery } from '@/src/application/hooks/patient/use-patient-query.hook'
@@ -20,6 +20,9 @@ export interface UseIpsBundleResult {
   validation: ValidationResult | null
   isLoading: boolean
   error: Error | null
+  /** Re-run the clinical-data query. The error card is otherwise a dead end —
+   *  the user would have to leave and re-enter the tab to try again. */
+  refetch: () => Promise<void>
   hasPatient: boolean
   /** Count of section entries across the document (excludes Composition + Patient). */
   resourceCount: number
@@ -50,7 +53,7 @@ export function useIpsBundle(
   const includeImageAttachments = !!options.includeImageAttachments
   const includePatientIdentifiers = options.includePatientIdentifiers !== false
   const { t } = useLanguage()
-  const { data, isLoading: dataLoading, error } = useClinicalDataQuery()
+  const { data, isLoading: dataLoading, error, refetch } = useClinicalDataQuery()
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
   const { getProfile } = useDataSelection()
   const ipsProfile = getProfile('ips')
@@ -117,6 +120,12 @@ export function useIpsBundle(
     [bundle],
   )
 
+  // Narrow React Query's rich refetch signature to a plain "try again" the
+  // error card can call without importing query types.
+  const retry = useCallback(async () => {
+    await refetch()
+  }, [refetch])
+
   // Total bundle entries minus Composition + Patient = clinical resources.
   const resourceCount = bundle ? Math.max(0, bundle.entry.length - 2) : 0
 
@@ -128,6 +137,7 @@ export function useIpsBundle(
     validation,
     isLoading: dataLoading || patientLoading,
     error: (error as Error | null) ?? null,
+    refetch: retry,
     hasPatient: !!patient,
     resourceCount,
   }

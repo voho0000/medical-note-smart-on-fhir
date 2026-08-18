@@ -204,6 +204,7 @@ export default function MedicalSummaryFeature() {
     isRestoring,
     summaryError,
     cardErrors,
+    safetyError,
     contextOverflowIssue,
     contextAdaptation,
     hasAnyResult,
@@ -472,7 +473,15 @@ export default function MedicalSummaryFeature() {
     ),
     [cardErrors, result],
   )
-  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety"))
+  // A failed safety scan has to stay visible: it is the ONE card whose absence
+  // reads as "nothing to worry about". The banner above never listed
+  // `safetyError` (it only walks `result.cardErrors`, which the separate safety
+  // pipeline never writes), so without this the scan could fail in complete
+  // silence.
+  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety") || safetyError)
+  // 'PARSE_FAILED' is an internal sentinel — SafetyAlertsPanel maps it to the
+  // audience-aware wording; every other value is already a user-facing message.
+  const safetyCardError = safetyError ?? cardErrors.safety ?? null
   const moduleSucceeded = useCallback(
     (moduleId: MedicalSummaryModuleId) => cardSucceeded(moduleId),
     [cardSucceeded],
@@ -692,9 +701,11 @@ export default function MedicalSummaryFeature() {
         <CareRemindersSafetyCard
           result={safetyResult}
           isScanning={isSafetyGenerating}
-          error={null}
+          error={safetyCardError}
           hasPatient={hasPatient}
           renderSources={renderSafetySources}
+          onRetry={() => void retryFailed()}
+          retryLabel={t.errors.retry}
           title={ms.careSafetyTitle}
         />
       </div>

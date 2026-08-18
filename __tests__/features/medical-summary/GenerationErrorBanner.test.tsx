@@ -42,7 +42,7 @@ describe("GenerationErrorBanner", () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it("shows overflow actions instead of the fallback retry", () => {
+  it("shows overflow actions ALONGSIDE retry", () => {
     const onAdjustScope = jest.fn()
     const onOpenSettings = jest.fn()
     const onRetry = jest.fn()
@@ -71,14 +71,34 @@ describe("GenerationErrorBanner", () => {
       />,
     )
 
-    expect(screen.queryByRole("button", { name: "重試" })).not.toBeInTheDocument()
-
+    // The overflow variant used to DROP retry: after resolving the overflow
+    // elsewhere (narrower scope, different model) the banner that reported the
+    // problem offered no way to re-run.
     fireEvent.click(screen.getByRole("button", { name: "調整資料範圍" }))
     fireEvent.click(screen.getByRole("button", { name: "模型與內容視窗設定" }))
+    fireEvent.click(screen.getByRole("button", { name: "重試" }))
 
     expect(onAdjustScope).toHaveBeenCalledTimes(1)
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
-    expect(onRetry).not.toHaveBeenCalled()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("hides retry while a generation is already running", () => {
+    render(
+      <GenerationErrorBanner
+        title="輸入內容超過模型上限"
+        errors={errors}
+        retryLabel="重試"
+        closeLabel="關閉"
+        isBusy
+        onRetry={jest.fn()}
+        actions={[
+          { label: "調整資料範圍", onClick: jest.fn() },
+        ]}
+      />,
+    )
+
+    expect(screen.queryByRole("button", { name: "重試" })).not.toBeInTheDocument()
   })
 
   it("disables overflow actions while generation is busy", () => {

@@ -63,11 +63,15 @@ export function ChatHistoryItem({ session, onLoad, onDelete, formatDate, locale 
             </Badge>
           </div>
         </div>
+        {/* Hover-reveal is a mouse idiom: on touch the button was invisible but
+            still tappable — a hidden delete control right next to the row the
+            user taps to open. Keep the quiet hover reveal on pointer devices,
+            and make it a visible 44px target on phones/tablets. */}
         <Button
           variant="ghost"
           size="icon"
           aria-label="Delete conversation"
-          className="h-8 w-8 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+          className="h-8 w-8 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-md:h-[44px] max-md:w-[44px] max-md:opacity-60"
           onClick={(e) => onDelete(session.id, e)}
         >
           <Trash2 className="h-4 w-4 text-destructive" />

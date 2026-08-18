@@ -12,7 +12,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
-import { AlertTriangle, FileOutput, Image as ImageIcon, Loader2, Settings2, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, FileOutput, Image as ImageIcon, Loader2, RefreshCw, Settings2, ShieldCheck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   CARD_BORDER_CLASSES,
   SUBTAB_LIST_CLASSES,
@@ -56,7 +57,7 @@ export default function IpsExportFeature() {
   // 影像附件預設剝除(每張健保存摺影像 2-3 MB);使用者可 opt-in 帶回。
   const [includeImageAttachments, setIncludeImageAttachments] = useState(false)
 
-  const { bundle, curatedData, patient, labels, validation, isLoading, error, hasPatient, resourceCount } =
+  const { bundle, curatedData, patient, labels, validation, isLoading, error, refetch, hasPatient, resourceCount } =
     useIpsBundle(confirmedConditions, { includeImageAttachments, includePatientIdentifiers })
 
   const markdown = useMemo(
@@ -79,13 +80,25 @@ export default function IpsExportFeature() {
     )
   }
 
-  // Clinical data failed to load
+  // Clinical data failed to load. A transient FHIR/network failure must not
+  // strand the whole export behind a message — offer the retry here instead of
+  // making the user leave and re-open the tab.
   if (error) {
     return (
       <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="text-sm">
           <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
           <div className="text-muted-foreground">{error.message}</div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void refetch()}
+            className="mt-3 h-7 gap-1 px-2 text-xs"
+          >
+            <RefreshCw className="h-3 w-3" />
+            {t.errors.retry}
+          </Button>
         </CardContent>
       </Card>
     )

@@ -2,6 +2,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AlertCircle, X } from 'lucide-react'
@@ -11,7 +12,7 @@ import { sendEmailVerification } from 'firebase/auth'
 import { auth } from '@/src/shared/config/firebase.config'
 
 export function EmailVerificationBanner() {
-  const { locale } = useLanguage()
+  const { t, locale } = useLanguage()
   const { user } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
@@ -30,9 +31,13 @@ export function EmailVerificationBanner() {
     try {
       await sendEmailVerification(auth.currentUser)
       setSent(true)
+      toast.success(t.auth.verificationEmailSent)
       setTimeout(() => setSent(false), 5000) // Hide success message after 5s
     } catch (error) {
+      // Rate limits and transient auth failures are common here. Without a
+      // toast the button just stops spinning and looks like it worked.
       console.error('Failed to resend verification email:', error)
+      toast.error(t.auth.verificationEmailFailed)
     } finally {
       setSending(false)
     }
@@ -48,9 +53,14 @@ export function EmailVerificationBanner() {
       // Force a re-render by reloading the page if verified
       if (auth.currentUser.emailVerified) {
         window.location.reload()
+        return
       }
+      // Still unverified: the banner stays exactly as it was, so say what
+      // happened instead of leaving the click looking like a no-op.
+      toast.info(t.auth.verificationStillPending)
     } catch (error) {
       console.error('Failed to check verification status:', error)
+      toast.error(t.auth.verificationCheckFailed)
     } finally {
       setChecking(false)
     }

@@ -1,9 +1,10 @@
 "use client"
 
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react"
+import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
 import { Info } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TapTooltip } from "@/src/shared/components/TapTooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
 
 type CompactLabResultRowProps = {
@@ -48,6 +49,12 @@ function CompactValue({
   abnormal: boolean
   maxWidthClassName?: string
 }) {
+  // A truncated result value is the row's whole point, and on touch the hover
+  // bubble that held the rest of it was unreachable. Tapping the value drops
+  // the truncation so it wraps in place — no bubble to position, nothing to
+  // dismiss, and the reading stays selectable/copyable. Desktop keeps the
+  // quick hover peek while collapsed.
+  const [expanded, setExpanded] = useState(false)
   const isLong = value.length > 20
   const valueClass = cn(
     "text-[0.8125rem] font-bold tabular-nums",
@@ -57,10 +64,52 @@ function CompactValue({
 
   if (!isLong) return <span className={valueClass}>{value}</span>
 
+  const toggle = (event: MouseEvent | KeyboardEvent) => {
+    // The row itself is often a toggle — revealing the value must not also
+    // open/close it.
+    event.stopPropagation()
+    setExpanded((current) => !current)
+  }
+
+  if (expanded) {
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        aria-expanded
+        onClick={toggle}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return
+          event.preventDefault()
+          toggle(event)
+        }}
+        className={cn(
+          "min-w-0 shrink cursor-pointer touch-manipulation whitespace-normal break-words text-[0.8125rem] font-bold tabular-nums",
+          abnormal ? "text-clinical-abnormal" : "text-foreground",
+        )}
+      >
+        {value}
+      </span>
+    )
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={valueClass}>{value}</span>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-expanded={false}
+          onClick={toggle}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return
+            event.preventDefault()
+            toggle(event)
+          }}
+          className={cn(valueClass, "cursor-pointer touch-manipulation")}
+        >
+          {value}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-[min(90vw,24rem)] whitespace-normal break-words text-xs leading-relaxed">
         {value}
@@ -117,17 +166,18 @@ function RangeUnassessedBadge({
   label?: string
   tooltip?: string
 }) {
+  // 「未判讀」 says nothing on its own — WHY the app did not assess this value
+  // lives only in the bubble, and a clinician reading on an iPad could never
+  // open it. Tap now reveals the same explanation.
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0 cursor-help items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
-          {label}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[min(90vw,22rem)] whitespace-normal text-xs leading-relaxed">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
+    <TapTooltip
+      content={tooltip}
+      aria-label={label}
+      contentClassName="max-w-[min(90vw,22rem)] whitespace-normal text-xs leading-relaxed"
+      className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground"
+    >
+      {label}
+    </TapTooltip>
   )
 }
 
