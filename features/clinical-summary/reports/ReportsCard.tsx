@@ -53,7 +53,21 @@ const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden round
 
 export function ReportsCard() {
   const { t } = useLanguage()
-  const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
+  const {
+    diagnosticReports = [],
+    imagingStudies = [],
+    observations = [],
+    procedures = [],
+    resourceReady,
+    error,
+  } = useClinicalData()
+  // Per-type gate: the tabs mix four resource types, and a row set built while
+  // one of them is still in flight would read as "no reports". The rest of the
+  // chart (medications, encounters, documents…) is none of this card's business.
+  const isLoading = !resourceReady.diagnosticReports
+    || !resourceReady.imagingStudies
+    || !resourceReady.observations
+    || !resourceReady.procedures
   const [activeTab, setActiveTab] = useState("cumulative")
   const tourActive = useLeftBrowserTourStore((state) => state.active)
   const tourStep = useLeftBrowserTourStore((state) => state.stepId)

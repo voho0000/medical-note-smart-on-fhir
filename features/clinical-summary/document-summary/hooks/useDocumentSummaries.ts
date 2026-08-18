@@ -28,7 +28,19 @@ export interface UseDocumentSummariesReturn {
 export function useDocumentSummaries(
   docTypeStrings: Record<string, string>,
 ): UseDocumentSummariesReturn {
-  const { compositions, documentReferences, encounters, isLoading, error } = useClinicalData()
+  const {
+    compositions,
+    documentReferences,
+    encounters,
+    resourceReady,
+    error,
+  } = useClinicalData()
+  // Documents are assembled from three types (the Encounter supplies each
+  // entry's primary diagnosis), so this card waits for those three and not for
+  // the rest of the chart.
+  const isLoading = !resourceReady.compositions
+    || !resourceReady.documentReferences
+    || !resourceReady.encounters
   // `locale` drives the primary-diagnosis text picked from the linked
   // Encounter — zh-TW uses the Chinese `text` field, en uses coding[].display.
   const { locale } = useLanguage()

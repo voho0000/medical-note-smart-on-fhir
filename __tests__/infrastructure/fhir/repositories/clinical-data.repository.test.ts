@@ -25,7 +25,14 @@ describe('FhirClinicalDataRepository', () => {
       const mockCondition = { id: 'cond-1', code: { text: 'Diabetes' } }
       const mockMedication = { id: 'med-1', medicationCodeableConcept: { text: 'Metformin' }, status: 'active', intent: 'order' }
       const mockAllergy = { id: 'allergy-1', code: { text: 'Penicillin' } }
-      const mockObservation = { id: 'obs-1', code: { text: 'Glucose' }, status: 'final' }
+      // Carries the vital-signs category because vitalSigns is now derived from
+      // the Observation result rather than fetched by a second search.
+      const mockObservation = {
+        id: 'obs-1',
+        code: { text: 'Glucose' },
+        status: 'final',
+        category: [{ coding: [{ code: 'vital-signs' }] }],
+      }
       const mockReport = { id: 'report-1', code: { text: 'CBC' }, status: 'final' }
       const mockImagingStudy = { id: 'study-1', description: 'Chest CT', status: 'available' }
       const mockProcedure = { id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' }
@@ -66,6 +73,51 @@ describe('FhirClinicalDataRepository', () => {
       expect(result.imagingStudies).toHaveLength(1)
       expect(result.procedures).toHaveLength(1)
       expect(result.encounters).toHaveLength(1)
+    })
+
+    // Regression: vitals used to be a second `category=vital-signs` search that
+    // re-downloaded rows the unfiltered Observation search had already
+    // returned. They are filtered out of that result instead.
+    it('derives vital signs from the Observation result without a second search', async () => {
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [{ resource: {} }] })
+      mockMapper.toObservation.mockReturnValue({
+        id: 'vital-1',
+        status: 'final',
+        category: [{ coding: [{ code: 'vital-signs' }] }],
+      })
+
+      const result = await repository.fetchAllClinicalData('patient-123')
+
+      expect(result.vitalSigns).toEqual(result.observations)
+      expect(mockFhirClient.requestAllPages).not.toHaveBeenCalledWith(
+        expect.stringContaining('category=vital-signs'),
+      )
+      expect(result.resourceQueryStatus?.['Observation:vital-signs']).toMatchObject({
+        resourceType: 'Observation',
+        state: 'ok',
+        count: 1,
+      })
+    })
+
+    it('reports a failed Observation search under the vital-signs key too', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => {
+        if (url.startsWith('Observation')) {
+          return Promise.reject({ status: 403, message: 'Forbidden' })
+        }
+        return Promise.resolve({ entry: [] })
+      })
+
+      const result = await repository.fetchAllClinicalData('patient-123')
+
+      // A refused search must not read as "no vitals recorded".
+      expect(result.vitalSigns).toEqual([])
+      expect(result.resourceQueryStatus?.['Observation:vital-signs']).toMatchObject({
+        resourceType: 'Observation',
+        state: 'forbidden',
+        httpStatus: 403,
+      })
+      consoleErrorSpy.mockRestore()
     })
 
     it('should handle empty responses', async () => {
@@ -300,17 +352,26 @@ describe('FhirClinicalDataRepository', () => {
   })
 
   describe('fetchVitalSigns', () => {
-    it('should fetch vital signs', async () => {
+    it('filters the unfiltered Observation search instead of searching by category', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'vital-1', code: { text: 'Blood Pressure' } } }]
+        entry: [
+          { resource: { id: 'vital-1' } },
+          { resource: { id: 'lab-1' } },
+        ]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
-      mockMapper.toObservation.mockReturnValue({ id: 'vital-1', code: { text: 'Blood Pressure' }, status: 'final' })
+      mockMapper.toObservation.mockImplementation((resource: any) => ({
+        id: resource.id,
+        status: 'final',
+        category: resource.id === 'vital-1'
+          ? [{ coding: [{ code: 'vital-signs' }] }]
+          : [{ coding: [{ code: 'laboratory' }] }],
+      }))
 
       const result = await repository.fetchVitalSigns('patient-123')
 
-      expect(result).toHaveLength(1)
-      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
+      expect(result).toEqual([expect.objectContaining({ id: 'vital-1' })])
+      expect(mockFhirClient.requestAllPages).not.toHaveBeenCalledWith(
         expect.stringContaining('category=vital-signs')
       )
     })

@@ -1,74 +1,198 @@
-import { renderHook } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { renderHook, waitFor } from '@testing-library/react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { getClinicalDataRepository } from '@/src/application/composition'
 
-const mockUseQuery = jest.fn()
+jest.mock('@/src/application/composition')
+
 const mockUsePatientQuery = jest.fn()
-
-jest.mock('@tanstack/react-query', () => ({
-  useQuery: (options: unknown) => mockUseQuery(options),
-}))
-
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatientQuery: () => mockUsePatientQuery(),
 }))
 
-const clinicalData = {
-  conditions: [],
-  medications: [],
-  allergies: [],
-  observations: [{ id: 'obs-1' }],
-  vitalSigns: [],
-  diagnosticReports: [],
-  imagingStudies: [],
-  procedures: [],
-  encounters: [],
-  documentReferences: [],
-  compositions: [],
-  immunizations: [],
-  consents: [],
-  devices: [],
-  carePlans: [],
+const mockGetClinicalDataRepository = jest.mocked(getClinicalDataRepository)
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
+const VITAL = {
+  id: 'vital-1',
+  status: 'final',
+  category: [{ coding: [{ code: 'vital-signs' }] }],
+}
+const LAB = {
+  id: 'lab-1',
+  status: 'final',
+  category: [{ coding: [{ code: 'laboratory' }] }],
+}
+
+/** A SMART-shaped repository: every per-type fetcher, plus the status probe. */
+function fakeSmartRepository(overrides: Record<string, unknown> = {}) {
+  const empty = async () => []
+  return {
+    fetchAllClinicalData: jest.fn(async () => {
+      throw new Error('fetchAllClinicalData must not run when every type has its own fetcher')
+    }),
+    fetchConditions: jest.fn(async () => [{ id: 'cond-1' }]),
+    fetchMedications: jest.fn(async () => [{ id: 'med-1' }]),
+    fetchAllergies: jest.fn(empty),
+    fetchObservations: jest.fn(async () => [VITAL, LAB]),
+    fetchDiagnosticReports: jest.fn(empty),
+    fetchImagingStudies: jest.fn(empty),
+    fetchProcedures: jest.fn(empty),
+    fetchEncounters: jest.fn(empty),
+    fetchDocumentReferences: jest.fn(empty),
+    fetchCompositions: jest.fn(empty),
+    fetchImmunizations: jest.fn(empty),
+    fetchConsents: jest.fn(empty),
+    fetchDevices: jest.fn(empty),
+    fetchCarePlans: jest.fn(empty),
+    getQueryStatus: jest.fn((key: string) =>
+      key === 'Condition'
+        ? { resourceType: 'Condition', state: 'ok', count: 1 }
+        : undefined,
+    ),
+    ...overrides,
+  }
+}
+
+function renderClinicalData() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  )
+  return renderHook(() => useClinicalData(), { wrapper })
 }
 
 describe('useClinicalData', () => {
-  const refetch = jest.fn()
-  let clinicalFetching = false
-
   beforeEach(() => {
     jest.clearAllMocks()
-    clinicalFetching = false
     mockUsePatientQuery.mockReturnValue({
       data: { id: 'patient-1' },
       isLoading: false,
       isFetching: false,
     })
-    mockUseQuery.mockImplementation(() => ({
-      data: clinicalData,
-      isLoading: false,
-      isFetching: clinicalFetching,
-      error: null,
-      refetch,
-    }))
   })
 
-  it('keeps the returned snapshot stable across unrelated parent renders', () => {
-    const { result, rerender } = renderHook(() => useClinicalData())
-    const firstSnapshot = result.current
+  it('fills each resource type as its own query settles', async () => {
+    const observations = deferred<unknown[]>()
+    const repository = fakeSmartRepository({
+      fetchObservations: jest.fn(() => observations.promise),
+    })
+    mockGetClinicalDataRepository.mockResolvedValue(repository as any)
 
-    rerender()
+    const { result } = renderClinicalData()
 
-    expect(result.current).toBe(firstSnapshot)
-    expect(result.current.observations).toBe(clinicalData.observations)
-  })
+    await waitFor(() => expect(result.current.resourceReady.conditions).toBe(true))
 
-  it('publishes a new snapshot when React Query request state changes', () => {
-    const { result, rerender } = renderHook(() => useClinicalData())
-    const firstSnapshot = result.current
-
-    clinicalFetching = true
-    rerender()
-
-    expect(result.current).not.toBe(firstSnapshot)
+    // Conditions rendered while Observation is still paginating…
+    expect(result.current.conditions).toEqual([{ id: 'cond-1' }])
+    expect(result.current.resourceReady.observations).toBe(false)
+    expect(result.current.resourceReady.vitalSigns).toBe(false)
+    // …but the AI-facing flags stay all-or-nothing until everything settles.
+    expect(result.current.isLoading).toBe(true)
     expect(result.current.isFetching).toBe(true)
+
+    observations.resolve([VITAL, LAB])
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.observations).toEqual([VITAL, LAB])
+    expect(result.current.resourceReady.vitalSigns).toBe(true)
+    // Vitals are the vital-signs subset of the Observation result, not a
+    // second search.
+    expect(result.current.vitalSigns).toEqual([VITAL])
+    expect(result.current.resourceQueryStatus.Condition).toMatchObject({ state: 'ok' })
+  })
+
+  it('resolves the data source once for all resource types', async () => {
+    mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository() as any)
+
+    const { result } = renderClinicalData()
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(mockGetClinicalDataRepository).toHaveBeenCalledTimes(1)
+  })
+
+  // Local bundles parse the whole chart in one pass and only implement the core
+  // nine fetchers; that single collection must be sliced, never re-parsed once
+  // per resource type.
+  it('fans one collection out to every type when the source cannot serve them all', async () => {
+    const collection = {
+      conditions: [{ id: 'cond-1' }],
+      medications: [], allergies: [], observations: [VITAL, LAB],
+      vitalSigns: [VITAL], diagnosticReports: [], imagingStudies: [], procedures: [],
+      encounters: [], documentReferences: [{ id: 'doc-1' }], compositions: [],
+      immunizations: [], consents: [], devices: [], carePlans: [],
+      sourceMetadata: { source: 'health-bank-sdk-json' },
+    }
+    const fetchAllClinicalData = jest.fn(async () => collection)
+    mockGetClinicalDataRepository.mockResolvedValue({
+      fetchAllClinicalData,
+      fetchConditions: jest.fn(async () => collection.conditions),
+    } as any)
+
+    const { result } = renderClinicalData()
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchAllClinicalData).toHaveBeenCalledTimes(1)
+    expect(result.current.documentReferences).toEqual([{ id: 'doc-1' }])
+    expect(result.current.vitalSigns).toEqual([VITAL])
+    expect(result.current.sourceMetadata).toEqual({ source: 'health-bank-sdk-json' })
+  })
+
+  // The FHIR issues banner's retry has to re-resolve the data source, not
+  // replay the repository the failed load was built on.
+  it('re-resolves the source and every type on refetch', async () => {
+    mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository() as any)
+
+    const { result } = renderClinicalData()
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    const repository = fakeSmartRepository({
+      fetchConditions: jest.fn(async () => [{ id: 'cond-2' }]),
+    })
+    mockGetClinicalDataRepository.mockResolvedValue(repository as any)
+
+    await result.current.refetch()
+
+    await waitFor(() => expect(result.current.conditions).toEqual([{ id: 'cond-2' }]))
+    expect(mockGetClinicalDataRepository).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports nothing as ready while the patient query is still loading', () => {
+    mockUsePatientQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+    })
+    mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository() as any)
+
+    const { result } = renderClinicalData()
+
+    expect(result.current.resourceReady.conditions).toBe(false)
+    expect(result.current.resourceReady.vitalSigns).toBe(false)
+    expect(result.current.isLoading).toBe(true)
+  })
+
+  it('keeps the returned snapshot stable across unrelated parent renders', async () => {
+    mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository() as any)
+
+    const { result, rerender } = renderClinicalData()
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    const settled = result.current
+
+    rerender()
+
+    expect(result.current).toBe(settled)
+    expect(result.current.observations).toBe(settled.observations)
   })
 })

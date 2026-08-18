@@ -31,7 +31,9 @@ function getUdi(d: DeviceEntity): string | undefined {
 
 export function DevicesCard() {
   const { t } = useLanguage()
-  const { devices, isLoading, error } = useClinicalData()
+  // Single-type card: gate on Device alone (per-type queries).
+  const { devices, resourceReady, error } = useClinicalData()
+  const isLoading = !resourceReady.devices
 
   const tt = useMemo(() => (t as any).devices || ({
     title: 'Medical Devices',

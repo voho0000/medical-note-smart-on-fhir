@@ -2,6 +2,6 @@
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 
 export function useAllergies() {
-  const { allergies = [], isLoading, error } = useClinicalData()
-  return { allergies, isLoading, error }
+  const { allergies = [], resourceReady, error } = useClinicalData()
+  return { allergies, isLoading: !resourceReady.allergies, error }
 }

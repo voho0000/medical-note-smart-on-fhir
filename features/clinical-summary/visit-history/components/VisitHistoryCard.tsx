@@ -53,9 +53,22 @@ export function VisitHistoryCard() {
     conditions = [],
     documentReferences = [],
     compositions = [],
-    isLoading,
+    resourceReady,
     error,
   } = useClinicalData()
+  // A visit row renders its own medications, orders, reports and notes inline,
+  // so this card waits for exactly those types — showing the encounter spine
+  // early would make a half-loaded visit look like a visit with nothing in it.
+  // Types it never renders (allergies, imaging, immunizations, consents,
+  // devices, care plans) no longer hold it back.
+  const isLoading = !resourceReady.encounters
+    || !resourceReady.medications
+    || !resourceReady.diagnosticReports
+    || !resourceReady.observations
+    || !resourceReady.procedures
+    || !resourceReady.conditions
+    || !resourceReady.documentReferences
+    || !resourceReady.compositions
 
   // ── State ──────────────────────────────────────────────────────────────
   // Set (not a single id) so several visits can stay expanded at once —

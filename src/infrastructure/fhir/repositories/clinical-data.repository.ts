@@ -41,6 +41,30 @@ function warnFhirError(label: string, error: unknown) {
 
 type MedicationSourceType = 'MedicationRequest' | 'MedicationStatement'
 
+/**
+ * Vital signs are a SUBSET of the unfiltered Observation search — FHIR requires
+ * `Observation?patient=X` (no category filter) to return vitals, report members
+ * and labs alike; see the OBSERVATION SUPERSET INVARIANT on
+ * ClinicalDataCollection. Deriving the subset here replaces a second
+ * `category=vital-signs` round-trip that re-downloaded rows we already had, on
+ * the slowest leg of a chart load (Observation pagination is strictly
+ * sequential).
+ *
+ * The system is deliberately not matched: `vital-signs` is distinctive enough
+ * as a code, and servers still emit it under the STU3 category system as well
+ * as the R4 one. Any coding in any category entry counts, so a server that
+ * files a vital under two classifiers is not missed.
+ */
+export function selectVitalSignObservations(
+  observations: ObservationEntity[],
+): ObservationEntity[] {
+  return observations.filter((observation) =>
+    observation.category?.some((category) =>
+      category.coding?.some((coding) => coding.code === 'vital-signs'),
+    ),
+  )
+}
+
 function medicationReferenceCandidates(reference: string): string[] {
   const withoutHistory = reference.split('/_history/')[0]
   const segments = withoutHistory.split('/').filter(Boolean)
@@ -115,6 +139,19 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     this.resourceQueryStatus[key] = classifyFhirQueryError(error, resourceType)
   }
 
+  /**
+   * Outcome recorded by the most recent fetch of `key`.
+   *
+   * Callers that drive one query per resource type (see the clinical-data
+   * fetch plan) never go through fetchAllClinicalData, so they read each
+   * search's outcome here instead of off the aggregated collection. Every
+   * fetcher writes its own disjoint key(s), which is what makes it safe to
+   * share one repository instance across concurrent per-type fetches.
+   */
+  getQueryStatus(key: ClinicalDataQueryKey): ClinicalDataQueryStatus | undefined {
+    return this.resourceQueryStatus[key]
+  }
+
   private async requestWithBasicFallback(primary: string, fallback?: string): Promise<any> {
     try {
       return await fhirClient.requestAllPages(primary)
@@ -132,7 +169,6 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       medications,
       allergies,
       observations,
-      vitalSigns,
       diagnosticReports,
       imagingStudies,
       procedures,
@@ -148,7 +184,6 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchMedications(patientId),
       this.fetchAllergies(patientId),
       this.fetchObservations(patientId),
-      this.fetchVitalSigns(patientId),
       this.fetchDiagnosticReports(patientId),
       this.fetchImagingStudies(patientId),
       this.fetchProcedures(patientId),
@@ -160,6 +195,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchDevices(patientId),
       this.fetchCarePlans(patientId)
     ])
+
+    // Vitals come out of the Observation result, not a second search — see
+    // selectVitalSignObservations. fetchObservations already recorded the
+    // mirrored 'Observation:vital-signs' status.
+    const vitalSigns = selectVitalSignObservations(observations)
 
     // Re-attach observations to DiagnosticReports that _include didn't populate.
     // The bridge may not support _include; this mirrors what local-bundle.service does.
@@ -353,28 +393,38 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
       const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
       this.markQuerySuccess('Observation', 'Observation', result.length)
+      this.markDerivedVitalSignsStatus(result)
       return result
     } catch (error) {
       this.markQueryFailure('Observation', 'Observation', error)
+      // Vitals are derived from this search, so its failure is theirs: without
+      // the mirrored entry a 401/403 would read as "no vitals recorded".
+      this.markQueryFailure('Observation:vital-signs', 'Observation', error)
       logFhirError('Failed to fetch observations:', error)
       return []
     }
   }
 
+  /** The vital-signs key stays in resourceQueryStatus even though no dedicated
+   * search runs any more, so the FHIR issues banner and any consumer keyed on
+   * it keep working. */
+  private markDerivedVitalSignsStatus(observations: ObservationEntity[]) {
+    this.markQuerySuccess(
+      'Observation:vital-signs',
+      'Observation',
+      selectVitalSignObservations(observations).length,
+    )
+  }
+
+  /**
+   * Kept to satisfy IClinicalDataRepository. It no longer issues a
+   * `category=vital-signs` search: vitals are filtered out of the full
+   * Observation result (selectVitalSignObservations). Callers that already
+   * hold the observations should filter directly rather than pay for the
+   * search again.
+   */
   async fetchVitalSigns(patientId: string): Promise<ObservationEntity[]> {
-    try {
-      const response = await this.requestWithBasicFallback(
-        `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=500`,
-        `Observation?patient=${patientId}&category=vital-signs&_count=500`,
-      )
-      const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
-      this.markQuerySuccess('Observation:vital-signs', 'Observation', result.length)
-      return result
-    } catch (error) {
-      this.markQueryFailure('Observation:vital-signs', 'Observation', error)
-      logFhirError('Failed to fetch vital signs:', error)
-      return []
-    }
+    return selectVitalSignObservations(await this.fetchObservations(patientId))
   }
 
   async fetchDiagnosticReports(patientId: string): Promise<DiagnosticReportEntity[]> {

@@ -72,7 +72,9 @@ function getStatusLabel(status: string | undefined, tt: Record<string, string>):
 
 export function CarePlansCard() {
   const { t } = useLanguage()
-  const { carePlans, isLoading, error } = useClinicalData()
+  // Single-type card: gate on CarePlan alone (per-type queries).
+  const { carePlans, resourceReady, error } = useClinicalData()
+  const isLoading = !resourceReady.carePlans
 
   const tt = useMemo(() => (t as any).carePlans || ({
     title: 'Care Plans',

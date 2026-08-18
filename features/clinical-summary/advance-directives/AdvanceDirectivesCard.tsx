@@ -28,7 +28,9 @@ function getConsentLabel(c: ConsentEntity): string {
 
 export function AdvanceDirectivesCard() {
   const { t } = useLanguage()
-  const { consents, isLoading, error } = useClinicalData()
+  // Single-type card: gate on Consent alone (per-type queries).
+  const { consents, resourceReady, error } = useClinicalData()
+  const isLoading = !resourceReady.consents
 
   const tt = useMemo(() => (t as any).advanceDirectives || ({
     title: 'Advance Directives',

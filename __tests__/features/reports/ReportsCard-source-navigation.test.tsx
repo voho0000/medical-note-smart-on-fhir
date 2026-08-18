@@ -3,6 +3,13 @@ import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 
 const mockUseClinicalData = jest.fn()
+// ReportsCard gates on the readiness of the four types it renders.
+const ALL_TYPES_READY = {
+  diagnosticReports: true,
+  imagingStudies: true,
+  observations: true,
+  procedures: true,
+}
 const mockUseReportsData = jest.fn()
 const mockReportsTabContent = jest.fn((_props: unknown) => null)
 
@@ -80,7 +87,7 @@ describe('ReportsCard source navigation', () => {
       imagingStudies: [],
       observations: [],
       procedures: [],
-      isLoading: false,
+      resourceReady: ALL_TYPES_READY,
       error: null,
     })
     mockUseReportsData.mockReturnValue({

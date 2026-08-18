@@ -1,8 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 
 const mockUseClinicalData = jest.fn()
+// ReportsCard gates on the readiness of the four types it renders.
+const ALL_TYPES_READY = {
+  diagnosticReports: true,
+  imagingStudies: true,
+  observations: true,
+  procedures: true,
+}
 const mockUseReportsData = jest.fn((_reports: unknown[], _imagingStudies: unknown[], _nameMode: string) => ({
   reportRows: [],
   seenIds: new Set<string>(),
@@ -137,7 +145,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       imagingStudies: [],
       observations: [{ id: 'obs-1', resourceType: 'Observation' }],
       procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
-      isLoading: false,
+      resourceReady: ALL_TYPES_READY,
       error: null,
     })
   })
@@ -163,7 +171,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       imagingStudies,
       observations: [{ id: 'obs-1', resourceType: 'Observation' }],
       procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
-      isLoading: false,
+      resourceReady: ALL_TYPES_READY,
       error: null,
     })
 
@@ -210,7 +218,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       imagingStudies: [],
       observations: [{ id: 'obs-1', resourceType: 'Observation' }],
       procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
-      isLoading: false,
+      resourceReady: ALL_TYPES_READY,
       error: null,
     })
     useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })

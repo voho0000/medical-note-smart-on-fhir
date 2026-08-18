@@ -43,7 +43,13 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
     imagingStudies: [],
     observations: [],
     procedures: procedureRows.map((row) => ({ id: row.id })),
-    isLoading: false,
+    // ReportsCard gates on the readiness of the four types it renders.
+    resourceReady: {
+      diagnosticReports: true,
+      imagingStudies: true,
+      observations: true,
+      procedures: true,
+    },
     error: null,
   }),
 }))
