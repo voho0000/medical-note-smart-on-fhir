@@ -380,6 +380,55 @@ describe('App-side NHI drug terminology enrichment', () => {
     )).toHaveLength(1)
   })
 
+  it('performance contract: maps one stored Bundle once without dropping resources for concurrent consumers', async () => {
+    const enriched = await enrichBundleWithNhiDrugTerminology(
+      bundleWith(
+        { resourceType: 'Patient', id: 'p-complete' },
+        medicationRequest({ id: 'mr-first' }),
+        medicationRequest({ id: 'mr-last' }),
+        {
+          resourceType: 'Observation',
+          id: 'obs-first',
+          status: 'final',
+          code: { text: 'Creatinine' },
+          valueQuantity: { value: 1.1, unit: 'mg/dL' },
+        },
+        {
+          resourceType: 'DiagnosticReport',
+          id: 'report-last',
+          status: 'final',
+          code: { text: 'Complete report' },
+          result: [{ reference: 'Observation/obs-first' }],
+        },
+      ),
+    )
+    // A fresh identity ensures this assertion cannot reuse another test's
+    // WeakMap entry while still representing the exact persisted payload.
+    const stored = JSON.parse(JSON.stringify(enriched.bundle)) as Record<string, any>
+    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    const parse = jest.spyOn(LocalBundleService, 'parse')
+
+    const [patientConsumer, clinicalConsumer, summaryConsumer] = await Promise.all([
+      LocalBundleService.parseStored(),
+      LocalBundleService.parseStored(),
+      LocalBundleService.parseStored(),
+    ])
+
+    expect(parse).toHaveBeenCalledTimes(1)
+    for (const result of [patientConsumer, clinicalConsumer, summaryConsumer]) {
+      expect(result?.patient.id).toBe('p-complete')
+      expect(result?.collection.medications.map((item) => item.id)).toEqual([
+        'mr-first',
+        'mr-last',
+      ])
+      expect(result?.collection.observations.map((item) => item.id)).toContain('obs-first')
+      expect(result?.collection.diagnosticReports.map((item) => item.id)).toContain('report-last')
+    }
+    // Consumers share the immutable mapped collection; the patient overlay is
+    // applied separately and therefore cannot thin the AI input.
+    expect(clinicalConsumer?.collection).toBe(summaryConsumer?.collection)
+  })
+
   it('re-runs enrichment once for a stored bundle created under the older date policy', async () => {
     const previouslyEnriched = await enrichBundleWithNhiDrugTerminology(
       bundleWith(

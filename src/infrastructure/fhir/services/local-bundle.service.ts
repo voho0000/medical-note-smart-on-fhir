@@ -98,6 +98,15 @@ let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
 const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
+// Mapping a FHIR Bundle into every domain collection is also expensive and was
+// previously repeated independently by the Patient and clinical-data queries.
+// Cache only the post-storage parse (not the import validator): save() may move
+// inline images out of the Bundle before this path runs, and we must never keep
+// a second parsed copy containing those large base64 payloads alive.
+const parsedStoredDataByBundle = new WeakMap<object, {
+  sourceMetadata: ClinicalSourceMetadata | null
+  data: LocalBundleData
+}>()
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
@@ -1382,8 +1391,15 @@ export const LocalBundleService = {
       bundle = await migration
     }
 
-    const parsed = this.parse(bundle, memBundleSourceMetadata ?? undefined)
+    const sourceMetadata = memBundleSourceMetadata
+    const cached = parsedStoredDataByBundle.get(bundle)
+    const parsed = cached?.sourceMetadata === sourceMetadata
+      ? cached.data
+      : this.parse(bundle, sourceMetadata ?? undefined)
     if (!parsed) return null
+    if (cached?.sourceMetadata !== sourceMetadata) {
+      parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: parsed })
+    }
     return {
       ...parsed,
       patient: applyUserEnteredPatientProfile(

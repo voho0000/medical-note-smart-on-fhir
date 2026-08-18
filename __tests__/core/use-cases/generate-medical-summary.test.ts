@@ -25,6 +25,7 @@ import {
   DEFAULT_DATA_FILTERS,
   DEFAULT_DATA_SELECTION,
 } from '@/src/shared/constants/data-selection.constants'
+import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -1897,6 +1898,7 @@ describe('finalizeResult', () => {
       DEFAULT_DATA_SELECTION,
       DEFAULT_DATA_FILTERS,
       includedDocumentIds,
+      clinicalNowMs(true),
     )
     const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
