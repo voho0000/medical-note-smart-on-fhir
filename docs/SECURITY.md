@@ -67,7 +67,7 @@
 - 每個自訂 profile 有穩定 logical model id（舊 profile 保留 `openai-compatible-custom`，新增 profile 使用帶 profile id 的 dynamic id）；transport／endpoint／model fingerprint 納入 AI cache identity。
 - 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。
 - 自訂 profile 被修改、停用、刪除或畫面卸載時，進行中的文字／語音請求會中止；後續與排隊請求在送出前重新解析 live profile，不沿用舊 endpoint 或 key。
-- 對話切換模型、provider 或自訂 profile 身分時會先中止並清空目前對話與 session pointer，避免舊端點的訊息或 FHIR tool result 被送往另一個端點，亦避免切回雲端後將混合來源對話寫入 Firestore。
+- 對話跨自訂 endpoint 身分邊界（自訂 profile 之間、或自訂↔雲端）切換時會先中止並清空目前對話與 session pointer，避免舊端點的訊息或 FHIR tool result 被送往另一個端點，亦避免切回雲端後將混合來源對話寫入 Firestore。雲端模型之間切換屬同一信任域，保留對話（訊息逐則標記產生它的 modelId），進行中的串流由原模型完成。
 - 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；通過驗證的深入對話只暴露 browser-bound FHIR tools。direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
 - On-prem profile 不初始化 Firebase/Auth/App Check、不接受公共 provider key，也不提供 Firebase Gateway transport；自訂 endpoint unavailable 時維持 fail closed。`build:intranet` 是 `build:onprem` 的相容別名。
 

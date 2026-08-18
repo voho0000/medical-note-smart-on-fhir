@@ -86,13 +86,21 @@ import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutio
  * Destination + execution identity for one chat transcript. A custom endpoint
  * is more than its logical picker id: editing the URL/upstream model/transport
  * or changing whether it receives Agent tools creates a new privacy boundary.
+ *
+ * Every CLOUD model shares ONE identity on purpose. The boundary protects
+ * against transcript content crossing between trust domains (a hospital
+ * endpoint's FHIR tool results must not be replayed to a public provider, and
+ * vice versa) — but Gemini→GPT is the same trust domain, and clearing there
+ * destroyed the conversation (and any half-streamed answer) on an ordinary
+ * picker change. Messages are tagged with their own modelId, so one thread
+ * legitimately holds answers from several cloud models.
  */
 export function medicalChatRuntimeIdentity(
   modelId: string,
   profile: OpenAiCompatibleProfile | null,
 ): string {
   if (!isCustomOpenAiModelId(modelId)) {
-    return JSON.stringify(['cloud', modelId])
+    return JSON.stringify(['cloud'])
   }
   return JSON.stringify([
     'custom',
@@ -328,19 +336,22 @@ export default function MedicalChat() {
 
   const handleModelSelect = useCallback((requestedModelId: string) => {
     const nextModel = resolveSelectedModel(requestedModelId)
-    if (nextModel !== model) {
-      const nextProfile = resolveOpenAiCompatibleProfile(
-        nextModel,
-        openAiCompatibleProfiles,
-      )
-      const nextIdentity = medicalChatRuntimeIdentity(nextModel, nextProfile)
+    const nextProfile = resolveOpenAiCompatibleProfile(
+      nextModel,
+      openAiCompatibleProfiles,
+    )
+    const nextIdentity = medicalChatRuntimeIdentity(nextModel, nextProfile)
+    // Reset ONLY across a runtime-identity boundary (custom↔custom profile
+    // change, custom↔cloud). Cloud↔cloud keeps the conversation — including a
+    // stream still in flight, which finishes under the model that started it.
+    if (nextIdentity !== runtimeIdentity) {
       resetChatForRuntimeBoundary()
       // Suppress the defensive effect's duplicate reset after this controlled
       // switch; the privacy cleanup above has already completed synchronously.
       adoptRuntimeBoundary(nextIdentity, nextProfile?.apiKey ?? null)
     }
     setModelFor('chat', requestedModelId)
-  }, [adoptRuntimeBoundary, model, openAiCompatibleProfiles, resetChatForRuntimeBoundary, resolveSelectedModel, setModelFor])
+  }, [adoptRuntimeBoundary, openAiCompatibleProfiles, resetChatForRuntimeBoundary, resolveSelectedModel, runtimeIdentity, setModelFor])
 
   useEffect(() => {
     if (!runtimeTransitionPending) return
@@ -527,13 +538,17 @@ export default function MedicalChat() {
         await forceSave()
       } catch (error) {
         console.error('[Chat] Failed to save user message:', error)
+        // Non-blocking: the message is already in state and the answer is
+        // streaming. Say the cloud copy didn't land (stage 2 retries) instead
+        // of letting the user believe the turn is safely stored.
+        toast.warning(t.medicalChat.saveMessageFailed)
       }
     })
     
     // Wait for AI response to complete
     await sendPromise
     // Stage 2: AI response completion will trigger another forceSave to update with full conversation
-  }, [input, imageUpload.images, replyDraft, chat, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
+  }, [input, imageUpload.images, replyDraft, chat, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups, t])
 
   const handleReplyToSelection = useCallback((reply: ChatReplyReference) => {
     setReplyDraft(reply)

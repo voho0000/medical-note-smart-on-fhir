@@ -468,8 +468,33 @@ describe('MedicalChat model privacy boundary', () => {
       ...profile,
       apiKey: 'different-secret',
     })).toBe(base)
+    // Cloud models deliberately share ONE identity: switching among them is
+    // the same trust domain, so it must not clear the conversation.
     expect(medicalChatRuntimeIdentity('gemini-3.1-flash-lite', null)).toBe(
-      JSON.stringify(['cloud', 'gemini-3.1-flash-lite']),
+      JSON.stringify(['cloud']),
     )
+    expect(medicalChatRuntimeIdentity('gpt-5-nano', null)).toBe(
+      medicalChatRuntimeIdentity('gemini-3.1-flash-lite', null),
+    )
+  })
+
+  it('keeps the conversation when switching between cloud models', async () => {
+    useModelPrefsStore.setState({
+      prefs: { chat: MODEL_PREF_DEFAULTS.chat, insights: MODEL_PREF_DEFAULTS.insights },
+    })
+    render(<MedicalChat />)
+    expect(mockResetChat).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('header-model-picker'))
+
+    await waitFor(() => expect(useModelPrefsStore.getState().prefs.chat).toBe(
+      'gemini-3-flash-preview',
+    ))
+    // No privacy boundary was crossed: the transcript (and any in-flight
+    // stream) survives an ordinary cloud→cloud picker change.
+    expect(mockResetChat).not.toHaveBeenCalled()
+    expect(mockMessages).toEqual([
+      { id: 'local-message', role: 'user', content: 'private local question' },
+    ])
   })
 })

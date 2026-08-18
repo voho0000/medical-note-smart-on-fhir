@@ -25,6 +25,7 @@ import {
   DEFAULT_DATA_FILTERS,
   DEFAULT_DATA_SELECTION,
 } from '@/src/shared/constants/data-selection.constants'
+import { DEMO_DATA_AS_OF_MS } from '@/src/shared/constants/demo-data.constants'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -1892,11 +1893,16 @@ describe('finalizeResult', () => {
       'latestAdmission',
       [],
     ).map((document) => document.id)
+    // The demo chart is judged against its own as-of date, matching the app
+    // (use-clinical-ai-input) — on the wall clock this assertion decays as the
+    // demo's dispensings pass their supply windows (M11–M21 aged out over
+    // 2026-08-16/18 and the regimen shrank from 10 groups to 6).
     const scopedClinicalData = scopeClinicalDataForAi(
       parsedData!.collection,
       DEFAULT_DATA_SELECTION,
       DEFAULT_DATA_FILTERS,
       includedDocumentIds,
+      DEMO_DATA_AS_OF_MS,
     )
     const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
