@@ -39,6 +39,7 @@ import {
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { TrendWindow } from './utils/trend-time-scale'
+import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -53,6 +54,7 @@ const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden round
 
 export function ReportsCard() {
   const { t } = useLanguage()
+  const clinicalTabActive = useClinicalTabActivity()
   const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
   const tourActive = useLeftBrowserTourStore((state) => state.active)
@@ -73,6 +75,23 @@ export function ReportsCard() {
   // this preparation finishes invisibly; on an immediate user click, a compact
   // loading state gets the first paint instead of a frozen old tab.
   const [cumulativeReady, setCumulativeReady] = useState(false)
+  // Keep the large report arrays behind a tab-local snapshot. React Query can
+  // settle while Reports is hidden; feeding those fresh arrays straight into
+  // the cumulative table would still rebuild its pivots off-screen and block
+  // the primary tab bar. The snapshot advances only after Reports is visible
+  // and its loading frame has painted.
+  const [cumulativeSource, setCumulativeSource] = useState(() => ({
+    diagnosticReports: EMPTY_RESOURCES,
+    imagingStudies: EMPTY_RESOURCES,
+    observations: EMPTY_RESOURCES,
+    procedures: EMPTY_RESOURCES,
+  }))
+  const cumulativeSourceIsCurrent =
+    cumulativeSource.diagnosticReports === diagnosticReports
+    && cumulativeSource.imagingStudies === imagingStudies
+    && cumulativeSource.observations === observations
+    && cumulativeSource.procedures === procedures
+  const cumulativePrepared = cumulativeReady && cumulativeSourceIsCurrent
   // Lifted here (not inside CumulativeLabReport) so the selected cumulative
   // sub-category (生化 …) survives the fullscreen toggle, which remounts the
   // reports content under a different parent.
@@ -129,22 +148,54 @@ export function ReportsCard() {
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
 
   useEffect(() => {
-    if (cumulativeReady) return
+    // Idle-mount only the lightweight Reports shell. Preparing the cumulative
+    // pivot while this top-level tab is hidden makes the final clinical-data
+    // delivery compete with the tab bar for the main thread. Wait until the
+    // clinician actually opens Reports, paint its loading state, then prepare
+    // the pivot in a transition.
+    if (
+      !clinicalTabActive
+      || isLoading
+      || (cumulativeReady && cumulativeSourceIsCurrent)
+    ) return
     let timer: number | undefined
     const frame = window.requestAnimationFrame(() => {
       timer = window.setTimeout(() => {
-        startTransition(() => setCumulativeReady(true))
+        startTransition(() => {
+          setCumulativeSource({
+            diagnosticReports,
+            imagingStudies,
+            observations,
+            procedures,
+          })
+          setCumulativeReady(true)
+        })
       }, 0)
     })
     return () => {
       window.cancelAnimationFrame(frame)
       if (timer !== undefined) window.clearTimeout(timer)
     }
-  }, [cumulativeReady])
+  }, [
+    clinicalTabActive,
+    cumulativeReady,
+    cumulativeSourceIsCurrent,
+    diagnosticReports,
+    imagingStudies,
+    isLoading,
+    observations,
+    procedures,
+  ])
 
   useEffect(() => {
     if (rawReportsEnabled) return
-    const priority = rawPreparationPriority ?? (cumulativeReady ? 'idle' : null)
+    // The cumulative view already has lightweight counts and Observation
+    // pivots. Do not build every raw report row merely because the browser is
+    // momentarily idle: that background projection can block a workspace tab
+    // click while the initial chart is still loading. A concrete raw tab,
+    // resource navigation, or tour step sets the preparation priority and gets
+    // the same after-paint loading behavior on demand.
+    const priority = rawPreparationPriority
     if (priority === null) return
 
     let cancelled = false
@@ -182,7 +233,7 @@ export function ReportsCard() {
       if (timer !== undefined) window.clearTimeout(timer)
       if (idleId !== undefined) browserWindow.cancelIdleCallback?.(idleId)
     }
-  }, [cumulativeReady, rawPreparationPriority, rawReportsEnabled])
+  }, [rawPreparationPriority, rawReportsEnabled])
 
   // Open a concrete raw-report view for the trend / imaging tour steps. The
   // report card unmounts when the outer tour moves away, so its normal default
@@ -221,10 +272,10 @@ export function ReportsCard() {
   // full Row construction. The exact rendered counts take over as soon as the
   // raw-report pipeline is enabled.
   const initialTabCounts = useReportTabCounts(
-    diagnosticReports,
-    imagingStudies,
-    observations,
-    procedures,
+    cumulativePrepared ? cumulativeSource.diagnosticReports : EMPTY_RESOURCES,
+    cumulativePrepared ? cumulativeSource.imagingStudies : EMPTY_RESOURCES,
+    cumulativePrepared ? cumulativeSource.observations : EMPTY_RESOURCES,
+    cumulativePrepared ? cumulativeSource.procedures : EMPTY_RESOURCES,
     !rawReportsEnabled,
   )
 
@@ -769,9 +820,9 @@ export function ReportsCard() {
               forceMount={keepMounted}
               className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
             >
-              {cumulativeReady ? (
+              {cumulativePrepared ? (
                 <CumulativeLabReport
-                  observations={observations}
+                  observations={cumulativeSource.observations}
                   nameModeControl={<ReportNameModeSwitch responsiveLabels />}
                   fullHeight={expanded}
                   activeCategoryId={cumulativeCategoryId}
@@ -803,6 +854,7 @@ export function ReportsCard() {
               value={tab.value}
               rows={tab.rows}
               isActive={activeTab === tab.value}
+              workspaceActive={clinicalTabActive}
               fullHeight={expanded}
               forceMount={keepMounted}
               defaultOpenIds={expandedRowIds}

@@ -17,6 +17,7 @@
 | [Prompt Gallery](PROMPT_GALLERY.md) | 範本類型、篩選、分享與相容性 | `features/prompt-gallery/` |
 | [Feedback](FEEDBACK_SETUP.md) | 回饋端點與部署設定 | `app/api/feedback/route.ts`、feedback feature |
 | [Security](SECURITY.md) | 已實作控制、限制與部署檢查 | 儲存、代理、CSP、CI |
+| [前端效能基準](PERFORMANCE_BASELINE.md) | 臨床工作區 p95、測試門檻與重跑方式 | `workspace-performance.spec.ts` |
 | [院內 HTTPS／純內網部署](INTRANET_HTTPS.md) | Cloud/on-prem profile、TLS、院內 AI、離線套件與防火牆 | `next.config.ts`、`scripts/build-intranet.mjs`、`deploy/intranet/` |
 | [Privacy policy](../PRIVACY_POLICY.md) | 實際資料處理說明 | FHIR、Firestore、AI、回饋流程 |
 | [E2E](../e2e/README.md) | Playwright 測試資料與執行方式 | `playwright*.config.ts`、`e2e/` |

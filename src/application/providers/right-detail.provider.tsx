@@ -24,7 +24,9 @@ interface RightDetailContextValue {
   showDetail: (detail: RightDetail) => void
   /** Show, or close if the same sourceId is already shown (toggle). */
   toggleDetail: (detail: RightDetail) => void
-  clearDetail: () => void
+  /** Clear the current detail. When an expected id is supplied, a newer
+   *  detail is preserved instead of being cleared by deferred cleanup. */
+  clearDetail: (expectedSourceId?: string) => void
 }
 
 const RightDetailContext = createContext<RightDetailContextValue | null>(null)
@@ -33,7 +35,13 @@ export function RightDetailProvider({ children }: { children: ReactNode }) {
   const [detail, setDetail] = useState<RightDetail | null>(null)
 
   const showDetail = useCallback((next: RightDetail) => setDetail(next), [])
-  const clearDetail = useCallback(() => setDetail(null), [])
+  const clearDetail = useCallback((expectedSourceId?: string) => {
+    setDetail((current) => (
+      expectedSourceId && current?.sourceId !== expectedSourceId
+        ? current
+        : null
+    ))
+  }, [])
   const toggleDetail = useCallback(
     (next: RightDetail) => setDetail((cur) => (cur?.sourceId === next.sourceId ? null : next)),
     [],

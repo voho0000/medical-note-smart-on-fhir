@@ -33,6 +33,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `reports-search.spec.ts` | Search report content, institution and numeric result; highlight and empty state |
 | `trend-charts.spec.ts` | BP SBP／DBP and single-analyte labels／normal band |
 | `list-search.spec.ts` | Medication and visit list search／empty state |
+| `workspace-performance.spec.ts` | Loading + warm tab switching／trend open-close／medication scrolling／retained DOM budgets |
 | `data-selection-preview.spec.ts` | Medical Summary data-scope entry and assembled-context preview |
 | `medical-summary-model-picker.spec.ts` | Summary picker remains available in patient audience |
 | `safety-alerts.spec.ts` | Unified summary + safety, model sync, auto-run and encrypted cache reuse |
@@ -42,6 +43,8 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `ai-chat-stream.spec.ts` | Markdown streaming, large-block responsiveness and idle timeout |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
+
+The workspace performance spec also attaches a `performance-metrics` JSON object to each Playwright result. Current measured p95 values, environment details and the five-run baseline procedure are recorded in [`docs/PERFORMANCE_BASELINE.md`](../docs/PERFORMANCE_BASELINE.md).
 
 ## Deterministic AI stream
 

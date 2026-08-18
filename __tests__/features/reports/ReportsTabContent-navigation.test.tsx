@@ -5,7 +5,12 @@ import { ReportsTabContent } from '@/features/clinical-summary/reports/component
 
 const mockScrollToIndex = jest.fn()
 const mockScrollElement = jest.fn()
-const mockVirtualizerOptions: Array<{ useFlushSync?: boolean }> = []
+const mockVirtualizerOptions: Array<{
+  enabled: boolean
+  scrollMargin: number
+  getScrollElement: () => HTMLElement | null
+  useFlushSync?: boolean
+}> = []
 
 function mockUseVirtualizer(options: {
   enabled: boolean
@@ -43,28 +48,29 @@ class ResizeObserverMock {
 }
 
 function NestedScrollFixture({ children }: { children: ReactNode }) {
-  const realScrollerRef = useRef<HTMLDivElement>(null)
-  const inertRadixViewportRef = useRef<HTMLDivElement>(null)
+  const outerPanelRef = useRef<HTMLDivElement>(null)
+  const tabViewportRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
-    const realScroller = realScrollerRef.current
-    const inertViewport = inertRadixViewportRef.current
-    if (!realScroller || !inertViewport) return
+    const outerPanel = outerPanelRef.current
+    const tabViewport = tabViewportRef.current
+    if (!outerPanel || !tabViewport) return
 
-    Object.defineProperties(realScroller, {
+    Object.defineProperties(outerPanel, {
       clientHeight: { configurable: true, value: 400 },
-      scrollHeight: { configurable: true, value: 1200 },
+      scrollHeight: { configurable: true, value: 400 },
     })
-    Object.defineProperties(inertViewport, {
-      clientHeight: { configurable: true, value: 1200 },
+    Object.defineProperties(tabViewport, {
+      clientHeight: { configurable: true, value: 400 },
       scrollHeight: { configurable: true, value: 1200 },
     })
   }, [])
 
   return (
-    <div ref={realScrollerRef} data-testid="real-scroll-container" style={{ height: 400, overflowY: 'auto' }}>
+    <div ref={outerPanelRef} data-testid="outer-panel" style={{ height: 400, overflowY: 'auto' }}>
       <div
-        ref={inertRadixViewportRef}
+        ref={tabViewportRef}
+        data-testid="tab-scroll-container"
         data-slot="scroll-area-viewport"
         style={{ overflowY: 'scroll' }}
       >
@@ -130,7 +136,7 @@ describe('ReportsTabContent source navigation', () => {
     }, { timeout: 1000 })
   })
 
-  it('skips an inert Radix viewport and uses the outer panel that can actually scroll', async () => {
+  it('uses the tab-owned viewport instead of the shared outer panel', async () => {
     const row = {
       id: 'dr-row',
       title: '超音波導引(為組織切片，抽吸、注射等)',
@@ -155,8 +161,53 @@ describe('ReportsTabContent source navigation', () => {
 
     await waitFor(() => {
       expect(mockScrollToIndex).toHaveBeenCalledWith(0, { align: 'center' })
-      expect(mockScrollElement).toHaveBeenCalledWith(getByTestId('real-scroll-container'))
+      expect(mockScrollElement).toHaveBeenCalledWith(getByTestId('tab-scroll-container'))
     }, { timeout: 1000 })
+  })
+
+  it('keeps the report window cached but detaches it from another top-level tab scroll', async () => {
+    const row = {
+      id: 'dr-row',
+      title: '胸部影像報告',
+      meta: 'Radiology • final',
+      obs: [],
+      group: 'imaging' as const,
+    }
+    const renderTree = (workspaceActive: boolean) => (
+      <NestedScrollFixture>
+        <Tabs value="all">
+          <ReportsTabContent
+            value="all"
+            rows={[row]}
+            isActive
+            workspaceActive={workspaceActive}
+          />
+        </Tabs>
+      </NestedScrollFixture>
+    )
+
+    const { getByTestId, rerender } = render(renderTree(true))
+
+    await waitFor(() => {
+      const latestOptions = mockVirtualizerOptions.at(-1)
+      expect(latestOptions?.enabled).toBe(true)
+      expect(latestOptions?.getScrollElement()).toBe(getByTestId('tab-scroll-container'))
+    })
+
+    rerender(renderTree(false))
+
+    await waitFor(() => {
+      const latestOptions = mockVirtualizerOptions.at(-1)
+      expect(latestOptions?.enabled).toBe(true)
+      expect(latestOptions?.getScrollElement()).toBeNull()
+    })
+
+    rerender(renderTree(true))
+
+    await waitFor(() => {
+      expect(mockVirtualizerOptions.at(-1)?.getScrollElement())
+        .toBe(getByTestId('tab-scroll-container'))
+    })
   })
 
   it('does not acknowledge a mounted row that is still outside the visible scroll area', async () => {
