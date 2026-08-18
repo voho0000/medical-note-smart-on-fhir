@@ -15,7 +15,8 @@ function RightDetailHarness() {
       <button type="button" onClick={() => showDetail(first)}>Show first</button>
       <button type="button" onClick={() => toggleDetail(first)}>Toggle first</button>
       <button type="button" onClick={() => toggleDetail(second)}>Toggle second</button>
-      <button type="button" onClick={clearDetail}>Clear detail</button>
+      <button type="button" onClick={() => clearDetail()}>Clear detail</button>
+      <button type="button" onClick={() => clearDetail('first')}>Clear first</button>
     </div>
   )
 }
@@ -42,5 +43,19 @@ describe('RightDetailProvider docking behavior', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle first' }))
     fireEvent.click(screen.getByRole('button', { name: 'Clear detail' }))
     expect(screen.getByTestId('right-detail-source')).toHaveTextContent('none')
+  })
+
+  it('does not let deferred cleanup clear a newer detail', () => {
+    render(
+      <RightDetailProvider>
+        <RightDetailHarness />
+      </RightDetailProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show first' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle second' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear first' }))
+
+    expect(screen.getByTestId('right-detail-source')).toHaveTextContent('second')
   })
 })

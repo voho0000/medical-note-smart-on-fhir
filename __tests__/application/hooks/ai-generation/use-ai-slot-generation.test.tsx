@@ -1133,6 +1133,106 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.slotKey).toContain('::ctx-')
   })
 
+  it('never sends a partial clinical snapshot and forwards every settled resource to AI', async () => {
+    mockPatientId = 'smart-patient-completeness'
+    mockClinicalContext = 'PARTIAL INPUT — first page only'
+    mockClinicalData = {
+      isLoading: false,
+      isFetching: true,
+      error: null,
+      encounters: [{ id: 'encounter-first' }],
+      medications: [{ id: 'medication-first' }],
+      diagnosticReports: [],
+      observations: [],
+    }
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async (_input: unknown) => ({ headline: 'complete-data result' }))
+
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gemini-3.1-flash-lite',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    await act(async () => result.current.generate())
+    expect(result.current.dataReady).toBe(false)
+    expect(result.current.slotKey).toBe('')
+    expect(run).not.toHaveBeenCalled()
+
+    mockClinicalContext = [
+      'COMPLETE INPUT',
+      'encounter-first',
+      'encounter-last',
+      'medication-first',
+      'medication-last',
+      'report-last',
+      'observation-last',
+      'FINAL-RESOURCE-MARKER',
+    ].join('\n')
+    mockClinicalData = {
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      encounters: [
+        { id: 'encounter-first' },
+        { id: 'encounter-last' },
+      ],
+      medications: [
+        { id: 'medication-first' },
+        { id: 'medication-last' },
+      ],
+      diagnosticReports: [{
+        id: 'report-last',
+        status: 'final',
+        category: [{ coding: [{ code: 'LAB' }] }],
+        code: { text: 'Complete panel' },
+        effectiveDateTime: '2026-08-18',
+        result: [{ reference: 'Observation/observation-last' }],
+      }],
+      observations: [{
+        id: 'observation-last',
+        status: 'final',
+        code: { text: 'Complete analyte' },
+        effectiveDateTime: '2026-08-18',
+        valueQuantity: { value: 42, unit: 'mg/dL' },
+      }],
+    }
+    rerender()
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    const input = run.mock.calls[0][0] as {
+      clinicalContext: string
+      clinicalData: {
+        encounters?: Array<{ id?: string }>
+        medications?: Array<{ id?: string }>
+        diagnosticReports?: Array<{ id?: string }>
+        observations?: Array<{ id?: string }>
+      }
+    }
+    expect(input.clinicalContext).toContain('FINAL-RESOURCE-MARKER')
+    expect(input.clinicalContext).not.toContain('PARTIAL INPUT')
+    expect(input.clinicalData.encounters?.map((resource) => resource.id)).toEqual([
+      'encounter-first',
+      'encounter-last',
+    ])
+    expect(input.clinicalData.medications?.map((resource) => resource.id)).toEqual([
+      'medication-first',
+      'medication-last',
+    ])
+    expect(input.clinicalData.diagnosticReports?.map((resource) => resource.id)).toEqual([
+      'report-last',
+    ])
+    expect(input.clinicalData.observations?.map((resource) => resource.id)).toEqual([
+      'observation-last',
+    ])
+  })
+
   it('uses a new slot and does not reuse the old result when clinical input changes', async () => {
     mockPatientId = 'smart-patient-1'
     const store = createAiResultStore<{ headline: string }>()

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { memo, useState } from "react"
 import { Building2, ChevronDown, PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -43,7 +43,7 @@ interface VisitItemProps {
   documents?: DocumentEntry[]
   abnormalCount?: number
   isExpanded: boolean
-  onToggle: () => void
+  onToggle: (visitId: string) => void
 }
 
 const getTypeBadge = (type: VisitType, labels: any) => {
@@ -122,7 +122,7 @@ function VisitStat({ kind, label, count, attention = false, title }: VisitStatPr
   )
 }
 
-export function VisitItem({
+function VisitItemComponent({
   visit,
   details,
   documents,
@@ -209,11 +209,11 @@ export function VisitItem({
       <div
         role="button"
         tabIndex={0}
-        onClick={onToggle}
+        onClick={() => onToggle(visit.id)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            onToggle()
+            onToggle(visit.id)
           }
         }}
         className={cn(
@@ -332,7 +332,7 @@ export function VisitItem({
               title={isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails}
               onClick={(event) => {
                 event.stopPropagation()
-                onToggle()
+                onToggle(visit.id)
               }}
               onMouseDown={(event) => event.stopPropagation()}
               className="col-start-2 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
@@ -563,3 +563,9 @@ export function VisitItem({
     </div>
   )
 }
+
+// Expanding one visit used to recreate callbacks for every visible row and
+// re-render all 25 cards. With stable parent props, only the changed row now
+// commits; clinical details and source data remain untouched.
+export const VisitItem = memo(VisitItemComponent)
+VisitItem.displayName = 'VisitItem'

@@ -211,7 +211,7 @@ function TrendChart({
         ? `檢驗趨勢圖，共 ${points.length} 筆，時間由左至右`
         : `Lab trend chart with ${points.length} results, oldest to newest`}
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <LineChart data={points} margin={{ top: 24, right: 18, bottom: 6, left: 2 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis

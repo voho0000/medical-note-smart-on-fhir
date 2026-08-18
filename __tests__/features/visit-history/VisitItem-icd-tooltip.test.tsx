@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { useState } from 'react'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { RightDetailProvider } from '@/src/application/providers/right-detail.provider'
 import { VisitItem } from '@/features/clinical-summary/visit-history/components/VisitItem'
@@ -311,5 +312,51 @@ describe('VisitItem ICD tooltip', () => {
     expect(expandedDescription).not.toHaveClass('truncate')
     expect(screen.queryByTestId('secondary-icd-preview')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '收合其他 ICD 碼' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('does not rerender an unchanged row when its parent list updates', () => {
+    const visit = {
+      id: 'stable-visit-row',
+      type: 'outpatient' as const,
+      careDiscipline: 'western' as const,
+      date: '2026-08-12',
+      icdCodes: [],
+      status: 'finished',
+    }
+    const onToggle = jest.fn()
+    function UpdatingList() {
+      const [listRevision, setListRevision] = useState(0)
+      const [isExpanded, setIsExpanded] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setListRevision((value) => value + 1)}>
+            parent update {listRevision}
+          </button>
+          <button type="button" onClick={() => setIsExpanded((value) => !value)}>
+            change row
+          </button>
+          <VisitItem
+            visit={visit}
+            isExpanded={isExpanded}
+            onToggle={onToggle}
+          />
+        </>
+      )
+    }
+
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <UpdatingList />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+    expect(mockVisitHasDetails).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /parent update/ }))
+    expect(mockVisitHasDetails).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'change row' }))
+    expect(mockVisitHasDetails).toHaveBeenCalledTimes(2)
   })
 })

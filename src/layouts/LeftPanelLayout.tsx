@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { startTransition, useEffect, useRef, useState } from "react"
+import { memo, startTransition, useEffect, useRef, useState } from "react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
@@ -21,15 +21,17 @@ import {
   ClinicalTabList,
   ClinicalTabTrigger,
 } from "@/src/shared/components/clinical-workspace"
+import { ClinicalTabActivityProvider } from "@/src/application/providers/clinical-tab-activity.provider"
+import { LoaderCircle } from "lucide-react"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
 // ============================================================================
-function TabFeatureContent({ tabId }: { tabId: string }) {
+const TabFeatureContent = memo(function TabFeatureContent({ tabId }: { tabId: string }) {
   const features = getFeaturesForTab(tabId)
   
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full min-h-0" data-testid={`clinical-tab-content-${tabId}`}>
       {/*
         CSS containment (`contain: inline-size`) decouples this wrapper's
         intrinsic width from its children's content size. Without this,
@@ -48,7 +50,7 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
       </ClinicalTabContentFrame>
     </ScrollArea>
   )
-}
+})
 
 // ============================================================================
 // MAIN EXPORT - Clinical Summary Feature (Left Panel)
@@ -75,6 +77,30 @@ export default function ClinicalSummaryFeature() {
   const wasTourActiveRef = useRef(false)
   const pending = useResourceNavigationStore((s) => s.pending)
   const seq = useResourceNavigationStore((s) => s.seq)
+
+  // A newly visited tab can contain a large pivot table or clinical list. Mark
+  // the tab active first, paint a lightweight loading frame, then mount the
+  // heavy workspace in a transition on the next frame. This keeps the tab bar
+  // responsive while the initial chart is still loading and lets a second tab
+  // click interrupt unfinished rendering.
+  useEffect(() => {
+    if (mountedTabs.has(activeTab)) return
+    const tabToMount = activeTab
+    let cancelled = false
+    const frame = window.requestAnimationFrame(() => {
+      if (cancelled) return
+      startTransition(() => {
+        setMountedTabs((previous) => previous.has(tabToMount)
+          ? previous
+          : new Set(previous).add(tabToMount))
+      })
+    })
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+    }
+  }, [activeTab, mountedTabs])
+
   useEffect(() => {
     if (!pending) return
     const target = leftTabForResourceType(pending.resourceType)
@@ -185,18 +211,14 @@ export default function ClinicalSummaryFeature() {
   }
 
   return (
-    <div className="@container flex h-full flex-col" data-tour="left-panel">
+    <div className="@container flex h-full min-h-0 flex-col overflow-hidden" data-tour="left-panel">
       <SdkSourceLimitationsBanner />
-      <FhirDataIssuesBanner />
       <Tabs
         value={activeTab}
         // Switching the left clinical tab dismisses any right-pane detail
         // (向右展開) opened from the previous tab — the detail is tied to that
         // tab's content, so navigating away retracts it back to the AI panel.
         onValueChange={(value) => {
-          setMountedTabs((previous) => previous.has(value)
-            ? previous
-            : new Set(previous).add(value))
           setActiveTab(value)
           clearDetail()
         }}
@@ -229,14 +251,37 @@ export default function ClinicalSummaryFeature() {
           })}
         </ClinicalTabList>
 
+        {/* Keep the primary navigation in a stable position while the FHIR
+            requests settle. The warning used to appear above the tab bar and
+            move every tab under the pointer at the exact moment a clinician
+            tried to navigate during loading. */}
+        <FhirDataIssuesBanner />
+
         {tabs.map(tab => (
           <TabsContent
             key={tab.id}
             value={tab.id}
             forceMount={mountedTabs.has(tab.id) || undefined}
-            className="mt-1 flex-1 xl:mt-0"
+            className="mt-1 min-h-0 flex-1 overflow-hidden xl:mt-0"
           >
-            <TabFeatureContent tabId={tab.id} />
+            {mountedTabs.has(tab.id) ? (
+              <ClinicalTabActivityProvider active={activeTab === tab.id}>
+                <TabFeatureContent tabId={tab.id} />
+              </ClinicalTabActivityProvider>
+            ) : activeTab === tab.id ? (
+              <div
+                className="flex h-full min-h-40 items-start justify-center px-4 pt-12"
+                role="status"
+                aria-live="polite"
+                aria-label={`${getTabLabel(tab)} ${t.common.loading}`}
+                data-testid="clinical-tab-loading-indicator"
+              >
+                <div className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-muted/35 px-4 py-2 text-sm text-muted-foreground">
+                  <LoaderCircle className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+                  <span>{getTabLabel(tab)} · {t.common.loading}</span>
+                </div>
+              </div>
+            ) : null}
           </TabsContent>
         ))}
       </Tabs>

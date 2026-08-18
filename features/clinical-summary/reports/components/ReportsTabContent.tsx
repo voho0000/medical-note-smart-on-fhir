@@ -23,6 +23,9 @@ interface ReportsTabContentProps {
   rows: Row[]
   /** Only the visible tab should attach virtual scroll observers. */
   isActive?: boolean
+  /** Whether the parent top-level Reports tab is visible. Its rows remain
+   *  mounted while hidden, but must not observe another tab's scrolling. */
+  workspaceActive?: boolean
   /** When true, take remaining vertical space and scroll internally
    *  (used in fullscreen mode where the parent has overflow-hidden). */
   fullHeight?: boolean
@@ -65,12 +68,16 @@ const EMPTY_OPEN_IDS: string[] = []
 const ESTIMATED_ROW_HEIGHT = 56
 
 function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
-  // Do not blindly trust the nearest Radix viewport. In the split-panel
-  // layout that viewport can expand to the full report-list height, leaving
-  // `scrollHeight === clientHeight`; the *outer* panel <section> is then the
-  // element that actually scrolls. Treating the inert viewport as the target
-  // makes scrollToIndex a no-op, yet the requested row is still mounted and
-  // was previously (incorrectly) acknowledged as successfully navigated.
+  // Every top-level clinical tab owns a height-constrained Radix viewport.
+  // Bind the virtualizer to that nearest viewport even during its first layout
+  // pass, before the virtual spacer has made `scrollHeight > clientHeight`.
+  // Walking outward by current scroll metrics can otherwise select the shared
+  // panel for one frame and leave rows frozen when the tab viewport scrolls.
+  const tabViewport = el.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  if (tabViewport) return tabViewport
+
+  // Fullscreen/standalone fixtures may not live inside the clinical ScrollArea.
+  // Retain an overflow-ancestor fallback for those layouts.
   let lastOverflowCandidate: HTMLElement | null = null
   let parent = el.parentElement
   while (parent) {
@@ -81,13 +88,10 @@ function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
     }
     parent = parent.parentElement
   }
-  // During the first layout pass JSDOM and some browsers may not have final
-  // scroll metrics yet. The outermost overflow ancestor is the safest retry
-  // target: once the virtual spacer is measured it becomes the real scroller.
   return lastOverflowCandidate
 }
 
-function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading' }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading' }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
   // this report, not to find its collapsed shell.
   const openIds = useMemo(() => {
@@ -121,8 +125,13 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
     // every visible row). Let React schedule the measurement rerender instead.
     useFlushSync: false,
     count: rows.length,
+    // Preserve the measured first window while this force-mounted view is
+    // hidden. Only detach it from the shared panel scroller; setting enabled
+    // false would erase TanStack Virtual's measurement cache.
     enabled: isActive && (fullHeight ? !!scrollEl : !!externalScrollEl),
-    getScrollElement: () => fullHeight ? scrollEl : externalScrollEl,
+    getScrollElement: () => workspaceActive
+      ? (fullHeight ? scrollEl : externalScrollEl)
+      : null,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
     // Keep a small buffer above/below the viewport so users don't see a
     // flash of blank when they scroll quickly. 6 rows ≈ half a screen.
@@ -138,12 +147,12 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
   const totalSize = virtualizer.getTotalSize()
 
   useEffect(() => {
-    if (fullHeight || !listEl || typeof window === 'undefined') return
+    if (!workspaceActive || fullHeight || !listEl || typeof window === 'undefined') return
     setExternalScrollEl(findExternalScrollElement(listEl))
-  }, [fullHeight, listEl])
+  }, [workspaceActive, fullHeight, listEl])
 
   useEffect(() => {
-    if (!isActive || fullHeight || !listEl || !externalScrollEl || typeof window === 'undefined') return
+    if (!isActive || !workspaceActive || fullHeight || !listEl || !externalScrollEl || typeof window === 'undefined') return
     const measure = () => {
       const listRect = listEl.getBoundingClientRect()
       const scrollRect = externalScrollEl.getBoundingClientRect()
@@ -158,13 +167,13 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
       resizeObserver.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [isActive, fullHeight, listEl, externalScrollEl, rows.length, searchActive, query])
+  }, [isActive, workspaceActive, fullHeight, listEl, externalScrollEl, rows.length, searchActive, query])
 
   // Resource navigation: drive the virtualizer to the target row, then flash
   // it once mounted. setTimeout (not rAF — frozen in background tabs) gives
   // the virtualizer a beat to mount the scrolled-to row.
   useEffect(() => {
-    if (!isActive || !scrollToId) return
+    if (!isActive || !workspaceActive || !scrollToId) return
     // In normal-card mode the virtualizer cannot scroll until its external
     // ScrollArea viewport is known. Previously this effect ran once with a
     // null viewport, the scroll became a no-op, and it never retried when the
@@ -213,7 +222,7 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
       if (timer) clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- virtualizer is a fresh object each render
-  }, [isActive, scrollToId, scrollNonce, onScrollResolved, fullHeight, scrollEl, listEl, externalScrollEl, rows])
+  }, [isActive, workspaceActive, scrollToId, scrollNonce, onScrollResolved, fullHeight, scrollEl, listEl, externalScrollEl, rows])
 
   return (
     <TabsContent

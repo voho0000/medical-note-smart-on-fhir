@@ -20,7 +20,7 @@ import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layo
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
@@ -38,6 +38,12 @@ import {
   ClinicalWorkspaceRail,
   ClinicalWorkspaceRoot,
 } from "@/src/shared/components/clinical-workspace"
+
+// Closing a right-side detail is a PageContent-only presentation change. Keep
+// the two large workspaces from rendering again during that first paint; their
+// own context/store updates still render them when their data actually changes.
+const StableClinicalSummaryFeature = memo(ClinicalSummaryFeature)
+const StableRightPanelFeature = memo(RightPanelFeature)
 
 function PageContent() {
   const { t } = useLanguage()
@@ -137,6 +143,43 @@ function PageContent() {
   // section shows the detail (✕ returns to the AI features). Cleared on patient
   // change so one patient's detail never lingers onto the next.
   const { detail, clearDetail } = useRightDetail()
+  const [closingDetailSourceId, setClosingDetailSourceId] = useState<string | null>(null)
+  const deferredDetailClearFrameRef = useRef<number | null>(null)
+  const deferredDetailClearTimerRef = useRef<number | null>(null)
+  const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+
+  const cancelDeferredDetailClear = useCallback(() => {
+    if (deferredDetailClearFrameRef.current !== null) {
+      window.cancelAnimationFrame(deferredDetailClearFrameRef.current)
+      deferredDetailClearFrameRef.current = null
+    }
+    if (deferredDetailClearTimerRef.current !== null) {
+      window.clearTimeout(deferredDetailClearTimerRef.current)
+      deferredDetailClearTimerRef.current = null
+    }
+  }, [])
+
+  const closeDetailAfterPaint = useCallback(() => {
+    if (!detail) return
+    const sourceId = detail.sourceId
+    cancelDeferredDetailClear()
+
+    // First paint: reveal the already-mounted feature panel and hide the trend.
+    // The expensive chart/table cleanup runs only after the browser has shown
+    // that response, so the button itself feels immediate.
+    setClosingDetailSourceId(sourceId)
+    deferredDetailClearFrameRef.current = window.requestAnimationFrame(() => {
+      deferredDetailClearFrameRef.current = null
+      deferredDetailClearTimerRef.current = window.setTimeout(() => {
+        deferredDetailClearTimerRef.current = null
+        clearDetail(sourceId)
+        setClosingDetailSourceId(null)
+      }, 0)
+    })
+  }, [cancelDeferredDetailClear, clearDetail, detail])
+
+  useEffect(() => cancelDeferredDetailClear, [cancelDeferredDetailClear])
+
   useEffect(() => {
     if (!detail || !isLargeScreen) return
     const timer = window.setTimeout(() => {
@@ -164,13 +207,13 @@ function PageContent() {
   // has clamped scrollTop to 0 — so the position is gone before we could
   // sample it.
   const handleRightPanelScroll = useCallback((event: UIEvent<HTMLElement>) => {
-    if (detail) return
+    if (detailVisible) return
     featureScrollTopRef.current = event.currentTarget.scrollTop
-  }, [detail])
+  }, [detailVisible])
 
   useLayoutEffect(() => {
     const panel = rightPanelRef.current
-    const hasDetail = !!detail
+    const hasDetail = detailVisible
     const hadDetail = hadDetailRef.current
     hadDetailRef.current = hasDetail
     if (!panel) return
@@ -193,7 +236,7 @@ function PageContent() {
     }
     restore()
     return () => cancelAnimationFrame(frame)
-  }, [detail])
+  }, [detailVisible])
 
   return (
     <ClinicalWorkspaceRoot>
@@ -314,7 +357,7 @@ function PageContent() {
         >
           {/* Per-panel boundary: a render crash in one panel must not white-screen the other */}
           <ErrorBoundary>
-            <ClinicalSummaryFeature />
+            <StableClinicalSummaryFeature />
           </ErrorBoundary>
         </ClinicalWorkspacePanel>
 
@@ -327,7 +370,7 @@ function PageContent() {
             onCollapseRight={() => setCollapsed('right')}
             leftCollapseLabel={t.header.collapseClinicalSummary}
             rightCollapseLabel={t.header.collapseFeatures}
-            showCollapseActions={!detail}
+            showCollapseActions={!detailVisible}
           />
         )}
 
@@ -357,13 +400,15 @@ function PageContent() {
                 inputs and IPS clinician confirmations. Hide it with CSS
                 instead — same approach as the mobile panel switch. `contents`
                 keeps the layout identical to rendering it directly. */}
-            <div className={detail ? 'hidden' : 'contents'}>
-              <RightPanelFeature />
+            <div className={detailVisible ? 'hidden' : 'contents'}>
+              <StableRightPanelFeature />
             </div>
             {detail && (
-              <RightDetailPane title={detail.title} onClose={clearDetail}>
-                {detail.node}
-              </RightDetailPane>
+              <div className={detailVisible ? 'contents' : 'hidden'}>
+                <RightDetailPane title={detail.title} onClose={closeDetailAfterPaint}>
+                  {detail.node}
+                </RightDetailPane>
+              </div>
             )}
           </ErrorBoundary>
         </ClinicalWorkspacePanel>
@@ -372,9 +417,9 @@ function PageContent() {
             place of the AI 功能 panel, so the collapse control sits here at the
             far right — clicking it brings the 功能 panel back (same as closing
             the detail). Only when not already collapsed. */}
-        {detail && collapsed === null && (
+        {detailVisible && collapsed === null && (
           <ClinicalWorkspaceRail
-            onClick={clearDetail}
+            onClick={closeDetailAfterPaint}
             label={t.header.expandFeatures}
             iconDirection="left"
           >

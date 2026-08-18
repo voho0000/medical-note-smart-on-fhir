@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
+import { ClinicalTabActivityProvider } from '@/src/application/providers/clinical-tab-activity.provider'
 
 const mockUseClinicalData = jest.fn()
 // ReportsCard gates on the readiness of the four types it renders.
@@ -203,6 +204,32 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(cumulative).toHaveTextContent('nonce: 1')
     expect(screen.getByRole('switch', { name: '名稱顯示' })).toBeChecked()
     expect(screen.queryByText('在選定的時間範圍內未找到報告。')).not.toBeInTheDocument()
+  })
+
+  it('does not prepare the cumulative pivot while the top-level Reports tab is hidden', () => {
+    jest.useFakeTimers()
+    useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
+
+    const view = (active: boolean) => (
+      <ClinicalTabActivityProvider active={active}>
+        <ReportsCard />
+      </ClinicalTabActivityProvider>
+    )
+    const { rerender } = render(view(false))
+
+    act(() => {
+      jest.runOnlyPendingTimers()
+    })
+    expect(screen.queryByTestId('cumulative-report')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading')
+
+    act(() => {
+      rerender(view(true))
+    })
+    act(() => {
+      jest.runAllTimers()
+    })
+    expect(screen.getByTestId('cumulative-report')).toBeInTheDocument()
   })
 
   it('performance contract: selects a raw tab before any projection work is enabled', () => {

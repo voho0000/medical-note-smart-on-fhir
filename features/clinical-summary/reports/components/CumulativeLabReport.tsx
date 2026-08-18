@@ -29,12 +29,32 @@ import {
   type LabTrendSeries,
 } from "@/src/shared/utils/lab-trend.utils"
 // Trend charts pull in the whole charting library, but they only ever mount
-// after the clinician clicks a trend. Loading them eagerly put ~600KB of
-// parse work into first paint of the reports workspace — the most expensive
-// thing on an old hospital PC. next/dynamic options must be inline literals
-// (they are statically analysed), hence the repetition.
+// after the clinician clicks a trend. Keep them out of first paint, then warm
+// the shared chunk while the browser is idle so the first click does not pay
+// the download/parse cost. The cached promise also deduplicates idle, hover,
+// focus and click requests. next/dynamic options must remain inline literals
+// because Next statically analyses them.
+type CumulativeLabTrendModule = typeof import("./CumulativeLabTrendDetail")
+let cumulativeLabTrendModulePromise: Promise<CumulativeLabTrendModule> | null = null
+let resolvedCumulativeLabTrendModule: CumulativeLabTrendModule | null = null
+
+function loadCumulativeLabTrendModule(): Promise<CumulativeLabTrendModule> {
+  if (resolvedCumulativeLabTrendModule) {
+    return Promise.resolve(resolvedCumulativeLabTrendModule)
+  }
+  cumulativeLabTrendModulePromise ??= import("./CumulativeLabTrendDetail").then((module) => {
+    resolvedCumulativeLabTrendModule = module
+    return module
+  })
+  return cumulativeLabTrendModulePromise
+}
+
+function preloadCumulativeLabTrendModule(): void {
+  void loadCumulativeLabTrendModule()
+}
+
 const CumulativeLabTrendDetail = dynamic(
-  () => import("./CumulativeLabTrendDetail").then((m) => m.CumulativeLabTrendDetail),
+  () => loadCumulativeLabTrendModule().then((m) => m.CumulativeLabTrendDetail),
   {
     ssr: false,
     loading: () => (
@@ -45,7 +65,7 @@ const CumulativeLabTrendDetail = dynamic(
   },
 )
 const CumulativeLabTrendDialog = dynamic(
-  () => import("./CumulativeLabTrendDetail").then((m) => m.CumulativeLabTrendDialog),
+  () => loadCumulativeLabTrendModule().then((m) => m.CumulativeLabTrendDialog),
   { ssr: false },
 )
 import {
@@ -428,6 +448,8 @@ function LabPivotTable({
                   {canTrend ? (
                     <button
                       type="button"
+                      onPointerEnter={preloadCumulativeLabTrendModule}
+                      onFocus={preloadCumulativeLabTrendModule}
                       onClick={() => onOpenTrend({
                         categoryId: pivot.category.id,
                         mapKey: test.mapKey,
@@ -520,6 +542,27 @@ export function CumulativeLabReport({
   const rightDetail = useOptionalRightDetail()
   const [dialogTrend, setDialogTrend] = useState<OpenTrendRequest | null>(null)
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
+
+  // Reports is itself mounted during an idle period by LeftPanelLayout. Start
+  // the optional chart chunk immediately after the cumulative table's first
+  // paint; waiting for a second idle deadline can leave the first trend click
+  // racing a still-unloaded chart on busy or slower machines.
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    const preload = () => {
+      if (!cancelled) preloadCumulativeLabTrendModule()
+    }
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(preload, 0)
+    })
+
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [])
 
   // Show every category tab, even when the patient has no data — pinnedColumns
   // ensures key analytes still appear as empty column headers so users can see
@@ -619,6 +662,8 @@ export function CumulativeLabReport({
 
     if (canUseRightPane) {
       setDialogTrend(null)
+      const TrendDetail = resolvedCumulativeLabTrendModule?.CumulativeLabTrendDetail
+        ?? CumulativeLabTrendDetail
       rightDetail.showDetail({
         sourceId: request.sourceId,
         title: (
@@ -628,7 +673,7 @@ export function CumulativeLabReport({
           </span>
         ),
         node: (
-          <CumulativeLabTrendDetail
+          <TrendDetail
             key={request.sourceId}
             series={request.series}
             initialWindow={trendWindow}
@@ -731,6 +776,9 @@ export function CumulativeLabReport({
       </div>
     )
   }
+
+  const TrendDialog = resolvedCumulativeLabTrendModule?.CumulativeLabTrendDialog
+    ?? CumulativeLabTrendDialog
 
   return (
     <div className={fullHeight ? '@container flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : '@container space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
@@ -864,7 +912,7 @@ export function CumulativeLabReport({
         ))}
       </Tabs>
       {dialogTrend && (
-        <CumulativeLabTrendDialog
+        <TrendDialog
           key={dialogTrend.sourceId}
           title={`${dialogTrend.title} · ${(t.reports as any).cumulativeTrend?.title ?? '趨勢'}`}
           series={dialogTrend.series}
