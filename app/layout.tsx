@@ -21,10 +21,13 @@ export const metadata: Metadata = {
 //   arbitrary `iss` FHIR server chosen at launch time. HTTP is limited to
 //   loopback hosts so a production static build can still test a model running
 //   on the same workstation without opening arbitrary clear-text egress.
+// - frame-src includes the project's Firebase Hosting auth helper. Google
+//   sign-in completes through this hidden iframe after the account chooser
+//   redirects back to the app.
 // - frame-ancestors CANNOT be set via <meta> (per spec) — embedding control
 //   stays in next.config.ts headers() / the mediprisma.tw web server.
 // - Production only: `next dev` needs eval/websockets for HMR.
-const CSP_CONTENT = [
+export const CSP_CONTENT = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://apis.google.com",
   "style-src 'self' 'unsafe-inline'",
@@ -33,7 +36,7 @@ const CSP_CONTENT = [
   "connect-src 'self' https: wss: blob: http://localhost:* http://127.0.0.1:* http://[::1]:*",
   "media-src 'self' blob: data:",
   "worker-src 'self' blob:",
-  "frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com",
+  "frame-src https://*.firebaseapp.com https://mediprisma.web.app https://accounts.google.com https://www.google.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
