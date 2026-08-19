@@ -1,7 +1,5 @@
-// useNow must refresh its value on the events that matter for day-granularity
-// staleness (tab focus / visibility, and the local midnight rollover) so that
-// derived "days remaining" countdowns don't freeze on a long-lived tab —
-// while staying quiet otherwise (no per-second polling).
+// useNow is a shared day clock: clinical countdowns advance across a local-day
+// boundary without rebuilding every mounted UI/AI consumer on same-day resume.
 import { renderHook, act } from '@testing-library/react'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 
@@ -9,7 +7,12 @@ describe('useNow', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     jest.setSystemTime(new Date('2026-06-17T10:00:00'))
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true,
+    })
   })
+
   afterEach(() => {
     jest.useRealTimers()
   })
@@ -19,32 +22,30 @@ describe('useNow', () => {
     expect(result.current).toBe(Date.now())
   })
 
-  it('refreshes when the tab regains focus', () => {
+  it('does not refresh for focus and visibility events on the same day', () => {
     const { result } = renderHook(() => useNow())
     const initial = result.current
 
     act(() => {
       jest.setSystemTime(new Date('2026-06-17T15:00:00'))
       window.dispatchEvent(new Event('focus'))
+      document.dispatchEvent(new Event('visibilitychange'))
     })
 
-    expect(result.current).toBe(Date.now())
-    expect(result.current).toBeGreaterThan(initial)
+    expect(result.current).toBe(initial)
   })
 
-  it('refreshes on visibilitychange when the document becomes visible', () => {
+  it('refreshes once when the tab returns on a new local day', () => {
     const { result } = renderHook(() => useNow())
     const initial = result.current
 
     act(() => {
       jest.setSystemTime(new Date('2026-06-18T09:00:00'))
-      Object.defineProperty(document, 'visibilityState', {
-        value: 'visible',
-        configurable: true,
-      })
+      window.dispatchEvent(new Event('focus'))
       document.dispatchEvent(new Event('visibilitychange'))
     })
 
+    expect(result.current).toBe(Date.now())
     expect(result.current).toBeGreaterThan(initial)
   })
 
@@ -70,20 +71,42 @@ describe('useNow', () => {
     const initial = result.current
 
     act(() => {
-      // Cross midnight (msUntilNextMidnight is 30s here, plus the +1s guard).
+      // Cross midnight (30s here, plus the 1s scheduling guard).
       jest.advanceTimersByTime(40 * 1000)
     })
 
     expect(result.current).toBeGreaterThan(initial)
   })
 
-  it('removes its listeners on unmount', () => {
-    const removeSpy = jest.spyOn(window, 'removeEventListener')
-    const { unmount } = renderHook(() => useNow())
+  it('shares one browser listener set across all consumers', () => {
+    const addWindowSpy = jest.spyOn(window, 'addEventListener')
+    const addDocumentSpy = jest.spyOn(document, 'addEventListener')
 
-    unmount()
+    const first = renderHook(() => useNow())
+    const second = renderHook(() => useNow())
 
-    expect(removeSpy).toHaveBeenCalledWith('focus', expect.any(Function))
-    removeSpy.mockRestore()
+    expect(addWindowSpy.mock.calls.filter(([type]) => type === 'focus')).toHaveLength(1)
+    expect(addDocumentSpy.mock.calls.filter(([type]) => type === 'visibilitychange')).toHaveLength(1)
+
+    first.unmount()
+    second.unmount()
+    addWindowSpy.mockRestore()
+    addDocumentSpy.mockRestore()
+  })
+
+  it('removes shared listeners after the last consumer unmounts', () => {
+    const removeWindowSpy = jest.spyOn(window, 'removeEventListener')
+    const removeDocumentSpy = jest.spyOn(document, 'removeEventListener')
+    const first = renderHook(() => useNow())
+    const second = renderHook(() => useNow())
+
+    first.unmount()
+    expect(removeWindowSpy).not.toHaveBeenCalledWith('focus', expect.any(Function))
+
+    second.unmount()
+    expect(removeWindowSpy).toHaveBeenCalledWith('focus', expect.any(Function))
+    expect(removeDocumentSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+    removeWindowSpy.mockRestore()
+    removeDocumentSpy.mockRestore()
   })
 })

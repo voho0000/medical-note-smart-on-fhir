@@ -6,7 +6,7 @@
 // Includes a top-level "currently active medications" summary so the AI gets
 // a quick view of what the patient is on right now without having to scan
 // every visit.
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { ClinicalContextSection, DataFilters, TimeRange } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
@@ -21,7 +21,6 @@ import {
   normalizeClinicalStatus,
 } from "@/src/core/utils/clinical-context-selection.utils"
 import { referenceId } from "@/src/core/utils/observation-selectors"
-import { useNow } from "@/src/shared/hooks/use-now.hook"
 
 function refId(ref: any): string | undefined {
   return referenceId(ref?.reference)
@@ -98,7 +97,8 @@ export function useEncountersContext(
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
-  const nowMs = useNow()
+  const [fallbackNowMs] = useState(Date.now)
+  const nowMs = options?.nowMs ?? fallbackNowMs
   return useMemo(() => {
     if (!includeEncounters || !clinicalData) return null
     const encounters: any[] = (clinicalData as any).encounters ?? []

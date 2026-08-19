@@ -16,6 +16,10 @@ import { FhirPatientRepository } from '@/src/infrastructure/fhir/repositories/pa
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle, hasSmartContext, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
+import {
+  CLINICAL_SESSION_GC_TIME,
+  CLINICAL_SESSION_STALE_TIME,
+} from '../clinical-data/clinical-session-cache'
 
 export function usePatientQuery() {
   return useQuery({
@@ -45,7 +49,11 @@ export function usePatientQuery() {
         throw error
       }
     },
-    staleTime: 5 * 60 * 1000,
+    // The active local Bundle is an immutable tab-session snapshot. Import and
+    // clear explicitly invalidate this query; elapsed time alone must not make
+    // an idle tab reload the same patient.
+    staleTime: CLINICAL_SESSION_STALE_TIME,
+    gcTime: CLINICAL_SESSION_GC_TIME,
     retry: 1,
   })
 }

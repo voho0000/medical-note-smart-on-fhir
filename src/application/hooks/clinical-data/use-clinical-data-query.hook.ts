@@ -41,6 +41,10 @@ import {
   type ClinicalResourceResult,
 } from './clinical-data-fetch-plan'
 import { usePatientQuery } from '../patient/use-patient-query.hook'
+import {
+  CLINICAL_SESSION_GC_TIME,
+  CLINICAL_SESSION_STALE_TIME,
+} from './clinical-session-cache'
 
 const BLOCKING_FHIR_QUERY_KEYS = new Set([
   'Condition',
@@ -50,10 +54,6 @@ const BLOCKING_FHIR_QUERY_KEYS = new Set([
   'DiagnosticReport',
   'Encounter',
 ])
-
-// Matches the QueryProvider default; stated here because the per-type queries
-// and the shared source query must expire together.
-const CLINICAL_DATA_STALE_TIME = 5 * 60 * 1000
 
 const EMPTY_ARRAY: any[] = []
 
@@ -193,16 +193,17 @@ function useClinicalResourceAggregate() {
   const queryClient = useQueryClient()
   const patientId = patient?.id
 
-  // One shared data source per load generation. fetchQuery both collapses the
+  // One shared, session-stable data source per load generation. fetchQuery both collapses the
   // concurrent per-type callers onto a single resolution — critical in
   // local-bundle mode, where resolving the source parses the whole (multi-MB)
-  // bundle — and honours ordinary invalidation, so an import/clear re-resolves
-  // it exactly once.
+  // bundle — and honours explicit invalidation, so an import/clear re-resolves
+  // it exactly once without an idle tab re-parsing an unchanged Bundle.
   const getSource = useCallback(
     (id: string) => queryClient.fetchQuery({
       queryKey: clinicalDataSourceQueryKey(id),
       queryFn: () => resolveClinicalDataSource(id),
-      staleTime: CLINICAL_DATA_STALE_TIME,
+      staleTime: CLINICAL_SESSION_STALE_TIME,
+      gcTime: CLINICAL_SESSION_GC_TIME,
       retry: 1,
     }),
     [queryClient],
@@ -216,7 +217,8 @@ function useClinicalResourceAggregate() {
         return loadClinicalResource(unit, patientId, () => getSource(patientId))
       },
       enabled: !!patientId && !patientLoading,
-      staleTime: CLINICAL_DATA_STALE_TIME,
+      staleTime: CLINICAL_SESSION_STALE_TIME,
+      gcTime: CLINICAL_SESSION_GC_TIME,
       retry: 1,
     })),
     combine: combineClinicalResults,

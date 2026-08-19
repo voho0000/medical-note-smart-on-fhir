@@ -110,6 +110,25 @@ test.describe('clinical workspace performance contract', () => {
     const warmTabSwitchP95Ms = percentile(switchDurations, 0.95)
     expect(warmTabSwitchP95Ms).toBeLessThan(500)
 
+    // Returning to a backgrounded tab fires both browser lifecycle events in
+    // Chrome. Same-day resume must not rebuild every time-dependent UI/AI
+    // projection before the clinician's first click can paint.
+    const longTaskCountBeforeResume = await page.evaluate(
+      () => window.__mediprismaLongTasks?.length ?? 0,
+    )
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'))
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    const sameDayResumeTabSwitchMs = await switchLeftTab(page, '報告')
+    expect(sameDayResumeTabSwitchMs).toBeLessThan(500)
+    const sameDayResumeLongTasks = await page.evaluate(
+      (startIndex) => (window.__mediprismaLongTasks ?? []).slice(startIndex),
+      longTaskCountBeforeResume,
+    )
+    const longestSameDayResumeTaskMs = Math.max(0, ...sameDayResumeLongTasks)
+    expect(longestSameDayResumeTaskMs).toBeLessThan(300)
+
     const nodeCountAfterCycles = await page.locator('*').count()
     // First visit may retain a tab, but repeated switching must not append a
     // fresh copy of its clinical DOM on every cycle.
@@ -161,6 +180,8 @@ test.describe('clinical workspace performance contract', () => {
     const metrics = {
       loadingTabSwitchMs,
       warmTabSwitchP95Ms,
+      sameDayResumeTabSwitchMs,
+      longestSameDayResumeTaskMs,
       cumulativeTrendOpenP95Ms,
       cumulativeTrendCloseP95Ms,
       medicationScrollFrameP95Ms,

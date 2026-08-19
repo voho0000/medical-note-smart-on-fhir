@@ -129,10 +129,14 @@ export function ReportsCard() {
   // A trend range is a comparison preference, not an analyte default. Keep the
   // user's explicit choice while they move between tests or fullscreen modes.
   const [cumulativeTrendWindow, setCumulativeTrendWindow] = useState<TrendWindow>()
-  const handleCumulativeCategoryChange = (categoryId: string) => {
+  const cumulativeNameModeControl = useMemo(
+    () => <ReportNameModeSwitch responsiveLabels />,
+    [],
+  )
+  const handleCumulativeCategoryChange = useCallback((categoryId: string) => {
     setCumulativeCategoryId(categoryId)
     setCumulativeFocus(null)
-  }
+  }, [])
   // Tabs the user has visited at least once in this session. We forceMount
   // only these so the *first* paint of ReportsCard (e.g. when the user
   // switches from "病人資訊" to "報告") doesn't have to mount 500+ rows of
@@ -837,7 +841,6 @@ export function ReportsCard() {
               {cumulativePrepared ? (
                 <CumulativeLabReport
                   observations={cumulativeSource.observations}
-                  nameModeControl={<ReportNameModeSwitch responsiveLabels />}
                   fullHeight={expanded}
                   activeCategoryId={cumulativeCategoryId}
                   onCategoryChange={handleCumulativeCategoryChange}
@@ -845,6 +848,7 @@ export function ReportsCard() {
                   focusNonce={cumulativeFocus?.nonce}
                   trendWindow={cumulativeTrendWindow}
                   onTrendWindowChange={setCumulativeTrendWindow}
+                  nameModeControl={cumulativeNameModeControl}
                 />
               ) : (
                 <div className="space-y-2">

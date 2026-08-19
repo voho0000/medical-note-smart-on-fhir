@@ -5,7 +5,7 @@
 // Categories tabs: CBC, 生化, 血糖, 癌症指數, 尿液.
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
-import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
@@ -158,7 +158,7 @@ function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
   )
 }
 
-function LabPivotTable({
+const LabPivotTable = memo(function LabPivotTable({
   pivot,
   fullHeight = false,
   focusAnalyteKey,
@@ -523,9 +523,9 @@ function LabPivotTable({
       </table>
     </div>
   )
-}
+})
 
-export function CumulativeLabReport({
+export const CumulativeLabReport = memo(function CumulativeLabReport({
   observations,
   nameModeControl,
   fullHeight = false,
@@ -638,7 +638,7 @@ export function CumulativeLabReport({
       ? rightDetail.detail.sourceId
       : undefined)
 
-  const openTrend = (target: OpenTrendTarget) => {
+  const openTrend = useCallback((target: OpenTrendTarget) => {
     const series = buildLabTrendSeries(observations, {
       categoryId: target.categoryId,
       mapKey: target.mapKey,
@@ -685,7 +685,7 @@ export function CumulativeLabReport({
     }
 
     setDialogTrend(request)
-  }
+  }, [fullHeight, observations, onTrendWindowChange, rightDetail, t.reports, trendWindow])
 
   // Measure the real tab bar rather than relying on a screen-size breakpoint:
   // the left report pane can be resized independently from the window. The
@@ -926,4 +926,4 @@ export function CumulativeLabReport({
       )}
     </div>
   )
-}
+})

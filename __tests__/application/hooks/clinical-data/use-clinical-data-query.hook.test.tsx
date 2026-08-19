@@ -62,14 +62,13 @@ function fakeSmartRepository(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function renderClinicalData() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
+function renderClinicalData(queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
-  return renderHook(() => useClinicalData(), { wrapper })
+  return { ...renderHook(() => useClinicalData(), { wrapper }), queryClient }
 }
 
 describe('useClinicalData', () => {
@@ -119,6 +118,28 @@ describe('useClinicalData', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(mockGetClinicalDataRepository).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the same bundle snapshot after an idle-day remount', async () => {
+    const dateNow = jest.spyOn(Date, 'now')
+    dateNow.mockReturnValue(new Date('2026-08-19T09:00:00+08:00').getTime())
+    mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository() as any)
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    const first = renderClinicalData(queryClient)
+    await waitFor(() => expect(first.result.current.isLoading).toBe(false))
+    first.unmount()
+
+    dateNow.mockReturnValue(new Date('2026-08-20T09:00:00+08:00').getTime())
+    const second = renderClinicalData(queryClient)
+    await waitFor(() => expect(second.result.current.isLoading).toBe(false))
+
+    expect(mockGetClinicalDataRepository).toHaveBeenCalledTimes(1)
+    expect(second.result.current.conditions).toEqual([{ id: 'cond-1' }])
+    second.unmount()
+    dateNow.mockRestore()
   })
 
   // Local bundles parse the whole chart in one pass and only implement the core

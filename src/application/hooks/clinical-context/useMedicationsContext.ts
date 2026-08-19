@@ -2,7 +2,7 @@
 // Matches the left panel "Currently in use" logic: status-based AND date-based.
 // A medication is currently in use if status is active/completed AND
 // (no end date computable OR endDate >= today).
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
@@ -12,7 +12,6 @@ import {
   pickAiMedicationName,
 } from "@/src/shared/utils/fhir-display-helpers"
 import { routeAbbr } from "@/src/shared/utils/route-display"
-import { useNow } from "@/src/shared/hooks/use-now.hook"
 import {
   durationToDays,
   filterMedicationRecords,
@@ -239,11 +238,14 @@ export function useMedicationsContext(
   filters?: DataFilters,
   // Retained for API compatibility. The medication section remains
   // authoritative even when visit-linked records are repeated chronologically.
-  _encountersShown: boolean = false
+  _encountersShown: boolean = false,
+  sharedNowMs?: number,
 ): ClinicalContextSection | null {
-  // See useNow: re-run when the day rolls over so daysRemaining / recently-ended
-  // windows fed to the AI don't go stale on a long-lived tab.
-  const nowMs = useNow()
+  // The production clinical-context owner passes the shared day clock. Direct
+  // experiment/test consumers keep one mount-time snapshot instead of adding
+  // another focus listener or changing memo keys on every render.
+  const [fallbackNowMs] = useState(Date.now)
+  const nowMs = sharedNowMs ?? fallbackNowMs
   return useMemo(() => {
     if (!includeMedications || !clinicalData?.medications?.length) return null
 

@@ -77,9 +77,16 @@ export function useClinicalContext(
       includeMedications: selectedData.medications ?? false,
       includeProcedures: selectedData.procedures ?? false,
       filters,
+      nowMs,
     },
   )
-  const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters, selectedData.encounters ?? false)
+  const medicationsSection = useMedicationsContext(
+    selectedData.medications ?? false,
+    clinicalData,
+    filters,
+    selectedData.encounters ?? false,
+    nowMs,
+  )
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
   const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters, selectedData.encounters ?? false)
   const vitalSignsSections = useVitalSignsContext(
