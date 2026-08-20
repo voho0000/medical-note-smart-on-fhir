@@ -788,11 +788,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       ? getValueWithUnit(obs.valueQuantity)
       : obs.valueString || getCodeableConceptText(obs.valueCodeableConcept) || '—'
 
-    // Single line by design: the row stays compact and overflow shows an
-    // ellipsis. The name has priority — it gets the flexible width — while the
-    // value and institution are capped/truncate first (full text on hover) and
-    // the date stays fully visible. Keeps a long report name like "Nucleic acid
-    // amplification (DNA), quantitative" readable instead of collapsing to "Nu…".
+    // Prefer one scan line when the content genuinely fits. The clinical name
+    // keeps a readable minimum; if a long value/range/source exceeds the phone
+    // width, the source/date cluster wraps as one unit instead of squeezing the
+    // name away or overlapping the trend action.
     const compactRow = (
       <CompactLabResultRow
         title={row.title}
@@ -801,6 +800,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         abnormal={isAbnormal}
         referenceText={refText}
         rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
+        adaptivePhoneLayout
         titleActions={(
           <>
             {renderTrendButton()}
@@ -818,11 +818,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             {!hideMeta && (
               <div className="flex min-w-0 items-center justify-end gap-1 sm:shrink-0 sm:gap-2">
                 {row.institution && (
-                  <ReportInstitutionLabel institution={row.institution} className="max-w-[7rem] flex-1 sm:max-w-[9rem] sm:flex-none" />
+                  <ReportInstitutionLabel institution={row.institution} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                 )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+                    <Badge variant="outline" className="px-1.5 py-0 text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
                   </TooltipTrigger>
                   <TooltipContent>{metaWithDate}</TooltipContent>
                 </Tooltip>

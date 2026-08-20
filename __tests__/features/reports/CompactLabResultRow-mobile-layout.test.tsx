@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 
 describe('CompactLabResultRow mobile layout', () => {
-  it('moves source metadata to a complete second line instead of clipping it', () => {
+  it('keeps source metadata on a second line by default', () => {
     render(
       <CompactLabResultRow
         title="BUN"
@@ -31,6 +31,38 @@ describe('CompactLabResultRow mobile layout', () => {
     expect(source).toHaveClass('col-span-2', 'row-start-2', 'min-w-0', 'overflow-hidden', 'justify-start')
     expect(screen.getByText('23.7 mg/dL')).toBeInTheDocument()
     expect(screen.getByText('2026/6/2')).toBeInTheDocument()
+  })
+
+  it('uses an adaptive wrapping row without letting metadata compress the title', () => {
+    render(
+      <CompactLabResultRow
+        title="BUN"
+        value="23.7 mg/dL"
+        referenceText="[8–20 mg/dL]"
+        adaptivePhoneLayout
+        trailingContent={(
+          <div>
+            <span>示範長青醫院</span>
+            <span>2026/6/2</span>
+          </div>
+        )}
+      />,
+    )
+
+    const row = screen.getByText('BUN').closest('[role]')?.parentElement
+      ?? screen.getByText('BUN').parentElement?.parentElement
+    expect(row).toHaveClass('min-[380px]:flex', 'min-[380px]:flex-wrap')
+
+    const title = screen.getByText('BUN').closest('[data-testid="compact-lab-title"]')
+    expect(title).toHaveClass('min-[380px]:min-w-[3.75rem]', 'min-[380px]:flex-1')
+
+    const source = screen.getByText('示範長青醫院').closest('[data-testid="compact-lab-meta"]')
+    expect(source).toHaveClass(
+      'min-[380px]:col-auto',
+      'min-[380px]:row-auto',
+      'min-[380px]:ml-auto',
+      'min-[380px]:shrink-0',
+    )
   })
 
   it('shows ordinary reference ranges inline and reserves a tooltip for long ranges', () => {

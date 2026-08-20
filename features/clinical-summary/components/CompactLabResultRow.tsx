@@ -22,6 +22,9 @@ type CompactLabResultRowProps = {
   titleColumnClassName?: string
   titleClassName?: string
   valueMaxWidthClassName?: string
+  /** Let source metadata share the primary row when it genuinely fits.
+   *  The metadata wraps as one unit rather than compressing the clinical name. */
+  adaptivePhoneLayout?: boolean
   role?: "button"
   tabIndex?: number
   ariaExpanded?: boolean
@@ -195,6 +198,7 @@ export function CompactLabResultRow({
   titleColumnClassName,
   titleClassName,
   valueMaxWidthClassName,
+  adaptivePhoneLayout = false,
   role,
   tabIndex,
   ariaExpanded,
@@ -204,20 +208,24 @@ export function CompactLabResultRow({
   return (
     <div
       role={role}
+      data-testid="compact-lab-result-row"
+      data-mobile-adaptive={adaptivePhoneLayout ? "true" : undefined}
       tabIndex={tabIndex}
       aria-expanded={ariaExpanded}
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
         "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 sm:flex sm:px-2.5 sm:py-1.5",
+        adaptivePhoneLayout && "min-[380px]:flex min-[380px]:flex-wrap min-[380px]:gap-x-1 min-[380px]:px-2.5 min-[380px]:py-1.5",
         abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
       )}
     >
       <div className={cn(
         "flex min-w-0 basis-[45%] shrink-0 grow-0 items-center gap-1.5",
+        adaptivePhoneLayout && "min-[380px]:min-w-[3.75rem] min-[380px]:basis-auto min-[380px]:flex-1 min-[380px]:shrink",
         titleColumnClassName,
-      )}>
+      )} data-testid="compact-lab-title">
         {leadingTitleContent}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -229,7 +237,10 @@ export function CompactLabResultRow({
         </Tooltip>
         {titleActions}
       </div>
-      <div className="flex min-w-0 items-center justify-end gap-1.5 sm:flex-1 sm:justify-start">
+      <div className={cn(
+        "flex min-w-0 items-center justify-end gap-1.5 sm:flex-1 sm:justify-start",
+        adaptivePhoneLayout && "min-[380px]:shrink-0 min-[380px]:justify-start",
+      )} data-testid="compact-lab-value">
         <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
         {afterValue}
         <CompactReferenceRange referenceText={referenceText} value={value} />
@@ -241,7 +252,10 @@ export function CompactLabResultRow({
         )}
       </div>
       {trailingContent && (
-        <div className="col-span-2 row-start-2 flex min-w-0 items-center justify-start overflow-hidden sm:col-auto sm:row-auto sm:shrink-0">
+        <div className={cn(
+          "col-span-2 row-start-2 flex min-w-0 items-center justify-start overflow-hidden sm:col-auto sm:row-auto sm:shrink-0",
+          adaptivePhoneLayout && "min-[380px]:col-auto min-[380px]:row-auto min-[380px]:ml-auto min-[380px]:shrink-0",
+        )} data-testid="compact-lab-meta">
           {trailingContent}
         </div>
       )}
