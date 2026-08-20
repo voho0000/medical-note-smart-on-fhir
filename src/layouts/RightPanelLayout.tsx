@@ -388,11 +388,18 @@ function RightPanelContentInner() {
       {/* Match the left clinical workspace on phones: every primary feature is
           visible in one stable, equal-width row. Pin overrides remain a
           desktop customization only, so a phone user never has to open a
-          picker just to discover or switch features. */}
+          picker just to discover or switch features.
+
+          The columns have a floor rather than `minmax(0, 1fr)`: five zh-TW
+          labels fit a 375px strip, but enabling a sixth or seventh feature
+          would shave every column to ~50px and clip 「醫療摘要」/「臨床決策支援」
+          to two indistinguishable characters — with the full name only in a
+          `title` a finger cannot open. Past the floor the strip scrolls, and
+          `scroll-hint-x` says so. */}
       <ClinicalTabList
         data-tour="right-tabs"
-        className="grid gap-1 md:hidden"
-        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(0, 1fr))` }}
+        className="scroll-hint-x grid gap-1 overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
+        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(4.5rem, 1fr))` }}
       >
         {features.map(renderTrigger)}
       </ClinicalTabList>
@@ -400,7 +407,7 @@ function RightPanelContentInner() {
       <ClinicalTabList
         data-tour="right-tabs"
         className="grid gap-1 max-md:hidden"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(4.5rem, 1fr))` }}
       >
         {pinnedFeatures.map(renderTrigger)}
         {activeOverflowFeature && renderTrigger(activeOverflowFeature)}

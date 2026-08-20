@@ -26,4 +26,4 @@ export const clinicalTooltipSurfaceClass =
   "border border-primary/20 bg-secondary text-secondary-foreground shadow-lg shadow-primary/10 [&_svg]:bg-secondary! [&_svg]:fill-secondary!"
 
 export const clinicalIcdMoreButtonClass =
-  "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 py-0 text-[0.6875rem] text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+  "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 py-0 text-[0.6875rem] max-md:h-[36px] max-md:min-w-[36px] text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

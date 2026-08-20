@@ -158,7 +158,7 @@ export function FeatureRequestFormDialog({
           <div className="space-y-2">
             <Label htmlFor="feature-request-category">{copy.categoryLabel} *</Label>
             <Select value={category} onValueChange={(value) => setCategory(value as FeatureRequestCategory)}>
-              <SelectTrigger id="feature-request-category" className="min-h-11 sm:min-h-9">
+              <SelectTrigger id="feature-request-category" className="min-h-[44px] sm:min-h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -170,7 +170,7 @@ export function FeatureRequestFormDialog({
             {errors.category && <p className="text-sm text-destructive">{errors.category}</p>}
           </div>
 
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border p-3">
             <Checkbox
               checked={displayAuthor}
               onCheckedChange={(checked) => setDisplayAuthor(checked === true)}
@@ -187,7 +187,7 @@ export function FeatureRequestFormDialog({
             </span>
           </label>
 
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border p-3">
             <Checkbox
               checked={safetyConfirmed}
               onCheckedChange={(checked) => setSafetyConfirmed(checked === true)}

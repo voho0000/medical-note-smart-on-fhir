@@ -106,7 +106,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                 aria-pressed={range === r}
                 onClick={() => setRange(r)}
                 className={cn(
-                  'min-h-11 min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-3',
+                  'min-h-[44px] min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-3',
                   range === r
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',

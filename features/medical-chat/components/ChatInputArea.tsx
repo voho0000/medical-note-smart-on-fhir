@@ -202,7 +202,7 @@ export function ChatInputArea({
               onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
               aria-label={t.chat.clearInput}
               title={t.chat.clearInput}
-              className="absolute top-2 right-2 flex h-7 w-7 max-md:h-11 max-md:w-11 items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 touch-manipulation hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
+              className="absolute top-2 right-2 flex h-7 w-7 max-md:h-[44px] max-md:w-[44px] items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 touch-manipulation hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>

@@ -673,7 +673,7 @@ export function ReportsCard() {
             one horizontal scroller here instead of hiding frequent clinical
             comparisons behind a picker; the fullscreen action keeps its
             reserved space at the right edge. */}
-        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} !flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 touch-pan-x overflow-x-auto overscroll-x-contain gap-0 pr-12 max-md:!min-h-[36px] max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden @min-[1160px]:pr-28 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} !flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 scroll-hint-x touch-pan-x overflow-x-auto overscroll-x-contain gap-0 pr-12 max-md:pr-[3.25rem] max-md:!min-h-[36px] max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden @min-[1160px]:pr-28 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears only while a first-time raw view is being
             // prepared. The selected tab itself changes immediately.
@@ -716,7 +716,7 @@ export function ReportsCard() {
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center max-md:-m-2 max-md:min-h-[36px] max-md:min-w-[36px] max-md:p-2 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

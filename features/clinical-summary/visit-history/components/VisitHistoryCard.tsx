@@ -390,7 +390,8 @@ export function VisitHistoryCard() {
                     setVisibleCount(VISIT_PAGE_SIZE)
                   }}
                   placeholder={vt.searchPlaceholder}
-                  className="min-h-[36px] w-full rounded-md border bg-background py-0 pl-7 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5 [&::-webkit-search-cancel-button]:appearance-none"
+                  // 16px on phones: anything smaller makes iOS Safari zoom on focus.
+                  className="min-h-[36px] w-full rounded-md border bg-background py-0 pl-7 pr-7 text-[16px] focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5 md:text-xs [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
                   <button
@@ -399,7 +400,7 @@ export function VisitHistoryCard() {
                       setSearchQuery('')
                       setVisibleCount(VISIT_PAGE_SIZE)
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center max-md:-m-2 max-md:min-h-[36px] max-md:min-w-[36px] max-md:p-2 text-muted-foreground hover:text-foreground"
                     aria-label="Clear search"
                   >
                     <X className="h-3 w-3" />
@@ -412,7 +413,7 @@ export function VisitHistoryCard() {
                   setSortMode(e.target.value as SortMode)
                   setVisibleCount(VISIT_PAGE_SIZE)
                 }}
-                className="min-h-[36px] rounded-md border bg-background px-2 py-0 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5"
+                className="min-h-[36px] rounded-md border bg-background px-2 py-0 text-[16px] focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5 md:text-xs"
                 aria-label={vt.sortLabel}
               >
                 <option value="date-desc">{vt.sortDateDesc}</option>
@@ -429,7 +430,7 @@ export function VisitHistoryCard() {
                 data-testid="visit-filter-strip"
                 role="group"
                 aria-label={vt.filtersLabel ?? '就診篩選'}
-                className="flex min-w-0 flex-1 touch-pan-x flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible"
+                className="scroll-hint-x flex min-w-0 flex-1 touch-pan-x flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible md:bg-none"
               >
               {/* NHI care discipline is independent from visit setting:
                   e.g. both western and dental records can be outpatient. */}

@@ -221,3 +221,29 @@
   animation: resource-flash-fade 2s ease-out forwards;
   border-radius: 8px;
 }
+
+/* Horizontal-scroll affordance.
+   Phone strips (report sub-tabs, visit filters) hide their scrollbar for
+   density, which leaves no sign that a chip is parked off the right edge —
+   readers simply never find 「處置」. This is the classic layered-background
+   technique rather than a static gradient mask: the `local` cover layers
+   scroll away with the content, uncovering the `scroll`-attached shadow only
+   on the side that actually has more to reveal. A strip whose content fits
+   shows nothing at all, so nothing lies about hidden content. */
+.scroll-hint-x {
+  background-image:
+    linear-gradient(to right, var(--hint-surface, var(--panel)) 60%, transparent),
+    linear-gradient(to left, var(--hint-surface, var(--panel)) 60%, transparent),
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 16%, transparent), transparent),
+    linear-gradient(to left, color-mix(in oklab, var(--foreground) 16%, transparent), transparent);
+  background-position: left center, right center, left center, right center;
+  background-size: 28px 100%, 28px 100%, 14px 100%, 14px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+  /* Paint inside the content box, not the padding box. Strips that reserve
+     right-hand padding for an overlaid control (the reports 「展開」 button)
+     would otherwise draw the shadow underneath that control, where nobody
+     can see it. With no padding the two boxes coincide, so this costs the
+     other strips nothing. */
+  background-origin: content-box;
+}

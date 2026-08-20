@@ -788,7 +788,7 @@ export function OpenAiCompatibleSettings({
           value={selectedProfileId ?? ''}
           onChange={(event) => handleProfileSelection(event.target.value)}
           disabled={busy || profiles.length === 0}
-          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:text-xs"
+          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[16px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:text-xs"
           aria-label={t.settings.openAiCompatibleSelectProfile}
         >
           {creatingNew && (

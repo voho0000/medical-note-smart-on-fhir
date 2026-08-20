@@ -124,7 +124,7 @@ function FeatureRequestDescription({
       {canExpand && (
         <button
           type="button"
-          className="h-11 shrink-0 text-left text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-6"
+          className="h-[44px] shrink-0 text-left text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:h-6"
           aria-expanded={expanded}
           aria-controls={descriptionId}
           onClick={() => setExpanded((current) => !current)}
@@ -304,7 +304,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
                 <DialogTitle>{copy.title}</DialogTitle>
                 <DialogDescription>{copy.description}</DialogDescription>
               </div>
-              <Button className="h-11 w-full sm:h-9 sm:w-auto sm:shrink-0" onClick={handleNewRequest}>
+              <Button className="h-[44px] w-full sm:h-9 sm:w-auto sm:shrink-0" onClick={handleNewRequest}>
                 <Plus className="h-4 w-4" />
                 {copy.newRequest}
               </Button>
@@ -330,7 +330,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder={copy.searchPlaceholder}
-                  className="h-11 pl-9 sm:h-9"
+                  className="h-[44px] pl-9 sm:h-9"
                 />
               </div>
             </div>
@@ -339,7 +339,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
               <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="feature-request-sort">{copy.sortLabel}</Label>
                 <Select value={sort} onValueChange={(value) => setSort(value as FeatureRequestSort)}>
-                  <SelectTrigger id="feature-request-sort" className="min-h-11 w-full sm:min-h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="feature-request-sort" className="min-h-[44px] w-full sm:min-h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="popular">{copy.sortPopular}</SelectItem>
                     <SelectItem value="latest">{copy.sortLatest}</SelectItem>
@@ -350,7 +350,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
               <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="feature-request-status">{copy.statusLabel}</Label>
                 <Select value={status} onValueChange={(value) => setStatus(value as FeatureRequestStatus | 'all')}>
-                  <SelectTrigger id="feature-request-status" className="min-h-11 w-full sm:min-h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="feature-request-status" className="min-h-[44px] w-full sm:min-h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{copy.allStatuses}</SelectItem>
                     <SelectItem value="evaluating">{copy.statuses.evaluating}</SelectItem>
@@ -364,7 +364,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
               <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="feature-request-category-filter">{copy.categoryLabel}</Label>
                 <Select value={category} onValueChange={(value) => setCategory(value as FeatureRequestCategory | 'all')}>
-                  <SelectTrigger id="feature-request-category-filter" className="min-h-11 w-full sm:min-h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="feature-request-category-filter" className="min-h-[44px] w-full sm:min-h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{copy.allCategories}</SelectItem>
                     <SelectItem value="ai">{copy.categories.ai}</SelectItem>
@@ -377,7 +377,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
               <div className="min-w-0 space-y-1.5">
                 <Label htmlFor="feature-request-view">{copy.viewLabel}</Label>
                 <Select value={view} onValueChange={(value) => setView(value as FeatureRequestView)}>
-                  <SelectTrigger id="feature-request-view" className="min-h-11 w-full sm:min-h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="feature-request-view" className="min-h-[44px] w-full sm:min-h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{copy.views.all}</SelectItem>
                     {user && <SelectItem value="mine">{copy.views.mine}</SelectItem>}
@@ -466,7 +466,7 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-11 sm:h-8"
+                                className="h-[44px] sm:h-8"
                                 onClick={() => {
                                   setEditingRequest(request)
                                   setFormOpen(true)
@@ -476,12 +476,12 @@ export function FeatureRequestPoolDialog({ open, onOpenChange }: FeatureRequestP
                               </Button>
                             )}
                             {owned && request.visibility === 'visible' && (
-                              <Button variant="ghost" size="sm" className="h-11 sm:h-8" onClick={() => setWithdrawRequest(request)}>
+                              <Button variant="ghost" size="sm" className="h-[44px] sm:h-8" onClick={() => setWithdrawRequest(request)}>
                                 {copy.withdraw}
                               </Button>
                             )}
                             {admin && (
-                              <Button variant="outline" size="sm" className="h-11 sm:h-8" onClick={() => setAdminRequest(request)}>
+                              <Button variant="outline" size="sm" className="h-[44px] sm:h-8" onClick={() => setAdminRequest(request)}>
                                 <Settings2 className="h-3.5 w-3.5" />{copy.manage}
                               </Button>
                             )}

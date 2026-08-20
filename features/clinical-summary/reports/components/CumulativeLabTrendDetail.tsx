@@ -480,7 +480,7 @@ export function CumulativeLabTrendDetail({
             onClick={() => selectWindow(value)}
             aria-pressed={window === value}
             className={cn(
-              'min-h-11 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'min-h-[44px] rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               window === value
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',

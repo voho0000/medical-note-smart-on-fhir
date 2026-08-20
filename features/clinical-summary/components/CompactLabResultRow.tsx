@@ -260,14 +260,22 @@ export function CompactLabResultRow({
         titleColumnClassName,
       )} data-testid="compact-lab-title">
         {leadingTitleContent}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className={cn("truncate text-[0.8125rem] font-semibold text-foreground", titleClassName)}>
-              {titleNode ?? title}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{title}</TooltipContent>
-        </Tooltip>
+        {/* The analyte name truncates, and on a phone the hover bubble was the
+            only place the rest of it existed — unreachable with a finger.
+            TapTooltip keeps the desktop hover peek and adds the tap. */}
+        <TapTooltip
+          content={title}
+          aria-label={title}
+          asChild
+          contentClassName="max-w-[min(90vw,24rem)] whitespace-normal break-words"
+        >
+          <span
+            tabIndex={0}
+            className={cn("truncate text-[0.8125rem] font-semibold text-foreground", titleClassName)}
+          >
+            {titleNode ?? title}
+          </span>
+        </TapTooltip>
         {titleActions}
       </div>
       {/* No `min-w-0` here, deliberately. The value and its reference range are

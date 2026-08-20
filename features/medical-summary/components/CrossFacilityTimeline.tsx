@@ -125,7 +125,7 @@ export function CrossFacilityTimeline({
                     </span>
                   ) : null}
                   {onNavigate ? (
-                    <ArrowUpRight className="h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
+                    <ArrowUpRight className="h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-60" />
                   ) : null}
                 </div>
                 <p className="mt-0.5 min-w-0 text-[0.8125rem] leading-snug text-foreground @min-[30rem]:mt-0 @min-[30rem]:flex-1">

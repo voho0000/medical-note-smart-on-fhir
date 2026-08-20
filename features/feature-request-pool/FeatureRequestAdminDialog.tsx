@@ -78,7 +78,7 @@ export function FeatureRequestAdminDialog({
           <div className="space-y-2">
             <Label htmlFor="feature-request-admin-status">{copy.statusLabel}</Label>
             <Select value={status} onValueChange={(value) => setStatus(value as FeatureRequestStatus)}>
-              <SelectTrigger id="feature-request-admin-status" className="min-h-11 sm:min-h-9">
+              <SelectTrigger id="feature-request-admin-status" className="min-h-[44px] sm:min-h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -102,7 +102,7 @@ export function FeatureRequestAdminDialog({
             />
           </div>
 
-          <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border p-3">
+          <div className="flex min-h-[44px] items-center justify-between gap-4 rounded-md border p-3">
             <div>
               <Label htmlFor="feature-request-admin-visible">{copy.admin.visibilityLabel}</Label>
               <p className="mt-1 text-xs text-muted-foreground">{copy.admin.visibilityHint}</p>
