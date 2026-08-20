@@ -116,10 +116,26 @@ export function ObservationLongitudinalAction({
     'data-detail-source-id': sourceId,
     'data-tour': dataTour,
     className: cn(
-      // Literal px, not rem: the root font-size drops to 12px on phones, so a
-      // rem-sized box here rendered as a ~12px tap target — and this is the
-      // entry point to every trend in the app. Desktop keeps the compact icon.
-      'inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors touch-manipulation hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:min-h-[44px] sm:min-w-[44px] md:min-h-0 md:min-w-0',
+      // Literal px, not rem: the root font-size is user-settable (12–20px, and
+      // 12px is the phone default for clinicians), so a rem-sized box here
+      // rendered as a ~12px tap target — and this is the entry point to every
+      // trend in the app. The 36px box therefore holds for the WHOLE
+      // single-panel range (<768 = the app's md split, not sm): 640–767 is
+      // still the stacked touch layout, so it must not fall back to a
+      // mouse-sized icon. md+ (two-panel desktop) keeps the compact icon.
+      //
+      // `max-md:-my-[11px]` keeps that 36px box while stopping it from SETTING
+      // the height of the line it sits on: the icon lives on the analyte-name
+      // lane (~1.22 × root ⇒ ~15px at root 12), and a 36px box there inflated
+      // every lab row to ~60px. The negative margin lets the box overlap the
+      // row's own padding instead — 36 − 2×11 = 14px of layout contribution.
+      // Fixed px, not rem, and deliberately sized for the SMALLEST root: what
+      // is being cancelled (36px) is itself fixed, so the margin needed,
+      // (36 − line)/2, is largest when the root is smallest. 11px covers root
+      // 12; at root 16/20 the line (~20/25px) simply governs instead and the
+      // box contributes less than the text — it can never over-collapse a row.
+      // A rem margin would have scaled the wrong way (smallest where needed most).
+      'inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors touch-manipulation hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 max-md:-my-[11px] md:min-h-0 md:min-w-0',
       isActive && 'text-primary',
       className,
     ),

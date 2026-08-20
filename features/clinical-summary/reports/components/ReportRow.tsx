@@ -475,6 +475,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // Inline-image indicator. Clicking opens the lazy lightbox. `stopProp` is set
   // when the button lives inside an AccordionTrigger so the click doesn't also
   // toggle the accordion (mirrors TrendButton).
+  // Sizing mirrors ObservationLongitudinalAction exactly: one 36px touch box
+  // for the whole single-panel range (<768, the app's md split), and
+  // `max-md:-my-[11px]` so that box overlaps the row's padding instead of
+  // stretching the analyte-name lane it shares with the trend icon.
   const renderImageButton = (stopProp?: boolean) => (
     <div
       data-tour="report-image"
@@ -482,7 +486,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         if (stopProp) e.stopPropagation()
         openImageDialog()
       }}
-      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary sm:min-h-[44px] sm:min-w-[44px] md:min-h-0 md:min-w-0"
+      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary max-md:-my-[11px] md:min-h-0 md:min-w-0"
       role="button"
       tabIndex={0}
       aria-label="查看影像"

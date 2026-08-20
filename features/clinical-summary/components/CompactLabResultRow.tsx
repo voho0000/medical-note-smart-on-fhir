@@ -142,12 +142,19 @@ function CompactReferenceRange({
     )
   }
 
+  // The collapsed label is the ONLY way to read a stratified range on a touch
+  // layout, and at 0.6875rem its own line box is barely 16px of tap target.
+  // `-my/py` pads the hit area out by 20px without changing what the row
+  // measures: the padding is cancelled by an equal negative margin, so the
+  // analyte lane still lays out at its text height at ANY root size. Scoped to
+  // <768 (the app's md split) like the row's other touch targets; md+ keeps the
+  // bare label and hover.
   return (
     <TapTooltip
       content={referenceText}
       aria-label={`參考範圍 ${referenceText}`}
       contentClassName="max-h-[50vh] max-w-[min(90vw,28rem)] overflow-y-auto whitespace-normal break-words text-xs leading-relaxed"
-      className="inline-flex min-w-0 max-w-[8rem] shrink sm:max-w-[12rem]"
+      className="inline-flex min-w-0 max-w-[8rem] shrink max-md:-my-[10px] max-md:py-[10px] sm:max-w-[12rem]"
     >
       <span
         data-testid="reference-range-truncated"
@@ -215,7 +222,13 @@ export function CompactLabResultRow({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 sm:flex sm:px-2.5 sm:py-1.5",
+        // `max-md:min-h-[38px]`: below the app's md split every inline action in
+        // this row is a 36px touch box, and the row CLIPS (overflow-hidden), so
+        // the row's own padding box is the ceiling on those tap targets. 38px
+        // (36 + the 1px borders) is the smallest row that still lets a centred
+        // 36px target survive the clip. It is a floor, not a height — the
+        // two-line phone layout is naturally taller and ignores it.
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 max-md:min-h-[38px] sm:flex sm:px-2.5 sm:py-1.5",
         adaptivePhoneLayout && "min-[380px]:flex min-[380px]:flex-wrap min-[380px]:gap-x-1 min-[380px]:px-2.5 min-[380px]:py-1.5",
         abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
@@ -237,9 +250,24 @@ export function CompactLabResultRow({
         </Tooltip>
         {titleActions}
       </div>
+      {/* No `min-w-0` here, deliberately. The value and its reference range are
+          the clinical payload and neither can give ground on its own — a short
+          value is `shrink-0` and the inline range is `whitespace-nowrap` — so
+          zeroing this cluster's minimum let it shrink below its content and the
+          range PAINTED OVER the institution/date cluster beside it instead of
+          anything truncating. Flexbox's automatic minimum size (min-content)
+          now holds the cluster open; the slack comes out of the title (which
+          truncates) or the meta (which wraps, then clips). */}
       <div className={cn(
-        "flex min-w-0 items-center justify-end gap-1.5 sm:flex-1 sm:justify-start",
-        adaptivePhoneLayout && "min-[380px]:shrink-0 min-[380px]:justify-start",
+        "flex items-center justify-end gap-1.5",
+        adaptivePhoneLayout
+          // Single-line adaptive row: hug the content. `flex-1` (basis 0) was
+          // the second half of the overlap — a 0 hypothetical main size means
+          // the flex line always "fits", so the meta cluster never wrapped to
+          // line 2 the way this layout intends; it stayed put and got painted
+          // over. `flex-none` restores the wrap and leaves `ml-auto` working.
+          ? "min-[380px]:flex-none min-[380px]:justify-start"
+          : "sm:flex-1 sm:justify-start",
       )} data-testid="compact-lab-value">
         <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
         {afterValue}
