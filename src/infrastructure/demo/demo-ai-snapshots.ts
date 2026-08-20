@@ -336,6 +336,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { ref: 'L15', label: '胸部X光：雙下肺病灶與雙側肋膜積液', category: 'lab' },
       { ref: 'E1', label: '最新門診申報含肺炎、血液疾病與貧血診斷碼', category: 'encounter' },
     ],
+    milestones: [],
+    threads: [],
   },
   patient: {
     headline: '您的腎功能需要持續追蹤；近期門診申報也重複出現肺炎與血液疾病診斷碼，建議向原看診醫師確認。',
@@ -445,6 +447,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { ref: 'L15', label: '胸部X光檢查', category: 'lab' },
       { ref: 'E1', label: '8月12日最新門診申報', category: 'encounter' },
     ],
+    milestones: [],
+    threads: [],
   },
 }
 

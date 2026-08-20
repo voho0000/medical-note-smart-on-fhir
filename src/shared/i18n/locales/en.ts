@@ -264,6 +264,26 @@ export const en = {
       lab: 'Lab',
       followup: 'Follow-up',
     },
+    // Timeline v2 milestone categories (legacy ones reuse `categories`).
+    milestoneCategories: {
+      admission: 'Admission',
+      emergency: 'ER',
+      careplan: 'Care plan',
+      exam: 'Exam',
+    },
+    timelineStatsLine: '{start} – {end} · {orgs} facilities · {imp} admissions · {er} ER visits',
+    timelineWindowBoundary: 'Outpatient claim detail begins here — earlier years contain admission/ER records only',
+    timelineFallbackNote: '{count} mandatory event(s) auto-added by the app (missed in the AI reply).',
+    threadsTitle: 'Ongoing care',
+    threadsSubtitle: 'Routine visits grouped into care threads instead of individual events',
+    threadStatuses: {
+      active: 'ongoing',
+      ended: 'ended',
+      interrupted: 'record gap',
+    },
+    threadVisitCount: '{count} visits',
+    threadsShowMore: '{count} more threads',
+    threadsShowLess: 'Collapse threads',
     encounterClasses: {
       inpatient: 'Inpatient',
       emergency: 'ER',

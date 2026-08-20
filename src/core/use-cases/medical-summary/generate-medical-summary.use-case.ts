@@ -37,6 +37,8 @@ import {
   MedicalSummaryTimelineModuleSchema,
   SummarySegmentSchema,
   normaliseTimelineCategory,
+  normaliseMilestoneCategory,
+  normaliseCareThreadStatus,
   normaliseProblemKind,
   normaliseInvestigationKind,
   normaliseInvestigationDirection,
@@ -50,8 +52,11 @@ import {
   type MedicalSummaryModuleResultMap,
   type MedicalSummaryResult,
   type ResolvedSourceRef,
+  type SummaryCareThread,
   type SummaryCoverageStats,
+  type SummaryMilestoneEvent,
   type SummarySourceCatalogEntry,
+  type SummaryTimelineStats,
 } from '@/src/core/entities/medical-summary.entity'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
@@ -374,6 +379,11 @@ export function buildSourceCatalog(
     .forEach((e, i) => {
       const type = encounterTypeText(e, locale)
       const reason = diagnosisCodeText(e.reasonCode?.[0], locale)
+      // Uppercased ICD reason codes power care-thread rule expansion at
+      // finalize (codePrefixes matching) — deterministic, never AI-derived.
+      const reasonCodes = (e.reasonCode ?? [])
+        .flatMap((concept) => (concept?.coding ?? []).map((coding) => coding.code?.trim().toUpperCase()))
+        .filter((code): code is string => Boolean(code))
       entries.push({
         key: `E${i + 1}`,
         resourceType: 'Encounter',
@@ -387,6 +397,7 @@ export function buildSourceCatalog(
         endDate: day(e.period?.end),
         organization: e.serviceProvider?.display,
         encounterClass: classifyEncounterClass(e.class),
+        ...(reasonCodes.length > 0 ? { reasonCodes } : {}),
       })
     })
 
@@ -1002,7 +1013,8 @@ const SCHEMA_HINT =
   '"medicationReview": {"overview": "<1-2 sentence clinician synthesis of the whole regimen>", "regimen": [{"group": "<treatment area>", "name": "<medicine or clinically coherent group>", "sig": "<dose/frequency only when recorded>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported recent change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify during medication reconciliation>", "sources": ["<M key>"]}]}, ' +
   '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], ' +
   '"decisions": [], ' +
-  '"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}'
+  '"milestones": [{"refs": ["<catalog keys this row covers>"], "label": "<one-line event label>", "category": "admission|emergency|careplan|diagnosis|procedure|exam|medication", "note": "<optional one-line sub-note>", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], ' +
+  '"threads": [{"label": "<recurring-care thread name>", "codePrefixes": ["<ICD-10 3-char prefixes>"], "organizations": ["<facility names running that care>"], "insight": "<one short clinical reading>", "status": "active|ended|interrupted"}]}'
 
 const SHARED_RULES =
   '\n\nData-integrity rules (CRITICAL): ' +
@@ -1102,11 +1114,15 @@ const SHARED_RULES =
   'Do NOT wrap key phrases in 「」 quotes as a substitute for highlighting — split them out instead. ' +
   'Example: instead of ONE segment {"text": "近期診斷為「肺炎」伴隨咳嗽。"}, output THREE: ' +
   '[{"text": "近期診斷為", "emphasis": false, "sources": []}, {"text": "肺炎", "emphasis": true, "sources": ["E3"]}, {"text": "伴隨咳嗽。", "emphasis": false, "sources": []}]. ' +
-  'For the timeline, surface only the clinically SIGNIFICANT events — milestones and turning points ' +
-  '(a hospital admission, an ER visit, a first/major new diagnosis, starting a care plan, a key imaging study or procedure) — ' +
-  'NOT every routine follow-up visit or repeat-prescription pickup. Aim for ~5–8 such events for a case like this (only a very complex multi-year, multi-hospital course justifies more). ' +
-  'The timeline is the OBJECTIVE care journey, so choose the SAME significant events REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language — it must NOT show more events, fewer events, or different events than the clinician version would. ' +
-  'Curate — the full record list is already visible elsewhere; the app supplies date and hospital, you supply only the label. ' +
+  'For "milestones" (the cross-facility timeline), the coverage invariant is absolute: EVERY hospital admission, EVERY emergency visit, and EVERY care plan in the SOURCE LIST must appear in the "refs" of exactly one milestone row — none may be silently dropped (the app verifies this and appends any missed event itself). ' +
+  'One row may cover SEVERAL refs: merge an ER visit with its same-cause admission within days into one episode row; merge recurrent same-cause admissions or ER visits (chemotherapy cycles, repeated heart-failure admissions) into ONE series row listing every covered ref — the recurrence itself is the clinical signal. Events with DIFFERENT causes must stay separate rows; never bundle unrelated admissions into a catch-all row. ' +
+  'Beyond those anchors, add only 3–6 turning-point picks: the first-in-record appearance of a major diagnosis group, a surgery-level procedure (never dressing changes, injections, or routine billing items), a pivotal imaging/pathology report, or a chronic-medication start/stop. Prefer fewer, stronger picks. ' +
+  'Milestone refs must not point at routine outpatient visits (the sole exception: a single first-occurrence visit backing a diagnosis pick) — recurring outpatient care belongs to "threads", and the same visit must never appear in both. ' +
+  'Outpatient/medication claim detail often begins YEARS after the oldest admissions: first appearance in the record is NOT a new diagnosis — when context (e.g. an established medication) implies a pre-existing condition, say so in the label. ' +
+  'Claim a medication stop only as "最後開立於<date>，其後未再見紀錄" citing that M key, never as the patient having stopped; a same-ingredient product continuing under another brand is a switch, not a stop. ' +
+  'The app derives every date, day count, and organization from the refs — write only label text, with no dates except where the medication-stop phrasing requires one. ' +
+  'For "threads", describe each clinically coherent RECURRING outpatient care pattern as a rule: its ICD-10 3-character codePrefixes plus the organizations running that care. The app expands the rule into member visits — never enumerate or count visits yourself. Cover chronic-disease clinics and recurring minor care; scattered one-off visits are not threads. "insight" is one short clinical reading of the pattern (rhythm, facility handoff, linked chronic therapy); "status" is active while visits continue near the record end, ended when concluded, interrupted when the visit record stops while care apparently continues elsewhere. A visit belongs to at most one thread — choose the clinically primary grouping. ' +
+  'The timeline is the OBJECTIVE care journey, so choose the SAME milestones and threads REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language — it must NOT show more events, fewer events, or different events than the clinician version would. ' +
   // The synthesis rule itself is shared verbatim with the IPS-export problem
   // inference (problem-inference-principles.ts) so both features infer
   // problems from 健保 data with the same semantics.
@@ -1142,8 +1158,9 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryModuleId, string> = {
     'PROBLEMS: Include a condition only when it is explicitly documented by a Condition, care plan, or clinical document, or supported by repeated comparable abnormal results whose abnormality is supplied. ' +
     'Never create an active problem from medication evidence alone. Never turn a single unassessed lab value into a disease or poor-control problem. Omit claim-only or medication-only candidates instead of presenting them as confirmed. ',
   timeline:
-    'TIMELINE: Select significant objective events only. The app supplies dates, end dates, organizations, and encounter class; write only a concise label supported by the cited event. ' +
-    'Do not add a finding or procedure that is absent from the cited record. Prefer admissions, emergency visits, procedures, major reports, and explicit medication changes over routine refills. ',
+    'TIMELINE: Return milestones + threads. Milestones: every admission, emergency visit, and care plan key must appear in exactly one row\'s refs; same-cause episodes or series may merge into one row listing all refs; different causes stay separate rows. ' +
+    'Add at most 3-6 turning-point picks (first-in-record major diagnosis, surgery-level procedure, pivotal report, chronic medication start/stop). The app supplies dates, day counts, and organizations from refs; write only concise labels supported by the cited events. ' +
+    'Threads: express recurring outpatient care as codePrefixes + organizations rules the app expands; never enumerate or count visits; status is active|ended|interrupted. Do not put the same visit in both a milestone and a thread. ',
   investigations:
     `INVESTIGATIONS: Cite only matching L/O evidence and show at most ${MAX_INVESTIGATION_TREND_POINTS} actual dated values/findings. ` +
     'Use direction "single" for exactly one result. Use improving/stable/worsening/fluctuating only with at least two comparable dated points. ' +
@@ -1174,7 +1191,7 @@ const MODULE_SCHEMA_HINTS: Record<MedicalSummaryModuleId, string> = {
   problems:
     '{"problems": [{"label": "<condition name>", "basis": "<short evidence basis>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
   timeline:
-    '{"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
+    '{"milestones": [{"refs": ["<catalog keys this row covers>"], "label": "<one-line event label>", "category": "admission|emergency|careplan|diagnosis|procedure|exam|medication", "note": "<optional one-line sub-note>", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], "threads": [{"label": "<recurring-care thread name>", "codePrefixes": ["<ICD-10 3-char prefixes>"], "organizations": ["<facility names>"], "insight": "<one short clinical reading>", "status": "active|ended|interrupted"}]}',
   investigations:
     '{"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or finding>", "interpretation": "<why this matters>", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
   medications:
@@ -1442,10 +1459,12 @@ function classifyEvidenceType(text?: string): string | null {
 
 // Accept pre-v3 cached/test objects during the rollout; live parseResult always
 // materialises newer arrays via schema defaults.
-type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' | 'medicationEducation' | 'medicationReview'> & {
+type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' | 'medicationEducation' | 'medicationReview' | 'milestones' | 'threads'> & {
   investigations?: MedicalSummaryAiResult['investigations']
   medicationEducation?: MedicalSummaryAiResult['medicationEducation']
   medicationReview?: MedicalSummaryAiResult['medicationReview']
+  milestones?: MedicalSummaryAiResult['milestones']
+  threads?: MedicalSummaryAiResult['threads']
 }
 
 const MODULE_RESULT_SCHEMAS = {
@@ -1456,18 +1475,20 @@ const MODULE_RESULT_SCHEMAS = {
   medications: MedicalSummaryMedicationsModuleSchema,
 } as const
 
-const MODULE_REQUIRED_OUTPUT_FIELDS: Record<MedicalSummaryModuleId, readonly string[]> = {
-  priorities: ['headline', 'summary'],
-  problems: ['problems'],
-  timeline: ['timeline'],
-  investigations: ['investigations'],
-  medications: ['medicationEducation', 'medicationReview'],
+// Each inner group is satisfied by ANY of its fields — the timeline module
+// accepts either the v2 contract (milestones) or a legacy reply (timeline).
+const MODULE_REQUIRED_OUTPUT_FIELDS: Record<MedicalSummaryModuleId, readonly (readonly string[])[]> = {
+  priorities: [['headline'], ['summary']],
+  problems: [['problems']],
+  timeline: [['milestones', 'timeline']],
+  investigations: [['investigations']],
+  medications: [['medicationEducation'], ['medicationReview']],
 }
 
 function hasRequiredModuleFields(moduleId: MedicalSummaryModuleId, raw: unknown): boolean {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
-  return MODULE_REQUIRED_OUTPUT_FIELDS[moduleId].every((field) =>
-    Object.prototype.hasOwnProperty.call(raw, field),
+  return MODULE_REQUIRED_OUTPUT_FIELDS[moduleId].every((group) =>
+    group.some((field) => Object.prototype.hasOwnProperty.call(raw, field)),
   )
 }
 
@@ -1954,6 +1975,8 @@ export class GenerateMedicalSummaryUseCase {
       problems: [],
       decisions: [],
       timeline: [],
+      milestones: [],
+      threads: [],
     }
   }
 
@@ -2019,6 +2042,21 @@ export class GenerateMedicalSummaryUseCase {
         label: item.label,
         category: item.category,
       })),
+      milestones: (result.milestones ?? [])
+        .filter((item) => !item.coverageFallback)
+        .map((item) => ({
+          refs: item.keys,
+          label: item.label,
+          category: item.category,
+          note: item.note,
+        })),
+      threads: (result.careThreads ?? []).map((item) => ({
+        label: item.label,
+        codePrefixes: item.codePrefixes,
+        organizations: item.organizationFilter,
+        insight: item.insight,
+        status: item.status,
+      })),
     }
   }
 
@@ -2038,7 +2076,7 @@ export class GenerateMedicalSummaryUseCase {
       }
       case 'timeline': {
         const value = moduleResult as MedicalSummaryModuleResultMap['timeline']
-        return { ...draft, timeline: value.timeline }
+        return { ...draft, timeline: value.timeline, milestones: value.milestones, threads: value.threads }
       }
       case 'investigations': {
         const value = moduleResult as MedicalSummaryModuleResultMap['investigations']
@@ -2446,6 +2484,162 @@ export class GenerateMedicalSummaryUseCase {
       // sit at the top; scroll down for history.
       .sort((a, b) => b.date.localeCompare(a.date))
 
+    // ---- Timeline v2: milestones (multi-ref rows) --------------------------
+    // Resolve each milestone's refs; the date RANGE comes from Encounter refs
+    // only, so a cited M/R key can never stretch an admission's stay.
+    let milestones: SummaryMilestoneEvent[] = (ai.milestones ?? []).flatMap((pick) => {
+      const entries = pick.refs
+        .map((ref) => byKey.get(normaliseSummarySourceKey(ref)))
+        .filter((entry): entry is SummarySourceCatalogEntry => Boolean(entry?.date))
+      droppedTimelineCount += pick.refs.length - entries.length
+      if (entries.length === 0) return []
+      const encounterEntries = entries.filter((entry) => entry.resourceType === 'Encounter')
+      const spanEntries = encounterEntries.length > 0 ? encounterEntries : entries
+      const dates = spanEntries.map((entry) => entry.date!).sort()
+      const ends = spanEntries.map((entry) => entry.endDate ?? entry.date!).sort()
+      const primary = encounterEntries[0] ?? entries[0]
+      let category = normaliseMilestoneCategory(pick.category)
+      if (category === 'encounter' && primary.encounterClass === 'inpatient') category = 'admission'
+      if (category === 'encounter' && primary.encounterClass === 'emergency') category = 'emergency'
+      const organizations = [...new Set(entries.map((entry) => entry.organization).filter((org): org is string => Boolean(org)))]
+      const endDate = ends[ends.length - 1]
+      return [{
+        keys: entries.map((entry) => entry.key),
+        date: dates[0],
+        ...(endDate !== dates[0] ? { endDate } : {}),
+        label: pick.label,
+        ...(pick.note ? { note: pick.note } : {}),
+        category,
+        organizations,
+        resourceType: primary.resourceType,
+        resourceId: primary.resourceId,
+        encounterClass: primary.encounterClass,
+        refCount: entries.length,
+        ...withDocumentEvidence(pick.documentEvidence),
+      }]
+    })
+
+    // Legacy picks (cached results, demo snapshots) render through the same v2
+    // card: map each resolved single-ref event to a milestone row.
+    if (milestones.length === 0 && timeline.length > 0) {
+      milestones = timeline.map((event) => ({
+        keys: [event.key],
+        date: event.date,
+        ...(event.endDate && event.endDate !== event.date ? { endDate: event.endDate } : {}),
+        label: event.label,
+        category: event.category === 'encounter' && event.encounterClass === 'inpatient'
+          ? 'admission' as const
+          : event.category === 'encounter' && event.encounterClass === 'emergency'
+            ? 'emergency' as const
+            : event.category,
+        organizations: event.organization ? [event.organization] : [],
+        resourceType: event.resourceType,
+        resourceId: event.resourceId,
+        encounterClass: event.encounterClass,
+        refCount: 1,
+        ...(event.documentEvidence ? { documentEvidence: event.documentEvidence } : {}),
+      }))
+    }
+
+    // Coverage invariant (deterministic, zero AI): every admission, emergency
+    // visit, and care plan must appear in some row. Whatever the model missed
+    // is appended with its catalog display as the label — anchors may be
+    // aggregated by the AI, but they can never silently disappear.
+    if (milestones.length > 0) {
+      const coveredKeys = new Set(milestones.flatMap((event) => event.keys))
+      for (const entry of catalog) {
+        if (!entry.date || coveredKeys.has(entry.key)) continue
+        const isAnchorEncounter = entry.resourceType === 'Encounter' &&
+          (entry.encounterClass === 'inpatient' || entry.encounterClass === 'emergency')
+        const isCarePlan = entry.resourceType === 'CarePlan'
+        if (!isAnchorEncounter && !isCarePlan) continue
+        milestones.push({
+          keys: [entry.key],
+          date: entry.date,
+          ...(entry.endDate && entry.endDate !== entry.date ? { endDate: entry.endDate } : {}),
+          label: entry.display,
+          category: isCarePlan ? 'careplan' : entry.encounterClass === 'inpatient' ? 'admission' : 'emergency',
+          organizations: entry.organization ? [entry.organization] : [],
+          resourceType: entry.resourceType,
+          resourceId: entry.resourceId,
+          encounterClass: entry.encounterClass,
+          refCount: 1,
+          coverageFallback: true,
+        })
+      }
+      milestones.sort((a, b) => b.date.localeCompare(a.date))
+    }
+
+    // ---- Timeline v2: care threads expanded from AI rules ------------------
+    // NHI 藥局 dispensing rows are encounters too — they are refills of a
+    // clinic's prescription, not visits, so they never count toward a thread.
+    const threadableEntries = catalog.filter((entry) =>
+      entry.resourceType === 'Encounter' &&
+      entry.encounterClass === 'outpatient' &&
+      entry.date &&
+      !(entry.organization ?? '').includes('藥局') &&
+      !entry.display.includes('藥局') &&
+      !entry.display.toLowerCase().includes('pharmacy'))
+    const claimedByThread = new Set<string>()
+    const careThreads: SummaryCareThread[] = (ai.threads ?? []).flatMap((rule) => {
+      const prefixes = rule.codePrefixes.map((p) => p.trim().toUpperCase()).filter(Boolean)
+      if (prefixes.length === 0) return []
+      const organizationFilter = rule.organizations.map((org) => org.trim()).filter(Boolean)
+      const members = threadableEntries.filter((entry) =>
+        !claimedByThread.has(entry.key) &&
+        (organizationFilter.length === 0 || organizationFilter.some((org) =>
+          entry.organization && (entry.organization.includes(org) || org.includes(entry.organization)))) &&
+        (entry.reasonCodes ?? []).some((code) => prefixes.some((prefix) => code.startsWith(prefix))))
+      // One or zero matching visits is not a recurring pattern — the model
+      // over-claimed; drop the rule rather than render a hollow thread.
+      if (members.length < 2) return []
+      members.forEach((member) => claimedByThread.add(member.key))
+      const visits = members
+        .map((member) => ({
+          date: member.date!,
+          ...(member.organization ? { organization: member.organization } : {}),
+          resourceId: member.resourceId,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+      const orgCounts = new Map<string, number>()
+      for (const visit of visits) {
+        if (visit.organization) orgCounts.set(visit.organization, (orgCounts.get(visit.organization) ?? 0) + 1)
+      }
+      return [{
+        label: rule.label,
+        ...(rule.insight ? { insight: rule.insight } : {}),
+        status: normaliseCareThreadStatus(rule.status),
+        codePrefixes: prefixes,
+        organizationFilter,
+        count: visits.length,
+        first: visits[0].date,
+        last: visits[visits.length - 1].date,
+        organizations: [...orgCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => ({ name, count })),
+        visits,
+      }]
+    })
+
+    // ---- Deterministic stats strip -----------------------------------------
+    const encounterEntries = catalog.filter((entry) => entry.resourceType === 'Encounter' && entry.date)
+    const outpatientDates = encounterEntries
+      .filter((entry) => entry.encounterClass === 'outpatient')
+      .map((entry) => entry.date!)
+      .sort()
+    const allDates = encounterEntries.map((entry) => entry.date!).sort()
+    const timelineStats: SummaryTimelineStats | undefined = encounterEntries.length > 0
+      ? {
+          start: allDates[0],
+          end: encounterEntries.map((entry) => entry.endDate ?? entry.date!).sort().at(-1),
+          organizations: new Set(encounterEntries.map((entry) => entry.organization).filter(Boolean)).size,
+          admissions: encounterEntries.filter((entry) => entry.encounterClass === 'inpatient').length,
+          emergencies: encounterEntries.filter((entry) => entry.encounterClass === 'emergency').length,
+          encounters: encounterEntries.length,
+          ...(outpatientDates[0] ? { firstOutpatientDate: outpatientDates[0] } : {}),
+        }
+      : undefined
+
     return {
       headline,
       summary,
@@ -2455,6 +2649,9 @@ export class GenerateMedicalSummaryUseCase {
       problems,
       decisions,
       timeline,
+      ...(milestones.length > 0 ? { milestones } : {}),
+      ...(careThreads.length > 0 ? { careThreads } : {}),
+      ...(timelineStats ? { timelineStats } : {}),
       sourceIndex,
       droppedTimelineCount,
     }
