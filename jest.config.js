@@ -17,6 +17,44 @@ const customJestConfig = {
     '**/__tests__/**/*.test.ts',
     '**/__tests__/**/*.test.tsx',
   ],
+  // react-markdown and its unified/remark/micromark dependency tree are
+  // ESM-only, so jest must transform them instead of ignoring node_modules —
+  // otherwise any suite that renders MarkdownRenderer for real dies on
+  // "Unexpected token 'export'".
+  transformIgnorePatterns: [
+    '/node_modules/(?!(' + [
+      'react-markdown',
+      'remark-.*',
+      'rehype-.*',
+      'mdast-util-.*',
+      'micromark.*',
+      'hast-util-.*',
+      'unist-util-.*',
+      'unified',
+      'vfile.*',
+      'bail',
+      'ccount',
+      'character-entities.*',
+      'comma-separated-tokens',
+      'decode-named-character-reference',
+      'devlop',
+      'escape-string-regexp',
+      'estree-util-is-identifier-name',
+      'html-url-attributes',
+      'is-plain-obj',
+      'longest-streak',
+      'markdown-table',
+      'property-information',
+      'space-separated-tokens',
+      'stringify-entities',
+      'trim-lines',
+      'trough',
+      'web-namespaces',
+      'zwitch',
+      '@ungap/structured-clone',
+    ].join('|') + ')/)',
+    '^.+\\.module\\.(css|sass|scss)$',
+  ],
   // Without this, stale copies under .claude/worktrees/ get picked up and fail the run
   testPathIgnorePatterns: [
     '/node_modules/',
@@ -45,5 +83,11 @@ const customJestConfig = {
   },
 }
 
-// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-module.exports = createJestConfig(customJestConfig)
+// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async.
+// next/jest overwrites transformIgnorePatterns with its own list, so ours has to
+// be re-applied on the resolved config (documented Next.js workaround).
+module.exports = async () => {
+  const config = await createJestConfig(customJestConfig)()
+  config.transformIgnorePatterns = customJestConfig.transformIgnorePatterns
+  return config
+}

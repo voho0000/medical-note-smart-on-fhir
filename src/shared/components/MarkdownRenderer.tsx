@@ -30,6 +30,24 @@ const COMPONENTS: Components = {
     ) : (
       <code className="block bg-muted p-2 rounded text-xs font-mono overflow-x-auto" {...props} />
     ),
+  // Wide tables scroll inside their own container instead of crushing the
+  // bubble/page: on a phone (root font 12px) a 5-column table forced to the
+  // bubble width collapses a CJK column to one glyph per line. The fix is a
+  // per-cell min-width floor (6rem, so it scales with the user's font setting)
+  // rather than `w-max`: text still wraps at a readable width and the table
+  // overflows only as far as the floor demands — measured at 375px, `w-max`
+  // needed 595px of scrolling (pushing the row-label column off-screen) where
+  // the floor needs 41px. `min-w-full` keeps a table that already fits spanning
+  // the full width, and the floor sits below equal-share width, so tables with
+  // room to spare are unchanged.
+  table: ({...props}) => (
+    <div className="w-full touch-pan-x touch-pan-y overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
+      <table
+        className="min-w-full max-w-none table-auto border-collapse text-left [&_td]:min-w-[6rem] [&_td]:border-t [&_td]:border-border/60 [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_th]:whitespace-nowrap [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold [&_th]:text-muted-foreground"
+        {...props}
+      />
+    </div>
+  ),
   strong: ({...props}) => <strong className="font-semibold" {...props} />,
   em: ({...props}) => <em className="italic" {...props} />,
   hr: ({...props}) => <hr className="my-3 border-border" {...props} />,
