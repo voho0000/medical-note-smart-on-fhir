@@ -1,35 +1,49 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAutoGenerate } from '@/features/clinical-insights/hooks/useAutoGenerate'
 
-const panels = [{
+const basePanel = {
   id: 'summary-card',
   prompt: 'Summarize the record',
   showInSummary: true,
-  autoGenerate: true,
-}]
+}
 
-describe('useAutoGenerate authorization gate', () => {
-  it('does not run in the background until the active import is authorized', async () => {
+describe('useAutoGenerate', () => {
+  // The per-module autoGenerate toggle is the ONLY background-run control;
+  // there is no separate consent layer above it.
+  it('runs only modules whose autoGenerate toggle is on, and only once', async () => {
     const runPanels = jest.fn(async () => undefined)
     const { rerender } = renderHook(
-      ({ authorized }) => useAutoGenerate({
-        panels,
+      ({ autoGenerate }) => useAutoGenerate({
+        panels: [{ ...basePanel, autoGenerate }],
         canGenerate: true,
-        autoRunAuthorized: authorized,
         context: 'patient context',
         modelId: 'gpt-5.4-nano',
         runPanels,
         runScope: 'local:import-a',
       }),
-      { initialProps: { authorized: false } },
+      { initialProps: { autoGenerate: false } },
     )
 
     expect(runPanels).not.toHaveBeenCalled()
 
-    rerender({ authorized: true })
+    rerender({ autoGenerate: true })
     await waitFor(() => expect(runPanels).toHaveBeenCalledWith(['summary-card']))
 
-    rerender({ authorized: true })
+    rerender({ autoGenerate: true })
     expect(runPanels).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not run in the background while generation is not possible', async () => {
+    const runPanels = jest.fn(async () => undefined)
+    renderHook(() => useAutoGenerate({
+      panels: [{ ...basePanel, autoGenerate: true }],
+      canGenerate: false,
+      context: 'patient context',
+      modelId: 'gpt-5.4-nano',
+      runPanels,
+      runScope: 'local:import-a',
+    }))
+
+    expect(runPanels).not.toHaveBeenCalled()
   })
 })

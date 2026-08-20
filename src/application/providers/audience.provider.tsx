@@ -3,6 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AUDIENCE_CHANGED_EVENT } from './font-size.provider'
+import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
 
 export type Audience = 'medical' | 'patient'
 
@@ -23,6 +24,12 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
   const [hasSelected, setHasSelected] = useState<boolean>(true) // assume true on SSR to avoid flicker
 
   useEffect(() => {
+    // The Medcloud launch always opens in clinician mode. A 民眾 choice made
+    // on an earlier visit must not follow the doctor into the hand-off; it
+    // stays in storage and applies again outside this route.
+    // `hasSelected` already defaults to true, so leaving both states at their
+    // initial values is exactly the clinician-mode entry we want here.
+    if (isMedcloudLaunchRoute()) return
     const stored = localStorage.getItem(AUDIENCE_STORAGE_KEY)
     if (stored === 'medical' || stored === 'patient') {
       // Restore after hydration so persisted browser state cannot make the

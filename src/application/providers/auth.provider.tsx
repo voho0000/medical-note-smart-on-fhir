@@ -28,7 +28,6 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 import { clearSmartSession } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
-import { clearLocalImportAiConsent } from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 
 export interface User {
@@ -315,7 +314,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await serializeLocalBundleMutation(async () => {
         const importId = LocalBundleService.getActiveImportId()
-        clearLocalImportAiConsent()
         await LocalBundleService.clear()
         purgeAiResultCaches(importId)
         // Same signal an import/clear dispatches — resets in-memory AI-result

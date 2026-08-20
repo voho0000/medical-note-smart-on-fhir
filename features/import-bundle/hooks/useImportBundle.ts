@@ -18,11 +18,6 @@ import {
   purgeAiResultCaches,
   purgeExpiredAiResultCaches,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
-import {
-  clearLocalImportAiConsent,
-  markLocalImportAiConsentReady,
-  startLocalImportAiConsent,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { generateId } from '@/src/shared/utils/id.utils'
 import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 import {
@@ -120,7 +115,6 @@ export function useImportBundle(): UseImportBundleReturn {
     // clearing earlier would briefly expose the old real patient under demo's
     // automatic-snapshot policy.
     const localImportId = generateId()
-    const localImportConsent = startLocalImportAiConsent(localImportId)
     await LocalBundleService.save(bundle, {
       importId: localImportId,
       demo,
@@ -140,13 +134,6 @@ export function useImportBundle(): UseImportBundleReturn {
     notifyBundleChanged()
     try {
       await queryClient.invalidateQueries()
-      if (demo) {
-        clearLocalImportAiConsent()
-      } else if (localImportConsent) {
-        markLocalImportAiConsentReady(localImportConsent.importId, Date.now(), {
-          useTodayDecision: true,
-        })
-      }
     } finally {
       notifyBundleChangeSettled()
     }
@@ -208,7 +195,6 @@ export function useImportBundle(): UseImportBundleReturn {
   const clear = useCallback(async () => {
     await serializeLocalBundleMutation(async () => {
       const importId = LocalBundleService.getActiveImportId()
-      clearLocalImportAiConsent()
       await LocalBundleService.clear() // also removes the demo flag
       // Clearing the bundle must also drop cached AI results (safety scan,
       // insights) so re-importing the same patient starts fresh, not stale.

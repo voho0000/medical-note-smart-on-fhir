@@ -5,17 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
-import {
-  getTodayLocalImportAiDecision,
-  recordAutoAiRealDataDecision,
-  recordLocalImportAiDecision,
-  recordTodayLocalImportAiDecision,
-  markLocalImportAiConsentReady,
-  startLocalImportAiConsent,
-  useAutoAiConsentState,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
-import { generateId } from '@/src/shared/utils/id.utils'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
@@ -179,12 +169,9 @@ export function useMedicalSummaryOrchestrator() {
     scopeKey,
     summaryResultOwnerRuntimeId,
   ])
-  const autoAiConsent = useAutoAiConsentState()
-  const effectiveAutoGenerate = autoAiConsent.source === 'demo'
-    ? true
-    : autoAiConsent.source === 'local'
-      ? autoAiConsent.decision === 'auto'
-      : autoGenerate
+  // The persisted switch is the whole story: no source-specific override, so
+  // what the control shows is always what the auto-run gate reads.
+  const effectiveAutoGenerate = autoGenerate
   const sequenceRef = useRef(0)
   const activeBatchRef = useRef<ActiveGenerationBatch | null>(null)
   const activeCustomProfileRef = useRef<{
@@ -955,36 +942,9 @@ export function useMedicalSummaryOrchestrator() {
   }, [setSafetyModel, setSummaryModel])
 
   const setAutoGenerate = useCallback((value: boolean) => {
-    if (autoAiConsent.source === 'local') {
-      // A real/demo import transition has closed the gate but has not yet
-      // published its Bundle. Ignore controls still visible for the previous
-      // patient; they must not make the new scope answerable early.
-      if (autoAiConsent.decision === 'preparing') return
-      if (value && autoAiConsent.decision !== 'auto') {
-        // Turning auto-run on for a local Bundle reopens the same contextual
-        // confirmation. Do not flip the persisted preference until it is
-        // accepted, or the old preference could race the dialog.
-        const pending = startLocalImportAiConsent(autoAiConsent.importId ?? generateId())
-        if (pending) markLocalImportAiConsentReady(pending.importId)
-        return
-      }
-      if (!value && autoAiConsent.importId) {
-        const updated = recordLocalImportAiDecision(autoAiConsent.importId, 'manual')
-        if (updated && getTodayLocalImportAiDecision() !== null) {
-          recordTodayLocalImportAiDecision('manual')
-        }
-      }
-      return
-    }
-    if (autoAiConsent.source === 'demo') {
-      // Demo snapshots are source-driven and must not alter SMART preferences.
-      return
-    }
-    // SMART/other real data keeps the browser-wide preference.
-    recordAutoAiRealDataDecision(value ? 'auto' : 'manual')
     setSummaryAutoGenerate(value)
     setAutoScan(value)
-  }, [autoAiConsent, setAutoScan, setSummaryAutoGenerate])
+  }, [setAutoScan, setSummaryAutoGenerate])
 
   const preferencesSynced = safetyModel === model && autoScan === autoGenerate
   const isRestoring = hasPatient && dataReady && (

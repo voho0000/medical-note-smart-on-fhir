@@ -27,12 +27,6 @@ jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({
   purgeExpiredAiResultCaches: jest.fn(),
 }))
 
-jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
-  clearLocalImportAiConsent: jest.fn(),
-  markLocalImportAiConsentReady: jest.fn(),
-  startLocalImportAiConsent: jest.fn(),
-}))
-
 jest.mock('@/src/shared/utils/id.utils', () => ({
   generateId: () => 'test-import-id',
 }))

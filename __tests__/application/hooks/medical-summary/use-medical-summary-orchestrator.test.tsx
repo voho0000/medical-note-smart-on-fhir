@@ -8,20 +8,6 @@ import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
-let mockAutoAiConsent = {
-  source: 'other' as 'other' | 'local' | 'demo',
-  decision: null as 'preparing' | 'pending' | 'auto' | 'manual' | null,
-  importId: null as string | null,
-}
-const mockStartLocalImportAiConsent = jest.fn()
-const mockMarkLocalImportAiConsentReady = jest.fn((_importId: string) => true)
-const mockRecordLocalImportAiDecision = jest.fn((
-  _importId: string,
-  _decision: 'auto' | 'manual',
-) => true)
-const mockRecordAutoAiRealDataDecision = jest.fn()
-const mockGetTodayLocalImportAiDecision = jest.fn(() => null as 'auto' | 'manual' | null)
-const mockRecordTodayLocalImportAiDecision = jest.fn()
 const mockRequestDemographicsForAi = jest.fn(async () => true)
 
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
@@ -29,23 +15,6 @@ jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', ()
 }))
 jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => ({
   useSafetyAlerts: jest.fn(),
-}))
-jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
-  useAutoAiConsentState: () => mockAutoAiConsent,
-  startLocalImportAiConsent: (importId: string) => mockStartLocalImportAiConsent(importId),
-  markLocalImportAiConsentReady: (importId: string) => (
-    mockMarkLocalImportAiConsentReady(importId)
-  ),
-  recordLocalImportAiDecision: (importId: string, decision: 'auto' | 'manual') => (
-    mockRecordLocalImportAiDecision(importId, decision)
-  ),
-  recordAutoAiRealDataDecision: (decision: 'auto' | 'manual') => (
-    mockRecordAutoAiRealDataDecision(decision)
-  ),
-  getTodayLocalImportAiDecision: () => mockGetTodayLocalImportAiDecision(),
-  recordTodayLocalImportAiDecision: (decision: 'auto' | 'manual') => (
-    mockRecordTodayLocalImportAiDecision(decision)
-  ),
 }))
 jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({
   useAiDemographicsGate: () => ({
@@ -208,9 +177,6 @@ describe('useMedicalSummaryOrchestrator', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     useAiConfigStore.setState({ openAiCompatibleProfiles: [] })
-    mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
-    mockAutoAiConsent = { source: 'other', decision: null, importId: null }
-    mockGetTodayLocalImportAiDecision.mockReturnValue(null)
     mockRequestDemographicsForAi.mockResolvedValue(true)
     arrange()
   })
@@ -1498,52 +1464,27 @@ describe('useMedicalSummaryOrchestrator', () => {
     })
   })
 
-  it('reopens import-scoped consent instead of immediately enabling local auto-run', () => {
-    mockAutoAiConsent = { source: 'local', decision: 'manual', importId: 'import-a' }
+  // Automatic generation has no consent layer: the persisted switch is the
+  // single control, and it behaves identically for every data source.
+  it('turns automatic generation on for both pipelines', () => {
     arrange({ summaryAuto: false, safetyAuto: false })
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    expect(result.current.autoGenerate).toBe(false)
 
     act(() => result.current.setAutoGenerate(true))
 
-    expect(mockStartLocalImportAiConsent).toHaveBeenCalledWith('import-a')
-    expect(mockMarkLocalImportAiConsentReady).toHaveBeenCalledWith('import-a')
-    expect(setSummaryAuto).not.toHaveBeenCalled()
-    expect(setSafetyAuto).not.toHaveBeenCalled()
+    expect(setSummaryAuto).toHaveBeenCalledWith(true)
+    expect(setSafetyAuto).toHaveBeenCalledWith(true)
   })
 
-  it('ignores the previous patient controls while a new Bundle is preparing', () => {
-    mockAutoAiConsent = { source: 'local', decision: 'preparing', importId: 'import-b' }
-    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
-
-    act(() => result.current.setAutoGenerate(true))
-
-    expect(mockStartLocalImportAiConsent).not.toHaveBeenCalled()
-    expect(mockMarkLocalImportAiConsentReady).not.toHaveBeenCalled()
-    expect(mockRecordLocalImportAiDecision).not.toHaveBeenCalled()
-    expect(setSummaryAuto).not.toHaveBeenCalled()
-    expect(setSafetyAuto).not.toHaveBeenCalled()
-  })
-
-  it('records the safe local choice when automatic generation is turned off', () => {
-    mockAutoAiConsent = { source: 'local', decision: 'auto', importId: 'import-a' }
+  it('turns automatic generation off for both pipelines', () => {
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
     expect(result.current.autoGenerate).toBe(true)
 
     act(() => result.current.setAutoGenerate(false))
 
-    expect(mockRecordLocalImportAiDecision).toHaveBeenCalledWith('import-a', 'manual')
-    expect(setSummaryAuto).not.toHaveBeenCalled()
-    expect(setSafetyAuto).not.toHaveBeenCalled()
-  })
-
-  it('updates today\'s local choice when automatic generation is turned off', () => {
-    mockAutoAiConsent = { source: 'local', decision: 'auto', importId: 'import-a' }
-    mockGetTodayLocalImportAiDecision.mockReturnValue('auto')
-    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
-
-    act(() => result.current.setAutoGenerate(false))
-
-    expect(mockRecordTodayLocalImportAiDecision).toHaveBeenCalledWith('manual')
+    expect(setSummaryAuto).toHaveBeenCalledWith(false)
+    expect(setSafetyAuto).toHaveBeenCalledWith(false)
   })
 
   it('shows validated summary cards while the same summary stream is still running', async () => {

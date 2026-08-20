@@ -32,7 +32,7 @@ import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
-import { isDemoDataActive } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { isDemoDataActive } from '@/src/application/hooks/ai-generation/ai-data-source'
 import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {

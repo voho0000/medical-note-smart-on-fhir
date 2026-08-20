@@ -1,44 +1,34 @@
 // First-run onboarding — a short stepper shown the first time clinical data is
 // loaded (SMART launch / local bundle / demo all converge on `patient` becoming
-// non-null). Replaces the old audience-only dialog: it bundles the audience
-// choice with source-aware auto-insight guidance and a sign-in / guest step.
+// non-null). Shown once per browser, gated on the versioned
+// `medical-note-onboarding-v1` flag.
 //
-// Step list is built dynamically when the flow opens:
-//   • welcome + audience  — always (the audience choice shapes the whole UI)
-//   • autoScan            — demo: informational + automatic insights;
-//                           real data: one choice that drives BOTH auto-AI prefs
-//   • signIn              — only when not signed in
-// Shown once per browser, gated on the versioned `medical-note-onboarding-v1` flag.
+// Currently: welcome + privacy, then the audience choice that shapes the whole
+// UI. The sign-in step is HIDDEN, not deleted — flip SHOW_SIGN_IN_STEP back to
+// true to restore it exactly as it was; signing in meanwhile stays available
+// from the header account button.
+//
+// There is deliberately NO auto-AI question: automatic generation is off by
+// default and is turned on from the 醫療摘要 header's 自動產生 switch.
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Stethoscope, User, Sparkles, LogIn, Lock } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
-import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
-import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding.hook'
-import { isVghtpeMedcloudLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
-import {
-  clearTodayLocalImportAiDecision,
-  type AutoAiConsentState,
-  ensureLocalImportAiConsent,
-  getTodayLocalImportAiDecision,
-  recordAutoAiRealDataDecision,
-  recordLocalImportAiDecision,
-  recordTodayLocalImportAiDecision,
-  useAutoAiConsentState,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
 import { AuthDialog } from '@/features/auth/components/AuthDialog'
 
-type StepId = 'welcome' | 'audience' | 'autoScan' | 'signIn'
-type AutoAiChoice = 'auto' | 'manual'
+/** Single switch for the hidden sign-in step. Set to true to bring it back. */
+const SHOW_SIGN_IN_STEP = false
+
+type StepId = 'welcome' | 'audience' | 'signIn'
 
 interface FirstRunOnboardingDialogProps {
   /** Test seam only; production always reads the current page URL. */
@@ -46,116 +36,30 @@ interface FirstRunOnboardingDialogProps {
 }
 
 export function FirstRunOnboardingDialog({ launchHref }: FirstRunOnboardingDialogProps = {}) {
-  const { patient, loading: patientLoading, error: patientError } = usePatient()
-  const consentState = useAutoAiConsentState()
-  const dataLoaded = !!patient && !patientLoading && !patientError
-  // The exact allow-listed Medcloud route has a credential-gated, one-shot
-  // summary runner of its own. It must not be interrupted by the browser-wide
-  // SMART/local auto-analysis decision dialog. A bad or absent Extension
-  // credential still cannot start AI generation; that gate remains in the
-  // Medcloud provider.
-  const medcloudLaunchOwnsAutoRun = isVghtpeMedcloudLaunchUrl(
-    launchHref ?? (typeof window === 'undefined' ? '' : window.location.href),
-  )
-
-  // Recover a prompt for bundles retained from an older build, or for a page
-  // reload that happened after the Bundle was saved but before its import flow
-  // could publish the question. An import still running in this runtime remains
-  // `preparing`, so the previous patient's screen can never answer for it.
-  useEffect(() => {
-    if (
-      dataLoaded
-      && consentState.source === 'local'
-      && (
-        consentState.decision === 'preparing'
-        || (consentState.decision === 'pending' && !consentState.importId)
-      )
-    ) {
-      ensureLocalImportAiConsent()
-    }
-  }, [consentState.decision, consentState.importId, consentState.source, dataLoaded])
-
-  // A keyed inner flow resets every local UI field synchronously for a new
-  // import. No old checkbox/choice can survive even one render of the new scope.
-  const consentContextKey = consentState.source === 'local'
-    ? `local:${consentState.importId ?? 'pending'}`
-    : consentState.source
-
-  return (
-    <FirstRunOnboardingFlow
-      key={consentContextKey}
-      consentState={consentState}
-      dataLoaded={dataLoaded}
-      suppressForMedcloudLaunch={medcloudLaunchOwnsAutoRun}
-    />
-  )
-}
-
-function FirstRunOnboardingFlow({
-  consentState,
-  dataLoaded,
-  suppressForMedcloudLaunch,
-}: {
-  consentState: AutoAiConsentState
-  dataLoaded: boolean
-  suppressForMedcloudLaunch: boolean
-}) {
   const { t } = useLanguage()
   const ob = t.onboarding
+  const { patient, loading: patientLoading, error: patientError } = usePatient()
   const { ready: onboardingReady, completed, markComplete } = useOnboarding()
   const { setAudience } = useAudience()
   const { user } = useAuth()
-  // One onboarding choice drives both auto-AI prefs; each remains individually
-  // toggleable later from the Medical Summary tab's switches.
-  const autoScan = useSafetyPrefsStore((s) => s.autoScan)
-  const setAutoScan = useSafetyPrefsStore((s) => s.setAutoScan)
-  const autoSummary = useSummaryPrefsStore((s) => s.autoGenerate)
-  const setAutoSummary = useSummaryPrefsStore((s) => s.setAutoGenerate)
-  const autoAiOn = autoScan && autoSummary
-  const autoAiOff = !autoScan && !autoSummary
-  const setAutoAi = (value: boolean) => {
-    setAutoScan(value)
-    setAutoSummary(value)
-  }
-
-  const isDemo = consentState.source === 'demo'
-  // Demo use never counts as permission for a later real patient. If someone
-  // starts with demo and imports local/SMART data afterwards, reopen only this
-  // contextual decision even though the general onboarding is already done.
-  const needsRealDataDecision = dataLoaded && !isDemo && (
-    consentState.source === 'local'
-      ? consentState.decision === 'pending'
-      : consentState.decision === null
-  )
-  const open = onboardingReady
-    && dataLoaded
-    && !suppressForMedcloudLaunch
-    && (!completed || needsRealDataDecision)
-
   const [stepIndex, setStepIndex] = useState(0)
   const [showAuth, setShowAuth] = useState(false)
-  // Keep the onboarding selection local until the user continues. Otherwise
-  // clicking "auto" could start an AI request before the consent box is read.
-  const [autoAiChoice, setAutoAiChoice] = useState<AutoAiChoice | null>(
-    consentState.source === 'local'
-      ? 'manual'
-      : autoAiOn ? 'auto' : autoAiOff ? 'manual' : null,
-  )
-  const [autoAiConsent, setAutoAiConsent] = useState(false)
-  const [skipLocalPromptToday, setSkipLocalPromptToday] = useState(
-    consentState.source === 'local' && getTodayLocalImportAiDecision() !== null,
-  )
 
-  // General onboarding gets the full sequence; a demo-first user who later
-  // loads real data sees only the just-in-time auto-analysis decision.
-  const steps: StepId[] = completed ? ['autoScan'] : ['welcome', 'audience', 'autoScan']
-  if (!completed && !user && !ENV_CONFIG.offlineMode) steps.push('signIn')
+  const dataLoaded = !!patient && !patientLoading && !patientError
+  // The Medcloud launch is an unattended hand-off and must not be interrupted.
+  const open = onboardingReady
+    && dataLoaded
+    && !completed
+    && !isMedcloudLaunchRoute(launchHref)
 
-  // AuthDialog is always rendered so a 登入 choice (which closes this flow first)
-  // can still surface it afterwards.
+  const steps: StepId[] = ['welcome', 'audience']
+  if (SHOW_SIGN_IN_STEP && !user && !ENV_CONFIG.offlineMode) steps.push('signIn')
+
+  // AuthDialog is always rendered so a 登入 choice (which closes this flow
+  // first) can still surface it afterwards.
   const authDialog = <AuthDialog open={showAuth} onOpenChange={setShowAuth} />
 
-  if (!open || steps.length === 0) return authDialog
+  if (!open) return authDialog
 
   const safeStepIndex = Math.min(stepIndex, steps.length - 1)
   const step = steps[safeStepIndex]
@@ -164,32 +68,12 @@ function FirstRunOnboardingFlow({
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
   const finish = () => {
     setStepIndex(0)
-    setAutoAiConsent(false)
     markComplete()
   }
-  const continueFromAutoScan = () => {
-    if (isDemo) {
-      // Demo snapshots are source-driven. Do not mutate the browser-wide SMART
-      // preference or record any real-data authorization.
-      if (isLast) finish()
-      else goNext()
-      return
-    }
-    if (!autoAiChoice) return
-    if (consentState.source === 'local') {
-      if (
-        !consentState.importId
-        || !recordLocalImportAiDecision(consentState.importId, autoAiChoice)
-      ) return
-      if (skipLocalPromptToday) {
-        recordTodayLocalImportAiDecision(autoAiChoice)
-      } else {
-        clearTodayLocalImportAiDecision()
-      }
-    } else {
-      recordAutoAiRealDataDecision(autoAiChoice)
-      setAutoAi(autoAiChoice === 'auto')
-    }
+  // The audience cards are the step's own primary action, so when audience is
+  // the last step picking one completes onboarding outright.
+  const chooseAudience = (value: 'medical' | 'patient') => {
+    setAudience(value)
     if (isLast) finish()
     else goNext()
   }
@@ -239,10 +123,7 @@ function FirstRunOnboardingFlow({
               <div className="grid gap-3 pt-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setAudience('medical')
-                    goNext()
-                  }}
+                  onClick={() => chooseAudience('medical')}
                   className="group flex flex-col items-start gap-3 rounded-lg border-2 border-border p-5 text-left transition-colors hover:border-primary hover:bg-accent focus:border-primary focus:outline-none"
                 >
                   <Stethoscope className="h-8 w-8 text-blue-600 group-hover:text-primary dark:text-blue-400" />
@@ -253,10 +134,7 @@ function FirstRunOnboardingFlow({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setAudience('patient')
-                    goNext()
-                  }}
+                  onClick={() => chooseAudience('patient')}
                   className="group flex flex-col items-start gap-3 rounded-lg border-2 border-border p-5 text-left transition-colors hover:border-primary hover:bg-accent focus:border-primary focus:outline-none"
                 >
                   <User className="h-8 w-8 text-purple-600 group-hover:text-primary dark:text-purple-400" />
@@ -266,124 +144,6 @@ function FirstRunOnboardingFlow({
                   </div>
                 </button>
               </div>
-            </>
-          )}
-
-          {step === 'autoScan' && (
-            <>
-              {isDemo ? (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                      {ob.demoAutoScanTitle}
-                    </DialogTitle>
-                    <DialogDescription>{ob.demoAutoScanBody}</DialogDescription>
-                  </DialogHeader>
-                  <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-4 dark:border-teal-500/25 dark:bg-teal-500/[0.07]">
-                    <div className="mb-1.5 flex items-center gap-2 font-semibold text-foreground">
-                      <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                      {ob.demoAutoScanReadyTitle}
-                    </div>
-                    <p className="text-sm leading-relaxed text-muted-foreground">{ob.demoAutoScanReadyDesc}</p>
-                  </div>
-                  <div className="flex items-start gap-2 rounded-md bg-muted/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                    <p>{ob.demoAutoScanRealDataNote}</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                      {ob.autoScanTitle}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {consentState.source === 'local' ? ob.localAutoScanBody : ob.autoScanBody}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-3 pt-1 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => setAutoAiChoice('auto')}
-                      aria-pressed={autoAiChoice === 'auto'}
-                      className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                        autoAiChoice === 'auto' ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                      }`}
-                    >
-                      <div className="font-semibold">{ob.autoScanOnLabel}</div>
-                      <div className="text-sm text-muted-foreground">{ob.autoScanOnDesc}</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAutoAiChoice('manual')
-                        setAutoAiConsent(false)
-                      }}
-                      aria-pressed={autoAiChoice === 'manual'}
-                      className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                        autoAiChoice === 'manual' ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                      }`}
-                    >
-                      <div className="font-semibold">{ob.autoScanOffLabel}</div>
-                      <div className="text-sm text-muted-foreground">{ob.autoScanOffDesc}</div>
-                    </button>
-                  </div>
-                  {autoAiChoice === 'auto' ? (
-                    <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2.5">
-                      <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
-                        <Lock className="h-3.5 w-3.5 text-primary" />
-                        {ob.autoScanConfirmationTitle}
-                      </p>
-                      <p className="mb-2.5 text-xs leading-relaxed text-muted-foreground">
-                        {ob.autoScanPrivacyNote}
-                      </p>
-                      <div className="flex items-start gap-2.5">
-                        <Checkbox
-                          id="onboarding-auto-ai-consent"
-                          checked={autoAiConsent}
-                          onCheckedChange={(checked) => setAutoAiConsent(checked === true)}
-                          aria-describedby={!autoAiConsent ? 'onboarding-auto-ai-consent-required' : undefined}
-                          className="mt-0.5"
-                        />
-                        <label
-                          htmlFor="onboarding-auto-ai-consent"
-                          className="cursor-pointer text-sm leading-snug text-foreground"
-                        >
-                          {ob.autoScanConsent}
-                        </label>
-                      </div>
-                      {!autoAiConsent ? (
-                        <p id="onboarding-auto-ai-consent-required" className="mt-1.5 pl-6.5 text-xs text-muted-foreground">
-                          {ob.autoScanConsentRequired}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {consentState.source === 'local' ? (
-                    <div className="flex items-start gap-2.5 rounded-md border bg-muted/35 px-3 py-2.5">
-                      <Checkbox
-                        id="onboarding-skip-local-ai-prompt-today"
-                        checked={skipLocalPromptToday}
-                        onCheckedChange={(checked) => setSkipLocalPromptToday(checked === true)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <label
-                          htmlFor="onboarding-skip-local-ai-prompt-today"
-                          className="cursor-pointer text-sm leading-snug text-foreground"
-                        >
-                          {ob.localSkipPromptToday}
-                        </label>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          {ob.localSkipPromptTodayDesc}
-                        </p>
-                      </div>
-                    </div>
-                  ) : null}
-                </>
-              )}
             </>
           )}
 
@@ -425,17 +185,6 @@ function FirstRunOnboardingFlow({
               {step === 'welcome' && (
                 <Button size="sm" onClick={goNext}>
                   {ob.start}
-                </Button>
-              )}
-              {step === 'autoScan' && (
-                <Button
-                  size="sm"
-                  onClick={continueFromAutoScan}
-                  disabled={!isDemo && (!autoAiChoice || (autoAiChoice === 'auto' && !autoAiConsent))}
-                >
-                  {isDemo
-                    ? (isLast ? ob.demoAutoScanCta : ob.next)
-                    : (autoAiChoice === 'auto' ? ob.autoScanConfirmCta : ob.autoScanManualCta)}
                 </Button>
               )}
               {step === 'signIn' && (

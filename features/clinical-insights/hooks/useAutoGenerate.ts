@@ -14,10 +14,6 @@ interface Panel {
 interface UseAutoGenerateProps {
   panels: Panel[]
   canGenerate: boolean
-  /** Permission for background generation of the currently active data. Manual
-   *  runPanel/runPanels actions are intentionally outside this hook and remain
-   *  available when this is false. */
-  autoRunAuthorized: boolean
   context: string
   modelId: string
   runPanels: (panelIds: string[]) => Promise<void>
@@ -60,7 +56,6 @@ export function selectAutoGeneratePanelIds({
 export function useAutoGenerate({
   panels,
   canGenerate,
-  autoRunAuthorized,
   context,
   modelId,
   runPanels,
@@ -73,7 +68,7 @@ export function useAutoGenerate({
 
   // Auto-run panels with autoGenerate enabled when conditions are met
   useEffect(() => {
-    if (!autoRunAuthorized || !canGenerate || !context.trim() || panels.length === 0) {
+    if (!canGenerate || !context.trim() || panels.length === 0) {
       return
     }
 
@@ -109,7 +104,7 @@ export function useAutoGenerate({
       // Remove failed panels from the set so they can be retried
       panelIds.forEach((panelId) => autoRunPanels.current.delete(panelId))
     })
-  }, [autoRunAuthorized, canGenerate, context, modelId, panelStatus, panels, runPanels, responses, runScope])
+  }, [canGenerate, context, modelId, panelStatus, panels, runPanels, responses, runScope])
 
   return { autoRunPanels }
 }

@@ -54,10 +54,6 @@ import {
   type AiSlotDemoContext,
   type AiSlotRunContext,
 } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
-import {
-  isAutoAiEnabledForSource,
-  useAutoAiConsentState,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
@@ -162,7 +158,6 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
   const { demographicsReadyForAi } = useAiDemographicsGate()
-  const autoAiConsent = useAutoAiConsentState()
   const moduleRetryRequestsRef = useRef(new Map<string, {
     cardIds: MedicalSummaryCardId[]
     baseResult: MedicalSummaryResult
@@ -593,11 +588,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
     defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
     selectedModelId: modelId,
-    // A demo-first visit must never authorize a later real patient's data.
-    // Manual generation remains available; only background cloud runs are gated.
-    autoRunEnabled:
-      demographicsReadyForAi &&
-      isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
+    // The persisted "自動產生" switch is the single authorization for a
+    // background run; it is off by default. Manual generation is unaffected.
+    autoRunEnabled: demographicsReadyForAi && autoGenerate,
     // Even a MANUAL generate waits for the full clinical dataset.
     requireDataReadyToGenerate: true,
     store: medicalSummaryStore,

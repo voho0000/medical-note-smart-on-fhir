@@ -26,8 +26,8 @@ import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demog
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
+import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
-import { useAutoAiConsentState } from "@/src/application/hooks/ai-generation/auto-ai-consent"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 import {
   ClinicalMobilePanelSwitcher,
@@ -131,12 +131,14 @@ function PageContent() {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const showOnboarding = !patientLoading && !patient && !patientError
   const { ready: onboardingReady, completed: onboardingCompleted } = useOnboarding()
-  const autoAiConsent = useAutoAiConsentState()
   const dataLoaded = !!patient && !patientLoading && !patientError
-  const consentResolved = autoAiConsent.source === 'demo'
-    || autoAiConsent.decision === 'auto'
-    || autoAiConsent.decision === 'manual'
-  const tourEligible = dataLoaded && onboardingReady && onboardingCompleted && consentResolved
+  // The Medcloud launch is an unattended hand-off: no onboarding, and no
+  // guided-tour offer either. Without this it still popped up for anyone whose
+  // browser had completed onboarding on an earlier visit.
+  const tourEligible = dataLoaded
+    && onboardingReady
+    && onboardingCompleted
+    && !isMedcloudLaunchRoute()
 
   // Right-pane detail: a left-panel card can push its expanded detail here
   // instead of expanding downward (see RightDetailProvider). When set, the right

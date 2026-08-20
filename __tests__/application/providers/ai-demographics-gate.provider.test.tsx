@@ -9,7 +9,8 @@ import { AiDemographicsGateDialog } from '@/features/medical-summary/components/
 
 let mockPatient: any
 let mockSourceMetadata: any
-let mockAutoConsent: any
+let mockDataSource: any
+let mockAutoGenerate: boolean
 let mockLocalProfile: any
 const mockSaveProfile = jest.fn().mockResolvedValue(undefined)
 
@@ -25,8 +26,14 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
   useClinicalData: () => ({ sourceMetadata: mockSourceMetadata }),
 }))
 
-jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
-  useAutoAiConsentState: () => mockAutoConsent,
+jest.mock('@/src/application/hooks/ai-generation/ai-data-source', () => ({
+  useAiDataSource: () => mockDataSource,
+}))
+
+jest.mock('@/src/application/stores/medical-summary-prefs.store', () => ({
+  useSummaryPrefsStore: (selector: (state: { autoGenerate: boolean }) => unknown) => (
+    selector({ autoGenerate: mockAutoGenerate })
+  ),
 }))
 
 jest.mock('@/src/application/hooks/patient/use-local-patient-profile.hook', () => ({
@@ -102,11 +109,8 @@ describe('AiDemographicsGateProvider', () => {
       birthDate: undefined,
     }
     mockSourceMetadata = { source: 'health-bank-sdk-json' }
-    mockAutoConsent = {
-      source: 'local',
-      decision: 'manual',
-      importId: 'import-1',
-    }
+    mockDataSource = { source: 'local', importId: 'import-1' }
+    mockAutoGenerate = false
     mockLocalProfile = {
       available: true,
       importId: 'import-1',
@@ -149,12 +153,8 @@ describe('AiDemographicsGateProvider', () => {
     expect(mockSaveProfile).not.toHaveBeenCalled()
   })
 
-  it('opens automatically only after automatic summary is selected', async () => {
-    mockAutoConsent = {
-      source: 'local',
-      decision: 'auto',
-      importId: 'import-1',
-    }
+  it('opens automatically once the auto-generate switch is on', async () => {
+    mockAutoGenerate = true
     renderGate(
       <AiDemographicsGateProvider>
         <ManualGenerationProbe />
@@ -219,11 +219,7 @@ describe('AiDemographicsGateProvider', () => {
   })
 
   it('uses a session-only profile for non-local data without writing a Bundle', async () => {
-    mockAutoConsent = {
-      source: 'other',
-      decision: 'manual',
-      importId: null,
-    }
+    mockDataSource = { source: 'other', importId: null }
     mockLocalProfile = {
       ...mockLocalProfile,
       available: false,

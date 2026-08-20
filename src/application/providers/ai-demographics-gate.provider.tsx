@@ -11,9 +11,9 @@ import {
   type ReactNode,
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import {
-  useAutoAiConsentState,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { useAiDataSource } from '@/src/application/hooks/ai-generation/ai-data-source'
+import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import { useLocalPatientProfile } from '@/src/application/hooks/patient/use-local-patient-profile.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import type {
@@ -77,12 +77,15 @@ export function AiDemographicsGateProvider({
 }) {
   const queryClient = useQueryClient()
   const { patient } = usePatient()
-  const autoAiConsent = useAutoAiConsentState()
+  const dataSource = useAiDataSource()
+  // The persisted auto-generate switch is the only trigger for a background
+  // run, so it is also what decides whether missing demographics are blocking.
+  const autoGenerateEnabled = useSummaryPrefsStore((s) => s.autoGenerate)
   const isLocalBundle =
-    autoAiConsent.source === 'local' || autoAiConsent.source === 'demo'
+    dataSource.source === 'local' || dataSource.source === 'demo'
   const localProfile = useLocalPatientProfile(isLocalBundle)
   const scopeId = localProfile.importId
-    ?? (patient ? `${autoAiConsent.source}:${patient.id}` : null)
+    ?? (patient ? `${dataSource.source}:${patient.id}` : null)
   const [sessionProfileState, setSessionProfileState] = useState<{
     scopeId: string
     profile: UserEnteredPatientProfile
@@ -137,7 +140,7 @@ export function AiDemographicsGateProvider({
   const requestDemographicsForAi = useCallback((): Promise<boolean> => {
     if (demographicsReadyForAi) return Promise.resolve(true)
     if (!patient || !scopeId) return Promise.resolve(false)
-    if (autoAiConsent.source === 'local' && !localProfile.available) {
+    if (dataSource.source === 'local' && !localProfile.available) {
       return Promise.resolve(false)
     }
     if (pendingRequestRef.current) return pendingRequestRef.current.promise
@@ -154,7 +157,7 @@ export function AiDemographicsGateProvider({
     setDialogScopeId(scopeId)
     return promise
   }, [
-    autoAiConsent.source,
+    dataSource.source,
     demographicsReadyForAi,
     localProfile.available,
     patient,
@@ -163,13 +166,9 @@ export function AiDemographicsGateProvider({
 
   const closeDialog = useCallback(() => {
     setDialogScopeId(null)
-    setAutoDismissedScopeId(
-      autoAiConsent.decision === 'auto'
-        ? scopeId
-        : null,
-    )
+    setAutoDismissedScopeId(autoGenerateEnabled ? scopeId : null)
     settlePendingRequest(false)
-  }, [autoAiConsent.decision, scopeId, settlePendingRequest])
+  }, [autoGenerateEnabled, scopeId, settlePendingRequest])
 
   const saveRequiredProfile = useCallback(async (
     next: UserEnteredPatientProfile | null,
@@ -221,29 +220,28 @@ export function AiDemographicsGateProvider({
   // Turning automatic summaries off resets a previous dismissal. If the user
   // later opts in again for the same import, the requirement is shown again.
   useEffect(() => {
-    if (
-      autoAiConsent.decision === 'auto' ||
-      autoDismissedScopeId !== scopeId
-    ) return
+    if (autoGenerateEnabled || autoDismissedScopeId !== scopeId) return
     const timer = window.setTimeout(() => {
       setAutoDismissedScopeId(null)
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
-    autoAiConsent.decision,
+    autoGenerateEnabled,
     autoDismissedScopeId,
     scopeId,
   ])
 
-  // The import consent dialog owns the auto/manual choice. Once "automatic"
-  // is confirmed, prompt for any missing demographics before either automatic
-  // summary pipeline is allowed to start.
+  // With automatic generation switched on, prompt for any missing demographics
+  // before either automatic summary pipeline is allowed to start.
   useEffect(() => {
     if (
-      autoAiConsent.decision !== 'auto' ||
+      !autoGenerateEnabled ||
+      // Background auto-run is disabled on the Medcloud route, so this prompt
+      // there would be a modal with nothing waiting behind it.
+      isMedcloudLaunchRoute() ||
       demographicsReadyForAi ||
       !scopeId ||
-      (autoAiConsent.source === 'local' && !localProfile.available) ||
+      (dataSource.source === 'local' && !localProfile.available) ||
       autoDismissedScopeId === scopeId
     ) return
     const timer = window.setTimeout(() => {
@@ -251,8 +249,9 @@ export function AiDemographicsGateProvider({
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
-    autoAiConsent,
+    autoGenerateEnabled,
     autoDismissedScopeId,
+    dataSource.source,
     demographicsReadyForAi,
     localProfile.available,
     requestDemographicsForAi,

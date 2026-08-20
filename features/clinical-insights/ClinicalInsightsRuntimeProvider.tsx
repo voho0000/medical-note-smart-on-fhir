@@ -47,10 +47,7 @@ import type { PanelStatus, ResponseEntry } from "./types"
 import {
   getDemoClinicalInsightSnapshot,
 } from "@/src/infrastructure/demo/demo-ai-snapshots"
-import {
-  canAutoRunAi,
-  useAutoAiConsentState,
-} from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { useAiDataSource } from '@/src/application/hooks/ai-generation/ai-data-source'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
@@ -118,7 +115,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   )
   const contextLimit = modelContextLimit(model, openAiCompatible)
   const fittedClinicalInput = useClinicalAiInput(contextLimit)
-  const autoAiConsent = useAutoAiConsentState()
+  const dataSource = useAiDataSource()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
   const [bundleRevision, setBundleRevision] = useState(0)
   const previousRuntimeIdentity = useRef<string | null>(null)
@@ -313,13 +310,12 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
       && clinicalDataReady
       && !authLoading
       && hydratedCacheIdentity === cacheIdentity,
-    autoRunAuthorized: canAutoRunAi(autoAiConsent),
     context,
     modelId: model,
     runPanels,
     responses,
     panelStatus,
-    runScope: `${autoRunScope}:${autoAiConsent.source}:${autoAiConsent.importId ?? autoAiConsent.decision ?? 'none'}:${bundleRevision}`,
+    runScope: `${autoRunScope}:${dataSource.source}:${dataSource.importId ?? 'none'}:${bundleRevision}`,
   })
 
   const hasData = clinicalDataReady && context.trim().length > 0 && hydratedCacheIdentity === cacheIdentity
