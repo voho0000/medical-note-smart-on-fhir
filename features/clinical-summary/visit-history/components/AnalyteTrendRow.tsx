@@ -134,6 +134,11 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
             ⚠ {trend.flag}
           </span>
         ) : undefined}
+        // The fold chevron is one glyph, so it shares the primary line instead
+        // of taking the phone layout's full-width second row (that row exists
+        // to keep a source/date cluster off the clinical name — a lone 12px
+        // chevron there cost more height than the chevron).
+        trailingInline
         trailingContent={isFoldable ? (
           <ChevronDown
             className={cn(

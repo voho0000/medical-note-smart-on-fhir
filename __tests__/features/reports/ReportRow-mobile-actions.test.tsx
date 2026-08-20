@@ -60,4 +60,40 @@ describe('ReportRow mobile actions', () => {
     fireEvent.click(rightPaneButton)
     expect(rightPaneButton).toHaveClass('border-border', 'bg-background')
   })
+
+  it('marks the 36px trend action so its compact row reserves touch height', () => {
+    // The row's height floor is `has-[[data-touch-target]]`, so the marker on
+    // the action is what keeps a 36px tap target from being clipped by the
+    // row. Losing it would silently collapse reports rows back under the
+    // target size, which no layout assertion elsewhere would catch.
+    const row: Row = {
+      id: 'report-2',
+      title: 'Potassium',
+      meta: 'Laboratory • final',
+      group: 'lab',
+      institution: '臺北榮民總醫院',
+      effectiveDate: '2026-07-15',
+      obs: [{
+        id: 'obs-2',
+        code: { text: 'Potassium' },
+        valueQuantity: { value: 4.1, unit: 'mmol/L' },
+      }],
+    }
+
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow row={row} defaultOpen={[]} />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    const compactRow = screen.getByTestId('compact-lab-result-row')
+    const action = compactRow.querySelector('[data-touch-target]')
+    expect(action).not.toBeNull()
+    expect(action).toHaveAttribute('data-report-history-action')
+    expect(action).toHaveClass('min-h-[36px]', 'min-w-[36px]', 'max-md:-my-[11px]')
+  })
 })

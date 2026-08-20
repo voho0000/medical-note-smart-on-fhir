@@ -65,6 +65,57 @@ describe('CompactLabResultRow mobile layout', () => {
     )
   })
 
+  it('reserves touch height only for rows that host a 36px action', () => {
+    // The floor exists so a 36px tap target survives the row's own clipping.
+    // It must stay GATED: visit-history lab rows (EncounterObservationCard /
+    // AnalyteTrendRow) pass no such action, and an unconditional floor padded
+    // them from ~27px to 38px for nothing. jsdom does not evaluate `:has()`,
+    // so the guard is on the gate itself — an unconditional `min-h` here would
+    // be the regression.
+    render(<CompactLabResultRow title="K" value="4.1 mmol/L" />)
+
+    const row = screen.getByTestId('compact-lab-result-row')
+    expect(row).toHaveClass('max-md:has-[[data-touch-target]]:min-h-[38px]')
+    expect(row).not.toHaveClass('max-md:min-h-[38px]')
+    // Nothing in a plain row claims the floor.
+    expect(row.querySelector('[data-touch-target]')).toBeNull()
+  })
+
+  it('keeps icon-only trailing content on the primary line', () => {
+    // Audit #21: the second row exists so a source/date cluster cannot squeeze
+    // the clinical name. A lone fold chevron promoted there cost a whole lane
+    // plus the row gap — more height than the 12px glyph itself.
+    render(
+      <CompactLabResultRow
+        title="WBC"
+        value="8.1 1000/uL"
+        trailingInline
+        trailingContent={<span data-testid="chevron" />}
+      />,
+    )
+
+    const row = screen.getByTestId('compact-lab-result-row')
+    expect(row).toHaveClass('max-sm:grid-cols-[minmax(0,1fr)_auto_auto]')
+
+    const trailing = screen.getByTestId('compact-lab-meta')
+    expect(trailing).toHaveClass('col-start-3', 'row-start-1', 'shrink-0')
+    expect(trailing).not.toHaveClass('col-span-2', 'row-start-2')
+    // md+ still hands the trailing cluster to the flex row, untouched.
+    expect(trailing).toHaveClass('sm:col-auto', 'sm:row-auto')
+  })
+
+  it('drops a trailing container that renders nothing', () => {
+    // Audit #22: hosts pass a FRAGMENT of conditional children (ReportRow's
+    // institution/date/dup warning all drop out under hideMeta), which is
+    // truthy even when it emits no DOM — leaving an empty div holding the
+    // second grid row and its gap open.
+    render(
+      <CompactLabResultRow title="Na" value="140 mmol/L" trailingContent={<>{false}{null}</>} />,
+    )
+
+    expect(screen.getByTestId('compact-lab-meta')).toHaveClass('empty:hidden')
+  })
+
   it('never lets the value + reference range shrink under the source metadata', () => {
     // Regression: the cluster was `min-w-0 sm:flex-1`, so from 640px up it
     // collapsed to a 0 basis and its unshrinkable children (a short value is

@@ -115,6 +115,14 @@ export function ObservationLongitudinalAction({
     'data-report-history-action': true,
     'data-detail-source-id': sourceId,
     'data-tour': dataTour,
+    // Marks this as an action whose touch box (36px) is taller than the text
+    // line it sits on, so a host row can reserve height for it — see the
+    // `has-[[data-touch-target]]` floor in CompactLabResultRow. The marker
+    // lives HERE, on the component that owns the 36px, so it appears exactly
+    // when the action does (this component returns null with no observation or
+    // no right-detail pane) and any row that adopts the action inherits the
+    // floor without its host having to be told.
+    'data-touch-target': true,
     className: cn(
       // Literal px, not rem: the root font-size is user-settable (12–20px, and
       // 12px is the phone default for clinicians), so a rem-sized box here

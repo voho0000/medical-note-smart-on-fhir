@@ -14,7 +14,7 @@ import { useRightDetail } from "@/src/application/providers/right-detail.provide
 import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
-import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
+import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate, formatSourceTime } from '../utils/fhir-helpers'
 import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationLongitudinalAction } from './ObservationLongitudinalAction'
@@ -366,24 +366,17 @@ interface ReportRowProps {
   hideMeta?: boolean
 }
 
-// Date part goes through the shared, partial-date/timezone-safe formatDate
-// (a bare YYYY-MM-DD must not shift a day via UTC parsing). Time is appended
-// only when the source string actually carries one — never fabricated from a
-// date-only value.
+// Date and time both go through the shared, partial-date/timezone-faithful
+// helpers: what is shown is what the source wrote, so a report never moves to
+// a different day (or hour) because of where the reader happens to be. Time is
+// appended only when the source string actually carries one — never fabricated
+// from a date-only value.
 function formatDisplayDate(date?: string, showTime?: boolean): string {
   if (!date) return ''
   const datePart = formatDate(date)
-  if (showTime && date.includes('T')) {
-    try {
-      const d = new Date(date)
-      if (!Number.isNaN(d.getTime())) {
-        return datePart + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    } catch {
-      // fall through to date-only
-    }
-  }
-  return datePart
+  if (!showTime) return datePart
+  const timePart = formatSourceTime(date)
+  return timePart ? `${datePart} ${timePart}` : datePart
 }
 
 // Time-only label for rows inside a LabDayGroupCard (hideMeta): the group
@@ -391,15 +384,11 @@ function formatDisplayDate(date?: string, showTime?: boolean): string {
 // still need their draw TIME to be tellable apart. Only rendered when the
 // row carries the showTime disambiguation flag. Date-only values have no
 // time to show — returning '' beats inventing "08:00" from UTC midnight.
+// The card groups by the SOURCE's collection day, so the badge must read the
+// source's clock too, or a 08:30 draw would show as the previous evening to a
+// reader west of the hospital and contradict the card it sits in.
 function formatTimeOnly(date?: string): string {
-  if (!date || !date.includes('T')) return ''
-  try {
-    const d = new Date(date)
-    if (Number.isNaN(d.getTime())) return ''
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
+  return formatSourceTime(date)
 }
 
 // Collapse repeated blank lines so verbose hospital-report text doesn't waste
@@ -482,6 +471,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   const renderImageButton = (stopProp?: boolean) => (
     <div
       data-tour="report-image"
+      // Same marker as the trend action: this box is 36px on touch layouts, so
+      // a CompactLabResultRow hosting it has to reserve the height.
+      data-touch-target
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
         openImageDialog()

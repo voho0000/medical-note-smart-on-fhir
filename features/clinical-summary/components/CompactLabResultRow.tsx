@@ -25,6 +25,13 @@ type CompactLabResultRowProps = {
   /** Let source metadata share the primary row when it genuinely fits.
    *  The metadata wraps as one unit rather than compressing the clinical name. */
   adaptivePhoneLayout?: boolean
+  /** Keep `trailingContent` on the PRIMARY line instead of promoting it to the
+   *  phone layout's second row. For icon-only trailing (a fold chevron): the
+   *  second row exists so a source/date cluster does not squeeze the clinical
+   *  name, and spending a whole lane — plus the row gap — on one 12px glyph
+   *  cost more height than the glyph. Text-bearing trailing must NOT set this;
+   *  it is what the second row is for. */
+  trailingInline?: boolean
   role?: "button"
   tabIndex?: number
   ariaExpanded?: boolean
@@ -206,6 +213,7 @@ export function CompactLabResultRow({
   titleClassName,
   valueMaxWidthClassName,
   adaptivePhoneLayout = false,
+  trailingInline = false,
   role,
   tabIndex,
   ariaExpanded,
@@ -222,13 +230,38 @@ export function CompactLabResultRow({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        // `max-md:min-h-[38px]`: below the app's md split every inline action in
-        // this row is a 36px touch box, and the row CLIPS (overflow-hidden), so
-        // the row's own padding box is the ceiling on those tap targets. 38px
-        // (36 + the 1px borders) is the smallest row that still lets a centred
-        // 36px target survive the clip. It is a floor, not a height — the
-        // two-line phone layout is naturally taller and ignores it.
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 max-md:min-h-[38px] sm:flex sm:px-2.5 sm:py-1.5",
+        // Height floor, ONLY for rows that actually host a 36px action (the
+        // trend / image buttons, which stamp `data-touch-target`). Below the
+        // app's md split those boxes are 36px while the row CLIPS
+        // (overflow-hidden), so the row's own padding box is the ceiling on the
+        // tap target; 38px (36 + the 1px borders) is the smallest row that lets
+        // a centred 36px target survive the clip. It is a floor, not a height —
+        // the two-line phone layout is naturally taller and ignores it.
+        //
+        // Gated with `has-[]` rather than a prop because four components host
+        // this row and only two of them pass such an action: the visit-history
+        // pair (EncounterObservationCard / AnalyteTrendRow) pass badges and a
+        // chevron, whose only focusables are tooltip spans, and an
+        // unconditional floor padded those rows from ~27px to 38px for nothing.
+        // A prop would be four call sites to keep honest, and would have to
+        // re-derive conditions the action itself owns (it renders null with no
+        // observation / no right-detail pane; the image button needs images).
+        // The marker travels with the 36px box instead, so presence in the DOM
+        // is the single source of truth.
+        // The selector matches that marker, not `button`: these actions render
+        // as div[role=button] in the reports list, while the reference-range ⓘ
+        // IS a focusable trigger that must NOT floor a row.
+        //
+        // Second floor, for the other shape of tap target: a row that is ITSELF
+        // the button (AnalyteTrendRow's foldable series row). Nothing is being
+        // clipped there — the target is the row — so 36px is the whole
+        // requirement. Keyed off `role=button` so it follows the interaction
+        // rather than a host remembering to ask for it.
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 max-md:has-[[data-touch-target]]:min-h-[38px] max-md:[&[role=button]]:min-h-[36px] sm:flex sm:px-2.5 sm:py-1.5",
+        // Icon-only trailing joins the primary line: a third auto column at the
+        // row's end (the grid is phone-only — `sm:flex` takes over above it, so
+        // the column count is irrelevant there and md+ is untouched).
+        trailingInline && "max-sm:grid-cols-[minmax(0,1fr)_auto_auto]",
         adaptivePhoneLayout && "min-[380px]:flex min-[380px]:flex-wrap min-[380px]:gap-x-1 min-[380px]:px-2.5 min-[380px]:py-1.5",
         abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
@@ -279,9 +312,19 @@ export function CompactLabResultRow({
           />
         )}
       </div>
+      {/* `empty:hidden`, not just the `trailingContent &&` guard: hosts pass a
+          FRAGMENT whose contents are all conditional (ReportRow's institution /
+          date / duplicate warning all drop out under `hideMeta`), which is
+          truthy even when it renders no DOM at all. Such a div still claimed
+          the second grid row plus the row gap. `display: none` takes it out of
+          the grid entirely, so the row collapses to its primary line. */}
       {trailingContent && (
         <div className={cn(
-          "col-span-2 row-start-2 flex min-w-0 items-center justify-start overflow-hidden sm:col-auto sm:row-auto sm:shrink-0",
+          "flex min-w-0 items-center justify-start overflow-hidden empty:hidden sm:col-auto sm:row-auto sm:shrink-0",
+          // Icon-only trailing rides the primary line's third column; anything
+          // text-bearing keeps the full-width second row, which is what stops a
+          // source/date cluster from squeezing the clinical name.
+          trailingInline ? "col-start-3 row-start-1 shrink-0" : "col-span-2 row-start-2",
           adaptivePhoneLayout && "min-[380px]:col-auto min-[380px]:row-auto min-[380px]:ml-auto min-[380px]:shrink-0",
         )} data-testid="compact-lab-meta">
           {trailingContent}
