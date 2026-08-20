@@ -3,13 +3,11 @@
 import { Building2 } from 'lucide-react'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import { REPORT_SOURCE_TONE } from './report-color-roles'
 
-/** Remove a source-system code appended as the final delimited segment. */
-export function formatReportInstitution(institution: string): string {
-  const withoutTrailingCode = institution.replace(/\s*[;；,，]\s*\d{6,}\s*$/, '').trim()
-  return withoutTrailingCode || institution.trim()
-}
+/** Backwards-compatible name for report callers and tests. */
+export const formatReportInstitution = formatOrganizationDisplay
 
 /** Compact institution label that always exposes its complete source text.
  *  The label truncates, so "which hospital ran this?" lives ONLY in the bubble
