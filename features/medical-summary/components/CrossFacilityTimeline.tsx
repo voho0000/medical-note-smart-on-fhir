@@ -138,8 +138,9 @@ interface CrossFacilityTimelineProps {
   /** Precomposed deterministic stats line (or null when unavailable). */
   statsLine: string | null
   windowBoundaryLabel: string
-  /** "{count}" note shown when the app appended coverage-fallback rows. */
-  fallbackNote: string
+  /** "{count}" note shown when the app repaired rows (missed anchors restored,
+   *  unsupported groupings split back out). */
+  repairedNote: string
   threadsTitle: string
   threadsSubtitle: string
   threadStatusLabel: (status: CareThreadStatus) => string
@@ -161,7 +162,7 @@ export function CrossFacilityTimeline({
   droppedNote,
   statsLine,
   windowBoundaryLabel,
-  fallbackNote,
+  repairedNote,
   threadsTitle,
   threadsSubtitle,
   threadStatusLabel,
@@ -209,7 +210,7 @@ export function CrossFacilityTimeline({
     ? stats.firstOutpatientDate
     : null
 
-  const fallbackCount = events.filter((event) => event.coverageFallback).length
+  const repairedCount = events.filter((event) => event.appRepaired).length
 
   const visibleThreads = showAllThreads ? threads : threads.slice(0, THREADS_VISIBLE)
   const hiddenThreadCount = Math.max(0, threads.length - THREADS_VISIBLE)
@@ -290,7 +291,7 @@ export function CrossFacilityTimeline({
                 <div className="min-w-0 @min-[30rem]:flex-1">
                   <p className={cn(
                     "mt-0.5 text-[0.8125rem] leading-snug @min-[30rem]:mt-0",
-                    event.coverageFallback ? "text-muted-foreground" : "text-foreground",
+                    event.appRepaired ? "text-muted-foreground" : "text-foreground",
                   )}>
                     {event.label}
                   </p>
@@ -317,7 +318,7 @@ export function CrossFacilityTimeline({
                     className={cn(
                       "absolute -left-[19.5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card",
                       style.dot,
-                      event.coverageFallback && "opacity-60",
+                      event.appRepaired && "opacity-60",
                     )}
                   />
                   {onNavigate ? (
@@ -473,9 +474,9 @@ export function CrossFacilityTimeline({
         </div>
       ) : null}
 
-      {fallbackCount > 0 ? (
+      {repairedCount > 0 ? (
         <p className="mt-1.5 text-[0.65rem] text-muted-foreground/70">
-          {fallbackNote.replace("{count}", String(fallbackCount))}
+          {repairedNote.replace("{count}", String(repairedCount))}
         </p>
       ) : null}
       {droppedNote ? (

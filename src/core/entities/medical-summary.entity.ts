@@ -430,9 +430,12 @@ export interface SummaryMilestoneEvent {
   encounterClass?: EncounterClass
   /** How many events this row covers (drives the ×N badge). */
   refCount: number
-  /** True when the app appended this row because the model's reply failed the
-   *  coverage invariant for this anchor — label falls back to catalog display. */
-  coverageFallback?: boolean
+  /** True when this row is app-authored rather than AI-authored: the model
+   *  either missed the anchor entirely, or merged it into a grouping the
+   *  records do not support and the app split it back out. Either way the
+   *  label falls back to the catalog display, so the row renders as repaired.
+   *  The two causes stay separate as result-level counters for tuning. */
+  appRepaired?: boolean
   documentEvidence?: DocumentEvidence[]
 }
 
@@ -565,6 +568,11 @@ export interface MedicalSummaryResult {
   careThreads?: SummaryCareThread[]
   /** Deterministic stats strip for the timeline card header. */
   timelineStats?: SummaryTimelineStats
+  /** Deterministic repair counters — kept apart from the single UI flag so a
+   *  contract-tuning run can tell "the model missed events" (needs coverage
+   *  work) from "the model over-merged" (needs grouping work). */
+  coverageFallbackCount?: number
+  splitMilestoneCount?: number
   /** Unique cited sources in first-appearance order, matching the RENDER
    *  order (summary → investigations → medication card → problems → decisions) so superscript numbers read
    *  top-to-bottom on the page. */

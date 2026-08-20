@@ -273,7 +273,7 @@ export const en = {
     },
     timelineStatsLine: '{start} – {end} · {orgs} facilities · {imp} admissions · {er} ER visits',
     timelineWindowBoundary: 'Outpatient claim detail begins here — earlier years contain admission/ER records only',
-    timelineFallbackNote: '{count} mandatory event(s) auto-added by the app (missed in the AI reply).',
+    timelineRepairedNote: '{count} event(s) restored from the records by the app (missed by the AI, or merged into an unsupported group).',
     threadsTitle: 'Ongoing care',
     threadsSubtitle: 'Routine visits grouped into care threads instead of individual events',
     threadStatuses: {

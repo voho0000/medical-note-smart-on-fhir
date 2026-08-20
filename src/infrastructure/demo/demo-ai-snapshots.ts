@@ -130,7 +130,9 @@ export function remapDemoSnapshotSourceKeys<T>(
   }
   const visit = (value: unknown, field?: string): unknown => {
     if (Array.isArray(value)) {
-      return field === 'sources'
+      // 'refs' carries timeline-v2 milestone citations — same key space as
+      // 'sources', so it needs the same resource-id remapping.
+      return field === 'sources' || field === 'refs'
         ? value.map((item) => typeof item === 'string' ? remapKey(item) : item)
         : value.map((item) => visit(item))
     }
@@ -336,8 +338,23 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { ref: 'L15', label: '胸部X光：雙下肺病灶與雙側肋膜積液', category: 'lab' },
       { ref: 'E1', label: '最新門診申報含肺炎、血液疾病與貧血診斷碼', category: 'encounter' },
     ],
-    milestones: [],
-    threads: [],
+    // Timeline v2: every admission and care plan is covered (the app would
+    // otherwise append them itself), routine outpatient care moves to threads.
+    milestones: [
+      { refs: ['L15'], label: '胸部X光：雙下肺病灶與雙側肋膜積液', category: 'exam' },
+      { refs: ['L27'], label: '腹部超音波：脂肪肝、膽囊沉積物與腎結石', category: 'exam' },
+      { refs: ['L28'], label: '腦部無對比電腦斷層檢查', category: 'exam' },
+      { refs: ['K1'], label: '加入末期腎臟病前期（Pre-ESRD）照護與衛教計畫', category: 'careplan' },
+      { refs: ['K2'], label: '初期慢性腎病追蹤計畫收案', category: 'careplan' },
+    ],
+    threads: [
+      { label: '肺炎與慢性咳嗽門診追蹤', codePrefixes: ['J18', 'R05'], organizations: ['示範長青醫院'], insight: '肺炎住院後的呼吸道門診追蹤，最近一次為 2026-08', status: 'active' },
+      { label: '青光眼定期回診', codePrefixes: ['H40'], organizations: ['示範嘉恩醫院'], insight: '眼科規律追蹤，搭配長期降眼壓藥物', status: 'active' },
+      { label: '胃及十二指腸息肉追蹤', codePrefixes: ['K31'], organizations: ['示範嘉恩醫院'], insight: '內視鏡後持續門診追蹤', status: 'active' },
+      { label: '譫妄與認知功能追蹤', codePrefixes: ['F05'], organizations: ['示範長青醫院'], insight: '譫妄發作後的門診追蹤', status: 'active' },
+      { label: '良性攝護腺增生追蹤', codePrefixes: ['N40'], organizations: ['示範長青醫院'], insight: '長期口服治療；藥局調劑屬領藥紀錄，不計入回診次數', status: 'active' },
+      { label: '耳垢嵌塞清除', codePrefixes: ['H61'], organizations: ['示範安心耳鼻喉科診所'], insight: '反覆處置，約數月一次', status: 'active' },
+    ],
   },
   patient: {
     headline: '您的腎功能需要持續追蹤；近期門診申報也重複出現肺炎與血液疾病診斷碼，建議向原看診醫師確認。',
@@ -447,8 +464,23 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { ref: 'L15', label: '胸部X光檢查', category: 'lab' },
       { ref: 'E1', label: '8月12日最新門診申報', category: 'encounter' },
     ],
-    milestones: [],
-    threads: [],
+    // Same objective events and groupings as the clinician view; only the
+    // wording is plainer — the patient timeline never shows more or fewer.
+    milestones: [
+      { refs: ['L15'], label: '胸部X光檢查', category: 'exam' },
+      { refs: ['L27'], label: '腹部超音波檢查', category: 'exam' },
+      { refs: ['L28'], label: '腦部電腦斷層檢查', category: 'exam' },
+      { refs: ['K1'], label: '開始腎臟照護計畫', category: 'careplan' },
+      { refs: ['K2'], label: '開始早期腎臟追蹤計畫', category: 'careplan' },
+    ],
+    threads: [
+      { label: '肺部與咳嗽的定期回診', codePrefixes: ['J18', 'R05'], organizations: ['示範長青醫院'], insight: '住院後持續回診追蹤，最近一次為 2026 年 8 月', status: 'active' },
+      { label: '青光眼定期回診', codePrefixes: ['H40'], organizations: ['示範嘉恩醫院'], insight: '眼科規律追蹤，並持續使用眼藥水', status: 'active' },
+      { label: '胃部息肉追蹤', codePrefixes: ['K31'], organizations: ['示範嘉恩醫院'], insight: '胃鏡檢查後持續回診追蹤', status: 'active' },
+      { label: '意識混亂（譫妄）後的追蹤', codePrefixes: ['F05'], organizations: ['示範長青醫院'], insight: '發生後持續在門診追蹤', status: 'active' },
+      { label: '攝護腺肥大回診', codePrefixes: ['N40'], organizations: ['示範長青醫院'], insight: '長期用藥治療；到藥局領藥不算一次回診', status: 'active' },
+      { label: '耳垢清除', codePrefixes: ['H61'], organizations: ['示範安心耳鼻喉科診所'], insight: '每隔幾個月處理一次', status: 'active' },
+    ],
   },
 }
 

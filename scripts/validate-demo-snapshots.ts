@@ -29,7 +29,7 @@ async function main() {
   const { scopeClinicalDataForAi } = await import(path.join(ROOT, 'src/core/utils/ai-clinical-scope.utils.ts'))
   const { listClinicalDocuments, resolveSelectedDocuments } = await import(path.join(ROOT, 'src/core/utils/clinical-documents.utils.ts'))
   const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
-  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
+  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots, remapDemoSnapshotSourceKeys } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
 
   const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/demo/demo-bundle.json'), 'utf8'))
   // Match the real demo/local import path: exact-code NHI MedicationKnowledge
@@ -61,7 +61,10 @@ async function main() {
 
   for (const aud of ['medical', 'patient'] as const) {
     // --- medical summary: exact same path as a live reply ---
-    const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots[aud]))
+    // Same path as demoSeed: snapshot keys are remapped through their stable
+    // resource ids before parsing, so this validates what actually renders.
+    const summarySnapshot = remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[aud], catalog)
+    const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(summarySnapshot))
     if (!parsed) { fail(`summary[${aud}]: parseResult rejected`); continue }
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog, {
       clinicalData: scopedClinicalData,
@@ -75,7 +78,7 @@ async function main() {
     if (emph.length === 0) fail(`summary[${aud}]: zero emphasis survived`)
     if (emph.length > EMPHASIS_MAX_COUNT) fail(`summary[${aud}]: ${emph.length} emphasis > cap`)
     for (const e of emph) if (e.text.length > EMPHASIS_MAX_CHARS) fail(`summary[${aud}]: emphasis too long: ${e.text}`)
-    for (const issue of auditSummaryGrounding(demoMedicalSummarySnapshots[aud], grounding)) fail(`summary[${aud}] grounding: ${issue}`)
+    for (const issue of auditSummaryGrounding(summarySnapshot, grounding)) fail(`summary[${aud}] grounding: ${issue}`)
     if (aud === 'patient') {
       const urinaryEducation = demoMedicalSummarySnapshots.patient.medicationEducation
       const betmiga = urinaryEducation.find(
@@ -92,7 +95,8 @@ async function main() {
     console.log(`✓ summary[${aud}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.investigations.length} investigation trends, ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
     // --- safety: same path as a live reply ---
-    const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(demoSafetyScanSnapshots[aud]))
+    const safetySnapshot = remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[aud], catalog)
+    const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(safetySnapshot))
     if (!scan) { fail(`safety[${aud}]: parseScanResult rejected`); continue }
     for (const a of scan.alerts) {
       for (const k of a.sources ?? []) if (!keys.has(k)) fail(`safety[${aud}] "${a.title}": unknown key ${k}`)
