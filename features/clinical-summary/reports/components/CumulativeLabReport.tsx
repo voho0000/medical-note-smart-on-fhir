@@ -448,6 +448,7 @@ const LabPivotTable = memo(function LabPivotTable({
                   {canTrend ? (
                     <button
                       type="button"
+                      data-detail-source-id={sourceId}
                       onPointerEnter={preloadCumulativeLabTrendModule}
                       onFocus={preloadCumulativeLabTrendModule}
                       onClick={() => onOpenTrend({
@@ -654,11 +655,12 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       title: target.title,
       sourceId: target.sourceId,
     }
-    const canUseRightPane = !fullHeight
-      && !!rightDetail
-      && typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(min-width: 768px)').matches
+    // Keep cumulative-report trends on the same shared detail surface as the
+    // other report tabs at every split-workspace width. On phones this gives
+    // the clinician the fixed close/back header and preserves the originating
+    // tab + scroll position. The standalone fullscreen report still uses its
+    // own dialog because it does not have the split workspace beside it.
+    const canUseRightPane = !fullHeight && !!rightDetail
 
     if (canUseRightPane) {
       setDialogTrend(null)

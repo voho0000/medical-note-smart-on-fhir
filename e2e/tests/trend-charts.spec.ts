@@ -38,6 +38,31 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByText('4.3').first()).toBeVisible()
   })
 
+  test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 })
+    await importBundle(page)
+    await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
+    await page.getByRole('tab', { name: /^生化 \(/ }).click()
+
+    const trendAction = page.getByRole('button', { name: /^查看 .+ 趨勢$/ }).first()
+    await expect(trendAction).toBeVisible()
+    await trendAction.click()
+
+    await expect(page.getByRole('button', { name: '功能' })).toHaveAttribute('aria-pressed', 'true')
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await expect(detailPanel.getByTestId('cumulative-trend-detail')).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '關閉', exact: true })).toBeVisible()
+
+    await detailPanel.getByRole('button', { name: '關閉', exact: true }).click()
+
+    await expect(page.getByRole('button', { name: '臨床摘要' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('tab').filter({ hasText: '報告' }).first())
+      .toHaveAttribute('data-state', 'active')
+    await expect(page.getByRole('tab', { name: '累積報告', exact: true }))
+      .toHaveAttribute('data-state', 'active')
+  })
+
   test('phone report history action reveals its detail instead of appearing unresponsive', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 })
     await openReportsSubTab(page, '影像')

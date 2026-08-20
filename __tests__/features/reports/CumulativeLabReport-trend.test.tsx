@@ -55,26 +55,18 @@ function Providers({ children, detailHost = false }: { children: ReactNode; deta
 }
 
 describe('CumulativeLabReport trend entry', () => {
-  const originalMatchMedia = window.matchMedia
-
   beforeEach(() => {
     mockBuildLabTrendSeries.mockClear()
   })
 
   afterEach(() => {
-    Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia })
     jest.restoreAllMocks()
   })
 
   // The trend detail/dialog are loaded with next/dynamic (the charting library
   // is the heaviest thing in the bundle and only a click needs it), so these
   // assertions await the chunk instead of reading the DOM synchronously.
-  it('opens a shared right-pane trend on desktop and keeps the selected column highlighted', async () => {
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: jest.fn().mockReturnValue({ matches: true }),
-    })
-
+  it('opens a shared right-pane trend and keeps the selected column highlighted', async () => {
     const { container } = render(
       <Providers detailHost>
         <CumulativeLabReport observations={observations} activeCategoryId="chem" />
@@ -91,17 +83,30 @@ describe('CumulativeLabReport trend entry', () => {
     expect(screen.getByTestId('right-detail-host')).toBeInTheDocument()
     expect(await screen.findByTestId('cumulative-trend-detail')).toHaveTextContent('最新結果')
     expect(container.querySelector('[data-lab-test-key="CRP"]')).toHaveAttribute('data-trend-active', 'true')
+    expect(screen.getByRole('button', { name: /查看 CRP 趨勢/ })).toHaveAttribute(
+      'data-detail-source-id',
+      expect.stringContaining('cumulative-trend:'),
+    )
   })
 
-  it('uses a dialog below the split-view breakpoint', async () => {
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: jest.fn().mockReturnValue({ matches: false }),
-    })
+  it('uses the shared right pane on a phone-sized split workspace', async () => {
+    render(
+      <Providers detailHost>
+        <CumulativeLabReport observations={observations} activeCategoryId="chem" />
+      </Providers>,
+    )
 
+    fireEvent.click(screen.getByRole('button', { name: /查看 CRP 趨勢/ }))
+
+    expect(screen.getByTestId('right-detail-host')).toBeInTheDocument()
+    expect(await screen.findByTestId('cumulative-trend-detail')).toHaveTextContent('最新結果')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the dialog for the standalone fullscreen cumulative report', async () => {
     render(
       <Providers>
-        <CumulativeLabReport observations={observations} activeCategoryId="chem" />
+        <CumulativeLabReport observations={observations} activeCategoryId="chem" fullHeight />
       </Providers>,
     )
 
