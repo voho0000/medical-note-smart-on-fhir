@@ -3,7 +3,57 @@ import { ReportRow } from '@/features/clinical-summary/reports/components/Report
 import type { Row } from '@/features/clinical-summary/reports/types'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
-import { RightDetailProvider } from '@/src/application/providers/right-detail.provider'
+import { RightDetailProvider, useRightDetail } from '@/src/application/providers/right-detail.provider'
+
+// jsdom ships no matchMedia, so the layout hook reads "desktop" unless a test
+// says otherwise — which is what keeps the rest of this file on the desktop
+// contract.
+function useCompactLayout() {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  })
+}
+
+/** Surfaces what the right pane is currently showing, so a row's tap can be
+ *  checked by its EFFECT rather than by the handler being wired. */
+function RightDetailProbe() {
+  const { detail } = useRightDetail()
+  return <span data-testid="right-detail-source">{detail?.sourceId ?? 'none'}</span>
+}
+
+const COMPACT_ROW: Row = {
+  id: 'report-2',
+  title: 'Potassium',
+  meta: 'Laboratory • final',
+  group: 'lab',
+  institution: '臺北榮民總醫院',
+  effectiveDate: '2026-07-15',
+  obs: [{
+    id: 'obs-2',
+    code: { text: 'Potassium' },
+    valueQuantity: { value: 4.1, unit: 'mmol/L' },
+  }],
+}
+
+function renderCompactRow() {
+  return render(
+    <LanguageProvider>
+      <AudienceProvider>
+        <RightDetailProvider>
+          <RightDetailProbe />
+          <ReportRow row={COMPACT_ROW} defaultOpen={[]} />
+        </RightDetailProvider>
+      </AudienceProvider>
+    </LanguageProvider>,
+  )
+}
 
 jest.mock('@/features/report-interpretation', () => ({
   ReportInterpretationButton: jest.requireActual(
@@ -13,6 +63,12 @@ jest.mock('@/features/report-interpretation', () => ({
 }))
 
 describe('ReportRow mobile actions', () => {
+  // Undo the stub between tests: leaving it set would silently put every later
+  // test on the compact contract depending on declaration order.
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia')
+  })
+
   it('wraps narrative report actions without shrinking the AI button', () => {
     const row: Row = {
       id: 'report-1',
@@ -61,39 +117,67 @@ describe('ReportRow mobile actions', () => {
     expect(rightPaneButton).toHaveClass('border-border', 'bg-background')
   })
 
-  it('marks the 36px trend action so its compact row reserves touch height', () => {
-    // The row's height floor is `has-[[data-touch-target]]`, so the marker on
-    // the action is what keeps a 36px tap target from being clipped by the
-    // row. Losing it would silently collapse reports rows back under the
-    // target size, which no layout assertion elsewhere would catch.
-    const row: Row = {
-      id: 'report-2',
-      title: 'Potassium',
-      meta: 'Laboratory • final',
-      group: 'lab',
-      institution: '臺北榮民總醫院',
-      effectiveDate: '2026-07-15',
-      obs: [{
-        id: 'obs-2',
-        code: { text: 'Potassium' },
-        valueQuantity: { value: 4.1, unit: 'mmol/L' },
-      }],
-    }
-
-    render(
-      <LanguageProvider>
-        <AudienceProvider>
-          <RightDetailProvider>
-            <ReportRow row={row} defaultOpen={[]} />
-          </RightDetailProvider>
-        </AudienceProvider>
-      </LanguageProvider>,
-    )
+  it('keeps the standalone trend button on desktop', () => {
+    // Desktop interaction is unchanged: a real icon button with its own label,
+    // and a row that is NOT a control (hover + click the icon, as before).
+    renderCompactRow()
 
     const compactRow = screen.getByTestId('compact-lab-result-row')
-    const action = compactRow.querySelector('[data-touch-target]')
+    expect(compactRow).not.toHaveAttribute('role')
+    expect(compactRow).not.toHaveAttribute('tabindex')
+
+    const action = compactRow.querySelector('[data-report-history-action]')
     expect(action).not.toBeNull()
-    expect(action).toHaveAttribute('data-report-history-action')
-    expect(action).toHaveClass('min-h-[36px]', 'min-w-[36px]', 'max-md:-my-[11px]')
+    expect(action).toHaveAttribute('aria-label', '查看趨勢')
+    expect(action).toHaveClass('min-h-[36px]', 'min-w-[36px]')
+  })
+
+  it('hands the tap to the whole row on the single-panel layout', () => {
+    // A one-line result row is ~24px tall and ~343px wide: as a target it beats
+    // the 36px icon it used to need, and it lets the row stop padding out
+    // around that icon. The icon stays as a cue, but the ROW owns the role, the
+    // accessible name and the handler — and it must open the very same detail.
+    useCompactLayout()
+    renderCompactRow()
+
+    const compactRow = screen.getByTestId('compact-lab-result-row')
+    expect(compactRow).toHaveAttribute('role', 'button')
+    expect(compactRow).toHaveAttribute('tabindex', '0')
+    // Reading first, action second: the row's own text is its default name, so
+    // labelling it with the bare action would cost a screen-reader user the
+    // result they navigated to.
+    expect(compactRow).toHaveAttribute('aria-label', 'Potassium 4.1 mmol/L，查看趨勢')
+    // The icon is demoted to decoration — no second tab stop, no second
+    // announcement of the same action inside the control.
+    expect(compactRow.querySelector('[data-report-history-action]')).toBeNull()
+    expect(screen.getByTestId('right-detail-source')).toHaveTextContent('none')
+
+    fireEvent.click(compactRow)
+    expect(screen.getByTestId('right-detail-source'))
+      .toHaveTextContent('report-longitudinal:report-2:obs-2')
+  })
+
+  it('opens the row from the keyboard too', () => {
+    useCompactLayout()
+    renderCompactRow()
+
+    const compactRow = screen.getByTestId('compact-lab-result-row')
+    fireEvent.keyDown(compactRow, { key: 'Enter' })
+    expect(screen.getByTestId('right-detail-source'))
+      .toHaveTextContent('report-longitudinal:report-2:obs-2')
+  })
+
+  it('lets an inner control keep its own tap', () => {
+    // The row swallowing every tap would break the expandable value and the
+    // NHI viewer links sharing it.
+    useCompactLayout()
+    renderCompactRow()
+
+    const compactRow = screen.getByTestId('compact-lab-result-row')
+    const inner = document.createElement('button')
+    compactRow.appendChild(inner)
+    fireEvent.click(inner)
+
+    expect(screen.getByTestId('right-detail-source')).toHaveTextContent('none')
   })
 })

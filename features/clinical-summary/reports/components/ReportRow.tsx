@@ -17,7 +17,13 @@ import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate, formatSourceTime } from '../utils/fhir-helpers'
 import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
-import { ObservationLongitudinalAction } from './ObservationLongitudinalAction'
+import {
+  ObservationLongitudinalAction,
+  ObservationLongitudinalAffordance,
+  rowLongitudinalHandlers,
+  useObservationLongitudinal,
+} from './ObservationLongitudinalAction'
+import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.hook'
 import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
@@ -464,16 +470,16 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // Inline-image indicator. Clicking opens the lazy lightbox. `stopProp` is set
   // when the button lives inside an AccordionTrigger so the click doesn't also
   // toggle the accordion (mirrors TrendButton).
-  // Sizing mirrors ObservationLongitudinalAction exactly: one 36px touch box
-  // for the whole single-panel range (<768, the app's md split), and
-  // `max-md:-my-[11px]` so that box overlaps the row's padding instead of
-  // stretching the analyte-name lane it shares with the trend icon.
+  // This one stays a real button on every layout — unlike the trend icon it has
+  // no row-level equivalent to fall back to, and it shares rows with a row-tap
+  // that means something else. So it keeps a 36px touch box (literal px: the
+  // root font-size is user-settable, 12px on phones), with `max-md:-my-[11px]`
+  // so the box overlaps the host's padding instead of stretching the line it
+  // sits on. Measured host: the imaging report row is 43px tall on a phone, so
+  // the box is not clipped.
   const renderImageButton = (stopProp?: boolean) => (
     <div
       data-tour="report-image"
-      // Same marker as the trend action: this box is 36px on touch layouts, so
-      // a CompactLabResultRow hosting it has to reserve the height.
-      data-touch-target
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
         openImageDialog()
@@ -513,6 +519,20 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     (!(displayObs[0].component) || displayObs[0].component.length === 0)
 
   const longitudinalSourceId = `report-longitudinal:${row.id}:${firstObs?.id || 'first'}`
+
+  // Same detail the trend button opens, reachable from the row itself. On the
+  // single-panel layout a one-line result row IS the tap target — 343×24px
+  // beats a 36px icon, and it lets the row shrink to the height of its text
+  // instead of padding out around a square. Desktop keeps the icon button, so
+  // the decision is a rendered-handler difference and cannot be a media query.
+  const compactLayout = useCompactLayout()
+  const longitudinal = useObservationLongitudinal({
+    observation: firstObs,
+    title: row.title,
+    sourceId: longitudinalSourceId,
+    reportTitle: row.title,
+    reportLookupTitle: row.rawTitle,
+  })
 
   const renderTrendButton = (stopPropagation?: boolean) => (
     <ObservationLongitudinalAction
@@ -784,6 +804,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       ? getValueWithUnit(obs.valueQuantity)
       : obs.valueString || getCodeableConceptText(obs.valueCodeableConcept) || '—'
 
+    // On the single-panel layout the ROW opens the trend, so the icon is left
+    // as a plain affordance and the row carries the role, the label and the
+    // handlers. Desktop is untouched: the icon stays a real button.
+    const rowOpensTrend = compactLayout && longitudinal.available
+    const rowHandlers = rowLongitudinalHandlers(longitudinal.show)
+
     // Prefer one scan line when the content genuinely fits. The clinical name
     // keeps a readable minimum; if a long value/range/source exceeds the phone
     // width, the source/date cluster wraps as one unit instead of squeezing the
@@ -797,10 +823,23 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         referenceText={refText}
         rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
         adaptivePhoneLayout
+        role={rowOpensTrend ? 'button' : undefined}
+        tabIndex={rowOpensTrend ? 0 : undefined}
+        ariaLabel={rowOpensTrend ? longitudinal.describe(`${row.title} ${value}`) : undefined}
+        onClick={rowOpensTrend ? rowHandlers.onClick : undefined}
+        onKeyDown={rowOpensTrend ? rowHandlers.onKeyDown : undefined}
+        className={rowOpensTrend ? 'cursor-pointer' : undefined}
         titleActions={(
           <>
-            {renderTrendButton()}
-            {hasImages && renderImageButton()}
+            {rowOpensTrend ? (
+              <ObservationLongitudinalAffordance
+                mode={longitudinal.mode}
+                isActive={longitudinal.isActive}
+              />
+            ) : renderTrendButton()}
+            {/* stopProp once the row is the control, or opening an image would
+                also dock the trend behind it. */}
+            {hasImages && renderImageButton(rowOpensTrend)}
           </>
         )}
         trailingContent={(

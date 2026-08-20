@@ -36,16 +36,15 @@ describe('AnalyteTrendRow fold layout', () => {
     expect(trailing).not.toHaveClass('row-start-2')
   })
 
-  it('keeps the foldable row itself tall enough to tap', () => {
-    // The whole row is the fold target (role=button), so — unlike rows that
-    // merely CONTAIN a 36px action — the row's own height IS the tap target and
-    // nothing is being clipped. Inlining the chevron takes the natural height
-    // to ~21px at the 12px phone root, so the floor has to carry it.
+  it('is the tap target itself, at its natural height', () => {
+    // The whole row folds (role=button), and a ~343px-wide row is an easy
+    // target well under 36px tall — so it keeps no height floor. Reserving 36px
+    // here bought nothing but padding around a single line of text.
     render(<AnalyteTrendRow series={series(3)} />)
 
     const row = screen.getByTestId('compact-lab-result-row')
     expect(row).toHaveAttribute('role', 'button')
-    expect(row).toHaveClass('max-md:[&[role=button]]:min-h-[36px]')
+    expect(row.className).not.toMatch(/min-h-/)
   })
 
   it('leaves a single-value row unfoldable, and unfloored', () => {

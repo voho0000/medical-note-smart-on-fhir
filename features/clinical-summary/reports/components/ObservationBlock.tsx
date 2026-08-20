@@ -1,5 +1,5 @@
 // Observation Block Component - compact single-row display
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
@@ -9,7 +9,13 @@ import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbno
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
-import { ObservationLongitudinalAction } from './ObservationLongitudinalAction'
+import {
+  ObservationLongitudinalAction,
+  ObservationLongitudinalAffordance,
+  rowLongitudinalHandlers,
+  useObservationLongitudinal,
+} from './ObservationLongitudinalAction'
+import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.hook'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -29,6 +35,7 @@ function ObsRow({
   isLongText,
   refRangeAbnormal,
   nested,
+  rowAction,
 }: {
   name: string
   value: string
@@ -40,6 +47,9 @@ function ObsRow({
   isLongText?: boolean
   refRangeAbnormal?: boolean
   nested?: boolean
+  /** Set on the single-panel layout, where the ROW opens the trend instead of
+   *  the icon — see ReportRow for the same wiring on the flat lists. */
+  rowAction?: { ariaLabel: string; onClick: (event: MouseEvent<HTMLElement>) => void; onKeyDown: (event: KeyboardEvent<HTMLElement>) => void }
 }) {
   // Interpretation wins when present; the structured-range flag is only a
   // fallback for when the source shipped no interpretation at all.
@@ -53,9 +63,14 @@ function ObsRow({
       referenceText={refText}
       rangeUnassessed={rangeUnassessed}
       valueMaxWidthClassName={isLongText ? "max-w-[12rem]" : "max-w-[9rem]"}
-      className="rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60"
+      className={`rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60${rowAction ? ' cursor-pointer' : ''}`}
       titleColumnClassName={nested ? "pl-4" : undefined}
       titleActions={titleAction}
+      role={rowAction ? 'button' : undefined}
+      tabIndex={rowAction ? 0 : undefined}
+      ariaLabel={rowAction?.ariaLabel}
+      onClick={rowAction?.onClick}
+      onKeyDown={rowAction?.onKeyDown}
       trailingContent={originalValue && originalValue !== value ? (
         <span className="sr-only">原始值: {originalValue}</span>
       ) : undefined}
@@ -97,6 +112,22 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
     ? (locale.startsWith('zh') ? ' · 推估單位' : ' · inferred unit')
     : ''
   const detailSourceId = `observation-longitudinal:${observation.id || `${title}:${observation.effectiveDateTime || ''}`}`
+
+  // Single-panel layout: the row opens the trend, exactly as in the flat report
+  // lists. Without this the 36px icon button sat inside a ~24px row and was
+  // clipped to a target smaller than the box it declared — the row is the honest
+  // target, and a ~343px-wide one is easier to hit than the icon ever was.
+  // Desktop keeps the icon button untouched.
+  const compactLayout = useCompactLayout()
+  const longitudinal = useObservationLongitudinal({
+    observation,
+    title: title || '檢驗項目',
+    sourceId: detailSourceId,
+  })
+  const rowHandlers = rowLongitudinalHandlers(longitudinal.show)
+  // Only the main row carries a trend (component sub-rows have none), so the
+  // row-tap follows exactly the same condition as the icon it replaces.
+  const rowOpensTrend = compactLayout && !hasComponents && longitudinal.available
 
   // Procedure detail container: flat list of attribute rows, no main row.
   // Components flagged `_isSubHeader` (a grouped session's sub-procedure name)
@@ -214,13 +245,25 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
           interp={interp}
           refText={ref}
           titleAction={!hasComponents ? (
-            <ObservationLongitudinalAction
-              observation={observation}
-              title={title || '檢驗項目'}
-              sourceId={detailSourceId}
-              className="shrink-0"
-            />
+            rowOpensTrend ? (
+              <ObservationLongitudinalAffordance
+                mode={longitudinal.mode}
+                isActive={longitudinal.isActive}
+              />
+            ) : (
+              <ObservationLongitudinalAction
+                observation={observation}
+                title={title || '檢驗項目'}
+                sourceId={detailSourceId}
+                className="shrink-0"
+              />
+            )
           ) : undefined}
+          rowAction={rowOpensTrend ? {
+            ariaLabel: longitudinal.describe(`${title || '—'} ${primaryValue}${inferredUnitLabel}`),
+            onClick: rowHandlers.onClick,
+            onKeyDown: rowHandlers.onKeyDown,
+          } : undefined}
           isLongText={isLongText}
           refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
           rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}

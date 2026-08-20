@@ -65,20 +65,17 @@ describe('CompactLabResultRow mobile layout', () => {
     )
   })
 
-  it('reserves touch height only for rows that host a 36px action', () => {
-    // The floor exists so a 36px tap target survives the row's own clipping.
-    // It must stay GATED: visit-history lab rows (EncounterObservationCard /
-    // AnalyteTrendRow) pass no such action, and an unconditional floor padded
-    // them from ~27px to 38px for nothing. jsdom does not evaluate `:has()`,
-    // so the guard is on the gate itself — an unconditional `min-h` here would
-    // be the regression.
+  it('reserves no touch height — the row itself is the target', () => {
+    // A result row is one line of 9-10px text. Floors that reserved 36-38px so
+    // an icon-sized tap target could survive the row's clipping turned the row
+    // into a box of padding, which is what the user rejected. The row is the
+    // control now (see ReportRow's mobile wiring), so its height is free to be
+    // whatever the content needs. Any `min-h` creeping back here is the
+    // regression.
     render(<CompactLabResultRow title="K" value="4.1 mmol/L" />)
 
     const row = screen.getByTestId('compact-lab-result-row')
-    expect(row).toHaveClass('max-md:has-[[data-touch-target]]:min-h-[38px]')
-    expect(row).not.toHaveClass('max-md:min-h-[38px]')
-    // Nothing in a plain row claims the floor.
-    expect(row.querySelector('[data-touch-target]')).toBeNull()
+    expect(row.className).not.toMatch(/min-h-/)
   })
 
   it('keeps icon-only trailing content on the primary line', () => {

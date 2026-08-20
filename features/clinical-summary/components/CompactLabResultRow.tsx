@@ -34,6 +34,10 @@ type CompactLabResultRowProps = {
   trailingInline?: boolean
   role?: "button"
   tabIndex?: number
+  /** Accessible name for a row that IS the control. Without it the row's whole
+   *  reading (name, value, range, source, date) becomes the button's name and
+   *  never says what tapping does. */
+  ariaLabel?: string
   ariaExpanded?: boolean
   onClick?: (event: MouseEvent<HTMLDivElement>) => void
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
@@ -216,6 +220,7 @@ export function CompactLabResultRow({
   trailingInline = false,
   role,
   tabIndex,
+  ariaLabel,
   ariaExpanded,
   onClick,
   onKeyDown,
@@ -226,38 +231,20 @@ export function CompactLabResultRow({
       data-testid="compact-lab-result-row"
       data-mobile-adaptive={adaptivePhoneLayout ? "true" : undefined}
       tabIndex={tabIndex}
+      aria-label={ariaLabel}
       aria-expanded={ariaExpanded}
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        // Height floor, ONLY for rows that actually host a 36px action (the
-        // trend / image buttons, which stamp `data-touch-target`). Below the
-        // app's md split those boxes are 36px while the row CLIPS
-        // (overflow-hidden), so the row's own padding box is the ceiling on the
-        // tap target; 38px (36 + the 1px borders) is the smallest row that lets
-        // a centred 36px target survive the clip. It is a floor, not a height —
-        // the two-line phone layout is naturally taller and ignores it.
-        //
-        // Gated with `has-[]` rather than a prop because four components host
-        // this row and only two of them pass such an action: the visit-history
-        // pair (EncounterObservationCard / AnalyteTrendRow) pass badges and a
-        // chevron, whose only focusables are tooltip spans, and an
-        // unconditional floor padded those rows from ~27px to 38px for nothing.
-        // A prop would be four call sites to keep honest, and would have to
-        // re-derive conditions the action itself owns (it renders null with no
-        // observation / no right-detail pane; the image button needs images).
-        // The marker travels with the 36px box instead, so presence in the DOM
-        // is the single source of truth.
-        // The selector matches that marker, not `button`: these actions render
-        // as div[role=button] in the reports list, while the reference-range ⓘ
-        // IS a focusable trigger that must NOT floor a row.
-        //
-        // Second floor, for the other shape of tap target: a row that is ITSELF
-        // the button (AnalyteTrendRow's foldable series row). Nothing is being
-        // clipped there — the target is the row — so 36px is the whole
-        // requirement. Keyed off `role=button` so it follows the interaction
-        // rather than a host remembering to ask for it.
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 max-md:has-[[data-touch-target]]:min-h-[38px] max-md:[&[role=button]]:min-h-[36px] sm:flex sm:px-2.5 sm:py-1.5",
+        // No touch-height floor. A result row is ONE line of 9-10px text, and
+        // reserving 36-38px for an icon-sized tap target inside it read as a
+        // box of padding with a number lost in the middle. The row itself is
+        // the target instead (`role=button` + `onClick` from the host): ~343px
+        // wide against ~24px tall is a far easier hit than a 36px square, so
+        // the height can go back to what the content needs. The 36px rule still
+        // governs small ISOLATED controls — see ObservationLongitudinalAction,
+        // which keeps its box wherever the button, not the row, owns the tap.
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 sm:flex sm:px-2.5 sm:py-1.5",
         // Icon-only trailing joins the primary line: a third auto column at the
         // row's end (the grid is phone-only — `sm:flex` takes over above it, so
         // the column count is irrelevant there and md+ is untouched).
