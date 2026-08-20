@@ -704,7 +704,7 @@ export default function MedicalSummaryFeature() {
               : null
           }
           windowBoundaryLabel={ms.timelineWindowBoundary}
-          repairedNote={ms.timelineRepairedNote}
+          fallbackNote={ms.timelineFallbackNote}
           threadsTitle={ms.threadsTitle}
           threadsSubtitle={ms.threadsSubtitle}
           threadStatusLabel={(status) => ms.threadStatuses[status]}

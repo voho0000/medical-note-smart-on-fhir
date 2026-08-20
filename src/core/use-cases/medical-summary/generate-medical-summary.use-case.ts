@@ -55,7 +55,6 @@ import {
   type SummaryCareThread,
   type SummaryCoverageStats,
   type SummaryMilestoneEvent,
-  type TimelineMilestoneCategory,
   type SummarySourceCatalogEntry,
   type SummaryTimelineStats,
 } from '@/src/core/entities/medical-summary.entity'
@@ -1116,7 +1115,7 @@ const SHARED_RULES =
   'Example: instead of ONE segment {"text": "近期診斷為「肺炎」伴隨咳嗽。"}, output THREE: ' +
   '[{"text": "近期診斷為", "emphasis": false, "sources": []}, {"text": "肺炎", "emphasis": true, "sources": ["E3"]}, {"text": "伴隨咳嗽。", "emphasis": false, "sources": []}]. ' +
   'For "milestones" (the cross-facility timeline), the coverage invariant is absolute: EVERY hospital admission, EVERY emergency visit, and EVERY care plan in the SOURCE LIST must appear in the "refs" of exactly one milestone row — none may be silently dropped (the app verifies this and appends any missed event itself). ' +
-  'One row may cover SEVERAL refs: merge an ER visit with its same-cause admission within days into one episode row; merge recurrent same-cause admissions or ER visits (chemotherapy cycles, repeated heart-failure admissions) into ONE series row listing every covered ref — the recurrence itself is the clinical signal. Events with DIFFERENT causes must stay separate rows; never bundle unrelated admissions into a catch-all row such as \u6b77\u6b21\u4f4f\u9662\u7d00\u9304 or \u65e9\u671f\u4f4f\u9662\u7d00\u9304. The app VERIFIES every merge against the records: a row whose events share neither one episode window nor one ICD reason-code prefix is split back into separate rows and your group label is discarded, so merging unrelated events only loses your own labels. ' +
+  'One row may cover SEVERAL refs: merge an ER visit with its same-cause admission within days into one episode row; merge recurrent same-cause admissions or ER visits (chemotherapy cycles, repeated heart-failure admissions) into ONE series row listing every covered ref — the recurrence itself is the clinical signal. Events with DIFFERENT causes must stay separate rows; never bundle unrelated admissions into a catch-all row. ' +
   'Beyond those anchors, add only 3–6 turning-point picks: the first-in-record appearance of a major diagnosis group, a surgery-level procedure (never dressing changes, injections, or routine billing items), a pivotal imaging/pathology report, or a chronic-medication start/stop. Prefer fewer, stronger picks. ' +
   'Milestone refs must not point at routine outpatient visits (the sole exception: a single first-occurrence visit backing a diagnosis pick) — recurring outpatient care belongs to "threads", and the same visit must never appear in both. ' +
   'Outpatient/medication claim detail often begins YEARS after the oldest admissions: first appearance in the record is NOT a new diagnosis — when context (e.g. an established medication) implies a pre-existing condition, say so in the label. ' +
@@ -1683,42 +1682,6 @@ function compactLocalRetryEvidence(
   return { clinicalContext, catalog }
 }
 
-// An aggregated milestone row is legitimate only when the events it merges
-// really belong together: ONE episode (an ER visit and the admission it leads
-// to, or a transfer between hospitals inside the same 病程), or a same-cause
-// SERIES (chemotherapy cycles, repeated heart-failure admissions). Models
-// routinely satisfy the coverage invariant the lazy way instead — dumping every
-// unrelated admission into a single "歷次住院紀錄" row spanning ten years and
-// nine different diagnoses, which hides exactly what the timeline exists to
-// show. The app must not judge clinical similarity, but it CAN verify the
-// model's own grouping claim against the record: either the anchors fall inside
-// one episode window, or every anchor shares an ICD reason-code prefix.
-const MILESTONE_EPISODE_WINDOW_DAYS = 14
-
-const isMilestoneAnchorEntry = (entry: SummarySourceCatalogEntry): boolean =>
-  entry.resourceType === 'CarePlan' ||
-  (entry.resourceType === 'Encounter' &&
-    (entry.encounterClass === 'inpatient' || entry.encounterClass === 'emergency'))
-
-function anchorsBelongTogether(entries: SummarySourceCatalogEntry[]): boolean {
-  const anchors = entries.filter((entry) => isMilestoneAnchorEntry(entry) && entry.date)
-  if (anchors.length < 2) return true
-  const dates = anchors.map((entry) => entry.date!).sort()
-  const spanDays = Math.round(
-    (new Date(dates[dates.length - 1]).getTime() - new Date(dates[0]).getTime()) / 86400000,
-  )
-  if (spanDays <= MILESTONE_EPISODE_WINDOW_DAYS) return true
-  // Beyond one episode the grouping must be a same-cause series: a reason-code
-  // prefix present on EVERY anchor. Care plans carry no reason code, so a
-  // multi-year care-plan pair can never pass as one row.
-  const prefixSets = anchors.map(
-    (entry) => new Set((entry.reasonCodes ?? []).map((code) => code.slice(0, 3))),
-  )
-  if (prefixSets.some((set) => set.size === 0)) return false
-  const [first, ...rest] = prefixSets
-  return [...first].some((prefix) => rest.every((set) => set.has(prefix)))
-}
-
 export class GenerateMedicalSummaryUseCase {
   readonly moduleIds = MEDICAL_SUMMARY_MODULE_IDS
 
@@ -2080,7 +2043,7 @@ export class GenerateMedicalSummaryUseCase {
         category: item.category,
       })),
       milestones: (result.milestones ?? [])
-        .filter((item) => !item.appRepaired)
+        .filter((item) => !item.coverageFallback)
         .map((item) => ({
           refs: item.keys,
           label: item.label,
@@ -2522,40 +2485,14 @@ export class GenerateMedicalSummaryUseCase {
       .sort((a, b) => b.date.localeCompare(a.date))
 
     // ---- Timeline v2: milestones (multi-ref rows) --------------------------
-    let splitMilestoneCount = 0
-    let coverageFallbackCount = 0
     // Resolve each milestone's refs; the date RANGE comes from Encounter refs
     // only, so a cited M/R key can never stretch an admission's stay.
-    let milestones: SummaryMilestoneEvent[] = (ai.milestones ?? []).flatMap((pick): SummaryMilestoneEvent[] => {
+    let milestones: SummaryMilestoneEvent[] = (ai.milestones ?? []).flatMap((pick) => {
       const entries = pick.refs
         .map((ref) => byKey.get(normaliseSummarySourceKey(ref)))
         .filter((entry): entry is SummarySourceCatalogEntry => Boolean(entry?.date))
       droppedTimelineCount += pick.refs.length - entries.length
       if (entries.length === 0) return []
-      // Reject a grouping the record does not support: split it back into one
-      // row per anchor (catalog display as the label, since the model's group
-      // label cannot describe a single event) and count the rejection.
-      if (!anchorsBelongTogether(entries)) {
-        const anchors = entries.filter(isMilestoneAnchorEntry)
-        splitMilestoneCount += anchors.length
-        return anchors.map((entry) => ({
-          keys: [entry.key],
-          date: entry.date!,
-          ...(entry.endDate && entry.endDate !== entry.date ? { endDate: entry.endDate } : {}),
-          label: entry.display,
-          category: (entry.resourceType === 'CarePlan'
-            ? 'careplan'
-            : entry.encounterClass === 'inpatient'
-              ? 'admission'
-              : 'emergency') as TimelineMilestoneCategory,
-          organizations: entry.organization ? [entry.organization] : [],
-          resourceType: entry.resourceType,
-          resourceId: entry.resourceId,
-          encounterClass: entry.encounterClass,
-          refCount: 1,
-          appRepaired: true,
-        }))
-      }
       const encounterEntries = entries.filter((entry) => entry.resourceType === 'Encounter')
       const spanEntries = encounterEntries.length > 0 ? encounterEntries : entries
       const dates = spanEntries.map((entry) => entry.date!).sort()
@@ -2616,7 +2553,6 @@ export class GenerateMedicalSummaryUseCase {
           (entry.encounterClass === 'inpatient' || entry.encounterClass === 'emergency')
         const isCarePlan = entry.resourceType === 'CarePlan'
         if (!isAnchorEncounter && !isCarePlan) continue
-        coverageFallbackCount += 1
         milestones.push({
           keys: [entry.key],
           date: entry.date,
@@ -2628,7 +2564,7 @@ export class GenerateMedicalSummaryUseCase {
           resourceId: entry.resourceId,
           encounterClass: entry.encounterClass,
           refCount: 1,
-          appRepaired: true,
+          coverageFallback: true,
         })
       }
       milestones.sort((a, b) => b.date.localeCompare(a.date))
@@ -2714,8 +2650,6 @@ export class GenerateMedicalSummaryUseCase {
       decisions,
       timeline,
       ...(milestones.length > 0 ? { milestones } : {}),
-      ...(splitMilestoneCount > 0 ? { splitMilestoneCount } : {}),
-      ...(coverageFallbackCount > 0 ? { coverageFallbackCount } : {}),
       ...(careThreads.length > 0 ? { careThreads } : {}),
       ...(timelineStats ? { timelineStats } : {}),
       sourceIndex,

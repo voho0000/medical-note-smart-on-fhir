@@ -2133,8 +2133,7 @@ describe('finalizeResult — timeline v2 (milestones + care threads)', () => {
 
     // Coverage invariant: the uncovered admission and care plan are appended
     // deterministically with catalog display labels, newest-first order.
-    expect(result.coverageFallbackCount).toBe(2)
-    const fallbacks = result.milestones!.filter((event) => event.appRepaired)
+    const fallbacks = result.milestones!.filter((event) => event.coverageFallback)
     expect(fallbacks.map((event) => event.keys[0])).toEqual(['E8', 'K1'])
     expect(fallbacks[0].category).toBe('admission')
     expect(fallbacks[1].category).toBe('careplan')
@@ -2186,8 +2185,8 @@ describe('finalizeResult — timeline v2 (milestones + care threads)', () => {
     const picked = result.milestones!.find((event) => event.keys[0] === 'E8')!
     // Legacy generic "encounter" upgraded via bundle Encounter.class.
     expect(picked.category).toBe('admission')
-    expect(picked.appRepaired).toBeUndefined()
-    const fallbackKeys = result.milestones!.filter((event) => event.appRepaired).map((event) => event.keys[0])
+    expect(picked.coverageFallback).toBeUndefined()
+    const fallbackKeys = result.milestones!.filter((event) => event.coverageFallback).map((event) => event.keys[0])
     expect(fallbackKeys).toEqual(expect.arrayContaining(['E1', 'E2', 'K1']))
     // Legacy render path stays intact for old caches.
     expect(result.timeline).toHaveLength(1)
@@ -2204,95 +2203,5 @@ describe('finalizeResult — timeline v2 (milestones + care threads)', () => {
       organizations: 4,
       firstOutpatientDate: '2025-12-01',
     })
-  })
-})
-
-describe('finalizeResult — milestone grouping must be supported by the record', () => {
-  // Mirrors a real 2026-08 generation: the model satisfied the coverage
-  // invariant by dumping ten unrelated admissions (2016-2025, nine different
-  // diagnoses) into one 歷次住院紀錄 row, and both care plans into another.
-  const CATCH_ALL_INPUT = {
-    encounters: [
-      { id: 'adm-a', period: { start: '2016-03-11', end: '2016-03-14' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'G450' }] }], serviceProvider: { display: '北港' } },
-      { id: 'adm-b', period: { start: '2022-05-15', end: '2022-05-20' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'L03116' }] }], serviceProvider: { display: '北港' } },
-      { id: 'adm-c', period: { start: '2025-05-18', end: '2025-05-22' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'R042' }] }], serviceProvider: { display: '長庚' } },
-      // Legitimate episode: ER on 02-08 leading to the 02-11 admission.
-      { id: 'er-pneu', period: { start: '2025-02-08' }, class: { code: 'EMER' }, reasonCode: [{ coding: [{ code: 'J189' }] }], serviceProvider: { display: '長庚' } },
-      { id: 'adm-pneu', period: { start: '2025-02-11', end: '2025-02-25' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'J189' }] }], serviceProvider: { display: '長庚' } },
-      // Legitimate series: same-cause admissions a year apart (chemo-like).
-      { id: 'chemo-1', period: { start: '2024-01-10', end: '2024-01-12' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'Z5111' }] }], serviceProvider: { display: '長庚' } },
-      { id: 'chemo-2', period: { start: '2024-12-05', end: '2024-12-07' }, class: { code: 'IMP' }, reasonCode: [{ coding: [{ code: 'Z5111' }] }], serviceProvider: { display: '長庚' } },
-    ],
-    carePlans: [
-      { id: 'cp-early', period: { start: '2017-10-03' }, title: '初期慢性腎病追蹤' },
-      { id: 'cp-esrd', period: { start: '2024-06-13' }, title: 'Pre-ESRD 照護計畫' },
-    ],
-  }
-  const catalog = buildSourceCatalog(CATCH_ALL_INPUT)
-  const keyOf = (resourceId: string) => catalog.find((entry) => entry.resourceId === resourceId)!.key
-  const base = { headline: 'h', summary: [{ text: 't', emphasis: false, sources: [] }], problems: [], decisions: [], timeline: [] }
-
-  it('splits a catch-all admission row back into individual events and counts it', () => {
-    const ai = {
-      ...base,
-      milestones: [{
-        refs: [keyOf('adm-a'), keyOf('adm-b'), keyOf('adm-c')],
-        category: 'admission',
-        label: '歷次住院紀錄',
-      }],
-      threads: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-
-    // Counters keep the two repair causes distinguishable even though the UI
-    // renders them with one flag: 3 split out of the catch-all, and the other
-    // 6 anchors the model never cited restored by the coverage invariant.
-    expect(result.splitMilestoneCount).toBe(3)
-    expect(result.coverageFallbackCount).toBe(6)
-    const rows = result.milestones!.filter((event) =>
-      ['adm-a', 'adm-b', 'adm-c'].includes(event.resourceId))
-    expect(rows).toHaveLength(3)
-    // Each event regains its own date/label instead of a 3360-day mega-row.
-    expect(rows.every((event) => event.refCount === 1 && event.appRepaired)).toBe(true)
-    expect(rows.some((event) => event.label === '歷次住院紀錄')).toBe(false)
-    expect(rows.map((event) => event.date)).toEqual(['2025-05-18', '2022-05-15', '2016-03-11'])
-    expect(result.milestones!.every((event) => !event.endDate || event.endDate >= event.date)).toBe(true)
-  })
-
-  it('splits care plans merged years apart, since a care plan carries no shared cause', () => {
-    const ai = {
-      ...base,
-      milestones: [{ refs: [keyOf('cp-early'), keyOf('cp-esrd')], category: 'careplan', label: '慢性腎臟病照護計畫' }],
-      threads: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-
-    expect(result.splitMilestoneCount).toBe(2)
-    const plans = result.milestones!.filter((event) => event.category === 'careplan')
-    expect(plans.map((event) => event.date)).toEqual(['2024-06-13', '2017-10-03'])
-    expect(plans.every((event) => event.appRepaired)).toBe(true)
-    // The care plans were cited (just mis-grouped), so they are split, not
-    // coverage-restored — only the seven uncited encounters are.
-    expect(result.coverageFallbackCount).toBe(7)
-  })
-
-  it('keeps a same-episode merge (ER → admission) and a same-cause series intact', () => {
-    const ai = {
-      ...base,
-      milestones: [
-        { refs: [keyOf('er-pneu'), keyOf('adm-pneu')], category: 'admission', label: '肺炎急診當日後續收治住院' },
-        { refs: [keyOf('chemo-1'), keyOf('chemo-2')], category: 'admission', label: '化學治療週期住院' },
-      ],
-      threads: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-
-    const episode = result.milestones!.find((event) => event.label === '肺炎急診當日後續收治住院')!
-    expect(episode).toMatchObject({ refCount: 2, date: '2025-02-08', endDate: '2025-02-25' })
-    expect(episode.appRepaired).toBeFalsy()
-    const series = result.milestones!.find((event) => event.label === '化學治療週期住院')!
-    expect(series).toMatchObject({ refCount: 2, date: '2024-01-10', endDate: '2024-12-07' })
-    // Neither legitimate grouping is counted as a rejection.
-    expect(result.splitMilestoneCount).toBeUndefined()
   })
 })

@@ -13,10 +13,7 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 // v15: every registered card, including Safety, lives in one result artifact
 // and one cache entry. Older summary-only entries intentionally regenerate.
-// v16: the timeline card carries milestones / careThreads / timelineStats. A
-// v15 entry lacks them and would silently render the pre-v2 timeline, so those
-// entries must regenerate rather than resolve as a fallback.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary16', scanKey)
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary15', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

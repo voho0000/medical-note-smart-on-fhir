@@ -273,7 +273,7 @@ export const zhTW = {
     },
     timelineStatsLine: '{start} – {end} · {orgs} 家院所 · 住院 {imp} · 急診 {er}',
     timelineWindowBoundary: '健保門診明細涵蓋範圍自此開始——更早年份僅有住院／急診紀錄',
-    timelineRepairedNote: '{count} 筆事件由系統依原始紀錄補入或還原（AI 未涵蓋或併列不符）。',
+    timelineFallbackNote: '{count} 筆必列事件由系統自動補入（AI 回覆未涵蓋）。',
     threadsTitle: '長期追蹤',
     threadsSubtitle: '常態門診聚合為追蹤線，不逐次列入時間軸',
     threadStatuses: {
