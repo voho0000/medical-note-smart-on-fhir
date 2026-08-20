@@ -589,7 +589,20 @@ function ContentToggle({
       aria-label={accessibleLabel}
       title={accessibleLabel}
       className={cn(
-        "inline-flex min-h-[28px] shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1",
+        // Narrow containers keep the full px-2 rather than dropping to px-1:
+        // the width the three selects gave up (56/56/112px → 4/4/5.25rem) is
+        // spent here so the chips read as tappable pills instead of bare
+        // labels. px-2 is already rem-based, so a chip scales with the
+        // user-settable root font exactly like the selects do.
+        // Default-state strip math at the 12px phone baseline / 375px, against
+        // the strip's MEASURED 305px clientWidth (the 「39 筆」 count + outer
+        // gap take ~38px of the row):
+        // 48+48+63 + 4×32 + 6 gaps ×3 = 305px — an exact fit, one row, no
+        // horizontal scrolling. Any widening here re-clips the last chip, so
+        // re-measure rather than eyeball if these paddings change. At a larger
+        // root font on a narrow phone the strip may scroll; flex-nowrap still
+        // guarantees one row.
+        "inline-flex min-h-[28px] shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -619,7 +632,16 @@ function CompactFilterSelect({
         size="sm"
         aria-label={ariaLabel}
         title={triggerLabel}
-        className="min-h-[36px] w-[56px] shrink-0 gap-1 bg-background px-1 py-0 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7 md:w-[3.75rem] md:gap-1.5 md:px-1.5 md:py-1"
+        // Phone width must be REM, not px: the root font-size is user-settable
+        // (font-size.provider.tsx, 12–20px), and text-xs/gap/padding all scale
+        // with it — a literal px box would keep its size while the label grew,
+        // truncating 醫別 to 醫∨. Every trigger label and option value is 2 CJK
+        // glyphs (醫別/西醫/門診/藥局…), so the content is
+        // 2 (border) + px-1 + 2 glyphs + gap-1 + chevron ≈ 3.4rem + 2px,
+        // i.e. 41px at the 12px phone baseline — 4rem (48px @12, 64px @16,
+        // 80px @20) clears it at every step while freeing width for the
+        // content chips later in the strip.
+        className="min-h-[36px] w-[4rem] shrink-0 gap-1 bg-background px-1 py-0 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7 md:w-[3.75rem] md:gap-1.5 md:px-1.5 md:py-1"
       >
         <SelectValue>
           <span className="block min-w-0 truncate">{triggerLabel}</span>
