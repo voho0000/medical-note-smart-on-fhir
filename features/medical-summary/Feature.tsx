@@ -100,7 +100,6 @@ import type {
   ResolvedSourceRef,
   SummaryUrgency,
   TimelineCategory,
-  TimelineMilestoneCategory,
 } from "@/src/core/entities/medical-summary.entity"
 import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-execution-diagnostics.store"
 import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
@@ -329,10 +328,7 @@ export default function MedicalSummaryFeature() {
     if (!isPatient) return resourceType
     return (base.patient.sourceTypes as Record<string, string>)[resourceType] ?? resourceType
   }, [base.patient.sourceTypes, isPatient])
-  const milestoneCategoryLabel = (c: TimelineMilestoneCategory) =>
-    c in ms.milestoneCategories
-      ? ms.milestoneCategories[c as keyof typeof ms.milestoneCategories]
-      : ms.categories[c as TimelineCategory]
+  const categoryLabel = (c: TimelineCategory) => ms.categories[c]
   const encounterClassLabel = (c: EncounterClass) => ms.encounterClasses[c]
   const problemBadgeLabel = (kind: ProblemKind) =>
     kind === "careplan"
@@ -493,7 +489,7 @@ export default function MedicalSummaryFeature() {
   const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
     const ids: MedicalSummaryCardId[] = []
     if (moduleSucceeded("problems")) ids.push("problems")
-    if (moduleSucceeded("timeline") && (result?.milestones?.length || result?.timeline.length || result?.careThreads?.length)) ids.push("timeline")
+    if (moduleSucceeded("timeline") && result?.timeline.length) ids.push("timeline")
     if (showSafetyCard) ids.push("safety")
     if (result?.decisions.length) ids.push("decisions")
     if (moduleSucceeded("investigations")) ids.push("investigations")
@@ -546,7 +542,7 @@ export default function MedicalSummaryFeature() {
         + result.medicationReview.reconciliation.length
     return {
       problems: result.problems.length,
-      timeline: (result.milestones?.length ?? result.timeline.length) + (result.careThreads?.length ?? 0),
+      timeline: result.timeline.length,
       safety: safetyResult?.alerts.length,
       decisions: result.decisions.length,
       investigations: result.investigations.length,
@@ -674,7 +670,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    timeline: result && moduleSucceeded("timeline") && (result.milestones?.length || result.timeline.length || result.careThreads?.length) ? (
+    timeline: result && moduleSucceeded("timeline") && result.timeline.length ? (
       <div
         id="medical-summary-card-timeline"
         ref={(node) => { cardRefs.current.timeline = node }}
@@ -683,7 +679,7 @@ export default function MedicalSummaryFeature() {
         <CrossFacilityTimeline
           result={result}
           title={ms.timelineTitle}
-          milestoneCategoryLabel={milestoneCategoryLabel}
+          categoryLabel={categoryLabel}
           encounterClassLabel={encounterClassLabel}
           onNavigate={navigateToResource}
           earlierLabel={ms.timelineShowEarlier}
@@ -693,24 +689,6 @@ export default function MedicalSummaryFeature() {
               ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
               : null
           }
-          statsLine={
-            result.timelineStats
-              ? ms.timelineStatsLine
-                  .replace("{start}", (result.timelineStats.start ?? "").slice(0, 7))
-                  .replace("{end}", (result.timelineStats.end ?? "").slice(0, 7))
-                  .replace("{orgs}", String(result.timelineStats.organizations))
-                  .replace("{imp}", String(result.timelineStats.admissions))
-                  .replace("{er}", String(result.timelineStats.emergencies))
-              : null
-          }
-          windowBoundaryLabel={ms.timelineWindowBoundary}
-          fallbackNote={ms.timelineFallbackNote}
-          threadsTitle={ms.threadsTitle}
-          threadsSubtitle={ms.threadsSubtitle}
-          threadStatusLabel={(status) => ms.threadStatuses[status]}
-          threadVisitCountLabel={ms.threadVisitCount}
-          threadsShowMoreLabel={ms.threadsShowMore}
-          threadsShowLessLabel={ms.threadsShowLess}
         />
       </div>
     ) : null,

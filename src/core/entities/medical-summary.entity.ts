@@ -20,22 +20,6 @@ export const TIMELINE_CATEGORIES = [
 ] as const
 export type TimelineCategory = (typeof TIMELINE_CATEGORIES)[number]
 
-// Timeline v2 milestone categories. The v2 contract lets the model name the
-// event kind directly (admission/emergency/careplan) instead of the generic
-// 'encounter' + app-side class override; the legacy categories remain valid so
-// pre-generated snapshots and cached results keep rendering unchanged.
-export const TIMELINE_MILESTONE_CATEGORIES = [
-  'admission',
-  'emergency',
-  'careplan',
-  'exam',
-  ...TIMELINE_CATEGORIES,
-] as const
-export type TimelineMilestoneCategory = (typeof TIMELINE_MILESTONE_CATEGORIES)[number]
-
-export const CARE_THREAD_STATUSES = ['active', 'ended', 'interrupted'] as const
-export type CareThreadStatus = (typeof CARE_THREAD_STATUSES)[number]
-
 // What KIND of evidence an inferred problem rests on — drives the card badge.
 // 'diagnosis' = coded on a claim; the rest are cross-referenced inferences
 // (abnormal labs, dispensed meds implying a condition, a care plan, a
@@ -152,34 +136,6 @@ export const TimelinePickSchema = z.object({
   documentEvidence: optionalDocumentEvidence(),
 })
 
-// Timeline v2 milestone: one row may cover SEVERAL refs (an ER visit merged
-// with its same-episode admission, or a recurrent same-cause series) — the
-// coverage invariant is "no admission/ER/care-plan may silently disappear",
-// enforced app-side at finalize, not "one row per event". Dates, day counts and
-// organizations are still resolved app-side from the refs, never AI-written.
-export const TimelineMilestoneSchema = z.object({
-  refs: z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, 40)),
-  label: clampedText(200),
-  category: z.string().optional(),
-  note: z.string().transform((s) => (s.length > 200 ? s.slice(0, 200) : s)).optional(),
-  documentEvidence: optionalDocumentEvidence(),
-})
-export type TimelineMilestonePick = z.infer<typeof TimelineMilestoneSchema>
-
-// Care-thread RULE: the model describes recurring outpatient care as a
-// matching rule (ICD prefixes × organizations) and the app expands it into
-// member visits deterministically — the model never enumerates (or counts)
-// visits, so there is nothing to miscount and every expanded member remains a
-// real, navigable encounter.
-export const CareThreadRuleSchema = z.object({
-  label: clampedText(120),
-  codePrefixes: z.array(z.string().min(2).transform((s) => s.slice(0, 8))).min(1).transform((a) => a.slice(0, 8)),
-  organizations: z.array(z.string().min(1)).optional().default([]).transform((a) => a.slice(0, 8)),
-  insight: z.string().transform((s) => (s.length > 200 ? s.slice(0, 200) : s)).optional(),
-  status: z.string().optional(),
-})
-export type CareThreadRule = z.infer<typeof CareThreadRuleSchema>
-
 // Inferred active-problem list: the model synthesises problems from ALL data
 // types (coded diagnoses, abnormal labs, dispensed meds, care plans, discharge
 // summaries) — not just claim ICD codes — and cites the records via catalog keys.
@@ -276,8 +232,6 @@ export const MedicalSummaryAiResultSchema = z.object({
   // the model to scale its picks to the case and the UI folds/scrolls any
   // count, so 50 exists purely to stop a degenerate (looping) reply.
   timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
-  milestones: z.array(TimelineMilestoneSchema).default([]).transform((a) => a.slice(0, 50)),
-  threads: z.array(CareThreadRuleSchema).default([]).transform((a) => a.slice(0, 16)),
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 
@@ -301,11 +255,7 @@ export const MedicalSummaryProblemsModuleSchema = z.object({
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
 })
 export const MedicalSummaryTimelineModuleSchema = z.object({
-  // Legacy single-ref picks: still accepted so cached results and demo
-  // snapshots validate; new generations emit milestones + threads instead.
   timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
-  milestones: z.array(TimelineMilestoneSchema).default([]).transform((a) => a.slice(0, 50)),
-  threads: z.array(CareThreadRuleSchema).default([]).transform((a) => a.slice(0, 16)),
 })
 export const MedicalSummaryInvestigationsModuleSchema = z.object({
   investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
@@ -369,10 +319,6 @@ export interface SummarySourceCatalogEntry {
   getContentText?: () => string
   /** Only set for Encounter entries whose class is recognisable. */
   encounterClass?: EncounterClass
-  /** Encounter reason ICD codes (uppercased), deterministic from the bundle —
-   *  lets care-thread rules (`codePrefixes`) expand at finalize without
-   *  re-reading raw entities. */
-  reasonCodes?: string[]
 }
 
 /** A cited source resolved against the catalog. `verified: false` means the
@@ -410,60 +356,6 @@ export interface SummaryTimelineEvent {
   /** For category 'encounter': 住院/急診/門診, derived from Encounter.class. */
   encounterClass?: EncounterClass
   documentEvidence?: DocumentEvidence[]
-}
-
-/** Timeline v2 milestone resolved against the catalog. One row may cover
- *  several refs (merged episode / same-cause series); date range, orgs and
- *  navigation come from the bundle, only label/note/category from the AI. */
-export interface SummaryMilestoneEvent {
-  /** Verified catalog keys covered by this row (first = primary). */
-  keys: string[]
-  date: string
-  endDate?: string
-  label: string
-  note?: string
-  category: TimelineMilestoneCategory
-  organizations: string[]
-  /** Primary resource for row-click navigation. */
-  resourceType: string
-  resourceId: string
-  encounterClass?: EncounterClass
-  /** How many events this row covers (drives the ×N badge). */
-  refCount: number
-  /** True when the app appended this row because the model's reply failed the
-   *  coverage invariant for this anchor — label falls back to catalog display. */
-  coverageFallback?: boolean
-  documentEvidence?: DocumentEvidence[]
-}
-
-/** A care thread expanded app-side from the model's rule. Members are real
- *  encounters, so counts/spans/dots are arithmetic, never AI claims. */
-export interface SummaryCareThread {
-  label: string
-  insight?: string
-  status: CareThreadStatus
-  codePrefixes: string[]
-  organizationFilter: string[]
-  count: number
-  first: string
-  last: string
-  organizations: Array<{ name: string; count: number }>
-  visits: Array<{ date: string; organization?: string; resourceId: string }>
-}
-
-/** Deterministic header stats for the timeline card — straight from the
- *  catalog, zero AI. */
-export interface SummaryTimelineStats {
-  start?: string
-  end?: string
-  organizations: number
-  admissions: number
-  emergencies: number
-  encounters: number
-  /** First outpatient record date; when admissions predate it by >1 year the
-   *  UI renders an honest "window boundary" marker (NHI 健康存摺 keeps a longer
-   *  admission history than outpatient claim detail). */
-  firstOutpatientDate?: string
 }
 
 export interface SummaryProblem {
@@ -558,13 +450,6 @@ export interface MedicalSummaryResult {
     documentEvidence?: DocumentEvidence[]
   }>
   timeline: SummaryTimelineEvent[]
-  /** Timeline v2: milestone rows (anchors + AI picks, multi-ref aggregation).
-   *  When empty, the UI falls back to rendering legacy `timeline` picks. */
-  milestones?: SummaryMilestoneEvent[]
-  /** Timeline v2: recurring outpatient care expanded from AI rules. */
-  careThreads?: SummaryCareThread[]
-  /** Deterministic stats strip for the timeline card header. */
-  timelineStats?: SummaryTimelineStats
   /** Unique cited sources in first-appearance order, matching the RENDER
    *  order (summary → investigations → medication card → problems → decisions) so superscript numbers read
    *  top-to-bottom on the page. */
@@ -610,20 +495,6 @@ export function normaliseTimelineCategory(raw?: string): TimelineCategory {
   return (TIMELINE_CATEGORIES as readonly string[]).includes(c)
     ? (c as TimelineCategory)
     : 'encounter'
-}
-
-export function normaliseMilestoneCategory(raw?: string): TimelineMilestoneCategory {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (TIMELINE_MILESTONE_CATEGORIES as readonly string[]).includes(c)
-    ? (c as TimelineMilestoneCategory)
-    : 'encounter'
-}
-
-export function normaliseCareThreadStatus(raw?: string): CareThreadStatus {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (CARE_THREAD_STATUSES as readonly string[]).includes(c)
-    ? (c as CareThreadStatus)
-    : 'active'
 }
 
 export function normaliseProblemKind(raw?: string): ProblemKind {

@@ -264,26 +264,6 @@ export const zhTW = {
       lab: '檢驗',
       followup: '追蹤',
     },
-    // Timeline v2 里程碑類別（舊類別沿用 categories）。
-    milestoneCategories: {
-      admission: '住院',
-      emergency: '急診',
-      careplan: '照護計畫',
-      exam: '檢查',
-    },
-    timelineStatsLine: '{start} – {end} · {orgs} 家院所 · 住院 {imp} · 急診 {er}',
-    timelineWindowBoundary: '健保門診明細涵蓋範圍自此開始——更早年份僅有住院／急診紀錄',
-    timelineFallbackNote: '{count} 筆必列事件由系統自動補入（AI 回覆未涵蓋）。',
-    threadsTitle: '長期追蹤',
-    threadsSubtitle: '常態門診聚合為追蹤線，不逐次列入時間軸',
-    threadStatuses: {
-      active: '持續中',
-      ended: '已結束',
-      interrupted: '紀錄中斷',
-    },
-    threadVisitCount: '{count} 次',
-    threadsShowMore: '其餘 {count} 條追蹤線',
-    threadsShowLess: '收合追蹤線',
     encounterClasses: {
       inpatient: '住院',
       emergency: '急診',
