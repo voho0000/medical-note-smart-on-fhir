@@ -26,6 +26,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
 import type { Row } from '../types'
+import { formatDate } from '../utils/fhir-helpers'
 import { countAbnormalInRows } from '../utils/lab-day-grouping'
 import { ReportRow } from './ReportRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
@@ -45,13 +46,13 @@ interface LabDayGroupCardProps {
 
 const EMPTY_GROUPED_ROWS: Row[] = []
 
+// The card's MEMBERSHIP key is the source's own calendar date
+// (`collectionDayKey` = `iso.slice(0, 10)`), so its title has to be the same
+// date. Parsing the instant and re-localising it titled a card grouped under
+// 2026-01-14 as "2026/1/13" for any reader west of the reporting hospital.
+// The shared formatDate reads the date the source wrote, which is that key.
 function formatDayLabel(iso?: string): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleDateString()
-  } catch {
-    return iso.slice(0, 10)
-  }
+  return formatDate(iso)
 }
 
 export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProps) {

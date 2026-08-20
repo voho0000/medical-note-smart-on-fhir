@@ -28,15 +28,31 @@ export function formatQuantity(q?: Quantity): string {
 /**
  * Format a date string to locale string.
  *
- * FHIR `date` / `dateTime` may be partial (YYYY, YYYY-MM) — those must NOT be
- * padded into a full date, which would invent a day/month precision the source
- * never claimed. A bare `YYYY-MM-DD` is also parsed by `new Date()` as UTC
- * midnight, so `toLocaleDateString()` can render the previous day in negative
- * timezones; format date-only values on the local calendar to avoid that shift.
+ * The date shown is the one the SOURCE wrote, never a re-dating of it into the
+ * viewer's zone:
+ *  - FHIR `date` / `dateTime` may be partial (YYYY, YYYY-MM) — those must NOT
+ *    be padded into a full date, which would invent a day/month precision the
+ *    source never claimed.
+ *  - A bare `YYYY-MM-DD` is parsed by `new Date()` as UTC midnight, so
+ *    `toLocaleDateString()` renders the previous day in negative timezones.
+ *  - A `dateTime` carries the reporting facility's own offset
+ *    ("2026-01-14T00:00:00+08:00" = the 14th at that hospital). Converting it
+ *    to the viewer's zone moved the clinical event to a different DAY — a CI
+ *    runner in UTC rendered that CT as 2026/1/13 — and it contradicted the
+ *    app's own day grouping, which keys off the source's calendar date
+ *    (`iso.slice(0, 10)` in lab-day-grouping / multi-region-grouping / lab
+ *    pivots / report tab counts), so a card grouped under the 14th could be
+ *    titled the 13th.
+ *
+ * So: read the calendar date out of the string and format only that, on the
+ * local calendar. Timezone-independent by construction.
  */
 export function formatDate(d?: string): string {
   if (!d) return ""
-  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(d.trim())
+  const trimmed = d.trim()
+  // Leading FHIR date, whether the value ends there (`date`) or a time part
+  // follows (`dateTime` / `instant`).
+  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?=$|T)/.exec(trimmed)
   if (m) {
     const [, year, month, day] = m
     if (!month) return year                 // year only  → "2023"
@@ -45,13 +61,34 @@ export function formatDate(d?: string): string {
     const dt = new Date(Number(year), Number(month) - 1, Number(day))
     return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString()
   }
-  // dateTime / instant (carries a time + offset) — safe to parse directly.
+  // Anything else (non-FHIR shapes) — parse and echo back verbatim if invalid.
   try {
-    const dt = new Date(d)
+    const dt = new Date(trimmed)
     return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString()
   } catch {
     return d
   }
+}
+
+/**
+ * Clock time as the SOURCE wrote it, formatted for the active locale.
+ *
+ * Same contract as `formatDate`: "08:30 at the reporting facility" must not
+ * become 00:30 because the reader is in UTC — a serial-lab time badge sitting
+ * inside a collection-day card has to belong to that card's day. Returns ""
+ * for date-only values, which have no time to show; inventing "08:00" from a
+ * UTC midnight would be worse than showing nothing.
+ */
+export function formatSourceTime(d?: string): string {
+  if (!d) return ""
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(d.trim())
+  if (!m) return ""
+  const [, year, month, day, hour, minute] = m
+  // Rebuild the wall clock on the local calendar so Intl still applies the
+  // locale's own 上午/AM conventions, without shifting the reading.
+  const dt = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+  if (Number.isNaN(dt.getTime())) return ""
+  return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 /**

@@ -4,6 +4,7 @@ export {
   getConceptText,
   formatQuantity,
   formatDate,
+  formatSourceTime,
 } from '@/src/shared/utils/fhir-helpers'
 
 import type { ReferenceRange, Quantity } from '@/src/shared/types/fhir.types'

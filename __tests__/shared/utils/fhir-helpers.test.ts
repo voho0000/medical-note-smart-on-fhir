@@ -3,6 +3,7 @@ import {
   getCodeableConceptText,
   formatQuantity,
   formatDate,
+  formatSourceTime,
   calculateAge,
   formatGender,
   formatDateTime,
@@ -108,6 +109,40 @@ describe('FHIR Helpers', () => {
       const dateString = '2024-01-15T10:30:00Z'
       const result = formatDate(dateString)
       expect(result).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
+    })
+
+    it('keeps a dateTime on the day the SOURCE wrote, in any viewer timezone', () => {
+      // Regression: a CT stamped 2026-01-14T00:00:00+08:00 (the 14th at the
+      // reporting hospital) was rendered 2026/1/13 by a CI runner in UTC, which
+      // also contradicted the day-grouping key (`iso.slice(0, 10)`).
+      // The offsets below are chosen so that re-localising the INSTANT lands on
+      // a different calendar day in every timezone a runner realistically has:
+      // +14:00 midnight is the previous day everywhere up to UTC+13, and
+      // -12:00 end-of-day is the next day everywhere from UTC-11 up. Comparing
+      // against a locally-constructed date keeps the assertion itself
+      // timezone-independent.
+      expect(formatDate('2026-01-14T00:00:00+14:00')).toBe(new Date(2026, 0, 14).toLocaleDateString())
+      expect(formatDate('2026-01-14T23:59:00-12:00')).toBe(new Date(2026, 0, 14).toLocaleDateString())
+      expect(formatDate('2026-01-14T00:00:00+08:00')).toBe(new Date(2026, 0, 14).toLocaleDateString())
+    })
+  })
+
+  describe('formatSourceTime', () => {
+    it("renders the source's wall clock, not the viewer's", () => {
+      // Same contract as formatDate: an 08:30 draw stays 08:30 for every
+      // reader, so a serial-lab time badge still belongs to the collection-day
+      // card it sits in.
+      const expected = new Date(2026, 0, 14, 8, 30).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      expect(formatSourceTime('2026-01-14T08:30:00+08:00')).toBe(expected)
+      expect(formatSourceTime('2026-01-14T08:30:00-05:00')).toBe(expected)
+    })
+
+    it('returns empty for values that carry no time', () => {
+      // Never invent a clock reading a date-only source never claimed.
+      expect(formatSourceTime('2026-01-14')).toBe('')
+      expect(formatSourceTime('2026-01')).toBe('')
+      expect(formatSourceTime(undefined)).toBe('')
+      expect(formatSourceTime('not-a-date')).toBe('')
     })
   })
 
