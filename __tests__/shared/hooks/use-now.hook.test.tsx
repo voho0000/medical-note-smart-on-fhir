@@ -85,7 +85,9 @@ describe('useNow', () => {
     const first = renderHook(() => useNow())
     const second = renderHook(() => useNow())
 
-    expect(addWindowSpy.mock.calls.filter(([type]) => type === 'focus')).toHaveLength(1)
+    // DOM + WebWorker libs expose overloaded global event maps; normalize the
+    // captured event name before comparing so CI typechecks the browser spy.
+    expect(addWindowSpy.mock.calls.filter(([type]) => String(type) === 'focus')).toHaveLength(1)
     expect(addDocumentSpy.mock.calls.filter(([type]) => type === 'visibilitychange')).toHaveLength(1)
 
     first.unmount()
