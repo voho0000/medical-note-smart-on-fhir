@@ -13,9 +13,25 @@ import {
   ClinicalWorkspaceDivider,
   ClinicalWorkspaceMain,
   ClinicalWorkspacePanel,
+  ClinicalWorkspaceRoot,
 } from "@/src/shared/components/clinical-workspace"
 
 describe("ClinicalWorkspace primitives", () => {
+  it("follows the keyboard-safe visual viewport without leaving the visible screen", () => {
+    const { container } = render(
+      <ClinicalWorkspaceRoot>workspace</ClinicalWorkspaceRoot>,
+    )
+
+    const workspace = container.querySelector(
+      '[data-slot="clinical-workspace"]',
+    )
+    expect(workspace).toHaveClass("relative")
+    expect(workspace).toHaveStyle({
+      height: "var(--app-viewport-height, 100svh)",
+      top: "var(--app-viewport-offset-top, 0px)",
+    })
+  })
+
   it("uses one quiet center seam instead of stacking panel outlines", () => {
     const { container } = render(
       <ClinicalWorkspaceMain>
@@ -132,6 +148,9 @@ describe("ClinicalWorkspace primitives", () => {
     expect(
       screen.getByRole("button", { name: "Clinical summary" }),
     ).toHaveAttribute("aria-pressed", "true")
+    expect(
+      screen.getByRole("button", { name: "Clinical summary" }),
+    ).toHaveClass("h-[40px]", "min-h-[40px]", "py-0")
     fireEvent.click(screen.getByRole("button", { name: "Features" }))
     expect(onChange).toHaveBeenCalledWith("right")
   })
@@ -154,9 +173,11 @@ describe("ClinicalWorkspace primitives", () => {
     const tabList = screen.getByRole("tablist")
     expect(patient).toHaveAttribute("data-state", "active")
     expect(patient).toHaveClass("rounded-none")
+    expect(patient).toHaveClass("min-h-[40px]", "md:min-h-[44px]")
     expect(patient).toHaveClass("xl:min-h-10")
     expect(patient).toHaveClass("data-[state=active]:after:bg-primary")
     expect(tabList).toHaveClass("xl:h-10")
     expect(tabList).toHaveClass("xl:min-h-10")
+    expect(tabList).toHaveClass("min-h-[40px]", "md:min-h-[44px]")
   })
 })

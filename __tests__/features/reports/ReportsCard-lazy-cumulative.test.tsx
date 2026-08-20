@@ -191,12 +191,24 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Expand to fullscreen' })).toHaveClass('@min-[1160px]:px-2')
+    expect(screen.getByRole('button', { name: 'Expand to fullscreen' })).toHaveClass(
+      '@min-[1160px]:px-2',
+      'max-md:!min-h-[36px]',
+      'max-md:!min-w-[36px]',
+    )
     expect(screen.getByText('Fullscreen')).toHaveClass('hidden', '@min-[1160px]:inline')
-    expect(document.querySelector('[data-tour="report-tabs"][role="tablist"]')).toHaveClass(
+    const reportTabList = document.querySelector('[data-tour="report-tabs"][role="tablist"]')
+    expect(reportTabList).toHaveClass(
       'pr-12',
       '@min-[1160px]:pr-28',
+      '!flex',
+      'overflow-x-auto',
+      'max-md:!min-h-[36px]',
+      'max-md:[scrollbar-width:none]',
     )
+    expect(reportTabList).not.toHaveClass('hidden', 'md:!flex')
+    expect(reportTabList?.closest('[data-slot="card"]')).toHaveClass('pt-1', 'md:pt-3')
+    expect(screen.getByRole('tab', { name: '累積報告' })).toHaveClass('max-md:!min-h-[36px]')
     const cumulative = await screen.findByTestId('cumulative-report')
     expect(cumulative).toHaveTextContent('observations: 1')
     expect(cumulative).toHaveTextContent('category: chem')

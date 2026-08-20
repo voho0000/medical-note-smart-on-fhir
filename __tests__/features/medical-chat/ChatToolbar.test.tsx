@@ -48,11 +48,11 @@ describe('ChatToolbar patient-data badge', () => {
     jest.clearAllMocks()
   })
 
-  it('keeps the compact control in the single-row toolbar', () => {
+  it('uses a two-row mobile grid and returns to one row on wider screens', () => {
     const { container } = render(<ChatToolbar {...baseProps} />)
 
     const toolbar = container.querySelector('[data-tour="chat-template-tools"]')
-    expect(toolbar).toHaveClass('flex')
+    expect(toolbar).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto_auto]', 'md:flex')
     expect(toolbar).not.toHaveClass('flex-wrap')
 
     const toggle = screen.getByTestId('chat-patient-data-toggle')
@@ -73,5 +73,34 @@ describe('ChatToolbar patient-data badge', () => {
 
     rerender(<ChatToolbar {...baseProps} canTogglePatientData={false} />)
     expect(screen.queryByTestId('chat-patient-data-toggle')).not.toBeInTheDocument()
+  })
+
+  it('keeps the selected template name visible in the mobile toolbar', () => {
+    render(
+      <ChatToolbar
+        {...baseProps}
+        templates={[{
+          id: 'clinical-summary',
+          label: 'Clinical summary template',
+          content: 'Summarize this chart',
+        }]}
+        selectedTemplateId="clinical-summary"
+        hasTemplateContent
+      />,
+    )
+
+    const label = screen.getByText('Clinical summary template')
+    expect(label).toHaveClass('truncate')
+    expect(label).not.toHaveClass('hidden')
+    expect(screen.getByTestId('chat-template-insert')).toHaveAccessibleName(
+      'Template：Clinical summary template',
+    )
+    expect(screen.getByTestId('chat-patient-data-toggle')).toHaveClass(
+      'max-md:col-span-2',
+      '[html[data-keyboard-open=true]_&]:hidden',
+    )
+    expect(screen.getByTestId('chat-ai-execution-export')).toHaveClass(
+      '[html[data-keyboard-open=true]_&]:hidden',
+    )
   })
 })

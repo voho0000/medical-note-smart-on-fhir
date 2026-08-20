@@ -55,7 +55,7 @@ export function ClinicalPatientContext({
         variant === "header" &&
           "flex flex-1 border-l-2 border-primary/35 px-3 max-md:hidden",
         variant === "mobile" &&
-          "flex min-h-9 shrink-0 border-b border-border bg-card px-3 md:hidden",
+          "flex min-h-[40px] shrink-0 border-b border-border bg-card px-3 md:hidden",
         className,
       )}
       {...props}

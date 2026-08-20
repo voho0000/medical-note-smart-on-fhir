@@ -355,11 +355,11 @@ export function VisitHistoryCard() {
 
   // ── Render ────────────────────────────────────────────────────────────
   // No CardHeader/title here — the 就診紀錄 tab label already identifies this
-  // card, so the heading would be redundant. gap-2 py-3 mirrors FeatureCard
-  // for consistent spacing (base Card is gap-6 py-6).
+  // card, so the heading would be redundant. Mobile spacing mirrors the
+  // compact FeatureCard rhythm; md+ keeps the established desktop density.
   return (
-    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-3`} data-tour="visits-card">
-      <CardContent>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-2 md:py-3`} data-tour="visits-card">
+      <CardContent className="px-3 sm:px-5">
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>
         ) : error ? (
@@ -369,11 +369,11 @@ export function VisitHistoryCard() {
         ) : visitHistory.length === 0 ? (
           <div className="text-sm text-muted-foreground">{t.procedures.noData}</div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 md:space-y-3">
             {/* ── Search + sort row (sort isn't a filter, so it stays here;
                 the actual filters live on the row below). ────────────────── */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="relative flex-1 min-w-[160px]">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 md:flex md:flex-wrap">
+              <div className="relative min-w-0 md:flex-1 md:min-w-[160px]">
                 <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="search"
@@ -390,7 +390,7 @@ export function VisitHistoryCard() {
                     setVisibleCount(VISIT_PAGE_SIZE)
                   }}
                   placeholder={vt.searchPlaceholder}
-                  className="w-full rounded-md border bg-background pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
+                  className="min-h-[36px] w-full rounded-md border bg-background py-0 pl-7 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5 [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
                   <button
@@ -412,7 +412,7 @@ export function VisitHistoryCard() {
                   setSortMode(e.target.value as SortMode)
                   setVisibleCount(VISIT_PAGE_SIZE)
                 }}
-                className="rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+                className="min-h-[36px] rounded-md border bg-background px-2 py-0 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 md:min-h-0 md:py-1.5"
                 aria-label={vt.sortLabel}
               >
                 <option value="date-desc">{vt.sortDateDesc}</option>
@@ -471,6 +471,10 @@ export function VisitHistoryCard() {
                   }}
                 />
               )}
+              {/* Keep single-select filters and content-presence filters as two
+                  stable rows on phones. Mixing the first two content chips into
+                  the select row made the toolbar look accidental at 390–430px. */}
+              <span className="h-0 basis-full md:hidden" aria-hidden />
               {/* Divider between the single-select filters and the content toggles */}
               <span className="mx-0.5 h-4 w-px shrink-0 bg-border @max-[36rem]:hidden" aria-hidden />
               <ContentToggle
@@ -507,7 +511,7 @@ export function VisitHistoryCard() {
                   onClick={clearAllFilters}
                   aria-label={vt.clearFilters}
                   title={vt.clearFilters}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground @max-[36rem]:size-7 @max-[36rem]:justify-center @max-[36rem]:p-0"
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground @max-[36rem]:size-[28px] @max-[36rem]:justify-center @max-[36rem]:p-0"
                 >
                   <X className="h-3 w-3" />
                   <span className="@max-[36rem]:hidden">{vt.clearFiltersShort}</span>
@@ -542,7 +546,7 @@ export function VisitHistoryCard() {
               // more collapsed visits fit on screen at once. border-t keeps the
               // filters visually separated from the list now that the standalone
               // count row (which carried that divider) is gone.
-              <div className="space-y-0 border-t pt-1.5">
+              <div className="space-y-0 border-t pt-1 md:pt-1.5">
                 {visibleVisits.map((visit) => (
                   <VisitItem
                     key={visit.id}
@@ -582,7 +586,7 @@ function ContentToggle({
       aria-label={accessibleLabel}
       title={accessibleLabel}
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1.5",
+        "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -612,7 +616,7 @@ function CompactFilterSelect({
         size="sm"
         aria-label={ariaLabel}
         title={triggerLabel}
-        className="min-h-[44px] w-[3.75rem] shrink-0 gap-1.5 bg-background px-1.5 py-1 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7"
+        className="min-h-[36px] w-[56px] shrink-0 gap-1 bg-background px-1 py-0 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7 md:w-[3.75rem] md:gap-1.5 md:px-1.5 md:py-1"
       >
         <SelectValue>
           <span className="block min-w-0 truncate">{triggerLabel}</span>

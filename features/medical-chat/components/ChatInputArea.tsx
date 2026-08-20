@@ -186,7 +186,13 @@ export function ChatInputArea({
             spellCheck={false}
             rows={1}
             className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm max-md:text-[16px] ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
-            style={{ minHeight: '44px', maxHeight: '200px' }}
+            style={{
+              minHeight: '44px',
+              // Keep a pasted clinical template from consuming the entire
+              // keyboard-reduced viewport. The text remains intact and
+              // scrollable; only the editor's visible height is capped.
+              maxHeight: 'min(200px, calc(var(--app-viewport-height, 100svh) * 0.16))',
+            }}
           />
           {/* One-tap clear — handy on phones after accidentally tapping
               "insert clinical context", which dumps a large block into the box. */}
@@ -246,7 +252,10 @@ export function ChatInputArea({
           </button>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem] text-muted-foreground/70">
+      <div
+        data-keyboard-collapsible="true"
+        className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem] text-muted-foreground/70 [html[data-keyboard-open=true]_&]:hidden"
+      >
         {/* Route-aware disclosure: the selected model decides the recipient. */}
         <span className="inline-flex items-center gap-1">
           <Zap className="h-3 w-3" />

@@ -93,15 +93,15 @@ export function MedicationList({
     <div className="space-y-4">
       {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex min-h-8 items-center justify-between gap-2">
+        <div className="space-y-1 md:space-y-1.5">
+          <div className="flex min-h-[32px] items-center justify-between gap-2 md:min-h-8">
             <h3 className="min-w-0 text-sm font-semibold text-foreground">
               <button
                 type="button"
                 aria-expanded={showActive}
                 aria-controls={activeListId}
                 onClick={() => setShowActive((visible) => !visible)}
-                className="-ml-2 inline-flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="-ml-2 inline-flex min-h-[32px] min-w-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:min-h-8"
               >
                 {showActive
                   ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
@@ -115,7 +115,7 @@ export function MedicationList({
               <div
                 role="group"
                 aria-label={nameDisplay.label}
-                className="inline-flex min-h-8 shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"
+                className="inline-flex min-h-[32px] shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground md:min-h-8"
               >
                 <button
                   type="button"
@@ -130,7 +130,7 @@ export function MedicationList({
                 </button>
                 <label
                   htmlFor={nameModeSwitchId}
-                  className="inline-flex h-8 w-9 cursor-pointer items-center justify-center"
+                  className="inline-flex h-[32px] w-9 cursor-pointer items-center justify-center md:h-8"
                 >
                   <Switch
                     id={nameModeSwitchId}

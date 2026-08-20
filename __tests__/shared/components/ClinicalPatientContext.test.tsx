@@ -28,6 +28,9 @@ describe('ClinicalPatientContext', () => {
       expect(context).toHaveTextContent('王小明·42歲·男性')
       expect(context).not.toHaveTextContent(patient.id)
       expect(context.getAttribute('aria-label')).not.toContain(patient.id)
+      if (variant === 'mobile') {
+        expect(context).toHaveClass('min-h-[40px]')
+      }
     },
   )
 })

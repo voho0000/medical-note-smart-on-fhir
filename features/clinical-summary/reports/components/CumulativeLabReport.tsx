@@ -785,7 +785,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       {/* Cumulative utilities share one responsive row: finder left, trend
           guidance centred, and naming mode right. Keep all three visible at
           zoomed desktop widths; only genuinely narrow panels drop the hint. */}
-      <div className="mb-1 grid shrink-0 grid-cols-1 items-center gap-2 @min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto] @min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto] @min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]">
+      <div className="mb-1 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 @min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto] @min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto] @min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]">
         <AnalyteSearchBox
           pivots={nonEmpty}
           categoryLabels={categoryLabels}
@@ -802,7 +802,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
             {(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}
           </span>
         </span>
-        <div className="justify-self-end @min-[390px]:col-start-3">
+        <div className="col-start-2 justify-self-end @min-[390px]:col-start-3">
           {nameModeControl ?? <ReportNameModeSwitch responsiveLabels />}
         </div>
       </div>
@@ -811,7 +811,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
           <TabsList
             ref={tabsViewportRef}
             aria-label={(t.reports as any).cumulative ?? '累積報告分類'}
-            className={`${SUBTAB_LIST_CLASSES} !flex min-w-0 flex-1 snap-x !flex-nowrap !justify-start gap-0 overflow-x-auto [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30`}
+            className={`${SUBTAB_LIST_CLASSES} !flex min-w-0 flex-1 snap-x !flex-nowrap !justify-start gap-0 overflow-x-auto max-md:!min-h-[36px] max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30`}
           >
             {shownCats.map((p) => {
               const label = categoryLabels[p.category.id] || p.category.id
@@ -819,7 +819,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
                 <TabsTrigger
                   key={p.category.id}
                   value={p.category.id}
-                  className={`${SUBTAB_TRIGGER_CLASSES} !min-w-fit !flex-none snap-start whitespace-nowrap text-xs`}
+                  className={`${SUBTAB_TRIGGER_CLASSES} !min-w-fit !flex-none snap-start whitespace-nowrap text-xs max-md:!min-h-[36px]`}
                 >
                   {label} ({p.dates.length})
                 </TabsTrigger>
@@ -835,7 +835,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex min-h-[44px] !min-w-fit !flex-none snap-start items-center gap-0.5 whitespace-nowrap px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:min-h-[24px]"
+                    className="inline-flex min-h-[44px] !min-w-fit !flex-none snap-start items-center gap-0.5 whitespace-nowrap px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:!min-h-[36px] xl:min-h-[24px]"
                   >
                     {(t.reports as any).cumulativeShowMore || 'More'}
                     <ChevronDown className="h-3 w-3" />

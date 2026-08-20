@@ -18,6 +18,7 @@ interface FeatureCardProps {
   error?: Error | null
   isEmpty?: boolean
   emptyMessage?: string
+  titleAccessory?: ReactNode
   headerAction?: ReactNode
   children: ReactNode
 }
@@ -30,6 +31,7 @@ export function FeatureCard({
   error = null,
   isEmpty = false,
   emptyMessage = "No data available",
+  titleAccessory,
   headerAction,
   children
 }: FeatureCardProps) {
@@ -41,11 +43,11 @@ export function FeatureCard({
   return (
   // Base Card is `flex flex-col gap-6 py-6` (shadcn). That 24px flex-gap +
   // 24px vertical padding makes the title↔content spacing feel too airy for
-  // dense clinical cards, so tighten both here — this is the single shared
-  // wrapper every feature card renders through, so the change applies
-  // uniformly. A neutral boundary replaces per-feature accent stripes:
+  // dense clinical cards, so tighten both here — phones use the densest
+  // spacing so real clinical content starts earlier, while md+ preserves the
+  // established desktop rhythm. A neutral boundary replaces accent stripes:
   // clinical color is reserved for status, severity, and selected state.
-    <Card className="gap-2 rounded-lg border-border bg-card py-3 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none">
+    <Card className="gap-2 rounded-lg border-border bg-card py-2 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none md:py-3">
       {hasTitle && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -56,11 +58,12 @@ export function FeatureCard({
             />
             {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
             {title}
+            {titleAccessory}
           </CardTitle>
           {headerAction && <CardAction>{headerAction}</CardAction>}
         </CardHeader>
       )}
-      <CardContent>
+      <CardContent className="px-3 sm:px-5">
         {isLoading && <LoadingSkeleton />}
         {!isLoading && error && <ErrorMessage error={error} context={(title ?? featureId ?? '').toLowerCase()} />}
         {!isLoading && !error && isEmpty && <EmptyState message={emptyMessage} />}

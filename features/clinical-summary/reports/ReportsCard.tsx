@@ -9,9 +9,7 @@ import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
+import { Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -656,7 +654,7 @@ export function ReportsCard() {
       type="button"
       onClick={() => setExpanded(!expanded)}
       aria-label={expanded ? 'Minimize' : 'Expand to fullscreen'}
-      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8 lg:min-w-8 @min-[1160px]:px-2"
+      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:top-1.5 max-md:!min-h-[36px] max-md:!min-w-[36px] lg:min-h-8 lg:min-w-8 @min-[1160px]:px-2"
       title={expanded ? 'Minimize' : 'Expand to fullscreen'}
     >
       {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -671,8 +669,11 @@ export function ReportsCard() {
         onValueChange={handleTabChange}
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
-        {/* Desktop tabs */}
-        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto gap-0 pr-12 @min-[1160px]:pr-28 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        {/* Report views stay directly discoverable at every width. Phones own
+            one horizontal scroller here instead of hiding frequent clinical
+            comparisons behind a picker; the fullscreen action keeps its
+            reserved space at the right edge. */}
+        <TabsList data-tour="report-tabs" className={`${SUBTAB_LIST_CLASSES} !flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 touch-pan-x overflow-x-auto overscroll-x-contain gap-0 pr-12 max-md:!min-h-[36px] max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden @min-[1160px]:pr-28 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears only while a first-time raw view is being
             // prepared. The selected tab itself changes immediately.
@@ -682,7 +683,7 @@ export function ReportsCard() {
                 key={tab.value}
                 value={tab.value}
                 data-tour={`report-tab-${tab.value}`}
-                className={`${SUBTAB_TRIGGER_CLASSES} !flex-none !min-w-fit whitespace-nowrap capitalize`}
+                className={`${SUBTAB_TRIGGER_CLASSES} !flex-none !min-w-fit whitespace-nowrap capitalize max-md:!min-h-[36px]`}
               >
                 {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                 {tab.label}
@@ -690,32 +691,6 @@ export function ReportsCard() {
             )
           })}
         </TabsList>
-
-        {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
-        <div data-tour="report-tabs" className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="min-h-[44px] w-full justify-between shadow-none hover:shadow-none">
-                <span className="truncate inline-flex items-center gap-1">
-                  {pendingTab && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
-                  {tabConfigs.find(t => t.value === (pendingTab ?? activeTab))?.label || tabConfigs[0]?.label}
-                </span>
-                <Menu className="ml-2 h-4 w-4 shrink-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
-              {tabConfigs.map((tab) => (
-                <DropdownMenuItem
-                  key={tab.value}
-                  onClick={() => handleTabChange(tab.value)}
-                  className={activeTab === tab.value ? REPORT_ACTIVE_CONTROL_TONE : ""}
-                >
-                  {tab.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
 
         {/* Search bar — hidden on cumulative tab */}
         {activeTab !== "cumulative" && (
@@ -919,9 +894,9 @@ export function ReportsCard() {
   }
 
   return (
-    // pt-3 halves the Card's default pt-6 (24px → 12px) so the report group
-    // tabs sit closer to the card's top edge.
-    <Card className={`${REPORT_CARD_CLASS} @container relative w-full max-w-full pt-3`}>
+    // Phones keep the two tab rows visually connected while larger layouts
+    // retain the roomier card inset.
+    <Card className={`${REPORT_CARD_CLASS} @container relative w-full max-w-full pt-1 md:pt-3`}>
       {expandButton}
       <CardContent className="min-w-0 px-3 pb-3 sm:px-4 sm:pb-4">
         {reportsContent}

@@ -65,6 +65,11 @@ describe('MedicationList active section toggle', () => {
     )
 
     const toggle = screen.getByRole('button', { name: '使用中 (1)' })
+    expect(toggle).toHaveClass('min-h-[32px]', 'md:min-h-8')
+    expect(screen.getByRole('group', { name: '藥名顯示方式' })).toHaveClass(
+      'min-h-[32px]',
+      'md:min-h-8',
+    )
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
 

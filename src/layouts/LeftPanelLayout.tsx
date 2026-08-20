@@ -40,7 +40,7 @@ const TabFeatureContent = memo(function TabFeatureContent({ tabId }: { tabId: st
         pushing absolute-positioned UI like the expand button off-screen.
       */}
       <ClinicalTabContentFrame
-        className="space-y-3 pb-3 pt-2"
+        className="space-y-2 pb-3 pt-0 md:space-y-3 md:pt-2"
         style={{ contain: 'inline-size' }}
       >
         {features.map(feature => {
@@ -262,7 +262,7 @@ export default function ClinicalSummaryFeature() {
             key={tab.id}
             value={tab.id}
             forceMount={mountedTabs.has(tab.id) || undefined}
-            className="mt-1 min-h-0 flex-1 overflow-hidden xl:mt-0"
+            className="mt-0 min-h-0 flex-1 overflow-hidden md:mt-1 xl:mt-0"
           >
             {mountedTabs.has(tab.id) ? (
               <ClinicalTabActivityProvider active={activeTab === tab.id}>

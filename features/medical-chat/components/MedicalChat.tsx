@@ -652,7 +652,7 @@ export default function MedicalChat() {
   useKeyboardShortcuts(isExpanded, expandable.collapse)
 
   const chatContent = (
-    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : CARD_BORDER_CLASSES.chat} !gap-0 !py-0`}>
+    <Card className={`flex h-full min-h-0 flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : CARD_BORDER_CLASSES.chat} !gap-0 !py-0`}>
       {!isExpanded && (
         <div data-tour="medical-chat-controls" className="relative flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-1">
@@ -742,7 +742,7 @@ export default function MedicalChat() {
         />
       )}
       
-      <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded || !showHeader ? '' : 'border-t'}`}>
+      <CardContent className={`min-h-0 flex-1 overflow-y-auto bg-background p-0 ${isExpanded || !showHeader ? '' : 'border-t'}`}>
         {(patientError || clinicalDataError) && (
           <div className="mx-4 mt-4 mb-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-3 py-2 text-sm">
             <div className="font-medium text-amber-800 dark:text-amber-200 mb-1">{t.medicalChat.fhirDataWarning}</div>
@@ -771,7 +771,7 @@ export default function MedicalChat() {
         />
       </CardContent>
 
-      <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
+      <CardFooter className="flex max-h-[80%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain border-t px-3 pb-2 sm:px-6 !pt-2">
         <div
           data-tour="medical-chat-composer"
           className="flex w-full flex-col gap-1"

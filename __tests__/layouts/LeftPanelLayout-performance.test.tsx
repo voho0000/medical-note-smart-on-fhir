@@ -176,6 +176,19 @@ describe('LeftPanelLayout tab responsiveness', () => {
     expect(medsViewport.scrollTop).toBe(260)
   })
 
+  it('keeps mobile tab content directly below the primary tab row', () => {
+    render(<ClinicalSummaryFeature />)
+
+    const patientShell = screen.getByTestId('patient-shell')
+    const panel = patientShell.closest<HTMLElement>('[data-slot="tabs-content"]')
+    const frame = patientShell.parentElement
+
+    expect(panel).toHaveClass('mt-0')
+    expect(panel).toHaveClass('md:mt-1')
+    expect(frame).toHaveClass('pt-0')
+    expect(frame).toHaveClass('md:pt-2')
+  })
+
   it('selects an unmounted tab before mounting its heavy workspace', async () => {
     render(<ClinicalSummaryFeature />)
 

@@ -190,7 +190,7 @@ export function MedListCard() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full gap-0">
         <TabsList
           data-tour="medication-tabs"
-          className={cn(SUBTAB_LIST_CLASSES, "!flex !justify-start mb-2 w-full min-w-0 shrink-0 !flex-nowrap gap-0 overflow-x-auto")}
+          className={cn(SUBTAB_LIST_CLASSES, "!flex !justify-start mb-1 w-full min-w-0 shrink-0 !flex-nowrap gap-0 overflow-x-auto max-md:!min-h-[36px]")}
         >
           {tabConfigs.map((c) => (
             <TabsTrigger
@@ -198,7 +198,7 @@ export function MedListCard() {
               value={c.value}
               className={cn(
                 SUBTAB_TRIGGER_CLASSES,
-                '!flex-1 !min-w-fit inline-flex items-center gap-1 whitespace-nowrap',
+                '!flex-1 !min-w-fit inline-flex items-center gap-1 whitespace-nowrap max-md:!min-h-[36px]',
               )}
             >
               {c.label}
@@ -209,10 +209,10 @@ export function MedListCard() {
           ))}
         </TabsList>
 
-        <TabsContent value="medications" className="mt-0 space-y-3">
-          <div data-tour="medication-toolbar" className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
+        <TabsContent value="medications" className="mt-0 space-y-2 md:space-y-3">
+          <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <div className="inline-flex h-[36px] rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
                 {(['list', 'timeline'] as MedView[]).map((v) => (
                   <button
                     key={v}
@@ -220,7 +220,7 @@ export function MedListCard() {
                     data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
                     onClick={() => setView(v)}
                     className={cn(
-                      'px-3 py-1 rounded-sm transition-colors',
+                      'h-[30px] rounded-sm px-2 py-0 transition-colors md:h-auto md:px-3 md:py-1',
                       view === v
                         ? 'bg-background text-foreground shadow-sm font-medium'
                         : 'text-muted-foreground hover:text-foreground',
@@ -250,7 +250,7 @@ export function MedListCard() {
             </div>
             {/* Bilingual search — matches drug name (中/英), NHI code, class,
                 indication, 機構 and date (西元/民國); filters both views. */}
-            <div className="relative flex-1 min-w-[160px]">
+            <div className="relative min-w-0 md:min-w-[160px] md:flex-1">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <input
                 type="search"
@@ -264,7 +264,7 @@ export function MedListCard() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={mt.searchPlaceholder ?? '搜尋藥名、分類、適應症、機構、日期…'}
-                className="w-full rounded-md border bg-background pl-7 pr-7 py-1 text-xs max-md:text-[16px] focus:outline-none focus:ring-2 focus:ring-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
+                className="h-[36px] w-full rounded-md border bg-background py-0 pl-7 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 max-md:text-[16px] md:h-auto md:py-1 [&::-webkit-search-cancel-button]:appearance-none"
               />
               {searchQuery && (
                 <button

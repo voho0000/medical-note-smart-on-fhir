@@ -4,7 +4,7 @@
 
 import { ComponentType, memo, ReactNode, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
-import { Check, ChevronDown, MoreHorizontal, SlidersHorizontal } from "lucide-react"
+import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import {
   DropdownMenu,
@@ -376,10 +376,6 @@ function RightPanelContentInner() {
   const showOverflowMenu = overflowFeatures.length > 0
   const columnCount =
     pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + (showOverflowMenu ? 1 : 0) + lockedFeatures.length
-  const activeFeature = features.find((feature) => feature.id === effectiveTab) ?? features[0]
-  const ActiveFeatureIcon = activeFeature ? getTabTheme(activeFeature.id).icon : SlidersHorizontal
-  const activeFeatureLabel = activeFeature ? getTabLabel(activeFeature) : t.header.features
-
   return (
     <Tabs
       value={effectiveTab}
@@ -389,33 +385,17 @@ function RightPanelContentInner() {
       {/* Anchor for the per-tab scroll memory: it walks up from here to find
           the panel that actually scrolls. */}
       <div ref={scrollMemoryHostRef} className="hidden" aria-hidden />
-      {/* On phones the page-level 臨床摘要／功能 switch is already one
-          persistent navigation row. Use one labeled picker here instead of a
-          second row of ambiguous icon-only tabs. */}
-      <div className="shrink-0 border-b bg-background p-1 md:hidden">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm font-medium text-foreground shadow-none transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={`${t.header.features}: ${activeFeatureLabel}`}
-          >
-            <ActiveFeatureIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">{activeFeatureLabel}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-            {features.map((feature) => (
-              <DropdownMenuItem
-                key={feature.id}
-                onSelect={() => changeTab(feature.id)}
-                className="min-h-[44px] gap-2"
-              >
-                {renderMenuItemContent(feature)}
-                {feature.id === effectiveTab && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {/* Match the left clinical workspace on phones: every primary feature is
+          visible in one stable, equal-width row. Pin overrides remain a
+          desktop customization only, so a phone user never has to open a
+          picker just to discover or switch features. */}
+      <ClinicalTabList
+        data-tour="right-tabs"
+        className="grid gap-1 md:hidden"
+        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(0, 1fr))` }}
+      >
+        {features.map(renderTrigger)}
+      </ClinicalTabList>
 
       <ClinicalTabList
         data-tour="right-tabs"

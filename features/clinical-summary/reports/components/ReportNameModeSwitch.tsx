@@ -30,7 +30,7 @@ export function ReportNameModeSwitch({
     <div
       role="group"
       aria-label={labels.label}
-      className={cn('inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground lg:min-h-8', className)}
+      className={cn('inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground md:min-h-[44px] lg:min-h-8', className)}
     >
       <button
         type="button"
@@ -38,7 +38,7 @@ export function ReportNameModeSwitch({
         aria-label={labels.original}
         aria-pressed={mode === 'original'}
         className={cn(
-          'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
+          'inline-flex min-h-[36px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-[44px] lg:min-h-8',
           mode === 'original' && 'font-medium text-foreground',
         )}
       >
@@ -55,7 +55,7 @@ export function ReportNameModeSwitch({
       </button>
       <label
         htmlFor={switchId}
-        className="inline-flex h-[44px] w-[44px] cursor-pointer items-center justify-center lg:h-8 lg:w-10"
+        className="inline-flex h-[36px] w-[36px] cursor-pointer items-center justify-center md:h-[44px] md:w-[44px] lg:h-8 lg:w-10"
       >
         <Switch
           id={switchId}
@@ -70,7 +70,7 @@ export function ReportNameModeSwitch({
         aria-label={labels.standardized}
         aria-pressed={mode === 'standardized'}
         className={cn(
-          'inline-flex min-h-[44px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-h-8',
+          'inline-flex min-h-[36px] items-center rounded-sm px-1.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-[44px] lg:min-h-8',
           mode === 'standardized' && 'font-medium text-foreground',
         )}
       >

@@ -26,6 +26,14 @@ describe('InstitutionFilterSelect', () => {
     const trigger = screen.getByRole('combobox', { name: '所有機構' })
     expect(trigger).toHaveTextContent(fhirInstitution)
     expect(trigger).toHaveAttribute('title', fhirInstitution)
+    expect(trigger).toHaveClass(
+      'min-h-[36px]',
+      'w-[112px]',
+      'min-w-[112px]',
+      'max-w-[112px]',
+      'md:min-h-7',
+      'md:w-28',
+    )
 
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
 

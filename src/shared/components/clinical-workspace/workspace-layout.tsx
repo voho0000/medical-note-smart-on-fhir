@@ -23,12 +23,16 @@ export const ClinicalWorkspaceRoot = forwardRef<
       ref={ref}
       data-slot="clinical-workspace"
       className={cn(
-        "flex flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
+        "relative flex flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
         className,
       )}
       style={{
         // Falls back to the old behaviour wherever visualViewport is absent.
         height: "var(--app-viewport-height, 100svh)",
+        // iOS may pan the visual viewport instead of keeping it at y=0 when
+        // the keyboard opens. Move the shell with that visible area so its
+        // header and composer do not end up outside the screen.
+        top: "var(--app-viewport-offset-top, 0px)",
         ...style,
       }}
       {...props}
@@ -124,7 +128,7 @@ export function ClinicalMobilePanelSwitcher({
   onChange,
 }: ClinicalMobilePanelSwitcherProps) {
   const buttonClasses =
-    "min-h-[44px] flex-1 border-b-2 px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+    "h-[40px] min-h-[40px] flex-1 border-b-2 px-4 py-0 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 
   return (
     <nav

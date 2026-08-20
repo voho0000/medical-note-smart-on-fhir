@@ -200,7 +200,7 @@ export function AnalyteSearchBox({
         aria-label={zh ? "搜尋檢驗項目" : "Search analytes"}
         placeholder={zh ? "找檢驗項目…" : "Find an analyte…"}
         // 16px on phones: anything smaller makes iOS Safari zoom on focus.
-        className="w-full rounded-md border border-input bg-background py-1 pl-7 pr-7 text-[16px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring md:text-xs [&::-webkit-search-cancel-button]:appearance-none"
+        className="min-h-[36px] w-full rounded-md border border-input bg-background py-0 pl-7 pr-7 text-[16px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring md:min-h-0 md:py-1 md:text-xs [&::-webkit-search-cancel-button]:appearance-none"
       />
       {query && (
         <button

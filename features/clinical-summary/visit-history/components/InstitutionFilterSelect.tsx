@@ -31,7 +31,7 @@ export function InstitutionFilterSelect({
         size="sm"
         aria-label={ariaLabel ?? allLabel}
         title={triggerLabel}
-        className="min-h-[44px] w-28 shrink-0 bg-background px-2 py-1 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7"
+        className="min-h-[36px] w-[112px] min-w-[112px] max-w-[112px] shrink-0 bg-background px-1.5 py-0 text-xs shadow-none data-[size=sm]:h-auto md:min-h-7 md:w-28 md:min-w-28 md:max-w-28 md:px-2 md:py-1"
       >
         <SelectValue>
           <span className="block min-w-0 truncate">{triggerLabel}</span>

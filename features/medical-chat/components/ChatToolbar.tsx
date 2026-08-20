@@ -76,9 +76,12 @@ export function ChatToolbar({
   const insertTemplateLabel = `${t.chat.insertTemplate}：${selectedTemplateLabel}`
 
   return (
-    <div data-tour="chat-template-tools" className="flex w-full min-w-0 items-center gap-1.5">
+    <div
+      data-tour="chat-template-tools"
+      className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 md:flex"
+    >
       {templates.length > 0 ? (
-        <div className="flex h-9 min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border bg-background shadow-xs sm:max-w-[14rem]">
+        <div className="flex h-9 min-w-0 w-full items-stretch overflow-hidden rounded-lg border bg-background md:flex-1 sm:max-w-[14rem]">
           <Button
             type="button"
             size="sm"
@@ -91,7 +94,7 @@ export function ChatToolbar({
             className="h-full min-w-0 flex-1 justify-start gap-2 rounded-none px-2.5 text-xs font-medium hover:bg-accent"
           >
             <FileText className="h-4 w-4 shrink-0 text-primary" />
-            <span className="hidden truncate xl:inline">{selectedTemplateLabel}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{selectedTemplateLabel}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -165,7 +168,7 @@ export function ChatToolbar({
           title={patientDataDisabled
             ? t.chat.patientDataOffDisable
             : t.chat.patientDataOffEnable}
-          className={`h-7 max-md:h-11 shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none touch-manipulation ${
+          className={`h-7 max-md:col-span-2 max-md:h-11 max-md:justify-self-start [html[data-keyboard-open=true]_&]:hidden shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none touch-manipulation ${
             patientDataDisabled
               ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/15'
               : 'text-muted-foreground'
@@ -186,7 +189,7 @@ export function ChatToolbar({
         title={canExportAiExecution
           ? t.chat.exportAiExecution
           : t.chat.exportAiExecutionUnavailable}
-        className="h-7 w-7 max-md:h-11 max-md:w-11 shrink-0 text-muted-foreground opacity-35 transition-opacity touch-manipulation hover:opacity-100"
+        className="h-7 w-7 max-md:col-start-3 max-md:h-11 max-md:w-11 max-md:justify-self-end [html[data-keyboard-open=true]_&]:hidden shrink-0 text-muted-foreground opacity-35 transition-opacity touch-manipulation hover:opacity-100"
       >
         <Bug className="h-3.5 w-3.5" />
       </Button>

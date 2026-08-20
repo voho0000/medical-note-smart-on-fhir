@@ -56,16 +56,28 @@ describe('CumulativeLabReport responsive category tabs', () => {
     expect(shortHint).toHaveClass('@min-[480px]:hidden')
     expect(fullHint).toHaveClass('hidden', '@min-[480px]:block')
     expect(shortHint.parentElement).toHaveClass('@min-[390px]:inline-flex', 'overflow-hidden')
-    expect(screen.getByRole('combobox', { name: '搜尋檢驗項目' }).parentElement).toHaveClass(
+    const analyteSearch = screen.getByRole('combobox', { name: '搜尋檢驗項目' })
+    expect(analyteSearch).toHaveClass('min-h-[36px]', 'md:min-h-0')
+    expect(analyteSearch.parentElement).toHaveClass(
       '@min-[390px]:max-w-[160px]',
       '@min-[480px]:max-w-[220px]',
       '@min-[640px]:max-w-[260px]',
     )
     expect(shortHint.parentElement?.parentElement).toHaveClass(
+      'grid-cols-[minmax(0,1fr)_auto]',
       '@min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto]',
       '@min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto]',
       '@min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]',
     )
+    expect(container.querySelector('.col-start-2')).toHaveClass(
+      'col-start-2',
+      '@min-[390px]:col-start-3',
+    )
+    expect(screen.getByRole('tablist', { name: '累積報告分類' })).toHaveClass(
+      'max-md:!min-h-[36px]',
+      'max-md:[scrollbar-width:none]',
+    )
+    expect(screen.getByRole('tab', { name: '血液 (0)' })).toHaveClass('max-md:!min-h-[36px]')
     expect(container.querySelector('.\\@container')).toBeInTheDocument()
   })
 
