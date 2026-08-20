@@ -893,6 +893,7 @@ export const en = {
     expandFullDocument: 'Expand document',
     collapseFullDocument: 'Collapse document',
     sectionCount: '{count} sections',
+    tooltipLabel: 'About document summary',
     tooltip: 'Shows the original human-readable narrative carried inside imported documents (e.g. an IPS patient summary or discharge summary). The structured data referenced by these narratives is already shown in the cards above — this card preserves the source narrative for cross-reference and summary purposes.',
     ipsBadge: 'IPS',
     ipsBadgeTooltip: 'This document conforms to the IPS (International Patient Summary) implementation guide.',

@@ -18,6 +18,7 @@ export interface DocSummaryStrings {
   expandFullDocument: string
   collapseFullDocument: string
   sectionCount: string
+  tooltipLabel: string
   tooltip: string
   ipsBadge: string
   ipsBadgeTooltip: string
@@ -47,6 +48,7 @@ export const FALLBACK_DOC_STRINGS: DocSummaryStrings = {
   expandFullDocument: '展開全文',
   collapseFullDocument: '收合全文',
   sectionCount: '{count} 個章節',
+  tooltipLabel: '文件摘要說明',
   tooltip: '此處顯示匯入文件原始的人類可讀敘事內容（如 IPS 國際病人摘要、出院病摘）。當中的結構化資料已分別呈現在上方各卡片，本卡片保留原始敘事供對照或摘要參考。',
   ipsBadge: 'IPS',
   ipsBadgeTooltip: '此份文件依 IPS（國際病人摘要）規範產出。',

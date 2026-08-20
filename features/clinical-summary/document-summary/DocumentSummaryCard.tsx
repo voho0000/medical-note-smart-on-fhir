@@ -71,23 +71,16 @@ export function DocumentSummaryCard() {
     <FeatureCard
       title={strings.title}
       featureId="document-summary"
-      isLoading={isLoading}
-      error={error}
-      isEmpty={isEmpty}
-      emptyMessage={strings.noData}
-    >
-      <div className="space-y-3">
-        {/* Top hint with tooltip — explains the card's intent so clinicians
-            don't mistake the narrative for a separate dataset. */}
+      titleAccessory={(
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 text-[0.6875rem] text-muted-foreground hover:text-foreground"
+                aria-label={strings.tooltipLabel}
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <Info className="h-3 w-3" aria-hidden />
-                <span>{strings.title}</span>
+                <Info className="h-3.5 w-3.5" aria-hidden />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="start" className="max-w-xs text-xs leading-relaxed">
@@ -95,19 +88,23 @@ export function DocumentSummaryCard() {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-
-        <ul className="space-y-2" data-tour="documents-list">
-          {entries.map((entry) => (
-            <DocumentEntryCard
-              key={entry.id}
-              entry={entry}
-              autoExpand={autoExpand}
-              strings={strings}
-              resolveSectionLabel={resolveSectionLabel}
-            />
-          ))}
-        </ul>
-      </div>
+      )}
+      isLoading={isLoading}
+      error={error}
+      isEmpty={isEmpty}
+      emptyMessage={strings.noData}
+    >
+      <ul className="space-y-2" data-tour="documents-list">
+        {entries.map((entry) => (
+          <DocumentEntryCard
+            key={entry.id}
+            entry={entry}
+            autoExpand={autoExpand}
+            strings={strings}
+            resolveSectionLabel={resolveSectionLabel}
+          />
+        ))}
+      </ul>
     </FeatureCard>
   )
 }
