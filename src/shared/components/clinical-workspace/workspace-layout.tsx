@@ -102,7 +102,7 @@ export const ClinicalWorkspacePanel = forwardRef<
       ref={ref}
       data-slot="clinical-workspace-panel"
       className={cn(
-        "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto bg-panel md:w-auto md:rounded-lg",
+        "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-panel md:w-auto md:rounded-lg",
         !mobileActive && !preserveMobileLayoutWhenInactive && "max-md:hidden",
         !mobileActive && preserveMobileLayoutWhenInactive
           && "max-md:pointer-events-none max-md:invisible max-md:absolute max-md:inset-1 max-md:h-[calc(100%-0.5rem)]",

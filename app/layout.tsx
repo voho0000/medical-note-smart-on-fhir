@@ -61,9 +61,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* interactive-widget=resizes-content: the on-screen keyboard shrinks
             the viewport instead of overlaying it, so a `h-svh` app shell keeps
             its composer above the keyboard rather than behind it. */}
+        {/* viewport-fit=cover: without it iOS reports every `env(safe-area-inset-*)`
+            as 0, so the padding the workspace and the chat overlay already
+            compute for the notch and the home indicator was silently inert. */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
       </head>
       <body suppressHydrationWarning>

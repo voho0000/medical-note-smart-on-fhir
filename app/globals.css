@@ -145,10 +145,20 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* The app shell is a fixed-height workspace, never a scrolling document.
+     Without this, a downward drag that starts anywhere outside a scroll
+     container (header, tab strip, an already-at-top list) reaches the
+     document and Chrome Android runs pull-to-refresh — reloading the SPA
+     and discarding in-flight AI streams, chat drafts and unsaved input.
+     Per-container `overscroll-contain` cannot cover that case. */
+  html {
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "kern" 1;
     text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
   }
   /* Smooth scrolling */
   html {

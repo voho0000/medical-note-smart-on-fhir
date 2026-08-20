@@ -32,7 +32,7 @@ export function RightDetailPane({
         </button>
         <div className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{title}</div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2 sm:p-3">{children}</div>
     </div>
   )
 }

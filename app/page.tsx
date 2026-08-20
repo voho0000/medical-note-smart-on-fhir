@@ -18,6 +18,7 @@ import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
+import { useBackDismissibleLayer } from "@/src/shared/hooks/layout/use-back-dismissible-layer.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
@@ -159,6 +160,11 @@ function PageContent() {
     anchorOffsetTop: number | null
   } | null>(null)
   const detailOriginRestoreFrameRef = useRef<number | null>(null)
+  // Which detail has already pulled the phone over to the 「功能」 panel.
+  // Without it the reveal effect re-fires on every `isLargeScreen` flip, so
+  // rotating a phone across the 768 breakpoint with a detail still open
+  // yanks the reader out of whatever panel they had navigated back to.
+  const lastRevealedDetailSourceIdRef = useRef<string | null>(null)
   const pendingDetailOriginRestoreRef = useRef<string | null>(null)
 
   const captureDetailOrigin = useCallback((event: ReactMouseEvent<HTMLElement>) => {
@@ -191,7 +197,13 @@ function PageContent() {
   // so merely updating the detail slot looks like a dead button. Reveal that
   // panel for every newly requested detail; desktop keeps its split view.
   useEffect(() => {
-    if (!detail || isLargeScreen) return
+    if (!detail) {
+      lastRevealedDetailSourceIdRef.current = null
+      return
+    }
+    if (isLargeScreen) return
+    if (lastRevealedDetailSourceIdRef.current === detail.sourceId) return
+    lastRevealedDetailSourceIdRef.current = detail.sourceId
     const alreadyCaptured = detailOriginScrollRef.current?.sourceId === detail.sourceId
     const viewport = alreadyCaptured
       ? null
@@ -322,6 +334,21 @@ function PageContent() {
       }, 0)
     })
   }, [cancelDeferredDetailClear, clearDetail, detail, isLargeScreen, setMobileView])
+
+  // Android's hardware back and iOS' edge swipe are how phone readers close
+  // the top layer. Both used to leave the app outright, taking the loaded
+  // bundle and every AI result with them. Treat "the phone is showing
+  // something other than the clinical browser" as one dismissible layer:
+  // back closes the detail if one is open, otherwise returns to 臨床摘要.
+  const phoneLayerOpen = !isLargeScreen && (detailVisible || mobileView === 'right')
+  const dismissPhoneLayer = useCallback(() => {
+    if (detail) {
+      closeDetailAfterPaint()
+      return
+    }
+    setMobileView('left')
+  }, [closeDetailAfterPaint, detail, setMobileView])
+  useBackDismissibleLayer(phoneLayerOpen, dismissPhoneLayer)
 
   useEffect(() => () => {
     cancelDeferredDetailClear()
