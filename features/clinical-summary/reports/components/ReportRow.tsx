@@ -482,7 +482,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         if (stopProp) e.stopPropagation()
         openImageDialog()
       }}
-      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary md:min-h-0 md:min-w-0"
+      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary sm:min-h-[44px] sm:min-w-[44px] md:min-h-0 md:min-w-0"
       role="button"
       tabIndex={0}
       aria-label="查看影像"
@@ -553,11 +553,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     // bridgeDupCount badge surfaces bridge-side dedup misses so the bug
     // doesn't get silently hidden by our merge (no-mask-bridge-bugs rule).
     const headerRight = (
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex min-w-0 flex-1 items-center gap-1 sm:flex-none sm:gap-2">
         {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
         {hasViewerActions && <NhiViewerActions actions={viewerActions} />}
         {!hideMeta && row.institution && (
-          <ReportInstitutionLabel institution={row.institution} className="max-w-[10rem]" />
+          <ReportInstitutionLabel institution={row.institution} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         )}
         {!hideMeta && (
           <Tooltip>
@@ -612,7 +612,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
           <div
             data-tour="report-tour-row"
             className={cn(
-              'w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5 transition-colors',
+              'w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-muted/40 px-2 py-1 transition-colors sm:px-2.5 sm:py-1.5',
               // 向右展開 active: tint the row so it's clear which report the
               // right pane is showing.
               isReportRightActive && 'border-primary/40 bg-primary/5',
@@ -620,9 +620,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
           >
             <div
               className={cn(
-                'mb-0.5 flex rounded-md transition-all outline-none',
+                'flex rounded-md transition-all outline-none sm:mb-0.5',
                 hasText
-                  ? 'flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2'
+                  ? 'flex-col items-stretch gap-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2'
                   : 'items-center justify-between gap-2',
                 hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
               )}
@@ -659,7 +659,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 className={cn(
                   'flex items-center',
                   hasText
-                    ? 'min-w-0 flex-wrap justify-start gap-1.5 sm:flex-nowrap sm:justify-end sm:gap-2'
+                    ? 'min-w-0 flex-nowrap justify-end gap-1 sm:gap-2'
                     : 'gap-2',
                 )}
               >
@@ -743,7 +743,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
               ) : (
                 <p
-                  className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80"
+                  className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80 max-sm:hidden"
                   onClick={() => setTextExpanded(true)}
                 >
                   {obs.valueString}
@@ -816,9 +816,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 Hidden inside a LabDayGroupCard (hideMeta) — the group header
                 already states both. */}
             {!hideMeta && (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex min-w-0 items-center justify-end gap-1 sm:shrink-0 sm:gap-2">
                 {row.institution && (
-                  <ReportInstitutionLabel institution={row.institution} className="max-w-[9rem]" />
+                  <ReportInstitutionLabel institution={row.institution} className="max-w-[7rem] flex-1 sm:max-w-[9rem] sm:flex-none" />
                 )}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -915,14 +915,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         >
           <AccordionTrigger
             className={cn(
-              'items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0',
+              'items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_auto] max-sm:gap-y-1 max-sm:[&>svg]:col-start-3 max-sm:[&>svg]:row-start-1',
               panelHasNarrative && 'flex-wrap gap-y-1 sm:flex-nowrap',
               row.group === 'procedures' && 'flex-wrap gap-y-1 sm:flex-nowrap',
             )}
           >
             <div
               className={cn(
-                'flex min-w-0 shrink-0 grow-0 items-center gap-1.5',
+                'flex min-w-0 shrink-0 grow-0 items-center gap-1.5 max-sm:col-start-1 max-sm:row-start-1 max-sm:basis-auto max-sm:shrink',
                 row.group === 'procedures' ? 'flex-1 basis-0' : 'basis-[45%]',
               )}
             >
@@ -942,33 +942,39 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               {displayObs.length === 1 && row.group !== 'procedures' && renderTrendButton(true)}
               {hasImages && renderImageButton(true)}
             </div>
-            {/* "N 項" = sub-item count for a lab panel; meaningless for a
-                single procedure event, so hide it there. */}
-            {row.group !== "procedures" && (
-              <span className="shrink-0 text-[0.8125rem] font-bold tabular-nums text-foreground">
-                {displayObs.length} 項
-              </span>
-            )}
-            {abnormalCount > 0 && (
-              <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0 text-[0.625rem] font-medium', REPORT_ABNORMAL_TONE)}>
-                <AlertCircle className="h-3 w-3" />
-                {abnormalCount} 異常
-              </span>
-            )}
-            {/* Same-session sub-procedures grouped via Procedure.partOf —
-                tells the user this one title expands to several. */}
-            {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
-              <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-primary/10 dark:text-primary">
-                +{row.relatedCount} 相關處置
-              </span>
-            )}
+            <div
+              data-testid="report-panel-summary"
+              className="flex shrink-0 items-center gap-1.5 max-sm:col-start-2 max-sm:row-start-1"
+            >
+              {/* "N 項" = sub-item count for a lab panel; meaningless for a
+                  single procedure event, so hide it there. */}
+              {row.group !== "procedures" && (
+                <span className="shrink-0 text-[0.8125rem] font-bold tabular-nums text-foreground">
+                  {displayObs.length} 項
+                </span>
+              )}
+              {abnormalCount > 0 && (
+                <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0 text-[0.625rem] font-medium', REPORT_ABNORMAL_TONE)}>
+                  <AlertCircle className="h-3 w-3" />
+                  {abnormalCount} 異常
+                </span>
+              )}
+              {/* Same-session sub-procedures grouped via Procedure.partOf —
+                  tells the user this one title expands to several. */}
+              {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-primary/10 dark:text-primary">
+                  +{row.relatedCount} 相關處置
+                </span>
+              )}
+            </div>
             {/* Right cluster mirrors the single-value rows: institution inline +
                 date-only badge. Category/status (accordionMeta) live on the
                 badge's hover tooltip — no separate meta line, so nothing is
                 shown twice. */}
             <div
+              data-testid="report-panel-meta"
               className={cn(
-                'ml-auto flex shrink-0 items-center gap-2',
+                'ml-auto flex shrink-0 items-center gap-2 max-sm:col-span-3 max-sm:col-start-1 max-sm:row-start-2 max-sm:ml-0 max-sm:w-full max-sm:min-w-0 max-sm:justify-start',
                 panelHasNarrative && 'order-last w-full min-w-0 flex-wrap justify-start gap-1.5 sm:order-none sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2',
                 row.group === 'procedures' && 'max-sm:order-last max-sm:w-full max-sm:flex-wrap max-sm:justify-start max-sm:gap-1.5',
               )}

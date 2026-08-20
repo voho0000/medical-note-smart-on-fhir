@@ -63,7 +63,7 @@ export const ClinicalWorkspaceMain = forwardRef<
       ref={ref}
       data-slot="clinical-workspace-main"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-1 sm:p-2 md:flex-row md:gap-0",
+        "relative flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-1 sm:p-2 md:flex-row md:gap-0",
         className,
       )}
       {...props}
@@ -76,6 +76,11 @@ type DesktopPanelState = "split" | "fill" | "collapsed"
 interface ClinicalWorkspacePanelProps
   extends ComponentPropsWithoutRef<"section"> {
   mobileActive: boolean
+  /** Keep an inactive phone panel laid out while a temporary detail overlays
+   *  it. Virtualized lists lose their measured window when an ancestor becomes
+   *  display:none; an invisible absolute panel preserves the exact row and
+   *  scroll position for the close/back action. */
+  preserveMobileLayoutWhenInactive?: boolean
   desktopState: DesktopPanelState
   desktopWidth?: CSSProperties["width"]
 }
@@ -85,6 +90,7 @@ export const ClinicalWorkspacePanel = forwardRef<
   ClinicalWorkspacePanelProps
 >(function ClinicalWorkspacePanel({
   mobileActive,
+  preserveMobileLayoutWhenInactive = false,
   desktopState,
   desktopWidth,
   className,
@@ -97,7 +103,9 @@ export const ClinicalWorkspacePanel = forwardRef<
       data-slot="clinical-workspace-panel"
       className={cn(
         "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto bg-panel md:w-auto md:rounded-lg",
-        !mobileActive && "max-md:hidden",
+        !mobileActive && !preserveMobileLayoutWhenInactive && "max-md:hidden",
+        !mobileActive && preserveMobileLayoutWhenInactive
+          && "max-md:pointer-events-none max-md:invisible max-md:absolute max-md:inset-1 max-md:h-[calc(100%-0.5rem)]",
         desktopState === "collapsed" && "md:hidden",
         desktopState === "fill" && "md:flex-1",
         desktopState === "split" && "md:flex-initial",

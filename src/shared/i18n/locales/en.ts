@@ -1129,6 +1129,8 @@ export const en = {
     characters: 'characters',
     patientDataOff: 'Do not use patient data',
     patientDataOffBadge: 'No chart',
+    patientDataOffShort: 'No chart',
+    patientDataOffExplanation: 'No chart: when enabled, this conversation will not read the patient record. Press again to restore access.',
     patientDataOffEnable: 'Turn on to keep patient data out of this conversation',
     patientDataOffDisable: 'Turn off “No chart” to restore the current model\'s default data scope',
     cloudAiNotice: 'AI uses cloud services · avoid sending unnecessary personal identifiers',

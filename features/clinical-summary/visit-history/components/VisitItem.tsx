@@ -3,6 +3,7 @@
 import { memo, useState } from "react"
 import { Building2, ChevronDown, PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   CLINICAL_ABNORMAL_TONE,
@@ -84,6 +85,8 @@ interface VisitStatProps {
   count: number
   attention?: boolean
   title?: string
+  className?: string
+  fullLabel?: string
 }
 
 /**
@@ -92,18 +95,21 @@ interface VisitStatProps {
  * alone. The value keeps a small aligned surface for comparison; only abnormal
  * results use the semantic attention colour.
  */
-function VisitStat({ kind, label, count, attention = false, title }: VisitStatProps) {
+function VisitStat({ kind, label, count, attention = false, title, className }: VisitStatProps) {
   return (
     <span
       data-visit-stat={kind}
       aria-label={`${label} ${count}`}
       title={title}
-      className="inline-flex h-5 min-w-0 items-center gap-1 border-l border-border/60 pl-1 text-[0.625rem] leading-none first:border-l-0 first:pl-0"
+      className={cn(
+        "inline-flex h-5 min-w-0 shrink-0 items-center gap-1 border-l border-border/60 pl-1 text-[0.625rem] leading-none first:border-l-0 first:pl-0 max-sm:h-5 max-sm:gap-0.5 max-sm:border-l-0 max-sm:pl-0 max-sm:text-[10px]",
+        className,
+      )}
     >
       {attention ? (
         <span
           className={cn(
-            "inline-flex h-5 items-center gap-1 rounded-full px-1.5 font-medium",
+            "inline-flex h-5 items-center gap-1 rounded-full px-1.5 font-medium max-sm:h-5 max-sm:gap-0.5 max-sm:px-1",
             CLINICAL_ABNORMAL_TONE,
           )}
         >
@@ -113,7 +119,7 @@ function VisitStat({ kind, label, count, attention = false, title }: VisitStatPr
       ) : (
         <>
           <span className="whitespace-nowrap text-muted-foreground">{label}</span>
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-foreground/[0.06] px-1 font-semibold tabular-nums text-foreground/80 dark:bg-foreground/[0.08] dark:text-foreground/75">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-foreground/[0.06] px-1 font-semibold tabular-nums text-foreground/80 max-sm:h-[16px] max-sm:min-w-[16px] max-sm:px-0.5 dark:bg-foreground/[0.08] dark:text-foreground/75">
             {count}
           </span>
         </>
@@ -139,7 +145,6 @@ function VisitItemComponent({
   const [icdExpanded, setIcdExpanded] = useState(false)
   const docs = documents ?? []
   const hasDetails = visitHasDetails(details, documents)
-  const hasVisitContext = Boolean(visit.department || visit.physician || visit.reason || visit.diagnosis)
   const hasDischargeDocument = docs.some((document) => document.isDischargeSummary)
   const isRightActive = rightDetail?.sourceId === visit.id
   const showMedicationExecutionPeriods = visit.type === 'inpatient'
@@ -149,17 +154,45 @@ function VisitItemComponent({
   // single visit date. Single-day visits and inpatient records with no
   // discharge data keep showing just the one date.
   const startLabel = formatDateUtil(visit.date, locale)
+  const endLabel = visit.endDate ? formatDateUtil(visit.endDate, locale) : ''
   const showRange = !!visit.endDate && !!visit.date &&
     visit.endDate.slice(0, 10) !== visit.date.slice(0, 10)
   const dateLabel = showRange
-    ? `${startLabel} ~ ${formatDateUtil(visit.endDate as string, locale)}`
+    ? `${startLabel} ~ ${endLabel}`
     : startLabel
+  const mobileDateLabel = showRange && /^\d{4}\//.test(startLabel) &&
+    endLabel.startsWith(startLabel.slice(0, 5))
+    ? `${startLabel}–${endLabel.slice(5)}`
+    : dateLabel
   const secondaryIcdCount = Math.max(0, reasonCodes.length - 1)
   const icdToggleLabel = icdExpanded
     ? (locale.startsWith('zh') ? '收合其他 ICD 碼' : 'Collapse additional ICD codes')
     : (locale.startsWith('zh')
       ? `預覽並展開其他 ${secondaryIcdCount} 個 ICD 碼`
       : `Preview and expand ${secondaryIcdCount} additional ICD codes`)
+
+  const detailStats: VisitStatProps[] = []
+  if (details?.diagnoses.length) detailStats.push({ kind: 'diagnoses', label: t.visitHistory.diagnoses, count: details.diagnoses.length })
+  if (details?.tests.length) detailStats.push({ kind: 'tests', label: t.visitHistory.tests, count: details.tests.length })
+  if (abnormalCount > 0) detailStats.push({ kind: 'abnormal', label: (t.visitHistory as any).abnormal ?? 'Abnormal', count: abnormalCount, attention: true })
+  if (details?.medications.length) detailStats.push({ kind: 'medications', label: t.visitHistory.medications, count: details.medications.length })
+  if (details?.reports.length) detailStats.push({ kind: 'reports', label: t.visitHistory.examReportsShort, count: details.reports.length, title: t.visitHistory.examReports })
+  if (details?.procedures.length) detailStats.push({ kind: 'procedures', label: t.visitHistory.procedures, count: details.procedures.length })
+
+  const mobileStats: VisitStatProps[] = [...detailStats]
+  if (docs.length > 0) {
+    const fullDocumentLabel = hasDischargeDocument
+      ? docStrings.dischargeBadge
+      : docStrings.documentBadge
+    mobileStats.push({
+      kind: 'documents',
+      label: hasDischargeDocument && locale.startsWith('zh') ? '病摘' : fullDocumentLabel,
+      fullLabel: fullDocumentLabel,
+      count: docs.length,
+      title: hasDischargeDocument ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip,
+    })
+  }
+  const hiddenMobileStatCount = Math.max(0, mobileStats.length - 4)
 
   // Open this visit's detail in the right pane (向右展開). Reuses the very same
   // VisitDetailContent that renders inline.
@@ -226,21 +259,23 @@ function VisitItemComponent({
             ICD text never move either action horizontally. */}
         <div
           data-testid="visit-row-grid"
-          className="grid min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] grid-rows-[auto_auto] gap-x-1.5"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_1.5rem] grid-rows-[auto_auto] gap-x-1.5"
         >
-          <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-between gap-1.5 leading-5">
-            <div className="flex min-w-0 flex-1 items-center gap-x-1.5 overflow-hidden">
+          <div
+            data-testid="visit-primary-metadata"
+            className="col-start-1 row-start-1 flex min-w-0 items-center gap-x-1.5 overflow-hidden leading-5 max-sm:col-end-3 max-sm:gap-x-1"
+          >
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
             {visit.location && (
               <span
                 className={cn(
-                  "inline-flex h-5 max-w-[9rem] shrink-0 items-center gap-1 text-[0.6875rem]",
+                  "inline-flex h-5 min-w-0 max-w-[9rem] shrink-0 items-center gap-1 text-[0.6875rem] max-sm:max-w-none max-sm:flex-1 max-sm:shrink max-sm:text-[12px]",
                   CLINICAL_SOURCE_TONE,
                 )}
                 title={visit.location}
               >
-                <Building2 className="h-3 w-3 shrink-0" aria-hidden />
+                <Building2 className="h-3 w-3 shrink-0 max-sm:hidden" aria-hidden />
                 <span className="truncate">{visit.location}</span>
               </span>
             )}
@@ -250,9 +285,10 @@ function VisitItemComponent({
                   tabIndex={0}
                   aria-label={dateLabel}
                   data-testid="visit-date-label"
-                  className="min-w-0 truncate text-[0.9375rem] font-medium leading-5"
+                  className="min-w-0 shrink-0 truncate text-[13px] font-medium leading-5 sm:text-[0.9375rem]"
                 >
-                  {dateLabel}
+                  <span className="sm:hidden">{mobileDateLabel}</span>
+                  <span className="max-sm:hidden">{dateLabel}</span>
                 </span>
               </TooltipTrigger>
               <TooltipContent
@@ -270,58 +306,58 @@ function VisitItemComponent({
             )}
           </div>
           {/* Right cluster: compact text labels with tabular values. Category
-              colour is neutral; abnormal is the sole attention colour. */}
-            <div className="flex max-w-[60%] shrink-0 flex-wrap items-center justify-end gap-x-1 gap-y-1">
-            {details && (
-              <>
-                {details.diagnoses.length > 0 && (
-                  <VisitStat
-                    kind="diagnoses"
-                    label={t.visitHistory.diagnoses}
-                    count={details.diagnoses.length}
-                  />
-                )}
-                {details.tests.length > 0 && (
-                  <VisitStat
-                    kind="tests"
-                    label={t.visitHistory.tests}
-                    count={details.tests.length}
-                  />
-                )}
-                {abnormalCount > 0 && (
-                  <VisitStat
-                    kind="abnormal"
-                    label={(t.visitHistory as any).abnormal ?? 'Abnormal'}
-                    count={abnormalCount}
-                    attention
-                  />
-                )}
-                {details.medications.length > 0 && (
-                  <VisitStat
-                    kind="medications"
-                    label={t.visitHistory.medications}
-                    count={details.medications.length}
-                  />
-                )}
-                {details.reports.length > 0 && (
-                  <VisitStat
-                    kind="reports"
-                    label={t.visitHistory.examReportsShort}
-                    count={details.reports.length}
-                    title={t.visitHistory.examReports}
-                  />
-                )}
-                {details.procedures.length > 0 && (
-                  <VisitStat
-                    kind="procedures"
-                    label={t.visitHistory.procedures}
-                    count={details.procedures.length}
-                  />
-                )}
-              </>
-            )}
+              colour is neutral; abnormal is the sole attention colour. On
+              phones, at most four statistics remain visible; the rest move
+              into an explicit +N popover instead of clipping or scrolling. */}
+            <div
+              data-testid="visit-stat-strip"
+              className="col-start-2 row-start-1 flex max-w-none shrink-0 flex-nowrap items-center justify-end gap-1 overflow-visible whitespace-nowrap max-sm:col-end-4 max-sm:row-start-2 max-sm:max-w-[200px] max-sm:justify-self-end max-sm:gap-1 max-sm:overflow-hidden"
+            >
+              {mobileStats.map((stat, index) => (
+                <VisitStat
+                  key={stat.kind}
+                  {...stat}
+                  className={cn(
+                    index >= 4 && "max-sm:hidden",
+                    stat.kind === 'documents' && "sm:hidden",
+                  )}
+                />
+              ))}
+              {hiddenMobileStatCount > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="visit-stat-more"
+                      aria-label={locale.startsWith('zh')
+                        ? `顯示全部 ${mobileStats.length} 項統計`
+                        : `Show all ${mobileStats.length} statistics`}
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      className="inline-flex h-5 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 text-[0.6875rem] font-medium text-muted-foreground sm:hidden"
+                    >
+                      +{hiddenMobileStatCount}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    data-testid="visit-stat-popover"
+                    align="end"
+                    side="top"
+                    onClick={(event) => event.stopPropagation()}
+                    className="w-auto min-w-36 space-y-1.5 p-2.5"
+                  >
+                    {mobileStats.map((stat) => (
+                      <VisitStat
+                        key={`popover-${stat.kind}`}
+                        {...stat}
+                        label={stat.fullLabel ?? stat.label}
+                        className="border-l-0 pl-0"
+                      />
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
-          </div>
 
           {hasDetails && (
             <button
@@ -335,7 +371,7 @@ function VisitItemComponent({
                 onToggle(visit.id)
               }}
               onMouseDown={(event) => event.stopPropagation()}
-              className="col-start-2 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="col-start-3 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <ChevronDown
                 className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
@@ -344,10 +380,10 @@ function VisitItemComponent({
             </button>
           )}
 
-          {(hasVisitContext || docs.length > 0 || hasDetails) && (
           <div
+            data-testid="visit-context-row"
             className={cn(
-              "col-start-1 row-start-2 mt-0.5 flex min-w-0 items-end justify-between gap-2 text-sm leading-5",
+              "col-start-1 row-start-2 mt-0.5 flex min-w-0 items-end justify-between gap-2 text-sm leading-5 max-sm:col-end-2 max-sm:col-start-1",
               icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
             )}
           >
@@ -358,7 +394,11 @@ function VisitItemComponent({
               )}
             >
               {visit.department && (
-                <span className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={visit.department}>
+                <span
+                  data-testid="visit-channel-label"
+                  className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground max-sm:hidden"
+                  title={visit.department}
+                >
                   {visit.department}
                 </span>
               )}
@@ -373,7 +413,8 @@ function VisitItemComponent({
                   icdExpanded ? "items-start" : "items-center",
                 )}>
                 <span
-                  className="shrink-0 font-medium text-muted-foreground"
+                  data-testid="visit-icd-field-label"
+                  className="shrink-0 font-medium text-muted-foreground max-sm:hidden"
                   title={(t.visitHistory as any).icdCodesTooltip}
                 >
                   {(t.visitHistory as any).recordedIcdCodes ?? t.visitHistory.reason}:{' '}
@@ -514,21 +555,24 @@ function VisitItemComponent({
               )}
             </div>
 
-            <div data-testid="visit-secondary-metadata" className="flex shrink-0 items-center justify-end gap-1">
-              {docs.length > 0 && (
-                <VisitStat
-                  kind="documents"
-                  label={hasDischargeDocument ? docStrings.dischargeBadge : docStrings.documentBadge}
-                  count={docs.length}
-                  title={hasDischargeDocument ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
-                />
-              )}
-            </div>
           </div>
+
+          {docs.length > 0 && (
+            <div
+              data-testid="visit-secondary-metadata"
+              className="col-start-2 row-start-2 flex shrink-0 items-center justify-end gap-1 max-sm:hidden"
+            >
+              <VisitStat
+                kind="documents"
+                label={hasDischargeDocument ? docStrings.dischargeBadge : docStrings.documentBadge}
+                count={docs.length}
+                title={hasDischargeDocument ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
+              />
+            </div>
           )}
 
           {hasDetails && (
-            <div data-testid="visit-secondary-actions" className="col-start-2 row-start-2 flex h-6 w-6 items-center justify-center self-center">
+            <div data-testid="visit-secondary-actions" className="col-start-3 row-start-2 flex h-6 w-6 items-center justify-center self-center max-sm:hidden">
               <button
                 type="button"
                 data-tour="visit-open-right"

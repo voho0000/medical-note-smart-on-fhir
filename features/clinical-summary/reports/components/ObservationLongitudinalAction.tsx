@@ -113,12 +113,13 @@ export function ObservationLongitudinalAction({
   const sharedProps = {
     'aria-label': actionLabel,
     'data-report-history-action': true,
+    'data-detail-source-id': sourceId,
     'data-tour': dataTour,
     className: cn(
       // Literal px, not rem: the root font-size drops to 12px on phones, so a
       // rem-sized box here rendered as a ~12px tap target — and this is the
       // entry point to every trend in the app. Desktop keeps the compact icon.
-      'inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors touch-manipulation hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:min-h-0 md:min-w-0',
+      'inline-flex min-h-[36px] min-w-[36px] cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors touch-manipulation hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:min-h-[44px] sm:min-w-[44px] md:min-h-0 md:min-w-0',
       isActive && 'text-primary',
       className,
     ),

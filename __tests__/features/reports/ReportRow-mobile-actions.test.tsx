@@ -44,7 +44,12 @@ describe('ReportRow mobile actions', () => {
     const header = aiButton.closest('[role="button"][aria-expanded]')
     expect(header).toHaveClass('flex-col', 'sm:flex-row')
     expect(header?.parentElement).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
-    expect(aiButton.parentElement).toHaveClass('flex-wrap', 'justify-start', 'sm:flex-nowrap', 'sm:justify-end')
+    expect(aiButton.parentElement).toHaveClass('flex-nowrap', 'justify-end')
+    expect(aiButton.parentElement).not.toHaveClass('flex-wrap')
+
+    // The collapsed narrative is available after opening the card, but does
+    // not consume a third line in the compact phone list.
+    expect(screen.getByText(/No focal consolidation/)).toHaveClass('max-sm:hidden')
 
     const rightPaneButton = screen.getByRole('button', { name: '在右側面板展開全文' })
     expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-border', 'bg-background')

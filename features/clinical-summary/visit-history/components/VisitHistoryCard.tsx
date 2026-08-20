@@ -421,10 +421,16 @@ export function VisitHistoryCard() {
               </select>
             </div>
 
-            {/* ── Filters row: 就診類型 + 機構 (single-select dropdowns) followed
-                by the content toggles (multi-select) + result count — all the
-                filters grouped together, separate from search/sort above. ──── */}
-            <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+            {/* ── Filters row: keep every filter in one compact horizontal strip.
+                On narrow phones the strip, rather than the whole card, owns
+                horizontal scrolling; the result count remains pinned at right. */}
+            <div className="flex items-center gap-1">
+              <div
+                data-testid="visit-filter-strip"
+                role="group"
+                aria-label={vt.filtersLabel ?? '就診篩選'}
+                className="flex min-w-0 flex-1 touch-pan-x flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:overflow-visible"
+              >
               {/* NHI care discipline is independent from visit setting:
                   e.g. both western and dental records can be outpatient. */}
               <CompactFilterSelect
@@ -471,10 +477,6 @@ export function VisitHistoryCard() {
                   }}
                 />
               )}
-              {/* Keep single-select filters and content-presence filters as two
-                  stable rows on phones. Mixing the first two content chips into
-                  the select row made the toolbar look accidental at 390–430px. */}
-              <span className="h-0 basis-full md:hidden" aria-hidden />
               {/* Divider between the single-select filters and the content toggles */}
               <span className="mx-0.5 h-4 w-px shrink-0 bg-border @max-[36rem]:hidden" aria-hidden />
               <ContentToggle
@@ -511,14 +513,15 @@ export function VisitHistoryCard() {
                   onClick={clearAllFilters}
                   aria-label={vt.clearFilters}
                   title={vt.clearFilters}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground @max-[36rem]:size-[28px] @max-[36rem]:justify-center @max-[36rem]:p-0"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground @max-[36rem]:size-[28px] @max-[36rem]:justify-center @max-[36rem]:p-0"
                 >
                   <X className="h-3 w-3" />
                   <span className="@max-[36rem]:hidden">{vt.clearFiltersShort}</span>
                 </button>
               )}
+              </div>
               {/* Result count — right-aligned at the end of the filters row. */}
-              <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                 {hasActiveFilters
                   ? `${filteredVisits.length} / ${visitHistory.length} ${vt.recordsUnit}`
                   : `${visitHistory.length} ${vt.recordsUnit}`}
@@ -586,7 +589,7 @@ function ContentToggle({
       aria-label={accessibleLabel}
       title={accessibleLabel}
       className={cn(
-        "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1",
+        "inline-flex min-h-[28px] shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium transition-colors @max-[36rem]:px-1",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"

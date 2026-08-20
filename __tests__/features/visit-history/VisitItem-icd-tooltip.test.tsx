@@ -111,7 +111,7 @@ describe('VisitItem ICD tooltip', () => {
               tests: [{}],
               medications: [{}],
               reports: [{}],
-              procedures: [],
+              procedures: [{}],
             } as any}
             abnormalCount={2}
             isExpanded={false}
@@ -140,6 +140,10 @@ describe('VisitItem ICD tooltip', () => {
     const abnormalStat = screen.getByLabelText('異常 2')
     expect(abnormalStat).toHaveAttribute('data-visit-stat', 'abnormal')
     expect(within(abnormalStat).getByText('異常').parentElement).toHaveClass('bg-red-100', 'text-red-700')
+    expect(screen.getByLabelText('處置 1')).toHaveClass('max-sm:hidden')
+    expect(screen.getByTestId('visit-stat-more')).toHaveTextContent('+1')
+    fireEvent.click(screen.getByTestId('visit-stat-more'))
+    expect(screen.getByTestId('visit-stat-popover')).toHaveTextContent('檢驗1異常2用藥1檢查1處置1')
   })
 
   it('shows the complete code and diagnosis in an explicit tooltip', async () => {
@@ -208,6 +212,8 @@ describe('VisitItem ICD tooltip', () => {
     const dateLabel = screen.getByTestId('visit-date-label')
     expect(dateLabel).toHaveClass('truncate')
     expect(dateLabel).toHaveAttribute('aria-label', '2025/05/18 ~ 2025/05/28')
+    expect(within(dateLabel).getByText('2025/05/18–05/28')).toHaveClass('sm:hidden')
+    expect(within(dateLabel).getByText('2025/05/18 ~ 2025/05/28')).toHaveClass('max-sm:hidden')
 
     fireEvent.focus(dateLabel)
 
@@ -251,14 +257,46 @@ describe('VisitItem ICD tooltip', () => {
 
     const rowGrid = screen.getByTestId('visit-row-grid')
     const expandAction = within(rowGrid).getByTestId('visit-expand-action')
+    const primaryMetadata = within(rowGrid).getByTestId('visit-primary-metadata')
+    const statStrip = within(rowGrid).getByTestId('visit-stat-strip')
+    const contextRow = within(rowGrid).getByTestId('visit-context-row')
     const secondaryMetadata = within(rowGrid).getByTestId('visit-secondary-metadata')
     const secondaryActions = within(rowGrid).getByTestId('visit-secondary-actions')
 
     expect(within(secondaryMetadata).getByLabelText('出院病摘 1')).toBeInTheDocument()
+    expect(secondaryMetadata).toHaveClass(
+      'col-start-2',
+      'row-start-2',
+    )
+    expect(secondaryMetadata).not.toHaveClass('max-sm:row-start-3')
     expect(within(secondaryActions).getByRole('button', { name: '在右側面板展開' }))
       .toHaveClass('border-transparent', 'bg-transparent', 'hover:bg-background/80')
-    expect(expandAction).toHaveClass('col-start-2', 'row-start-1', 'h-6', 'w-6')
-    expect(secondaryActions).toHaveClass('col-start-2', 'row-start-2', 'h-6', 'w-6')
+    expect(expandAction).toHaveClass('col-start-3', 'row-start-1', 'h-6', 'w-6')
+    expect(secondaryActions).toHaveClass('col-start-3', 'row-start-2', 'h-6', 'w-6')
+    expect(rowGrid).toHaveClass(
+      'grid-cols-[minmax(0,1fr)_auto_1.5rem]',
+    )
+    expect(primaryMetadata).toHaveClass('col-start-1', 'row-start-1', 'overflow-hidden')
+    expect(primaryMetadata).toHaveClass('max-sm:col-end-3')
+    expect(statStrip).toHaveClass(
+      'row-start-1',
+      'max-sm:row-start-2',
+      'max-sm:col-end-4',
+      'max-sm:max-w-[200px]',
+      'max-sm:justify-self-end',
+      'flex-nowrap',
+      'overflow-visible',
+      'max-sm:overflow-hidden',
+    )
+    expect(statStrip).not.toHaveClass('flex-wrap')
+    expect(contextRow).toHaveClass('row-start-2', 'max-sm:col-end-2')
+    expect(screen.getByTestId('visit-date-label')).toHaveClass('shrink-0', 'text-[13px]', 'truncate')
+    expect(secondaryMetadata).toHaveClass('max-sm:hidden')
+    expect(secondaryActions).toHaveClass('max-sm:hidden')
+    expect(within(statStrip).getByLabelText('病摘 1')).toHaveClass(
+      'max-sm:border-l-0',
+      'max-sm:pl-0',
+    )
   })
 
   it('previews hidden ICDs on focus and wraps complete descriptions after expansion', async () => {
@@ -312,6 +350,45 @@ describe('VisitItem ICD tooltip', () => {
     expect(expandedDescription).not.toHaveClass('truncate')
     expect(screen.queryByTestId('secondary-icd-preview')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '收合其他 ICD 碼' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('hides the redundant ICD field label on phones while keeping the diagnosis', () => {
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <VisitItem
+            visit={{
+              id: 'visit-mobile-icd',
+              type: 'inpatient',
+              careDiscipline: 'western',
+              date: '2026-08-12',
+              reason: 'J18.9 - 肺炎，未明示病原體',
+              icdCodes: [{ code: 'J18.9', description: '肺炎，未明示病原體' }],
+              department: '申報資料',
+              status: 'finished',
+            }}
+            isExpanded={false}
+            onToggle={() => undefined}
+          />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('visit-icd-field-label')).toHaveClass('max-sm:hidden')
+    expect(screen.getByTestId('visit-channel-label')).toHaveClass('max-sm:hidden')
+    expect(screen.getByTestId('visit-primary-metadata')).toHaveClass('max-sm:col-end-3')
+    expect(screen.getByTestId('visit-stat-strip')).toHaveClass(
+      'col-start-2',
+      'row-start-1',
+      'max-sm:row-start-2',
+      'max-sm:col-end-4',
+      'max-sm:max-w-[200px]',
+      'overflow-visible',
+      'max-sm:overflow-hidden',
+    )
+    expect(screen.getByTestId('visit-context-row')).toHaveClass('max-sm:col-end-2')
+    expect(screen.getByTestId('visit-date-label')).toHaveTextContent('2026/08/12')
+    expect(screen.getByLabelText('J18.9 肺炎，未明示病原體')).toBeInTheDocument()
   })
 
   it('does not rerender an unchanged row when its parent list updates', () => {

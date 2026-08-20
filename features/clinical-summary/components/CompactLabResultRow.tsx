@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
-import { Info } from "lucide-react"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TapTooltip } from "@/src/shared/components/TapTooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -125,37 +123,36 @@ function CompactReferenceRange({
   referenceText?: string
   value: string
 }) {
-  if (!shouldShowReferenceRange(value, referenceText)) return null
+  if (!referenceText || !shouldShowReferenceRange(value, referenceText)) return null
+
+  // Most ranges are short clinical values such as "[3.5–5.1 mmol/L]" and
+  // should be readable without another tap. Only complex stratified ranges
+  // collapse to a tappable/hoverable label.
+  if (referenceText.length <= 22) {
+    return (
+      <span
+        data-testid="reference-range-inline"
+        className="shrink-0 whitespace-nowrap text-[0.6875rem] text-muted-foreground"
+      >
+        {referenceText}
+      </span>
+    )
+  }
 
   return (
-    <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="hidden min-w-0 flex-1 truncate text-[0.75rem] text-muted-foreground md:inline-block">
-            {referenceText}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="max-h-[50vh] max-w-[min(90vw,28rem)] overflow-y-auto whitespace-normal break-words text-xs leading-relaxed">
-          {referenceText}
-        </TooltipContent>
-      </Tooltip>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label="參考範圍"
-            className="shrink-0 -m-1 p-1 text-muted-foreground/70 hover:text-muted-foreground md:hidden"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Info className="h-3.5 w-3.5" aria-hidden />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="max-w-[min(88vw,22rem)] text-xs leading-relaxed">
-          <div className="font-medium text-foreground">參考範圍</div>
-          <div className="mt-0.5 whitespace-normal break-words text-muted-foreground">{referenceText}</div>
-        </PopoverContent>
-      </Popover>
-    </>
+    <TapTooltip
+      content={referenceText}
+      aria-label={`參考範圍 ${referenceText}`}
+      contentClassName="max-h-[50vh] max-w-[min(90vw,28rem)] overflow-y-auto whitespace-normal break-words text-xs leading-relaxed"
+      className="inline-flex min-w-0 max-w-[8rem] shrink sm:max-w-[12rem]"
+    >
+      <span
+        data-testid="reference-range-truncated"
+        className="min-w-0 truncate text-[0.6875rem] text-muted-foreground"
+      >
+        {referenceText}
+      </span>
+    </TapTooltip>
   )
 }
 
@@ -212,7 +209,7 @@ export function CompactLabResultRow({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        "flex w-full min-w-0 max-w-full items-center gap-x-1.5 overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5",
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border bg-muted/40 px-2 py-1 sm:flex sm:px-2.5 sm:py-1.5",
         abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
       )}
@@ -232,16 +229,22 @@ export function CompactLabResultRow({
         </Tooltip>
         {titleActions}
       </div>
-      <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
-      {afterValue}
-      <CompactReferenceRange referenceText={referenceText} value={value} />
-      {rangeUnassessed && (
-        <RangeUnassessedBadge
-          label={rangeUnassessedLabel}
-          tooltip={rangeUnassessedTooltip}
-        />
+      <div className="flex min-w-0 items-center justify-end gap-1.5 sm:flex-1 sm:justify-start">
+        <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
+        {afterValue}
+        <CompactReferenceRange referenceText={referenceText} value={value} />
+        {rangeUnassessed && (
+          <RangeUnassessedBadge
+            label={rangeUnassessedLabel}
+            tooltip={rangeUnassessedTooltip}
+          />
+        )}
+      </div>
+      {trailingContent && (
+        <div className="col-span-2 row-start-2 flex min-w-0 items-center justify-start overflow-hidden sm:col-auto sm:row-auto sm:shrink-0">
+          {trailingContent}
+        </div>
       )}
-      {trailingContent}
     </div>
   )
 }

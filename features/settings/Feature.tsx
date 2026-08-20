@@ -45,7 +45,7 @@ export function SettingsFeature() {
             <span className="truncate" title={(t.settings as any).display ?? '顯示與關於'}>{(t.settings as any).display ?? '顯示與關於'}</span>
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="ai" className="mt-4 space-y-6">
+        <TabsContent value="ai" className="mt-1 space-y-6 md:mt-4">
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <ModelAndKeySettings
@@ -55,7 +55,7 @@ export function SettingsFeature() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="display" className="mt-4 space-y-4">
+        <TabsContent value="display" className="mt-1 space-y-4 md:mt-4">
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <DisplaySettings />

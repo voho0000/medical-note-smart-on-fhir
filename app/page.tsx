@@ -20,7 +20,7 @@ import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layo
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
@@ -147,6 +147,139 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+  const leftPanelRef = useRef<HTMLElement | null>(null)
+  const detailOriginScrollRef = useRef<{
+    sourceId: string
+    viewport: HTMLElement
+    scrollTop: number
+    focusTarget: HTMLElement | null
+    anchorRowId: string | null
+    anchorOffsetTop: number | null
+  } | null>(null)
+  const detailOriginRestoreFrameRef = useRef<number | null>(null)
+  const pendingDetailOriginRestoreRef = useRef<string | null>(null)
+
+  const captureDetailOrigin = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (isLargeScreen) return
+    const eventTarget = event.target instanceof Element ? event.target : null
+    const action = eventTarget?.closest<HTMLElement>('[data-detail-source-id]')
+    const sourceId = action?.dataset.detailSourceId
+    if (!action || !sourceId) return
+
+    // Capture synchronously in the originating click. Waiting for the detail
+    // state effect is too late on iOS: the left panel may already be hidden
+    // and its scroll position clamped before that effect reads the viewport.
+    const viewport = action.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    if (!viewport) return
+    const anchorRow = action.closest<HTMLElement>('[data-row-id]')
+    detailOriginScrollRef.current = {
+      sourceId,
+      viewport,
+      scrollTop: viewport.scrollTop,
+      focusTarget: action,
+      anchorRowId: anchorRow?.dataset.rowId ?? null,
+      anchorOffsetTop: anchorRow
+        ? anchorRow.getBoundingClientRect().top - viewport.getBoundingClientRect().top
+        : null,
+    }
+  }, [isLargeScreen])
+
+  // A detail action originates in the clinical-summary panel. In the phone
+  // layout the shared detail pane lives behind the separate 「功能」 switcher,
+  // so merely updating the detail slot looks like a dead button. Reveal that
+  // panel for every newly requested detail; desktop keeps its split view.
+  useEffect(() => {
+    if (!detail || isLargeScreen) return
+    const alreadyCaptured = detailOriginScrollRef.current?.sourceId === detail.sourceId
+    const viewport = alreadyCaptured
+      ? null
+      : leftPanelRef.current?.querySelector<HTMLElement>(
+          '[role="tabpanel"][data-state="active"] [data-slot="scroll-area-viewport"]',
+        )
+    if (!alreadyCaptured && viewport) {
+      const focusTarget = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+      const anchorRow = focusTarget?.closest<HTMLElement>('[data-row-id]') ?? null
+      detailOriginScrollRef.current = {
+        sourceId: detail.sourceId,
+        viewport,
+        scrollTop: viewport.scrollTop,
+        focusTarget,
+        anchorRowId: anchorRow?.dataset.rowId ?? null,
+        anchorOffsetTop: anchorRow
+          ? anchorRow.getBoundingClientRect().top - viewport.getBoundingClientRect().top
+          : null,
+      }
+    }
+    setMobileView('right')
+  }, [detail, isLargeScreen, setMobileView])
+
+  useLayoutEffect(() => {
+    const sourceId = pendingDetailOriginRestoreRef.current
+    if (isLargeScreen || mobileView !== 'left' || !sourceId) return
+    const origin = detailOriginScrollRef.current
+    if (!origin || origin.sourceId !== sourceId) {
+      pendingDetailOriginRestoreRef.current = null
+      return
+    }
+
+    if (detailOriginRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(detailOriginRestoreFrameRef.current)
+    }
+
+    // The panel is visible again at this point. TanStack Virtual can publish
+    // several corrected measurements while rebuilding its visible window, so
+    // keep the exact scroll position and source row anchored during that short
+    // settling period. An explicit scroll event removes the old requirement
+    // for the clinician to nudge the page before the correct rows appear.
+    let framesLeft = 30
+    let focusRestored = false
+    const restoreOrigin = () => {
+      origin.viewport.scrollTop = origin.scrollTop
+      origin.viewport.dispatchEvent(new Event('scroll'))
+
+      const anchorRow = origin.anchorRowId
+        ? Array.from(origin.viewport.querySelectorAll<HTMLElement>('[data-row-id]'))
+            .find((row) => row.dataset.rowId === origin.anchorRowId) ?? null
+        : null
+      if (anchorRow && origin.anchorOffsetTop !== null) {
+        const currentOffset = anchorRow.getBoundingClientRect().top
+          - origin.viewport.getBoundingClientRect().top
+        const correction = currentOffset - origin.anchorOffsetTop
+        if (Number.isFinite(correction) && Math.abs(correction) > 0.5) {
+          origin.viewport.scrollTop += correction
+          origin.viewport.dispatchEvent(new Event('scroll'))
+        }
+      }
+
+      const focusTarget = origin.focusTarget?.isConnected
+        ? origin.focusTarget
+        : origin.viewport.querySelector<HTMLElement>(
+            `[data-detail-source-id="${CSS.escape(sourceId)}"]`,
+          )
+      if (!focusRestored && focusTarget) {
+        focusTarget.focus({ preventScroll: true })
+        focusRestored = true
+      }
+
+      framesLeft -= 1
+      if (framesLeft > 0) {
+        detailOriginRestoreFrameRef.current = window.requestAnimationFrame(restoreOrigin)
+      } else {
+        detailOriginRestoreFrameRef.current = null
+        pendingDetailOriginRestoreRef.current = null
+      }
+    }
+    restoreOrigin()
+
+    return () => {
+      if (detailOriginRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(detailOriginRestoreFrameRef.current)
+        detailOriginRestoreFrameRef.current = null
+      }
+    }
+  }, [isLargeScreen, mobileView])
 
   const cancelDeferredDetailClear = useCallback(() => {
     if (deferredDetailClearFrameRef.current !== null) {
@@ -164,6 +297,16 @@ function PageContent() {
     const sourceId = detail.sourceId
     cancelDeferredDetailClear()
 
+    // On phones the detail temporarily switches from the clinical browser to
+    // the separate 「功能」 panel. Closing is a back action, so return to the
+    // originating clinical panel immediately; the active left sub-tab and its
+    // scroll position stay mounted and therefore resume exactly where the
+    // clinician opened the detail.
+    if (!isLargeScreen) {
+      pendingDetailOriginRestoreRef.current = sourceId
+      setMobileView('left')
+    }
+
     // First paint: reveal the already-mounted feature panel and hide the trend.
     // The expensive chart/table cleanup runs only after the browser has shown
     // that response, so the button itself feels immediate.
@@ -176,9 +319,14 @@ function PageContent() {
         setClosingDetailSourceId(null)
       }, 0)
     })
-  }, [cancelDeferredDetailClear, clearDetail, detail])
+  }, [cancelDeferredDetailClear, clearDetail, detail, isLargeScreen, setMobileView])
 
-  useEffect(() => cancelDeferredDetailClear, [cancelDeferredDetailClear])
+  useEffect(() => () => {
+    cancelDeferredDetailClear()
+    if (detailOriginRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(detailOriginRestoreFrameRef.current)
+    }
+  }, [cancelDeferredDetailClear])
 
   useEffect(() => {
     if (!detail || !isLargeScreen) return
@@ -342,8 +490,11 @@ function PageContent() {
 
         {/* Left Panel - Clinical Summary */}
         <ClinicalWorkspacePanel
+          ref={leftPanelRef}
+          onClickCapture={captureDetailOrigin}
           aria-label={t.header.clinicalSummary}
           mobileActive={mobileView === 'left'}
+          preserveMobileLayoutWhenInactive={!isLargeScreen && detailVisible}
           desktopState={
             collapsed === 'left'
               ? 'collapsed'

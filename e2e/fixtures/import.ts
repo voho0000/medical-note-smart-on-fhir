@@ -73,7 +73,11 @@ export async function importBundle(
   // fixture the name is 王小明; for a real local bundle, just wait for the
   // patient-info heading instead of a specific name.
   if (bundlePath === SYNTHETIC_BUNDLE) {
-    await expect(page.getByText('王小明').first()).toBeVisible({ timeout: 20_000 })
+    // The phone workspace keeps both panels mounted and may restore the 功能
+    // panel as active. The patient context is still loaded correctly even when
+    // its left-panel copy is temporarily hidden, so wait for DOM attachment
+    // rather than coupling data readiness to the current responsive panel.
+    await expect(page.getByText('王小明').first()).toBeAttached({ timeout: 20_000 })
   }
   return bundlePath
 }

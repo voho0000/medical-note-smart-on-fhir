@@ -177,7 +177,7 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
   // remain sticky against the panel's own scrollport.
   if (feature.scrollMode === 'panel') {
     return (
-      <ClinicalTabContentFrame className="py-2">
+      <ClinicalTabContentFrame className="py-0.5 md:py-2">
         <Component />
       </ClinicalTabContentFrame>
     )
@@ -194,7 +194,7 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
   if (feature.id !== 'medical-chat') {
     return (
       <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]>div]:!block">
-        <ClinicalTabContentFrame className="py-2">
+        <ClinicalTabContentFrame className="py-0.5 md:py-2">
           <Component />
         </ClinicalTabContentFrame>
       </ScrollArea>
@@ -202,7 +202,7 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
   }
 
   return (
-    <ClinicalTabContentFrame className="h-full py-2">
+    <ClinicalTabContentFrame className="h-full py-0.5 md:py-2">
       <Component />
     </ClinicalTabContentFrame>
   )
@@ -458,7 +458,7 @@ function RightPanelContentInner() {
           key={feature.id}
           value={feature.id}
           data-tour={`right-content-${feature.id}`}
-          className={`${feature.contentClassName || 'flex-1 mt-1'} md:mt-0`}
+          className={`${feature.contentClassName || 'flex-1 mt-1'} max-md:!mt-0 md:mt-0`}
           forceMount={feature.forceMount || visitedTabs.has(feature.id) ? true : undefined}
         >
           <FeatureTabContent feature={feature} />

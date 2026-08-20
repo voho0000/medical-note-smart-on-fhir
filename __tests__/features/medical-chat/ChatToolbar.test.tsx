@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { ChatToolbar } from '@/features/medical-chat/components/ChatToolbar'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
@@ -11,6 +11,8 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         manageTemplates: 'Templates',
         patientDataOff: 'Do not use patient data',
         patientDataOffBadge: 'No chart',
+        patientDataOffShort: 'No chart',
+        patientDataOffExplanation: 'No chart: this conversation will not read the patient record.',
         patientDataOffEnable: 'Keep patient data out of this conversation',
         patientDataOffDisable: 'Restore the default data scope',
         exportAiExecution: 'Execution record',
@@ -43,16 +45,33 @@ const baseProps = {
   canExportAiExecution: false,
 }
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 describe('ChatToolbar patient-data badge', () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      value: ResizeObserverMock,
+    })
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it('uses a two-row mobile grid and returns to one row on wider screens', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  it('keeps every mobile composer tool in one compact row', () => {
     const { container } = render(<ChatToolbar {...baseProps} />)
 
     const toolbar = container.querySelector('[data-tour="chat-template-tools"]')
-    expect(toolbar).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto_auto]', 'md:flex')
+    expect(toolbar).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]', 'md:flex')
     expect(toolbar).not.toHaveClass('flex-wrap')
 
     const toggle = screen.getByTestId('chat-patient-data-toggle')
@@ -75,6 +94,30 @@ describe('ChatToolbar patient-data badge', () => {
     expect(screen.queryByTestId('chat-patient-data-toggle')).not.toBeInTheDocument()
   })
 
+  it('explains the short mobile label on long press without changing the privacy state', async () => {
+    jest.useFakeTimers()
+    render(<ChatToolbar {...baseProps} />)
+
+    const toggle = screen.getByTestId('chat-patient-data-toggle')
+    const pointerDown = createEvent.pointerDown(toggle)
+    Object.defineProperty(pointerDown, 'pointerType', { value: 'touch' })
+    fireEvent(toggle, pointerDown)
+    await act(async () => {
+      jest.advanceTimersByTime(550)
+    })
+
+    expect(await screen.findByTestId('chat-patient-data-help')).toHaveTextContent(
+      'No chart: this conversation will not read the patient record.',
+    )
+
+    fireEvent.pointerUp(toggle, { pointerType: 'touch' })
+    fireEvent.click(toggle)
+    expect(baseProps.onTogglePatientData).not.toHaveBeenCalled()
+
+    fireEvent.click(toggle)
+    expect(baseProps.onTogglePatientData).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the selected template name visible in the mobile toolbar', () => {
     render(
       <ChatToolbar
@@ -95,10 +138,8 @@ describe('ChatToolbar patient-data badge', () => {
     expect(screen.getByTestId('chat-template-insert')).toHaveAccessibleName(
       'Template：Clinical summary template',
     )
-    expect(screen.getByTestId('chat-patient-data-toggle')).toHaveClass(
-      'max-md:col-span-2',
-      '[html[data-keyboard-open=true]_&]:hidden',
-    )
+    expect(screen.getByTestId('chat-patient-data-toggle')).not.toHaveClass('max-md:col-span-2')
+    expect(screen.getByTestId('chat-patient-data-toggle')).toHaveClass('[html[data-keyboard-open=true]_&]:hidden')
     expect(screen.getByTestId('chat-ai-execution-export')).toHaveClass(
       '[html[data-keyboard-open=true]_&]:hidden',
     )

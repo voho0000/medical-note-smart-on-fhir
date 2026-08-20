@@ -1130,6 +1130,8 @@ export const zhTW = {
     characters: '字元',
     patientDataOff: '不使用病人資料',
     patientDataOffBadge: '不讀病歷',
+    patientDataOffShort: '不讀',
+    patientDataOffExplanation: '不讀病歷：開啟後，本次對話不會讀取病人病歷；再按一次可恢復。',
     patientDataOffEnable: '開啟後，這個對話不會提供病人資料給 AI',
     patientDataOffDisable: '關閉「不讀病歷」，恢復目前模型的預設資料範圍',
     cloudAiNotice: 'AI 會使用雲端服務 · 請避免傳送非必要的個人識別資訊',

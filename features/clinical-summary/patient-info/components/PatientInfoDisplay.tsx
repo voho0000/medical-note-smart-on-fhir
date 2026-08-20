@@ -24,7 +24,7 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
 
   return (
     <div className="text-sm space-y-2">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+      <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 sm:grid-cols-3 sm:gap-2">
         <span className="font-medium text-muted-foreground">{t.patient.name}：</span>
         <ValueWithSource
           value={patientInfo.name}
@@ -49,7 +49,7 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
         {patientInfo.id && (
           <>
             <span className="font-medium text-muted-foreground">ID：</span>
-            <span className="sm:col-span-2 text-muted-foreground">{patientInfo.id}</span>
+            <span className="min-w-0 break-all text-muted-foreground sm:col-span-2">{patientInfo.id}</span>
           </>
         )}
       </div>
@@ -63,7 +63,7 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
           <summary className="cursor-pointer text-muted-foreground select-none">
             {showMore ? t.patient.showLess : t.patient.showMore}
           </summary>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
+          <div className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 sm:grid-cols-3 sm:gap-2">
             {(patientInfo.identifiers ?? []).map((id, i) => (
               <FieldRow key={`id-${i}`} label={id.label} value={id.value} />
             ))}
