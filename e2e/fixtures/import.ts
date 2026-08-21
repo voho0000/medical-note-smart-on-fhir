@@ -20,16 +20,13 @@ export async function importBundle(
   page: Page,
   options: {
     bundlePath?: string
-    aiDecision?: 'manual' | 'auto'
   } = {},
 ) {
   const bundlePath = options.bundlePath || LOCAL_BUNDLE || SYNTHETIC_BUNDLE
-  const aiDecision = options.aiDecision ?? 'manual'
   // Preset prefs BEFORE the app boots so first-load is deterministic:
   // - zh-TW locale (tests assert Chinese strings)
   // - medical audience, already "selected"
-  // - first-run onboarding marked complete → the onboarding stepper (which fires
-  //   on first data load) reopens only the one-step, import-scoped AI question.
+  // - first-run onboarding marked complete
   await page.addInitScript(() => {
     localStorage.setItem('medical-note-locale', 'zh-TW')
     localStorage.setItem('medical-note-audience', 'medical')
@@ -53,22 +50,10 @@ export async function importBundle(
   await page.waitForFunction(() => (
     window as Window & { __mediprismaBundleSettled?: boolean }
   ).__mediprismaBundleSettled === true)
-  // Every real local import has its own decision. Keep general E2E fixtures
-  // deterministic and free of background AI by choosing the safe default.
-  if (aiDecision === 'auto') {
-    const auto = page.getByRole('button', { name: /^自動產生/ })
-    await expect(auto).toBeVisible({ timeout: 20_000 })
-    await auto.click()
-    await page.getByRole('checkbox', {
-      name: '我了解上述資料使用方式，並選擇啟用自動摘要與安全洞察',
-      exact: true,
-    }).click()
-    await page.getByRole('button', { name: '確認並啟用', exact: true }).click()
-  } else {
-    const importOnly = page.getByRole('button', { name: '只匯入並查看', exact: true })
-    await expect(importOnly).toBeVisible({ timeout: 20_000 })
-    await importOnly.click()
-  }
+  // Import no longer asks anything. The post-import AI decision dialog (「只匯入
+  // 並查看」/「自動產生」 plus its consent checkbox) was removed in v0.48 — auto
+  // generation is now a plain switch in the 醫療摘要 header, off by default, so
+  // import is silent and every spec starts free of background AI.
   // Patient panel renders once the local bundle is active. With the synthetic
   // fixture the name is 王小明; for a real local bundle, just wait for the
   // patient-info heading instead of a specific name.
@@ -80,6 +65,25 @@ export async function importBundle(
     await expect(page.getByText('王小明').first()).toBeAttached({ timeout: 20_000 })
   }
   return bundlePath
+}
+
+/**
+ * Turn on 醫療摘要 › 摘要設定 › 自動產生 through the real control.
+ *
+ * Specs that just need auto-run active across a reload should seed
+ * `medical-summary-prefs` in an init script instead — an init script re-runs on
+ * every navigation and would overwrite whatever this flipped. Use this when the
+ * switch itself is what you are testing.
+ */
+export async function enableSummaryAutoGenerate(page: Page) {
+  await page.getByRole('button', { name: '摘要設定', exact: true }).click()
+  const toggle = page.getByRole('switch', { name: '自動產生', exact: true })
+  await expect(toggle).toBeVisible({ timeout: 10_000 })
+  if ((await toggle.getAttribute('data-state')) !== 'checked') {
+    await toggle.click()
+  }
+  await expect(toggle).toHaveAttribute('data-state', 'checked')
+  await page.keyboard.press('Escape')
 }
 
 /**

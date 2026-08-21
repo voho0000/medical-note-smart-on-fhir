@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { importBundle } from '../fixtures/import'
+import { enableSummaryAutoGenerate, importBundle } from '../fixtures/import'
 import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 
 // The Medical Summary action generates all registered cards in one validated
@@ -72,13 +72,18 @@ test.describe('safety alerts (mocked)', () => {
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await summaryPanel.getByTestId('medical-summary-empty-generate').click()
 
-    await expect(summaryPanel.getByRole('heading', { name: '安全提醒與待處置事項' })).toBeVisible({ timeout: 20_000 })
+    // 「重新產生」 replaces the in-flight state only once the batch has finished
+    // parsing, so it is the one signal that every module has rendered. Asserting
+    // on the section heading first was a race: the card frame appears while the
+    // safety module is still streaming, and the default 5s that followed was not
+    // always enough for the alerts themselves.
+    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByRole('heading', { name: '安全提醒與待處置事項' })).toBeVisible()
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
     await expect(summaryPanel.getByText('高危', { exact: true })).toBeVisible()
     await expect(summaryPanel.getByText('中危', { exact: true })).toBeVisible()
     await expect(summaryPanel.getByText(/僅供臨床參考/)).toBeVisible()
-    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible()
   })
 
   test('model picker lists gated models and persists the unified summary choice', async ({ page }) => {
@@ -110,26 +115,44 @@ test.describe('safety alerts (mocked)', () => {
 
   test('auto-generation runs the integrated safety analysis', async ({ page }) => {
     await mockUnifiedSummary(page, true)
-    await importBundle(page, { aiDecision: 'auto' })
+    await importBundle(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
-    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
-    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible()
+  })
+
+  test('the 自動產生 switch turns background generation on', async ({ page }) => {
+    // The init script leaves it off, so nothing generates on import; flipping
+    // the switch is the only thing that can start a run. Covers the control
+    // itself, which the seeded specs above deliberately bypass.
+    await mockUnifiedSummary(page)
+    await importBundle(page)
+
+    const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
+    await expect(summaryPanel.getByTestId('medical-summary-empty-generate')).toBeVisible()
+
+    await enableSummaryAutoGenerate(page)
+
+    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
   })
 
   test('a cached unified summary is reused after a page reload — no re-bill', async ({ page }) => {
     await mockUnifiedSummary(page, true)
-    await importBundle(page, { aiDecision: 'auto' })
+    await importBundle(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
-    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
     expect(await getChatCallCount(page)).toBe(1)
 
     // The unified result comes back from encrypted cache. The mock counter
     // resets per navigation, so 0 proves the batch was not billed again.
     await page.reload()
-    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
     expect(await getChatCallCount(page)).toBe(0)
   })

@@ -945,7 +945,15 @@ export default function MedicalSummaryFeature() {
                   title={ms.autoGenerateTooltip}
                 >
                   <span className="font-medium text-foreground">{ms.autoGenerate}</span>
-                  <Switch checked={autoGenerate} onCheckedChange={setAutoGenerate} className="scale-90" />
+                  {/* A wrapping <label> does not name a button, and Radix renders the
+                      switch as role="switch" on a <button> — without this the
+                      control is announced with no name at all. */}
+                  <Switch
+                    checked={autoGenerate}
+                    onCheckedChange={setAutoGenerate}
+                    aria-label={ms.autoGenerate}
+                    className="scale-90"
+                  />
                 </label>
               ) : null}
               <Button
