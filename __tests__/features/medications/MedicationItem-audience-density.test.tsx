@@ -237,6 +237,50 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(screen.getByText('縮瞳劑')).toBeInTheDocument()
   })
 
+  describe('narrow-row date folding', () => {
+    // A 375pt phone gives the identity lane ~151px, and the full
+    // "start → end (N 天) · institution" needs ~205px. Rather than spend a
+    // third line on it — which cuts roughly a third of the medications visible
+    // per screen — the end date folds away, but ONLY where it can be rebuilt.
+    const dateText = () =>
+      screen.getByTestId('medication-schedule-date')
+
+    it('folds the end date behind a container query when the duration can rebuild it', () => {
+      mockAudience = 'medical'
+      render(<MedicationItem medication={medicationRow('AMOXICILLIN 500 MG')} />)
+
+      const foldable = within(dateText()).getByText(/→/)
+      expect(foldable).toHaveClass('hidden', '@min-[416px]:inline')
+      // The start and the duration stay unconditionally — together they are the
+      // same coverage window the range expressed.
+      expect(dateText()).toHaveTextContent('2026/7/22')
+      expect(dateText()).toHaveTextContent('21 天')
+      // Nothing is lost on a pointer device even while folded.
+      expect(dateText()).toHaveAttribute('title', '2026/7/22 → 2026/8/12 (21 天)')
+    })
+
+    it('keeps the end date visible when there is no duration to rebuild it', () => {
+      mockAudience = 'medical'
+      const medication = { ...medicationRow('AMOXICILLIN 500 MG'), durationDays: undefined }
+      render(<MedicationItem medication={medication} />)
+
+      // Without a duration the end date IS the coverage information, so folding
+      // it would drop the only record of when the supply runs out.
+      const end = within(dateText()).getByText(/→/)
+      expect(end).not.toHaveClass('hidden')
+      expect(dateText()).toHaveTextContent('2026/8/12')
+    })
+
+    it('leaves a stopped medication showing the date it ended', () => {
+      mockAudience = 'medical'
+      const medication = { ...medicationRow('AMOXICILLIN 500 MG'), isInactive: true }
+      render(<MedicationItem medication={medication} />)
+
+      expect(dateText()).toHaveTextContent('2026/8/12')
+      expect(within(dateText()).queryByText(/→/)).toBeNull()
+    })
+  })
+
   it('gives category and ICD separate wide-layout rows instead of competing for one line', () => {
     mockAudience = 'medical'
     const medication = {
@@ -254,21 +298,21 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑')
     const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
 
-    // Thresholds are px, not rem. The app's root font-size is 12px, so the
-    // rem spellings fired at 312/336/384/456px and dropped the three-lane
-    // layout onto a 329px phone card, where the identity lane had 151px and
-    // the date range overprinted the pharmacy. These are the widths the
-    // layout was designed for.
+    // Thresholds are px, not rem: the root font-size is 12px here, so a rem
+    // threshold would shift with the reader's font-size setting. The values are
+    // the ones this layout has always used in practice. Phones stay on the
+    // dense three-lane row — the date range, not the breakpoint, is what gives
+    // way when the identity lane runs short (see the folding test below).
     expect(container.firstElementChild).toHaveClass(
-      '@min-[416px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem]',
-      '@min-[448px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem]',
-      '@min-[512px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem]',
-      '@min-[608px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem]',
+      '@min-[312px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem]',
+      '@min-[336px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem]',
+      '@min-[384px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem]',
+      '@min-[456px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem]',
     )
-    expect(clinicalLane).toHaveClass('@min-[416px]:h-10', '@min-[416px]:grid-rows-2')
+    expect(clinicalLane).toHaveClass('@min-[312px]:h-10', '@min-[312px]:grid-rows-2')
     expect(category).toHaveClass('max-w-full')
     expect(category).not.toHaveClass('max-w-[10rem]')
-    expect(icd.parentElement).toHaveClass('@min-[416px]:row-start-2')
+    expect(icd.parentElement).toHaveClass('@min-[312px]:row-start-2')
     const icdTooltip = screen.getByTestId('medication-icd-tooltip')
     expect(icdTooltip).toHaveClass(
       'border-primary/20',

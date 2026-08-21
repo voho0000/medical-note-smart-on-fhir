@@ -3,12 +3,17 @@
 // Narrow: identity + supply stay first; clinical metadata moves below instead
 // of being clipped, so the same row remains usable inside the right pane.
 //
-// Container-query thresholds are deliberately in **px**, not rem. The app's
-// root font-size is 12px, so a `@min-[26rem]` written for a 16px baseline
-// fires at 312px — the three-lane layout then lands on a 329px phone card
-// where the identity lane gets 151px and the date range overprints the
-// pharmacy. px keeps the breakpoint anchored to the width the layout
-// actually needs, independent of the reader's font-size setting.
+// Container-query thresholds are in **px**, not rem: the app's root font-size
+// is 12px, so a rem threshold silently shifts with the reader's font-size
+// setting. The values are the ones the three-lane layout has always used in
+// practice (312/336/384/456), now stated literally.
+//
+// The identity lane is ~151px on a 375pt phone, and a full
+// "start → end (N 天) · institution" needs ~205px — that overflow is what used
+// to make the date overprint the pharmacy. Rather than spend a third line on
+// it (which costs roughly a third of the medications visible per screen), the
+// end date folds away below DATE_RANGE_END_MIN_WIDTH; see there for why that
+// is safe.
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
@@ -81,6 +86,11 @@ function sourceCalendarDate(value: string, locale: string): string {
     day: '2-digit',
   }).format(new Date(Number(year), Number(month) - 1, Number(day)))
 }
+
+/** Container width at which the identity lane can hold a full date RANGE
+ *  alongside the institution. Below it the end date folds away — see the
+ *  schedule builder for the conditions that make that lossless. */
+const DATE_RANGE_END_CLASS = 'hidden @min-[416px]:inline'
 
 function Sep() {
   return <span className="text-muted-foreground/40 select-none" aria-hidden>·</span>
@@ -164,23 +174,41 @@ export function MedicationItem({
     const startShort = shortDate(medication.startedOn)
     const endShort = shortDate(medication.endDate)
     if (startShort || endShort) {
-      let dateLabel: string
+      const durationTemplate = mt.durationCompact
+        ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d')
+      const durationLabel = medication.durationDays && !medication.isInactive
+        ? durationTemplate.replace('{n}', String(medication.durationDays))
+        : ''
+
+      let leadLabel: string
+      let rangeEnd = ''
       if (medication.isInactive && endShort) {
-        dateLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
+        leadLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
       } else if (startShort && endShort) {
-        dateLabel = `${startShort} → ${endShort}`
-      } else if (startShort) {
-        dateLabel = startShort
+        leadLabel = startShort
+        rangeEnd = ` → ${endShort}`
       } else {
-        dateLabel = endShort
+        leadLabel = startShort || endShort
       }
-      if (medication.durationDays && !medication.isInactive) {
-        const durationTemplate = mt.durationCompact
-          ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d')
-        dateLabel += ` (${durationTemplate.replace('{n}', String(medication.durationDays))})`
-      }
+      const durationSuffix = durationLabel ? ` (${durationLabel})` : ''
+      const dateLabel = `${leadLabel}${rangeEnd}${durationSuffix}`
+
+      // Folding the end date is only lossless when the duration is there to
+      // rebuild it: start + N 天 gives the same window, and the 「剩 N 天」 badge
+      // beside it already carries the part a clinician acts on. Without a
+      // duration the end date IS the coverage information, so it stays put and
+      // the row truncates instead. Inactive rows lead with the end date and
+      // never reach this branch.
+      const foldsEndDate = Boolean(rangeEnd && durationLabel)
+
       scheduleParts.push(
-        <span key="date" className="min-w-0 truncate" title={dateLabel}>{dateLabel}</span>,
+        <span key="date" data-testid="medication-schedule-date" className="min-w-0 truncate" title={dateLabel}>
+          {leadLabel}
+          {rangeEnd ? (
+            <span className={foldsEndDate ? DATE_RANGE_END_CLASS : undefined}>{rangeEnd}</span>
+          ) : null}
+          {durationSuffix}
+        </span>,
       )
     }
   }
@@ -232,7 +260,7 @@ export function MedicationItem({
       ref={anchorRef}
       data-medication-row-layout="three-lane"
       className={cn(
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden px-3 py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[416px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem] @min-[448px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem] @min-[512px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem] @min-[608px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem] @min-[608px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden px-3 py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
         grouped
           ? "rounded-none border-0 bg-transparent"
           : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
@@ -278,9 +306,9 @@ export function MedicationItem({
           gains space progressively at 28rem, 32rem, and 38rem. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden @min-[416px]:col-span-1 @min-[416px]:col-start-2 @min-[416px]:row-start-1 @min-[416px]:h-10 @min-[416px]:grid-cols-1 @min-[416px]:grid-rows-2 @min-[416px]:gap-x-0"
+        className="col-span-2 row-start-2 grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1 @min-[312px]:h-10 @min-[312px]:grid-cols-1 @min-[312px]:grid-rows-2 @min-[312px]:gap-x-0"
       >
-        <div className="col-start-2 row-start-1 flex h-5 min-w-0 items-center justify-end gap-1 overflow-hidden @min-[416px]:col-start-1 @min-[416px]:justify-start">
+        <div className="col-start-2 row-start-1 flex h-5 min-w-0 items-center justify-end gap-1 overflow-hidden @min-[312px]:col-start-1 @min-[312px]:justify-start">
           {medication.category && (
             <span
               title={medication.category}
@@ -331,7 +359,7 @@ export function MedicationItem({
           )}
         </div>
 
-        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center overflow-hidden @min-[416px]:row-start-2">
+        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center overflow-hidden @min-[312px]:row-start-2">
           {isMedical && medication.icdCode && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -367,7 +395,7 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[416px]:col-start-3"
+        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[312px]:col-start-3"
       >
         <div className="flex h-5 items-center">
           <Badge
