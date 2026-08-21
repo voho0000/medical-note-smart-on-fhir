@@ -25,5 +25,12 @@ export const clinicalIcdDescriptionClass =
 export const clinicalTooltipSurfaceClass =
   "border border-primary/20 bg-secondary text-secondary-foreground shadow-lg shadow-primary/10 [&_svg]:bg-secondary! [&_svg]:fill-secondary!"
 
+// Sits directly beside an h-5 ICD chip, so it stays that chip's sibling in
+// height — an earlier 36px square turned the whole diagnosis line into a tall,
+// uneven strip. Padding cannot separate ink from target here (border and
+// background paint on the padding box), so the finger area comes from an
+// invisible ::before that reaches past the line. That only works because the
+// collapsed diagnosis row now clips on x with `overflow-x-clip` instead of
+// `overflow-hidden`: hidden would force the y axis to auto and swallow it.
 export const clinicalIcdMoreButtonClass =
-  "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 py-0 text-[0.6875rem] max-md:h-[36px] max-md:min-w-[36px] text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+  "relative inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 py-0 text-[0.6875rem] max-md:min-w-[2.75rem] max-md:px-2 max-md:before:absolute max-md:before:inset-x-0 max-md:before:-inset-y-[9px] max-md:before:content-[''] text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

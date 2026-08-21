@@ -384,13 +384,13 @@ function VisitItemComponent({
             data-testid="visit-context-row"
             className={cn(
               "col-start-1 row-start-2 mt-0.5 flex min-w-0 items-end justify-between gap-2 text-sm leading-5 max-sm:col-end-2 max-sm:col-start-1",
-              icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
+              icdExpanded ? "items-start overflow-visible" : "items-center overflow-x-clip",
             )}
           >
             <div
               className={cn(
                 "flex min-w-0 flex-1 gap-1",
-                icdExpanded ? "items-start overflow-visible" : "items-center overflow-hidden",
+                icdExpanded ? "items-start overflow-visible" : "items-center overflow-x-clip",
               )}
             >
               {visit.department && (
@@ -426,7 +426,7 @@ function VisitItemComponent({
                       "min-w-0 gap-1 align-middle",
                       icdExpanded
                         ? "flex flex-1 flex-wrap items-start overflow-visible"
-                        : "inline-flex items-center overflow-hidden",
+                        : "inline-flex items-center overflow-x-clip",
                     )}
                   >
                     {/* Default: primary only. After explicit expansion, wrap
