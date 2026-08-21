@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
+import { type Page } from '@playwright/test'
 import { enableSummaryAutoGenerate, importBundle } from '../fixtures/import'
 import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 

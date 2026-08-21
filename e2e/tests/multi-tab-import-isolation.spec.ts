@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 import path from 'node:path'
 import { importBundle, SYNTHETIC_BUNDLE } from '../fixtures/import'
 

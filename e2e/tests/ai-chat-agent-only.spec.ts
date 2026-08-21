@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 import { chatPanel, importBundle, openChatInput } from '../fixtures/import'
 
 test.describe('AI chat agent-only UI', () => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 import { importBundle } from '../fixtures/import'
 
 // FHIR-generic regression: the 問題清單 card must show conditions regardless of

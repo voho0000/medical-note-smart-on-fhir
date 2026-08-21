@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from '../fixtures/test'
 
 test.describe('mobile visit row layout', () => {
   test.use({ viewport: { width: 390, height: 844 } })

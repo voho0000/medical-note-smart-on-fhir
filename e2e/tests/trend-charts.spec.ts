@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
+import { type Page } from '@playwright/test'
 import { importBundle } from '../fixtures/import'
 
 async function openReportsSubTab(page: Page, subTab: string) {

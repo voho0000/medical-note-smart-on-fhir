@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from '../fixtures/test'
 import { importBundle } from '../fixtures/import'
 
 test.describe('mobile report result row layout', () => {

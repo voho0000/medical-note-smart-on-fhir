@@ -29,8 +29,14 @@ jobs:
           # The dev server (next dev) needs the public Firebase config or
           # getAuth() throws at module load and the whole app white-screens.
           # These NEXT_PUBLIC_* values ship in the deployed bundle (not secret);
-          # mirrored from ci.yml so the app boots. The E2E flows themselves are
-          # client-only and don't exercise Firebase.
+          # mirrored from ci.yml so the app boots.
+          #
+          # The app DOES reach for Firebase on load — it mints an anonymous
+          # session for the free proxy tier — so the suite intercepts that and
+          # answers it locally (e2e/fixtures/firebase-auth.ts). Without it every
+          # run created real anonymous accounts in the production project and
+          # eventually tripped the sign-up rate limit, which is what made the
+          # AI specs fail in a block and the whole run take 40+ minutes.
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 import { importBundle } from '../fixtures/import'
 
 // Phase 0 smoke: proves the whole harness works end-to-end — the dev server

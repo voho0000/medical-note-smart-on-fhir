@@ -41,6 +41,11 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `ai-chat-agent-only.spec.ts` | Single Agent path and locked-model settings route |
 | `ai-chat-fhir-tools.spec.ts` | Full Chat → tool call → imported FHIR data → tool result → final-answer loop for imaging and semantic lab categories |
 | `ai-chat-stream.spec.ts` | Markdown streaming, large-block responsiveness and idle timeout |
+| `multi-tab-import-isolation.spec.ts` | Bundle and AI-cache ownership across two MediPrisma tabs |
+| `mobile-report-row-layout.spec.ts` | Compact lab row keeps value and source metadata legible from 320 to 1440px |
+| `mobile-visit-layout.spec.ts` | Visit row statistics at phone and desktop widths |
+| `mobile-back-gesture.spec.ts` | Android back／iOS edge swipe closes the top phone layer instead of the app |
+| `firebase-isolation.spec.ts` | The anonymous session is served locally, never from the production project |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
 
@@ -87,15 +92,38 @@ npm run test:e2e:emulated
 
 Running this command in the app repo alone requires the emulators to already be available.
 
+## Firebase isolation
+
+The app mints an anonymous Firebase session on any load without one — that is
+what makes the free proxy tier work — so the suite used to call
+`accounts:signUp` against the PRODUCTION project once per test. That littered
+the project with disposable accounts, and when the sign-up rate limit tripped
+every AI spec failed together with `TOO_MANY_ATTEMPTS_TRY_LATER` and stayed
+failing until the quota reset (the symptom: chat specs timing out on a 傳送
+button that never enables, because `canUseChat` needs
+`apiKeyAvailable || user || isAnonymous`).
+
+`fixtures/firebase-auth.ts` now serves that session locally — identitytoolkit
+is answered from the fixture, securetoken too, and the Firestore quota
+listener is cut. It is wired in `fixtures/test.ts`, which is why specs import
+`test`/`expect` from there and not from `@playwright/test`.
+`firebase-isolation.spec.ts` asserts it is still in effect.
+
+For the REAL chain (anonymous sign-in -> ID token -> proxy header), use the
+emulator config above.
+
 ## Writing a test
 
-1. Reuse `importBundle(page)` unless the test specifically covers Welcome／Demo.
-2. Prefer roles, accessible names and `data-testid` over CSS structure.
-3. Scope chat messages to `chatPanel(page)`; several other features render `.prose`.
-4. Call `mockAiStream()` before the first navigation or Bundle import.
-5. Avoid arbitrary sleeps; wait for user-visible state or a request count.
-6. Keep tests independent and safe for full parallelism.
-7. Update this scope table when adding a new spec.
+1. Import `test` and `expect` from `../fixtures/test`, never straight from
+   `@playwright/test` — that is what keeps the run off the real Firebase
+   project. Type-only imports from `@playwright/test` are fine.
+2. Reuse `importBundle(page)` unless the test specifically covers Welcome／Demo.
+3. Prefer roles, accessible names and `data-testid` over CSS structure.
+4. Scope chat messages to `chatPanel(page)`; several other features render `.prose`.
+5. Call `mockAiStream()` before the first navigation or Bundle import.
+6. Avoid arbitrary sleeps; wait for user-visible state or a request count.
+7. Keep tests independent and safe for full parallelism.
+8. Update the coverage table above when adding a new spec.
 
 ## CI
 

@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test } from '../fixtures/test'
+import { type Locator, type Page } from '@playwright/test'
 
 declare global {
   interface Window {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 
 // The "試用資料 / 示範病人" welcome option loads the committed, de-identified
 // demo bundle (public/demo/demo-bundle.json) through the normal import path.

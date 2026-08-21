@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../fixtures/test'
 import { importBundle, openChatInput, chatPanel } from '../fixtures/import'
 import { mockAiStream, getLongTasks, resetLongTasks, STREAM_PROBE_MARKER } from '../fixtures/mock-stream'
 
