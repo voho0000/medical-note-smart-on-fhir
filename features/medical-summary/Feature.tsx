@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Bug, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
+import { ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
@@ -64,6 +64,7 @@ import {
   getSummaryGenerationActivityState,
   SummaryGenerationButton,
 } from "./components/SummaryGenerationButton"
+import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
 import { SourceSup } from "./components/SourceSup"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
@@ -979,24 +980,15 @@ export default function MedicalSummaryFeature() {
                 </Button>
               ) : null}
               <div className="flex justify-end border-t pt-1">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  data-testid="medical-summary-ai-diagnostics-export"
-                  className="h-6 w-6 text-muted-foreground opacity-35 transition-opacity hover:opacity-100"
+                <AiDiagnosticsButton
+                  hasRecords={visibleAiDiagnostics.length > 0}
+                  availableLabel={ms.exportAiDiagnosticsTitle}
+                  unavailableLabel={ms.exportAiDiagnosticsUnavailable}
                   onClick={() => {
                     setSummarySettingsOpen(false)
                     setDiagnosticsOpen(true)
                   }}
-                  disabled={visibleAiDiagnostics.length === 0}
-                  title={visibleAiDiagnostics.length > 0
-                    ? ms.exportAiDiagnosticsTitle
-                    : ms.exportAiDiagnosticsUnavailable}
-                  aria-label={ms.exportAiDiagnosticsTitle}
-                >
-                  <Bug className="h-3 w-3" />
-                </Button>
+                />
               </div>
             </PopoverContent>
           </Popover>
