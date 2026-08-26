@@ -409,7 +409,6 @@ export const en = {
 
   ipsExport: {
     hubTitle: 'Export health data',
-    hubDescription: 'Choose a purpose first, then decide which data and format to use.',
     aiUseTab: 'Paste into AI',
     institutionTab: 'Download files',
     emrTab: 'Back to record',
@@ -606,6 +605,8 @@ export const en = {
       labsEmpty: 'No labs selected in this range.',
       reportsTitle: 'Studies & reports',
       reportsMeta: '{selected} of {total} selected',
+      selectAll: 'Select all',
+      selectNone: 'Clear all',
       reportsEmpty: 'No reports selected in this range.',
       copyLabs: 'Copy labs',
       copyReports: 'Copy studies',
@@ -1069,6 +1070,7 @@ export const en = {
       urine: 'Urine',
       bloodgas: 'BG',
       serology: 'Serology',
+      microbio: 'Micro',
       // Catch-all for labs not in the five main panels — keeps
       // uncategorised results from rendering under the previous group's
       // header in the visit-history detail view.

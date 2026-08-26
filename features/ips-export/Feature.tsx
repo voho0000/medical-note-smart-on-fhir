@@ -124,28 +124,29 @@ export default function IpsExportFeature() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{x.hubDescription}</p>
-      </div>
-      <Tabs defaultValue="ai" className="space-y-5">
+      <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
+      <Tabs defaultValue={showEmrTab ? "emr" : "ai"} className="space-y-5">
         <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
-          <TabsTrigger value="ai" className={SUBTAB_TRIGGER_CLASSES}>{x.aiUseTab}</TabsTrigger>
-          <TabsTrigger value="institution" className={SUBTAB_TRIGGER_CLASSES}>{x.institutionTab}</TabsTrigger>
+          {/* Clinicians open this hub to get data back into the chart far more
+              often than to hand it to an AI or download a file, so 帶回紀錄
+              leads and opens by default. 民眾 have no such tab and still land
+              on 貼給 AI. */}
           {showEmrTab && (
             <TabsTrigger value="emr" className={SUBTAB_TRIGGER_CLASSES}>{x.emrTab}</TabsTrigger>
           )}
+          <TabsTrigger value="ai" className={SUBTAB_TRIGGER_CLASSES}>{x.aiUseTab}</TabsTrigger>
+          <TabsTrigger value="institution" className={SUBTAB_TRIGGER_CLASSES}>{x.institutionTab}</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="ai">
-          <AiHandoffPanel />
-        </TabsContent>
 
         {showEmrTab && (
           <TabsContent value="emr">
             <EmrHandoffPanel />
           </TabsContent>
         )}
+
+        <TabsContent value="ai">
+          <AiHandoffPanel />
+        </TabsContent>
 
         <TabsContent value="institution">
           <IpsExportPreview

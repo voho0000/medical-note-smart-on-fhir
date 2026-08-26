@@ -1,6 +1,6 @@
 "use client"
 
-// 帶回病歷 — build a plain-text block from the patient's labs and exam reports
+// 帶回紀錄 — build a plain-text block from the patient's labs and exam reports
 // and hand it to the clipboard so the clinician can paste it into their own
 // EMR's SOAP "O" field. Clipboard is the whole transport: there is no write-back
 // channel into the hospital system, so the text format IS the feature (see
@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy, Languages, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { InfoHint } from '@/src/shared/components/InfoHint'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
@@ -20,6 +21,8 @@ import {
   buildEmrLabText,
   buildEmrReportText,
   collectEmrReports,
+  filterEmrReportsByRange,
+  hasEmrLabData,
   joinEmrSections,
   summarizeEmrLabPanels,
   translationToPlainText,
@@ -51,9 +54,15 @@ export function EmrHandoffPanel() {
   const { data } = useClinicalDataQuery()
   const { copy } = useCopyToClipboard()
 
-  // 「最近一次」 is the default: the smallest, least surprising paste. Widening
-  // the window is one click; unpicking twenty lines out of a chart is not.
-  const [range, setRange] = useState<EmrRange>('last')
+  // Labs and studies get their own window on purpose. In clinic they are asked
+  // for on different timescales — the labs you want as a recent trend, while
+  // the CT you need to quote may be the only one this year — and one shared
+  // range forces a round trip every time those disagree.
+  //
+  // 「最近一次」 is the default for both: the smallest, least surprising paste.
+  // Widening is one click; unpicking twenty lines out of a chart is not.
+  const [labRange, setLabRange] = useState<EmrRange>('last')
+  const [reportRange, setReportRange] = useState<EmrRange>('last')
   const [preset, setPreset] = useState<EmrPreset>('standard')
   // Tracked as EXCLUSIONS so everything inside a newly chosen window is
   // selected by default — an inclusion set would silently drop the panels and
@@ -78,8 +87,8 @@ export function EmrHandoffPanel() {
   const pivots = useMemo(() => buildLabPivots(data?.observations ?? []), [data?.observations])
 
   const panels = useMemo(
-    () => summarizeEmrLabPanels(pivots, categoryLabels, range),
-    [pivots, categoryLabels, range],
+    () => summarizeEmrLabPanels(pivots, categoryLabels, labRange),
+    [pivots, categoryLabels, labRange],
   )
 
   const selectedPanels = useMemo(() => {
@@ -93,18 +102,28 @@ export function EmrHandoffPanel() {
       pivots,
       categoryLabels,
       selected: selectedPanels,
-      range,
+      range: labRange,
       preset,
       omittedLabel: x.omitted,
       drawCountLabel: x.drawCount,
     }),
-    [pivots, categoryLabels, selectedPanels, range, preset, x.omitted, x.drawCount],
+    [pivots, categoryLabels, selectedPanels, labRange, preset, x.omitted, x.drawCount],
+  )
+
+  // Collected once, windowed separately: a range that happens to select nothing
+  // must not take the section — and the range control inside it — off screen,
+  // or the user is stranded with no way to widen it again.
+  const allReports = useMemo(
+    () => collectEmrReports(data?.diagnosticReports ?? []),
+    [data?.diagnosticReports],
   )
 
   const reports = useMemo(
-    () => collectEmrReports(data?.diagnosticReports ?? [], { range }),
-    [data?.diagnosticReports, range],
+    () => filterEmrReportsByRange(allReports, reportRange),
+    [allReports, reportRange],
   )
+
+  const hasLabData = useMemo(() => hasEmrLabData(pivots), [pivots])
 
   const selectedReports = useMemo(
     () => reports.filter((report) => !excludedReports[report.id]),
@@ -119,8 +138,8 @@ export function EmrHandoffPanel() {
   }, [reportLanguage, selectedReports, translations])
 
   const reportText = useMemo(
-    () => buildEmrReportText(selectedReports, preset, translatedBodies),
-    [selectedReports, preset, translatedBodies],
+    () => buildEmrReportText(selectedReports, translatedBodies),
+    [selectedReports, translatedBodies],
   )
 
   // Only write when something actually changed: this runs from a child effect,
@@ -141,6 +160,28 @@ export function EmrHandoffPanel() {
       return { ...prev, [id]: next }
     })
   }, [])
+
+  const allPanelsSelected = panels.length > 0 && panels.every((panel) => selectedPanels[panel.id])
+
+  const toggleAllPanels = useCallback(() => {
+    setExcludedPanels((prev) => {
+      const next = { ...prev }
+      for (const panel of panels) next[panel.id] = allPanelsSelected
+      return next
+    })
+  }, [panels, allPanelsSelected])
+
+  const allReportsSelected = reports.length > 0 && selectedReports.length === reports.length
+
+  const toggleAllReports = useCallback(() => {
+    setExcludedReports((prev) => {
+      const next = { ...prev }
+      // Only the reports the current window shows — a hidden report's state is
+      // the user's earlier choice, not something this button is asked about.
+      for (const report of reports) next[report.id] = allReportsSelected
+      return next
+    })
+  }, [reports, allReportsSelected])
 
   const pendingTranslations = useMemo(
     () => selectedReports.filter((report) => !translations[report.id]?.text),
@@ -210,50 +251,19 @@ export function EmrHandoffPanel() {
     { id: 'full', label: x.presetFull },
   ]
 
-  const hasAnything = panels.length > 0 || reports.length > 0
+  const hasAnything = hasLabData || allReports.length > 0
 
   return (
     <div className="space-y-4">
-      <div>
+      {/* The prose that explains the text rules lives in the ⓘ — reference
+          material earns a tooltip, not a permanent line above a dense panel. */}
+      <div className="flex items-center gap-1.5">
         <h2 className="text-lg font-semibold tracking-tight">{x.pageTitle}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{x.pageDescription}</p>
+        <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
+          <span className="block">{x.pageDescription}</span>
+          <span className="mt-2 block">{x.presetHint}</span>
+        </InfoHint>
       </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{x.rangeLabel}</span>
-          <div className={SEGMENT_GROUP} role="group" aria-label={x.rangeLabel}>
-            {rangeOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setRange(option.id)}
-                aria-pressed={range === option.id}
-                className={cn(SEGMENT_BASE, range === option.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{x.presetLabel}</span>
-          <div className={SEGMENT_GROUP} role="group" aria-label={x.presetLabel}>
-            {presetOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setPreset(option.id)}
-                aria-pressed={preset === option.id}
-                className={cn(SEGMENT_BASE, preset === option.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <p className="-mt-1 text-xs leading-relaxed text-muted-foreground">{x.presetHint}</p>
 
       {!hasAnything && (
         <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
@@ -261,7 +271,7 @@ export function EmrHandoffPanel() {
         </div>
       )}
 
-      {panels.length > 0 && (
+      {hasLabData && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">
@@ -271,12 +281,20 @@ export function EmrHandoffPanel() {
                   .replace('{panels}', String(panels.filter((panel) => selectedPanels[panel.id]).length))
                   .replace('{draws}', String(drawCount))}
               </span>
+              <SelectAllToggle
+                visible={panels.length > 1}
+                allSelected={allPanelsSelected}
+                onToggle={toggleAllPanels}
+                selectAllLabel={x.selectAll}
+                selectNoneLabel={x.selectNone}
+              />
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="gap-1.5"
+              disabled={!labText.trim()}
               onClick={() => doCopy('labs', labText)}
             >
               {copiedKey === 'labs' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -284,7 +302,30 @@ export function EmrHandoffPanel() {
             </Button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          {/* 格式 shapes how lab VALUES are written, and nothing else — so it
+              lives inside this card. Above both cards it read as governing the
+              studies section too. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <SegmentedControl
+              label={x.rangeLabel}
+              value={labRange}
+              options={rangeOptions}
+              onChange={setLabRange}
+            />
+            <SegmentedControl
+              label={x.presetLabel}
+              value={preset}
+              options={presetOptions}
+              onChange={setPreset}
+            />
+          </div>
+
+          {/* One line, scrolled rather than wrapped. Eleven CJK chips do not fit
+              a right-panel width at any padding worth having, and a second row
+              pushed the preview down for no gain. Same strip idiom as the
+              reports tab bar: `scroll-hint-x` fades an edge only while there is
+              more to reach, so nothing hides silently. */}
+          <div className="scroll-hint-x mt-3 flex min-w-0 flex-nowrap touch-pan-x gap-1 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {panels.map((panel) => {
               const active = !!selectedPanels[panel.id]
               return (
@@ -295,21 +336,17 @@ export function EmrHandoffPanel() {
                   aria-checked={active}
                   onClick={() => setExcludedPanels((prev) => ({ ...prev, [panel.id]: active }))}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors',
+                    'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors',
                     active
                       ? 'border-primary bg-primary/10 font-medium text-primary'
                       : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   <span>{panel.label}</span>
-                  <span
-                    className={cn(
-                      'min-w-4 rounded-full px-1 text-center text-[0.625rem] tabular-nums',
-                      active ? 'bg-primary/15' : 'bg-muted',
-                    )}
-                  >
-                    {panel.drawCount}
-                  </span>
+                  {/* Plain number, no pill. Eleven panels each carrying a
+                      filled badge pushed the row onto a second line and made
+                      the counts louder than the labels they annotate. */}
+                  <span className="text-[0.6875rem] tabular-nums opacity-60">{panel.drawCount}</span>
                 </button>
               )
             })}
@@ -319,7 +356,7 @@ export function EmrHandoffPanel() {
         </section>
       )}
 
-      {reports.length > 0 && (
+      {allReports.length > 0 && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">
@@ -329,12 +366,20 @@ export function EmrHandoffPanel() {
                   .replace('{selected}', String(selectedReports.length))
                   .replace('{total}', String(reports.length))}
               </span>
+              <SelectAllToggle
+                visible={reports.length > 1}
+                allSelected={allReportsSelected}
+                onToggle={toggleAllReports}
+                selectAllLabel={x.selectAll}
+                selectNoneLabel={x.selectNone}
+              />
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="gap-1.5"
+              disabled={!reportText.trim()}
               onClick={() => doCopy('reports', reportText)}
             >
               {copiedKey === 'reports' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -342,21 +387,22 @@ export function EmrHandoffPanel() {
             </Button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">{x.reportLangLabel}</span>
-            <div className={SEGMENT_GROUP} role="group" aria-label={x.reportLangLabel}>
-              {languageOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setReportLanguage(option.id)}
-                  aria-pressed={reportLanguage === option.id}
-                  className={cn(SEGMENT_BASE, reportLanguage === option.id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+          <div className="mt-3">
+            <SegmentedControl
+              label={x.rangeLabel}
+              value={reportRange}
+              options={rangeOptions}
+              onChange={setReportRange}
+            />
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <SegmentedControl
+              label={x.reportLangLabel}
+              value={reportLanguage}
+              options={languageOptions}
+              onChange={setReportLanguage}
+            />
             {reportLanguage === 'translated' && pendingTranslations.length > 0 && (
               <Button
                 type="button"
@@ -387,7 +433,12 @@ export function EmrHandoffPanel() {
             </>
           )}
 
-          <div className="mt-2 flex flex-col">
+          {/* A year of studies can be twenty rows, which pushed the text you
+              actually came here to copy off the bottom of the panel. Cap the
+              list and let it scroll on its own; it collapses to content height
+              when there are only a few. Deliberately NOT `overscroll-contain` —
+              reaching the end must keep scrolling the panel, not dead-end. */}
+          <div className="mt-2 flex max-h-56 flex-col overflow-y-auto">
             {reports.map((report) => {
               const active = !excludedReports[report.id]
               const translation = translations[report.id] ?? EMPTY_TRANSLATION
@@ -434,7 +485,7 @@ export function EmrHandoffPanel() {
           <span className="text-xs text-muted-foreground">
             {x.footerMeta.replace('{chars}', String(allText.length))}
           </span>
-          <Button type="button" className="gap-2 px-6" onClick={() => doCopy('all', allText)}>
+          <Button type="button" className="gap-2 px-6" disabled={!allText.trim()} onClick={() => doCopy('all', allText)}>
             {copiedKey === 'all' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copiedKey === 'all' ? x.copiedAll : x.copyAll}
           </Button>
@@ -459,6 +510,76 @@ function PlainTextPreview({ text, empty, testId }: { text: string; empty: string
       )}
     >
       {text.trim() ? text : empty}
+    </div>
+  )
+}
+
+/** 全選 / 全不選 for a section's own list. Both sections own one — the same
+ *  reason SegmentedControl exists: a hand-copied second instance is the one
+ *  that never gets made. */
+function SelectAllToggle({
+  visible,
+  allSelected,
+  onToggle,
+  selectAllLabel,
+  selectNoneLabel,
+}: {
+  visible: boolean
+  allSelected: boolean
+  onToggle: () => void
+  selectAllLabel: string
+  selectNoneLabel: string
+}) {
+  if (!visible) return null
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="text-xs text-primary underline-offset-2 hover:underline"
+    >
+      {allSelected ? selectNoneLabel : selectAllLabel}
+    </button>
+  )
+}
+
+/**
+ * The panel's one control shape: a label plus a bordered group of mutually
+ * exclusive chips. Four controls used to repeat this markup verbatim, which is
+ * how the 時間範圍 group ended up living only above the labs card — the copy
+ * that reports needed was simply never made.
+ */
+function SegmentedControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: ReadonlyArray<{ id: T; label: string }>
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className={SEGMENT_GROUP} role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+            aria-pressed={value === option.id}
+            className={cn(
+              SEGMENT_BASE,
+              value === option.id
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

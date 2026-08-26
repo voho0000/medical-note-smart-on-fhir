@@ -21,6 +21,7 @@
 import { formatReportText } from '@/src/shared/utils/report-text-format'
 import { markdownToPlainText } from '@/src/shared/utils/markdown-to-text'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
+import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 import type { LabCell, LabPivot } from '@/src/shared/utils/lab-pivot.utils'
 
 /** 'last' / 'last3' count DRAWS (a panel's own most recent collection days);
@@ -338,25 +339,38 @@ function formatNarrative(raw: string): string {
 }
 
 /**
- * Reports with real narrative text inside the window, newest first. Lab
- * DiagnosticReports carry their values on linked Observations and no
- * narrative, so they drop out here and stay in the lab section where they
- * belong.
+ * EVERY exam report with real narrative text, newest first — no window applied.
+ *
+ * "Has narrative" alone is NOT the test for what belongs here. Most lab
+ * DiagnosticReports carry their values on linked Observations and no narrative,
+ * so they fall out on their own — but microbiology does not: a culture reports
+ * free text ("No Mycobacterium tuberculosis complex isolated"), which looks
+ * exactly like an exam narrative. Those are 檢驗, and the app already says so —
+ * the reports list files them under 檢驗 — so this defers to that same
+ * classifier rather than guessing from the text.
+ *
+ * Specifically `inferReportDisplayGroup`, the one the reports tabs themselves
+ * use: it knows the pathology paths (pathology category codes, NHI 病理 order
+ * codes, order-title patterns) that the coarser report-level classifier folds
+ * into "imaging" or misses entirely. Sharing it is what keeps this section and
+ * the 病理 tab from disagreeing about the same report.
+ *
+ * Extraction and windowing are separate on purpose: the caller needs to know
+ * "does this patient have any reports at all" (so the section, and the range
+ * control inside it, stay on screen) independently of what the current range
+ * happens to select.
  */
-export function collectEmrReports(
-  diagnosticReports: any[],
-  options: { range: EmrRange; now?: Date },
-): EmrReportItem[] {
-  const cutoff = emrRangeCutoff(options.range, options.now)
+export function collectEmrReports(diagnosticReports: any[]): EmrReportItem[] {
   const items: EmrReportItem[] = []
   const seen = new Set<string>()
 
   for (const dr of diagnosticReports || []) {
+    const group = inferReportDisplayGroup(dr)
+    if (group === 'lab' || group === 'vitals') continue
     const raw = reportNarrative(dr)
     if (!raw) continue
     const date = (dr?.effectiveDateTime || dr?.issued || '').slice(0, 10)
     if (!date) continue
-    if (cutoff && date < cutoff) continue
     const name = reportTitle(dr)
     if (!name) continue
 
@@ -370,18 +384,39 @@ export function collectEmrReports(
   }
 
   items.sort((a, b) => b.date.localeCompare(a.date))
+  return items
+}
 
+/** The reports a window selects, from an already-collected list. */
+export function filterEmrReportsByRange(
+  items: EmrReportItem[],
+  range: EmrRange,
+  now?: Date,
+): EmrReportItem[] {
   // The draw-counting ranges keep whole exam DAYS: a same-day CXR + ECG pair is
   // one visit's worth of imaging, not two separate "last" results.
-  const days = DRAW_COUNT_RANGES[options.range]
+  const days = DRAW_COUNT_RANGES[range]
   if (days) {
     const keep = new Set([...new Set(items.map((r) => r.date))].slice(0, days))
     return items.filter((r) => keep.has(r.date))
   }
-  return items
+  const cutoff = emrRangeCutoff(range, now)
+  return cutoff ? items.filter((r) => r.date >= cutoff) : items
+}
+
+/** True when the patient has any lab result at all, whatever the window. */
+export function hasEmrLabData(pivots: Record<string, LabPivot>): boolean {
+  return Object.values(pivots).some((pivot) => pivot.dates.length > 0)
 }
 
 /**
+ * Report blocks: a `日期 檢查名稱` title line, then the narrative.
+ *
+ * Deliberately takes no `EmrPreset`. The preset shapes how lab VALUES are
+ * written (units, four-digit years, panel headings) and has no meaningful
+ * equivalent for a narrative, so letting it reach in here only made a
+ * labs-shaped control look like it governed this section too.
+ *
  * @param bodies optional per-report replacement text (the Chinese translation
  *   when the user switched the report language). A report with no entry keeps
  *   its source narrative — falling back is visible in the preview, whereas
@@ -389,14 +424,12 @@ export function collectEmrReports(
  */
 export function buildEmrReportText(
   items: EmrReportItem[],
-  preset: EmrPreset,
   bodies?: Record<string, string | undefined>,
 ): string {
   return items
     .map((r) => {
-      const org = preset === 'full' && r.org ? ` (${r.org})` : ''
       const body = bodies?.[r.id]?.trim() || r.body
-      return `${fullDate(r.date)} ${r.name}${org}\n${body}`
+      return `${fullDate(r.date)} ${r.name}\n${body}`
     })
     .join('\n\n')
 }

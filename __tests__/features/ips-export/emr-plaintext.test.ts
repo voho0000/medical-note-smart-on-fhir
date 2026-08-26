@@ -6,6 +6,8 @@ import {
   buildEmrReportText,
   collectEmrReports,
   emrRangeCutoff,
+  filterEmrReportsByRange,
+  hasEmrLabData,
   joinEmrSections,
   summarizeEmrLabPanels,
 } from '@/features/ips-export/utils/emr-plaintext'
@@ -212,6 +214,11 @@ describe('summarizeEmrLabPanels', () => {
   })
 })
 
+/** Collect + window, the pairing the panel uses. */
+function windowed(reports: any[], range: Parameters<typeof filterEmrReportsByRange>[1]) {
+  return filterEmrReportsByRange(collectEmrReports(reports), range, NOW)
+}
+
 describe('collectEmrReports', () => {
   const reports = [
     {
@@ -231,13 +238,36 @@ describe('collectEmrReports', () => {
     { id: 'dr3', code: { text: '生化' }, effectiveDateTime: '2026-08-18T09:00:00+08:00' },
   ]
 
+  it('leaves microbiology in the lab section where the app files it', () => {
+    // A culture reports free text, so a "has narrative" test would pull it in
+    // here — but the reports list shows it under 檢驗, and the two must agree.
+    const culture = [{
+      id: 'dr-mb',
+      code: { text: 'Mycobacterial Culture' },
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'MB' }] }],
+      effectiveDateTime: '2026-08-18T10:00:00+08:00',
+      conclusion: 'No Mycobacterium tuberculosis complex isolated after 8 weeks.',
+    }]
+    expect(collectEmrReports(culture)).toHaveLength(0)
+  })
+
+  it('keeps pathology — it is an exam report, not a lab panel', () => {
+    const pathology = [{
+      id: 'dr-path',
+      code: { text: '病理組織切片檢查' },
+      effectiveDateTime: '2026-08-18T10:00:00+08:00',
+      conclusion: 'Invasive ductal carcinoma, grade II. Margins free of tumor.',
+    }]
+    expect(collectEmrReports(pathology).map((r) => r.name)).toEqual(['病理組織切片檢查'])
+  })
+
   it('keeps only reports with narrative text, newest first', () => {
-    const items = collectEmrReports(reports, { range: '1y', now: NOW })
+    const items = windowed(reports, '1y')
     expect(items.map((r) => r.id)).toEqual(['dr1', 'dr2'])
   })
 
   it('re-flows the narrative onto its own lines', () => {
-    const [first] = collectEmrReports(reports, { range: '1y', now: NOW })
+    const [first] = windowed(reports, '1y')
     expect(first.body.split('\n').length).toBeGreaterThan(1)
     expect(first.body).toContain('Impression')
   })
@@ -249,7 +279,7 @@ describe('collectEmrReports', () => {
       effectiveDateTime: '2026-08-18T10:00:00+08:00',
       conclusion: '心電圖:    Sinus bradycardia    Left axis deviation    Abnormal ECG',
     }]
-    const [item] = collectEmrReports(blob, { range: '1y', now: NOW })
+    const [item] = windowed(blob, '1y')
     expect(item.body.split('\n')).toEqual([
       '心電圖:',
       'Sinus bradycardia',
@@ -260,7 +290,7 @@ describe('collectEmrReports', () => {
 
   it('drops a bridge duplicate of the same narrative on the same day', () => {
     const withDup = [...reports, { ...reports[0], id: 'dr1-copy' }]
-    expect(collectEmrReports(withDup, { range: '1y', now: NOW })).toHaveLength(2)
+    expect(windowed(withDup, '1y')).toHaveLength(2)
   })
 
   it('keeps the whole newest exam day for 最近一次', () => {
@@ -268,7 +298,7 @@ describe('collectEmrReports', () => {
       ...reports,
       { id: 'dr4', code: { text: '心電圖' }, effectiveDateTime: '2026-08-18T11:00:00+08:00', conclusion: 'Sinus rhythm, no acute change noted.' },
     ]
-    const items = collectEmrReports(sameDay, { range: 'last', now: NOW })
+    const items = windowed(sameDay, 'last')
     expect(items.map((r) => r.id).sort()).toEqual(['dr1', 'dr4'])
   })
 
@@ -284,7 +314,7 @@ describe('collectEmrReports', () => {
       effectiveDateTime: '2025-08-30T10:00:00+08:00',
       conclusion: 'T-score -1.8 at lumbar spine, osteopenia.',
     }]
-    expect(collectEmrReports(older, { range: 'last3', now: NOW }).map((r) => r.id))
+    expect(windowed(older, 'last3').map((r) => r.id))
       .toEqual(['dr1', 'dr2', 'dr5'])
   })
 
@@ -295,14 +325,54 @@ describe('collectEmrReports', () => {
       effectiveDateTime: '2025-12-11T10:00:00+08:00',
       conclusion: 'LVEF 62%, normal left ventricular systolic function.',
     }]
-    expect(collectEmrReports(older, { range: '1y', now: NOW }).map((r) => r.id)).toEqual(['dr1', 'dr2', 'dr5'])
-    expect(collectEmrReports(older, { range: '3m', now: NOW }).map((r) => r.id)).toEqual(['dr1', 'dr2'])
+    expect(windowed(older, '1y').map((r) => r.id)).toEqual(['dr1', 'dr2', 'dr5'])
+    expect(windowed(older, '3m').map((r) => r.id)).toEqual(['dr1', 'dr2'])
   })
 
-  it('names the institution only in the 完整 preset', () => {
-    const items = collectEmrReports(reports, { range: '1y', now: NOW })
-    expect(buildEmrReportText(items, 'standard')).not.toContain('北榮')
-    expect(buildEmrReportText(items, 'full')).toContain('2026/08/18 胸部X光 (北榮)')
+  it('titles each block with just the date and the exam name', () => {
+    // No institution and no preset: the lab preset shapes how VALUES are
+    // written and has no equivalent here, so it must not reach into this
+    // section — a labs-shaped control that silently edited study blocks too is
+    // exactly the confusion this removes.
+    const text = buildEmrReportText(windowed(reports, '1y'))
+    expect(text).toContain('2026/08/18 胸部X光\n')
+    expect(text).not.toContain('北榮')
+  })
+
+  it('substitutes a translated body when one is supplied', () => {
+    const items = windowed(reports, '1y')
+    const text = buildEmrReportText(items, { [items[0].id]: '兩側肺野未見浸潤性病灶。' })
+    expect(text).toContain('2026/08/18 胸部X光\n兩側肺野未見浸潤性病灶。')
+    // The report with no translation keeps its own narrative rather than
+    // vanishing from the paste.
+    expect(text).toContain('肝臟實質回音稍增強')
+  })
+})
+
+describe('empty windows', () => {
+  const oldReport = [{
+    id: 'dr-old',
+    code: { text: '骨密度' },
+    effectiveDateTime: '2024-03-02T10:00:00+08:00',
+    conclusion: 'T-score -1.8 at lumbar spine, osteopenia.',
+  }]
+
+  it('still reports the patient HAS studies when the window selects none', () => {
+    // What the panel keys its section on. If this collapsed to the windowed
+    // list, a range with no hits would take the section — and the range control
+    // inside it — off screen, stranding the user with no way to widen it.
+    expect(collectEmrReports(oldReport)).toHaveLength(1)
+    expect(windowed(oldReport, '1m')).toHaveLength(0)
+  })
+
+  it('still reports the patient HAS labs when the window selects none', () => {
+    const pivots = buildLabPivots([obs('CREA', '2024-03-02', 1.1, { unit: 'mg/dL' })])
+    expect(hasEmrLabData(pivots)).toBe(true)
+    expect(summarizeEmrLabPanels(pivots, LABELS, '1m', NOW)).toHaveLength(0)
+  })
+
+  it('has no labs to offer when the patient has none at all', () => {
+    expect(hasEmrLabData(buildLabPivots([]))).toBe(false)
   })
 })
 

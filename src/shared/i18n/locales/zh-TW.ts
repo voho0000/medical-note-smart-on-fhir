@@ -409,7 +409,6 @@ export const zhTW = {
 
   ipsExport: {
     hubTitle: '匯出健康資料',
-    hubDescription: '先選擇用途，再決定要使用的資料與格式。',
     aiUseTab: '貼給 AI',
     institutionTab: '下載檔案',
     emrTab: '帶回紀錄',
@@ -605,6 +604,8 @@ export const zhTW = {
       labsEmpty: '這個時間範圍內沒有選取的檢驗。',
       reportsTitle: '檢查／報告',
       reportsMeta: '已選 {selected} / {total} 份',
+      selectAll: '全選',
+      selectNone: '全不選',
       reportsEmpty: '這個時間範圍內沒有選取的報告。',
       copyLabs: '複製檢驗',
       copyReports: '複製檢查',
@@ -1070,6 +1071,7 @@ export const zhTW = {
       urine: '尿液',
       bloodgas: '血氣',
       serology: '病毒抗原',
+      microbio: '微生物',
       // 「其他」歸納未進入上述五大類的特殊檢驗（例如罕用的免疫學、
       // 微生物、自費項目）— 在就診紀錄詳情用，避免無分類檢驗緊接前
       // 一個分類渲染、被誤讀成同類。
