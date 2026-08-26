@@ -950,15 +950,32 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         >
           <AccordionTrigger
             className={cn(
-              'items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_auto] max-sm:gap-y-1 max-sm:[&>svg]:col-start-3 max-sm:[&>svg]:row-start-1',
+              // `min-w-0` is what actually lets a long title truncate. The
+              // trigger is a flex item of AccordionPrimitive.Header, so without
+              // it its automatic minimum size is the title's MAX-CONTENT width:
+              // the trigger grows past the row (measured 712px inside a 600px
+              // row), the row's overflow-hidden clips the institution and date
+              // off the end, and the title's own `truncate` never gets to act
+              // because nothing ever constrains it. Panel rows hid this by
+              // giving their title a fixed `basis-[45%]`; procedures, which
+              // must flex, exposed it.
+              'min-w-0 items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_auto] max-sm:gap-y-1 max-sm:[&>svg]:col-start-3 max-sm:[&>svg]:row-start-1',
               panelHasNarrative && 'flex-wrap gap-y-1 sm:flex-nowrap',
               row.group === 'procedures' && 'flex-wrap gap-y-1 sm:flex-nowrap',
             )}
           >
             <div
               className={cn(
-                'flex min-w-0 shrink-0 grow-0 items-center gap-1.5 max-sm:col-start-1 max-sm:row-start-1 max-sm:basis-auto max-sm:shrink',
-                row.group === 'procedures' ? 'flex-1 basis-0' : 'basis-[45%]',
+                'flex min-w-0 items-center gap-1.5 max-sm:col-start-1 max-sm:row-start-1 max-sm:basis-auto max-sm:shrink',
+                // Procedures carry the longest titles in the app (a whole NHI
+                // order name, parentheses and all). `flex-1 basis-0` alone did
+                // not save them: `shrink-0 grow-0` sat in the shared half of
+                // this class list and, being a different utility group, was not
+                // merged away — so the box refused to shrink and a long title
+                // shoved the institution and date off the row. The title itself
+                // already truncates with a hover tooltip; it just needed a
+                // container that could give ground.
+                row.group === 'procedures' ? 'min-w-0 flex-1 basis-0' : 'shrink-0 grow-0 basis-[45%]',
               )}
             >
               <ReportTitle
