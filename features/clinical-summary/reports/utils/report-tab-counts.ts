@@ -2,9 +2,9 @@ import { collectReportMemberIds, referenceId } from '@/src/core/utils/observatio
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
 import {
-  inferGroupFromDiagnosticReport,
   inferGroupFromObservation,
-  type ReportGroup,
+  inferReportDisplayGroup,
+  type ReportDisplayGroup,
 } from '@/src/shared/utils/report-grouping-helpers'
 import { getCodeableConceptText } from '@/src/shared/utils/fhir-helpers'
 import {
@@ -24,12 +24,13 @@ export interface ReportTabCounts {
   all: number
   lab: number
   imaging: number
+  pathology: number
   vitals: number
   procedures: number
 }
 
 interface CountRow {
-  group: ReportGroup
+  group: ReportDisplayGroup
   rawTitle: string
   effectiveDate?: string
   institution?: string
@@ -152,7 +153,7 @@ function createDiagnosticReportRows(
     const rawTitle = (getCodeableConceptText(head?.code) || '').trim()
       || (study ? imagingStudyTitle(study) : '')
     return {
-      group: inferGroupFromDiagnosticReport(head),
+      group: inferReportDisplayGroup(head),
       rawTitle,
       effectiveDate: reportDate(head) || study?.started,
       institution: reportInstitution(head)
@@ -310,8 +311,8 @@ function countLabDayRows(rows: CountRow[]): number {
   return datedGroups.size + undated
 }
 
-/** Count Imaging after its same-title/day/institution display grouping. */
-function countImagingRows(rows: CountRow[]): number {
+/** Count report cards after same-title/day/institution display grouping. */
+function countReportRows(rows: CountRow[]): number {
   const groups = new Set<string>()
   for (const row of rows) {
     groups.add([
@@ -342,11 +343,13 @@ export function calculateReportTabCounts(
   ]
   const labRows = rows.filter((row) => row.group === 'lab')
   const imagingRows = rows.filter((row) => row.group === 'imaging')
+  const pathologyRows = rows.filter((row) => row.group === 'pathology')
 
   return {
     all: rows.length,
     lab: countLabDayRows(labRows),
-    imaging: countImagingRows(imagingRows),
+    imaging: countReportRows(imagingRows),
+    pathology: countReportRows(pathologyRows),
     vitals: rows.filter((row) => row.group === 'vitals').length,
     procedures: rows.filter((row) => row.group === 'procedures').length,
   }

@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
-import { inferGroupFromDiagnosticReport } from '../utils/grouping-helpers'
+import { inferReportDisplayGroup } from '../utils/grouping-helpers'
 import {
   getAnalyteLabel,
   getAnalyteCanonicalKey,
@@ -634,10 +634,13 @@ export function useReportsData(
       const institution = getDrInstitution(head)
         || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
       const isLinkedImagingStudy = rowStudyIds.size > 0
-      const reportGroup = inferGroupFromDiagnosticReport(head)
+      const reportGroup = inferReportDisplayGroup(head)
       const inferredImagingLabel = locale === 'zh-TW'
         ? '影像（依檢查名稱／代碼辨識）'
         : 'Imaging (inferred from test name/code)'
+      const inferredPathologyLabel = locale === 'zh-TW'
+        ? '病理（依檢查名稱／代碼辨識）'
+        : 'Pathology (inferred from test name/code)'
 
       rows.push({
         id: head.id || `report-${groupOrder.indexOf(key) + 1}`,
@@ -653,9 +656,11 @@ export function useReportsData(
         // clinical assertion. Linked ImagingStudy remains explicit.
         meta: `${category || (isLinkedImagingStudy
           ? 'ImagingStudy'
-          : reportGroup === 'imaging'
-            ? inferredImagingLabel
-            : (locale === 'zh-TW' ? '未分類' : 'Unclassified'))} • ${head.status || linkedStudies[0]?.status || '—'}`,
+          : reportGroup === 'pathology'
+            ? inferredPathologyLabel
+            : reportGroup === 'imaging'
+              ? inferredImagingLabel
+              : (locale === 'zh-TW' ? '未分類' : 'Unclassified'))} • ${head.status || linkedStudies[0]?.status || '—'}`,
         obs: obsWithSummary,
         group: reportGroup,
         institution,

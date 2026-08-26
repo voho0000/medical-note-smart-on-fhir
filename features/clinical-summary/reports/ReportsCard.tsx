@@ -45,7 +45,7 @@ import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab
 const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
-const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
+const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'pathology', 'vitals'])
 type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 type RawPreparationPriority = 'idle' | 'after-paint'
 const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden rounded-lg border-border shadow-none hover:shadow-none`
@@ -509,6 +509,7 @@ export function ReportsCard() {
       all: groupedRows.all.length,
       lab: labRows.length,
       imaging: imagingRows.length,
+      pathology: groupedRows.pathology.length,
       vitals: groupedRows.vitals.length,
       procedures: filteredProcedureRows.length,
     }
@@ -526,10 +527,12 @@ export function ReportsCard() {
       // CT now reads as 1 row in the badge), so the number a user sees and
       // the cards they can click on match.
       { value: "imaging", label: withCount(reportTabs.imaging, displayCounts?.imaging), rows: imagingRows, isCumulative: false },
+      { value: "pathology", label: withCount(reportTabs.pathology, displayCounts?.pathology), rows: groupedRows.pathology, isCumulative: false },
       { value: "vitals", label: withCount(reportTabs.vitals, displayCounts?.vitals), rows: groupedRows.vitals, isCumulative: false },
       { value: "procedures", label: withCount(reportTabs.procedures, displayCounts?.procedures), rows: filteredProcedureRows, isCumulative: false },
     ]
-    // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
+    // Keep the frequent report views in a stable order, including an empty
+    // Pathology tab; only hide Procedures when that source type is absent.
     return configs.filter(
       // Use the underlying resources rather than lazy-built rows so users can
       // open Procedures directly from the default cumulative view.
@@ -722,7 +725,7 @@ export function ReportsCard() {
                   </button>
                 )}
               </div>
-              {(activeTab === 'all' || activeTab === 'imaging' || activeTab === 'vitals') && (
+              {(activeTab === 'all' || activeTab === 'imaging' || activeTab === 'pathology' || activeTab === 'vitals') && (
                 <ReportNameModeSwitch className="shrink-0" />
               )}
             </div>
@@ -858,6 +861,8 @@ export function ReportsCard() {
               onScrollResolved={resolveNavTarget}
               isPreparing={!rawReportsEnabled}
               preparingLabel={t.common.loading}
+              emptyLabel={t.reports.emptyCategory}
+              noMatchesLabel={t.reports.noSearchResults}
             />
           )
         })}

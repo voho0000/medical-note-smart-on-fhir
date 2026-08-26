@@ -13,7 +13,7 @@ export type {
   Procedure,
 } from '@/src/shared/types/fhir.types'
 
-export type ReportGroup = "lab" | "imaging" | "procedures" | "vitals" | "other"
+export type ReportGroup = "lab" | "imaging" | "pathology" | "procedures" | "vitals" | "other"
 
 /** Image attachment from DiagnosticReport.presentedForm (bridge v0.14.0+).
  *  Decoded to a Blob URL lazily by the viewer (ReportImageDialog), never

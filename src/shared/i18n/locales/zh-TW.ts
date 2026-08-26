@@ -1002,6 +1002,7 @@ export const zhTW = {
       all: '全部',
       lab: '檢驗',
       imaging: '影像',
+      pathology: '病理',
       vitals: '生命徵象',
       procedures: '處置',
     },
@@ -1055,6 +1056,7 @@ export const zhTW = {
       category: '類別：',
     },
     emptyCategory: '此分類中沒有可用的報告。',
+    noSearchResults: '沒有符合搜尋的報告。',
   },
 
   procedures: {

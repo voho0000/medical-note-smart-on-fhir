@@ -60,8 +60,8 @@ const STEPS: TourStep[] = [
     fallbackTarget: '[data-tour="left-tab-reports"]',
     title: { 'zh-TW': '報告有多種閱讀方式', en: 'Several ways to read reports' },
     body: {
-      'zh-TW': '除了累積報告，也能分別查看全部、檢驗、影像、生命徵象與處置；切到明細後還可以搜尋名稱、結果、院所或日期。',
-      en: 'Use cumulative reports or browse all, laboratory, imaging, vital-sign, and procedure records. Detail views can be searched by name, result, facility, or date.',
+      'zh-TW': '除了累積報告，也能分別查看全部、檢驗、影像、病理、生命徵象與處置；切到明細後還可以搜尋名稱、結果、院所或日期。',
+      en: 'Use cumulative reports or browse all, laboratory, imaging, pathology, vital-sign, and procedure records. Detail views can be searched by name, result, facility, or date.',
     },
   },
   {

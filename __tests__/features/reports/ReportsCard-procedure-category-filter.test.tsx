@@ -68,6 +68,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
           all: '全部',
           lab: '檢驗',
           imaging: '影像',
+          pathology: '病理',
           vitals: '生命徵象',
           procedures: '處置',
         },

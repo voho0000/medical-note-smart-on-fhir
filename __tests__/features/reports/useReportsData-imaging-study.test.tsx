@@ -65,7 +65,7 @@ describe('useReportsData — ImagingStudy metadata', () => {
     expect(rows[0].meta).toMatch(/影像|Imaging/)
   })
 
-  it('puts a category-less Health Bank pathology report in the same group', () => {
+  it('puts a category-less Health Bank pathology report in the Pathology group', () => {
     const rows = run([{
       id: 'sdk-r8-pathology',
       status: 'final',
@@ -80,8 +80,9 @@ describe('useReportsData — ImagingStudy metadata', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       id: 'sdk-r8-pathology',
-      group: 'imaging',
+      group: 'pathology',
     })
+    expect(rows[0].meta).toMatch(/病理|Pathology/)
   })
 
   it('renders a standalone ImagingStudy in the Imaging group', () => {

@@ -1001,6 +1001,7 @@ export const en = {
       all: 'All',
       lab: 'Labs',
       imaging: 'Imaging',
+      pathology: 'Patho',
       vitals: 'Vitals',
       procedures: 'Procedures',
     },
@@ -1054,6 +1055,7 @@ export const en = {
       category: 'Category:',
     },
     emptyCategory: 'No reports available in this category.',
+    noSearchResults: 'No matching reports.',
   },
 
   procedures: {

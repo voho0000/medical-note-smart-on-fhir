@@ -43,6 +43,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
           all: '全部',
           lab: '檢驗',
           imaging: '影像',
+          pathology: '病理',
           vitals: '生命徵象',
           procedures: '處置',
         },
@@ -115,6 +116,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       all: 119,
       lab: 31,
       imaging: 7,
+      pathology: 2,
       vitals: 10,
       procedures: 2,
     })
@@ -189,6 +191,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByRole('tab', { name: '全部 (119)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '檢驗 (31)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '病理 (2)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand to fullscreen' })).toHaveClass(
@@ -313,7 +316,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByTestId('raw-report-imaging')).toBeInTheDocument()
   })
 
-  it('shares the name mode across cumulative, all, lab, imaging, and vitals tabs', async () => {
+  it('shares the name mode across cumulative, all, lab, imaging, pathology, and vitals tabs', async () => {
     useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
     render(<ReportsCard />)
 
@@ -330,6 +333,10 @@ describe('ReportsCard lazy cumulative loading', () => {
     await waitFor(() => expect(activeNameSwitches()).toHaveLength(1))
     expect(activeNameSwitches()[0]).not.toBeChecked()
     expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'original')
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /病理/ }), { button: 0, ctrlKey: false })
+    await waitFor(() => expect(activeNameSwitches()).toHaveLength(1))
+    expect(activeNameSwitches()[0]).not.toBeChecked()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: /檢驗/ }), { button: 0, ctrlKey: false })
     await waitFor(() => expect(activeNameSwitches()).toHaveLength(1))

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { Tabs } from '@/components/ui/tabs'
 import { ReportsTabContent } from '@/features/clinical-summary/reports/components/ReportsTabContent'
 
@@ -260,5 +260,38 @@ describe('ReportsTabContent source navigation', () => {
     })
 
     expect(onScrollResolved).not.toHaveBeenCalled()
+  })
+})
+
+describe('ReportsTabContent empty states', () => {
+  it('uses the localized category label when the selected tab has no rows', () => {
+    render(
+      <Tabs value="pathology">
+        <ReportsTabContent
+          value="pathology"
+          rows={[]}
+          emptyLabel="此分類中沒有可用的報告。"
+          noMatchesLabel="沒有符合搜尋的報告。"
+        />
+      </Tabs>,
+    )
+
+    expect(screen.getByText('此分類中沒有可用的報告。')).toBeInTheDocument()
+  })
+
+  it('uses the localized search label when a query has no matches', () => {
+    render(
+      <Tabs value="pathology">
+        <ReportsTabContent
+          value="pathology"
+          rows={[]}
+          searchActive
+          emptyLabel="此分類中沒有可用的報告。"
+          noMatchesLabel="沒有符合搜尋的報告。"
+        />
+      </Tabs>,
+    )
+
+    expect(screen.getByText('沒有符合搜尋的報告。')).toBeInTheDocument()
   })
 })

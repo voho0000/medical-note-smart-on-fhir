@@ -55,6 +55,8 @@ interface ReportsTabContentProps {
    *  already painted. Prevent an empty-state flash during that first visit. */
   isPreparing?: boolean
   preparingLabel?: string
+  emptyLabel?: string
+  noMatchesLabel?: string
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -91,7 +93,7 @@ function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
   return lastOverflowCandidate
 }
 
-function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading' }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading', emptyLabel = 'No reports available in this category.', noMatchesLabel = 'No matching reports.' }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
   // this report, not to find its collapsed shell.
   const openIds = useMemo(() => {
@@ -241,7 +243,7 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
         </div>
       ) : rows.length === 0 ? (
         <div className="text-sm text-muted-foreground">
-          {searchActive ? '沒有符合搜尋的報告' : 'No reports available in this category.'}
+          {searchActive ? noMatchesLabel : emptyLabel}
         </div>
       ) : (
         <div

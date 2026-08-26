@@ -4,4 +4,5 @@ export {
   inferGroupFromObservation,
   inferGroupFromCategory,
   inferGroupFromDiagnosticReport,
+  inferReportDisplayGroup,
 } from '@/src/shared/utils/report-grouping-helpers'

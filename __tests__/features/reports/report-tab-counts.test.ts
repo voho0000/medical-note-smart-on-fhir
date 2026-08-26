@@ -9,6 +9,13 @@ const category = (code: string) => [{
   }],
 }]
 
+const v2Category = (code: string) => [{
+  coding: [{
+    system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+    code,
+  }],
+}]
+
 const performer = (display: string) => [{ display }]
 
 describe('calculateReportTabCounts', () => {
@@ -71,6 +78,19 @@ describe('calculateReportTabCounts', () => {
         imagingStudy: [{ reference: 'ImagingStudy/study-linked' }],
         conclusion: 'No acute cardiopulmonary finding.',
       },
+      {
+        id: 'dr-pathology',
+        category: [{
+          coding: [{
+            system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+            code: 'PAT',
+          }],
+        }],
+        code: { text: 'Surgical pathology' },
+        effectiveDateTime: '2026-05-28T09:00:00+08:00',
+        performer: performer('示範醫院'),
+        conclusion: 'Benign tissue.',
+      },
     ]
     const codedOnlyLab = {
       id: 'obs-blood-type',
@@ -107,11 +127,12 @@ describe('calculateReportTabCounts', () => {
     )
 
     expect(counts).toEqual({
-      // DR groups: 3; orphan rows: 2; Procedure mains: 2; standalone study: 1.
-      all: 8,
+      // DR groups: 4; orphan rows: 2; Procedure mains: 2; standalone study: 1.
+      all: 9,
       // Two CBC-category collection days at the same institution.
       lab: 2,
       imaging: 2,
+      pathology: 1,
       vitals: 1,
       procedures: 2,
     })
@@ -134,6 +155,42 @@ describe('calculateReportTabCounts', () => {
       all: 3,
       lab: 0,
       imaging: 1,
+      pathology: 0,
+      vitals: 0,
+      procedures: 0,
+    })
+  })
+
+  it('counts EC and OTH in Imaging and SP in Patho for the shared NHI report source', () => {
+    const counts = calculateReportTabCounts([
+      {
+        id: 'dr-ekg',
+        category: v2Category('EC'),
+        code: { coding: [{ code: '18001C' }], text: '12-lead EKG' },
+        effectiveDateTime: '2026-06-02T08:00:00+08:00',
+        conclusion: 'Sinus rhythm.',
+      },
+      {
+        id: 'dr-endoscopy',
+        category: v2Category('OTH'),
+        code: { text: 'Upper GI endoscopy report' },
+        effectiveDateTime: '2026-06-01T12:00:00+08:00',
+        conclusion: 'No active bleeding.',
+      },
+      {
+        id: 'dr-surgical-pathology',
+        category: v2Category('SP'),
+        code: { coding: [{ code: '25025C' }], text: '第六級外科病理' },
+        effectiveDateTime: '2026-06-01T08:00:00+08:00',
+        conclusion: 'Surgical pathology report.',
+      },
+    ], [], [], [])
+
+    expect(counts).toEqual({
+      all: 3,
+      lab: 0,
+      imaging: 2,
+      pathology: 1,
       vitals: 0,
       procedures: 0,
     })

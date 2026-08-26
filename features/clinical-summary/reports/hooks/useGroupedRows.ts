@@ -6,6 +6,7 @@ export function useGroupedRows(rows: Row[]) {
   return useMemo(() => {
     const lab = rows.filter((row) => row.group === "lab")
     const imaging = rows.filter((row) => row.group === "imaging")
+    const pathology = rows.filter((row) => row.group === "pathology")
     const proceduresOnly = rows.filter((row) => row.group === "procedures")
     const vitals = rows.filter((row) => row.group === "vitals")
     const other = rows.filter((row) => row.group === "other")
@@ -14,6 +15,7 @@ export function useGroupedRows(rows: Row[]) {
       all: rows,
       lab,
       imaging,
+      pathology,
       procedures: proceduresOnly,
       vitals,
       other,
