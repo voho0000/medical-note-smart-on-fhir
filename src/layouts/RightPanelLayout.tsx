@@ -23,6 +23,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { resolveScrollMode, tabPanelClasses } from "@/src/shared/config/right-panel-scroll"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { useBetaFeaturesStore } from "@/src/application/stores/beta-features.store"
 import { RIGHT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
@@ -172,40 +173,43 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
     )
   }
 
-  // Medical summary intentionally scrolls with the entire right panel. This
-  // lets the top-level feature tabs leave the viewport while its card chips
-  // remain sticky against the panel's own scrollport.
-  if (feature.scrollMode === 'panel') {
-    return (
-      <ClinicalTabContentFrame className="py-0.5 md:py-2">
-        <Component />
-      </ClinicalTabContentFrame>
-    )
-  }
-
-  // Wrap with ScrollArea for non-chat features.
-  //
-  // Radix renders the viewport's content in a `display:table; min-width:100%`
-  // wrapper (shrink-to-fit), which GROWS to a child's max-content width. A
-  // child with a wide intrinsic width can therefore stretch the whole panel
-  // past the column and overflow the viewport horizontally. These panels only
-  // ever scroll vertically, so force that wrapper to `display:block`
-  // (= viewport width, content wraps).
-  if (feature.id !== 'medical-chat') {
-    return (
-      <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]>div]:!block">
+  switch (resolveScrollMode(feature.scrollMode)) {
+    // The whole right panel scrolls, feature tabs and all. This lets a
+    // feature's own chips stay sticky against the panel's scrollport (medical
+    // summary, 個人化衛教).
+    case 'panel':
+      return (
         <ClinicalTabContentFrame className="py-0.5 md:py-2">
           <Component />
         </ClinicalTabContentFrame>
-      </ScrollArea>
-    )
-  }
+      )
 
-  return (
-    <ClinicalTabContentFrame className="h-full py-0.5 md:py-2">
-      <Component />
-    </ClinicalTabContentFrame>
-  )
+    // The feature scrolls its own regions (chat: pinned composer, scrolling
+    // transcript). Give it the full height and stay out of the way.
+    case 'self':
+      return (
+        <ClinicalTabContentFrame className="h-full py-0.5 md:py-2">
+          <Component />
+        </ClinicalTabContentFrame>
+      )
+
+    // Default: one scrollport around the whole feature.
+    //
+    // Radix renders the viewport's content in a `display:table; min-width:100%`
+    // wrapper (shrink-to-fit), which GROWS to a child's max-content width. A
+    // child with a wide intrinsic width can therefore stretch the whole panel
+    // past the column and overflow the viewport horizontally. These panels only
+    // ever scroll vertically, so force that wrapper to `display:block`
+    // (= viewport width, content wraps).
+    default:
+      return (
+        <ScrollArea className="h-full [&_[data-radix-scroll-area-viewport]>div]:!block">
+          <ClinicalTabContentFrame className="py-0.5 md:py-2">
+            <Component />
+          </ClinicalTabContentFrame>
+        </ScrollArea>
+      )
+  }
 })
 
 // ============================================================================
@@ -465,7 +469,7 @@ function RightPanelContentInner() {
           key={feature.id}
           value={feature.id}
           data-tour={`right-content-${feature.id}`}
-          className={`${feature.contentClassName || 'flex-1 mt-1'} max-md:!mt-0 md:mt-0`}
+          className={`${tabPanelClasses(feature.scrollMode)} ${feature.contentClassName ?? ''} max-md:!mt-0 md:mt-0`}
           forceMount={feature.forceMount || visitedTabs.has(feature.id) ? true : undefined}
         >
           <FeatureTabContent feature={feature} />

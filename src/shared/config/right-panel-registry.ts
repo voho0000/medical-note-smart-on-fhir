@@ -3,6 +3,8 @@
 import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_MODULE } from '@/features/personalized-education/module'
 
+import type { RightPanelScrollMode } from '@/src/shared/config/right-panel-scroll'
+
 export interface RightPanelFeatureConfig {
   id: string
   name: string
@@ -34,13 +36,21 @@ export interface RightPanelFeatureConfig {
   badge?: string
   /** Optional: force mount the tab content (useful for chat to preserve state) */
   forceMount?: boolean
-  /** Optional: custom wrapper className for the tab content */
+  /**
+   * Optional EXTRA classes for the tab panel. Structural layout — how the panel
+   * sizes itself and where scrolling happens — is derived from `scrollMode` by
+   * RightPanelLayout; do not restate it here.
+   */
   contentClassName?: string
   /**
-   * panel: let the whole right panel scroll, including its feature tabs.
-   * feature/default: keep scrolling inside the feature's own ScrollArea.
+   * Where this feature's content scrolls. Drives BOTH the wrapper the layout
+   * renders and the panel's own sizing, so the two can never disagree.
+   *
+   * feature (default): the layout wraps the content in a ScrollArea.
+   * panel: the whole right panel scrolls, feature tabs and all.
+   * self: the feature scrolls its own regions internally (chat).
    */
-  scrollMode?: 'panel' | 'feature'
+  scrollMode?: RightPanelScrollMode
 }
 
 /**
@@ -72,7 +82,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     // Let the outer panel own scrolling so the feature tabs leave the viewport
     // while the summary's inner card-navigation bar can remain sticky.
     scrollMode: 'panel',
-    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'medical-chat',
@@ -81,7 +90,10 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     order: 1,
     enabled: true,
     forceMount: true,
-    contentClassName: 'flex-1 overflow-hidden mt-1',
+    // Chat owns its scrolling: a pinned composer with a scrolling transcript
+    // above it, not one long scrollport.
+    scrollMode: 'self',
+    contentClassName: 'overflow-hidden',
   },
   PERSONALIZED_EDUCATION_MODULE.rightPanel,
   CLINICAL_DECISION_SUPPORT_MODULE.rightPanel,
@@ -95,7 +107,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     // and clinically reviewed state — they must survive tab switches.
     // useInferredProblems resets them when the loaded patient changes.
     forceMount: true,
-    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'medical-calculator',
@@ -106,7 +117,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     // Deliberately NOT forceMount: that would pull the 57-calculator chunk on
     // panel mount for every user. Half-filled scores are still preserved —
     // RightPanelLayout keeps any tab mounted once it has been opened.
-    contentClassName: 'flex-1 mt-1',
   },
   {
     // Gear tab: always the right-most trigger (after the "more" menu), never
@@ -117,7 +127,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     order: 7,
     enabled: true,
     pinLocked: true,
-    contentClassName: 'flex-1 mt-1',
   },
 ]
 

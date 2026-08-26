@@ -25,7 +25,6 @@ export const PERSONALIZED_EDUCATION_MODULE = {
     // positioning and scrollIntoView. The section jump would silently do
     // nothing and the control row would scroll away instead of pinning.
     scrollMode: 'panel',
-    contentClassName: 'flex-1 mt-1',
   },
   diseasePacks: getEnabledDiseasePacks,
 } as const

@@ -1,3 +1,4 @@
+import { tabPanelClasses } from '@/src/shared/config/right-panel-scroll'
 import { getEnabledRightPanelFeatures } from '@/src/shared/config/right-panel-registry'
 import { groupRightPanelFeatures } from '@/src/application/stores/right-panel-tabs.store'
 
@@ -127,6 +128,33 @@ describe('right-panel registry', () => {
     )
 
     expect(medicalSummary?.scrollMode).toBe('panel')
-    expect(medicalSummary?.contentClassName?.split(' ')).not.toContain('min-h-0')
+  })
+
+  it('never pins a panel-scrolled tab to the viewport', () => {
+    // `min-h-0` here would stop the panel growing past the viewport, trapping
+    // the content the right column is supposed to scroll.
+    expect(tabPanelClasses('panel').split(' ')).not.toContain('min-h-0')
+  })
+
+  it('lets every other tab shrink so the scrollport inside it can scroll', () => {
+    // The regression this guards: without `min-h-0` the panel grows to its
+    // content, the ScrollArea inside grows with it, and the tab goes dead —
+    // silently, and only once that feature's content outgrows the viewport.
+    for (const mode of [undefined, 'feature', 'self'] as const) {
+      expect(tabPanelClasses(mode).split(' ')).toContain('min-h-0')
+    }
+  })
+
+  it('leaves panel sizing to the layout, not to each registry entry', () => {
+    const structural = ['flex-1', 'min-h-0', 'h-full']
+    for (const feature of getEnabledRightPanelFeatures(undefined, {
+      betaFeaturesEnabled: true,
+      isAuthenticated: true,
+    })) {
+      const classes = feature.contentClassName?.split(' ') ?? []
+      for (const token of structural) {
+        expect([feature.id, classes.includes(token)]).toEqual([feature.id, false])
+      }
+    }
   })
 })
