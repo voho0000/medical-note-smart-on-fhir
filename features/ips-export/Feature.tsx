@@ -19,6 +19,7 @@ import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
 } from '@/src/shared/config/ui-theme.config'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
@@ -29,9 +30,14 @@ import { IpsDataScopePanel } from './components/IpsDataScopePanel'
 import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
 import { AiHandoffPanel } from './components/AiHandoffPanel'
+import { EmrHandoffPanel } from './components/EmrHandoffPanel'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
+  // 帶回病歷 pastes into a hospital chart's SOAP note — there is no such
+  // destination in the 民眾 experience, so the tab only exists for clinicians.
+  const showEmrTab = audience === 'medical'
   const x = t.ipsExport
   const [includePatientIdentifiers, setIncludePatientIdentifiers] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -123,14 +129,23 @@ export default function IpsExportFeature() {
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{x.hubDescription}</p>
       </div>
       <Tabs defaultValue="ai" className="space-y-5">
-        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2 sm:max-w-md`}>
+        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
           <TabsTrigger value="ai" className={SUBTAB_TRIGGER_CLASSES}>{x.aiUseTab}</TabsTrigger>
           <TabsTrigger value="institution" className={SUBTAB_TRIGGER_CLASSES}>{x.institutionTab}</TabsTrigger>
+          {showEmrTab && (
+            <TabsTrigger value="emr" className={SUBTAB_TRIGGER_CLASSES}>{x.emrTab}</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="ai">
           <AiHandoffPanel />
         </TabsContent>
+
+        {showEmrTab && (
+          <TabsContent value="emr">
+            <EmrHandoffPanel />
+          </TabsContent>
+        )}
 
         <TabsContent value="institution">
           <IpsExportPreview
