@@ -55,14 +55,12 @@ describe('categorizeObservation — CBC differentials', () => {
     })
 
     it('血球比容值測定 with panel LOINC 24317-0 categorises as cbc', () => {
-      // NOTE: 24317-0 isn't in cbc.loincCodes yet (Bug N1 fix pending).
-      // When we add it, this test should change from .toBeNull() to .toBe('cbc').
-      // For now we document the actual behaviour so the test fails loudly
-      // if anyone removes the workaround.
-      const cat = categorizeObservation(makeObs('血球比容值測定', '24317-0'))
-      // Falls through to text-based codes match — '血球比容值測定' isn't in
-      // cbc.codes, so this returns null today. Documents the gap.
-      expect(cat).toBeNull()
+      // Was the documented Bug N1 gap: 24317-0 is not in cbc.loincCodes and
+      // '血球比容值測定' is not in cbc.codes, so this fell through to null and
+      // the row vanished from 血液. The canonical-analyte pass closes it — the
+      // alias table already resolves this name to HCT, which cbc lists — so
+      // the assertion flips to 'cbc' exactly as this test's note anticipated.
+      expect(categorizeObservation(makeObs('血球比容值測定', '24317-0'))?.id).toBe('cbc')
     })
   })
 
@@ -302,5 +300,82 @@ describe('categorizeObservation — NHI section gate (name-collision guard)', ()
 
   it('"Bacteria" with no NHI code still categorises as urine via the name fallback', () => {
     expect(categorizeObservation({ code: { text: 'Bacteria' }, valueString: 'Few' })?.id).toBe('urine')
+  })
+})
+
+describe('names the source actually sends', () => {
+  const lab = (text: string, extra: Record<string, unknown> = {}) => ({
+    code: { text },
+    valueQuantity: { value: 100, unit: 'mg/dL' },
+    ...extra,
+  })
+
+  it('files every spelling of a blood sugar under 血糖', () => {
+    for (const name of ['GLUCOSE-AC', 'GLUCOSE-PC', '葡萄糖', '血糖', '飯前血糖', '空腹血糖']) {
+      expect(categorizeObservation(lab(name))?.id).toBe('glucose')
+    }
+  })
+
+  it('keeps a dipstick sugar out of the 血糖 trend', () => {
+    // Same name, qualitative value: this is urinalysis, not a serum glucose.
+    const dipstick = { code: { text: '葡萄糖' }, valueString: '4+' }
+    expect(categorizeObservation(dipstick)?.id).not.toBe('glucose')
+  })
+
+  it('files FSH under 內分泌 by either name', () => {
+    for (const name of ['FSH', '濾泡刺激素']) {
+      expect(categorizeObservation(lab(name))?.id).toBe('endocrine')
+    }
+  })
+})
+
+describe('microbiology and the 其他 catch-all', () => {
+  const lab = (text: string, extra: Record<string, unknown> = {}) => ({
+    code: { text },
+    valueString: 'result',
+    ...extra,
+  })
+  const declaredLab = {
+    category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
+  }
+
+  it('files cultures under 微生物 whatever the specimen', () => {
+    for (const name of ['Blood Culture', 'Aerobic culture, Sputum', '細菌血液培養', 'Mycobacterial Culture']) {
+      expect(categorizeObservation(lab(name))?.id).toBe('microbio')
+    }
+  })
+
+  it('keeps a urine culture out of 尿液 — it is microbiology, not urinalysis', () => {
+    const urineCulture = lab('Urine Culture', { specimen: { display: 'Urine' } })
+    expect(categorizeObservation(urineCulture)?.id).toBe('microbio')
+  })
+
+  it('files stains and susceptibilities with the cultures', () => {
+    for (const name of ['Acid-fast Stain', 'Gram stain', '革蘭氏染色', 'Antibiotic susceptibility']) {
+      expect(categorizeObservation(lab(name))?.id).toBe('microbio')
+    }
+  })
+
+  it('catches a source-declared lab that fits no panel', () => {
+    expect(categorizeObservation(lab('Heavy metal screen', declaredLab))?.id).toBe('other')
+  })
+
+  it('catches a non-blood specimen instead of dropping it', () => {
+    const pleural = lab('Glucose', { specimen: { display: 'Pleural fluid' }, ...declaredLab })
+    // NOT 血糖: a pleural-fluid glucose must never join the serum trend.
+    expect(categorizeObservation(pleural)?.id).toBe('other')
+  })
+
+  it('never promotes something the source did not call a lab', () => {
+    expect(categorizeObservation(lab('Handgrip strength, left'))).toBeNull()
+    const vital = lab('Body temperature', {
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'vital-signs' }] }],
+    })
+    expect(categorizeObservation(vital)).toBeNull()
+  })
+
+  it('still routes the routine panels to their own category', () => {
+    expect(categorizeObservation(lab('CREA', declaredLab))?.id).toBe('chem')
+    expect(categorizeObservation(lab('HB', declaredLab))?.id).toBe('cbc')
   })
 })

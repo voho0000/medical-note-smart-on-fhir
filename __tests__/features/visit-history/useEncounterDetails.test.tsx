@@ -49,11 +49,28 @@ describe('useEncounterDetails — clinical category grouping', () => {
   })
 
   it('uncategorized tests fall into a trailing null group', () => {
-    // A free-text / non-canonical row has no lab category.
-    const details = run([obs('o1', 'WBC'), obs('o2', 'Aerobic culture, Sputum')])
+    // A free-text row the source never labelled a laboratory result has no lab
+    // category. (Cultures are NOT an example of this any more — they belong to
+    // the 微生物 category; and a row the source DOES call a lab now lands in
+    // the 其他 catch-all rather than here.)
+    const details = run([obs('o1', 'WBC'), obs('o2', 'Handgrip strength, left')])
     const ids = details.testGroups.map((g) => g.categoryId)
     expect(ids[0]).toBe('cbc')
     expect(ids[ids.length - 1]).toBeNull()
+  })
+
+  it('groups a culture under 微生物 whatever it was grown from', () => {
+    const details = run([obs('o1', 'WBC'), obs('o2', 'Aerobic culture, Sputum')])
+    expect(details.testGroups.map((g) => g.categoryId)).toEqual(['cbc', 'microbio'])
+  })
+
+  it('files a source-declared lab with no panel of its own under 其他', () => {
+    const lab = {
+      ...obs('o2', 'Heavy metal screen, blood'),
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
+    }
+    const details = run([obs('o1', 'WBC'), lab])
+    expect(details.testGroups.map((g) => g.categoryId)).toEqual(['cbc', 'other'])
   })
 })
 

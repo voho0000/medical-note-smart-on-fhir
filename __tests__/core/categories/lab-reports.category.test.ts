@@ -22,6 +22,9 @@ const all = { observations }
 const section = (depth: 'latest' | '3' | '8' | '16' | 'all') =>
   labReportsCategory.getContextSection(data, { labDepth: depth, labReportTimeRange: 'all' } as any, all)
 
+// Analyte lines are headed by the CANONICAL name (CREA / HB), the same label
+// the cumulative report uses — 'Creatinine' and 'Hemoglobin' resolve to those
+// through the alias table.
 const lineFor = (items: string[], analyte: string) => items.find((i) => i.startsWith(analyte)) || ''
 
 describe('labReportsCategory — per-analyte trend', () => {
@@ -35,7 +38,7 @@ describe('labReportsCategory — per-analyte trend', () => {
   it('all → chronological trend (oldest → newest) with abnormal flag', () => {
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const cr = lineFor(items, 'Creatinine')
+    const cr = lineFor(items, 'CREA')
     expect(cr).toContain('1.2')
     expect(cr).toContain('2.1')
     expect(cr).toContain('→') // it's a series
@@ -47,6 +50,8 @@ describe('labReportsCategory — per-analyte trend', () => {
   it('latest → only the most recent value per analyte', () => {
     const s = section('latest')
     const items = Array.isArray(s) ? [] : s?.items ?? []
+    // 'latest' lists analytes one per line under the source's own display
+    // name; the pivot/Key-trends output below uses the canonical one.
     const cr = lineFor(items, 'Creatinine')
     expect(cr).toContain('2.1')
     expect(cr).not.toContain('1.2') // older readings dropped
@@ -57,7 +62,7 @@ describe('labReportsCategory — per-analyte trend', () => {
     // 'all' = 每項目全部、不設上限。Creatinine 有 3 筆,全數保留,無「…earlier」。
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const cr = lineFor(items, 'Creatinine')
+    const cr = lineFor(items, 'CREA')
     expect(cr).toContain('1.2')
     expect(cr).toContain('1.5')
     expect(cr).toContain('2.1')
@@ -166,7 +171,9 @@ describe('labReportsCategory — window fallback (empty range)', () => {
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
     expect(items.some((i) => i.includes('no labs fell within the selected time range'))).toBe(true)
-    expect(items.some((i) => i.startsWith('Creatinine'))).toBe(true)
+    // The readings themselves come back — as a 生化 pivot, since they now
+    // categorise instead of falling through as loose lines.
+    expect(items.join('\n')).toContain('CREA')
   })
 
   it('getCount matches the fallback (non-zero) rather than reporting 0', () => {
@@ -187,22 +194,27 @@ describe('labReportsCategory — trend depth', () => {
     effectiveDateTime: `2026-${String(i + 1).padStart(2, '0')}-01`.replace('2026-13', '2026-12'),
   })) as any
 
-  const arrows = (depth: string) => {
+  // A recognised analyte renders as its panel's pivot (one row per sampling
+  // day), so depth is counted in ROWS. It used to be counted in arrows, back
+  // when 'Creatinine' failed categorisation and fell through as a loose
+  // per-analyte line — the cap is the same, the shape it caps is not.
+  const rows = (depth: string) => {
     const s = labReportsCategory.getContextSection(
       series,
       { labDepth: depth, labReportTimeRange: 'all' } as any,
       { observations: [] },
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const cr = items.find((i) => i.startsWith('Creatinine')) || ''
-    return (cr.match(/→/g) || []).length
+    const chem = items.find((i) => i.startsWith('[chem]')) || ''
+    return chem.split('\n').filter((line) => /^\| 20/.test(line)).length
   }
 
   it('caps the rendered trend at the configured point count', () => {
-    // 3 per test → fewer arrows than 16; 'all' shows the full 12-point series.
-    expect(arrows('3')).toBeLessThan(arrows('16'))
-    expect(arrows('16')).toBeLessThanOrEqual(arrows('all'))
-    expect(arrows('all')).toBe(11) // 12 readings → 11 arrows, uncapped
+    // 3 per test → fewer readings than 16; 'all' shows the full 12-point series.
+    expect(rows('3')).toBe(3)
+    expect(rows('3')).toBeLessThan(rows('16'))
+    expect(rows('16')).toBeLessThanOrEqual(rows('all'))
+    expect(rows('all')).toBe(12) // every reading, uncapped
   })
 })
 

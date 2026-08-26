@@ -13,6 +13,9 @@
 
 import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.constants'
 
+import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
+import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+
 export interface LabSubgroup {
   /** Stable id — matches a key under t.reports.cumulativeSubgroups for display. */
   id: string
@@ -161,7 +164,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       // TEST_ALIASES; using 'PROLACTIN' here would never match a sorted
       // label (getAnalyteLabel always returns PRL), per
       // memory/feedback_canonical_only_in_preferredorder.md.
-      'LH', 'FSH', 'E2', 'PROGESTERONE', 'TESTOSTERONE', 'PRL', 'AMH', 'SHBG',
+      'LH', 'FSH', '濾泡刺激素', '促濾泡成熟激素', 'E2', 'PROGESTERONE', 'TESTOSTERONE', 'PRL', 'AMH', 'SHBG',
       // Diabetes
       'INSULIN', 'C-PEPTIDE',
       // Growth
@@ -226,7 +229,10 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // SUGAR / FINGER SUGAR: some Taiwan clinics use these for blood glucose.
     // Urine dipstick "Sugar" with qualitative value (+, ++, 4+, negative)
     // is routed to urine via the qualitative-value heuristic earlier.
-    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'SUGAR', 'FINGER SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE'],
+    // 'GLUCOSE-AC' lived in preferredOrder/pinnedColumns but never here, so a
+    // source emitting that exact name fell out of 血糖 entirely. Chinese names
+    // added alongside it — 健保存摺 and hospital feeds both send them.
+    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'GLUCOSE-AC', 'GLUCOSE-PC', 'GLU-PC', 'GLUCOSE-FS', 'SUGAR', 'FINGER SUGAR', 'AC SUGAR', 'PC SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE', '葡萄糖', '血糖', '飯前血糖', '飯後血糖', '空腹血糖', '隨機血糖', '糖化血色素'],
     loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9'],
     pinnedColumns: ['GLUCOSE-AC', 'GLUCOSE', 'HBA1C'],
   },
@@ -392,6 +398,62 @@ export const LAB_CATEGORIES: LabCategory[] = [
     pinnedColumns: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG'],
     hiddenByDefault: true,
   },
+  {
+    // 微生物 — cultures, stains and susceptibilities. Unlike every category
+    // above, membership is decided by the TEST, not the specimen: a blood, a
+    // urine and a sputum culture are all microbiology, so this is matched in
+    // its own pass BEFORE specimen routing (which would otherwise file a urine
+    // culture under 尿液 and drop a sputum one entirely).
+    //
+    // Text-alias-only on purpose — no LOINC. 健保存摺 ships these without one,
+    // and an unverified LOINC table is worse than a name match here.
+    id: 'microbio',
+    preferredOrder: ['BLOOD CULTURE', 'URINE CULTURE', 'SPUTUM CULTURE', 'GRAM STAIN', 'ACID-FAST STAIN'],
+    codes: [
+      'CULTURE', 'BLOOD CULTURE', 'URINE CULTURE', 'SPUTUM CULTURE', 'STOOL CULTURE',
+      'WOUND CULTURE', 'PUS CULTURE', 'CSF CULTURE', 'FUNGUS CULTURE', 'FUNGAL CULTURE',
+      'MYCOBACTERIAL CULTURE', 'TB CULTURE', 'GRAM STAIN', 'ACID-FAST STAIN',
+      'ACID FAST STAIN', 'AFB', 'AFB STAIN', 'INDIA INK', 'KOH',
+      '培養', '細菌培養', '血液培養', '細菌血液培養', '尿液培養', '痰液培養', '糞便培養',
+      '傷口培養', '黴菌培養', '真菌培養', '結核菌培養', '分枝桿菌培養',
+      '革蘭氏染色', '抗酸菌染色', '抗酸性染色', '藥物敏感試驗', '抗生素敏感性試驗',
+    ],
+  },
+  {
+    // 其他 — the catch-all. The panels above are an allowlist of the routinely
+    // ordered ones, so anything else the SOURCE itself calls a laboratory
+    // result used to be dropped on the floor and disappear from the cumulative
+    // report, the AI context and the exports. It now lands here instead.
+    //
+    // `codes` is intentionally EMPTY: nothing is matched into 其他 by name. It
+    // is only ever reached as the last-resort fallback, and only for
+    // observations the source labelled as laboratory — never by guessing.
+    id: 'other',
+    codes: [],
+  },
+]
+
+/**
+ * Microbiology is identified by the test itself, so these run before specimen
+ * routing. Kept as patterns rather than exact codes because lab names arrive
+ * in many shapes ("Culture, Blood (Aerobic)", "痰液細菌培養", "AFB stain").
+ */
+const MICROBIOLOGY_NAME_PATTERNS: RegExp[] = [
+  /\bCULTURES?\b/,
+  /ACID[- ]?FAST/,
+  /GRAM[- ]?STAIN/,
+  /MYCOBACTERI/,
+  /FUNGUS|FUNGAL/,
+  /SUSCEPTIBILIT/,
+  /INDIA INK/,
+  /\bAFB\b/,
+  /\bKOH\b/,
+  /培養/,
+  /抗酸/,
+  /革蘭/,
+  /分枝桿菌|結核菌/,
+  /黴菌|真菌/,
+  /藥敏|抗生素敏感/,
 ]
 
 function normalize(s: string): string {
@@ -465,6 +527,12 @@ function nhiOrderCode(obs: any): string | null {
 // handles those when a specimen is present). Categories absent from the map are
 // never gated.
 function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
+  // A dipstick value ("4+", "Negative", "Trace") under a glucose NAME is a
+  // urinalysis row, not a serum sugar. Urine-specimen rows are already routed
+  // before any name match; this covers the specimen-less ones that would
+  // otherwise ride 葡萄糖 / SUGAR into the 血糖 trend.
+  if (cat.id === 'glucose' && isQualitativeResult(obs)) return false
+
   const sections = CATEGORY_NHI_SECTIONS[cat.id]
   if (!sections) return true
   const nhi = nhiOrderCode(obs)
@@ -509,21 +577,32 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // and the text 'HbA1c' / 'HB-A1C' / 'GLYCATED' all match glucose.codes
   // entries via Pass 3/4 below.
 
+  // ── Pass 0: microbiology, by TEST rather than specimen ─────────────────
+  // Runs first on purpose. A culture is microbiology whatever it was grown
+  // from, so specimen routing below must not claim a urine culture for 尿液 or
+  // drop a sputum one for being neither blood nor urine.
+  if (MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(textNorm))) {
+    return LAB_CATEGORIES.find((c) => c.id === 'microbio') || null
+  }
+
   // ── Pass 1: specimen-based routing ─────────────────────────────────────
   const specimenText = String(obs.specimen?.display || obs.category?.[1]?.text || '')
   const specimenSaysBlood = !!specimenText &&
     /blood|serum|plasma|whole\s*blood|venous|capillary|血/i.test(specimenText)
+  // Non-blood/serum/plasma specimens (stool, CSF, pleural fluid, ascites,
+  // smear, synovial fluid, amniotic, bone marrow…) must NOT be measured
+  // against the blood panels — a pleural-fluid glucose in the 血糖 trend would
+  // be a clinical error. They still fall through to the 其他 catch-all rather
+  // than being dropped.
+  let specimenBlocksPanels = false
   if (specimenText) {
     if (/urine|urinaly|尿/i.test(specimenText)) {
       return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
     }
-    // Non-blood/serum/plasma specimens (stool, sputum, CSF, pleural fluid,
-    // ascites, smear, synovial fluid, amniotic, bone marrow…) aren't covered
-    // by our 5 cumulative-report categories. Skip rather than miscategorize.
-    if (!specimenSaysBlood) {
-      return null
-    }
+    specimenBlocksPanels = !specimenSaysBlood
   }
+
+  if (specimenBlocksPanels) return fallbackCategory(obs)
 
   // ── Pass 2: LOINC against cat.loincCodes (authoritative) ───────────────
   for (const cat of LAB_CATEGORIES) {
@@ -560,6 +639,29 @@ export function categorizeObservation(obs: any): LabCategory | null {
     }
   }
 
+  // ── Pass 4.5: canonical-analyte match ──────────────────────────────────
+  // lab-normalize already knows which source names mean which analyte — that
+  // is how a row can be HEADED "GLUCOSE-AC" when the source said 飯前血糖.
+  // Categorisation used to consult only the raw text against `codes`, so an
+  // analyte the alias table recognised could still fail every pass above and
+  // fall out of its panel: "GLUCOSE-AC" is listed in glucose's preferredOrder
+  // and pinnedColumns but was never added to its `codes`, so a source emitting
+  // that exact name was silently dropped from 血糖.
+  //
+  // Matching the CANONICAL key against each category's code + column lists
+  // keeps categorisation and display from drifting apart, instead of asking
+  // every future alias to be hand-copied into a second list.
+  const canonicalKeys = [
+    canonicalKeyFromLoinc(obs),
+    ...exactCandidates.map((candidate) => canonicalTestKeyFromString(candidate)),
+  ].filter((key): key is string => !!key && key !== 'UNKNOWN')
+  for (const cat of LAB_CATEGORIES) {
+    const keySet = new Set([...(cat.preferredOrder ?? []), ...cat.codes].map(normalize))
+    for (const key of canonicalKeys) {
+      if (keySet.has(normalize(key)) && nameMatchAllowedForCategory(cat, obs)) return cat
+    }
+  }
+
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
   // Skip when bridge declared specimen=Blood — see big comment above for
   // the 尿酸 / 尿素氮 substring trap this guard avoids.
@@ -581,8 +683,22 @@ export function categorizeObservation(obs: any): LabCategory | null {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
-  // Pure allowlist: anything not matched by exact code or LOINC is excluded.
-  return null
+  return fallbackCategory(obs)
+}
+
+/**
+ * Last resort. The panels above are an allowlist of the routinely-ordered
+ * ones; a lab outside all of them used to be dropped, so it vanished from the
+ * cumulative report, the AI context and every export.
+ *
+ * It now lands in 其他 — but ONLY when the SOURCE itself labelled the
+ * observation a laboratory result. We never promote by guessing: vital signs,
+ * imaging-derived measurements and survey answers keep their own homes and
+ * still return null here.
+ */
+function fallbackCategory(obs: any): LabCategory | null {
+  if (inferGroupFromObservation(obs) !== 'lab') return null
+  return LAB_CATEGORIES.find((c) => c.id === 'other') || null
 }
 
 /**
