@@ -256,13 +256,30 @@ export function EmrHandoffPanel() {
   return (
     <div className="space-y-4">
       {/* The prose that explains the text rules lives in the ⓘ — reference
-          material earns a tooltip, not a permanent line above a dense panel. */}
-      <div className="flex items-center gap-1.5">
-        <h2 className="text-lg font-semibold tracking-tight">{x.pageTitle}</h2>
-        <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
-          <span className="block">{x.pageDescription}</span>
-          <span className="mt-2 block">{x.presetHint}</span>
-        </InfoHint>
+          material earns a tooltip, not a permanent line above a dense panel.
+          The primary action sits up here rather than under both cards: this
+          panel is taller than the viewport, so a footer button is permanently
+          below the fold. The character count rides with it — it is the only
+          warning of how much text is about to land in the chart. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-lg font-semibold tracking-tight">{x.pageTitle}</h2>
+          <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
+            <span className="block">{x.pageDescription}</span>
+            <span className="mt-2 block">{x.presetHint}</span>
+          </InfoHint>
+        </div>
+        {hasAnything && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {x.footerMeta.replace('{chars}', String(allText.length))}
+            </span>
+            <Button type="button" className="gap-2 px-5" disabled={!allText.trim()} onClick={() => doCopy('all', allText)}>
+              {copiedKey === 'all' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copiedKey === 'all' ? x.copiedAll : x.copyAll}
+            </Button>
+          </div>
+        )}
       </div>
 
       {!hasAnything && (
@@ -478,18 +495,6 @@ export function EmrHandoffPanel() {
 
           <PlainTextPreview text={reportText} empty={x.reportsEmpty} testId="emr-handoff-report-preview" />
         </section>
-      )}
-
-      {hasAnything && (
-        <div className="flex items-center justify-between gap-3 border-t pt-4">
-          <span className="text-xs text-muted-foreground">
-            {x.footerMeta.replace('{chars}', String(allText.length))}
-          </span>
-          <Button type="button" className="gap-2 px-6" disabled={!allText.trim()} onClick={() => doCopy('all', allText)}>
-            {copiedKey === 'all' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            {copiedKey === 'all' ? x.copiedAll : x.copyAll}
-          </Button>
-        </div>
       )}
     </div>
   )
