@@ -52,6 +52,13 @@ export const DEMO_SAFETY_SCAN_GENERATION = {
   modelName: 'Gemini 3.1 Flash-Lite',
 } as const satisfies SafetyScanGeneration
 
+export const DEMO_CLINICAL_INSIGHT_GENERATION = {
+  source: 'pre-generated',
+  modelId: 'gemini-3.1-flash-lite',
+  modelName: 'Gemini 3.1 Flash-Lite',
+  provider: 'gemini',
+} as const
+
 type Audience = 'medical' | 'patient'
 
 // Snapshot citations are authored against the default demo catalog, whose

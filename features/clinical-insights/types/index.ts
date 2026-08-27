@@ -3,15 +3,33 @@ import type { AiQueryResponse } from "@/src/core/entities/ai.entity"
 
 export type QueryMetadata = AiQueryResponse['metadata']
 
+export interface InsightGenerationMetadata extends QueryMetadata {
+  /** Live generation or a bundled, audited demo snapshot. Legacy entries may omit it. */
+  source?: 'live' | 'pre-generated'
+  /** Human-readable model identity captured at generation time. */
+  modelName?: string
+  /** Wall-clock completion time in epoch milliseconds. */
+  generatedAt?: number
+  /** Model request duration in milliseconds (queue time excluded). */
+  durationMs?: number
+}
+
+export interface ActiveInsightGeneration {
+  id: string
+  modelName: string
+  startedAt: number
+}
+
 export interface PanelStatus {
   isLoading: boolean
   error: Error | null
+  activeGeneration?: ActiveInsightGeneration
 }
 
 export interface ResponseEntry {
   text: string
   isEdited: boolean
-  metadata: QueryMetadata | null
+  metadata: InsightGenerationMetadata | null
 }
 
 export interface InsightPanelProps {
@@ -30,7 +48,7 @@ export interface InsightPanelProps {
   onResponseChange: (value: string) => void
   onClearResponse: () => void
   isEdited: boolean
-  modelMetadata: QueryMetadata | null
+  modelMetadata: InsightGenerationMetadata | null
   autoGenerate?: boolean
   /** Toggle this panel's auto-generate-on-load setting (persists per config). */
   onToggleAutoGenerate?: (value: boolean) => void

@@ -31,6 +31,11 @@ const LOCAL_SYSTEM_INSTRUCTION = `You summarize the supplied patient record. Fol
 4. Only Problem List diagnoses are confirmed. A visit/claim ICD code alone is not a confirmed diagnosis; label it as a claim and state that limitation.
 5. Before answering, remove every patient-specific claim that cannot be matched to the supplied record.`
 
+const MARKDOWN_FORMAT_CONTRACT =
+  'MARKDOWN FORMAT: When using bold labels, use valid Markdown boundaries. ' +
+  'Put trailing punctuation outside the bold text (for example, **Label**: value), ' +
+  'or add a space after the closing **. Never write **Label:**value without a separator.'
+
 export interface GenerateInsightInput {
   prompt: string
   clinicalContext: string
@@ -76,8 +81,8 @@ export class GenerateInsightUseCase {
         // contract ends with it so the language reminder is closest to the
         // response boundary; the user message repeats it after the long data.
         content: isLocalModel
-          ? `${systemInstruction}\n\n${languageContract}`
-          : `${languageContract}\n\n${systemInstruction}`,
+          ? `${systemInstruction}\n\n${languageContract}\n\n${MARKDOWN_FORMAT_CONTRACT}`
+          : `${languageContract}\n\n${MARKDOWN_FORMAT_CONTRACT}\n\n${systemInstruction}`,
       },
       {
         role: "user" as const,

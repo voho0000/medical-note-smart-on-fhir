@@ -22,6 +22,8 @@ describe('GenerateInsightUseCase', () => {
       expect(messages[0].role).toBe('system')
       expect(messages[0].content).toContain('clinical assistant')
       expect(messages[0].content).toContain('PATIENT-RECORD GROUNDING CONTRACT')
+      expect(messages[0].content).toContain('MARKDOWN FORMAT')
+      expect(messages[0].content).toContain('**Label**: value')
     })
 
     it('should include prompt and clinical context in user message', () => {

@@ -7,7 +7,7 @@ const TABLE = [
   '| 血紅素 | 10.2 | 13-17 | 偏低，可能與貧血有關，建議追蹤 |',
 ].join('\n')
 
-describe('MarkdownRenderer tables', () => {
+describe('MarkdownRenderer', () => {
   it('wraps tables in a horizontal scroll container so wide tables never crush the bubble', () => {
     const { container } = render(<MarkdownRenderer content={TABLE} />)
 
@@ -34,5 +34,16 @@ describe('MarkdownRenderer tables', () => {
     render(<MarkdownRenderer content={TABLE} />)
     expect(screen.getByText('血紅素')).toBeInTheDocument()
     expect(screen.getByText('偏低，可能與貧血有關，建議追蹤')).toBeInTheDocument()
+  })
+
+  it('renders a model-generated bold label when punctuation touches the following text', () => {
+    const { container } = render(
+      <MarkdownRenderer content={'- **2018/02/12：**肌酸酐 1.6 mg/dL'} />,
+    )
+
+    const date = screen.getByText('2018/02/12')
+    expect(date.tagName).toBe('STRONG')
+    expect(container).toHaveTextContent('2018/02/12：肌酸酐 1.6 mg/dL')
+    expect(container).not.toHaveTextContent('**')
   })
 })

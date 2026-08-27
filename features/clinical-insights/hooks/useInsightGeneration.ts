@@ -28,6 +28,7 @@ interface UseInsightGenerationProps {
   context: string
   piiLiterals: string[]
   model: string
+  modelName: string
   contextLimit: number
   contextAdaptation: ClinicalContextAdaptation | null
   inputSignature: string
@@ -49,6 +50,7 @@ export function useInsightGeneration({
   context,
   piiLiterals,
   model,
+  modelName,
   contextLimit,
   contextAdaptation,
   inputSignature,
@@ -142,6 +144,20 @@ export function useInsightGeneration({
       // whole set through one store update only after the final call settles.
       for (const { panel, messages } of prepared) {
         if (runIdRef.current !== runId || ownerChanged()) return
+        const startedAt = Date.now()
+        const activeGenerationId = `${runId}:${panel.id}`
+        setPanelStatus((prev) => ({
+          ...prev,
+          [panel.id]: {
+            isLoading: true,
+            error: null,
+            activeGeneration: {
+              id: activeGenerationId,
+              modelName,
+              startedAt,
+            },
+          },
+        }))
         try {
           const overflow = preflightContextWarning(
             messages.map((message) => message.content).join('\n\n'),
@@ -163,23 +179,41 @@ export function useInsightGeneration({
             diagnosticFeature: 'clinical-insights',
           })
           if (runIdRef.current !== runId || ownerChanged()) return
+          const generatedAt = Date.now()
           entries[panel.id] = {
             text: fullText,
             isEdited: false,
-            metadata: generateInsight.buildMetadata(model),
+            metadata: {
+              source: 'live',
+              ...generateInsight.buildMetadata(model),
+              modelName,
+              generatedAt,
+              durationMs: Math.max(0, generatedAt - startedAt),
+            },
           }
         } catch (error) {
           if (runIdRef.current !== runId || ownerChanged()) return
           const errorMessage = getUserErrorMessage(error)
           console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
           errors[panel.id] = new Error(errorMessage)
+        } finally {
+          if (runIdRef.current === runId && !ownerChanged()) {
+            setPanelStatus((prev) => {
+              const status = prev[panel.id]
+              if (status?.activeGeneration?.id !== activeGenerationId) return prev
+              return {
+                ...prev,
+                [panel.id]: { isLoading: true, error: null },
+              }
+            })
+          }
         }
       }
 
       if (runIdRef.current !== runId || ownerChanged()) return
       completeBatch(activePanelIds, entries, errors)
     },
-    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, panels, piiLiterals, prompts, setPanelStatus],
+    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, modelName, panels, piiLiterals, prompts, setPanelStatus],
   )
 
   const runPanel = useCallback(

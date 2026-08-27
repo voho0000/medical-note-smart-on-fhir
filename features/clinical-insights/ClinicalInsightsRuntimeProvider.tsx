@@ -26,7 +26,7 @@ import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import {
   hasDirectModelAccess,
   modelContextLimit,
-  modelRuntimeIdentity,
+  modelDisplayLabel,
 } from '@/src/shared/utils/model-access.utils'
 import {
   isOpenAiCompatibleRuntimeReady,
@@ -45,6 +45,7 @@ import { useInsightResponsesStore } from "./hooks/useInsightResponsesStore"
 import { useAutoGenerate } from "./hooks/useAutoGenerate"
 import type { PanelStatus, ResponseEntry } from "./types"
 import {
+  DEMO_CLINICAL_INSIGHT_GENERATION,
   getDemoClinicalInsightSnapshot,
 } from "@/src/infrastructure/demo/demo-ai-snapshots"
 import { useAiDataSource } from '@/src/application/hooks/ai-generation/ai-data-source'
@@ -56,8 +57,11 @@ const INSIGHTS_PIPELINE_VERSION = "custom-summary-modules-v1"
 interface CachedInsightEntry {
   entry: ResponseEntry
   promptSig: string
-  contextSig: string
-  modelId: string
+  /** Model-independent identity of the authorized clinical source. */
+  inputSignature?: string
+  /** Legacy v1 fields retained only for safe cache migration. */
+  contextSig?: string
+  modelId?: string
   pipelineVersion: string
 }
 
@@ -118,7 +122,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const dataSource = useAiDataSource()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
   const [bundleRevision, setBundleRevision] = useState(0)
-  const previousRuntimeIdentity = useRef<string | null>(null)
+  const previousResultScopeIdentity = useRef<string | null>(null)
 
   const { prompts, handlePromptChange } = useInsightPanels(panels)
   const context = fittedClinicalInput.clinicalContext
@@ -135,7 +139,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const canGenerate = modelProvider === 'custom'
     ? isOpenAiCompatibleRuntimeReady(openAiCompatible)
     : hasModelProviderKey || hasModelProxy
-  const runtimeModelId = modelRuntimeIdentity(model, openAiCompatible)
+  const modelName = modelDisplayLabel(model, openAiCompatible)
   const autoRunScope = authLoading
     ? "auth-loading"
     : hasModelProviderKey
@@ -162,6 +166,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     context,
     piiLiterals: fittedClinicalInput.piiLiterals,
     model,
+    modelName,
     contextLimit,
     contextAdaptation: fittedClinicalInput.contextAdaptation,
     inputSignature: fittedClinicalInput.inputSignature,
@@ -174,7 +179,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   useEffect(() => {
     const resetForBundle = () => {
       stopAll()
-      previousRuntimeIdentity.current = null
+      previousResultScopeIdentity.current = null
       setHydratedCacheIdentity(null)
       setResponses({})
       setPanelStatus({})
@@ -215,21 +220,25 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     && !clinicalDataError
     && !hasBlockingQueryIssues
     && fittedClinicalInput.dataReady
-  const runtimeIdentity = patientId && context.trim() && clinicalDataReady
-    ? `${bundleRevision}:${patientId}:${contextSig}:${runtimeModelId}:${INSIGHTS_PIPELINE_VERSION}`
+  const resultScopeIdentity = patientId
+    && context.trim()
+    && clinicalDataReady
+    && fittedClinicalInput.inputSignature
+    ? `${bundleRevision}:${patientId}:${audience}:${fittedClinicalInput.inputSignature}:${INSIGHTS_PIPELINE_VERSION}`
     : ""
 
-  // A model or source-context change invalidates every module for this patient.
-  // Prompt-only changes are handled per card by the signatures below.
+  // Only a genuine patient/source/audience change invalidates visible results.
+  // The model picker controls the NEXT run; it must never erase the artifact
+  // currently on screen. Prompt-only changes are handled per card below.
   useEffect(() => {
-    if (!runtimeIdentity) return
-    const previous = previousRuntimeIdentity.current
-    previousRuntimeIdentity.current = runtimeIdentity
-    if (!previous || previous === runtimeIdentity) return
+    if (!resultScopeIdentity) return
+    const previous = previousResultScopeIdentity.current
+    previousResultScopeIdentity.current = resultScopeIdentity
+    if (!previous || previous === resultScopeIdentity) return
     stopAll()
     setResponses({})
     setPanelStatus({})
-  }, [runtimeIdentity, setPanelStatus, setResponses, stopAll])
+  }, [resultScopeIdentity, setPanelStatus, setResponses, stopAll])
 
   const promptSig = useCallback((panelId: string) => {
     const prompt = prompts[panelId] ?? panels.find((panel) => panel.id === panelId)?.prompt ?? ""
@@ -240,34 +249,60 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     () => JSON.stringify(panels.map((panel) => ({ id: panel.id, promptSig: promptSig(panel.id) }))),
     [panels, promptSig],
   )
-  const cacheIdentity = runtimeIdentity ? `${runtimeIdentity}:${panelPromptIdentity}` : ""
-  // Hydrate every card independently. Cache validity includes the current
-  // patient context, prompt, model and pipeline version.
+  const cacheIdentity = resultScopeIdentity ? `${resultScopeIdentity}:${panelPromptIdentity}` : ""
+  // Hydrate every card independently. A cached result owns its generation
+  // model in metadata; the CURRENT picker model is deliberately irrelevant.
   useEffect(() => {
     const descriptors = JSON.parse(panelPromptIdentity) as Array<{ id: string; promptSig: string }>
-    if (!runtimeIdentity || descriptors.length === 0) return
+    if (
+      !resultScopeIdentity
+      || descriptors.length === 0
+      || hydratedCacheIdentity === cacheIdentity
+    ) return
     let cancelled = false
     void Promise.all(descriptors.map(async (panel) => {
       const cached = await loadEncryptedCache<CachedInsightEntry>(
         panelCacheKey(patientId, panel.id),
         INSIGHTS_CACHE_MAX_AGE_MS,
       )
+      const demo = getDemoClinicalInsightSnapshot(patientId, audience, panel.id)
+      const matchingDemo = demo && contentSignature(demo.prompt) === panel.promptSig
+        ? demo
+        : undefined
       if (!cached) {
         // The demo bundle is frozen and its bundled insight snapshots are
         // audited constants. Restore them regardless of a model preference
         // retained from the user's own data; otherwise the hidden custom-
         // insight runtime can silently start cloud AI while the standard demo
         // summary is loading. A deliberate regenerate still uses `model`.
-        const demo = getDemoClinicalInsightSnapshot(patientId, audience, panel.id)
-        if (demo && contentSignature(demo.prompt) === panel.promptSig) {
-          return [panel.id, { text: demo.text, isEdited: false, metadata: null }] as const
+        if (matchingDemo) {
+          return [panel.id, {
+            text: matchingDemo.text,
+            isEdited: false,
+            metadata: { ...DEMO_CLINICAL_INSIGHT_GENERATION },
+          }] as const
         }
         return null
       }
+      // The demo source is frozen. Preserve a manually regenerated cached
+      // result across picker changes, and upgrade old bundled entries whose
+      // provenance was previously saved as null.
+      if (
+        matchingDemo
+        && cached.promptSig === panel.promptSig
+        && cached.pipelineVersion === INSIGHTS_PIPELINE_VERSION
+      ) {
+        return [panel.id, {
+          ...cached.entry,
+          metadata: cached.entry.metadata ?? { ...DEMO_CLINICAL_INSIGHT_GENERATION },
+        }] as const
+      }
+      const sourceMatches = cached.inputSignature
+        ? cached.inputSignature === fittedClinicalInput.inputSignature
+        : cached.contextSig === contextSig
       if (
         cached.promptSig !== panel.promptSig ||
-        cached.contextSig !== contextSig ||
-        cached.modelId !== runtimeModelId ||
+        !sourceMatches ||
         cached.pipelineVersion !== INSIGHTS_PIPELINE_VERSION
       ) return null
       return [panel.id, cached.entry] as const
@@ -279,12 +314,12 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     })
 
     return () => { cancelled = true }
-  }, [audience, cacheIdentity, contextSig, runtimeModelId, panelPromptIdentity, patientId, runtimeIdentity, setResponses])
+  }, [audience, cacheIdentity, contextSig, fittedClinicalInput.inputSignature, hydratedCacheIdentity, panelPromptIdentity, patientId, resultScopeIdentity, setResponses])
 
   // Persist each completed card separately; one slow or failed module never
   // blocks another module from becoming reusable on refresh.
   useEffect(() => {
-    if (!runtimeIdentity || hydratedCacheIdentity !== cacheIdentity) return
+    if (!resultScopeIdentity || hydratedCacheIdentity !== cacheIdentity) return
     for (const panel of panels) {
       if (panelStatus[panel.id]?.isLoading) continue
       const entry = responses[panel.id]
@@ -296,13 +331,12 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
       const cached: CachedInsightEntry = {
         entry,
         promptSig: promptSig(panel.id),
-        contextSig,
-        modelId: runtimeModelId,
+        inputSignature: fittedClinicalInput.inputSignature,
         pipelineVersion: INSIGHTS_PIPELINE_VERSION,
       }
       void saveEncryptedCache(key, cached)
     }
-  }, [cacheIdentity, contextSig, hydratedCacheIdentity, runtimeModelId, panelStatus, panels, patientId, promptSig, responses, runtimeIdentity])
+  }, [cacheIdentity, fittedClinicalInput.inputSignature, hydratedCacheIdentity, panelStatus, panels, patientId, promptSig, responses, resultScopeIdentity])
 
   useAutoGenerate({
     panels,

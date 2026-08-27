@@ -1,4 +1,5 @@
 import {
+  DEMO_CLINICAL_INSIGHT_GENERATION,
   DEMO_MEDICAL_SUMMARY_GENERATION,
   DEMO_SAFETY_SCAN_GENERATION,
   demoMedicalSummarySnapshots,
@@ -25,6 +26,16 @@ import {
 import { DEMO_DATA_AS_OF_MS } from '@/src/shared/constants/demo-data.constants'
 
 describe('demo clinical-insight snapshots', () => {
+  it('declares honest pre-generated model provenance without a fabricated time', () => {
+    expect(DEMO_CLINICAL_INSIGHT_GENERATION).toEqual({
+      source: 'pre-generated',
+      modelId: 'gemini-3.1-flash-lite',
+      modelName: 'Gemini 3.1 Flash-Lite',
+      provider: 'gemini',
+    })
+    expect(DEMO_CLINICAL_INSIGHT_GENERATION).not.toHaveProperty('generatedAt')
+  })
+
   it('selects the bundled snapshot without consulting a retained model preference', () => {
     expect(getDemoClinicalInsightSnapshot(
       'demo-patient-1',

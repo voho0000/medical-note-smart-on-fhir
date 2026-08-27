@@ -3,6 +3,7 @@ import { memo, useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { splitMarkdownBlocks } from '@/src/shared/utils/markdown-blocks'
+import { normalizeMarkdownEmphasisBoundaries } from '@/src/shared/utils/markdown-emphasis'
 
 interface MarkdownRendererProps {
   content: string
@@ -81,7 +82,10 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
   // of re-parsing the whole growing message every ~100ms — which is what froze
   // the main thread (and stalled the stream-reading loop, making replies look
   // slow) on long/fast responses.
-  const blocks = useMemo(() => splitMarkdownBlocks(content), [content])
+  const blocks = useMemo(
+    () => splitMarkdownBlocks(normalizeMarkdownEmphasisBoundaries(content)),
+    [content],
+  )
   return (
     <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
       {blocks.map((block, i) => (

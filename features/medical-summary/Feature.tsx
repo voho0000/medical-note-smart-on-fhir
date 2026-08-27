@@ -840,7 +840,7 @@ export default function MedicalSummaryFeature() {
                 {visibleInsightCount}
               </span>
             ) : null}
-            {customGenerating ? (
+            {customGenerating && activeView !== "custom" ? (
               <Loader2 className="h-3 w-3 animate-spin text-violet-500 dark:text-primary" aria-label={ms.customGenerating} />
             ) : customUnread ? (
               <span

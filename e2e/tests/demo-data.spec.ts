@@ -40,4 +40,23 @@ test.describe('demo data (試用資料)', () => {
     await page.getByRole('button', { name: /結束示範/ }).click()
     await expect(page.getByTestId('welcome-demo-card')).toBeVisible({ timeout: 20_000 })
   })
+
+  test('labels the bundled custom summary with honest pre-generated model provenance', async ({ page }) => {
+    await page.getByTestId('welcome-demo-card').click()
+    await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+
+    const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
+    await summaryPanel.getByRole('tab', { name: '自訂摘要' }).click()
+    const summaryModule = summaryPanel.locator('article').filter({
+      has: page.getByRole('heading', { name: '變化摘要' }),
+    })
+    const meta = summaryModule.getByTestId('custom-insight-generation-meta')
+
+    await expect(meta).toHaveText('預產生·Gemini 3.1 Flash-Lite', { timeout: 20_000 })
+    await expect(meta).toHaveAttribute(
+      'aria-label',
+      '預產生摘要，由 Gemini 3.1 Flash-Lite 建立',
+    )
+    await expect(meta.locator('time')).toHaveCount(0)
+  })
 })
