@@ -19,6 +19,10 @@ jest.mock("@/src/application/providers/language.provider", () => ({
   }),
 }))
 
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/gu, " ")
+}
+
 describe("CustomInsightGenerationMeta", () => {
   afterEach(() => {
     jest.useRealTimers()
@@ -48,10 +52,11 @@ describe("CustomInsightGenerationMeta", () => {
     )
 
     const meta = screen.getByTestId("custom-insight-generation-meta")
-    expect(meta).toHaveTextContent(`GPT-5.6 Luna·${expectedTime}·耗時 00:18`)
-    expect(meta).toHaveAttribute(
-      "aria-label",
-      `由 GPT-5.6 Luna 於 ${expectedTime} 產生，總耗時 00:18`,
+    expect(normalizeWhitespace(meta.textContent ?? "")).toBe(
+      `GPT-5.6 Luna·${normalizeWhitespace(expectedTime)}·耗時 00:18`,
+    )
+    expect(normalizeWhitespace(meta.getAttribute("aria-label") ?? "")).toBe(
+      `由 GPT-5.6 Luna 於 ${normalizeWhitespace(expectedTime)} 產生，總耗時 00:18`,
     )
     expect(meta.querySelector("time")).toHaveAttribute(
       "datetime",
