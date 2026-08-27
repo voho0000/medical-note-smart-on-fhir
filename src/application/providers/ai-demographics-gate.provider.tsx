@@ -78,6 +78,7 @@ export function AiDemographicsGateProvider({
   const queryClient = useQueryClient()
   const { patient } = usePatient()
   const dataSource = useAiDataSource()
+  const medcloudAutoLaunch = isMedcloudLaunchRoute()
   // The persisted auto-generate switch is the only trigger for a background
   // run, so it is also what decides whether missing demographics are blocking.
   const autoGenerateEnabled = useSummaryPrefsStore((s) => s.autoGenerate)
@@ -96,7 +97,10 @@ export function AiDemographicsGateProvider({
   const effectiveProfile = localProfile.available
     ? localProfile.profile
     : sessionProfile
-  const demographicsReadyForAi =
+  // The controlled one-click route must stay question-free. Missing
+  // structured demographics remain missing in the generated context; this
+  // bypass does not invent or persist patient fields.
+  const demographicsReadyForAi = medcloudAutoLaunch ||
     !patient || hasAiReadyPatientDemographics(patient, effectiveProfile)
   const editorProfile = useMemo<UserEnteredPatientProfile | null>(() => {
     const sourceGender =
@@ -238,7 +242,7 @@ export function AiDemographicsGateProvider({
       !autoGenerateEnabled ||
       // Background auto-run is disabled on the Medcloud route, so this prompt
       // there would be a modal with nothing waiting behind it.
-      isMedcloudLaunchRoute() ||
+      medcloudAutoLaunch ||
       demographicsReadyForAi ||
       !scopeId ||
       (dataSource.source === 'local' && !localProfile.available) ||
@@ -254,6 +258,7 @@ export function AiDemographicsGateProvider({
     dataSource.source,
     demographicsReadyForAi,
     localProfile.available,
+    medcloudAutoLaunch,
     requestDemographicsForAi,
     scopeId,
   ])

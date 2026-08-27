@@ -1,6 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
-import { VGTPE_MEDCLOUD_LAUNCH_URL } from '@/src/application/launch/medcloud-launch-context'
+import {
+  MEDCLOUD_AUTO_LAUNCH_URL,
+  VGTPE_MEDCLOUD_LAUNCH_URL,
+  VGTPE_SITE_LAUNCH_URL,
+} from '@/src/application/launch/medcloud-launch-context'
 import { AudienceProvider, useAudience } from '@/src/application/providers/audience.provider'
 
 // jsdom will not let window.location be redefined, so the route answer is
@@ -22,11 +26,12 @@ function AudienceProbe() {
 }
 
 describe('isMedcloudLaunchRoute', () => {
-  it('matches only the exact allow-listed launch URL', () => {
+  it('follows only the independent medcloud2=auto control', () => {
+    expect(isMedcloudLaunchRoute(MEDCLOUD_AUTO_LAUNCH_URL)).toBe(true)
     expect(isMedcloudLaunchRoute(VGTPE_MEDCLOUD_LAUNCH_URL)).toBe(true)
-    // Param order, extra params, and other hosts are deliberately NOT the
-    // unattended route — they keep the normal, question-asking flow.
-    expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto')).toBe(false)
+    expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto')).toBe(true)
+    expect(isMedcloudLaunchRoute(VGTPE_SITE_LAUNCH_URL)).toBe(false)
+    expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/')).toBe(false)
     expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&x=1')).toBe(false)
     expect(isMedcloudLaunchRoute('https://example.com/app/?medcloud2=auto&site=vghtpe')).toBe(false)
     expect(isMedcloudLaunchRoute('')).toBe(false)

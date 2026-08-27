@@ -12,6 +12,7 @@ let mockSourceMetadata: any
 let mockDataSource: any
 let mockAutoGenerate: boolean
 let mockLocalProfile: any
+let mockMedcloudAutoLaunch: boolean
 const mockSaveProfile = jest.fn().mockResolvedValue(undefined)
 
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
@@ -38,6 +39,10 @@ jest.mock('@/src/application/stores/medical-summary-prefs.store', () => ({
 
 jest.mock('@/src/application/hooks/patient/use-local-patient-profile.hook', () => ({
   useLocalPatientProfile: () => mockLocalProfile,
+}))
+
+jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
+  isMedcloudLaunchRoute: () => mockMedcloudAutoLaunch,
 }))
 
 jest.mock(
@@ -111,6 +116,7 @@ describe('AiDemographicsGateProvider', () => {
     mockSourceMetadata = { source: 'health-bank-sdk-json' }
     mockDataSource = { source: 'local', importId: 'import-1' }
     mockAutoGenerate = false
+    mockMedcloudAutoLaunch = false
     mockLocalProfile = {
       available: true,
       importId: 'import-1',
@@ -211,6 +217,23 @@ describe('AiDemographicsGateProvider', () => {
       </AiDemographicsGateProvider>,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: '產生摘要' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('outcome')).toHaveTextContent('generated')
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the authenticated Medcloud auto workflow question-free when demographics are missing', async () => {
+    mockMedcloudAutoLaunch = true
+    renderGate(
+      <AiDemographicsGateProvider>
+        <ManualGenerationProbe />
+        <AiDemographicsGateDialog />
+      </AiDemographicsGateProvider>,
+    )
+
+    expect(screen.getByTestId('ready')).toHaveTextContent('true')
     fireEvent.click(screen.getByRole('button', { name: '產生摘要' }))
     await waitFor(() => {
       expect(screen.getByTestId('outcome')).toHaveTextContent('generated')

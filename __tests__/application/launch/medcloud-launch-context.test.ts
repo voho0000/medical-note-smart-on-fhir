@@ -2,8 +2,12 @@ import { webcrypto } from 'crypto'
 import {
   createVghtpeTvghbrainRuntimeProfile,
   decryptVghtpeMedcloudCredential,
-  isVghtpeMedcloudLaunchUrl,
+  isMedcloudAutoLaunchUrl,
+  isVghtpeLaunchUrl,
+  MEDCLOUD_AUTO_LAUNCH_URL,
+  parseMedcloudLaunchOptions,
   parseMedcloudLaunchContext,
+  VGTPE_SITE_LAUNCH_URL,
   VGTPE_MEDCLOUD_LAUNCH_URL,
   VGTPE_TVGHBRAIN_BASE_URL,
   VGTPE_TVGHBRAIN_MODEL_ID,
@@ -23,26 +27,51 @@ afterAll(() => {
 })
 
 describe('medcloud launch context', () => {
-  it('accepts only the exact production vghtpe auto-launch URL', () => {
-    expect(isVghtpeMedcloudLaunchUrl(VGTPE_MEDCLOUD_LAUNCH_URL)).toBe(true)
-    expect(isVghtpeMedcloudLaunchUrl(
-      'https://evil.example/app/?medcloud2=auto&site=vghtpe',
-    )).toBe(false)
-    expect(isVghtpeMedcloudLaunchUrl(
-      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&site=evil',
-    )).toBe(false)
-    expect(isVghtpeMedcloudLaunchUrl(
-      'https://mediprisma.tw/app/?medcloud2=manual&site=vghtpe',
-    )).toBe(false)
-    expect(isVghtpeMedcloudLaunchUrl(
-      'https://mediprisma.tw/app?medcloud2=auto&site=vghtpe',
-    )).toBe(false)
-    expect(isVghtpeMedcloudLaunchUrl(
+  it('parses medcloud automation and VGH site routing as independent controls', () => {
+    expect(parseMedcloudLaunchOptions('https://mediprisma.tw/app/')).toEqual({
+      auto: false,
+      site: null,
+    })
+    expect(parseMedcloudLaunchOptions(MEDCLOUD_AUTO_LAUNCH_URL)).toEqual({
+      auto: true,
+      site: null,
+    })
+    expect(parseMedcloudLaunchOptions(VGTPE_SITE_LAUNCH_URL)).toEqual({
+      auto: false,
+      site: 'vghtpe',
+    })
+    expect(parseMedcloudLaunchOptions(VGTPE_MEDCLOUD_LAUNCH_URL)).toEqual({
+      auto: true,
+      site: 'vghtpe',
+    })
+    expect(parseMedcloudLaunchOptions(
       'https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto',
-    )).toBe(false)
-    expect(isVghtpeMedcloudLaunchUrl(
+    )).toEqual({ auto: true, site: 'vghtpe' })
+    expect(isMedcloudAutoLaunchUrl(MEDCLOUD_AUTO_LAUNCH_URL)).toBe(true)
+    expect(isMedcloudAutoLaunchUrl(VGTPE_SITE_LAUNCH_URL)).toBe(false)
+    expect(isVghtpeLaunchUrl(VGTPE_SITE_LAUNCH_URL)).toBe(true)
+    expect(isVghtpeLaunchUrl(MEDCLOUD_AUTO_LAUNCH_URL)).toBe(false)
+  })
+
+  it('rejects ambiguous or untrusted launch controls', () => {
+    expect(parseMedcloudLaunchOptions(
+      'https://evil.example/app/?medcloud2=auto&site=vghtpe',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&site=evil',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?medcloud2=manual&site=vghtpe',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app?medcloud2=auto&site=vghtpe',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&extra=1',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
       'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe#extra',
-    )).toBe(false)
+    )).toBeNull()
   })
 
   it('validates the encrypted Extension message envelope', () => {
@@ -58,6 +87,21 @@ describe('medcloud launch context', () => {
       site: 'vghtpe',
       credential: ENCRYPTED_RUNTIME_SECRET,
     })
+    expect(parseMedcloudLaunchContext({
+      source: 'medcloud2-extension',
+      type: 'MEDIPRISMA_LAUNCH_CONTEXT',
+      version: 1,
+      messageId: 'message-default',
+    })).toEqual({
+      messageId: 'message-default',
+    })
+    expect(parseMedcloudLaunchContext({
+      source: 'medcloud2-extension',
+      type: 'MEDIPRISMA_LAUNCH_CONTEXT',
+      version: 1,
+      messageId: 'message-default-with-vgh-secret',
+      credential: ENCRYPTED_RUNTIME_SECRET,
+    })).toBeNull()
     expect(parseMedcloudLaunchContext({
       source: 'other-script',
       type: 'MEDIPRISMA_LAUNCH_CONTEXT',

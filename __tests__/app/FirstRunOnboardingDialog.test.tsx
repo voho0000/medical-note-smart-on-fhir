@@ -3,7 +3,11 @@ import { FirstRunOnboardingDialog } from '@/app/_components/FirstRunOnboardingDi
 import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import { DEMO_FLAG_KEY } from '@/src/infrastructure/fhir/services/local-bundle.service'
-import { VGTPE_MEDCLOUD_LAUNCH_URL } from '@/src/application/launch/medcloud-launch-context'
+import {
+  MEDCLOUD_AUTO_LAUNCH_URL,
+  VGTPE_MEDCLOUD_LAUNCH_URL,
+  VGTPE_SITE_LAUNCH_URL,
+} from '@/src/application/launch/medcloud-launch-context'
 
 const mockOnboarding = {
   step: '步驟',
@@ -115,16 +119,26 @@ describe('FirstRunOnboardingDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('stays out of the way on the exact VGTPE Medcloud launch', () => {
-    render(<FirstRunOnboardingDialog launchHref={VGTPE_MEDCLOUD_LAUNCH_URL} />)
+  it('stays out of the way on auto launches with or without a VGH site', () => {
+    const { rerender } = render(
+      <FirstRunOnboardingDialog launchHref={MEDCLOUD_AUTO_LAUNCH_URL} />,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    rerender(<FirstRunOnboardingDialog launchHref={VGTPE_MEDCLOUD_LAUNCH_URL} />)
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    rerender(
+      <FirstRunOnboardingDialog launchHref="https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto" />,
+    )
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('still onboards on similar but non-allow-listed launch URLs', () => {
-    render(
-      <FirstRunOnboardingDialog launchHref="https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto" />,
-    )
+  it('keeps the normal onboarding flow for a site-only launch', () => {
+    render(<FirstRunOnboardingDialog launchHref={VGTPE_SITE_LAUNCH_URL} />)
 
     expect(screen.getByText('歡迎使用 MediPrisma')).toBeInTheDocument()
   })

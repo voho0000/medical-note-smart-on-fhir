@@ -1,25 +1,32 @@
 import { create } from 'zustand'
 
+export interface MedcloudSummaryRequest {
+  /** Non-secret Extension delivery id. */
+  messageId: string
+  /** Exact model selected by the independent site-routing decision. */
+  modelId: string
+}
+
 interface MedcloudLaunchState {
-  /** Non-secret delivery id waiting for the Medical Summary feature to become
-   * data-ready. The decrypted API key lives only in ai-config's runtime-only
-   * profile and is never copied into this queue. */
-  pendingSummaryMessageId: string | null
-  queueSummary: (messageId: string) => void
+  /** Request waiting for the Medical Summary feature to become data-ready.
+   * The decrypted credential lives only in ai-config when the VGH site is
+   * active and is never copied into this queue. */
+  pendingSummary: MedcloudSummaryRequest | null
+  queueSummary: (request: MedcloudSummaryRequest) => void
   claimSummary: (messageId: string) => boolean
   clear: () => void
 }
 
 export const useMedcloudLaunchStore = create<MedcloudLaunchState>((set, get) => ({
-  pendingSummaryMessageId: null,
-  queueSummary: (messageId) => {
-    if (!messageId) return
-    set({ pendingSummaryMessageId: messageId })
+  pendingSummary: null,
+  queueSummary: (request) => {
+    if (!request.messageId || !request.modelId) return
+    set({ pendingSummary: request })
   },
   claimSummary: (messageId) => {
-    if (get().pendingSummaryMessageId !== messageId) return false
-    set({ pendingSummaryMessageId: null })
+    if (get().pendingSummary?.messageId !== messageId) return false
+    set({ pendingSummary: null })
     return true
   },
-  clear: () => set({ pendingSummaryMessageId: null }),
+  clear: () => set({ pendingSummary: null }),
 }))

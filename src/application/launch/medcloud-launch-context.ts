@@ -14,6 +14,11 @@ export const MEDCLOUD_LAUNCH_CONTEXT_SOURCE = 'medcloud2-extension'
 export const MEDCLOUD_LAUNCH_CONTEXT_TYPE = 'MEDIPRISMA_LAUNCH_CONTEXT'
 export const MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE = 'MEDIPRISMA_LAUNCH_CONTEXT_ACK'
 
+export const MEDIPRISMA_PRODUCTION_ORIGIN = 'https://mediprisma.tw'
+export const MEDCLOUD_AUTO_LAUNCH_URL =
+  'https://mediprisma.tw/app/?medcloud2=auto'
+export const VGTPE_SITE_LAUNCH_URL =
+  'https://mediprisma.tw/app/?site=vghtpe'
 export const VGTPE_MEDCLOUD_LAUNCH_URL =
   'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
 export const VGTPE_MEDCLOUD_DECRYPTION_KEY_BASE64URL =
@@ -26,19 +31,66 @@ const AES_GCM_IV_LENGTH = 12
 const AES_GCM_AUTH_TAG_LENGTH = 16
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/
 
-export interface MedcloudLaunchContext {
-  messageId: string
-  site: 'vghtpe'
-  credential: string
+export type MedcloudLaunchContext =
+  | {
+      messageId: string
+      site: 'vghtpe'
+      credential: string
+    }
+  | {
+      messageId: string
+      site?: undefined
+      credential?: never
+    }
+
+export interface MedcloudLaunchOptions {
+  auto: boolean
+  site: 'vghtpe' | null
 }
 
-export function isVghtpeMedcloudLaunchUrl(value: string | URL): boolean {
+/** Parse only the PHI-free launch controls accepted by the production app.
+ * The two controls are deliberately independent: `medcloud2=auto` owns the
+ * unattended workflow, while `site=vghtpe` owns hospital routing. */
+export function parseMedcloudLaunchOptions(
+  value: string | URL,
+): MedcloudLaunchOptions | null {
   try {
     const url = value instanceof URL ? value : new URL(value)
-    return url.href === VGTPE_MEDCLOUD_LAUNCH_URL
+    if (
+      url.origin !== MEDIPRISMA_PRODUCTION_ORIGIN ||
+      url.pathname !== '/app/' ||
+      url.hash !== ''
+    ) return null
+
+    let parameterCount = 0
+    url.searchParams.forEach(() => {
+      parameterCount += 1
+    })
+    const autoValues = url.searchParams.getAll('medcloud2')
+    const siteValues = url.searchParams.getAll('site')
+    if (
+      autoValues.length > 1 ||
+      siteValues.length > 1 ||
+      parameterCount !== autoValues.length + siteValues.length ||
+      (autoValues.length === 1 && autoValues[0] !== 'auto') ||
+      (siteValues.length === 1 && siteValues[0] !== 'vghtpe')
+    ) return null
+
+    return {
+      auto: autoValues.length === 1,
+      site: siteValues.length === 1 ? 'vghtpe' : null,
+    }
   } catch {
-    return false
+    return null
   }
+}
+
+export function isMedcloudAutoLaunchUrl(value: string | URL): boolean {
+  return parseMedcloudLaunchOptions(value)?.auto === true
+}
+
+export function isVghtpeLaunchUrl(value: string | URL): boolean {
+  return parseMedcloudLaunchOptions(value)?.site === 'vghtpe'
 }
 
 function decodeBase64UrlSegment(value: string): Uint8Array | null {
@@ -129,10 +181,21 @@ export function parseMedcloudLaunchContext(value: unknown): MedcloudLaunchContex
     candidate.source !== MEDCLOUD_LAUNCH_CONTEXT_SOURCE ||
     candidate.type !== MEDCLOUD_LAUNCH_CONTEXT_TYPE ||
     candidate.version !== 1 ||
-    candidate.site !== 'vghtpe' ||
     typeof candidate.messageId !== 'string' ||
     candidate.messageId.length < 1 ||
-    candidate.messageId.length > MAX_MESSAGE_ID_LENGTH ||
+    candidate.messageId.length > MAX_MESSAGE_ID_LENGTH
+  ) return null
+
+  if (candidate.site === undefined) {
+    // The default-model auto route carries no VGH secret. Rejecting even a
+    // well-formed credential here keeps the two launch controls independent
+    // and prevents accidental disclosure outside the VGH site route.
+    if (candidate.credential !== undefined) return null
+    return { messageId: candidate.messageId }
+  }
+
+  if (
+    candidate.site !== 'vghtpe' ||
     typeof candidate.credential !== 'string' ||
     candidate.credential.length < 1 ||
     candidate.credential.length > MAX_CREDENTIAL_LENGTH

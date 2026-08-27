@@ -4,8 +4,8 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   createVghtpeTvghbrainRuntimeProfile,
   decryptVghtpeMedcloudCredential,
-  isVghtpeMedcloudLaunchUrl,
   MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
+  parseMedcloudLaunchOptions,
   parseMedcloudLaunchContext,
   type MedcloudLaunchContext,
   VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
@@ -21,6 +21,7 @@ import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-p
 import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
+import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 interface MedcloudLaunchProviderProps {
   children: ReactNode
@@ -52,6 +53,16 @@ function resetVghtpeRuntimeModelPreferences(): void {
   }
 }
 
+/** The no-site automatic route explicitly requests the ordinary defaults,
+ * regardless of a model choice left behind by an earlier browser session. */
+function selectDefaultModelPreferences(): void {
+  const modelPrefs = useModelPrefsStore.getState()
+  modelPrefs.setModelFor('chat', MODEL_PREF_DEFAULTS.chat)
+  modelPrefs.setModelFor('insights', MODEL_PREF_DEFAULTS.insights)
+  useSummaryPrefsStore.getState().setModelId(MEDICAL_SUMMARY_MODEL_ID)
+  useSafetyPrefsStore.getState().setModelId(SAFETY_ALERTS_MODEL_ID)
+}
+
 export function MedcloudLaunchProvider({
   children,
   launchHref,
@@ -65,13 +76,36 @@ export function MedcloudLaunchProvider({
   const processedMessageIdsRef = useRef(new Set<string>())
   const processingMessageIdsRef = useRef(new Set<string>())
   const activationEpochRef = useRef(0)
+  const bundleSettledRef = useRef(false)
+  const launchSummaryModelIdRef = useRef<string | null>(null)
+  const launchMessageIdRef = useRef<string | null>(null)
+  const autoSummaryQueuedRef = useRef(false)
   const resolvedLaunchHref = launchHref ?? (
     typeof window === 'undefined' ? '' : window.location.href
   )
+  const launchOptions = useMemo(
+    () => parseMedcloudLaunchOptions(resolvedLaunchHref),
+    [resolvedLaunchHref],
+  )
   const launchOrigin = useMemo(() => {
-    if (!isVghtpeMedcloudLaunchUrl(resolvedLaunchHref)) return null
+    if (!launchOptions || (!launchOptions.auto && !launchOptions.site)) return null
     return new URL(resolvedLaunchHref).origin
-  }, [resolvedLaunchHref])
+  }, [launchOptions, resolvedLaunchHref])
+
+  const queueAutoSummaryIfReady = useCallback(() => {
+    const modelId = launchSummaryModelIdRef.current
+    if (
+      !launchOptions?.auto ||
+      !bundleSettledRef.current ||
+      !modelId ||
+      autoSummaryQueuedRef.current
+    ) return
+    const messageId = launchMessageIdRef.current ?? (
+      globalThis.crypto?.randomUUID?.() ?? `medcloud-auto-${Date.now()}`
+    )
+    autoSummaryQueuedRef.current = true
+    useMedcloudLaunchStore.getState().queueSummary({ messageId, modelId })
+  }, [launchOptions])
 
   // Persist hydration can finish after this provider mounts. Watching all four
   // preferences makes a later non-parameter Extension launch recover as soon
@@ -80,6 +114,36 @@ export function MedcloudLaunchProvider({
     if (launchOrigin) return
     resetVghtpeRuntimeModelPreferences()
   }, [chatModelId, insightsModelId, launchOrigin, safetyModelId, summaryModelId])
+
+  // The no-site route receives no launch-context message. Its URL selects the
+  // ordinary defaults, while the import-settled event below is the only signal
+  // allowed to queue a summary for the newly published Bundle.
+  useEffect(() => {
+    if (
+      credentialsHydrating ||
+      !launchOptions?.auto ||
+      launchOptions.site !== null
+    ) return
+    useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
+      VGTPE_TVGHBRAIN_PROFILE_ID,
+    )
+    selectDefaultModelPreferences()
+    launchSummaryModelIdRef.current = MEDICAL_SUMMARY_MODEL_ID
+    queueAutoSummaryIfReady()
+  }, [credentialsHydrating, launchOptions, queueAutoSummaryIfReady])
+
+  useEffect(() => {
+    if (!launchOptions?.auto || typeof window === 'undefined') return
+    const handleBundleSettled = () => {
+      bundleSettledRef.current = true
+      queueAutoSummaryIfReady()
+    }
+    window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, handleBundleSettled)
+    return () => window.removeEventListener(
+      BUNDLE_CHANGE_SETTLED_EVENT,
+      handleBundleSettled,
+    )
+  }, [launchOptions, queueAutoSummaryIfReady])
 
   const acknowledge = useCallback((messageId: string) => {
     if (!launchOrigin || typeof window === 'undefined') return
@@ -91,21 +155,34 @@ export function MedcloudLaunchProvider({
     }, launchOrigin)
   }, [launchOrigin])
 
-  const activate = useCallback((context: MedcloudLaunchContext, apiKey: string) => {
-    useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(
-      createVghtpeTvghbrainRuntimeProfile(apiKey),
-    )
+  const activate = useCallback((context: MedcloudLaunchContext, apiKey?: string) => {
+    if (!launchOptions) return
 
-    // Select the runtime-only hospital connection everywhere first, then queue
-    // one generation. The summary feature claims that delivery only after its
-    // FHIR input and model/cache hydration are complete.
-    const modelId = VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
-    const modelPrefs = useModelPrefsStore.getState()
-    modelPrefs.setModelFor('chat', modelId)
-    modelPrefs.setModelFor('insights', modelId)
-    useSummaryPrefsStore.getState().setModelId(modelId)
-    useSafetyPrefsStore.getState().setModelId(modelId)
-    useMedcloudLaunchStore.getState().queueSummary(context.messageId)
+    let summaryModelId = MEDICAL_SUMMARY_MODEL_ID
+    if (launchOptions.site === 'vghtpe') {
+      if (!apiKey) return
+      useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(
+        createVghtpeTvghbrainRuntimeProfile(apiKey),
+      )
+      const modelId = VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
+      const modelPrefs = useModelPrefsStore.getState()
+      modelPrefs.setModelFor('chat', modelId)
+      modelPrefs.setModelFor('insights', modelId)
+      useSummaryPrefsStore.getState().setModelId(modelId)
+      useSafetyPrefsStore.getState().setModelId(modelId)
+      summaryModelId = modelId
+    } else {
+      // The external-site route contains no VGH credential and must never
+      // install or call the VGH local endpoint.
+      useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
+        VGTPE_TVGHBRAIN_PROFILE_ID,
+      )
+      selectDefaultModelPreferences()
+    }
+
+    launchSummaryModelIdRef.current = summaryModelId
+    launchMessageIdRef.current = context.messageId
+    queueAutoSummaryIfReady()
 
     const processed = processedMessageIdsRef.current
     processed.add(context.messageId)
@@ -115,7 +192,7 @@ export function MedcloudLaunchProvider({
       processed.delete(oldest)
     }
     acknowledge(context.messageId)
-  }, [acknowledge])
+  }, [acknowledge, launchOptions, queueAutoSummaryIfReady])
 
   const processContext = useCallback(async (context: MedcloudLaunchContext) => {
     if (processedMessageIdsRef.current.has(context.messageId)) {
@@ -127,9 +204,13 @@ export function MedcloudLaunchProvider({
     processing.add(context.messageId)
     const activationEpoch = activationEpochRef.current
     try {
-      const apiKey = await decryptVghtpeMedcloudCredential(context.credential)
-      if (!apiKey || activationEpoch !== activationEpochRef.current) return
-      activate(context, apiKey)
+      if (context.site === 'vghtpe') {
+        const apiKey = await decryptVghtpeMedcloudCredential(context.credential)
+        if (!apiKey || activationEpoch !== activationEpochRef.current) return
+        activate(context, apiKey)
+      } else if (activationEpoch === activationEpochRef.current) {
+        activate(context)
+      }
     } catch {
       // Fail closed without exposing the credential through an exception or
       // leaving a partially installed runtime connection behind.
@@ -153,6 +234,7 @@ export function MedcloudLaunchProvider({
       ) return
       const context = parseMedcloudLaunchContext(event.data)
       if (!context) return
+      if (!launchOptions || (context.site ?? null) !== launchOptions.site) return
       if (processedMessageIdsRef.current.has(context.messageId)) {
         acknowledge(context.messageId)
         return
@@ -166,7 +248,7 @@ export function MedcloudLaunchProvider({
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [acknowledge, credentialsHydrating, launchOrigin, processContext])
+  }, [acknowledge, credentialsHydrating, launchOptions, launchOrigin, processContext])
 
   useEffect(() => {
     if (credentialsHydrating || !launchOrigin) return
@@ -182,6 +264,10 @@ export function MedcloudLaunchProvider({
     const processingMessageIds = processingMessageIdsRef.current
     const clearSensitiveLaunchState = () => {
       activationEpochRef.current += 1
+      bundleSettledRef.current = false
+      launchSummaryModelIdRef.current = null
+      launchMessageIdRef.current = null
+      autoSummaryQueuedRef.current = false
       pendingContextRef.current = null
       processedMessageIds.clear()
       processingMessageIds.clear()

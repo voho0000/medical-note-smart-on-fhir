@@ -106,7 +106,6 @@ import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-exec
 import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
 import { AiExecutionDiagnosticsDialog } from "@/src/shared/components/AiExecutionDiagnosticsDialog"
 import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
-import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from "@/src/application/launch/medcloud-launch-context"
 
 type SummaryView = "standard" | "custom"
 
@@ -217,10 +216,9 @@ export default function MedicalSummaryFeature() {
   useMedcloudAutoSummary({
     hasPatient,
     // `result` is already scoped to the current patient, FHIR input signature,
-    // locale, audience, and selected model cache slot. A restored TVGHBRAIN
-    // result therefore proves this patient does not need another launch run.
-    hasTvghbrainSummary:
-      result?.generation?.modelId === VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    // locale, audience, and selected model cache slot. Matching provenance
+    // therefore proves this patient does not need another launch run.
+    summaryModelId: result?.generation?.modelId ?? null,
     dataReady,
     isGenerating: isBusy,
     isRestoring,

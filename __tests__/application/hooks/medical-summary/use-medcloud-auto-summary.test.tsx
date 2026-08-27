@@ -2,19 +2,23 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useMedcloudAutoSummary } from '@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcloud-launch-context'
+import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
 describe('useMedcloudAutoSummary', () => {
   beforeEach(() => useMedcloudLaunchStore.getState().clear())
 
   it('waits for the FHIR summary runtime, then claims and generates once', async () => {
     const generate = jest.fn(async () => undefined)
-    useMedcloudLaunchStore.getState().queueSummary('message-1')
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-1',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    })
     const { rerender } = renderHook((props: {
       dataReady: boolean
       isRestoring: boolean
     }) => useMedcloudAutoSummary({
       hasPatient: true,
-      hasTvghbrainSummary: false,
+      summaryModelId: null,
       dataReady: props.dataReady,
       isGenerating: false,
       isRestoring: props.isRestoring,
@@ -25,23 +29,26 @@ describe('useMedcloudAutoSummary', () => {
     })
 
     expect(generate).not.toHaveBeenCalled()
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBe('message-1')
+    expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId).toBe('message-1')
 
     rerender({ dataReady: true, isRestoring: false })
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
 
     rerender({ dataReady: true, isRestoring: false })
     expect(generate).toHaveBeenCalledTimes(1)
   })
 
-  it('does not consume a request until tvghbrain is the selected model', () => {
+  it('does not consume a request until its queued model is selected', () => {
     const generate = jest.fn(async () => undefined)
-    useMedcloudLaunchStore.getState().queueSummary('message-2')
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-2',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    })
 
     renderHook(() => useMedcloudAutoSummary({
       hasPatient: true,
-      hasTvghbrainSummary: false,
+      summaryModelId: null,
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
@@ -50,16 +57,40 @@ describe('useMedcloudAutoSummary', () => {
     }))
 
     expect(generate).not.toHaveBeenCalled()
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBe('message-2')
+    expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId).toBe('message-2')
   })
 
-  it('consumes the launch without regenerating when this patient already has a tvghbrain summary', async () => {
+  it('runs the external launch with the ordinary default model', async () => {
     const generate = jest.fn(async () => undefined)
-    useMedcloudLaunchStore.getState().queueSummary('message-existing')
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-default',
+      modelId: MEDICAL_SUMMARY_MODEL_ID,
+    })
 
     renderHook(() => useMedcloudAutoSummary({
       hasPatient: true,
-      hasTvghbrainSummary: true,
+      summaryModelId: null,
+      dataReady: true,
+      isGenerating: false,
+      isRestoring: false,
+      modelId: MEDICAL_SUMMARY_MODEL_ID,
+      generate,
+    }))
+
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
+
+  it('consumes the launch without regenerating when this patient already has a matching summary', async () => {
+    const generate = jest.fn(async () => undefined)
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-existing',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    })
+
+    renderHook(() => useMedcloudAutoSummary({
+      hasPatient: true,
+      summaryModelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
@@ -68,7 +99,7 @@ describe('useMedcloudAutoSummary', () => {
     }))
 
     await waitFor(() => expect(
-      useMedcloudLaunchStore.getState().pendingSummaryMessageId,
+      useMedcloudLaunchStore.getState().pendingSummary,
     ).toBeNull())
     expect(generate).not.toHaveBeenCalled()
   })

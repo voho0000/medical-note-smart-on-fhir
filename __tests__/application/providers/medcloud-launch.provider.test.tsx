@@ -2,7 +2,9 @@ import { webcrypto } from 'crypto'
 import { act, render, waitFor } from '@testing-library/react'
 import { MedcloudLaunchProvider } from '@/src/application/providers/medcloud-launch.provider'
 import {
+  MEDCLOUD_AUTO_LAUNCH_URL,
   MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
+  VGTPE_SITE_LAUNCH_URL,
   VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
   VGTPE_TVGHBRAIN_PROFILE_ID,
 } from '@/src/application/launch/medcloud-launch-context'
@@ -17,6 +19,7 @@ import { createEmptyOpenAiCompatibleConfig } from '@/src/shared/types/openai-com
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
+import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
 const ENCRYPTED_RUNTIME_SECRET =
@@ -33,7 +36,8 @@ afterAll(() => {
 
 function extensionMessage(
   messageId = 'message-1',
-  credential = ENCRYPTED_RUNTIME_SECRET,
+  credential: string | null = ENCRYPTED_RUNTIME_SECRET,
+  site: 'vghtpe' | null = 'vghtpe',
 ) {
   const event = new MessageEvent('message', {
     data: {
@@ -41,13 +45,17 @@ function extensionMessage(
       type: 'MEDIPRISMA_LAUNCH_CONTEXT',
       version: 1,
       messageId,
-      site: 'vghtpe',
-      credential,
+      ...(credential ? { credential } : {}),
+      ...(site ? { site } : {}),
     },
     origin: 'https://mediprisma.tw',
   })
   Object.defineProperty(event, 'source', { value: window })
   return event
+}
+
+function settleImportedBundle() {
+  act(() => window.dispatchEvent(new Event(BUNDLE_CHANGE_SETTLED_EVENT)))
 }
 
 describe('MedcloudLaunchProvider', () => {
@@ -92,7 +100,13 @@ describe('MedcloudLaunchProvider', () => {
     })
     expect(useSummaryPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
     expect(useSafetyPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBe('message-1')
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+
+    settleImportedBundle()
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary).toEqual({
+      messageId: 'message-1',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    }))
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
       source: 'mediprisma',
       type: MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
@@ -104,6 +118,107 @@ describe('MedcloudLaunchProvider', () => {
 
     unmount()
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+  })
+
+  it('uses the ordinary default model for an external auto launch without installing VGH runtime', async () => {
+    useModelPrefsStore.setState({
+      prefs: { chat: 'custom-chat', insights: 'custom-insights' },
+    })
+    useSummaryPrefsStore.setState({ modelId: 'custom-summary' })
+    useSafetyPrefsStore.setState({ modelId: 'custom-safety' })
+    render(
+      <MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    await waitFor(() => {
+      expect(useModelPrefsStore.getState().prefs).toEqual(MODEL_PREF_DEFAULTS)
+      expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
+      expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
+    })
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    expect(postMessage).not.toHaveBeenCalled()
+
+    settleImportedBundle()
+
+    await waitFor(() => expect(
+      useMedcloudLaunchStore.getState().pendingSummary,
+    ).toEqual({
+      messageId: expect.any(String),
+      modelId: MEDICAL_SUMMARY_MODEL_ID,
+    }))
+  })
+
+  it('selects VGHBrain for a site-only launch without queuing an automatic summary', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={VGTPE_SITE_LAUNCH_URL}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    act(() => window.dispatchEvent(extensionMessage('message-site-only')))
+
+    await waitFor(() => expect(
+      useAiConfigStore.getState().openAiCompatibleProfiles[0]?.profileId,
+    ).toBe(VGTPE_TVGHBRAIN_PROFILE_ID))
+    settleImportedBundle()
+    expect(useSummaryPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    expect(postMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for the VGH credential when the imported Bundle settles first', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={launchHref}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    settleImportedBundle()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+
+    act(() => window.dispatchEvent(extensionMessage('message-bundle-first')))
+
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary).toEqual({
+      messageId: 'message-bundle-first',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    }))
+  })
+
+  it('ignores a site context that does not match the route controls', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    act(() => window.dispatchEvent(extensionMessage('message-wrong-site')))
+    await act(async () => { await Promise.resolve() })
+
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    expect(postMessage).not.toHaveBeenCalled()
+  })
+
+  it('rejects a VGH credential on the external default-model route', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    act(() => window.dispatchEvent(extensionMessage(
+      'message-secret-on-external-route',
+      ENCRYPTED_RUNTIME_SECRET,
+      null,
+    )))
+    await act(async () => { await Promise.resolve() })
+
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    expect(postMessage).not.toHaveBeenCalled()
   })
 
   it('holds a valid message until credential hydration completes', async () => {
@@ -134,12 +249,16 @@ describe('MedcloudLaunchProvider', () => {
 
     act(() => window.dispatchEvent(extensionMessage()))
     await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1))
+    settleImportedBundle()
+    await waitFor(() => expect(
+      useMedcloudLaunchStore.getState().pendingSummary,
+    ).not.toBeNull())
     expect(useMedcloudLaunchStore.getState().claimSummary('message-1')).toBe(true)
 
     act(() => window.dispatchEvent(extensionMessage()))
 
     expect(postMessage).toHaveBeenCalledTimes(2)
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   })
 
   it('does not acknowledge or install a profile when authentication fails', async () => {
@@ -156,7 +275,7 @@ describe('MedcloudLaunchProvider', () => {
 
     await act(async () => { await Promise.resolve() })
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
     expect(postMessage).not.toHaveBeenCalled()
   })
 
@@ -170,11 +289,15 @@ describe('MedcloudLaunchProvider', () => {
     await waitFor(() => expect(
       useAiConfigStore.getState().openAiCompatibleProfiles,
     ).toHaveLength(1))
+    settleImportedBundle()
+    await waitFor(() => expect(
+      useMedcloudLaunchStore.getState().pendingSummary,
+    ).not.toBeNull())
 
     act(() => window.dispatchEvent(new Event('pagehide')))
 
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
-    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
     expect(useModelPrefsStore.getState().prefs).toEqual(MODEL_PREF_DEFAULTS)
     expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
     expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
