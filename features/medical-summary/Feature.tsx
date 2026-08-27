@@ -915,7 +915,7 @@ export default function MedicalSummaryFeature() {
               type="button"
               size="sm"
               variant="outline"
-              className="h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7"
+              className="hidden h-[44px] gap-1 px-2 text-xs shadow-none hover:shadow-none md:inline-flex lg:h-7"
               onClick={() => openCustomManager()}
               title={`${ms.manageCustomInsights}。${ms.customManagerDescription}`}
               aria-label={ms.manageCustomInsights}
@@ -972,6 +972,22 @@ export default function MedicalSummaryFeature() {
                 <Database className="h-3.5 w-3.5" />
                 {ms.dataScopeButton}
               </Button>
+              {activeView === "custom" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-[44px] w-full justify-start gap-2 px-2 text-xs md:hidden"
+                  onClick={() => {
+                    setSummarySettingsOpen(false)
+                    openCustomManager()
+                  }}
+                  title={ms.customManagerDescription}
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  {ms.customManagerTitle}
+                </Button>
+              ) : null}
               {activeView === "standard" && !isPatient && availableCardIds.length > 0 ? (
                 <Button
                   type="button"
