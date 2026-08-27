@@ -1132,6 +1132,9 @@ export default function MedicalSummaryFeature() {
               generatedByLine={generatedByLine}
               expandSummaryLabel={ms.expandSummary}
               collapseSummaryLabel={ms.collapseSummary}
+              copyLabel={t.common.copy}
+              copiedLabel={t.common.copied}
+              copyFailedLabel={t.common.copyFailed}
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}

@@ -1,8 +1,11 @@
 "use client"
 
 import { useLayoutEffect, useRef, useState } from "react"
-import { ChevronDown, ShieldCheck } from "lucide-react"
+import { Check, ChevronDown, Copy, ShieldCheck } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import type {
   MedicalSummaryResult,
   ResolvedSourceRef,
@@ -16,6 +19,9 @@ interface CurrentPrioritiesCardProps {
   generatedByLine: string
   expandSummaryLabel: string
   collapseSummaryLabel: string
+  copyLabel: string
+  copiedLabel: string
+  copyFailedLabel: string
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
@@ -27,14 +33,27 @@ export function CurrentPrioritiesCard({
   generatedByLine,
   expandSummaryLabel,
   collapseSummaryLabel,
+  copyLabel,
+  copiedLabel,
+  copyFailedLabel,
   typeLabel,
   unverifiedLabel,
   onNavigate,
 }: CurrentPrioritiesCardProps) {
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [summaryOverflowing, setSummaryOverflowing] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
   const summaryRef = useRef<HTMLParagraphElement>(null)
   const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
+
+  const handleCopy = async () => {
+    const summaryText = result.summary.map((segment) => segment.text).join("").trim()
+    const text = [title.trim(), result.headline.trim(), summaryText]
+      .filter(Boolean)
+      .join("\n")
+
+    if (!await copy(text)) toast.error(copyFailedLabel)
+  }
 
   useLayoutEffect(() => {
     const el = summaryRef.current
@@ -75,6 +94,21 @@ export function CurrentPrioritiesCard({
           <h3 id="current-priorities-title" className="min-w-0 flex-1 text-sm font-semibold text-foreground">
             {title}
           </h3>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-[44px] shrink-0 gap-1.5 px-2 text-xs shadow-none hover:shadow-none lg:h-8"
+            onClick={handleCopy}
+            aria-label={copied ? copiedLabel : copyLabel}
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-300" aria-hidden="true" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span>{copied ? copiedLabel : copyLabel}</span>
+          </Button>
         </div>
         <p className="mt-2 text-[0.875rem] font-semibold leading-snug text-foreground @min-[48rem]:text-[0.9375rem]">
           {result.headline}
