@@ -97,7 +97,7 @@ export const zhTW = {
     clinicalInsights: '自訂摘要',
     safetyAlerts: '安全警示',
     medicalSummary: '醫療摘要',
-    ipsExport: '匯出',
+    ipsExport: '複製',
     medicalCalculator: '計算機',
     personalizedEducation: '個人化衛教',
     personalizedGuidance: '個人化照護指引',

@@ -34,8 +34,8 @@ const STEPS: TourStep[] = [
     target: '[data-tour="right-tabs"]',
     title: { 'zh-TW': '右側是臨床工作區', en: 'The right side is your clinical workspace' },
     body: {
-      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、匯出與設定；登入後可從設定中自行開啟 Beta 功能。取消釘選的功能會收進「更多」選單。',
-      en: 'The tabs bring together the medical summary, clinical chat, calculators, export, and settings. After signing in, Beta features can be enabled in Settings. Unpinned tools move into More.',
+      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、複製與設定；登入後可從設定中自行開啟 Beta 功能。取消釘選的功能會收進「更多」選單。',
+      en: 'The tabs bring together the medical summary, clinical chat, calculators, copy tools, and settings. After signing in, Beta features can be enabled in Settings. Unpinned tools move into More.',
     },
   },
   {
@@ -141,7 +141,7 @@ const STEPS: TourStep[] = [
     id: 'export',
     target: '[data-tour="right-tab-ips-export"]',
     highlightPadding: 10,
-    title: { 'zh-TW': '匯出前先預覽並調整範圍', en: 'Preview and adjust scope before export' },
+    title: { 'zh-TW': '複製前先預覽並調整範圍', en: 'Preview and adjust scope before copying' },
     body: {
       'zh-TW': '可先預覽整理後的病歷內容、調整納入範圍，再複製或下載 Markdown／JSON。需要 AI 推論的項目必須由你主動啟動與確認。',
       en: 'Preview the organised record, adjust its scope, then copy or download Markdown or JSON. Any AI-inferred item requires your explicit request and confirmation.',

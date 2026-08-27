@@ -96,7 +96,7 @@ export const en = {
     clinicalInsights: 'Custom Summary',
     safetyAlerts: 'Safety',
     medicalSummary: 'Summary',
-    ipsExport: 'Export',
+    ipsExport: 'Copy',
     medicalCalculator: 'Calculator',
     personalizedEducation: 'Education',
     personalizedGuidance: 'Care guidance',
