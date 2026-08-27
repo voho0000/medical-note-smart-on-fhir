@@ -9,10 +9,18 @@ import { useBackDismissibleLayer } from '@/src/shared/hooks/layout/use-back-dism
 
 const LAYER_KEY = '__mpLayer'
 
-/** jsdom runs history traversal as a task, so a back() needs a turn to land. */
-const settleHistory = async () => {
+/**
+ * jsdom runs history traversal as a task. Wait for the traversal itself rather
+ * than guessing how many milliseconds the CI runner needs to dispatch it.
+ */
+const runAndWaitForPopState = async (action: () => void) => {
+  const traversed = new Promise<void>((resolve) => {
+    window.addEventListener('popstate', () => resolve(), { once: true })
+  })
+
+  action()
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await traversed
   })
 }
 
@@ -31,10 +39,9 @@ const onSentinel = () =>
   (window.history.state as Record<string, unknown> | null)?.__probe === SENTINEL
 
 const goBack = async () => {
-  act(() => {
+  await runAndWaitForPopState(() => {
     window.history.back()
   })
-  await settleHistory()
 }
 
 function Layer({
@@ -68,7 +75,7 @@ function NestedLayers({
 }
 
 describe('useBackDismissibleLayer', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     // jsdom keeps one session history for the whole file. Pushing truncates
     // anything a previous test left ahead of us, so these two pushes always
     // produce the same shape: [ … , sentinel, baseline ] with the cursor on
@@ -76,7 +83,6 @@ describe('useBackDismissibleLayer', () => {
     window.history.pushState({ __probe: SENTINEL }, '')
     window.history.pushState({}, '')
     window.history.replaceState({}, '')
-    await settleHistory()
   })
 
   it('pushes a tagged history entry when the layer opens', async () => {
@@ -107,8 +113,9 @@ describe('useBackDismissibleLayer', () => {
     const onDismiss = jest.fn()
     const view = render(<Layer active onDismiss={onDismiss} />)
 
-    view.rerender(<Layer active={false} onDismiss={onDismiss} />)
-    await settleHistory()
+    await runAndWaitForPopState(() => {
+      view.rerender(<Layer active={false} onDismiss={onDismiss} />)
+    })
 
     // Closing in-app is not a dismissal request coming back at us — the app
     // already did the closing; the entry just has to disappear with it.
@@ -124,9 +131,9 @@ describe('useBackDismissibleLayer', () => {
 
     for (let cycle = 0; cycle < 3; cycle += 1) {
       view.rerender(<Layer active onDismiss={onDismiss} />)
-      await settleHistory()
-      view.rerender(<Layer active={false} onDismiss={onDismiss} />)
-      await settleHistory()
+      await runAndWaitForPopState(() => {
+        view.rerender(<Layer active={false} onDismiss={onDismiss} />)
+      })
     }
 
     expect(onDismiss).not.toHaveBeenCalled()
@@ -168,8 +175,9 @@ describe('useBackDismissibleLayer', () => {
     // Inner closed from inside the app: its cleanup calls history.back(), and
     // the outer listener must recognise the resulting popstate as its own
     // entry rather than treating it as its own dismissal.
-    view.rerender(<NestedLayers outerActive innerActive={false} {...props} />)
-    await settleHistory()
+    await runAndWaitForPopState(() => {
+      view.rerender(<NestedLayers outerActive innerActive={false} {...props} />)
+    })
 
     expect(onInnerDismiss).not.toHaveBeenCalled()
     expect(onOuterDismiss).not.toHaveBeenCalled()
@@ -207,8 +215,9 @@ describe('useBackDismissibleLayer', () => {
     const view = render(<Layer active onDismiss={jest.fn()} />)
     expect(currentToken()).toEqual(expect.any(String))
 
-    view.unmount()
-    await settleHistory()
+    await runAndWaitForPopState(() => {
+      view.unmount()
+    })
 
     expect(currentToken()).toBeNull()
     await goBack()
