@@ -9,6 +9,7 @@ interface UseMedcloudAutoSummaryOptions {
   dataReady: boolean
   isGenerating: boolean
   isRestoring: boolean
+  generationSlotKey: string
   modelId: string
   generate: () => Promise<void>
 }
@@ -22,6 +23,7 @@ export function useMedcloudAutoSummary({
   dataReady,
   isGenerating,
   isRestoring,
+  generationSlotKey,
   modelId,
   generate,
 }: UseMedcloudAutoSummaryOptions): void {
@@ -34,19 +36,33 @@ export function useMedcloudAutoSummary({
       !hasPatient ||
       !dataReady ||
       isRestoring ||
+      !generationSlotKey ||
       modelId !== request.modelId
     ) return
-    if (summaryModelId === request.modelId) {
-      claimSummary(request.messageId)
-      return
-    }
-    if (isGenerating) return
-    if (!claimSummary(request.messageId)) return
-    void generate().catch(() => undefined)
+
+    // The small-record adaptive default runs in a sibling passive effect. On a
+    // pristine first launch it can switch 初診 -> 全部資料 in the same effect
+    // flush that made this request eligible. That changes generationSlotKey.
+    // Defer one task so React can publish the final data scope first; a slot
+    // change cleans up this timer and leaves the launch request pending for the
+    // replacement slot instead of consuming it for a result the UI no longer
+    // presents.
+    const timer = window.setTimeout(() => {
+      if (summaryModelId === request.modelId) {
+        claimSummary(request.messageId)
+        return
+      }
+      if (isGenerating) return
+      if (!claimSummary(request.messageId)) return
+      void generate().catch(() => undefined)
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [
     claimSummary,
     dataReady,
     generate,
+    generationSlotKey,
     hasPatient,
     isGenerating,
     isRestoring,

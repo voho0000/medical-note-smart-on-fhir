@@ -222,6 +222,7 @@ export default function MedicalSummaryFeature() {
     dataReady,
     isGenerating: isBusy,
     isRestoring,
+    generationSlotKey: summaryGenerationSlotKey,
     modelId: model,
     generate,
   })

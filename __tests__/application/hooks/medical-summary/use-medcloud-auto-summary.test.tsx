@@ -22,6 +22,7 @@ describe('useMedcloudAutoSummary', () => {
       dataReady: props.dataReady,
       isGenerating: false,
       isRestoring: props.isRestoring,
+      generationSlotKey: 'summary-slot-1',
       modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
       generate,
     }), {
@@ -52,6 +53,7 @@ describe('useMedcloudAutoSummary', () => {
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
+      generationSlotKey: 'summary-slot-2',
       modelId: 'gemini-2.5-flash-lite',
       generate,
     }))
@@ -73,6 +75,7 @@ describe('useMedcloudAutoSummary', () => {
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
+      generationSlotKey: 'summary-slot-default',
       modelId: MEDICAL_SUMMARY_MODEL_ID,
       generate,
     }))
@@ -94,6 +97,7 @@ describe('useMedcloudAutoSummary', () => {
       dataReady: true,
       isGenerating: false,
       isRestoring: false,
+      generationSlotKey: 'summary-slot-existing',
       modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
       generate,
     }))
@@ -102,5 +106,56 @@ describe('useMedcloudAutoSummary', () => {
       useMedcloudLaunchStore.getState().pendingSummary,
     ).toBeNull())
     expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the first-launch request pending until an adaptive data-scope change settles', async () => {
+    const generateInitialScope = jest.fn(async () => undefined)
+    const generateFinalScope = jest.fn(async () => undefined)
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-small-record',
+      modelId: MEDICAL_SUMMARY_MODEL_ID,
+    })
+
+    const { rerender } = renderHook((props: {
+      generationSlotKey: string
+      isRestoring: boolean
+      generate: () => Promise<void>
+    }) => useMedcloudAutoSummary({
+      hasPatient: true,
+      summaryModelId: null,
+      dataReady: true,
+      isGenerating: false,
+      isRestoring: props.isRestoring,
+      generationSlotKey: props.generationSlotKey,
+      modelId: MEDICAL_SUMMARY_MODEL_ID,
+      generate: props.generate,
+    }), {
+      initialProps: {
+        generationSlotKey: 'summary-slot-new-patient',
+        isRestoring: false,
+        generate: generateInitialScope,
+      },
+    })
+
+    // The small-record default switches to 全部資料 during the same passive
+    // effect flush. The old slot's deferred claim must be cancelled.
+    rerender({
+      generationSlotKey: 'summary-slot-all-data',
+      isRestoring: true,
+      generate: generateFinalScope,
+    })
+    expect(generateInitialScope).not.toHaveBeenCalled()
+    expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId)
+      .toBe('message-small-record')
+
+    rerender({
+      generationSlotKey: 'summary-slot-all-data',
+      isRestoring: false,
+      generate: generateFinalScope,
+    })
+
+    await waitFor(() => expect(generateFinalScope).toHaveBeenCalledTimes(1))
+    expect(generateInitialScope).not.toHaveBeenCalled()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   })
 })
