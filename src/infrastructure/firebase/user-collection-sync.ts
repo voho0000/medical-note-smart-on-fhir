@@ -11,6 +11,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  writeBatch,
   Timestamp,
   type DocumentData,
   type Unsubscribe,
@@ -50,8 +51,11 @@ export interface UserCollectionSync<T> {
   remove: (userId: string, itemId: string) => Promise<boolean>
   subscribe: (userId: string, onUpdate: (items: T[]) => void) => Unsubscribe
   batchSave: (userId: string, items: T[]) => Promise<boolean>
+  applyChanges: (userId: string, upserts: T[], deleteIds: string[]) => Promise<boolean>
   replaceAll: (userId: string, items: T[]) => Promise<boolean>
 }
+
+const MAX_ATOMIC_WRITES = 500
 
 export function createUserCollectionSync<T, D extends DocumentData>(
   config: UserCollectionSyncConfig<T, D>
@@ -136,11 +140,41 @@ export function createUserCollectionSync<T, D extends DocumentData>(
     if (!db) return false
 
     try {
-      const promises = items.map(item => save(userId, item))
-      await Promise.all(promises)
-      return true
+      const results = await Promise.all(items.map(item => save(userId, item)))
+      return results.every(Boolean)
     } catch (error) {
       console.error(`[${logLabel}] Error batch saving ${nounPlural}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Apply only the changed documents in one Firestore commit. A delete and an
+   * upsert for the same id resolves to the upsert, matching the caller's final
+   * local state.
+   */
+  async function applyChanges(userId: string, upserts: T[], deleteIds: string[]): Promise<boolean> {
+    if (!db) return false
+
+    try {
+      const upsertsById = new Map(upserts.map((item) => [getId(item), item]))
+      const deletes = [...new Set(deleteIds)].filter((id) => !upsertsById.has(id))
+      const writeCount = upsertsById.size + deletes.length
+      if (writeCount === 0) return true
+      if (writeCount > MAX_ATOMIC_WRITES) {
+        console.error(`[${logLabel}] Refusing non-atomic ${nounPlural} update with ${writeCount} writes`)
+        return false
+      }
+
+      const itemsRef = collection(db, 'users', userId, collectionName)
+      const batch = writeBatch(db)
+      const now = Timestamp.now()
+      deletes.forEach((id) => batch.delete(doc(itemsRef, id)))
+      upsertsById.forEach((item, id) => batch.set(doc(itemsRef, id), toDoc(item, now)))
+      await batch.commit()
+      return true
+    } catch (error) {
+      console.error(`[${logLabel}] Error applying ${nounPlural} changes:`, error)
       return false
     }
   }
@@ -149,23 +183,24 @@ export function createUserCollectionSync<T, D extends DocumentData>(
     if (!db) return false
 
     try {
-      // First, get all existing items
-      const existingItems = await getAll(userId)
-
-      // Delete all existing items
-      const deletePromises = existingItems.map(item => remove(userId, getId(item)))
-      await Promise.all(deletePromises)
-
-      // Then save new items
-      const savePromises = items.map(item => save(userId, item))
-      await Promise.all(savePromises)
-
-      return true
+      // Do not call getAll() here: that public helper intentionally converts a
+      // read failure to an empty list, which would make stale remote documents
+      // look as if they did not exist. Keep the read and write in this failure
+      // boundary, then commit the complete replacement atomically.
+      const itemsRef = collection(db, 'users', userId, collectionName)
+      // Use an unordered collection query so legacy documents missing `order`
+      // are still visible and can be deleted.
+      const snapshot = await getDocs(query(itemsRef))
+      const nextById = new Map(items.map((item) => [getId(item), item]))
+      const deleteIds = snapshot.docs
+        .map((docSnap) => docSnap.id)
+        .filter((id) => !nextById.has(id))
+      return applyChanges(userId, [...nextById.values()], deleteIds)
     } catch (error) {
       console.error(`[${logLabel}] Error replacing ${nounPlural}:`, error)
       return false
     }
   }
 
-  return { getAll, save, remove, subscribe, batchSave, replaceAll }
+  return { getAll, save, remove, subscribe, batchSave, applyChanges, replaceAll }
 }

@@ -97,7 +97,6 @@ describe('data-selection.constants', () => {
       expect(STORAGE_KEYS.GEMINI_KEY).toBe('clinical-note:gemini-key')
       expect(STORAGE_KEYS.PERPLEXITY_KEY).toBe('clinical-note:perplexity-key')
       expect(STORAGE_KEYS.PROMPT_TEMPLATES).toBe('medical-chat-prompt-templates')
-      expect(STORAGE_KEYS.CLINICAL_INSIGHTS_PANELS).toBe('clinical-insights-panels')
       expect(STORAGE_KEYS.CLINICAL_INSIGHTS_AUTO_GENERATE).toBe('clinical-insights-auto-generate')
     })
 

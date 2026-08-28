@@ -10,6 +10,7 @@ jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: jest.fn
 jest.mock('@/src/infrastructure/firebase/clinical-insights-sync', () => ({
   subscribeToClinicalInsightPanels: jest.fn(),
   batchSaveClinicalInsightPanels: jest.fn(),
+  applyClinicalInsightPanelChanges: jest.fn(),
   replaceAllClinicalInsightPanels: jest.fn(),
 }))
 

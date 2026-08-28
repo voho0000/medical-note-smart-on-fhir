@@ -24,6 +24,11 @@ interface LoginRequiredDialogProps {
   title?: string
   description?: string
   features?: string[]
+  showBenefits?: boolean
+  cancelLabel?: string
+  loginLabel?: string
+  onCancel?: () => void
+  onLoginStart?: () => void
   onLoginSuccess?: () => void
 }
 
@@ -33,6 +38,11 @@ export function LoginRequiredDialog({
   title,
   description,
   features,
+  showBenefits = true,
+  cancelLabel,
+  loginLabel,
+  onCancel,
+  onLoginStart,
   onLoginSuccess,
 }: LoginRequiredDialogProps) {
   const { t } = useLanguage()
@@ -59,6 +69,7 @@ export function LoginRequiredDialog({
   }, [user, showAuthDialog, onLoginSuccess, onOpenChange])
 
   const handleLogin = () => {
+    onLoginStart?.()
     onOpenChange(false)
     setShowAuthDialog(true)
   }
@@ -79,18 +90,22 @@ export function LoginRequiredDialog({
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <div>{description || t.promptGallery.loginRequiredDesc}</div>
-                <div className="text-sm">{t.promptGallery.loginBenefits}</div>
-                <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                  {(features || defaultFeatures).map((feature, index) => (
-                    <li key={index}>{feature}</li>
-                  ))}
-                </ul>
+                {showBenefits ? (
+                  <>
+                    <div className="text-sm">{t.promptGallery.loginBenefits}</div>
+                    <ul className="ml-2 list-inside list-disc space-y-1 text-sm">
+                      {(features || defaultFeatures).map((feature, index) => (
+                        <li key={index}>{feature}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLogin}>{t.promptGallery.goToLogin}</AlertDialogAction>
+            <AlertDialogCancel onClick={onCancel}>{cancelLabel || t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogin}>{loginLabel || t.promptGallery.goToLogin}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

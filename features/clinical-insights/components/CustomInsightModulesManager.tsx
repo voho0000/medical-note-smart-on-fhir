@@ -1,7 +1,7 @@
 // Custom Summary Modules Manager
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -11,13 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Cloud,
   Eye,
-  HardDrive,
   Library,
+  Loader2,
   Plus,
   RotateCcw,
-  Save,
   Sparkles,
   Stethoscope,
   User,
@@ -26,7 +24,10 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
-import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
+import {
+  useClinicalInsightsConfig,
+  type InsightPanelConfig,
+} from "@/src/application/providers/clinical-insights-config.provider"
 import {
   MAX_AUTO_INSIGHT_MODULES,
   MAX_SUMMARY_INSIGHT_MODULES,
@@ -40,6 +41,7 @@ import {
 import { cn } from "@/src/shared/utils/cn.utils"
 import { CustomInsightModuleEditor } from "./CustomInsightModuleEditor"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
+import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { PromptType, SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 interface CustomInsightModulesManagerProps {
@@ -54,15 +56,18 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
   const setModelFor = useSetModelFor()
   const {
     panels,
+    guestEditingApproved,
+    approveGuestEditing,
     updatePanel,
     updatePanelAndSave,
     addPanel,
     removePanel,
+    restorePanel,
     resetPanels,
     savePanels,
     maxPanels,
     reorderPanels,
-    isSaving,
+    isLoading,
   } = useClinicalInsightsConfig()
 
   const audienceLabel = audience === "medical" ? t.audience.medical : t.audience.patient
@@ -81,42 +86,98 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
 
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
+  const [showTemplatePersistencePrompt, setShowTemplatePersistencePrompt] = useState(false)
   const [promptToShare, setPromptToShare] = useState<{ title: string; prompt: string } | null>(null)
+  const [lastDeletedPanel, setLastDeletedPanel] = useState<InsightPanelConfig | null>(null)
+  const pendingCustomizationRef = useRef<(() => void | Promise<void>) | null>(null)
+  const resumeAfterLoginRef = useRef(false)
+
+  const requestCustomization = (action: () => void | Promise<void>) => {
+    if (user || guestEditingApproved) return action()
+    pendingCustomizationRef.current = action
+    setShowTemplatePersistencePrompt(true)
+  }
+
+  useEffect(() => {
+    if (!user || isLoading || !resumeAfterLoginRef.current) return
+    resumeAfterLoginRef.current = false
+    const action = pendingCustomizationRef.current
+    pendingCustomizationRef.current = null
+    if (action) void action()
+  }, [isLoading, user])
 
   const handleAddPanel = () => {
-    const newPanelId = addPanel()
-    if (newPanelId) setActiveId(newPanelId)
+    requestCustomization(() => {
+      const newPanelId = addPanel()
+      if (newPanelId) setActiveId(newPanelId)
+    })
   }
 
   const handleRemovePanel = (id: string) => {
-    const remaining = panels.filter((panel) => panel.id !== id)
-    removePanel(id)
-    if (resolvedActiveId === id) setActiveId(remaining[0]?.id ?? "")
+    requestCustomization(() => {
+      const removedPanel = panels.find((panel) => panel.id === id)
+      const remaining = panels.filter((panel) => panel.id !== id)
+      removePanel(id)
+      if (resolvedActiveId === id) setActiveId(remaining[0]?.id ?? "")
+      if (removedPanel) setLastDeletedPanel(removedPanel)
+    })
+  }
+
+  const handleUndoRemovePanel = () => {
+    if (!lastDeletedPanel) return
+    restorePanel(lastDeletedPanel)
+    setActiveId(lastDeletedPanel.id)
+    setLastDeletedPanel(null)
   }
 
   const handleMove = (panelId: string, direction: "up" | "down") => {
-    const currentIndex = panels.findIndex((panel) => panel.id === panelId)
-    if (currentIndex === -1) return
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
-    if (targetIndex < 0 || targetIndex >= panels.length) return
-    const orderedIds = panels.map((panel) => panel.id)
-    const [removed] = orderedIds.splice(currentIndex, 1)
-    orderedIds.splice(targetIndex, 0, removed)
-    reorderPanels(orderedIds)
+    requestCustomization(() => {
+      const currentIndex = panels.findIndex((panel) => panel.id === panelId)
+      if (currentIndex === -1) return
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= panels.length) return
+      const orderedIds = panels.map((panel) => panel.id)
+      const [removed] = orderedIds.splice(currentIndex, 1)
+      orderedIds.splice(targetIndex, 0, removed)
+      reorderPanels(orderedIds)
+    })
   }
 
   const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType) => {
     if (useAs === "chat" || !canAddPanel) return
-    const newPanelId = addPanel({
-      title: prompt.title,
-      prompt: prompt.prompt,
-      showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES,
-      autoGenerate: false,
+    await requestCustomization(async () => {
+      const newPanelId = addPanel({
+        title: prompt.title,
+        prompt: prompt.prompt,
+        showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES,
+        autoGenerate: false,
+      })
+      if (!newPanelId) return
+      setActiveId(newPanelId)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      await savePanels()
     })
-    if (!newPanelId) return
-    setActiveId(newPanelId)
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    await savePanels()
+  }
+
+  const handleContinueAsGuest = () => {
+    resumeAfterLoginRef.current = false
+    approveGuestEditing()
+    const action = pendingCustomizationRef.current
+    pendingCustomizationRef.current = null
+    if (action) void action()
+  }
+
+  if (isLoading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        {t.settings.loadingCustomSummaryTemplates}
+      </div>
+    )
   }
 
   return (
@@ -152,6 +213,31 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
           </div>
         </div>
       </div>
+
+      {lastDeletedPanel ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-foreground">{t.settings.customTemplateDeleted}</p>
+            <p className="truncate text-xs text-muted-foreground" title={lastDeletedPanel.title}>
+              {lastDeletedPanel.title}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0 gap-1.5 sm:min-h-8"
+            onClick={handleUndoRemovePanel}
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {t.common.undo}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2 sm:hidden">
         <Select value={resolvedActiveId} onValueChange={setActiveId}>
@@ -237,7 +323,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
               <Library className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
               {t.promptGallery?.browseGallery || "Browse Gallery"}
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground" onClick={() => void resetPanels()}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground" onClick={() => void requestCustomization(resetPanels)}>
               <RotateCcw className="h-3.5 w-3.5" />
               {t.settings.resetToDefaults}
             </Button>
@@ -256,7 +342,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
               autoModuleCount={autoModuleCount}
               maxSummaryModules={MAX_SUMMARY_INSIGHT_MODULES}
               maxAutoModules={MAX_AUTO_INSIGHT_MODULES}
-              onUpdate={updatePanel}
+              onUpdate={(id, patch) => void requestCustomization(() => updatePanel(id, patch))}
               onUpdateAndSave={user ? updatePanelAndSave : undefined}
               onRemove={handleRemovePanel}
               onMove={handleMove}
@@ -274,27 +360,15 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-        <div className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
-          {user ? <Cloud className="h-3.5 w-3.5" /> : <HardDrive className="h-3.5 w-3.5" />}
-          {user ? t.settings.moduleAccountSync : t.settings.moduleBrowserAutosave}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:hidden" onClick={() => setShowGalleryDialog(true)}>
-            <Library className="h-3.5 w-3.5" />
-            {t.promptGallery?.browseGallery || "Browse Gallery"}
-          </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground sm:hidden" onClick={() => void resetPanels()}>
-            <RotateCcw className="h-3.5 w-3.5" />
-            {t.settings.resetToDefaults}
-          </Button>
-          {user ? (
-            <Button type="button" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => void savePanels()} disabled={isSaving}>
-              <Save className="h-3.5 w-3.5" />
-              {isSaving ? t.settings.saving : t.settings.saveTemplates}
-            </Button>
-          ) : null}
-        </div>
+      <div className="flex items-center gap-2 border-t pt-3 sm:hidden">
+        <Button type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs" onClick={() => setShowGalleryDialog(true)}>
+          <Library className="h-3.5 w-3.5" />
+          {t.promptGallery?.browseGallery || "Browse Gallery"}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs text-muted-foreground" onClick={() => void requestCustomization(resetPanels)}>
+          <RotateCcw className="h-3.5 w-3.5" />
+          {t.settings.resetToDefaults}
+        </Button>
       </div>
 
       <SharePromptDialog
@@ -310,6 +384,20 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
         onOpenChange={setShowGalleryDialog}
         mode="summary"
         onSelectPrompt={handleSelectPrompt}
+      />
+
+      <LoginRequiredDialog
+        open={showTemplatePersistencePrompt}
+        onOpenChange={setShowTemplatePersistencePrompt}
+        title={t.settings.customTemplatePersistenceTitle}
+        description={t.settings.customTemplatePersistenceDesc}
+        showBenefits={false}
+        cancelLabel={t.settings.customTemplateContinueGuest}
+        loginLabel={t.settings.customTemplateSignIn}
+        onCancel={handleContinueAsGuest}
+        onLoginStart={() => {
+          resumeAfterLoginRef.current = true
+        }}
       />
     </div>
   )

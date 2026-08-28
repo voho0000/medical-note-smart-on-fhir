@@ -116,6 +116,18 @@ export async function batchSaveClinicalInsightPanels(
 }
 
 /**
+ * Atomically apply only locally changed panels. This prevents another device's
+ * unrelated templates from being re-created by a stale full-library save.
+ */
+export async function applyClinicalInsightPanelChanges(
+  userId: string,
+  upserts: ClinicalInsightPanel[],
+  deleteIds: string[]
+): Promise<boolean> {
+  return panelSync.applyChanges(userId, upserts, deleteIds)
+}
+
+/**
  * Replace all clinical insight panels (delete all existing, then save new ones)
  */
 export async function replaceAllClinicalInsightPanels(

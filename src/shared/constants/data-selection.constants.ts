@@ -250,6 +250,5 @@ export const STORAGE_KEYS = {
   GEMINI_KEY: 'clinical-note:gemini-key',
   PERPLEXITY_KEY: 'clinical-note:perplexity-key',
   PROMPT_TEMPLATES: 'medical-chat-prompt-templates',
-  CLINICAL_INSIGHTS_PANELS: 'clinical-insights-panels',
   CLINICAL_INSIGHTS_AUTO_GENERATE: 'clinical-insights-auto-generate'
 } as const

@@ -5,15 +5,13 @@ import { useLanguage } from "./language.provider"
 import { useAudience, type Audience } from "./audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
+  applyClinicalInsightPanelChanges,
   subscribeToClinicalInsightPanels,
-  batchSaveClinicalInsightPanels,
-  replaceAllClinicalInsightPanels,
 } from "@/src/infrastructure/firebase/clinical-insights-sync"
 import { stripLegacySafetyPanels } from "./clinical-insights-legacy"
 import {
   MAX_AUTO_INSIGHT_MODULES,
   MAX_SUMMARY_INSIGHT_MODULES,
-  coerceShowInSummary,
 } from "@/src/shared/constants/clinical-insights.constants"
 
 export { MAX_AUTO_INSIGHT_MODULES, MAX_SUMMARY_INSIGHT_MODULES }
@@ -238,8 +236,8 @@ const DEFAULT_PANELS_ZH_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
   },
 ]
 
-const STORAGE_KEY = "clinical-insights-panels"
 const MAX_PANELS = 999
+const ACCOUNT_AUTOSAVE_DELAY_MS = 600
 
 function generatePanelId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -267,6 +265,28 @@ function getAllDefaults(language: 'en' | 'zh-TW'): InsightPanelConfig[] {
     ...getDefaultsFor(language, 'medical'),
     ...getDefaultsFor(language, 'patient'),
   ]
+}
+
+function renumberPanelsForAccount(panels: InsightPanelConfig[]): InsightPanelConfig[] {
+  return (['medical', 'patient'] as Audience[]).flatMap((panelAudience) => (
+    panels
+      .filter((panel) => panel.audience === panelAudience)
+      .sort((a, b) => a.order - b.order)
+      .map((panel, order) => ({ ...panel, order }))
+  ))
+}
+
+function getPanelFingerprint(panel: InsightPanelConfig): string {
+  return JSON.stringify({
+    id: panel.id,
+    title: panel.title,
+    prompt: panel.prompt,
+    showInSummary: panel.showInSummary,
+    autoGenerate: panel.autoGenerate,
+    order: panel.order,
+    audience: panel.audience,
+    templateLibraryRevision: panel.templateLibraryRevision,
+  })
 }
 
 const STANDARD_SUMMARY_TEMPLATE_ID: Record<Audience, string> = {
@@ -327,15 +347,60 @@ export function getDefaultClinicalInsightPanels(language: 'en' | 'zh-TW' = 'en',
 
 type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
+  guestEditingApproved: boolean
+  approveGuestEditing: () => void
   addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate">>) => string | null
   updatePanel: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => void
   updatePanelAndSave: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => Promise<void>
   removePanel: (id: string) => void
+  restorePanel: (panel: InsightPanelConfig) => void
   resetPanels: () => Promise<void>
-  savePanels: () => Promise<void>
+  savePanels: () => Promise<boolean>
   maxPanels: number
   reorderPanels: (orderedIds: string[]) => void
   isSaving: boolean
+  isLoading: boolean
+  syncStatus: ClinicalInsightTemplateSyncStatus
+  lastSavedAt: Date | null
+}
+
+export type ClinicalInsightTemplateSyncStatus = "idle" | "dirty" | "saving" | "saved" | "error"
+
+type PendingPanelMutation = {
+  panel: InsightPanelConfig | null
+  revision: number
+}
+
+function getPanelLibraryDiff(
+  before: InsightPanelConfig[],
+  after: InsightPanelConfig[],
+): Array<{ id: string; panel: InsightPanelConfig | null }> {
+  const beforeById = new Map(before.map((panel) => [panel.id, panel]))
+  const afterById = new Map(after.map((panel) => [panel.id, panel]))
+  const mutations: Array<{ id: string; panel: InsightPanelConfig | null }> = []
+
+  beforeById.forEach((_panel, id) => {
+    if (!afterById.has(id)) mutations.push({ id, panel: null })
+  })
+  afterById.forEach((panel, id) => {
+    const previous = beforeById.get(id)
+    if (!previous || getPanelFingerprint(previous) !== getPanelFingerprint(panel)) {
+      mutations.push({ id, panel })
+    }
+  })
+  return mutations
+}
+
+function overlayPendingPanelMutations(
+  panels: InsightPanelConfig[],
+  pending: Map<string, PendingPanelMutation>,
+): InsightPanelConfig[] {
+  const byId = new Map(panels.map((panel) => [panel.id, panel]))
+  pending.forEach(({ panel }, id) => {
+    if (panel) byId.set(id, panel)
+    else byId.delete(id)
+  })
+  return [...byId.values()]
 }
 
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
@@ -343,209 +408,280 @@ const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContex
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const currentLang: 'en' | 'zh-TW' = locale === "zh-TW" ? "zh-TW" : "en"
 
   const [allPanels, setAllPanels] = useState<InsightPanelConfig[]>(() => getAllDefaults('en'))
   const allPanelsRef = useRef<InsightPanelConfig[]>(allPanels)
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [customByAudience, setCustomByAudience] = useState<Record<Audience, boolean>>({ medical: false, patient: false })
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [hasReceivedAccountSnapshot, setHasReceivedAccountSnapshot] = useState(false)
+  const [guestEditingApproved, setGuestEditingApproved] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<ClinicalInsightTemplateSyncStatus>("idle")
+  const syncStatusRef = useRef<ClinicalInsightTemplateSyncStatus>("idle")
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [pendingMutationVersion, setPendingMutationVersion] = useState(0)
+  const pendingMutationsRef = useRef<Map<string, PendingPanelMutation>>(new Map())
+  const mutationRevisionRef = useRef(0)
+  const savePromiseRef = useRef<Promise<boolean> | null>(null)
+  const [loadedOwner, setLoadedOwner] = useState<string | null | undefined>(undefined)
+  const loadedOwnerRef = useRef<string | null | undefined>(undefined)
 
+  const updateSyncStatus = useCallback((next: ClinicalInsightTemplateSyncStatus) => {
+    syncStatusRef.current = next
+    setSyncStatus(next)
+  }, [])
+
+  const queuePanelMutations = useCallback((
+    before: InsightPanelConfig[],
+    after: InsightPanelConfig[],
+  ) => {
+    if (!user?.uid) return
+    const mutations = getPanelLibraryDiff(before, after)
+    if (mutations.length === 0) return
+
+    let changed = false
+    mutations.forEach(({ id, panel }) => {
+      const existing = pendingMutationsRef.current.get(id)
+      const existingFingerprint = existing?.panel ? getPanelFingerprint(existing.panel) : null
+      const nextFingerprint = panel ? getPanelFingerprint(panel) : null
+      if (existing && existingFingerprint === nextFingerprint) return
+      mutationRevisionRef.current += 1
+      pendingMutationsRef.current.set(id, {
+        panel,
+        revision: mutationRevisionRef.current,
+      })
+      changed = true
+    })
+
+    if (!changed) return
+    setPendingMutationVersion((version) => version + 1)
+    if (syncStatusRef.current !== "saving") updateSyncStatus("dirty")
+  }, [updateSyncStatus, user?.uid])
+
+  const commitLocalPanels = useCallback((
+    update: (current: InsightPanelConfig[]) => InsightPanelConfig[],
+  ): InsightPanelConfig[] => {
+    const before = allPanelsRef.current
+    const after = renumberPanelsForAccount(update(before))
+    const changed = getPanelLibraryDiff(before, after).length > 0
+    if (!changed) return before
+    allPanelsRef.current = after
+    setAllPanels(after)
+    queuePanelMutations(before, after)
+    return after
+  }, [queuePanelMutations])
+
+  // Treat every account and the signed-out state as separate storage owners.
+  // The rendered panel list is hidden as soon as the auth owner changes, so a
+  // shared workstation never paints the previous account's templates while
+  // the next account snapshot is loading.
   useEffect(() => {
-    allPanelsRef.current = allPanels
-  }, [allPanels])
-
-  const sanitizePanel = (entry: unknown, fallbackOrder: number): InsightPanelConfig | null => {
-    if (!entry || typeof entry !== "object") return null
-    const c = entry as Record<string, unknown>
-    const audienceValue: Audience = c.audience === 'patient' ? 'patient' : 'medical'
-    return {
-      id: typeof c.id === "string" ? c.id : generatePanelId(),
-      title: typeof c.title === "string" ? c.title : "Untitled Panel",
-      prompt: typeof c.prompt === "string" ? c.prompt : "",
-      // Pre-v0.34 records had no placement flag. Only the high-value Changes
-      // default is activated during migration; saved custom templates remain
-      // in the library until the user explicitly adds them to the summary.
-      showInSummary: coerceShowInSummary(c.showInSummary, c.id),
-      autoGenerate: c.autoGenerate === true,
-      order: typeof c.order === "number" ? c.order : fallbackOrder,
-      audience: audienceValue,
-      templateLibraryRevision: typeof c.templateLibraryRevision === "number"
-        ? c.templateLibraryRevision
-        : undefined,
+    if (authLoading) return
+    const nextOwner = user?.uid ?? null
+    if (loadedOwnerRef.current === undefined) {
+      loadedOwnerRef.current = nextOwner
+      setLoadedOwner(nextOwner)
+      return
     }
-  }
+    if (loadedOwnerRef.current === nextOwner) return
 
-  // Initial load
+    loadedOwnerRef.current = nextOwner
+    setLoadedOwner(nextOwner)
+    setHasReceivedAccountSnapshot(false)
+    setHasLoadedFromStorage(false)
+    pendingMutationsRef.current.clear()
+    mutationRevisionRef.current = 0
+    savePromiseRef.current = null
+    setPendingMutationVersion((version) => version + 1)
+    updateSyncStatus("idle")
+    setLastSavedAt(null)
+    const defaults = getAllDefaults(currentLang)
+    allPanelsRef.current = defaults
+    setAllPanels(defaults)
+    setCustomByAudience({ medical: false, patient: false })
+    setGuestEditingApproved(false)
+  }, [authLoading, currentLang, updateSyncStatus, user?.uid])
+
+  // Guests deliberately start from in-memory defaults. Their edits last only
+  // for the current page lifetime and are never promoted into whichever
+  // account signs in next on this shared workstation.
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (authLoading) return
     if (hasLoadedFromStorage) return
-
-    const loadFromLocalStorage = () => {
-      try {
-        const stored = window.localStorage.getItem(STORAGE_KEY)
-        if (!stored) {
-          setAllPanels(getAllDefaults(currentLang))
-          setCustomByAudience({ medical: false, patient: false })
-          return
-        }
-        const parsed = JSON.parse(stored)
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-          setAllPanels(getAllDefaults(currentLang))
-          setCustomByAudience({ medical: false, patient: false })
-          return
-        }
-        const sanitized = stripLegacySafetyPanels(
-          parsed
-            .map((e, i) => sanitizePanel(e, i))
-            .filter((p): p is InsightPanelConfig => p !== null)
-            .slice(0, MAX_PANELS),
-        )
-
-        const seen = new Set(sanitized.map((p) => p.audience))
-        const merged = [...sanitized]
-        ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
-          if (!seen.has(aud)) {
-            merged.push(...getDefaultsFor(currentLang, aud))
-          }
-        })
-        const migrated = migrateClinicalInsightTemplateLibrary(merged, currentLang).panels
-        const customMap: Record<Audience, boolean> = {
-          medical: !panelsEqualDefaults(migrated, currentLang, 'medical'),
-          patient: !panelsEqualDefaults(migrated, currentLang, 'patient'),
-        }
-        setAllPanels(migrated)
-        setCustomByAudience(customMap)
-      } catch (error) {
-        console.warn("Failed to load panels from storage", error)
-        setAllPanels(getAllDefaults(currentLang))
-      }
-    }
-
-    if (user?.uid) {
-      // Migration: if localStorage has data, push to Firestore once
-      const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const sanitized = stripLegacySafetyPanels(
-              parsed
-                .map((e, i) => sanitizePanel(e, i))
-                .filter((p): p is InsightPanelConfig => p !== null)
-                .slice(0, MAX_PANELS),
-            )
-            if (sanitized.length > 0) {
-              batchSaveClinicalInsightPanels(user.uid, sanitized).catch((err) => {
-                console.warn('[Clinical Insights] Migration failed', err)
-              })
-              window.localStorage.removeItem(STORAGE_KEY)
-            }
-          }
-        } catch (err) {
-          console.warn('[Clinical Insights] Failed to parse localStorage for migration', err)
-        }
-      }
-    } else {
-      loadFromLocalStorage()
-    }
-
-    // Marks completion of the one-time browser/Firestore migration above.
+    const defaults = getAllDefaults(currentLang)
+    allPanelsRef.current = defaults
+    // Initializing an auth-scoped library is intentionally effect-driven.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAllPanels(defaults)
+    setCustomByAudience({ medical: false, patient: false })
     setHasLoadedFromStorage(true)
-  }, [hasLoadedFromStorage, user?.uid, currentLang])
+  }, [authLoading, hasLoadedFromStorage, user?.uid, currentLang])
 
   // Firestore subscription
   useEffect(() => {
     if (!user?.uid || !hasLoadedFromStorage) return
 
     const unsubscribe = subscribeToClinicalInsightPanels(user.uid, (incoming: InsightPanelConfig[]) => {
-      if (isSyncing) return
       // Keep one-time cleanup and bundled-template migrations idempotent. The
       // revision marker also means deleting a bundled template is respected.
       const updated = stripLegacySafetyPanels(incoming)
+      let accountLibrary: InsightPanelConfig[]
+      let needsAccountMaintenance = updated.length < incoming.length
+        || incoming.length > MAX_PANELS
+        || incoming.length === 0
+
       if (updated.length === 0) {
-        setAllPanels(getAllDefaults(currentLang))
-        setCustomByAudience({ medical: false, patient: false })
-        if (incoming.length > 0 && user?.uid) {
-          setIsSyncing(true)
-          replaceAllClinicalInsightPanels(user.uid, []).finally(() => setIsSyncing(false))
-        }
+        accountLibrary = getAllDefaults(currentLang)
       } else {
         const seen = new Set(updated.map((p) => p.audience))
         const merged: InsightPanelConfig[] = [...updated.slice(0, MAX_PANELS)]
         ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
           if (!seen.has(aud)) {
             merged.push(...getDefaultsFor(currentLang, aud))
+            needsAccountMaintenance = true
           }
         })
         const migration = migrateClinicalInsightTemplateLibrary(merged, currentLang)
-        const customMap: Record<Audience, boolean> = {
-          medical: !panelsEqualDefaults(migration.panels, currentLang, 'medical'),
-          patient: !panelsEqualDefaults(migration.panels, currentLang, 'patient'),
-        }
-        setAllPanels(migration.panels)
-        setCustomByAudience(customMap)
+        accountLibrary = migration.panels
+        needsAccountMaintenance ||= migration.changed
+      }
 
-        if ((updated.length < incoming.length || migration.changed) && user?.uid) {
-          setIsSyncing(true)
-          const persist = updated.length < incoming.length
-            ? replaceAllClinicalInsightPanels(user.uid, migration.panels)
-            : batchSaveClinicalInsightPanels(user.uid, migration.panels)
-          persist.finally(() => setIsSyncing(false))
-        }
+      const nextPanels = overlayPendingPanelMutations(
+        renumberPanelsForAccount(accountLibrary),
+        pendingMutationsRef.current,
+      )
+      allPanelsRef.current = nextPanels
+      setAllPanels(nextPanels)
+      setCustomByAudience({
+        medical: !panelsEqualDefaults(nextPanels, currentLang, 'medical'),
+        patient: !panelsEqualDefaults(nextPanels, currentLang, 'patient'),
+      })
+
+      setHasReceivedAccountSnapshot(true)
+
+      if (needsAccountMaintenance) {
+        queuePanelMutations(incoming, accountLibrary)
+      } else if (pendingMutationsRef.current.size === 0) {
+        updateSyncStatus("saved")
       }
     })
 
     return () => unsubscribe()
-  }, [user?.uid, hasLoadedFromStorage, isSyncing, currentLang])
+  }, [currentLang, hasLoadedFromStorage, queuePanelMutations, updateSyncStatus, user?.uid])
 
   // On language change: swap defaults for any audience that isn't customized
   useEffect(() => {
     if (!hasLoadedFromStorage) return
+    if (user?.uid && !hasReceivedAccountSnapshot) return
     // Language is external preference state; replace only bundled defaults
     // while preserving each audience's customized panels.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAllPanels((prev) => {
-      const next = prev.filter((p) => customByAudience[p.audience])
-      ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
-        if (!customByAudience[aud]) {
-          next.push(...getDefaultsFor(currentLang, aud))
+    commitLocalPanels((current) => {
+      const next = current.filter((panel) => customByAudience[panel.audience])
+      ;(['medical', 'patient'] as Audience[]).forEach((panelAudience) => {
+        if (!customByAudience[panelAudience]) {
+          next.push(...getDefaultsFor(currentLang, panelAudience))
         }
       })
       return next
     })
-  }, [currentLang, customByAudience, hasLoadedFromStorage])
+  }, [
+    commitLocalPanels,
+    currentLang,
+    customByAudience,
+    hasLoadedFromStorage,
+    hasReceivedAccountSnapshot,
+    user?.uid,
+  ])
 
-  // Persist to localStorage for non-logged-in users
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (!hasLoadedFromStorage) return
-    if (user?.uid) return
-
-    try {
-      const allDefault = (['medical', 'patient'] as Audience[]).every(
-        (aud) => !customByAudience[aud] || panelsEqualDefaults(allPanels, currentLang, aud),
-      )
-      if (allDefault) {
-        window.localStorage.removeItem(STORAGE_KEY)
-      } else {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(allPanels))
-      }
-    } catch (error) {
-      console.warn("Failed to persist panels", error)
-    }
-  }, [allPanels, customByAudience, hasLoadedFromStorage, currentLang, user?.uid])
-
+  const activeOwner = user?.uid ?? null
+  const ownerMatches = loadedOwner === activeOwner
+  const isLoading = authLoading
+    || !ownerMatches
+    || !hasLoadedFromStorage
+    || Boolean(user?.uid && !hasReceivedAccountSnapshot)
   const panels = useMemo(
-    () => allPanels.filter((p) => p.audience === audience).sort((a, b) => a.order - b.order),
-    [allPanels, audience],
+    () => isLoading
+      ? []
+      : allPanels.filter((p) => p.audience === audience).sort((a, b) => a.order - b.order),
+    [allPanels, audience, isLoading],
   )
 
+  const savePanels = useCallback(async (): Promise<boolean> => {
+    if (!user?.uid || isLoading) return false
+    if (savePromiseRef.current) return savePromiseRef.current
+
+    const mutationEntries = [...pendingMutationsRef.current.entries()]
+    if (mutationEntries.length === 0) {
+      updateSyncStatus("saved")
+      return true
+    }
+
+    const ownerId = user.uid
+    const upserts = mutationEntries
+      .map(([, mutation]) => mutation.panel)
+      .filter((panel): panel is InsightPanelConfig => panel !== null)
+    const deleteIds = mutationEntries
+      .filter(([, mutation]) => mutation.panel === null)
+      .map(([id]) => id)
+
+    updateSyncStatus("saving")
+    const savePromise = applyClinicalInsightPanelChanges(ownerId, upserts, deleteIds)
+    savePromiseRef.current = savePromise
+
+    try {
+      const saved = await savePromise
+      if (loadedOwnerRef.current !== ownerId) return false
+      if (!saved) {
+        updateSyncStatus("error")
+        return false
+      }
+
+      mutationEntries.forEach(([id, savedMutation]) => {
+        if (pendingMutationsRef.current.get(id)?.revision === savedMutation.revision) {
+          pendingMutationsRef.current.delete(id)
+        }
+      })
+      setPendingMutationVersion((version) => version + 1)
+      setLastSavedAt(new Date())
+      updateSyncStatus(pendingMutationsRef.current.size > 0 ? "dirty" : "saved")
+      return true
+    } catch (error) {
+      if (loadedOwnerRef.current === ownerId) {
+        console.error('[Clinical Insights] Account save failed:', error)
+        updateSyncStatus("error")
+      }
+      return false
+    } finally {
+      if (savePromiseRef.current === savePromise) savePromiseRef.current = null
+    }
+  }, [isLoading, updateSyncStatus, user])
+
+  // Quiet-period autosave. Closing the manager does not interrupt this because
+  // the provider lives at the workspace level, outside the drawer.
+  useEffect(() => {
+    if (!user?.uid || isLoading || syncStatus !== "dirty") return
+    if (pendingMutationsRef.current.size === 0) return
+    const timer = window.setTimeout(() => {
+      void savePanels()
+    }, ACCOUNT_AUTOSAVE_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [isLoading, pendingMutationVersion, savePanels, syncStatus, user?.uid])
+
+  // Warn only when the entire page is being discarded. Closing the template
+  // drawer is safe: pending writes continue in this provider.
+  useEffect(() => {
+    if (!user?.uid || pendingMutationsRef.current.size === 0) return
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [pendingMutationVersion, user?.uid])
+
   const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate">>) => {
-    const audienceCount = allPanels.filter((p) => p.audience === audience).length
+    if (isLoading) return null
+    const audienceCount = allPanelsRef.current.filter((p) => p.audience === audience).length
     if (audienceCount >= MAX_PANELS) return null
     const suffix = audienceCount + 1
     const newPanel: InsightPanelConfig = {
@@ -558,7 +694,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       audience,
       templateLibraryRevision: CLINICAL_INSIGHT_TEMPLATE_LIBRARY_REVISION,
     }
-    setAllPanels((prev) => [...prev, newPanel])
+    commitLocalPanels((current) => [...current, newPanel])
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
     return newPanel.id
   }
@@ -596,128 +732,86 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   }
 
   const updatePanel = (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => {
-    setAllPanels((prev) => applyConstrainedPatch(prev, id, patch))
+    if (isLoading) return
+    commitLocalPanels((current) => applyConstrainedPatch(current, id, patch))
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }
 
   const updatePanelAndSave = async (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => {
-    return new Promise<void>((resolve, reject) => {
-      setAllPanels((prev) => {
-        const updated = applyConstrainedPatch(prev, id, patch)
-
-        if (user?.uid) {
-          setIsSaving(true)
-          // Renumber order within each audience to keep tight, then save the full set
-          const byAudience = new Map<Audience, InsightPanelConfig[]>()
-          updated.forEach((p) => {
-            if (!byAudience.has(p.audience)) byAudience.set(p.audience, [])
-            byAudience.get(p.audience)!.push(p)
-          })
-          const renumbered: InsightPanelConfig[] = []
-          byAudience.forEach((arr) => {
-            arr.sort((a, b) => a.order - b.order).forEach((p, i) => renumbered.push({ ...p, order: i }))
-          })
-
-          replaceAllClinicalInsightPanels(user.uid, renumbered)
-            .then(() => resolve())
-            .catch((error) => {
-              console.error('[Clinical Insights] Save failed:', error)
-              reject(error)
-            })
-            .finally(() => setIsSaving(false))
-        } else {
-          resolve()
-        }
-
-        return updated
-      })
-      setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
-    })
+    updatePanel(id, patch)
+    await savePanels()
   }
 
   const removePanel = (id: string) => {
-    setAllPanels((prev) => {
-      const target = prev.find((p) => p.id === id)
-      if (!target) return prev
-      const audienceCount = prev.filter((p) => p.audience === target.audience).length
-      if (audienceCount <= 1) return prev // keep at least one per audience
-      return prev.filter((p) => p.id !== id)
+    if (isLoading) return
+    commitLocalPanels((current) => {
+      const target = current.find((panel) => panel.id === id)
+      if (!target) return current
+      const audienceCount = current.filter((panel) => panel.audience === target.audience).length
+      if (audienceCount <= 1) return current // keep at least one per audience
+      return current.filter((panel) => panel.id !== id)
     })
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
+  }
+
+  const restorePanel = (panel: InsightPanelConfig) => {
+    if (isLoading || allPanelsRef.current.some((current) => current.id === panel.id)) return
+    commitLocalPanels((current) => [...current, panel])
+    setCustomByAudience((prev) => ({ ...prev, [panel.audience]: true }))
   }
 
   const resetPanels = async () => {
+    if (isLoading) return
     const defaults = getDefaultsFor(currentLang, audience)
-    setAllPanels((prev) => [...prev.filter((p) => p.audience !== audience), ...defaults])
+    commitLocalPanels((current) => [
+      ...current.filter((panel) => panel.audience !== audience),
+      ...defaults,
+    ])
     setCustomByAudience((prev) => ({ ...prev, [audience]: false }))
-
-    if (user?.uid) {
-      setIsSyncing(true)
-      try {
-        const other = allPanelsRef.current.filter((p) => p.audience !== audience)
-        await replaceAllClinicalInsightPanels(user.uid, [...other, ...defaults])
-      } catch (error) {
-        console.error('[Clinical Insights] Reset failed:', error)
-      } finally {
-        setIsSyncing(false)
-      }
-    }
+    if (user?.uid) await savePanels()
   }
 
-  const savePanels = async () => {
-    if (!user?.uid) return
-    setIsSaving(true)
-    setIsSyncing(true)
-    try {
-      const current = allPanelsRef.current
-      const byAudience = new Map<Audience, InsightPanelConfig[]>()
-      current.forEach((p) => {
-        if (!byAudience.has(p.audience)) byAudience.set(p.audience, [])
-        byAudience.get(p.audience)!.push(p)
-      })
-      const renumbered: InsightPanelConfig[] = []
-      byAudience.forEach((arr) => {
-        arr.sort((a, b) => a.order - b.order).forEach((p, i) => renumbered.push({ ...p, order: i }))
-      })
-      await replaceAllClinicalInsightPanels(user.uid, renumbered)
-    } catch (error) {
-      console.error('[Clinical Insights] Save failed:', error)
-    } finally {
-      setIsSaving(false)
-      setIsSyncing(false)
-    }
-  }
-
-  const reorderPanels = useCallback((orderedIds: string[]) => {
-    setAllPanels((prev) => {
-      if (!Array.isArray(orderedIds) || orderedIds.length === 0) return prev
+  const reorderPanels = (orderedIds: string[]) => {
+    if (isLoading) return
+    commitLocalPanels((current) => {
+      if (!Array.isArray(orderedIds) || orderedIds.length === 0) return current
       const idSet = new Set(orderedIds)
-      const filtered = prev.filter((p) => p.audience === audience)
+      const filtered = current.filter((panel) => panel.audience === audience)
       const ordered = orderedIds
-        .map((id) => filtered.find((p) => p.id === id))
-        .filter((p): p is InsightPanelConfig => Boolean(p))
-      const orderById = new Map(ordered.map((p, i) => [p.id, i]))
+        .map((id) => filtered.find((panel) => panel.id === id))
+        .filter((panel): panel is InsightPanelConfig => Boolean(panel))
+      const orderById = new Map(ordered.map((panel, index) => [panel.id, index]))
       // Reassign order within current audience; preserve other audience untouched.
-      return prev.map((p) => {
-        if (p.audience !== audience) return p
-        if (!idSet.has(p.id)) return p
-        return { ...p, order: orderById.get(p.id) ?? p.order }
+      return current.map((panel) => {
+        if (panel.audience !== audience) return panel
+        if (!idSet.has(panel.id)) return panel
+        return { ...panel, order: orderById.get(panel.id) ?? panel.order }
       })
     })
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
-  }, [audience])
+  }
+
+  const approveGuestEditing = useCallback(() => {
+    if (!user?.uid) setGuestEditingApproved(true)
+  }, [user?.uid])
 
   const value = {
     panels,
+    guestEditingApproved,
+    approveGuestEditing,
     addPanel,
     updatePanel,
     updatePanelAndSave,
     removePanel,
+    restorePanel,
     resetPanels,
     savePanels,
     reorderPanels,
     maxPanels: MAX_PANELS,
-    isSaving,
+    isSaving: syncStatus === "saving",
+    isLoading,
+    syncStatus,
+    lastSavedAt,
   }
 
   return <ClinicalInsightsConfigContext.Provider value={value}>{children}</ClinicalInsightsConfigContext.Provider>
