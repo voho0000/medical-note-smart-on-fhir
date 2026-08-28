@@ -116,6 +116,11 @@ export class FhirMapper implements IDataMapper {
         drugTerminology?: MedicationEntity['drugTerminology']
       }
     ).drugTerminology
+    const atcClassification = (
+      fhirResource as MedicationRequest & {
+        atcClassification?: MedicationEntity['atcClassification']
+      }
+    ).atcClassification
     const isStatement = fhirResource.resourceType === 'MedicationStatement'
       || request._sourceResourceType === 'MedicationStatement'
 
@@ -138,6 +143,7 @@ export class FhirMapper implements IDataMapper {
       informationSource: statement.informationSource,
       reasonCode: fhirResource.reasonCode,
       ...(drugTerminology ? { drugTerminology } : {}),
+      ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id

@@ -127,6 +127,8 @@ export function buildDetail({
   doseText,
   route,
   repeat,
+  timingCode,
+  additionalInstruction,
   audience,
   locale,
 }: {
@@ -134,12 +136,18 @@ export function buildDetail({
   doseText?: string
   route?: CodeableConcept
   repeat?: TimingRepeat
+  timingCode?: CodeableConcept
+  additionalInstruction?: CodeableConcept[]
   audience?: 'medical' | 'patient'
   locale?: string
 }): string {
   const dose = humanDoseAmount(doseAndRate, doseText)
   const r = routeDisplayText(route, { audience, locale })
-  const freq = humanDoseFreq(repeat)
+  const freq = humanDosageFrequency({
+    text: doseText,
+    timing: { repeat, code: timingCode },
+    additionalInstruction,
+  })
 
   const parts = [
     dose ? `Dose: ${dose}` : "",

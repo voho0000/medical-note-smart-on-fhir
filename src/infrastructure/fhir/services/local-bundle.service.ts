@@ -27,6 +27,7 @@ import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import {
+  isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
   NHI_DRUG_ENRICHMENT_POLICY_VERSION,
 } from './nhi-drug-terminology-enrichment.service'
@@ -62,6 +63,12 @@ import {
   localBundleMarker,
   readTabLocalImportId,
 } from './local-bundle-scope'
+import { resolveAtcLevel2 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/atc-level2'
+import {
+  resolveAtcLevel3,
+  resolveAtcLevel4,
+} from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/atc-hierarchy'
+import { ATC_CODE_SYSTEM } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
 // New builds keep the active pointer in tab-scoped sessionStorage. These local
 // aliases keep the migration code readable while older origin-wide
@@ -602,8 +609,6 @@ function toDateStr(dateStr?: string): string | null {
   return dateStr.slice(0, 10)
 }
 
-const NHI_DRUG_CODE_SYSTEM =
-  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
 const NHI_DRUG_SNAPSHOT_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot'
 const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
@@ -666,7 +671,7 @@ function terminologyFromMedicationKnowledge(
       : undefined
     const drugCoding = Array.isArray(knowledge.code?.coding)
       ? knowledge.code.coding.find(
-        (coding: any) => coding?.system === NHI_DRUG_CODE_SYSTEM,
+        (coding: any) => isNhiDrugCodeSystem(coding?.system),
       )
       : undefined
     const snapshotId = snapshotTag?.code ?? drugCoding?.version
@@ -695,10 +700,20 @@ function terminologyFromMedicationKnowledge(
     const level2Atc = atcConcepts.find(
       ({ coding }: any) => /^[A-Z]\d{2}$/.test(coding.code),
     )
+    const level3Atc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}[A-Z]$/.test(coding.code),
+    )
+    const level4Atc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}[A-Z]{2}$/.test(coding.code),
+    )
     const atcCoding = fullAtc?.coding
     const classification = fullAtc?.classification
     const level2Coding = level2Atc?.coding
     const level2Classification = level2Atc?.classification
+    const level3Coding = level3Atc?.coding
+    const level3Classification = level3Atc?.classification
+    const level4Coding = level4Atc?.coding
+    const level4Classification = level4Atc?.classification
     const officialProductIdentifier = Array.isArray(knowledge.identifier)
       ? knowledge.identifier.find(
         (identifier: any) =>
@@ -726,6 +741,22 @@ function terminologyFromMedicationKnowledge(
       && level2Classification.text !== atcLevel2NameEn
         ? level2Classification.text
         : undefined
+    const atcLevel3NameEn = typeof level3Coding?.display === 'string'
+      ? level3Coding.display
+      : undefined
+    const atcLevel3NameZh =
+      typeof level3Classification?.text === 'string'
+      && level3Classification.text !== atcLevel3NameEn
+        ? level3Classification.text
+        : undefined
+    const atcLevel4NameEn = typeof level4Coding?.display === 'string'
+      ? level4Coding.display
+      : undefined
+    const atcLevel4NameZh =
+      typeof level4Classification?.text === 'string'
+      && level4Classification.text !== atcLevel4NameEn
+        ? level4Classification.text
+        : undefined
 
     return {
       source: 'nhi-official-drug-master',
@@ -752,8 +783,18 @@ function terminologyFromMedicationKnowledge(
         : {}),
       ...(atcLevel2NameEn ? { atcLevel2NameEn } : {}),
       ...(atcLevel2NameZh ? { atcLevel2NameZh } : {}),
-      ...(typeof level2Coding?.version === 'string'
-        ? { atcHierarchySnapshotId: level2Coding.version }
+      ...(typeof level3Coding?.code === 'string'
+        ? { atcLevel3Code: level3Coding.code }
+        : {}),
+      ...(atcLevel3NameEn ? { atcLevel3NameEn } : {}),
+      ...(atcLevel3NameZh ? { atcLevel3NameZh } : {}),
+      ...(typeof level4Coding?.code === 'string'
+        ? { atcLevel4Code: level4Coding.code }
+        : {}),
+      ...(atcLevel4NameEn ? { atcLevel4NameEn } : {}),
+      ...(atcLevel4NameZh ? { atcLevel4NameZh } : {}),
+      ...(typeof (level4Coding?.version ?? level3Coding?.version ?? level2Coding?.version) === 'string'
+        ? { atcHierarchySnapshotId: level4Coding?.version ?? level3Coding?.version ?? level2Coding?.version }
         : {}),
       ...(typeof officialProductIdentifier?.value === 'string'
         ? { officialProductUrl: officialProductIdentifier.value }
@@ -761,6 +802,61 @@ function terminologyFromMedicationKnowledge(
     }
   }
   return undefined
+}
+
+function classificationFromSourceWhoAtc(
+  medication: any,
+): MedicationEntity['atcClassification'] | undefined {
+  const codings = Array.isArray(medication?.medicationCodeableConcept?.coding)
+    ? medication.medicationCodeableConcept.coding
+    : []
+  const atcCodings = codings.filter(
+    (coding: any) =>
+      coding?.system === ATC_CODE_SYSTEM
+      && typeof coding?.code === 'string'
+      && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/i.test(coding.code.trim()),
+  )
+  const codes: string[] = [
+    ...new Set<string>(
+      atcCodings.map((coding: any): string => coding.code.trim().toUpperCase()),
+    ),
+  ]
+  // Multiple distinct full ATC codes are ambiguous (e.g. combination-product
+  // source data). Do not choose one silently or infer from free text.
+  if (codes.length !== 1) return undefined
+
+  const atcCode = codes[0]
+  const level2 = resolveAtcLevel2(atcCode)
+  const level3 = resolveAtcLevel3(atcCode)
+  const level4 = resolveAtcLevel4(atcCode)
+  if (!level2 || !level4) return undefined
+
+  const sourceCoding = atcCodings.find(
+    (coding: any) => coding.code.trim().toUpperCase() === atcCode,
+  )
+  const atcNameEn = typeof sourceCoding?.display === 'string'
+    ? sourceCoding.display.replace(/\s+/g, ' ').trim()
+    : ''
+
+  return {
+    source: 'source-who-atc',
+    atcCode,
+    ...(atcNameEn && atcNameEn !== atcCode ? { atcNameEn } : {}),
+    atcLevel2Code: level2.code,
+    atcLevel2NameEn: level2.nameEn,
+    ...(level2.nameZh ? { atcLevel2NameZh: level2.nameZh } : {}),
+    ...(level3
+      ? {
+          atcLevel3Code: level3.code,
+          atcLevel3NameEn: level3.nameEn,
+          ...(level3.nameZh ? { atcLevel3NameZh: level3.nameZh } : {}),
+        }
+      : {}),
+    atcLevel4Code: level4.code,
+    atcLevel4NameEn: level4.nameEn,
+    ...(level4.nameZh ? { atcLevel4NameZh: level4.nameZh } : {}),
+    atcHierarchySnapshotId: level4.hierarchySnapshotId,
+  }
 }
 
 // Attach encounter references for non-medication resources by same-day match.
@@ -1251,6 +1347,7 @@ export const LocalBundleService = {
     // panel can surface "目前服用中" when an IPS dataset is loaded.
     const medicationStatements = byType('MedicationStatement').map((ms: any) => {
       const resolved = resolveMedicationCode(ms)
+      const atcClassification = classificationFromSourceWhoAtc(resolved)
       // Normalize field names that differ between MedicationRequest and MedicationStatement
       return {
         ...resolved,
@@ -1259,6 +1356,7 @@ export const LocalBundleService = {
           ?? resolved.effectivePeriod?.start
           ?? resolved.effectiveDateTime,
         dosageInstruction: resolved.dosageInstruction ?? resolved.dosage,
+        ...(atcClassification ? { atcClassification } : {}),
       }
     })
 
@@ -1266,14 +1364,19 @@ export const LocalBundleService = {
     // tell a mixed-source list from a pure one. Resolve its medicationReference
     // as well (IPS-style orders reference a Medication rather than inlining it).
     const medicationRequests = byType('MedicationRequest').map((m: any) => {
+      const resolved = resolveMedicationCode(m)
       const drugTerminology = terminologyFromMedicationKnowledge(
         m,
         medicationKnowledgeMap,
       )
+      const atcClassification = drugTerminology
+        ? undefined
+        : classificationFromSourceWhoAtc(resolved)
       return {
-        ...resolveMedicationCode(m),
+        ...resolved,
         _sourceResourceType: 'MedicationRequest' as const,
         ...(drugTerminology ? { drugTerminology } : {}),
+        ...(atcClassification ? { atcClassification } : {}),
       }
     })
 

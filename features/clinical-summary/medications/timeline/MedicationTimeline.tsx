@@ -9,7 +9,12 @@ import { useState, useRef, useEffect } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
-import { useMedicationTimeline, type TimeRange } from './hooks/useMedicationTimeline'
+import {
+  useMedicationTimeline,
+  type TimeRange,
+  type TimelineAtcLevel,
+  type TimelineGroupingMode,
+} from './hooks/useMedicationTimeline'
 import { TimelineSvg } from './components/TimelineSvg'
 import {
   medicationChronicSwatchClass,
@@ -24,9 +29,19 @@ const RANGES: TimeRange[] = ['3m', '6m', '1y', '3y', 'all']
 // switches / page reloads within the same browser.
 const DEFAULT_RANGE: TimeRange = '3m'
 const RANGE_STORAGE_KEY = 'medication-timeline-range'
+const GROUPING_STORAGE_KEY = 'medication-timeline-grouping'
+const ATC_LEVEL_STORAGE_KEY = 'medication-timeline-atc-level'
 
 function isValidRange(v: unknown): v is TimeRange {
   return v === '3m' || v === '6m' || v === '1y' || v === '3y' || v === 'all'
+}
+
+function isValidGroupingMode(v: unknown): v is TimelineGroupingMode {
+  return v === 'atc' || v === 'organization'
+}
+
+function isValidAtcLevel(v: unknown): v is TimelineAtcLevel {
+  return v === '2' || v === '4'
 }
 
 interface MedicationTimelineProps {
@@ -50,18 +65,37 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
   // render match (avoids the hydration mismatch we hit earlier with bundle
   // status). The persisted choice is loaded in useEffect below.
   const [range, setRangeState] = useState<TimeRange>(DEFAULT_RANGE)
+  const [groupingMode, setGroupingModeState] = useState<TimelineGroupingMode>('atc')
+  const [atcLevel, setAtcLevelState] = useState<TimelineAtcLevel>('4')
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(RANGE_STORAGE_KEY)
+      const storedRange = window.localStorage.getItem(RANGE_STORAGE_KEY)
+      const storedGrouping = window.localStorage.getItem(GROUPING_STORAGE_KEY)
+      const storedAtcLevel = window.localStorage.getItem(ATC_LEVEL_STORAGE_KEY)
       // Post-hydration preference restore keeps the server and first client
       // render identical while still honoring the saved range.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (isValidRange(stored)) setRangeState(stored)
+      if (isValidRange(storedRange)) setRangeState(storedRange)
+      if (isValidGroupingMode(storedGrouping)) setGroupingModeState(storedGrouping)
+      if (storedAtcLevel === '3' || storedAtcLevel === 'auto') {
+        setAtcLevelState('4')
+        window.localStorage.setItem(ATC_LEVEL_STORAGE_KEY, '4')
+      } else if (isValidAtcLevel(storedAtcLevel)) {
+        setAtcLevelState(storedAtcLevel)
+      }
     } catch { /* storage unavailable — silently keep default */ }
   }, [])
   const setRange = (next: TimeRange) => {
     setRangeState(next)
     try { window.localStorage.setItem(RANGE_STORAGE_KEY, next) } catch {}
+  }
+  const setGroupingMode = (next: TimelineGroupingMode) => {
+    setGroupingModeState(next)
+    try { window.localStorage.setItem(GROUPING_STORAGE_KEY, next) } catch {}
+  }
+  const setAtcLevel = (next: TimelineAtcLevel) => {
+    setAtcLevelState(next)
+    try { window.localStorage.setItem(ATC_LEVEL_STORAGE_KEY, next) } catch {}
   }
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -84,48 +118,127 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
     fallbackCategoryLabel,
     locale,
     atcCategoryLabels,
+    groupingMode,
+    atcLevel,
+    mt.timelineUnknownOrganization ?? '未提供機構',
   )
 
   return (
     <div className="space-y-2">
-      {/* ── Compact toolbar + legend ────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            {mt.timelineRangeLabel ?? '時段'}
-          </span>
-          <div
-            role="group"
-            aria-label={mt.timelineRangeLabel ?? '時段'}
-            className="inline-flex min-w-0 overflow-hidden rounded-md border bg-background"
-          >
-            {RANGES.map((r, index) => (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={range === r}
-                onClick={() => setRange(r)}
-                className={cn(
-                  'min-h-[44px] min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-3',
-                  range === r
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
-                  index === 0 && 'border-l-0',
-                )}
-              >
-                {rangeLabels[r]}
-              </button>
-            ))}
+      {/* ── Grouping controls, range, and legend ────────────────────── */}
+      <div className="space-y-2 border-b pb-2">
+        <div
+          data-timeline-primary-controls
+          className="flex flex-wrap items-center gap-x-4 gap-y-2"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              {mt.timelineRangeLabel ?? '時段'}
+            </span>
+            <div
+              role="group"
+              aria-label={mt.timelineRangeLabel ?? '時段'}
+              className="inline-flex min-w-0 overflow-hidden rounded-md border bg-background"
+            >
+              {RANGES.map((r, index) => (
+                <button
+                  key={r}
+                  type="button"
+                  aria-pressed={range === r}
+                  onClick={() => setRange(r)}
+                  className={cn(
+                    'min-h-[44px] min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-2',
+                    range === r
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                    index === 0 && 'border-l-0',
+                  )}
+                >
+                  {rangeLabels[r]}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              {mt.timelineGroupingLabel ?? '分組方式'}
+            </span>
+            <div
+              role="group"
+              aria-label={mt.timelineGroupingLabel ?? '分組方式'}
+              className="inline-flex overflow-hidden rounded-md border bg-background"
+            >
+              {(['atc', 'organization'] as const).map((mode, index) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={groupingMode === mode}
+                  onClick={() => setGroupingMode(mode)}
+                  className={cn(
+                    'min-h-[44px] border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8',
+                    groupingMode === mode
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                    index === 0 && 'border-l-0',
+                  )}
+                >
+                  {mode === 'atc'
+                    ? mt.timelineGroupingAtc ?? 'ATC 藥理'
+                    : mt.timelineGroupingOrganization ?? '醫療機構'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {groupingMode === 'atc' ? (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                {mt.timelineAtcDetailLabel ?? '分類細節'}
+              </span>
+              <div
+                role="group"
+                aria-label={mt.timelineAtcDetailLabel ?? '分類細節'}
+                className="inline-flex overflow-hidden rounded-md border bg-background"
+              >
+                {(['2', '4'] as const).map((level, index) => (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-pressed={atcLevel === level}
+                    onClick={() => setAtcLevel(level)}
+                    className={cn(
+                      'min-h-[44px] border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8',
+                      atcLevel === level
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                      index === 0 && 'border-l-0',
+                    )}
+                  >
+                    {level === '2'
+                      ? mt.timelineAtcBroad ?? '粗分'
+                      : mt.timelineAtcDetailed ?? '細分'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* Text labels accompany every swatch so the chart never requires
-            colour-only interpretation. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
-          {data.totalDrugs > 0 ? (
-            <>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Text labels accompany every swatch so the chart never requires
+              colour-only interpretation. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
+            {data.totalDrugs > 0 ? (
+              <>
               <span className="font-medium text-foreground">
                 {data.totalDrugs} {mt.timelineDrugCount ?? 'drugs'}
+                {groupingMode === 'organization' ? (
+                  <>
+                    {' · '}{data.totalRows} {mt.timelineOrganizationRowCount ?? 'organization rows'}
+                    {' · '}{data.organizationCount} {mt.timelineOrganizationCount ?? 'organizations'}
+                  </>
+                ) : null}
               </span>
               <span
                 role="group"
@@ -195,10 +308,11 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                   {mt.timelineAfterToday ?? 'After today'}
                 </span>
               </span>
-            </>
-          ) : (
-            mt.timelineEmpty ?? '此時段內無用藥紀錄'
-          )}
+              </>
+            ) : (
+              mt.timelineEmpty ?? '此時段內無用藥紀錄'
+            )}
+          </div>
         </div>
       </div>
 

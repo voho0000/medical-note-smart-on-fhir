@@ -83,4 +83,21 @@ describe('TapTooltip', () => {
     const trigger = screen.getByText('1.2…').parentElement as HTMLElement
     expect(trigger).toHaveAttribute('tabindex', '0')
   })
+
+  it('keeps selectable content open during text selection', () => {
+    render(
+      <TapTooltip selectable content="Beta blocking agents">
+        <span>眼用 β blocker</span>
+      </TapTooltip>,
+    )
+    const trigger = screen.getByText('眼用 β blocker').parentElement as HTMLElement
+
+    fireEvent.click(trigger)
+    const content = screen.getByRole('tooltip')
+    expect(content).toHaveClass('cursor-text', 'select-text')
+
+    fireEvent.pointerDown(content, { pointerType: 'mouse' })
+    fireEvent.pointerLeave(trigger)
+    expect(screen.getByText('Beta blocking agents')).toBeInTheDocument()
+  })
 })

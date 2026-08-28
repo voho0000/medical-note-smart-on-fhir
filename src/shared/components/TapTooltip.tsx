@@ -25,6 +25,9 @@ interface TapTooltipProps {
   /** Default true: a tap that reveals hidden text must not ALSO toggle the row
    *  or accordion behind it. */
   stopPropagation?: boolean
+  /** Keep the bubble open while its text is being selected. A click outside
+   *  or Escape still closes it. */
+  selectable?: boolean
 }
 
 /**
@@ -57,8 +60,10 @@ export function TapTooltip({
   "aria-label": ariaLabel,
   asChild = false,
   stopPropagation = true,
+  selectable = false,
 }: TapTooltipProps) {
   const [open, setOpen] = React.useState(false)
+  const pinnedRef = React.useRef(false)
   // Remembers whether the pending click came from a finger, so the tap is not
   // counted twice when the browser also dispatches a compatibility click.
   const lastPointerTypeRef = React.useRef<string>("")
@@ -68,7 +73,11 @@ export function TapTooltip({
     if (event.pointerType !== "touch") return
     event.preventDefault()
     if (stopPropagation) event.stopPropagation()
-    setOpen((current) => !current)
+    setOpen((current) => {
+      const next = !current
+      pinnedRef.current = selectable && next
+      return next
+    })
   }
 
   const handleClick = (event: React.MouseEvent) => {
@@ -83,7 +92,27 @@ export function TapTooltip({
       lastPointerTypeRef.current = ""
       return
     }
+    if (selectable) {
+      if (pinnedRef.current) {
+        pinnedRef.current = false
+        setOpen(false)
+      } else {
+        pinnedRef.current = true
+        setOpen(true)
+      }
+      return
+    }
     setOpen((current) => !current)
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    if (next || !pinnedRef.current) setOpen(next)
+  }
+
+  const closeSelectableTooltip = () => {
+    if (!selectable) return
+    pinnedRef.current = false
+    setOpen(false)
   }
 
   const trigger = asChild ? (
@@ -101,15 +130,20 @@ export function TapTooltip({
   )
 
   return (
-    <Tooltip open={open} onOpenChange={setOpen} delayDuration={150}>
+    <Tooltip open={open} onOpenChange={handleOpenChange} delayDuration={150}>
       <TooltipTrigger asChild onPointerDown={handlePointerDown} onClick={handleClick}>
         {trigger}
       </TooltipTrigger>
       <TooltipContent
         side={side}
         sideOffset={sideOffset}
-        className={contentClassName}
+        className={cn(selectable && "cursor-text select-text", contentClassName)}
         data-testid={contentTestId}
+        onPointerDownCapture={() => {
+          if (selectable) pinnedRef.current = true
+        }}
+        onPointerDownOutside={closeSelectableTooltip}
+        onEscapeKeyDown={closeSelectableTooltip}
       >
         {content}
       </TooltipContent>

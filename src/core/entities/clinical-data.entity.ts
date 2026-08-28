@@ -62,6 +62,28 @@ export interface ConditionEntity {
   sourceId?: string
 }
 
+/**
+ * Governed ATC hierarchy derived from an exact WHO ATC code carried by the
+ * source medication. This is deliberately separate from `drugTerminology`:
+ * the latter means the App matched an official, date-effective NHI drug-master
+ * record, while this fallback only supports pharmacologic grouping.
+ */
+export interface MedicationAtcClassification {
+  source: 'source-who-atc'
+  atcCode: string
+  atcNameEn?: string
+  atcLevel2Code: string
+  atcLevel2NameZh?: string
+  atcLevel2NameEn: string
+  atcLevel3Code?: string
+  atcLevel3NameZh?: string
+  atcLevel3NameEn?: string
+  atcLevel4Code: string
+  atcLevel4NameZh?: string
+  atcLevel4NameEn: string
+  atcHierarchySnapshotId: string
+}
+
 export interface MedicationEntity {
   id: string
   medicationCodeableConcept?: {
@@ -194,9 +216,23 @@ export interface MedicationEntity {
     atcLevel2Code?: string
     atcLevel2NameZh?: string
     atcLevel2NameEn?: string
+    /** Governed four-character ATC pharmacological/therapeutic subgroup. */
+    atcLevel3Code?: string
+    atcLevel3NameZh?: string
+    atcLevel3NameEn?: string
+    /** Governed five-character ATC chemical/pharmacological subgroup. */
+    atcLevel4Code?: string
+    atcLevel4NameZh?: string
+    atcLevel4NameEn?: string
     atcHierarchySnapshotId?: string
     officialProductUrl?: string
   }
+  /**
+   * Strict fallback used only when no official NHI drug-master terminology is
+   * available. The full source WHO ATC code must resolve in the App's pinned
+   * hierarchy; free-text drug/category labels are never guessed or translated.
+   */
+  atcClassification?: MedicationAtcClassification
   /**
    * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
    * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS

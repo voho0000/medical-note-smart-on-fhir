@@ -12,14 +12,22 @@ import type {
   NhiDrugTerminologyResolutionStatus,
 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
-const NHI_DRUG_CODE_SYSTEM =
-  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
+export const NHI_DRUG_CODE_SYSTEMS = [
+  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+  'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw',
+] as const
+const NHI_DRUG_CODE_SYSTEM_SET = new Set<string>(NHI_DRUG_CODE_SYSTEMS)
+
+export function isNhiDrugCodeSystem(system: unknown): boolean {
+  return typeof system === 'string' && NHI_DRUG_CODE_SYSTEM_SET.has(system)
+}
+
 const ATC_HIERARCHY_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
 export const NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM =
   'https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy'
 export const NHI_DRUG_ENRICHMENT_POLICY_VERSION =
-  'latest-covered-record-for-newer-prescriptions-v1'
+  'latest-covered-record-atc-levels-2-4-v5'
 
 type FhirResource = Record<string, unknown> & {
   resourceType?: string
@@ -117,7 +125,7 @@ function exactNhiDrugCodes(
   return [
     ...new Set(
       medicationCodings(request, medicationsByReference)
-        .filter(({ system }) => system === NHI_DRUG_CODE_SYSTEM)
+        .filter(({ system }) => isNhiDrugCodeSystem(system))
         .map(({ code }) => typeof code === 'string' ? code.trim().toUpperCase() : '')
         .filter(Boolean),
     ),
@@ -348,9 +356,30 @@ export async function enrichBundleWithNhiDrugTerminology(
               && /^[A-Z]\d{2}$/.test(coding.code),
           ),
       )
+      const existingHasLevel3 = existingClassifications.some(
+        (classification: any) =>
+          Array.isArray(classification?.coding)
+          && classification.coding.some(
+            (coding: any) =>
+              coding?.system === 'http://www.whocc.no/atc'
+              && typeof coding?.code === 'string'
+              && /^[A-Z]\d{2}[A-Z]$/.test(coding.code),
+          ),
+      )
+      const existingHasLevel4 = existingClassifications.some(
+        (classification: any) =>
+          Array.isArray(classification?.coding)
+          && classification.coding.some(
+            (coding: any) =>
+              coding?.system === 'http://www.whocc.no/atc'
+              && typeof coding?.code === 'string'
+              && /^[A-Z]\d{2}[A-Z]{2}$/.test(coding.code),
+          ),
+      )
       const existingIsCurrent = existingHasHierarchyTag
         && existingHasCurrentPolicyTag
-        && (!existingHasFullAtc || existingHasLevel2)
+        && (!existingHasFullAtc
+          || (existingHasLevel2 && existingHasLevel3 && existingHasLevel4))
       const effectiveKnowledge =
         existingKnowledge && existingIsCurrent ? existingKnowledge : knowledge
       if (!existingKnowledge) {

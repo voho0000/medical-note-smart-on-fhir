@@ -15,7 +15,7 @@ The 97 MB source CSV and TFDA source archive are not redistributed. The
 runtime snapshot contains normalized terminology fields, effective periods,
 source metadata, and cryptographic hashes. It contains no patient data.
 
-The package also contains the three-character ATC level 2 hierarchy from:
+The package also contains the ATC level 2-4 hierarchy from:
 
 - WHO Collaborating Centre for Drug Statistics Methodology
 - ATC classification index with DDDs, 2026
@@ -25,4 +25,8 @@ The WHO source copyright notice requires attribution and does not allow
 commercial copying or distribution. The bundled hierarchy is therefore part
 of this private module and must not be republished as a commercial terminology
 dataset. The English hierarchy names are official. The zh-TW labels are
-NHI-FHIR-BRIDGE display translations and are not official WHO translations.
+NHI-FHIR-BRIDGE display translations and are not official WHO or TFDA
+translations. All 921 level 4 categories have an application-maintained
+Taiwan clinical display label, retaining familiar English abbreviations where
+appropriate; level 3 Chinese labels remain selective. The official WHO
+English text is retained for provenance and user-facing original-text help.

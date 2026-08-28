@@ -7,6 +7,8 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 
 const NHI_DRUG_CODE_SYSTEM =
   'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
+const TW_CORE_MEDICATION_NHI_CODE_SYSTEM =
+  'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 
 function resources(bundle: Record<string, any>, resourceType: string) {
   return (bundle.entry ?? [])
@@ -120,27 +122,39 @@ describe('App-side NHI drug terminology enrichment', () => {
       ingredient: [{
         itemCodeableConcept: { text: 'BUPROPION HYDROCHLORIDE 150 MG' },
       }],
-      medicineClassification: [{
-        classification: [
-          {
-            coding: [{
-              system: 'http://www.whocc.no/atc',
-              code: 'N06AX12',
-              display: 'bupropion',
-            }],
-          },
-          {
-            coding: [{
-              system: 'http://www.whocc.no/atc',
-              version: 'atc-level2-2026',
-              code: 'N06',
-              display: 'PSYCHOANALEPTICS',
-            }],
-            text: '精神興奮／抗憂鬱與失智相關用藥',
-          },
-        ],
-      }],
+      medicineClassification: expect.any(Array),
     })
+    expect(knowledge.medicineClassification[0].classification).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          coding: [expect.objectContaining({ code: 'N06AX12', display: 'bupropion' })],
+        }),
+        expect.objectContaining({
+          coding: [expect.objectContaining({
+            version: 'atc-level2-2026',
+            code: 'N06',
+            display: 'PSYCHOANALEPTICS',
+          })],
+          text: '精神興奮／抗憂鬱與失智相關用藥',
+        }),
+        expect.objectContaining({
+          coding: [expect.objectContaining({
+            version: 'atc-hierarchy-2026',
+            code: 'N06A',
+            display: 'ANTIDEPRESSANTS',
+          })],
+          text: '抗憂鬱藥',
+        }),
+        expect.objectContaining({
+          coding: [expect.objectContaining({
+            version: 'atc-hierarchy-2026',
+            code: 'N06AX',
+            display: 'Other antidepressants',
+          })],
+          text: '其他抗憂鬱藥',
+        }),
+      ]),
+    )
     expect(provenance).toMatchObject({
       resourceType: 'Provenance',
       recorded: '2026-07-29T12:00:00Z',
@@ -151,9 +165,100 @@ describe('App-side NHI drug terminology enrichment', () => {
         },
       }, {
         what: {
-          identifier: { value: 'atc-level2-2026' },
+          identifier: { value: 'atc-hierarchy-2026' },
         },
       }],
+    })
+  })
+
+  it('accepts the TW Core medication-nhi-tw URI used by MedCloud bundles', async () => {
+    const sourceRequest = medicationRequest({
+      authoredOn: '2026-07-01',
+      medicationCodeableConcept: {
+        coding: [{
+          system: TW_CORE_MEDICATION_NHI_CODE_SYSTEM,
+          code: 'BC23097100',
+          display: 'AROMASIN SUGAR COATED TABLETS 25MG',
+        }],
+        text: 'AROMASIN SUGAR COATED TABLETS 25MG',
+      },
+    })
+
+    const result = await enrichBundleWithNhiDrugTerminology(
+      bundleWith(
+        { resourceType: 'Patient', id: 'p1' },
+        sourceRequest,
+      ),
+    )
+    const request = resources(result.bundle, 'MedicationRequest')[0]
+    const parsed = LocalBundleService.parse(result.bundle)
+
+    expect(result.report).toMatchObject({
+      status: 'enriched',
+      eligibleRequestCount: 1,
+      linkedRequestCount: 1,
+      atcResolvedCount: 1,
+      skipped: { missingNhiDrugCode: 0 },
+    })
+    expect(request.medicationCodeableConcept).toEqual(
+      sourceRequest.medicationCodeableConcept,
+    )
+    expect(parsed?.collection.medications[0]?.drugTerminology).toMatchObject({
+      atcCode: 'L02BG06',
+      atcLevel2Code: 'L02',
+      atcLevel4Code: 'L02BG',
+    })
+  })
+
+  it('uses a source WHO ATC code as a governed grouping fallback when the NHI lookup misses', async () => {
+    const sourceRequest = medicationRequest({
+      authoredOn: '2026-07-01',
+      medicationCodeableConcept: {
+        coding: [{
+          system: TW_CORE_MEDICATION_NHI_CODE_SYSTEM,
+          code: 'ZZ00000000',
+          display: 'SOURCE PRODUCT NAME',
+        }, {
+          system: 'http://www.whocc.no/atc',
+          code: 'A10BK01',
+          display: 'dapagliflozin',
+        }],
+        text: '來源藥品名稱',
+      },
+    })
+    const source = bundleWith(
+      { resourceType: 'Patient', id: 'p1' },
+      sourceRequest,
+    )
+
+    const result = await enrichBundleWithNhiDrugTerminology(source)
+    const parsed = LocalBundleService.parse(result.bundle)
+    const medication = parsed?.collection.medications[0]
+
+    expect(result.report).toMatchObject({
+      status: 'not-applicable',
+      eligibleRequestCount: 1,
+      linkedRequestCount: 0,
+      atcResolvedCount: 0,
+    })
+    expect(sourceRequest).not.toHaveProperty('drugTerminology')
+    expect(sourceRequest).not.toHaveProperty('atcClassification')
+    expect(medication?.drugTerminology).toBeUndefined()
+    expect(medication?.medicationCodeableConcept).toEqual(
+      sourceRequest.medicationCodeableConcept,
+    )
+    expect(medication?.atcClassification).toMatchObject({
+      source: 'source-who-atc',
+      atcCode: 'A10BK01',
+      atcNameEn: 'dapagliflozin',
+      atcLevel2Code: 'A10',
+      atcLevel2NameEn: 'DRUGS USED IN DIABETES',
+      atcLevel2NameZh: '糖尿病用藥',
+      atcLevel3Code: 'A10B',
+      atcLevel4Code: 'A10BK',
+      atcLevel4NameEn: 'Sodium-glucose co-transporter 2 (SGLT2) inhibitors',
+      atcLevel4NameZh: 'SGLT2 抑制劑',
+      atcHierarchySnapshotId: 'atc-hierarchy-2026',
     })
   })
 
@@ -228,7 +333,7 @@ describe('App-side NHI drug terminology enrichment', () => {
     })
   })
 
-  it('upgrades a vendored 0.1 knowledge resource in place with level 2 hierarchy', async () => {
+  it('upgrades an older knowledge resource in place with the level 2-4 hierarchy', async () => {
     const current = await enrichBundleWithNhiDrugTerminology(
       bundleWith(
         { resourceType: 'Patient', id: 'p1' },
@@ -268,7 +373,7 @@ describe('App-side NHI drug terminology enrichment', () => {
       expect.objectContaining({
         what: expect.objectContaining({
           identifier: expect.objectContaining({
-            value: 'atc-level2-2026',
+            value: 'atc-hierarchy-2026',
           }),
         }),
       }),
@@ -352,7 +457,13 @@ describe('App-side NHI drug terminology enrichment', () => {
         atcLevel2Code: 'N06',
         atcLevel2NameEn: 'PSYCHOANALEPTICS',
         atcLevel2NameZh: '精神興奮／抗憂鬱與失智相關用藥',
-        atcHierarchySnapshotId: 'atc-level2-2026',
+        atcLevel3Code: 'N06A',
+        atcLevel3NameEn: 'ANTIDEPRESSANTS',
+        atcLevel3NameZh: '抗憂鬱藥',
+        atcLevel4Code: 'N06AX',
+        atcLevel4NameEn: 'Other antidepressants',
+        atcLevel4NameZh: '其他抗憂鬱藥',
+        atcHierarchySnapshotId: 'atc-hierarchy-2026',
       },
     })
   })

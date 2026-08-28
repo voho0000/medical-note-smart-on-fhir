@@ -38,6 +38,42 @@ export type AtcLevel2Category = {
 	hierarchySnapshotId: string;
 };
 
+export type AtcHierarchyManifest = {
+	snapshotId: string;
+	schemaVersion: "atc-hierarchy-v1";
+	release: string;
+	sourceTitle: string;
+	sourceUrl: string;
+	sourceUpdatedDate: string;
+	retrievedDate: string;
+	categoryCount: number;
+	level2Count: number;
+	level3Count: number;
+	level4Count: number;
+	officialEnglishCanonicalSha256: string;
+	englishNameAuthority: string;
+	chineseNameAuthority: string;
+	chineseNamePolicy: string;
+	copyrightNotice: string;
+};
+
+export type AtcHierarchyCategoryRow = readonly [
+	code: string,
+	nameEn: string,
+	nameZh: string,
+];
+
+export type AtcHierarchySnapshot = {
+	manifest: AtcHierarchyManifest;
+	level2: readonly AtcHierarchyCategoryRow[];
+	level3: readonly AtcHierarchyCategoryRow[];
+	level4: readonly AtcHierarchyCategoryRow[];
+};
+
+export type AtcHierarchyCategory = AtcLevel2Category & {
+	level: 2 | 3 | 4;
+};
+
 export type NhiDrugSnapshotManifest = {
 	snapshotId: string;
 	schemaVersion: "nhi-drug-terminology-snapshot-v1";
@@ -102,6 +138,8 @@ export type NhiDrugTerminologyRecord = {
 	atcNameEn?: string;
 	atcNameZh?: string;
 	atcLevel2?: AtcLevel2Category;
+	atcLevel3?: AtcHierarchyCategory;
+	atcLevel4?: AtcHierarchyCategory;
 	officialProductUrl?: string;
 	compoundType?: string;
 	snapshotId: string;
@@ -138,6 +176,7 @@ export type NhiDrugTerminologyCoverageReport = {
 export type NhiDrugTerminologyResolver = {
 	readonly snapshot: NhiDrugTerminologySnapshot;
 	readonly atcLevel2Hierarchy: AtcLevel2HierarchySnapshot;
+	readonly atcHierarchy: AtcHierarchySnapshot;
 	resolve(
 		nhiDrugCode: string,
 		prescriptionDate: string,

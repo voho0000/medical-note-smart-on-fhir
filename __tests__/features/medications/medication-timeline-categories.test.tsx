@@ -76,6 +76,10 @@ describe('useMedicationTimeline category grouping', () => {
           label: '咳嗽與感冒製劑',
         },
       ])
+    expect(result.current.categories[1]).toMatchObject({
+      nameEn: 'COUGH AND COLD PREPARATIONS',
+      nameZh: '咳嗽與感冒製劑',
+    })
   })
 
   it('keeps ATC grouping consistent even when a source category is present', () => {
@@ -132,6 +136,47 @@ describe('useMedicationTimeline category grouping', () => {
       key: 'source:mucolytic',
       label: '祛痰藥',
     })
+  })
+
+  it('groups by governed source WHO ATC fallback without treating it as official drug-master data', () => {
+    const medications = [
+      medication({
+        drugTerminology: undefined,
+        atcClassification: {
+          source: 'source-who-atc',
+          atcCode: 'A10BK01',
+          atcNameEn: 'dapagliflozin',
+          atcLevel2Code: 'A10',
+          atcLevel2NameEn: 'DRUGS USED IN DIABETES',
+          atcLevel2NameZh: '糖尿病用藥',
+          atcLevel4Code: 'A10BK',
+          atcLevel4NameEn: 'Sodium-glucose co-transporter 2 (SGLT2) inhibitors',
+          atcLevel4NameZh: 'SGLT2 抑制劑',
+          atcHierarchySnapshotId: 'atc-hierarchy-2026',
+        },
+      }),
+    ]
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.categories[0]).toMatchObject({
+      key: 'atc-level2:A10',
+      label: '糖尿病用藥',
+      children: [expect.objectContaining({
+        key: 'atc-level4:A10BK',
+        label: 'SGLT2 抑制劑',
+      })],
+    })
+    expect(result.current.drugs[0].drugTerminology).toBeUndefined()
   })
 
   it('prefers a source category over broad level one when level two is unavailable', () => {
@@ -224,6 +269,27 @@ describe('useMedicationTimeline category grouping', () => {
     })
   })
 
+  it('carries the source medication frequency into each timeline prescription', () => {
+    const withFrequency = medication({
+      dosageInstruction: [{
+        timing: { code: { text: 'QDPC' } },
+      }],
+    })
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [withFrequency],
+        'medical',
+        'all',
+        'Other',
+        'en',
+        { R: 'Respiratory system' },
+      ),
+    )
+
+    expect(result.current.drugs[0].bars[0].frequency).toBe('QDPC')
+  })
+
   it('uses the official English level two name in an English UI', () => {
     const { result } = renderHook(() =>
       useMedicationTimeline(
@@ -239,6 +305,8 @@ describe('useMedicationTimeline category grouping', () => {
     expect(result.current.categories[0]).toMatchObject({
       key: 'atc-level2:R05',
       label: 'COUGH AND COLD PREPARATIONS',
+      nameEn: 'COUGH AND COLD PREPARATIONS',
+      nameZh: '咳嗽與感冒製劑',
     })
   })
 
@@ -341,5 +409,208 @@ describe('useMedicationTimeline category grouping', () => {
     )
 
     expect(result.current.totalDrugs).toBe(2)
+  })
+
+  it('keeps a dense ATC group broad when broad detail is selected', () => {
+    const medications = [
+      ['antipsychotic-a', 'N05A', '抗精神病藥', 'N05AX', '其他抗精神病藥'],
+      ['antipsychotic-b', 'N05A', '抗精神病藥', 'N05AH', '二氮雜䓬類'],
+      ['anxiolytic-a', 'N05B', '抗焦慮藥', 'N05BA', '苯二氮平類衍生物'],
+      ['anxiolytic-b', 'N05B', '抗焦慮藥', 'N05BX', '其他抗焦慮藥'],
+    ].map(([id, level3Code, level3NameZh, level4Code, level4NameZh], index) =>
+      medication({
+        id,
+        authoredOn: `2026-07-0${index + 1}`,
+        medicationCodeableConcept: {
+          coding: [{ code: id }],
+          text: id,
+        },
+        drugTerminology: {
+          officialNameEn: id,
+          officialProductUrl: `https://example.test/licence/${id}`,
+          atcCode: `${level4Code}01`,
+          atcLevel2Code: 'N05',
+          atcLevel2NameEn: 'PSYCHOLEPTICS',
+          atcLevel2NameZh: '精神安定類藥物',
+          atcLevel3Code: level3Code,
+          atcLevel3NameEn: level3Code === 'N05A' ? 'ANTIPSYCHOTICS' : 'ANXIOLYTICS',
+          atcLevel3NameZh: level3NameZh,
+          atcLevel4Code: level4Code,
+          atcLevel4NameEn: level4NameZh,
+          atcLevel4NameZh: level4NameZh,
+        },
+      }),
+    )
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'atc',
+        '2',
+      ),
+    )
+
+    expect(result.current.categories[0]).toMatchObject({
+      code: 'N05',
+      drugCount: 4,
+    })
+    expect(result.current.categories[0].children).toEqual([])
+    expect(result.current.categories[0].drugs).toHaveLength(4)
+  })
+
+  it('shows level 4 groups directly below level 2 when level 4 is selected', () => {
+    const medications = [
+      ['ssri', 'N06AB', '選擇性血清素再吸收抑制劑'],
+      ['other-antidepressant', 'N06AX', '其他抗憂鬱藥'],
+    ].map(([id, level4Code, level4NameZh], index) =>
+      medication({
+        id,
+        authoredOn: `2026-07-1${index}`,
+        medicationCodeableConcept: { coding: [{ code: id }], text: id },
+        drugTerminology: {
+          officialNameEn: id,
+          officialProductUrl: `https://example.test/licence/${id}`,
+          atcCode: `${level4Code}01`,
+          atcLevel2Code: 'N06',
+          atcLevel2NameEn: 'PSYCHOANALEPTICS',
+          atcLevel2NameZh: '精神興奮／抗憂鬱與失智相關用藥',
+          atcLevel3Code: 'N06A',
+          atcLevel3NameEn: 'ANTIDEPRESSANTS',
+          atcLevel3NameZh: '抗憂鬱藥',
+          atcLevel4Code: level4Code,
+          atcLevel4NameEn: level4NameZh,
+          atcLevel4NameZh: level4NameZh,
+        },
+      }),
+    )
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'atc',
+        '4',
+      ),
+    )
+
+    expect(result.current.categories[0].children?.map((group) => group.code).sort())
+      .toEqual(['N06AB', 'N06AX'])
+    expect(result.current.categories[0].children?.every((group) => group.depth === 1))
+      .toBe(true)
+  })
+
+  it('splits the same clinical drug into organization rows without changing its unique-drug count', () => {
+    const sharedTerminology = {
+      officialNameZh: '共同藥品',
+      officialNameEn: 'SHARED PRODUCT',
+      ingredientText: 'SHARED INGREDIENT 10 MG',
+      officialProductUrl: 'https://example.test/licence/shared',
+      atcCode: 'N06AX12',
+      atcLevel2Code: 'N06',
+      atcLevel2NameZh: '精神興奮／抗憂鬱與失智相關用藥',
+    }
+    const medications = [
+      medication({
+        id: 'shared-a',
+        authoredOn: '2026-07-01',
+        requester: { display: '臺北榮民總醫院' },
+        drugTerminology: sharedTerminology,
+      }),
+      medication({
+        id: 'shared-b',
+        authoredOn: '2026-07-15',
+        requester: { display: '社區藥局' },
+        drugTerminology: sharedTerminology,
+      }),
+    ]
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'organization',
+        '4',
+        '未提供機構',
+      ),
+    )
+
+    expect(result.current.totalDrugs).toBe(1)
+    expect(result.current.totalRows).toBe(2)
+    expect(result.current.organizationCount).toBe(2)
+    expect(result.current.categories.map((group) => group.label).sort())
+      .toEqual(['社區藥局', '臺北榮民總醫院'])
+    expect(result.current.categories.every((group) => group.drugs.length === 1)).toBe(true)
+  })
+
+  it('keeps medications first prescribed on the same day together in organization groups', () => {
+    const organization = { display: '示範宏恩醫院' }
+    const timelineMedication = (
+      id: string,
+      authoredOn: string,
+      ingredientText: string,
+      isChronic: boolean,
+    ) => medication({
+      id,
+      authoredOn,
+      requester: organization,
+      medicationCodeableConcept: {
+        coding: [{ code: id, display: ingredientText }],
+        text: ingredientText,
+      },
+      drugTerminology: {
+        officialNameEn: ingredientText,
+        ingredientText,
+        officialProductUrl: `https://example.test/licence/${id}`,
+        atcCode: 'R05CB01',
+        atcLevel2Code: 'R05',
+        atcLevel2NameEn: 'COUGH AND COLD PREPARATIONS',
+        atcLevel2NameZh: '咳嗽與感冒製劑',
+      },
+      ...(isChronic
+        ? {
+            courseOfTherapyType: {
+              coding: [{ code: 'continuous' }],
+            },
+          }
+        : {}),
+    })
+    const medications = [
+      timelineMedication('early-chronic', '2026-06-02', 'EARLY CHRONIC', true),
+      timelineMedication('later-chronic', '2026-07-01', 'LATER CHRONIC', true),
+      timelineMedication('early-acute', '2026-06-02', 'EARLY ACUTE', false),
+    ]
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'organization',
+        '4',
+        '未提供機構',
+      ),
+    )
+
+    const organizationDrugs = result.current.categories[0].drugs
+    expect(organizationDrugs.map((drug) => drug.bars[0].authoredOnIso))
+      .toEqual(['2026-06-02', '2026-06-02', '2026-07-01'])
+    expect(organizationDrugs.map((drug) => drug.isChronic))
+      .toEqual([false, true, true])
   })
 })

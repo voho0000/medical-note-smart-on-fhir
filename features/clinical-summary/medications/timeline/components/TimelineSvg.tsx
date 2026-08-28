@@ -1,8 +1,8 @@
 // SVG Gantt chart for medication refill history.
 //
 // Layout:
-//   - One row per drug, grouped by category.
-//   - Category headers sit between groups (text-only, no separate SVG).
+//   - One row per drug, grouped by ATC hierarchy or organization.
+//   - Nested group headers make adaptive ATC expansion visible.
 //   - X-axis: time (date range), ticks at year boundaries.
 //   - Y-axis: drug labels (left column, scrollable with the chart).
 //
@@ -11,9 +11,10 @@
 // — for 50+ drugs we revisit.
 "use client"
 
-import { useState, type MouseEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import type { CategoryGroup, RefillBar, TimelineDrug } from '../hooks/useMedicationTimeline'
 import {
   medicationChronicFutureTimelineBarClass,
@@ -31,6 +32,7 @@ interface TimelineSvgProps {
 
 const ROW_HEIGHT = 18
 const CATEGORY_HEADER_HEIGHT = 22
+const CATEGORY_HEADER_LINE_HEIGHT = 14
 const LABEL_COLUMN_WIDTH = 180
 const AXIS_HEIGHT = 22
 const BAR_HEIGHT = 10
@@ -45,6 +47,8 @@ interface HoverState {
   drugTerminology?: TimelineDrug['drugTerminology']
   xPx: number
   yPx: number
+  containerLeftPx: number
+  containerRightPx: number
 }
 
 function shortYmd(ms: number): string {
@@ -108,7 +112,17 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
   const { audience } = useAudience()
   const [hover, setHover] = useState<HoverState | null>(null)
   const [todayMs] = useState(() => Date.now())
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  const [tooltipHeight, setTooltipHeight] = useState(0)
   const mt = (t.medications as any)
+  const viewportWidth = typeof window === 'undefined' ? width : window.innerWidth
+  const tooltipWidth = Math.min(360, viewportWidth - 8)
+
+  useLayoutEffect(() => {
+    if (!hover || !tooltipRef.current) return
+    const measuredHeight = Math.ceil(tooltipRef.current.getBoundingClientRect().height)
+    setTooltipHeight((current) => current === measuredHeight ? current : measuredHeight)
+  }, [hover, tooltipWidth])
 
   if (categories.length === 0 || width < 200) return null
 
@@ -118,18 +132,28 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
 
   // ── Layout pass: assign Y position to each row ─────────────────────────
   type Row =
-    | { kind: 'category'; y: number; group: CategoryGroup }
-    | { kind: 'drug'; y: number; drug: TimelineDrug }
+    | { kind: 'category'; y: number; height: number; group: CategoryGroup }
+    | { kind: 'drug'; y: number; drug: TimelineDrug; depth: number }
 
   const rows: Row[] = []
   let cursorY = AXIS_HEIGHT
-  for (const group of categories) {
-    rows.push({ kind: 'category', y: cursorY, group })
+  const appendGroup = (group: CategoryGroup) => {
+    rows.push({
+      kind: 'category',
+      y: cursorY,
+      height: CATEGORY_HEADER_HEIGHT,
+      group,
+    })
     cursorY += CATEGORY_HEADER_HEIGHT
+    const depth = group.depth ?? 0
     for (const drug of group.drugs) {
-      rows.push({ kind: 'drug', y: cursorY, drug })
+      rows.push({ kind: 'drug', y: cursorY, drug, depth })
       cursorY += ROW_HEIGHT
     }
+    for (const child of group.children ?? []) appendGroup(child)
+  }
+  for (const group of categories) {
+    appendGroup(group)
     cursorY += CATEGORY_GAP
   }
   const totalHeight = cursorY
@@ -142,7 +166,47 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
     locale,
   )
   const todayX = xScale(todayMs)
-  const tooltipWidth = Math.min(280, width - 8)
+  const tooltipViewportMargin = 4
+  const tooltipGap = 8
+  const tooltipLeft = hover
+    ? (() => {
+      const viewportMin = tooltipViewportMargin
+      const viewportMax = Math.max(
+        viewportMin,
+        viewportWidth - tooltipWidth - tooltipViewportMargin,
+      )
+      const fitsTimeline = hover.containerRightPx - hover.containerLeftPx
+        >= tooltipWidth + tooltipViewportMargin * 2
+      const minimum = fitsTimeline
+        ? Math.max(viewportMin, hover.containerLeftPx + tooltipViewportMargin)
+        : viewportMin
+      const maximum = fitsTimeline
+        ? Math.min(
+          viewportMax,
+          hover.containerRightPx - tooltipWidth - tooltipViewportMargin,
+        )
+        : viewportMax
+      return Math.min(
+        Math.max(hover.xPx - tooltipWidth / 2, minimum),
+        Math.max(minimum, maximum),
+      )
+    })()
+    : tooltipViewportMargin
+  const tooltipTop = hover
+    ? (() => {
+      const viewportHeight = typeof window === 'undefined'
+        ? Number.POSITIVE_INFINITY
+        : window.innerHeight
+      const above = hover.yPx - tooltipHeight - tooltipGap
+      const below = hover.yPx + BAR_HEIGHT / 2 + tooltipGap
+      if (tooltipHeight > 0 && above >= tooltipViewportMargin) return above
+      if (below + tooltipHeight <= viewportHeight - tooltipViewportMargin) return below
+      return Math.max(
+        tooltipViewportMargin,
+        viewportHeight - tooltipHeight - tooltipViewportMargin,
+      )
+    })()
+    : tooltipViewportMargin
 
   return (
     <div className="relative w-full overflow-x-auto">
@@ -177,27 +241,110 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
         {/* ── Rows ──────────────────────────────────────────────────── */}
         {rows.map((row, idx) => {
           if (row.kind === 'category') {
+            const depth = row.group.depth ?? 0
+            const headerX = 6 + depth * 12
+            const count = row.group.drugCount ?? row.group.drugs.length
+            const originalEnglish = locale !== 'en'
+              && row.group.nameZh === row.group.label
+              && row.group.nameEn
+              && row.group.nameEn !== row.group.label
+                ? row.group.nameEn
+                : undefined
+            const hasAtcDetails = Boolean(row.group.code || originalEnglish)
+            const headerContent = (
+              <span className="inline-block whitespace-nowrap">
+                {row.group.label}{' '}
+                <span style={{ color: 'var(--muted-foreground)', fontWeight: 400 }}>
+                  ({count})
+                </span>
+              </span>
+            )
             return (
-              <g key={`cat-${idx}`}>
+              <g
+                key={`cat-${idx}`}
+                data-timeline-group-depth={depth}
+                data-timeline-group-level={row.group.level}
+                data-timeline-group-header-lines={1}
+              >
                 <rect
                   x={0}
                   y={row.y}
                   width={width}
-                  height={CATEGORY_HEADER_HEIGHT}
-                  className="fill-muted/55"
+                  height={row.height}
+                  className={depth === 0 ? 'fill-muted/55' : 'fill-muted/25'}
                 />
-                <text
-                  x={6}
-                  y={row.y + 14}
-                  fontSize={11}
-                  fontWeight={600}
-                  className="fill-foreground"
+                <foreignObject
+                  x={headerX}
+                  y={row.y}
+                  width={Math.max(width - headerX - 6, 80)}
+                  height={row.height}
+                  style={{ overflow: 'visible' }}
                 >
-                  {row.group.label}{' '}
-                  <tspan fontWeight={400} className="fill-muted-foreground">
-                    ({row.group.drugs.length})
-                  </tspan>
-                </text>
+                  <div
+                    // @ts-expect-error xmlns is valid here
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    style={{
+                      color: 'var(--foreground)',
+                      boxSizing: 'border-box',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      lineHeight: `${CATEGORY_HEADER_LINE_HEIGHT}px`,
+                      minHeight: '100%',
+                      overflow: 'visible',
+                      paddingBlock: 4,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {hasAtcDetails ? (
+                      <TapTooltip
+                        asChild
+                        selectable
+                        side="top"
+                        sideOffset={4}
+                        contentClassName="max-w-[min(90vw,28rem)] whitespace-normal text-left"
+                        contentTestId="timeline-atc-group-details"
+                        content={(
+                          <div className="space-y-1">
+                            {row.group.code ? (
+                              <div>
+                                <span className="text-background/70">
+                                  {mt.terminologyAtcLabel ?? 'ATC'}：
+                                </span>
+                                <span className="font-mono font-medium">{row.group.code}</span>
+                              </div>
+                            ) : null}
+                            {originalEnglish ? (
+                              <div>
+                                <div className="text-[0.6875rem] text-background/70">
+                                  {mt.timelineAtcOriginalEnglishLabel ?? 'WHO English original'}
+                                </div>
+                                <div className="font-medium leading-relaxed">{originalEnglish}</div>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      >
+                        <button
+                          type="button"
+                          tabIndex={0}
+                          aria-label={[
+                            row.group.label,
+                            row.group.code
+                              ? `${mt.terminologyAtcLabel ?? 'ATC'}：${row.group.code}`
+                              : undefined,
+                            originalEnglish
+                              ? `${mt.timelineAtcOriginalEnglishLabel ?? 'WHO English original'}：${originalEnglish}`
+                              : undefined,
+                          ].filter(Boolean).join('。')}
+                          className="inline-block cursor-help appearance-none whitespace-nowrap rounded-[2px] border-0 bg-transparent p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                          style={{ color: 'inherit', font: 'inherit', lineHeight: 'inherit' }}
+                        >
+                          {headerContent}
+                        </button>
+                      </TapTooltip>
+                    ) : headerContent}
+                  </div>
+                </foreignObject>
               </g>
             )
           }
@@ -224,9 +371,9 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               ) : null}
               {/* drug name label (left column) */}
               <foreignObject
-                x={4}
+                x={4 + row.depth * 12}
                 y={row.y}
-                width={LABEL_COLUMN_WIDTH - 8}
+                width={LABEL_COLUMN_WIDTH - 8 - row.depth * 12}
                 height={ROW_HEIGHT}
               >
                 <div
@@ -273,8 +420,10 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     drugName: drug.drugName,
                     drugProductName: drug.drugProductName,
                     drugTerminology: drug.drugTerminology,
-                    xPx: rect.left - (containerRect?.left ?? 0) + rect.width / 2,
-                    yPx: rect.top - (containerRect?.top ?? 0),
+                    xPx: rect.left + rect.width / 2,
+                    yPx: rect.top + rect.height / 2,
+                    containerLeftPx: containerRect?.left ?? 0,
+                    containerRightPx: containerRect?.right ?? width,
                   })
                 }
 
@@ -344,16 +493,20 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
       {/* ── Hover tooltip ──────────────────────────────────────────── */}
       {hover && (
         <div
-          className="absolute z-10 pointer-events-none rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md"
+          ref={tooltipRef}
+          data-testid="timeline-medication-tooltip"
+          className="pointer-events-none fixed z-50 rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md"
           style={{
-            left: Math.min(Math.max(hover.xPx - tooltipWidth / 2, 4), width - tooltipWidth - 4),
-            top: Math.max(4, hover.yPx - 150),
+            left: tooltipLeft,
+            top: tooltipTop,
             width: tooltipWidth,
           }}
         >
-          <div className="font-semibold truncate">{hover.drugName}</div>
+          <div className="min-w-0 whitespace-normal break-words font-semibold [overflow-wrap:anywhere]">
+            {hover.drugName}
+          </div>
           {hover.drugProductName && (
-            <div className="truncate text-[0.6875rem] text-muted-foreground">
+            <div className="min-w-0 whitespace-normal break-words text-[0.6875rem] text-muted-foreground [overflow-wrap:anywhere]">
               {hover.drugProductName}
             </div>
           )}
@@ -364,45 +517,53 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
             </div>
           )}
           {hover.drugTerminology && (
-            <dl className="mt-1 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
+            <dl className="mt-1 grid grid-cols-[minmax(6.5rem,2fr)_minmax(0,3fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
               {hover.drugTerminology.ingredientText && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyIngredientLabel ?? 'Ingredient / strength'}
                   </dt>
-                  <dd className="truncate">{hover.drugTerminology.ingredientText}</dd>
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                    {hover.drugTerminology.ingredientText}
+                  </dd>
                 </>
               )}
               {hover.drugTerminology.officialNameZh && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyOfficialNameZhLabel ?? '中文品名'}
                   </dt>
-                  <dd className="truncate">{hover.drugTerminology.officialNameZh}</dd>
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                    {hover.drugTerminology.officialNameZh}
+                  </dd>
                 </>
               )}
               {hover.drugTerminology.officialNameEn && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyOfficialNameEnLabel ?? 'English name'}
                   </dt>
-                  <dd className="truncate">{hover.drugTerminology.officialNameEn}</dd>
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                    {hover.drugTerminology.officialNameEn}
+                  </dd>
                 </>
               )}
               {hover.drugTerminology.doseForm && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyDoseFormLabel ?? 'Dose form'}
                   </dt>
-                  <dd className="truncate">{hover.drugTerminology.doseForm}</dd>
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                    {hover.drugTerminology.doseForm}
+                  </dd>
                 </>
               )}
               {hover.drugTerminology.atcCode && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyAtcLabel ?? 'ATC'}
                   </dt>
-                  <dd className="truncate">
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
                     {hover.drugTerminology.atcCode}
                     {(hover.drugTerminology.atcNameEn || hover.drugTerminology.atcNameZh) && (
                       <> · {hover.drugTerminology.atcNameEn || hover.drugTerminology.atcNameZh}</>
@@ -412,10 +573,10 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               )}
               {hover.drugTerminology.atcLevel2Code && (
                 <>
-                  <dt className="text-muted-foreground">
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                     {mt.terminologyAtcLevel2Label ?? 'ATC subgroup'}
                   </dt>
-                  <dd className="truncate">
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
                     {hover.drugTerminology.atcLevel2Code}
                     {(hover.drugTerminology.atcLevel2NameEn
                       || hover.drugTerminology.atcLevel2NameZh) && (
@@ -430,10 +591,32 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                   </dd>
                 </>
               )}
-              <dt className="text-muted-foreground">
+              {hover.drugTerminology.atcLevel4Code && (
+                <>
+                  <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
+                    {mt.terminologyAtcLevel4Label ?? 'ATC level 4'}
+                  </dt>
+                  <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                    {hover.drugTerminology.atcLevel4Code}
+                    {(hover.drugTerminology.atcLevel4NameEn
+                      || hover.drugTerminology.atcLevel4NameZh) && (
+                      <> · {
+                        locale === 'en'
+                          ? hover.drugTerminology.atcLevel4NameEn
+                            || hover.drugTerminology.atcLevel4NameZh
+                          : hover.drugTerminology.atcLevel4NameZh
+                            || hover.drugTerminology.atcLevel4NameEn
+                      }</>
+                    )}
+                  </dd>
+                </>
+              )}
+              <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">
                 {mt.terminologySnapshotLabel ?? 'Version'}
               </dt>
-              <dd className="truncate">{hover.drugTerminology.snapshotId}</dd>
+              <dd className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                {hover.drugTerminology.snapshotId}
+              </dd>
               <div className="col-span-2 mt-0.5 border-t pt-0.5 text-muted-foreground">
                 {mt.terminologySource ?? 'NHI drug master'}
               </div>
@@ -443,13 +626,19 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
             {shortYmd(hover.bar.startMs)} → {shortYmd(hover.bar.endMs)}
             <span className="ml-1">({hover.bar.supplyDays}d)</span>
           </div>
+          {hover.bar.frequency && (
+            <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
+              {mt.frequencyLabel ?? 'Frequency'}:{' '}
+              <span className="font-semibold text-foreground">{hover.bar.frequency}</span>
+            </div>
+          )}
           {hover.bar.pharmacy && (
-            <div className="text-muted-foreground truncate">
+            <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
               {mt.pharmacyLabel ?? 'Dispensed at'}: {hover.bar.pharmacy}
             </div>
           )}
           {audience === 'medical' && hover.bar.icdCode && (
-            <div className="text-muted-foreground truncate">
+            <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
               {mt.billingIcdLabel ?? 'Billing ICD'}:{' '}
               <span className="font-mono">{hover.bar.icdCode}</span>
               {hover.bar.icdText && <span className="ml-1">{hover.bar.icdText}</span>}

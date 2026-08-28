@@ -1,5 +1,5 @@
 import { sha1 } from "js-sha1";
-import { ATC_LEVEL_2_HIERARCHY_MANIFEST } from "./atc-level2";
+import { ATC_HIERARCHY_MANIFEST } from "./atc-hierarchy";
 import { NHI_DRUG_TERMINOLOGY_MANIFEST } from "./snapshot";
 import {
 	ATC_CODE_SYSTEM,
@@ -59,8 +59,8 @@ export function buildMedicationKnowledge(
 		},
 		{
 			system: ATC_HIERARCHY_TAG_SYSTEM,
-			code: ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
-			display: "ATC level 2 hierarchy snapshot",
+			code: ATC_HIERARCHY_MANIFEST.snapshotId,
+			display: "ATC hierarchy snapshot (levels 2-4)",
 		},
 	];
 	if (record.validTo) {
@@ -126,6 +126,20 @@ export function buildMedicationKnowledge(
 					record.atcLevel2.nameZh ||
 					record.atcLevel2.nameEn ||
 					record.atcLevel2.code,
+			});
+		}
+		for (const category of [record.atcLevel3, record.atcLevel4]) {
+			if (!category) continue;
+			classifications.push({
+				coding: [
+					{
+						system: ATC_CODE_SYSTEM,
+						version: category.hierarchySnapshotId,
+						code: category.code,
+						display: category.nameEn,
+					},
+				],
+				text: category.nameZh || category.nameEn || category.code,
 			});
 		}
 		resource.medicineClassification = [
@@ -207,10 +221,10 @@ export function buildDrugTerminologyProvenance(
 	return {
 		resourceType: "Provenance",
 		id: sha1(
-			[
-				"drug-terminology-provenance",
-				manifest.snapshotId,
-				ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
+				[
+					"drug-terminology-provenance",
+					manifest.snapshotId,
+					ATC_HIERARCHY_MANIFEST.snapshotId,
 				...targetReferences,
 			].join("|"),
 		).slice(0, 32),
@@ -261,11 +275,11 @@ export function buildDrugTerminologyProvenance(
 				role: "source",
 				what: {
 					identifier: {
-						system:
-							"https://nhi-fhir-bridge.github.io/IdentifierSystem/terminology-snapshot",
-						value: ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
-					},
-					display: ATC_LEVEL_2_HIERARCHY_MANIFEST.sourceTitle,
+							system:
+								"https://nhi-fhir-bridge.github.io/IdentifierSystem/terminology-snapshot",
+							value: ATC_HIERARCHY_MANIFEST.snapshotId,
+						},
+						display: ATC_HIERARCHY_MANIFEST.sourceTitle,
 				},
 			},
 		],

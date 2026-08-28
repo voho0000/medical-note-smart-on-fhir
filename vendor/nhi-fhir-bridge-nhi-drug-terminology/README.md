@@ -4,7 +4,8 @@ Versioned, offline Taiwan NHI drug terminology for application-side
 enrichment. It is intentionally not invoked by the Health Bank SDK converter.
 
 Current snapshot: `nhi-drug-terminology-20260728`.
-ATC hierarchy snapshot: `atc-level2-2026`.
+ATC hierarchy snapshots: `atc-level2-2026` for the existing level 2 API and
+`atc-hierarchy-2026` for governed level 3-4 resolution.
 
 - 224,553 official history rows accepted; zero rejected.
 - 45,177 date-effective semantic records covering 45,175 NHI drug codes.
@@ -23,9 +24,15 @@ ATC hierarchy snapshot: `atc-level2-2026`.
 - Input key: exact NHI drug code plus ISO prescription date.
 - Output: official Chinese/English names, ingredient text, strength, dosage
   form, exact full ATC code and its governed ATC level 2 category.
-- ATC level 2 English names are pinned from the WHO Collaborating Centre's
-  2026 ATC Index. `nameZh` is a Bridge-maintained zh-TW display translation,
-  explicitly not an official WHO translation.
+- ATC level 2-4 English names are pinned from the WHO Collaborating Centre's
+  2026 ATC Index. `nameZh` is a Bridge-maintained Taiwan clinical display
+  translation, explicitly not an official WHO or TFDA translation.
+- All 921 level 4 categories have a maintained display label. Familiar
+  abbreviations such as `PPI`, `ACEI`, `ARB`, `SGLT2`, `GLP-1`, and `SSRI`
+  remain visible when they are more useful than a long literal translation.
+  The official WHO English name remains available alongside every label.
+- Level 3 Chinese labels remain selective because the application timeline
+  displays level 2 directly above level 4.
 - No drug-name matching, regex fallback, live network request, or disease
   inference.
 - A future prescription date, missing effective version, or overlapping

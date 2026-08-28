@@ -1,0 +1,6456 @@
+{
+  "manifest": {
+    "snapshotId": "atc-hierarchy-2026",
+    "schemaVersion": "atc-hierarchy-v1",
+    "release": "2026",
+    "sourceTitle": "WHO Collaborating Centre for Drug Statistics Methodology, ATC classification index with DDDs, 2026",
+    "sourceUrl": "https://atcddd.fhi.no/atc_ddd_index/",
+    "sourceUpdatedDate": "2026-01-20",
+    "retrievedDate": "2026-08-27",
+    "categoryCount": 1286,
+    "level2Count": 94,
+    "level3Count": 271,
+    "level4Count": 921,
+    "officialEnglishCanonicalSha256": "b3e19363fb81728594747fb84e066bb5c38e8d3cd196650f954aaced65d5aa02",
+    "englishNameAuthority": "WHO Collaborating Centre for Drug Statistics Methodology",
+    "chineseNameAuthority": "NHI-FHIR-BRIDGE curated zh-TW display translation",
+    "chineseNamePolicy": "The zh-TW labels are application-maintained Taiwan clinical display translations, not official WHO or TFDA translations. Level 4 has complete coverage; common English abbreviations are retained where they are more familiar in Taiwan clinical use. Level 3 remains selectively translated.",
+    "copyrightNotice": "Use requires reference to the WHO Collaborating Centre. Commercial copying or distribution is not allowed by the source copyright notice."
+  },
+  "level2": [
+    [
+      "A01",
+      "STOMATOLOGICAL PREPARATIONS",
+      "口腔製劑"
+    ],
+    [
+      "A02",
+      "DRUGS FOR ACID RELATED DISORDERS",
+      "胃酸相關疾病用藥"
+    ],
+    [
+      "A03",
+      "DRUGS FOR FUNCTIONAL GASTROINTESTINAL DISORDERS",
+      "胃腸功能障礙用藥"
+    ],
+    [
+      "A04",
+      "ANTIEMETICS AND ANTINAUSEANTS",
+      "止吐與止噁心藥"
+    ],
+    [
+      "A05",
+      "BILE AND LIVER THERAPY",
+      "膽道與肝臟治療用藥"
+    ],
+    [
+      "A06",
+      "DRUGS FOR CONSTIPATION",
+      "便秘用藥"
+    ],
+    [
+      "A07",
+      "ANTIDIARRHEALS, INTESTINAL ANTIINFLAMMATORY/ANTIINFECTIVE AGENTS",
+      "止瀉、腸道抗發炎／抗感染藥"
+    ],
+    [
+      "A08",
+      "ANTIOBESITY PREPARATIONS, EXCL. DIET PRODUCTS",
+      "抗肥胖製劑（不含代餐）"
+    ],
+    [
+      "A09",
+      "DIGESTIVES, INCL. ENZYMES",
+      "消化劑（含酵素）"
+    ],
+    [
+      "A10",
+      "DRUGS USED IN DIABETES",
+      "糖尿病用藥"
+    ],
+    [
+      "A11",
+      "VITAMINS",
+      "維生素"
+    ],
+    [
+      "A12",
+      "MINERAL SUPPLEMENTS",
+      "礦物質補充劑"
+    ],
+    [
+      "A13",
+      "TONICS",
+      "滋補劑"
+    ],
+    [
+      "A14",
+      "ANABOLIC AGENTS FOR SYSTEMIC USE",
+      "全身性合成代謝劑"
+    ],
+    [
+      "A15",
+      "APPETITE STIMULANTS",
+      "食慾促進劑"
+    ],
+    [
+      "A16",
+      "OTHER ALIMENTARY TRACT AND METABOLISM PRODUCTS",
+      "其他消化道與代謝用藥"
+    ],
+    [
+      "B01",
+      "ANTITHROMBOTIC AGENTS",
+      "抗血栓劑"
+    ],
+    [
+      "B02",
+      "ANTIHEMORRHAGICS",
+      "抗出血劑"
+    ],
+    [
+      "B03",
+      "ANTIANEMIC PREPARATIONS",
+      "抗貧血製劑"
+    ],
+    [
+      "B05",
+      "BLOOD SUBSTITUTES AND PERFUSION SOLUTIONS",
+      "血液代用品與灌流液"
+    ],
+    [
+      "B06",
+      "OTHER HEMATOLOGICAL AGENTS",
+      "其他血液學用藥"
+    ],
+    [
+      "C01",
+      "CARDIAC THERAPY",
+      "心臟治療用藥"
+    ],
+    [
+      "C02",
+      "ANTIHYPERTENSIVES",
+      "降血壓劑"
+    ],
+    [
+      "C03",
+      "DIURETICS",
+      "利尿劑"
+    ],
+    [
+      "C04",
+      "PERIPHERAL VASODILATORS",
+      "周邊血管擴張劑"
+    ],
+    [
+      "C05",
+      "VASOPROTECTIVES",
+      "血管保護劑"
+    ],
+    [
+      "C07",
+      "BETA BLOCKING AGENTS",
+      "β 受體阻斷劑"
+    ],
+    [
+      "C08",
+      "CALCIUM CHANNEL BLOCKERS",
+      "鈣離子通道阻斷劑"
+    ],
+    [
+      "C09",
+      "AGENTS ACTING ON THE RENIN-ANGIOTENSIN SYSTEM",
+      "作用於腎素－血管張力素系統的藥物"
+    ],
+    [
+      "C10",
+      "LIPID MODIFYING AGENTS",
+      "血脂調節劑"
+    ],
+    [
+      "D01",
+      "ANTIFUNGALS FOR DERMATOLOGICAL USE",
+      "皮膚用抗黴菌劑"
+    ],
+    [
+      "D02",
+      "EMOLLIENTS AND PROTECTIVES",
+      "潤膚與保護劑"
+    ],
+    [
+      "D03",
+      "PREPARATIONS FOR TREATMENT OF WOUNDS AND ULCERS",
+      "傷口與潰瘍治療製劑"
+    ],
+    [
+      "D04",
+      "ANTIPRURITICS, INCL. ANTIHISTAMINES, ANESTHETICS, ETC.",
+      "止癢劑（含抗組織胺、麻醉劑等）"
+    ],
+    [
+      "D05",
+      "ANTIPSORIATICS",
+      "乾癬治療劑"
+    ],
+    [
+      "D06",
+      "ANTIBIOTICS AND CHEMOTHERAPEUTICS FOR DERMATOLOGICAL USE",
+      "皮膚用抗生素與化學治療劑"
+    ],
+    [
+      "D07",
+      "CORTICOSTEROIDS, DERMATOLOGICAL PREPARATIONS",
+      "皮膚用皮質類固醇製劑"
+    ],
+    [
+      "D08",
+      "ANTISEPTICS AND DISINFECTANTS",
+      "消毒劑與殺菌劑"
+    ],
+    [
+      "D09",
+      "MEDICATED DRESSINGS",
+      "藥物敷料"
+    ],
+    [
+      "D10",
+      "ANTI-ACNE PREPARATIONS",
+      "抗痤瘡製劑"
+    ],
+    [
+      "D11",
+      "OTHER DERMATOLOGICAL PREPARATIONS",
+      "其他皮膚用製劑"
+    ],
+    [
+      "G01",
+      "GYNECOLOGICAL ANTIINFECTIVES AND ANTISEPTICS",
+      "婦科用抗感染劑與消毒劑"
+    ],
+    [
+      "G02",
+      "OTHER GYNECOLOGICALS",
+      "其他婦科用藥"
+    ],
+    [
+      "G03",
+      "SEX HORMONES AND MODULATORS OF THE GENITAL SYSTEM",
+      "性荷爾蒙與生殖系統調節劑"
+    ],
+    [
+      "G04",
+      "UROLOGICALS",
+      "泌尿系統用藥"
+    ],
+    [
+      "H01",
+      "PITUITARY AND HYPOTHALAMIC HORMONES AND ANALOGUES",
+      "腦下垂體與下視丘荷爾蒙及類似物"
+    ],
+    [
+      "H02",
+      "CORTICOSTEROIDS FOR SYSTEMIC USE",
+      "全身性皮質類固醇"
+    ],
+    [
+      "H03",
+      "THYROID THERAPY",
+      "甲狀腺治療用藥"
+    ],
+    [
+      "H04",
+      "PANCREATIC HORMONES",
+      "胰臟荷爾蒙"
+    ],
+    [
+      "H05",
+      "CALCIUM HOMEOSTASIS",
+      "鈣恆定調節劑"
+    ],
+    [
+      "J01",
+      "ANTIBACTERIALS FOR SYSTEMIC USE",
+      "全身性抗菌劑"
+    ],
+    [
+      "J02",
+      "ANTIMYCOTICS FOR SYSTEMIC USE",
+      "全身性抗黴菌劑"
+    ],
+    [
+      "J04",
+      "ANTIMYCOBACTERIALS",
+      "抗分枝桿菌劑"
+    ],
+    [
+      "J05",
+      "ANTIVIRALS FOR SYSTEMIC USE",
+      "全身性抗病毒劑"
+    ],
+    [
+      "J06",
+      "IMMUNE SERA AND IMMUNOGLOBULINS",
+      "免疫血清與免疫球蛋白"
+    ],
+    [
+      "J07",
+      "VACCINES",
+      "疫苗"
+    ],
+    [
+      "L01",
+      "ANTINEOPLASTIC AGENTS",
+      "抗腫瘤劑"
+    ],
+    [
+      "L02",
+      "ENDOCRINE THERAPY",
+      "內分泌治療"
+    ],
+    [
+      "L03",
+      "IMMUNOSTIMULANTS",
+      "免疫刺激劑"
+    ],
+    [
+      "L04",
+      "IMMUNOSUPPRESSANTS",
+      "免疫抑制劑"
+    ],
+    [
+      "M01",
+      "ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS",
+      "抗發炎與抗風濕製劑"
+    ],
+    [
+      "M02",
+      "TOPICAL PRODUCTS FOR JOINT AND MUSCULAR PAIN",
+      "關節與肌肉疼痛局部用藥"
+    ],
+    [
+      "M03",
+      "MUSCLE RELAXANTS",
+      "肌肉鬆弛劑"
+    ],
+    [
+      "M04",
+      "ANTIGOUT PREPARATIONS",
+      "抗痛風製劑"
+    ],
+    [
+      "M05",
+      "DRUGS FOR TREATMENT OF BONE DISEASES",
+      "骨骼疾病治療用藥"
+    ],
+    [
+      "M09",
+      "OTHER DRUGS FOR DISORDERS OF THE MUSCULO-SKELETAL SYSTEM",
+      "其他肌肉骨骼系統疾病用藥"
+    ],
+    [
+      "N01",
+      "ANESTHETICS",
+      "麻醉劑"
+    ],
+    [
+      "N02",
+      "ANALGESICS",
+      "止痛劑"
+    ],
+    [
+      "N03",
+      "ANTIEPILEPTICS",
+      "抗癲癇劑"
+    ],
+    [
+      "N04",
+      "ANTI-PARKINSON DRUGS",
+      "抗巴金森氏症用藥"
+    ],
+    [
+      "N05",
+      "PSYCHOLEPTICS",
+      "精神安定類藥物"
+    ],
+    [
+      "N06",
+      "PSYCHOANALEPTICS",
+      "精神興奮／抗憂鬱與失智相關用藥"
+    ],
+    [
+      "N07",
+      "OTHER NERVOUS SYSTEM DRUGS",
+      "其他神經系統用藥"
+    ],
+    [
+      "P01",
+      "ANTIPROTOZOALS",
+      "抗原蟲劑"
+    ],
+    [
+      "P02",
+      "ANTHELMINTICS",
+      "驅蟲劑"
+    ],
+    [
+      "P03",
+      "ECTOPARASITICIDES, INCL. SCABICIDES, INSECTICIDES AND REPELLENTS",
+      "外寄生蟲防治劑（含疥瘡治療劑、殺蟲劑與驅避劑）"
+    ],
+    [
+      "R01",
+      "NASAL PREPARATIONS",
+      "鼻用製劑"
+    ],
+    [
+      "R02",
+      "THROAT PREPARATIONS",
+      "咽喉製劑"
+    ],
+    [
+      "R03",
+      "DRUGS FOR OBSTRUCTIVE AIRWAY DISEASES",
+      "阻塞性呼吸道疾病用藥"
+    ],
+    [
+      "R05",
+      "COUGH AND COLD PREPARATIONS",
+      "咳嗽與感冒製劑"
+    ],
+    [
+      "R06",
+      "ANTIHISTAMINES FOR SYSTEMIC USE",
+      "全身性抗組織胺"
+    ],
+    [
+      "R07",
+      "OTHER RESPIRATORY SYSTEM PRODUCTS",
+      "其他呼吸系統用藥"
+    ],
+    [
+      "S01",
+      "OPHTHALMOLOGICALS",
+      "眼科用藥"
+    ],
+    [
+      "S02",
+      "OTOLOGICALS",
+      "耳科用藥"
+    ],
+    [
+      "S03",
+      "OPHTHALMOLOGICAL AND OTOLOGICAL PREPARATIONS",
+      "眼科與耳科用製劑"
+    ],
+    [
+      "V01",
+      "ALLERGENS",
+      "過敏原"
+    ],
+    [
+      "V03",
+      "ALL OTHER THERAPEUTIC PRODUCTS",
+      "其他治療用產品"
+    ],
+    [
+      "V04",
+      "DIAGNOSTIC AGENTS",
+      "診斷用製劑"
+    ],
+    [
+      "V06",
+      "GENERAL NUTRIENTS",
+      "一般營養劑"
+    ],
+    [
+      "V07",
+      "ALL OTHER NON-THERAPEUTIC PRODUCTS",
+      "其他非治療用產品"
+    ],
+    [
+      "V08",
+      "CONTRAST MEDIA",
+      "顯影劑"
+    ],
+    [
+      "V09",
+      "DIAGNOSTIC RADIOPHARMACEUTICALS",
+      "診斷用放射性藥品"
+    ],
+    [
+      "V10",
+      "THERAPEUTIC RADIOPHARMACEUTICALS",
+      "治療用放射性藥品"
+    ],
+    [
+      "V20",
+      "SURGICAL DRESSINGS",
+      "外科敷料"
+    ]
+  ],
+  "level3": [
+    [
+      "A01A",
+      "STOMATOLOGICAL PREPARATIONS",
+      ""
+    ],
+    [
+      "A02A",
+      "ANTACIDS",
+      ""
+    ],
+    [
+      "A02B",
+      "DRUGS FOR PEPTIC ULCER AND GASTRO-OESOPHAGEAL REFLUX DISEASE (GORD)",
+      ""
+    ],
+    [
+      "A02X",
+      "OTHER DRUGS FOR ACID RELATED DISORDERS",
+      ""
+    ],
+    [
+      "A03A",
+      "DRUGS FOR FUNCTIONAL GASTROINTESTINAL DISORDERS",
+      ""
+    ],
+    [
+      "A03B",
+      "BELLADONNA AND DERIVATIVES, PLAIN",
+      ""
+    ],
+    [
+      "A03C",
+      "ANTISPASMODICS IN COMBINATION WITH PSYCHOLEPTICS",
+      ""
+    ],
+    [
+      "A03D",
+      "ANTISPASMODICS IN COMBINATION WITH ANALGESICS",
+      ""
+    ],
+    [
+      "A03E",
+      "ANTISPASMODICS AND ANTICHOLINERGICS IN COMBINATION WITH OTHER DRUGS",
+      ""
+    ],
+    [
+      "A03F",
+      "PROPULSIVES",
+      ""
+    ],
+    [
+      "A04A",
+      "ANTIEMETICS AND ANTINAUSEANTS",
+      ""
+    ],
+    [
+      "A05A",
+      "BILE THERAPY",
+      ""
+    ],
+    [
+      "A05B",
+      "LIVER THERAPY, LIPOTROPICS",
+      ""
+    ],
+    [
+      "A05C",
+      "DRUGS FOR BILE THERAPY AND LIPOTROPICS IN COMBINATION",
+      ""
+    ],
+    [
+      "A06A",
+      "DRUGS FOR CONSTIPATION",
+      ""
+    ],
+    [
+      "A07A",
+      "INTESTINAL ANTIINFECTIVES",
+      ""
+    ],
+    [
+      "A07B",
+      "INTESTINAL ADSORBENTS",
+      ""
+    ],
+    [
+      "A07C",
+      "ELECTROLYTES WITH CARBOHYDRATES",
+      ""
+    ],
+    [
+      "A07D",
+      "ANTIPROPULSIVES",
+      ""
+    ],
+    [
+      "A07E",
+      "INTESTINAL ANTIINFLAMMATORY AGENTS",
+      ""
+    ],
+    [
+      "A07F",
+      "ANTIDIARRHEAL MICROORGANISMS",
+      ""
+    ],
+    [
+      "A07X",
+      "OTHER ANTIDIARRHEALS",
+      ""
+    ],
+    [
+      "A08A",
+      "ANTIOBESITY PREPARATIONS, EXCL. DIET PRODUCTS",
+      ""
+    ],
+    [
+      "A09A",
+      "DIGESTIVES, INCL. ENZYMES",
+      ""
+    ],
+    [
+      "A10A",
+      "INSULINS AND ANALOGUES",
+      ""
+    ],
+    [
+      "A10B",
+      "BLOOD GLUCOSE LOWERING DRUGS, EXCL. INSULINS",
+      ""
+    ],
+    [
+      "A10X",
+      "OTHER DRUGS USED IN DIABETES",
+      ""
+    ],
+    [
+      "A11A",
+      "MULTIVITAMINS, COMBINATIONS",
+      ""
+    ],
+    [
+      "A11B",
+      "MULTIVITAMINS, PLAIN",
+      ""
+    ],
+    [
+      "A11C",
+      "VITAMIN A AND D, INCL. COMBINATIONS OF THE TWO",
+      ""
+    ],
+    [
+      "A11D",
+      "VITAMIN B1, PLAIN AND IN COMBINATION WITH VITAMIN B6 AND B12",
+      ""
+    ],
+    [
+      "A11E",
+      "VITAMIN B-COMPLEX, INCL. COMBINATIONS",
+      ""
+    ],
+    [
+      "A11G",
+      "ASCORBIC ACID (VITAMIN C), INCL. COMBINATIONS",
+      ""
+    ],
+    [
+      "A11H",
+      "OTHER PLAIN VITAMIN PREPARATIONS",
+      ""
+    ],
+    [
+      "A11J",
+      "OTHER VITAMIN PRODUCTS, COMBINATIONS",
+      ""
+    ],
+    [
+      "A12A",
+      "CALCIUM",
+      ""
+    ],
+    [
+      "A12B",
+      "POTASSIUM",
+      ""
+    ],
+    [
+      "A12C",
+      "OTHER MINERAL SUPPLEMENTS",
+      ""
+    ],
+    [
+      "A13A",
+      "TONICS",
+      ""
+    ],
+    [
+      "A14A",
+      "ANABOLIC STEROIDS",
+      ""
+    ],
+    [
+      "A14B",
+      "OTHER ANABOLIC AGENTS",
+      ""
+    ],
+    [
+      "A16A",
+      "OTHER ALIMENTARY TRACT AND METABOLISM PRODUCTS",
+      ""
+    ],
+    [
+      "B01A",
+      "ANTITHROMBOTIC AGENTS",
+      ""
+    ],
+    [
+      "B02A",
+      "ANTIFIBRINOLYTICS",
+      ""
+    ],
+    [
+      "B02B",
+      "VITAMIN K AND OTHER HEMOSTATICS",
+      ""
+    ],
+    [
+      "B03A",
+      "IRON PREPARATIONS",
+      ""
+    ],
+    [
+      "B03B",
+      "VITAMIN B12 AND FOLIC ACID",
+      ""
+    ],
+    [
+      "B03X",
+      "OTHER ANTIANEMIC PREPARATIONS",
+      ""
+    ],
+    [
+      "B05A",
+      "BLOOD AND RELATED PRODUCTS",
+      ""
+    ],
+    [
+      "B05B",
+      "I.V. SOLUTIONS",
+      ""
+    ],
+    [
+      "B05C",
+      "IRRIGATING SOLUTIONS",
+      ""
+    ],
+    [
+      "B05D",
+      "PERITONEAL DIALYTICS",
+      ""
+    ],
+    [
+      "B05X",
+      "I.V. SOLUTION ADDITIVES",
+      ""
+    ],
+    [
+      "B05Z",
+      "HEMODIALYTICS AND HEMOFILTRATES",
+      ""
+    ],
+    [
+      "B06A",
+      "OTHER HEMATOLOGICAL AGENTS",
+      ""
+    ],
+    [
+      "C01A",
+      "CARDIAC GLYCOSIDES",
+      ""
+    ],
+    [
+      "C01B",
+      "ANTIARRHYTHMICS, CLASS I AND III",
+      ""
+    ],
+    [
+      "C01C",
+      "CARDIAC STIMULANTS EXCL. CARDIAC GLYCOSIDES",
+      ""
+    ],
+    [
+      "C01D",
+      "VASODILATORS USED IN CARDIAC DISEASES",
+      ""
+    ],
+    [
+      "C01E",
+      "OTHER CARDIAC PREPARATIONS",
+      ""
+    ],
+    [
+      "C02A",
+      "ANTIADRENERGIC AGENTS, CENTRALLY ACTING",
+      ""
+    ],
+    [
+      "C02B",
+      "ANTIADRENERGIC AGENTS, GANGLION-BLOCKING",
+      ""
+    ],
+    [
+      "C02C",
+      "ANTIADRENERGIC AGENTS, PERIPHERALLY ACTING",
+      ""
+    ],
+    [
+      "C02D",
+      "ARTERIOLAR SMOOTH MUSCLE, AGENTS ACTING ON",
+      ""
+    ],
+    [
+      "C02K",
+      "OTHER ANTIHYPERTENSIVES",
+      ""
+    ],
+    [
+      "C02L",
+      "ANTIHYPERTENSIVES AND DIURETICS IN COMBINATION",
+      ""
+    ],
+    [
+      "C02N",
+      "COMBINATIONS OF ANTIHYPERTENSIVES IN ATC-GR. C02",
+      ""
+    ],
+    [
+      "C03A",
+      "LOW-CEILING DIURETICS, THIAZIDES",
+      ""
+    ],
+    [
+      "C03B",
+      "LOW-CEILING DIURETICS, EXCL. THIAZIDES",
+      ""
+    ],
+    [
+      "C03C",
+      "HIGH-CEILING DIURETICS",
+      ""
+    ],
+    [
+      "C03D",
+      "ALDOSTERONE ANTAGONISTS AND OTHER POTASSIUM-SPARING AGENTS",
+      ""
+    ],
+    [
+      "C03E",
+      "DIURETICS AND POTASSIUM-SPARING AGENTS IN COMBINATION",
+      ""
+    ],
+    [
+      "C03X",
+      "OTHER DIURETICS",
+      ""
+    ],
+    [
+      "C04A",
+      "PERIPHERAL VASODILATORS",
+      ""
+    ],
+    [
+      "C05A",
+      "AGENTS FOR TREATMENT OF HEMORRHOIDS AND ANAL FISSURES FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "C05B",
+      "ANTIVARICOSE THERAPY",
+      ""
+    ],
+    [
+      "C05C",
+      "CAPILLARY STABILIZING AGENTS",
+      ""
+    ],
+    [
+      "C05X",
+      "OTHER VASOPROTECTIVES",
+      ""
+    ],
+    [
+      "C07A",
+      "BETA BLOCKING AGENTS",
+      ""
+    ],
+    [
+      "C07B",
+      "BETA BLOCKING AGENTS AND THIAZIDES",
+      ""
+    ],
+    [
+      "C07C",
+      "BETA BLOCKING AGENTS AND OTHER DIURETICS",
+      ""
+    ],
+    [
+      "C07D",
+      "BETA BLOCKING AGENTS, THIAZIDES AND OTHER DIURETICS",
+      ""
+    ],
+    [
+      "C07E",
+      "BETA BLOCKING AGENTS AND VASODILATORS",
+      ""
+    ],
+    [
+      "C07F",
+      "BETA BLOCKING AGENTS, OTHER COMBINATIONS",
+      ""
+    ],
+    [
+      "C08C",
+      "SELECTIVE CALCIUM CHANNEL BLOCKERS WITH MAINLY VASCULAR EFFECTS",
+      ""
+    ],
+    [
+      "C08D",
+      "SELECTIVE CALCIUM CHANNEL BLOCKERS WITH DIRECT CARDIAC EFFECTS",
+      ""
+    ],
+    [
+      "C08E",
+      "NON-SELECTIVE CALCIUM CHANNEL BLOCKERS",
+      ""
+    ],
+    [
+      "C08G",
+      "CALCIUM CHANNEL BLOCKERS AND DIURETICS",
+      ""
+    ],
+    [
+      "C09A",
+      "ACE INHIBITORS, PLAIN",
+      ""
+    ],
+    [
+      "C09B",
+      "ACE INHIBITORS, COMBINATIONS",
+      ""
+    ],
+    [
+      "C09C",
+      "ANGIOTENSIN II RECEPTOR BLOCKERS (ARBs), PLAIN",
+      ""
+    ],
+    [
+      "C09D",
+      "ANGIOTENSIN II RECEPTOR BLOCKERS (ARBs), COMBINATIONS",
+      ""
+    ],
+    [
+      "C09X",
+      "OTHER AGENTS ACTING ON THE RENIN-ANGIOTENSIN SYSTEM",
+      ""
+    ],
+    [
+      "C10A",
+      "LIPID MODIFYING AGENTS, PLAIN",
+      ""
+    ],
+    [
+      "C10B",
+      "LIPID MODIFYING AGENTS, COMBINATIONS",
+      ""
+    ],
+    [
+      "D01A",
+      "ANTIFUNGALS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "D01B",
+      "ANTIFUNGALS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "D02A",
+      "EMOLLIENTS AND PROTECTIVES",
+      ""
+    ],
+    [
+      "D02B",
+      "PROTECTIVES AGAINST UV-RADIATION",
+      ""
+    ],
+    [
+      "D03A",
+      "CICATRIZANTS",
+      ""
+    ],
+    [
+      "D03B",
+      "ENZYMES",
+      ""
+    ],
+    [
+      "D04A",
+      "ANTIPRURITICS, INCL. ANTIHISTAMINES, ANESTHETICS, ETC.",
+      ""
+    ],
+    [
+      "D05A",
+      "ANTIPSORIATICS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "D05B",
+      "ANTIPSORIATICS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "D06A",
+      "ANTIBIOTICS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "D06B",
+      "CHEMOTHERAPEUTICS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "D06C",
+      "ANTIBIOTICS AND CHEMOTHERAPEUTICS, COMBINATIONS",
+      ""
+    ],
+    [
+      "D07A",
+      "CORTICOSTEROIDS, PLAIN",
+      ""
+    ],
+    [
+      "D07B",
+      "CORTICOSTEROIDS, COMBINATIONS WITH ANTISEPTICS",
+      ""
+    ],
+    [
+      "D07C",
+      "CORTICOSTEROIDS, COMBINATIONS WITH ANTIBIOTICS",
+      ""
+    ],
+    [
+      "D07X",
+      "CORTICOSTEROIDS, OTHER COMBINATIONS",
+      ""
+    ],
+    [
+      "D08A",
+      "ANTISEPTICS AND DISINFECTANTS",
+      ""
+    ],
+    [
+      "D09A",
+      "MEDICATED DRESSINGS",
+      ""
+    ],
+    [
+      "D10A",
+      "ANTI-ACNE PREPARATIONS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "D10B",
+      "ANTI-ACNE PREPARATIONS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "D11A",
+      "OTHER DERMATOLOGICAL PREPARATIONS",
+      ""
+    ],
+    [
+      "G01A",
+      "ANTIINFECTIVES AND ANTISEPTICS, EXCL. COMBINATIONS WITH CORTICOSTEROIDS",
+      ""
+    ],
+    [
+      "G01B",
+      "ANTIINFECTIVES/ANTISEPTICS IN COMBINATION WITH CORTICOSTEROIDS",
+      ""
+    ],
+    [
+      "G02A",
+      "UTEROTONICS",
+      ""
+    ],
+    [
+      "G02B",
+      "CONTRACEPTIVES FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "G02C",
+      "OTHER GYNECOLOGICALS",
+      ""
+    ],
+    [
+      "G03A",
+      "HORMONAL CONTRACEPTIVES FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "G03B",
+      "ANDROGENS",
+      ""
+    ],
+    [
+      "G03C",
+      "ESTROGENS",
+      ""
+    ],
+    [
+      "G03D",
+      "PROGESTOGENS",
+      ""
+    ],
+    [
+      "G03E",
+      "ANDROGENS AND FEMALE SEX HORMONES IN COMBINATION",
+      ""
+    ],
+    [
+      "G03F",
+      "PROGESTOGENS AND ESTROGENS IN COMBINATION",
+      ""
+    ],
+    [
+      "G03G",
+      "GONADOTROPINS AND OTHER OVULATION STIMULANTS",
+      ""
+    ],
+    [
+      "G03H",
+      "ANTIANDROGENS",
+      ""
+    ],
+    [
+      "G03X",
+      "OTHER SEX HORMONES AND MODULATORS OF THE GENITAL SYSTEM",
+      ""
+    ],
+    [
+      "G04B",
+      "UROLOGICALS",
+      ""
+    ],
+    [
+      "G04C",
+      "DRUGS USED IN BENIGN PROSTATIC HYPERTROPHY",
+      ""
+    ],
+    [
+      "H01A",
+      "ANTERIOR PITUITARY LOBE HORMONES AND ANALOGUES",
+      ""
+    ],
+    [
+      "H01B",
+      "POSTERIOR PITUITARY LOBE HORMONES",
+      ""
+    ],
+    [
+      "H01C",
+      "HYPOTHALAMIC HORMONES",
+      ""
+    ],
+    [
+      "H02A",
+      "CORTICOSTEROIDS FOR SYSTEMIC USE, PLAIN",
+      ""
+    ],
+    [
+      "H02B",
+      "CORTICOSTEROIDS FOR SYSTEMIC USE, COMBINATIONS",
+      ""
+    ],
+    [
+      "H02C",
+      "ANTIADRENAL PREPARATIONS",
+      ""
+    ],
+    [
+      "H03A",
+      "THYROID PREPARATIONS",
+      ""
+    ],
+    [
+      "H03B",
+      "ANTITHYROID PREPARATIONS",
+      ""
+    ],
+    [
+      "H03C",
+      "IODINE THERAPY",
+      ""
+    ],
+    [
+      "H04A",
+      "GLYCOGENOLYTIC HORMONES",
+      ""
+    ],
+    [
+      "H05A",
+      "PARATHYROID HORMONES AND ANALOGUES",
+      ""
+    ],
+    [
+      "H05B",
+      "ANTI-PARATHYROID AGENTS",
+      ""
+    ],
+    [
+      "J01A",
+      "TETRACYCLINES",
+      ""
+    ],
+    [
+      "J01B",
+      "AMPHENICOLS",
+      ""
+    ],
+    [
+      "J01C",
+      "BETA-LACTAM ANTIBACTERIALS, PENICILLINS",
+      ""
+    ],
+    [
+      "J01D",
+      "OTHER BETA-LACTAM ANTIBACTERIALS",
+      ""
+    ],
+    [
+      "J01E",
+      "SULFONAMIDES AND TRIMETHOPRIM",
+      ""
+    ],
+    [
+      "J01F",
+      "MACROLIDES, LINCOSAMIDES AND STREPTOGRAMINS",
+      ""
+    ],
+    [
+      "J01G",
+      "AMINOGLYCOSIDE ANTIBACTERIALS",
+      ""
+    ],
+    [
+      "J01M",
+      "QUINOLONE ANTIBACTERIALS",
+      ""
+    ],
+    [
+      "J01R",
+      "COMBINATIONS OF ANTIBACTERIALS",
+      ""
+    ],
+    [
+      "J01X",
+      "OTHER ANTIBACTERIALS",
+      ""
+    ],
+    [
+      "J02A",
+      "ANTIMYCOTICS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "J04A",
+      "DRUGS FOR TREATMENT OF TUBERCULOSIS",
+      ""
+    ],
+    [
+      "J04B",
+      "DRUGS FOR TREATMENT OF LEPRA",
+      ""
+    ],
+    [
+      "J05A",
+      "DIRECT ACTING ANTIVIRALS",
+      ""
+    ],
+    [
+      "J06A",
+      "IMMUNE SERA",
+      ""
+    ],
+    [
+      "J06B",
+      "IMMUNOGLOBULINS",
+      ""
+    ],
+    [
+      "J07A",
+      "BACTERIAL VACCINES",
+      ""
+    ],
+    [
+      "J07B",
+      "VIRAL VACCINES",
+      ""
+    ],
+    [
+      "J07C",
+      "BACTERIAL AND VIRAL VACCINES, COMBINED",
+      ""
+    ],
+    [
+      "J07X",
+      "OTHER VACCINES",
+      ""
+    ],
+    [
+      "L01A",
+      "ALKYLATING AGENTS",
+      ""
+    ],
+    [
+      "L01B",
+      "ANTIMETABOLITES",
+      ""
+    ],
+    [
+      "L01C",
+      "PLANT ALKALOIDS AND OTHER NATURAL PRODUCTS",
+      ""
+    ],
+    [
+      "L01D",
+      "CYTOTOXIC ANTIBIOTICS AND RELATED SUBSTANCES",
+      ""
+    ],
+    [
+      "L01E",
+      "PROTEIN KINASE INHIBITORS",
+      ""
+    ],
+    [
+      "L01F",
+      "MONOCLONAL ANTIBODIES AND ANTIBODY DRUG CONJUGATES",
+      ""
+    ],
+    [
+      "L01X",
+      "OTHER ANTINEOPLASTIC AGENTS",
+      ""
+    ],
+    [
+      "L02A",
+      "HORMONES AND RELATED AGENTS",
+      ""
+    ],
+    [
+      "L02B",
+      "HORMONE ANTAGONISTS AND RELATED AGENTS",
+      ""
+    ],
+    [
+      "L03A",
+      "IMMUNOSTIMULANTS",
+      ""
+    ],
+    [
+      "L04A",
+      "IMMUNOSUPPRESSANTS",
+      ""
+    ],
+    [
+      "M01A",
+      "ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS, NON-STEROIDS",
+      ""
+    ],
+    [
+      "M01B",
+      "ANTIINFLAMMATORY/ANTIRHEUMATIC AGENTS IN COMBINATION",
+      ""
+    ],
+    [
+      "M01C",
+      "SPECIFIC ANTIRHEUMATIC AGENTS",
+      ""
+    ],
+    [
+      "M02A",
+      "TOPICAL PRODUCTS FOR JOINT AND MUSCULAR PAIN",
+      ""
+    ],
+    [
+      "M03A",
+      "MUSCLE RELAXANTS, PERIPHERALLY ACTING AGENTS",
+      ""
+    ],
+    [
+      "M03B",
+      "MUSCLE RELAXANTS, CENTRALLY ACTING AGENTS",
+      ""
+    ],
+    [
+      "M03C",
+      "MUSCLE RELAXANTS, DIRECTLY ACTING AGENTS",
+      ""
+    ],
+    [
+      "M04A",
+      "ANTIGOUT PREPARATIONS",
+      ""
+    ],
+    [
+      "M05B",
+      "DRUGS AFFECTING BONE STRUCTURE AND MINERALIZATION",
+      ""
+    ],
+    [
+      "M09A",
+      "OTHER DRUGS FOR DISORDERS OF THE MUSCULO-SKELETAL SYSTEM",
+      ""
+    ],
+    [
+      "N01A",
+      "ANESTHETICS, GENERAL",
+      ""
+    ],
+    [
+      "N01B",
+      "ANESTHETICS, LOCAL",
+      ""
+    ],
+    [
+      "N02A",
+      "OPIOIDS",
+      ""
+    ],
+    [
+      "N02B",
+      "OTHER ANALGESICS AND ANTIPYRETICS",
+      ""
+    ],
+    [
+      "N02C",
+      "ANTIMIGRAINE PREPARATIONS",
+      ""
+    ],
+    [
+      "N03A",
+      "ANTIEPILEPTICS",
+      "抗癲癇藥"
+    ],
+    [
+      "N04A",
+      "ANTICHOLINERGIC AGENTS",
+      "抗膽鹼作用藥"
+    ],
+    [
+      "N04B",
+      "DOPAMINERGIC AGENTS",
+      "多巴胺作用藥"
+    ],
+    [
+      "N04C",
+      "OTHER ANTIPARKINSON DRUGS",
+      ""
+    ],
+    [
+      "N05A",
+      "ANTIPSYCHOTICS",
+      "抗精神病藥"
+    ],
+    [
+      "N05B",
+      "ANXIOLYTICS",
+      "抗焦慮藥"
+    ],
+    [
+      "N05C",
+      "HYPNOTICS AND SEDATIVES",
+      "安眠與鎮靜藥"
+    ],
+    [
+      "N06A",
+      "ANTIDEPRESSANTS",
+      "抗憂鬱藥"
+    ],
+    [
+      "N06B",
+      "PSYCHOSTIMULANTS, AGENTS USED FOR ADHD AND NOOTROPICS",
+      "精神刺激劑、ADHD 與益智藥物"
+    ],
+    [
+      "N06C",
+      "PSYCHOLEPTICS AND PSYCHOANALEPTICS IN COMBINATION",
+      "精神興奮類複方"
+    ],
+    [
+      "N06D",
+      "ANTI-DEMENTIA DRUGS",
+      "抗失智症藥"
+    ],
+    [
+      "N07A",
+      "PARASYMPATHOMIMETICS",
+      "副交感神經作用藥"
+    ],
+    [
+      "N07B",
+      "DRUGS USED IN ADDICTIVE DISORDERS",
+      "成癮疾患用藥"
+    ],
+    [
+      "N07C",
+      "ANTIVERTIGO PREPARATIONS",
+      "抗眩暈製劑"
+    ],
+    [
+      "N07X",
+      "OTHER NERVOUS SYSTEM DRUGS",
+      "其他神經系統用藥"
+    ],
+    [
+      "P01A",
+      "AGENTS AGAINST AMOEBIASIS AND OTHER PROTOZOAL DISEASES",
+      ""
+    ],
+    [
+      "P01B",
+      "ANTIMALARIALS",
+      ""
+    ],
+    [
+      "P01C",
+      "AGENTS AGAINST LEISHMANIASIS AND TRYPANOSOMIASIS",
+      ""
+    ],
+    [
+      "P02B",
+      "ANTITREMATODALS",
+      ""
+    ],
+    [
+      "P02C",
+      "ANTINEMATODAL AGENTS",
+      ""
+    ],
+    [
+      "P02D",
+      "ANTICESTODALS",
+      ""
+    ],
+    [
+      "P03A",
+      "ECTOPARASITICIDES, INCL. SCABICIDES",
+      ""
+    ],
+    [
+      "P03B",
+      "INSECTICIDES AND REPELLENTS",
+      ""
+    ],
+    [
+      "R01A",
+      "DECONGESTANTS AND OTHER NASAL PREPARATIONS FOR TOPICAL USE",
+      ""
+    ],
+    [
+      "R01B",
+      "NASAL DECONGESTANTS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "R02A",
+      "THROAT PREPARATIONS",
+      ""
+    ],
+    [
+      "R03A",
+      "ADRENERGICS, INHALANTS",
+      ""
+    ],
+    [
+      "R03B",
+      "OTHER DRUGS FOR OBSTRUCTIVE AIRWAY DISEASES, INHALANTS",
+      ""
+    ],
+    [
+      "R03C",
+      "ADRENERGICS FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "R03D",
+      "OTHER SYSTEMIC DRUGS FOR OBSTRUCTIVE AIRWAY DISEASES",
+      ""
+    ],
+    [
+      "R05C",
+      "EXPECTORANTS, EXCL. COMBINATIONS WITH COUGH SUPPRESSANTS",
+      ""
+    ],
+    [
+      "R05D",
+      "COUGH SUPPRESSANTS, EXCL. COMBINATIONS WITH EXPECTORANTS",
+      ""
+    ],
+    [
+      "R05F",
+      "COUGH SUPPRESSANTS AND EXPECTORANTS, COMBINATIONS",
+      ""
+    ],
+    [
+      "R05X",
+      "OTHER COLD PREPARATIONS",
+      ""
+    ],
+    [
+      "R06A",
+      "ANTIHISTAMINES FOR SYSTEMIC USE",
+      ""
+    ],
+    [
+      "R07A",
+      "OTHER RESPIRATORY SYSTEM PRODUCTS",
+      ""
+    ],
+    [
+      "S01A",
+      "ANTIINFECTIVES",
+      ""
+    ],
+    [
+      "S01B",
+      "ANTIINFLAMMATORY AGENTS",
+      ""
+    ],
+    [
+      "S01C",
+      "ANTIINFLAMMATORY AGENTS AND ANTIINFECTIVES IN COMBINATION",
+      ""
+    ],
+    [
+      "S01E",
+      "ANTIGLAUCOMA PREPARATIONS AND MIOTICS",
+      ""
+    ],
+    [
+      "S01F",
+      "MYDRIATICS AND CYCLOPLEGICS",
+      ""
+    ],
+    [
+      "S01G",
+      "DECONGESTANTS AND ANTIALLERGICS",
+      ""
+    ],
+    [
+      "S01H",
+      "LOCAL ANESTHETICS",
+      ""
+    ],
+    [
+      "S01J",
+      "DIAGNOSTIC AGENTS",
+      ""
+    ],
+    [
+      "S01K",
+      "SURGICAL AIDS",
+      ""
+    ],
+    [
+      "S01L",
+      "OCULAR VASCULAR DISORDER AGENTS",
+      ""
+    ],
+    [
+      "S01X",
+      "OTHER OPHTHALMOLOGICALS",
+      ""
+    ],
+    [
+      "S02A",
+      "ANTIINFECTIVES",
+      ""
+    ],
+    [
+      "S02B",
+      "CORTICOSTEROIDS",
+      ""
+    ],
+    [
+      "S02C",
+      "CORTICOSTEROIDS AND ANTIINFECTIVES IN COMBINATION",
+      ""
+    ],
+    [
+      "S02D",
+      "OTHER OTOLOGICALS",
+      ""
+    ],
+    [
+      "S03A",
+      "ANTIINFECTIVES",
+      ""
+    ],
+    [
+      "S03B",
+      "CORTICOSTEROIDS",
+      ""
+    ],
+    [
+      "S03C",
+      "CORTICOSTEROIDS AND ANTIINFECTIVES IN COMBINATION",
+      ""
+    ],
+    [
+      "S03D",
+      "OTHER OPHTHALMOLOGICAL AND OTOLOGICAL PREPARATIONS",
+      ""
+    ],
+    [
+      "V01A",
+      "ALLERGENS",
+      ""
+    ],
+    [
+      "V03A",
+      "ALL OTHER THERAPEUTIC PRODUCTS",
+      ""
+    ],
+    [
+      "V04B",
+      "URINE TESTS",
+      ""
+    ],
+    [
+      "V04C",
+      "OTHER DIAGNOSTIC AGENTS",
+      ""
+    ],
+    [
+      "V06A",
+      "DIET FORMULATIONS FOR TREATMENT OF OBESITY",
+      ""
+    ],
+    [
+      "V06B",
+      "PROTEIN SUPPLEMENTS",
+      ""
+    ],
+    [
+      "V06C",
+      "INFANT FORMULAS",
+      ""
+    ],
+    [
+      "V06D",
+      "OTHER NUTRIENTS",
+      ""
+    ],
+    [
+      "V07A",
+      "ALL OTHER NON-THERAPEUTIC PRODUCTS",
+      ""
+    ],
+    [
+      "V08A",
+      "X-RAY CONTRAST MEDIA, IODINATED",
+      ""
+    ],
+    [
+      "V08B",
+      "X-RAY CONTRAST MEDIA, NON-IODINATED",
+      ""
+    ],
+    [
+      "V08C",
+      "MAGNETIC RESONANCE IMAGING CONTRAST MEDIA",
+      ""
+    ],
+    [
+      "V08D",
+      "ULTRASOUND CONTRAST MEDIA",
+      ""
+    ],
+    [
+      "V09A",
+      "CENTRAL NERVOUS SYSTEM",
+      ""
+    ],
+    [
+      "V09B",
+      "SKELETON",
+      ""
+    ],
+    [
+      "V09C",
+      "RENAL SYSTEM",
+      ""
+    ],
+    [
+      "V09D",
+      "HEPATIC AND RETICULO ENDOTHELIAL SYSTEM",
+      ""
+    ],
+    [
+      "V09E",
+      "RESPIRATORY SYSTEM",
+      ""
+    ],
+    [
+      "V09F",
+      "THYROID",
+      ""
+    ],
+    [
+      "V09G",
+      "CARDIOVASCULAR SYSTEM",
+      ""
+    ],
+    [
+      "V09H",
+      "INFLAMMATION AND INFECTION DETECTION",
+      ""
+    ],
+    [
+      "V09I",
+      "TUMOUR DETECTION",
+      ""
+    ],
+    [
+      "V09X",
+      "OTHER DIAGNOSTIC RADIOPHARMACEUTICALS",
+      ""
+    ],
+    [
+      "V10A",
+      "ANTIINFLAMMATORY AGENTS",
+      ""
+    ],
+    [
+      "V10B",
+      "PAIN PALLIATION (BONE SEEKING AGENTS)",
+      ""
+    ],
+    [
+      "V10X",
+      "OTHER THERAPEUTIC RADIOPHARMACEUTICALS",
+      ""
+    ]
+  ],
+  "level4": [
+    [
+      "A01AA",
+      "Caries prophylactic agents",
+      "齲齒預防藥"
+    ],
+    [
+      "A01AB",
+      "Antiinfectives and antiseptics for local oral treatment",
+      "口腔局部治療用抗感染藥和滅菌藥"
+    ],
+    [
+      "A01AC",
+      "Corticosteroids for local oral treatment",
+      "口腔局部治療用皮質類固醇類藥"
+    ],
+    [
+      "A01AD",
+      "Other agents for local oral treatment",
+      "口腔局部治療用其他藥物"
+    ],
+    [
+      "A02AA",
+      "Magnesium compounds",
+      "鎂化合物類"
+    ],
+    [
+      "A02AB",
+      "Aluminium compounds",
+      "鋁化合物類"
+    ],
+    [
+      "A02AC",
+      "Calcium compounds",
+      "鈣化合物類"
+    ],
+    [
+      "A02AD",
+      "Combinations and complexes of aluminium, calcium and magnesium compounds",
+      "鋁、鈣和鎂化合物類的複合物及複方"
+    ],
+    [
+      "A02AF",
+      "Antacids with antiflatulents",
+      "配有消脹氣藥的制酸劑"
+    ],
+    [
+      "A02AG",
+      "Antacids with antispasmodics",
+      "配有解痙藥的制酸劑"
+    ],
+    [
+      "A02AH",
+      "Antacids with sodium bicarbonate",
+      "配有碳酸氫鈉的制酸劑"
+    ],
+    [
+      "A02AX",
+      "Antacids, other combinations",
+      "制酸劑，其他複方"
+    ],
+    [
+      "A02BB",
+      "Prostaglandins",
+      "前列腺素類"
+    ],
+    [
+      "A02BC",
+      "Proton pump inhibitors",
+      "氫離子幫浦抑制劑（PPI）"
+    ],
+    [
+      "A02BD",
+      "Combinations for eradication of Helicobacter pylori",
+      "根除幽門螺旋桿菌的複方"
+    ],
+    [
+      "A02BX",
+      "Other drugs for peptic ulcer and gastro-oesophageal reflux disease (GORD)",
+      "消化性潰瘍與胃食道逆流（GERD）治療用其他藥物"
+    ],
+    [
+      "A03AA",
+      "Synthetic anticholinergics, esters with tertiary amino group",
+      "合成的抗膽鹼藥物，帶三級胺基團的酯類"
+    ],
+    [
+      "A03AB",
+      "Synthetic anticholinergics, quaternary ammonium compounds",
+      "合成的抗膽鹼藥物，四級銨鹽化合物類"
+    ],
+    [
+      "A03AC",
+      "Synthetic antispasmodics, amides with tertiary amines",
+      "合成的解痙藥，帶三級胺的醯胺類"
+    ],
+    [
+      "A03AD",
+      "Papaverine and derivatives",
+      "罌粟鹼及其衍生物"
+    ],
+    [
+      "A03AE",
+      "Serotonin receptor antagonists",
+      "血清素受體拮抗劑"
+    ],
+    [
+      "A03AX",
+      "Other drugs for functional gastrointestinal disorders",
+      "其他功能性腸胃疾病用藥"
+    ],
+    [
+      "A03BA",
+      "Belladonna alkaloids, tertiary amines",
+      "顛茄生物鹼，三級胺類"
+    ],
+    [
+      "A03BB",
+      "Belladonna alkaloids, semisynthetic, quaternary ammonium compounds",
+      "半合成的顛茄生物鹼，四級銨鹽類化合物"
+    ],
+    [
+      "A03CA",
+      "Synthetic anticholinergic agents in combination with psycholeptics",
+      "合成抗膽鹼藥物與精神安定劑複方"
+    ],
+    [
+      "A03CB",
+      "Belladonna and derivatives in combination with psycholeptics",
+      "顛茄及其衍生物與精神安定劑複方"
+    ],
+    [
+      "A03CC",
+      "Other antispasmodics in combination with psycholeptics",
+      "其他解痙藥與精神安定劑複方"
+    ],
+    [
+      "A03DA",
+      "Synthetic anticholinergic agents in combination with analgesics",
+      "合成抗膽鹼藥物與鎮痛藥複方"
+    ],
+    [
+      "A03DB",
+      "Belladonna and derivatives in combination with analgesics",
+      "複方中有鎮痛藥的顛茄及其衍生物"
+    ],
+    [
+      "A03DC",
+      "Other antispasmodics in combination with analgesics",
+      "複方中有鎮痛藥的其他解痙藥"
+    ],
+    [
+      "A03EA",
+      "Antispasmodics, psycholeptics and analgesics in combination",
+      "解痙藥、精神安定劑和鎮痛藥複方"
+    ],
+    [
+      "A03ED",
+      "Antispasmodics in combination with other drugs",
+      "複方中有其他藥物的解痙藥"
+    ],
+    [
+      "A03FA",
+      "Propulsives",
+      "腸胃蠕動促進劑（Prokinetics）"
+    ],
+    [
+      "A04AA",
+      "Serotonin (5HT3) antagonists",
+      "5-HT3 受體拮抗劑"
+    ],
+    [
+      "A04AD",
+      "Other antiemetics",
+      "其他止吐藥"
+    ],
+    [
+      "A05AA",
+      "Bile acids and derivatives",
+      "膽酸及其衍生物"
+    ],
+    [
+      "A05AB",
+      "Preparations for biliary tract therapy",
+      "膽道疾病治療藥"
+    ],
+    [
+      "A05AX",
+      "Other drugs for bile therapy",
+      "膽病的其他治療藥"
+    ],
+    [
+      "A05BA",
+      "Liver therapy",
+      "肝病治療藥"
+    ],
+    [
+      "A06AA",
+      "Softeners, emollients",
+      "軟化藥，潤滑藥"
+    ],
+    [
+      "A06AB",
+      "Contact laxatives",
+      "刺激性瀉劑"
+    ],
+    [
+      "A06AC",
+      "Bulk-forming laxatives",
+      "膨脹性瀉劑"
+    ],
+    [
+      "A06AD",
+      "Osmotically acting laxatives",
+      "滲透性瀉劑"
+    ],
+    [
+      "A06AG",
+      "Enemas",
+      "灌腸藥"
+    ],
+    [
+      "A06AH",
+      "Peripheral opioid receptor antagonists",
+      "周邊類鴉片受體拮抗劑"
+    ],
+    [
+      "A06AX",
+      "Other drugs for constipation",
+      "其他便祕用藥"
+    ],
+    [
+      "A07AA",
+      "Antibiotics",
+      "抗生素"
+    ],
+    [
+      "A07AB",
+      "Sulfonamides",
+      "磺胺類"
+    ],
+    [
+      "A07AC",
+      "Imidazole derivatives",
+      "咪唑衍生物"
+    ],
+    [
+      "A07AX",
+      "Other intestinal antiinfectives",
+      "其他腸道抗感染藥"
+    ],
+    [
+      "A07BA",
+      "Charcoal preparations",
+      "活性炭製劑"
+    ],
+    [
+      "A07BB",
+      "Bismuth preparations",
+      "鉍製劑"
+    ],
+    [
+      "A07BC",
+      "Other intestinal adsorbents",
+      "其他腸道吸附藥"
+    ],
+    [
+      "A07CA",
+      "Oral rehydration salt formulations",
+      "口服電解質補充液（ORS）"
+    ],
+    [
+      "A07DA",
+      "Antipropulsives",
+      "腸蠕動抑制劑"
+    ],
+    [
+      "A07EA",
+      "Corticosteroids acting locally",
+      "局部作用的皮質類固醇類"
+    ],
+    [
+      "A07EB",
+      "Antiallergic agents, excl. corticosteroids",
+      "非類固醇抗過敏藥"
+    ],
+    [
+      "A07EC",
+      "Aminosalicylic acid and similar agents",
+      "胺基水楊酸及其類似藥物"
+    ],
+    [
+      "A07FA",
+      "Antidiarrheal microorganisms",
+      "止瀉用微生物製劑"
+    ],
+    [
+      "A07XA",
+      "Other antidiarrheals",
+      "其他止瀉藥"
+    ],
+    [
+      "A08AA",
+      "Centrally acting antiobesity products",
+      "中樞作用的減肥藥品"
+    ],
+    [
+      "A08AB",
+      "Peripherally acting antiobesity products",
+      "周邊作用的減肥藥"
+    ],
+    [
+      "A08AX",
+      "Other antiobesity drugs",
+      "其他抗肥胖症藥"
+    ],
+    [
+      "A09AA",
+      "Enzyme preparations",
+      "消化酵素製劑"
+    ],
+    [
+      "A09AB",
+      "Acid preparations",
+      "酸製劑"
+    ],
+    [
+      "A09AC",
+      "Enzyme and acid preparations, combinations",
+      "消化酵素／胃酸複方"
+    ],
+    [
+      "A10AB",
+      "Insulins and analogues for injection, fast-acting",
+      "注射用胰島素及其類似藥物，速效"
+    ],
+    [
+      "A10AC",
+      "Insulins and analogues for injection, intermediate-acting",
+      "注射用胰島素及其類似藥物，中效"
+    ],
+    [
+      "A10AD",
+      "Insulins and analogues for injection, intermediate- or long-acting combined with fast-acting",
+      "中／長效與速效胰島素複方"
+    ],
+    [
+      "A10AE",
+      "Insulins and analogues for injection, long-acting",
+      "注射用胰島素及其類似藥物，長效"
+    ],
+    [
+      "A10AF",
+      "Insulins and analogues for inhalation",
+      "吸入用胰島素及其類似藥物"
+    ],
+    [
+      "A10BA",
+      "Biguanides",
+      "雙胍類"
+    ],
+    [
+      "A10BB",
+      "Sulfonylureas",
+      "磺醯尿素類（SU）"
+    ],
+    [
+      "A10BC",
+      "Sulfonamides (heterocyclic)",
+      "磺胺類，雜環"
+    ],
+    [
+      "A10BD",
+      "Combinations of oral blood glucose lowering drugs",
+      "口服降糖藥複方"
+    ],
+    [
+      "A10BF",
+      "Alpha glucosidase inhibitors",
+      "α-葡萄糖苷酶抑制劑"
+    ],
+    [
+      "A10BG",
+      "Thiazolidinediones",
+      "噻唑烷二酮類"
+    ],
+    [
+      "A10BH",
+      "Dipeptidyl peptidase 4 (DPP-4) inhibitors",
+      "DPP-4 抑制劑"
+    ],
+    [
+      "A10BJ",
+      "Glucagon-like peptide-1 (GLP-1) analogues",
+      "GLP-1 受體促效劑"
+    ],
+    [
+      "A10BK",
+      "Sodium-glucose co-transporter 2 (SGLT2) inhibitors",
+      "SGLT2 抑制劑"
+    ],
+    [
+      "A10BX",
+      "Other blood glucose lowering drugs, excl. insulins",
+      "其他非胰島素降血糖藥"
+    ],
+    [
+      "A10XA",
+      "Aldose reductase inhibitors",
+      "醛糖還原酶抑制劑"
+    ],
+    [
+      "A10XX",
+      "Other drugs used in diabetes",
+      "其他糖尿病用藥"
+    ],
+    [
+      "A11AA",
+      "Multivitamins with minerals",
+      "多種維生素和礦物質"
+    ],
+    [
+      "A11AB",
+      "Multivitamins, other combinations",
+      "多種維生素，其他複方"
+    ],
+    [
+      "A11BA",
+      "Multivitamins, plain",
+      "多種維生素，單方"
+    ],
+    [
+      "A11CA",
+      "Vitamin A, plain",
+      "維生素A，單方"
+    ],
+    [
+      "A11CB",
+      "Vitamin A and D in combination",
+      "維生素A和維生素D的複方"
+    ],
+    [
+      "A11CC",
+      "Vitamin D and analogues",
+      "維生素D及其類似物"
+    ],
+    [
+      "A11DA",
+      "Vitamin B1, plain",
+      "維生素B1，單方"
+    ],
+    [
+      "A11DB",
+      "Vitamin B1 in combination with vitamin B6 and/or vitamin B12",
+      "維生素B1與維生素B6和/或B12的複方"
+    ],
+    [
+      "A11EA",
+      "Vitamin B-complex, plain",
+      "複合維生素B，單方"
+    ],
+    [
+      "A11EB",
+      "Vitamin B-complex with vitamin C",
+      "複合維生素B與維生素C的複方"
+    ],
+    [
+      "A11EC",
+      "Vitamin B-complex with minerals",
+      "複合維生素B與礦物質的複方"
+    ],
+    [
+      "A11ED",
+      "Vitamin B-complex with anabolic steroids",
+      "複合維生素B與同化性類固醇的複方"
+    ],
+    [
+      "A11EX",
+      "Vitamin B-complex, other combinations",
+      "複合維生素B的其他複方"
+    ],
+    [
+      "A11GA",
+      "Ascorbic acid (vitamin C), plain",
+      "抗壞血酸（維生素C），單方"
+    ],
+    [
+      "A11GB",
+      "Ascorbic acid (vitamin C), combinations",
+      "抗壞血酸（維生素C），複方"
+    ],
+    [
+      "A11HA",
+      "Other plain vitamin preparations",
+      "其他單方維生素製劑"
+    ],
+    [
+      "A11JA",
+      "Combinations of vitamins",
+      "維生素的複方"
+    ],
+    [
+      "A11JB",
+      "Vitamins with minerals",
+      "維生素與礦物質"
+    ],
+    [
+      "A11JC",
+      "Vitamins, other combinations",
+      "維生素，其他複方"
+    ],
+    [
+      "A12AA",
+      "Calcium",
+      "鈣"
+    ],
+    [
+      "A12AX",
+      "Calcium, combinations with vitamin D and/or other drugs",
+      "鈣與其他藥品的複方"
+    ],
+    [
+      "A12BA",
+      "Potassium",
+      "鉀"
+    ],
+    [
+      "A12CA",
+      "Sodium",
+      "鈉"
+    ],
+    [
+      "A12CB",
+      "Zinc",
+      "鋅"
+    ],
+    [
+      "A12CC",
+      "Magnesium",
+      "鎂"
+    ],
+    [
+      "A12CD",
+      "Fluoride",
+      "氟化物"
+    ],
+    [
+      "A12CE",
+      "Selenium",
+      "硒"
+    ],
+    [
+      "A12CX",
+      "Other mineral products",
+      "其他礦物質藥物"
+    ],
+    [
+      "A14AA",
+      "Androstan derivatives",
+      "Androstan（雄固烷）衍生物同化劑"
+    ],
+    [
+      "A14AB",
+      "Estren derivatives",
+      "雌烯（Estren）衍生物同化劑"
+    ],
+    [
+      "A16AA",
+      "Amino acids and derivatives",
+      "胺基酸及其衍生物"
+    ],
+    [
+      "A16AB",
+      "Enzymes",
+      "酵素補充治療"
+    ],
+    [
+      "A16AX",
+      "Various alimentary tract and metabolism products",
+      "其他消化道與代謝系統用藥"
+    ],
+    [
+      "B01AA",
+      "Vitamin K antagonists",
+      "維生素K拮抗劑"
+    ],
+    [
+      "B01AB",
+      "Heparin group",
+      "肝素類抗凝血劑"
+    ],
+    [
+      "B01AC",
+      "Platelet aggregation inhibitors excl. heparin",
+      "抗血小板藥"
+    ],
+    [
+      "B01AD",
+      "Enzymes",
+      "血栓溶解酵素"
+    ],
+    [
+      "B01AE",
+      "Direct thrombin inhibitors",
+      "直接凝血酶抑制劑"
+    ],
+    [
+      "B01AF",
+      "Direct factor Xa inhibitors",
+      "直接第 Xa 因子抑制劑"
+    ],
+    [
+      "B01AX",
+      "Other antithrombotic agents",
+      "其他抗血栓藥"
+    ],
+    [
+      "B02AA",
+      "Amino acids",
+      "胺基酸類抗纖維蛋白溶解劑（如 Tranexamic acid）"
+    ],
+    [
+      "B02AB",
+      "Proteinase inhibitors",
+      "蛋白酶抑制劑"
+    ],
+    [
+      "B02BA",
+      "Vitamin K",
+      "維生素K"
+    ],
+    [
+      "B02BB",
+      "Fibrinogen",
+      "纖維蛋白原"
+    ],
+    [
+      "B02BC",
+      "Local hemostatics",
+      "局部止血藥"
+    ],
+    [
+      "B02BD",
+      "Blood coagulation factors",
+      "凝血因子類"
+    ],
+    [
+      "B02BX",
+      "Other systemic hemostatics",
+      "其他系統止血藥"
+    ],
+    [
+      "B03AA",
+      "Iron bivalent, oral preparations",
+      "口服二價鐵製劑"
+    ],
+    [
+      "B03AB",
+      "Iron trivalent, oral preparations",
+      "口服三價鐵製劑"
+    ],
+    [
+      "B03AC",
+      "Iron, parenteral preparations",
+      "注射用鐵劑"
+    ],
+    [
+      "B03AD",
+      "Iron in combination with folic acid",
+      "鐵與葉酸的複方"
+    ],
+    [
+      "B03AE",
+      "Iron in other combinations",
+      "鐵與其他藥品的複方"
+    ],
+    [
+      "B03BA",
+      "Vitamin B12 (cyanocobalamin and analogues)",
+      "維生素B12（氰鈷胺及其類似藥物）"
+    ],
+    [
+      "B03BB",
+      "Folic acid and derivatives",
+      "葉酸及其衍生物"
+    ],
+    [
+      "B03XA",
+      "Other antianemic preparations",
+      "其他抗貧血藥"
+    ],
+    [
+      "B05AA",
+      "Blood substitutes and plasma protein fractions",
+      "血液代用品和血漿蛋白成分"
+    ],
+    [
+      "B05AX",
+      "Other blood products",
+      "其他血液藥品"
+    ],
+    [
+      "B05BA",
+      "Solutions for parenteral nutrition",
+      "非經腸營養液"
+    ],
+    [
+      "B05BB",
+      "Solutions affecting the electrolyte balance",
+      "調節電解質平衡的溶液"
+    ],
+    [
+      "B05BC",
+      "Solutions producing osmotic diuresis",
+      "產生滲透利尿作用的溶液"
+    ],
+    [
+      "B05CA",
+      "Antiinfectives",
+      "抗感染藥"
+    ],
+    [
+      "B05CB",
+      "Salt solutions",
+      "鹽溶液"
+    ],
+    [
+      "B05CX",
+      "Other irrigating solutions",
+      "其他灌注液"
+    ],
+    [
+      "B05DA",
+      "Isotonic solutions",
+      "等張溶液"
+    ],
+    [
+      "B05DB",
+      "Hypertonic solutions",
+      "高張溶液"
+    ],
+    [
+      "B05XA",
+      "Electrolyte solutions",
+      "電解質溶液"
+    ],
+    [
+      "B05XB",
+      "Amino acids",
+      "胺基酸類"
+    ],
+    [
+      "B05XC",
+      "Vitamins",
+      "維生素類"
+    ],
+    [
+      "B05XX",
+      "Other i.v. solution additives",
+      "其他靜脈注射液添加藥"
+    ],
+    [
+      "B05ZA",
+      "Hemodialytics, concentrates",
+      "血液透析濃縮液"
+    ],
+    [
+      "B05ZB",
+      "Hemofiltrates",
+      "血液過濾"
+    ],
+    [
+      "B06AA",
+      "Enzymes",
+      "酵素製劑"
+    ],
+    [
+      "B06AB",
+      "Heme products",
+      "血基質製劑"
+    ],
+    [
+      "B06AC",
+      "Drugs used in hereditary angioedema",
+      "遺傳性血管性水腫藥物"
+    ],
+    [
+      "B06AX",
+      "Other hematological agents",
+      "其他血液學用藥"
+    ],
+    [
+      "C01AA",
+      "Digitalis glycosides",
+      "毛地黃糖苷類"
+    ],
+    [
+      "C01AB",
+      "Scilla glycosides",
+      "海蔥苷類"
+    ],
+    [
+      "C01AC",
+      "Strophanthus glycosides",
+      "毒毛旋花苷類"
+    ],
+    [
+      "C01AX",
+      "Other cardiac glycosides",
+      "其他強心苷類"
+    ],
+    [
+      "C01BA",
+      "Antiarrhythmics, class Ia",
+      "抗心律不整藥，Ⅰa 類"
+    ],
+    [
+      "C01BB",
+      "Antiarrhythmics, class Ib",
+      "抗心律不整藥，Ⅰb 類"
+    ],
+    [
+      "C01BC",
+      "Antiarrhythmics, class Ic",
+      "抗心律不整藥，Ⅰc 類"
+    ],
+    [
+      "C01BD",
+      "Antiarrhythmics, class III",
+      "抗心律不整藥，Ⅲ 類"
+    ],
+    [
+      "C01BG",
+      "Other antiarrhythmics, class I and III",
+      "其他第 I 類及第 III 類抗心律不整藥"
+    ],
+    [
+      "C01CA",
+      "Adrenergic and dopaminergic agents",
+      "腎上腺素性與多巴胺性藥物"
+    ],
+    [
+      "C01CE",
+      "Phosphodiesterase inhibitors",
+      "PDE 抑制劑"
+    ],
+    [
+      "C01CX",
+      "Other cardiac stimulants",
+      "其他強心劑"
+    ],
+    [
+      "C01DA",
+      "Organic nitrates",
+      "有機硝酸鹽類"
+    ],
+    [
+      "C01DB",
+      "Quinolone vasodilators",
+      "喹啉類血管舒張藥"
+    ],
+    [
+      "C01DX",
+      "Other vasodilators used in cardiac diseases",
+      "治療心臟病用其他血管舒張藥"
+    ],
+    [
+      "C01EA",
+      "Prostaglandins",
+      "前列腺素類"
+    ],
+    [
+      "C01EB",
+      "Other cardiac preparations",
+      "其他心臟病用藥"
+    ],
+    [
+      "C01EX",
+      "Other cardiac combination products",
+      "治療心臟病用的其他複方藥物"
+    ],
+    [
+      "C02AA",
+      "Rauwolfia alkaloids",
+      "蛇根木生物鹼類"
+    ],
+    [
+      "C02AB",
+      "Methyldopa",
+      "甲基多巴類"
+    ],
+    [
+      "C02AC",
+      "Imidazoline receptor agonists",
+      "咪唑啉受體促效劑"
+    ],
+    [
+      "C02BA",
+      "Sulfonium derivatives",
+      "鋶衍生物"
+    ],
+    [
+      "C02BB",
+      "Secondary and tertiary amines",
+      "二級胺和三級胺類"
+    ],
+    [
+      "C02BC",
+      "Bisquaternary ammonium compounds",
+      "雙四級銨鹽化合物"
+    ],
+    [
+      "C02CA",
+      "Alpha-adrenoreceptor antagonists",
+      "α blocker"
+    ],
+    [
+      "C02CC",
+      "Guanidine derivatives",
+      "胍衍生物"
+    ],
+    [
+      "C02DA",
+      "Thiazide derivatives",
+      "Thiazide 衍生物"
+    ],
+    [
+      "C02DB",
+      "Hydrazinophthalazine derivatives",
+      "肼酞嗪衍生物"
+    ],
+    [
+      "C02DC",
+      "Pyrimidine derivatives",
+      "嘧啶衍生物"
+    ],
+    [
+      "C02DD",
+      "Nitroferricyanide derivatives",
+      "亞硝基鐵氰化物衍生物"
+    ],
+    [
+      "C02DG",
+      "Guanidine derivatives",
+      "胍衍生物"
+    ],
+    [
+      "C02KA",
+      "Alkaloids, excl. rauwolfia",
+      "非蛇根木類生物鹼"
+    ],
+    [
+      "C02KB",
+      "Tyrosine hydroxylase inhibitors",
+      "酪胺酸羥化酶抑制劑"
+    ],
+    [
+      "C02KC",
+      "MAO inhibitors",
+      "單胺氧化酶抑制劑（MAOI）"
+    ],
+    [
+      "C02KD",
+      "Serotonin antagonists",
+      "血清素拮抗劑"
+    ],
+    [
+      "C02KN",
+      "Other antihypertensives",
+      "其他降血壓藥"
+    ],
+    [
+      "C02KX",
+      "Antihypertensives for pulmonary arterial hypertension",
+      "肺動脈高壓用藥"
+    ],
+    [
+      "C02LA",
+      "Rauwolfia alkaloids and diuretics in combination",
+      "蛇根木生物鹼和利尿藥的複方"
+    ],
+    [
+      "C02LB",
+      "Methyldopa and diuretics in combination",
+      "甲基多巴和利尿藥複方"
+    ],
+    [
+      "C02LC",
+      "Imidazoline receptor agonists in combination with diuretics",
+      "咪唑啉受體促效劑與利尿藥複方"
+    ],
+    [
+      "C02LE",
+      "Alpha-adrenoreceptor antagonists and diuretics",
+      "α blocker／利尿劑複方"
+    ],
+    [
+      "C02LF",
+      "Guanidine derivatives and diuretics",
+      "胍衍生物和利尿藥"
+    ],
+    [
+      "C02LG",
+      "Hydrazinophthalazine derivatives and diuretics",
+      "肼酞嗪衍生物和利尿藥"
+    ],
+    [
+      "C02LK",
+      "Alkaloids, excl. rauwolfia, in combination with diuretics",
+      "非蛇根木類生物鹼／利尿劑複方"
+    ],
+    [
+      "C02LL",
+      "MAO inhibitors and diuretics",
+      "MAOI／利尿劑複方"
+    ],
+    [
+      "C02LN",
+      "Serotonin antagonists and diuretics",
+      "血清素拮抗劑和利尿藥"
+    ],
+    [
+      "C02LX",
+      "Other antihypertensives and diuretics",
+      "其他抗高血壓藥和利尿藥"
+    ],
+    [
+      "C03AA",
+      "Thiazides, plain",
+      "Thiazide 類，單方"
+    ],
+    [
+      "C03AB",
+      "Thiazides and potassium in combination",
+      "Thiazide 類與鉀複方"
+    ],
+    [
+      "C03AH",
+      "Thiazides, combinations with psycholeptics and/or analgesics",
+      "Thiazide 類與精神安定劑和/或鎮痛藥複方"
+    ],
+    [
+      "C03AX",
+      "Thiazides, combinations with other drugs",
+      "Thiazide 類與其他藥物複方"
+    ],
+    [
+      "C03BA",
+      "Sulfonamides, plain",
+      "磺胺類,單方"
+    ],
+    [
+      "C03BB",
+      "Sulfonamides and potassium in combination",
+      "磺胺類利尿藥與鉀的複方"
+    ],
+    [
+      "C03BC",
+      "Mercurial diuretics",
+      "汞類利尿藥"
+    ],
+    [
+      "C03BD",
+      "Xanthine derivatives",
+      "黃嘌呤衍生物"
+    ],
+    [
+      "C03BK",
+      "Sulfonamides, combinations with other drugs",
+      "磺胺類利尿藥與其他藥物的複方"
+    ],
+    [
+      "C03BX",
+      "Other low-ceiling diuretics",
+      "其他低效能（low-ceiling）利尿劑"
+    ],
+    [
+      "C03CA",
+      "Sulfonamides, plain",
+      "磺胺類,單方"
+    ],
+    [
+      "C03CB",
+      "Sulfonamides and potassium in combination",
+      "磺胺類利尿藥與鉀的複方"
+    ],
+    [
+      "C03CC",
+      "Aryloxyacetic acid derivatives",
+      "芳氧基乙酸衍生物"
+    ],
+    [
+      "C03CD",
+      "Pyrazolone derivatives",
+      "吡唑酮衍生物"
+    ],
+    [
+      "C03CX",
+      "Other high-ceiling diuretics",
+      "其他高效能（high-ceiling）利尿劑"
+    ],
+    [
+      "C03DA",
+      "Aldosterone antagonists",
+      "醛固酮拮抗劑"
+    ],
+    [
+      "C03DB",
+      "Other potassium-sparing agents",
+      "其他保鉀藥"
+    ],
+    [
+      "C03EA",
+      "Low-ceiling diuretics and potassium-sparing agents",
+      "低效能利尿劑與保鉀利尿劑複方"
+    ],
+    [
+      "C03EB",
+      "High-ceiling diuretics and potassium-sparing agents",
+      "高效能利尿劑與保鉀利尿劑複方"
+    ],
+    [
+      "C03XA",
+      "Vasopressin antagonists",
+      "加壓素拮抗劑"
+    ],
+    [
+      "C04AA",
+      "2-amino-1-phenylethanol derivatives",
+      "2-胺基-1-苯基乙醇衍生物"
+    ],
+    [
+      "C04AB",
+      "Imidazoline derivatives",
+      "咪唑啉衍生物"
+    ],
+    [
+      "C04AC",
+      "Nicotinic acid and derivatives",
+      "菸鹼酸及其衍生物"
+    ],
+    [
+      "C04AD",
+      "Purine derivatives",
+      "嘌呤衍生物"
+    ],
+    [
+      "C04AE",
+      "Ergot alkaloids",
+      "麥角生物鹼類"
+    ],
+    [
+      "C04AF",
+      "Enzymes",
+      "酵素製劑"
+    ],
+    [
+      "C04AX",
+      "Other peripheral vasodilators",
+      "其他周邊血管擴張劑"
+    ],
+    [
+      "C05AA",
+      "Corticosteroids",
+      "皮質類固醇類"
+    ],
+    [
+      "C05AB",
+      "Antibiotics",
+      "抗生素"
+    ],
+    [
+      "C05AD",
+      "Local anesthetics",
+      "局部麻醉藥"
+    ],
+    [
+      "C05AE",
+      "Muscle relaxants",
+      "肌肉鬆弛劑"
+    ],
+    [
+      "C05AX",
+      "Other agents for treatment of hemorrhoids and anal fissures for topical use",
+      "治療痔瘡和肛裂的其他外用藥"
+    ],
+    [
+      "C05BA",
+      "Heparins or heparinoids for topical use",
+      "局部用藥的肝素或類肝素"
+    ],
+    [
+      "C05BB",
+      "Sclerosing agents for local injection",
+      "局部注射硬化劑"
+    ],
+    [
+      "C05BX",
+      "Other sclerosing agents",
+      "其他硬化藥"
+    ],
+    [
+      "C05CA",
+      "Bioflavonoids",
+      "生物黃酮素類"
+    ],
+    [
+      "C05CX",
+      "Other capillary stabilizing agents",
+      "其他微血管穩定劑"
+    ],
+    [
+      "C05XX",
+      "Other vasoprotectives",
+      "其他血管保護劑"
+    ],
+    [
+      "C07AA",
+      "Beta blocking agents, non-selective",
+      "非選擇性 β blocker"
+    ],
+    [
+      "C07AB",
+      "Beta blocking agents, selective",
+      "選擇性 β1 blocker"
+    ],
+    [
+      "C07AG",
+      "Alpha and beta blocking agents",
+      "α／β blocker"
+    ],
+    [
+      "C07BA",
+      "Beta blocking agents, non-selective, and thiazides",
+      "非選擇性 β blocker／Thiazide 利尿劑複方"
+    ],
+    [
+      "C07BB",
+      "Beta blocking agents, selective, and thiazides",
+      "選擇性 β1 blocker／Thiazide 利尿劑複方"
+    ],
+    [
+      "C07BG",
+      "Alpha and beta blocking agents and thiazides",
+      "α／β blocker／Thiazide 利尿劑複方"
+    ],
+    [
+      "C07CA",
+      "Beta blocking agents, non-selective, and other diuretics",
+      "非選擇性 β blocker／其他利尿劑複方"
+    ],
+    [
+      "C07CB",
+      "Beta blocking agents, selective, and other diuretics",
+      "選擇性 β1 blocker／其他利尿劑複方"
+    ],
+    [
+      "C07CG",
+      "Alpha and beta blocking agents and other diuretics",
+      "α／β blocker／其他利尿劑複方"
+    ],
+    [
+      "C07DA",
+      "Beta blocking agents, non-selective, thiazides and other diuretics",
+      "非選擇性 β blocker／Thiazide 與其他利尿劑複方"
+    ],
+    [
+      "C07DB",
+      "Beta blocking agents, selective, thiazides and other diuretics",
+      "選擇性 β1 blocker／Thiazide 與其他利尿劑複方"
+    ],
+    [
+      "C07EA",
+      "Beta blocking agents, non-selective, and vasodilators",
+      "非選擇性 β blocker／血管擴張劑複方"
+    ],
+    [
+      "C07EB",
+      "Beta blocking agents, selective, and vasodilators",
+      "選擇性 β1 blocker／血管擴張劑複方"
+    ],
+    [
+      "C07FB",
+      "Beta blocking agents and calcium channel blockers",
+      "β blocker／CCB 複方"
+    ],
+    [
+      "C07FX",
+      "Beta blocking agents, other combinations",
+      "β blocker 其他複方"
+    ],
+    [
+      "C08CA",
+      "Dihydropyridine derivatives",
+      "Dihydropyridine 類鈣離子通道阻斷劑（CCB）"
+    ],
+    [
+      "C08CX",
+      "Other selective calcium channel blockers with mainly vascular effects",
+      "主要作用於血管的其他選擇性鈣離子通道阻斷劑"
+    ],
+    [
+      "C08DA",
+      "Phenylalkylamine derivatives",
+      "苯基烷基胺衍生物"
+    ],
+    [
+      "C08DB",
+      "Benzothiazepine derivatives",
+      "苯並硫卓衍生物"
+    ],
+    [
+      "C08EA",
+      "Phenylalkylamine derivatives",
+      "苯基烷基胺衍生物"
+    ],
+    [
+      "C08EX",
+      "Other non-selective calcium channel blockers",
+      "其他非選擇性鈣離子通道阻斷劑"
+    ],
+    [
+      "C08GA",
+      "Calcium channel blockers and diuretics",
+      "鈣離子通道阻斷劑與利尿劑複方"
+    ],
+    [
+      "C09AA",
+      "ACE inhibitors, plain",
+      "ACEI"
+    ],
+    [
+      "C09BA",
+      "ACE inhibitors and diuretics",
+      "ACEI／利尿劑複方"
+    ],
+    [
+      "C09BB",
+      "ACE inhibitors and calcium channel blockers",
+      "ACEI／鈣離子通道阻斷劑複方"
+    ],
+    [
+      "C09BX",
+      "ACE inhibitors, other combinations",
+      "ACEI 其他複方"
+    ],
+    [
+      "C09CA",
+      "Angiotensin II receptor blockers (ARBs), plain",
+      "ARB"
+    ],
+    [
+      "C09DA",
+      "Angiotensin II receptor blockers (ARBs) and diuretics",
+      "ARB／利尿劑複方"
+    ],
+    [
+      "C09DB",
+      "Angiotensin II receptor blockers (ARBs) and calcium channel blockers",
+      "ARB／鈣離子通道阻斷劑複方"
+    ],
+    [
+      "C09DX",
+      "Angiotensin II receptor blockers (ARBs), other combinations",
+      "ARB 其他複方"
+    ],
+    [
+      "C09XA",
+      "Renin-inhibitors",
+      "腎素抑制劑"
+    ],
+    [
+      "C09XX",
+      "Other agents acting on the renin-angiotensin system",
+      "其他腎素－血管收縮素系統作用藥"
+    ],
+    [
+      "C10AA",
+      "HMG CoA reductase inhibitors",
+      "Statin 類"
+    ],
+    [
+      "C10AB",
+      "Fibrates",
+      "Fibrate 類"
+    ],
+    [
+      "C10AC",
+      "Bile acid sequestrants",
+      "膽酸螯合劑"
+    ],
+    [
+      "C10AD",
+      "Nicotinic acid and derivatives",
+      "菸鹼酸及其衍生物"
+    ],
+    [
+      "C10AX",
+      "Other lipid modifying agents",
+      "其他血脂調節劑"
+    ],
+    [
+      "C10BA",
+      "Combinations of various lipid modifying agents",
+      "多種降血脂藥複方"
+    ],
+    [
+      "C10BX",
+      "Lipid modifying agents in combination with other drugs",
+      "降血脂藥與其他藥物複方"
+    ],
+    [
+      "D01AA",
+      "Antibiotics",
+      "抗生素類"
+    ],
+    [
+      "D01AC",
+      "Imidazole and triazole derivatives",
+      "咪唑和三唑衍生物"
+    ],
+    [
+      "D01AE",
+      "Other antifungals for topical use",
+      "局部用其他抗真菌藥"
+    ],
+    [
+      "D01BA",
+      "Antifungals for systemic use",
+      "系統用抗真菌藥"
+    ],
+    [
+      "D02AA",
+      "Silicone products",
+      "矽酮類"
+    ],
+    [
+      "D02AB",
+      "Zinc products",
+      "鋅類"
+    ],
+    [
+      "D02AC",
+      "Soft paraffin and fat products",
+      "軟石蠟和脂肪類"
+    ],
+    [
+      "D02AD",
+      "Liquid plasters",
+      "液膏類"
+    ],
+    [
+      "D02AE",
+      "Carbamide products",
+      "脲類"
+    ],
+    [
+      "D02AF",
+      "Salicylic acid preparations",
+      "水楊酸製劑"
+    ],
+    [
+      "D02AX",
+      "Other emollients and protectives",
+      "其他潤膚藥和護膚藥"
+    ],
+    [
+      "D02BA",
+      "Protectives against UV-radiation for topical use",
+      "局部用紫外線防護藥"
+    ],
+    [
+      "D02BB",
+      "Protectives against UV-radiation for systemic use",
+      "系統用紫外線防護藥"
+    ],
+    [
+      "D03AA",
+      "Cod-liver oil ointments",
+      "鱈魚肝油軟膏"
+    ],
+    [
+      "D03AX",
+      "Other cicatrizants",
+      "其他促傷口癒合藥"
+    ],
+    [
+      "D03BA",
+      "Proteolytic enzymes",
+      "蛋白水解酵素"
+    ],
+    [
+      "D04AA",
+      "Antihistamines for topical use",
+      "局部用抗組織胺藥"
+    ],
+    [
+      "D04AB",
+      "Anesthetics for topical use",
+      "局部麻醉藥"
+    ],
+    [
+      "D04AX",
+      "Other antipruritics",
+      "其他止癢藥"
+    ],
+    [
+      "D05AA",
+      "Tars",
+      "焦油"
+    ],
+    [
+      "D05AC",
+      "Antracen derivatives",
+      "蒽衍生物"
+    ],
+    [
+      "D05AD",
+      "Psoralens for topical use",
+      "局部用補骨脂素類"
+    ],
+    [
+      "D05AX",
+      "Other antipsoriatics for topical use",
+      "其他局部用乾癬治療藥"
+    ],
+    [
+      "D05BA",
+      "Psoralens for systemic use",
+      "系統用補骨脂素類"
+    ],
+    [
+      "D05BB",
+      "Retinoids for treatment of psoriasis",
+      "Retinoid 類乾癬治療藥"
+    ],
+    [
+      "D05BX",
+      "Other antipsoriatics for systemic use",
+      "其他全身用乾癬治療藥"
+    ],
+    [
+      "D06AA",
+      "Tetracycline and derivatives",
+      "四環素及其衍生物"
+    ],
+    [
+      "D06AX",
+      "Other antibiotics for topical use",
+      "局部用其他抗生素"
+    ],
+    [
+      "D06BA",
+      "Sulfonamides",
+      "磺胺類"
+    ],
+    [
+      "D06BB",
+      "Antivirals",
+      "抗病毒藥"
+    ],
+    [
+      "D06BX",
+      "Other chemotherapeutics",
+      "其他化療藥"
+    ],
+    [
+      "D07AA",
+      "Corticosteroids, weak (group I)",
+      "外用類固醇，弱效（第 I 級）"
+    ],
+    [
+      "D07AB",
+      "Corticosteroids, moderately potent (group II)",
+      "外用類固醇，中效（第 II 級）"
+    ],
+    [
+      "D07AC",
+      "Corticosteroids, potent (group III)",
+      "外用類固醇，強效（第 III 級）"
+    ],
+    [
+      "D07AD",
+      "Corticosteroids, very potent (group IV)",
+      "外用類固醇，超強效（第 IV 級）"
+    ],
+    [
+      "D07BA",
+      "Corticosteroids, weak, combinations with antiseptics",
+      "弱效類固醇／消毒藥複方"
+    ],
+    [
+      "D07BB",
+      "Corticosteroids, moderately potent, combinations with antiseptics",
+      "中效類固醇／消毒藥複方"
+    ],
+    [
+      "D07BC",
+      "Corticosteroids, potent, combinations with antiseptics",
+      "強效類固醇／消毒藥複方"
+    ],
+    [
+      "D07BD",
+      "Corticosteroids, very potent, combinations with antiseptics",
+      "超強效類固醇／消毒藥複方"
+    ],
+    [
+      "D07CA",
+      "Corticosteroids, weak, combinations with antibiotics",
+      "弱效類固醇／抗生素複方"
+    ],
+    [
+      "D07CB",
+      "Corticosteroids, moderately potent, combinations with antibiotics",
+      "中效類固醇／抗生素複方"
+    ],
+    [
+      "D07CC",
+      "Corticosteroids, potent, combinations with antibiotics",
+      "強效類固醇／抗生素複方"
+    ],
+    [
+      "D07CD",
+      "Corticosteroids, very potent, combinations with antibiotics",
+      "超強效類固醇／抗生素複方"
+    ],
+    [
+      "D07XA",
+      "Corticosteroids, weak, other combinations",
+      "弱效類固醇其他複方"
+    ],
+    [
+      "D07XB",
+      "Corticosteroids, moderately potent, other combinations",
+      "中效類固醇其他複方"
+    ],
+    [
+      "D07XC",
+      "Corticosteroids, potent, other combinations",
+      "強效類固醇其他複方"
+    ],
+    [
+      "D07XD",
+      "Corticosteroids, very potent, other combinations",
+      "超強效類固醇其他複方"
+    ],
+    [
+      "D08AA",
+      "Acridine derivatives",
+      "吖啶衍生物"
+    ],
+    [
+      "D08AB",
+      "Aluminium agents",
+      "鋁製劑類"
+    ],
+    [
+      "D08AC",
+      "Biguanides and amidines",
+      "雙胍類和脒類"
+    ],
+    [
+      "D08AD",
+      "Boric acid products",
+      "硼酸類"
+    ],
+    [
+      "D08AE",
+      "Phenol and derivatives",
+      "苯酚及其衍生物"
+    ],
+    [
+      "D08AF",
+      "Nitrofuran derivatives",
+      "硝基呋喃衍生物"
+    ],
+    [
+      "D08AG",
+      "Iodine products",
+      "碘製劑"
+    ],
+    [
+      "D08AH",
+      "Quinoline derivatives",
+      "喹啉衍生物"
+    ],
+    [
+      "D08AJ",
+      "Quaternary ammonium compounds",
+      "四級銨鹽類化合物"
+    ],
+    [
+      "D08AK",
+      "Mercurial products",
+      "汞製劑類"
+    ],
+    [
+      "D08AL",
+      "Silver compounds",
+      "銀化合物類"
+    ],
+    [
+      "D08AX",
+      "Other antiseptics and disinfectants",
+      "其他消毒滅菌藥"
+    ],
+    [
+      "D09AA",
+      "Medicated dressings with antiinfectives",
+      "含抗感染藥之藥用敷料"
+    ],
+    [
+      "D09AB",
+      "Zinc bandages",
+      "鋅繃帶"
+    ],
+    [
+      "D09AX",
+      "Soft paraffin dressings",
+      "軟石蠟繃帶"
+    ],
+    [
+      "D10AA",
+      "Corticosteroids, combinations for treatment of acne",
+      "皮質類固醇類，治療痤瘡的複方"
+    ],
+    [
+      "D10AB",
+      "Preparations containing sulfur",
+      "含硫藥物"
+    ],
+    [
+      "D10AD",
+      "Retinoids for topical use in acne",
+      "治療痤瘡的局部用 Retinoid"
+    ],
+    [
+      "D10AE",
+      "Peroxides",
+      "過氧化物類"
+    ],
+    [
+      "D10AF",
+      "Antiinfectives for treatment of acne",
+      "痤瘡用抗感染藥"
+    ],
+    [
+      "D10AX",
+      "Other anti-acne preparations for topical use",
+      "其他局部用的抗痤瘡藥"
+    ],
+    [
+      "D10BA",
+      "Retinoids for treatment of acne",
+      "治療痤瘡的全身用 Retinoid"
+    ],
+    [
+      "D10BX",
+      "Other anti-acne preparations for systemic use",
+      "其他系統用抗痤瘡藥"
+    ],
+    [
+      "D11AA",
+      "Antihidrotics",
+      "止汗藥"
+    ],
+    [
+      "D11AC",
+      "Medicated shampoos",
+      "醫用洗髮劑"
+    ],
+    [
+      "D11AE",
+      "Androgens for topical use",
+      "局部用雄性素"
+    ],
+    [
+      "D11AF",
+      "Wart and anti-corn preparations",
+      "疣與雞眼治療藥"
+    ],
+    [
+      "D11AH",
+      "Agents for dermatitis, excluding corticosteroids",
+      "皮膚炎治療藥（不含類固醇）"
+    ],
+    [
+      "D11AX",
+      "Other dermatologicals",
+      "其他皮膚病用藥"
+    ],
+    [
+      "G01AA",
+      "Antibiotics",
+      "婦科用抗生素"
+    ],
+    [
+      "G01AB",
+      "Arsenic compounds",
+      "婦科用砷化合物"
+    ],
+    [
+      "G01AC",
+      "Quinoline derivatives",
+      "婦科用喹啉衍生物"
+    ],
+    [
+      "G01AD",
+      "Organic acids",
+      "婦科用有機酸"
+    ],
+    [
+      "G01AE",
+      "Sulfonamides",
+      "婦科用磺胺類"
+    ],
+    [
+      "G01AF",
+      "Imidazole derivatives",
+      "婦科用咪唑衍生物"
+    ],
+    [
+      "G01AG",
+      "Triazole derivatives",
+      "婦科用三唑衍生物"
+    ],
+    [
+      "G01AX",
+      "Other antiinfectives and antiseptics",
+      "其他婦科用抗感染與消毒藥"
+    ],
+    [
+      "G01BA",
+      "Antibiotics and corticosteroids",
+      "抗生素／類固醇婦科複方"
+    ],
+    [
+      "G01BC",
+      "Quinoline derivatives and corticosteroids",
+      "喹啉／類固醇婦科複方"
+    ],
+    [
+      "G01BD",
+      "Antiseptics and corticosteroids",
+      "消毒藥／類固醇婦科複方"
+    ],
+    [
+      "G01BE",
+      "Sulfonamides and corticosteroids",
+      "磺胺類／類固醇婦科複方"
+    ],
+    [
+      "G01BF",
+      "Imidazole derivatives and corticosteroids",
+      "咪唑類／類固醇婦科複方"
+    ],
+    [
+      "G02AB",
+      "Ergot alkaloids",
+      "麥角生物鹼"
+    ],
+    [
+      "G02AC",
+      "Ergot alkaloids and oxytocin incl. analogues, in combination",
+      "麥角生物鹼／催產素類複方"
+    ],
+    [
+      "G02AD",
+      "Prostaglandins",
+      "前列腺素類"
+    ],
+    [
+      "G02AX",
+      "Other uterotonics",
+      "其他子宮收縮劑"
+    ],
+    [
+      "G02BA",
+      "Intrauterine contraceptives",
+      "子宮內避孕器"
+    ],
+    [
+      "G02BB",
+      "Intravaginal contraceptives",
+      "陰道用避孕藥"
+    ],
+    [
+      "G02CA",
+      "Sympathomimetics, labour repressants",
+      "安胎用擬交感神經藥（子宮收縮抑制劑）"
+    ],
+    [
+      "G02CB",
+      "Prolactine inhibitors",
+      "泌乳激素抑制劑"
+    ],
+    [
+      "G02CC",
+      "Antiinflammatory products for vaginal administration",
+      "陰道用抗發炎藥"
+    ],
+    [
+      "G02CX",
+      "Other gynecologicals",
+      "其他婦科用藥"
+    ],
+    [
+      "G03AA",
+      "Progestogens and estrogens, fixed combinations",
+      "黃體素／雌激素固定複方避孕藥"
+    ],
+    [
+      "G03AB",
+      "Progestogens and estrogens, sequential preparations",
+      "黃體素／雌激素序列型避孕藥"
+    ],
+    [
+      "G03AC",
+      "Progestogens",
+      "單方黃體素避孕藥"
+    ],
+    [
+      "G03AD",
+      "Emergency contraceptives",
+      "緊急避孕藥"
+    ],
+    [
+      "G03BA",
+      "3-oxoandrosten (4) derivatives",
+      "雄性素 3-氧代雄烯衍生物"
+    ],
+    [
+      "G03BB",
+      "5-androstanon (3) derivatives",
+      "雄性素 5-雄烷酮衍生物"
+    ],
+    [
+      "G03CA",
+      "Natural and semisynthetic estrogens, plain",
+      "天然與半合成雌激素"
+    ],
+    [
+      "G03CB",
+      "Synthetic estrogens, plain",
+      "合成雌激素"
+    ],
+    [
+      "G03CC",
+      "Estrogens, combinations with other drugs",
+      "雌激素與其他藥物複方"
+    ],
+    [
+      "G03CX",
+      "Other estrogens",
+      "其他雌激素"
+    ],
+    [
+      "G03DA",
+      "Pregnen (4) derivatives",
+      "黃體素孕烯衍生物"
+    ],
+    [
+      "G03DB",
+      "Pregnadien derivatives",
+      "黃體素孕二烯衍生物"
+    ],
+    [
+      "G03DC",
+      "Estren derivatives",
+      "黃體素雌烯衍生物"
+    ],
+    [
+      "G03EA",
+      "Androgens and estrogens",
+      "雄性素／雌激素複方"
+    ],
+    [
+      "G03EB",
+      "Androgen, progestogen and estrogen in combination",
+      "雄性素／黃體素／雌激素複方"
+    ],
+    [
+      "G03EK",
+      "Androgens and female sex hormones in combination with other drugs",
+      "雄性素／女性荷爾蒙與其他藥物複方"
+    ],
+    [
+      "G03FA",
+      "Progestogens and estrogens, fixed combinations",
+      "黃體素／雌激素固定複方"
+    ],
+    [
+      "G03FB",
+      "Progestogens and estrogens, sequential preparations",
+      "黃體素／雌激素序列型製劑"
+    ],
+    [
+      "G03GA",
+      "Gonadotropins",
+      "性腺刺激素"
+    ],
+    [
+      "G03GB",
+      "Ovulation stimulants, synthetic",
+      "合成排卵促進劑"
+    ],
+    [
+      "G03HA",
+      "Antiandrogens, plain",
+      "抗雄性素"
+    ],
+    [
+      "G03HB",
+      "Antiandrogens and estrogens",
+      "抗雄性素／雌激素複方"
+    ],
+    [
+      "G03XA",
+      "Antigonadotropins and similar agents",
+      "抗性腺刺激素及類似藥物"
+    ],
+    [
+      "G03XB",
+      "Progesterone receptor modulators",
+      "黃體素受體調節劑"
+    ],
+    [
+      "G03XC",
+      "Selective estrogen receptor modulators",
+      "選擇性雌激素受體調節劑（SERM）"
+    ],
+    [
+      "G03XX",
+      "Other sex hormones and modulators of the genital system",
+      "其他性荷爾蒙與生殖系統調節劑"
+    ],
+    [
+      "G04BA",
+      "Acidifiers",
+      "尿液酸化劑"
+    ],
+    [
+      "G04BC",
+      "Urinary concrement solvents",
+      "泌尿道結石溶解劑"
+    ],
+    [
+      "G04BD",
+      "Drugs for urinary frequency and incontinence",
+      "頻尿與尿失禁治療藥"
+    ],
+    [
+      "G04BE",
+      "Drugs used in erectile dysfunction",
+      "勃起功能障礙用藥（PDE5 抑制劑等）"
+    ],
+    [
+      "G04BX",
+      "Other urologicals",
+      "其他泌尿系統用藥"
+    ],
+    [
+      "G04CA",
+      "Alpha-adrenoreceptor antagonists",
+      "泌尿用 α1 blocker"
+    ],
+    [
+      "G04CB",
+      "Testosterone-5-alpha reductase inhibitors",
+      "5α 還原酶抑制劑"
+    ],
+    [
+      "G04CX",
+      "Other drugs used in benign prostatic hypertrophy",
+      "其他良性攝護腺肥大用藥"
+    ],
+    [
+      "H01AA",
+      "ACTH",
+      "ACTH"
+    ],
+    [
+      "H01AB",
+      "Thyrotropin",
+      "甲狀腺刺激素（TSH）"
+    ],
+    [
+      "H01AC",
+      "Somatropin and somatropin agonists",
+      "生長激素及其促效劑"
+    ],
+    [
+      "H01AX",
+      "Other anterior pituitary lobe hormones and analogues",
+      "其他腦下垂體前葉荷爾蒙及類似物"
+    ],
+    [
+      "H01BA",
+      "Vasopressin and analogues",
+      "抗利尿激素及類似物"
+    ],
+    [
+      "H01BB",
+      "Oxytocin and analogues",
+      "催產素及類似物"
+    ],
+    [
+      "H01CA",
+      "Gonadotropin-releasing hormones",
+      "性腺刺激素釋放激素（GnRH）"
+    ],
+    [
+      "H01CB",
+      "Somatostatin and analogues",
+      "體抑素及類似物"
+    ],
+    [
+      "H01CC",
+      "Anti-gonadotropin-releasing hormones",
+      "GnRH 拮抗劑"
+    ],
+    [
+      "H02AA",
+      "Mineralocorticoids",
+      "礦物皮質類固醇"
+    ],
+    [
+      "H02AB",
+      "Glucocorticoids",
+      "全身性皮質類固醇"
+    ],
+    [
+      "H02BX",
+      "Corticosteroids for systemic use, combinations",
+      "全身性皮質類固醇複方"
+    ],
+    [
+      "H02CA",
+      "Anticorticosteroids",
+      "抗皮質類固醇藥"
+    ],
+    [
+      "H03AA",
+      "Thyroid hormones",
+      "甲狀腺素"
+    ],
+    [
+      "H03BA",
+      "Thiouracils",
+      "Thiouracil 類抗甲狀腺藥（如 PTU）"
+    ],
+    [
+      "H03BB",
+      "Sulfur-containing imidazole derivatives",
+      "含硫咪唑類抗甲狀腺藥"
+    ],
+    [
+      "H03BC",
+      "Perchlorates",
+      "過氯酸鹽類抗甲狀腺藥"
+    ],
+    [
+      "H03BX",
+      "Other antithyroid preparations",
+      "其他抗甲狀腺藥"
+    ],
+    [
+      "H03CA",
+      "Iodine therapy",
+      "碘治療"
+    ],
+    [
+      "H04AA",
+      "Glycogenolytic hormones",
+      "升血糖荷爾蒙"
+    ],
+    [
+      "H05AA",
+      "Parathyroid hormones and analogues",
+      "副甲狀腺素及類似物"
+    ],
+    [
+      "H05BA",
+      "Calcitonin preparations",
+      "抑鈣素製劑"
+    ],
+    [
+      "H05BX",
+      "Other anti-parathyroid agents",
+      "其他抗副甲狀腺藥"
+    ],
+    [
+      "J01AA",
+      "Tetracyclines",
+      "四環素類"
+    ],
+    [
+      "J01BA",
+      "Amphenicols",
+      "醯胺醇類"
+    ],
+    [
+      "J01CA",
+      "Penicillins with extended spectrum",
+      "廣效型 Penicillin"
+    ],
+    [
+      "J01CE",
+      "Beta-lactamase sensitive penicillins",
+      "β-內醯胺酶敏感型 Penicillin"
+    ],
+    [
+      "J01CF",
+      "Beta-lactamase resistant penicillins",
+      "抗 β-內醯胺酶 Penicillin"
+    ],
+    [
+      "J01CG",
+      "Beta-lactamase inhibitors",
+      "β-內醯胺酶抑制劑"
+    ],
+    [
+      "J01CR",
+      "Combinations of penicillins, incl. beta-lactamase inhibitors",
+      "Penicillin／β-內醯胺酶抑制劑複方"
+    ],
+    [
+      "J01DB",
+      "First-generation cephalosporins",
+      "第一代 Cephalosporin"
+    ],
+    [
+      "J01DC",
+      "Second-generation cephalosporins",
+      "第二代 Cephalosporin"
+    ],
+    [
+      "J01DD",
+      "Third-generation cephalosporins",
+      "第三代 Cephalosporin"
+    ],
+    [
+      "J01DE",
+      "Fourth-generation cephalosporins",
+      "第四代 Cephalosporin"
+    ],
+    [
+      "J01DF",
+      "Monobactams",
+      "單環β-內醯胺類"
+    ],
+    [
+      "J01DH",
+      "Carbapenems",
+      "Carbapenem 類"
+    ],
+    [
+      "J01DI",
+      "Other cephalosporins and penems",
+      "其他 Cephalosporin 與 Penem 類"
+    ],
+    [
+      "J01EA",
+      "Trimethoprim and derivatives",
+      "Trimethoprim 及其衍生物"
+    ],
+    [
+      "J01EB",
+      "Short-acting sulfonamides",
+      "短效磺胺類"
+    ],
+    [
+      "J01EC",
+      "Intermediate-acting sulfonamides",
+      "中效磺胺類"
+    ],
+    [
+      "J01ED",
+      "Long-acting sulfonamides",
+      "長效磺胺類"
+    ],
+    [
+      "J01EE",
+      "Combinations of sulfonamides and trimethoprim, incl. derivatives",
+      "磺胺類／Trimethoprim 複方"
+    ],
+    [
+      "J01FA",
+      "Macrolides",
+      "大環內酯類"
+    ],
+    [
+      "J01FF",
+      "Lincosamides",
+      "林可醯胺類"
+    ],
+    [
+      "J01FG",
+      "Streptogramins",
+      "Streptogramin 類"
+    ],
+    [
+      "J01GA",
+      "Streptomycins",
+      "鏈黴素類"
+    ],
+    [
+      "J01GB",
+      "Other aminoglycosides",
+      "其他胺基醣苷類（Aminoglycoside）"
+    ],
+    [
+      "J01MA",
+      "Fluoroquinolones",
+      "氟喹諾酮類"
+    ],
+    [
+      "J01MB",
+      "Other quinolones",
+      "其他喹諾酮類"
+    ],
+    [
+      "J01RA",
+      "Combinations of antibacterials",
+      "抗菌藥複方"
+    ],
+    [
+      "J01XA",
+      "Glycopeptide antibacterials",
+      "糖肽類抗菌藥"
+    ],
+    [
+      "J01XB",
+      "Polymyxins",
+      "多黏菌素類"
+    ],
+    [
+      "J01XC",
+      "Steroid antibacterials",
+      "類固醇類抗菌藥"
+    ],
+    [
+      "J01XD",
+      "Imidazole derivatives",
+      "咪唑衍生物"
+    ],
+    [
+      "J01XE",
+      "Nitrofuran derivatives",
+      "硝基呋喃衍生物"
+    ],
+    [
+      "J01XX",
+      "Other antibacterials",
+      "其他抗菌藥"
+    ],
+    [
+      "J02AA",
+      "Antibiotics",
+      "抗生素類"
+    ],
+    [
+      "J02AB",
+      "Imidazole derivatives",
+      "咪唑衍生物類"
+    ],
+    [
+      "J02AC",
+      "Triazole and tetrazole derivatives",
+      "三唑與四唑衍生物"
+    ],
+    [
+      "J02AX",
+      "Other antimycotics for systemic use",
+      "其他系統用藥的抗真菌藥"
+    ],
+    [
+      "J04AA",
+      "Aminosalicylic acid and derivatives",
+      "胺基水楊酸及其衍生物類"
+    ],
+    [
+      "J04AB",
+      "Antibiotics",
+      "抗生素類"
+    ],
+    [
+      "J04AC",
+      "Hydrazides",
+      "醯肼類"
+    ],
+    [
+      "J04AD",
+      "Thiocarbamide derivatives",
+      "硫脲衍生物類"
+    ],
+    [
+      "J04AK",
+      "Other drugs for treatment of tuberculosis",
+      "其他結核病治療用藥"
+    ],
+    [
+      "J04AM",
+      "Combinations of drugs for treatment of tuberculosis",
+      "結核病治療用藥複方"
+    ],
+    [
+      "J04BA",
+      "Drugs for treatment of lepra",
+      "漢生病（麻風）治療用藥"
+    ],
+    [
+      "J05AA",
+      "Thiosemicarbazones",
+      "縮氨硫脲類"
+    ],
+    [
+      "J05AB",
+      "Nucleosides and nucleotides excl. reverse transcriptase inhibitors",
+      "非反轉錄酶抑制劑之核苷／核苷酸類"
+    ],
+    [
+      "J05AC",
+      "Cyclic amines",
+      "環胺類"
+    ],
+    [
+      "J05AD",
+      "Phosphonic acid derivatives",
+      "膦酸衍生物類"
+    ],
+    [
+      "J05AE",
+      "Protease inhibitors",
+      "蛋白酶抑制劑"
+    ],
+    [
+      "J05AF",
+      "Nucleoside and nucleotide reverse transcriptase inhibitors",
+      "核苷／核苷酸反轉錄酶抑制劑（NRTI）"
+    ],
+    [
+      "J05AG",
+      "Non-nucleoside reverse transcriptase inhibitors",
+      "非核苷反轉錄酶抑制劑（NNRTI）"
+    ],
+    [
+      "J05AH",
+      "Neuraminidase inhibitors",
+      "神經胺酸酶抑制劑"
+    ],
+    [
+      "J05AJ",
+      "Integrase inhibitors",
+      "整合酶抑制劑"
+    ],
+    [
+      "J05AP",
+      "Antivirals for treatment of HCV infections",
+      "C 型肝炎（HCV）抗病毒藥"
+    ],
+    [
+      "J05AR",
+      "Antivirals for treatment of HIV infections, combinations",
+      "治療HIV感染的抗病毒藥，複方"
+    ],
+    [
+      "J05AX",
+      "Other antivirals",
+      "其他抗病毒藥"
+    ],
+    [
+      "J06AA",
+      "Immune sera",
+      "免疫血清類"
+    ],
+    [
+      "J06BA",
+      "Immunoglobulins, normal human",
+      "正常人類免疫球蛋白（IVIG）"
+    ],
+    [
+      "J06BB",
+      "Specific immunoglobulins",
+      "特異性免疫球蛋白"
+    ],
+    [
+      "J06BC",
+      "Antibacterial monoclonal antibodies",
+      "抗細菌單株抗體"
+    ],
+    [
+      "J06BD",
+      "Antiviral monoclonal antibodies",
+      "抗病毒單株抗體"
+    ],
+    [
+      "J07AC",
+      "Anthrax vaccines",
+      "炭疽疫苗"
+    ],
+    [
+      "J07AD",
+      "Brucellosis vaccines",
+      "布魯氏桿菌病疫苗"
+    ],
+    [
+      "J07AE",
+      "Cholera vaccines",
+      "霍亂疫苗"
+    ],
+    [
+      "J07AF",
+      "Diphtheria vaccines",
+      "白喉疫苗"
+    ],
+    [
+      "J07AG",
+      "Haemophilus influenzae B vaccines",
+      "b 型流感嗜血桿菌（Hib）疫苗"
+    ],
+    [
+      "J07AH",
+      "Meningococcal vaccines",
+      "腦膜炎雙球菌疫苗"
+    ],
+    [
+      "J07AJ",
+      "Pertussis vaccines",
+      "百日咳疫苗"
+    ],
+    [
+      "J07AK",
+      "Plague vaccines",
+      "鼠疫疫苗"
+    ],
+    [
+      "J07AL",
+      "Pneumococcal vaccines",
+      "肺炎鏈球菌疫苗"
+    ],
+    [
+      "J07AM",
+      "Tetanus vaccines",
+      "破傷風疫苗"
+    ],
+    [
+      "J07AN",
+      "Tuberculosis vaccines",
+      "結核病疫苗（卡介苗 BCG）"
+    ],
+    [
+      "J07AP",
+      "Typhoid vaccines",
+      "傷寒疫苗"
+    ],
+    [
+      "J07AR",
+      "Typhus (exanthematicus) vaccines",
+      "斑疹傷寒疫苗"
+    ],
+    [
+      "J07AX",
+      "Other bacterial vaccines",
+      "其他細菌疫苗"
+    ],
+    [
+      "J07BA",
+      "Encephalitis vaccines",
+      "腦炎疫苗"
+    ],
+    [
+      "J07BB",
+      "Influenza vaccines",
+      "流感疫苗"
+    ],
+    [
+      "J07BC",
+      "Hepatitis vaccines",
+      "肝炎疫苗類"
+    ],
+    [
+      "J07BD",
+      "Measles vaccines",
+      "麻疹疫苗"
+    ],
+    [
+      "J07BE",
+      "Mumps vaccines",
+      "腮腺炎疫苗"
+    ],
+    [
+      "J07BF",
+      "Poliomyelitis vaccines",
+      "小兒麻痺疫苗"
+    ],
+    [
+      "J07BG",
+      "Rabies vaccines",
+      "狂犬病疫苗"
+    ],
+    [
+      "J07BH",
+      "Rota virus diarrhea vaccines",
+      "輪狀病毒疫苗"
+    ],
+    [
+      "J07BJ",
+      "Rubella vaccines",
+      "德國麻疹疫苗"
+    ],
+    [
+      "J07BK",
+      "Varicella zoster vaccines",
+      "水痘帶狀疱疹疫苗"
+    ],
+    [
+      "J07BL",
+      "Yellow fever vaccines",
+      "黃熱病疫苗"
+    ],
+    [
+      "J07BM",
+      "Papillomavirus vaccines",
+      "乳頭瘤病毒疫苗"
+    ],
+    [
+      "J07BN",
+      "Covid-19 vaccines",
+      "COVID-19 疫苗"
+    ],
+    [
+      "J07BP",
+      "Chikungunya vaccines",
+      "屈公病疫苗"
+    ],
+    [
+      "J07BX",
+      "Other viral vaccines",
+      "其他病毒疫苗"
+    ],
+    [
+      "J07CA",
+      "Bacterial and viral vaccines, combined",
+      "細菌疫苗和病毒疫苗的複方"
+    ],
+    [
+      "J07XA",
+      "Parasitic vaccines",
+      "寄生蟲疫苗"
+    ],
+    [
+      "L01AA",
+      "Nitrogen mustard analogues",
+      "氮芥類似物"
+    ],
+    [
+      "L01AB",
+      "Alkyl sulfonates",
+      "烷基磺酸鹽"
+    ],
+    [
+      "L01AC",
+      "Ethylene imines",
+      "氮丙環類"
+    ],
+    [
+      "L01AD",
+      "Nitrosoureas",
+      "亞硝基脲"
+    ],
+    [
+      "L01AG",
+      "Epoxides",
+      "環氧化合物"
+    ],
+    [
+      "L01AX",
+      "Other alkylating agents",
+      "其他烷化劑"
+    ],
+    [
+      "L01BA",
+      "Folic acid analogues",
+      "葉酸類似物"
+    ],
+    [
+      "L01BB",
+      "Purine analogues",
+      "嘌呤類似物"
+    ],
+    [
+      "L01BC",
+      "Pyrimidine analogues",
+      "嘧啶類似物"
+    ],
+    [
+      "L01CA",
+      "Vinca alkaloids and analogues",
+      "長春花鹼和類似物"
+    ],
+    [
+      "L01CB",
+      "Podophyllotoxin derivatives",
+      "鬼臼毒素衍生物"
+    ],
+    [
+      "L01CC",
+      "Colchicine derivatives",
+      "秋水仙素衍生物"
+    ],
+    [
+      "L01CD",
+      "Taxanes",
+      "紫杉烷類"
+    ],
+    [
+      "L01CE",
+      "Topoisomerase 1 (TOP1) inhibitors",
+      "拓撲異構酶 1（TOP1）抑制劑"
+    ],
+    [
+      "L01CX",
+      "Other plant alkaloids and natural products",
+      "其他植物鹼和天然產物"
+    ],
+    [
+      "L01DA",
+      "Actinomycines",
+      "放線菌素"
+    ],
+    [
+      "L01DB",
+      "Anthracyclines and related substances",
+      "蒽環類藥物"
+    ],
+    [
+      "L01DC",
+      "Other cytotoxic antibiotics",
+      "其他細胞毒抗生素"
+    ],
+    [
+      "L01EA",
+      "BCR-ABL tyrosine kinase inhibitors",
+      "BCR-ABL 酪胺酸激酶抑制劑"
+    ],
+    [
+      "L01EB",
+      "Epidermal growth factor receptor (EGFR) tyrosine kinase inhibitors",
+      "EGFR 酪胺酸激酶抑制劑"
+    ],
+    [
+      "L01EC",
+      "B-Raf serine-threonine kinase (BRAF) inhibitors",
+      "BRAF 抑制劑"
+    ],
+    [
+      "L01ED",
+      "Anaplastic lymphoma kinase (ALK) inhibitors",
+      "ALK 抑制劑"
+    ],
+    [
+      "L01EE",
+      "Mitogen-activated protein kinase (MEK) inhibitors",
+      "MEK 抑制劑"
+    ],
+    [
+      "L01EF",
+      "Cyclin-dependent kinase (CDK) inhibitors",
+      "CDK 抑制劑"
+    ],
+    [
+      "L01EG",
+      "Mammalian target of rapamycin (mTOR) kinase inhibitors",
+      "mTOR 抑制劑"
+    ],
+    [
+      "L01EH",
+      "Human epidermal growth factor receptor 2 (HER2) tyrosine kinase inhibitors",
+      "HER2 酪胺酸激酶抑制劑"
+    ],
+    [
+      "L01EJ",
+      "Janus-associated kinase (JAK) inhibitors",
+      "JAK 抑制劑"
+    ],
+    [
+      "L01EK",
+      "Vascular endothelial growth factor receptor (VEGFR) tyrosine kinase inhibitors",
+      "VEGFR 酪胺酸激酶抑制劑"
+    ],
+    [
+      "L01EL",
+      "Bruton's tyrosine kinase (BTK) inhibitors",
+      "BTK 抑制劑"
+    ],
+    [
+      "L01EM",
+      "Phosphatidylinositol-3-kinase (Pi3K) inhibitors",
+      "PI3K 抑制劑"
+    ],
+    [
+      "L01EN",
+      "Fibroblast growth factor receptor (FGFR) tyrosine kinase inhibitors",
+      "FGFR 酪胺酸激酶抑制劑"
+    ],
+    [
+      "L01EP",
+      "Cellular-mesenchymal-epithelial transition factor (c-MET) kinase inhibitors",
+      "c-MET 抑制劑"
+    ],
+    [
+      "L01EX",
+      "Other protein kinase inhibitors",
+      "其他蛋白激酶抑制劑"
+    ],
+    [
+      "L01FA",
+      "CD20 (Clusters of Differentiation 20) inhibitors",
+      "CD20 抑制劑"
+    ],
+    [
+      "L01FB",
+      "CD22 (Clusters of Differentiation 22) inhibitors",
+      "CD22 抑制劑"
+    ],
+    [
+      "L01FC",
+      "CD38 (Clusters of Differentiation 38) inhibitors",
+      "CD38 抑制劑"
+    ],
+    [
+      "L01FD",
+      "HER2 (Human Epidermal Growth Factor Receptor 2) inhibitors",
+      "HER2 抑制劑"
+    ],
+    [
+      "L01FE",
+      "EGFR (Epidermal Growth Factor Receptor) inhibitors",
+      "EGFR 抑制劑"
+    ],
+    [
+      "L01FF",
+      "PD-1/PD-L1 (Programmed cell death protein 1/death ligand 1) inhibitors",
+      "PD-1／PD-L1 抑制劑"
+    ],
+    [
+      "L01FG",
+      "VEGF/VEGFR (Vascular Endothelial Growth Factor / -Receptor) inhibitors",
+      "VEGF／VEGFR 抑制劑"
+    ],
+    [
+      "L01FX",
+      "Other monoclonal antibodies and antibody drug conjugates",
+      "其他單株抗體與抗體藥物複合體（ADC）"
+    ],
+    [
+      "L01FY",
+      "Combinations of monoclonal antibodies and antibody drug conjugates",
+      "單株抗體與 ADC 複方"
+    ],
+    [
+      "L01XA",
+      "Platinum compounds",
+      "鉑化合物"
+    ],
+    [
+      "L01XB",
+      "Methylhydrazines",
+      "甲基肼"
+    ],
+    [
+      "L01XD",
+      "Sensitizers used in photodynamic/radiation therapy",
+      "用於光動力療法或放射線療法的致敏劑"
+    ],
+    [
+      "L01XF",
+      "Retinoids for cancer treatment",
+      "癌症治療用 Retinoid"
+    ],
+    [
+      "L01XG",
+      "Proteasome inhibitors",
+      "蛋白酶體抑制劑"
+    ],
+    [
+      "L01XH",
+      "Histone deacetylase (HDAC) inhibitors",
+      "HDAC 抑制劑"
+    ],
+    [
+      "L01XJ",
+      "Hedgehog pathway inhibitors",
+      "Hedgehog 路徑抑制劑"
+    ],
+    [
+      "L01XK",
+      "Poly (ADP-ribose) polymerase (PARP) inhibitors",
+      "PARP 抑制劑"
+    ],
+    [
+      "L01XL",
+      "Antineoplastic cell and gene therapy",
+      "抗腫瘤細胞與基因治療"
+    ],
+    [
+      "L01XM",
+      "Isocitrate dehydrogenase (IDH) inhibitors",
+      "IDH 抑制劑"
+    ],
+    [
+      "L01XU",
+      "Other antineoplastic agents (cont.)",
+      "其他抗腫瘤藥（續）"
+    ],
+    [
+      "L01XX",
+      "Other antineoplastic agents",
+      "其他抗腫瘤藥"
+    ],
+    [
+      "L01XY",
+      "Combinations of antineoplastic agents",
+      "聯合化學療法"
+    ],
+    [
+      "L02AA",
+      "Estrogens",
+      "雌激素類"
+    ],
+    [
+      "L02AB",
+      "Progestogens",
+      "黃體素類"
+    ],
+    [
+      "L02AE",
+      "Gonadotropin releasing hormone analogues",
+      "GnRH 類似物（促效劑）"
+    ],
+    [
+      "L02AX",
+      "Other hormones",
+      "其他荷爾蒙"
+    ],
+    [
+      "L02BA",
+      "Anti-estrogens",
+      "抗雌激素類"
+    ],
+    [
+      "L02BB",
+      "Anti-androgens",
+      "抗雄性素類"
+    ],
+    [
+      "L02BG",
+      "Aromatase inhibitors",
+      "Aromatase（芳香環酶）抑制劑"
+    ],
+    [
+      "L02BX",
+      "Other hormone antagonists and related agents",
+      "其他荷爾蒙拮抗劑及相關藥物"
+    ],
+    [
+      "L03AA",
+      "Colony stimulating factors",
+      "白血球生長因子（G-CSF 等）"
+    ],
+    [
+      "L03AB",
+      "Interferons",
+      "干擾素類"
+    ],
+    [
+      "L03AC",
+      "Interleukins",
+      "介白素（IL）類"
+    ],
+    [
+      "L03AX",
+      "Other immunostimulants",
+      "其他免疫增強劑"
+    ],
+    [
+      "L04AA",
+      "Selective immunosuppressants",
+      "選擇性免疫抑制劑"
+    ],
+    [
+      "L04AB",
+      "Tumor necrosis factor alpha (TNF-alpha) inhibitors",
+      "腫瘤壞死因子α(TNF-α)抑制劑"
+    ],
+    [
+      "L04AC",
+      "Interleukin inhibitors",
+      "介白素（IL）抑制劑"
+    ],
+    [
+      "L04AD",
+      "Calcineurin inhibitors",
+      "Calcineurin 抑制劑"
+    ],
+    [
+      "L04AE",
+      "Sphingosine-1-phosphate (S1P) receptor modulators",
+      "S1P 受體調節劑"
+    ],
+    [
+      "L04AF",
+      "Janus-associated kinase (JAK) inhibitors",
+      "JAK 抑制劑"
+    ],
+    [
+      "L04AG",
+      "Monoclonal antibodies",
+      "單株抗體"
+    ],
+    [
+      "L04AH",
+      "Mammalian target of rapamycin (mTOR) kinase inhibitors",
+      "mTOR 抑制劑"
+    ],
+    [
+      "L04AJ",
+      "Complement inhibitors",
+      "補體抑制劑"
+    ],
+    [
+      "L04AK",
+      "Dihydroorotate dehydrogenase (DHODH) inhibitors",
+      "DHODH 抑制劑"
+    ],
+    [
+      "L04AL",
+      "Neonatal fragment crystallizable receptor (FcRn) inhibitors",
+      "FcRn 抑制劑"
+    ],
+    [
+      "L04AX",
+      "Other immunosuppressants",
+      "其他免疫抑制劑"
+    ],
+    [
+      "M01AA",
+      "Butylpyrazolidines",
+      "丁基吡唑烷類 NSAID"
+    ],
+    [
+      "M01AB",
+      "Acetic acid derivatives and related substances",
+      "醋酸衍生物類 NSAID"
+    ],
+    [
+      "M01AC",
+      "Oxicams",
+      "Oxicam 類 NSAID"
+    ],
+    [
+      "M01AE",
+      "Propionic acid derivatives",
+      "丙酸衍生物類 NSAID"
+    ],
+    [
+      "M01AG",
+      "Fenamates",
+      "Fenamate 類 NSAID"
+    ],
+    [
+      "M01AH",
+      "Coxibs",
+      "COX-2 選擇性抑制劑（Coxib）"
+    ],
+    [
+      "M01AX",
+      "Other antiinflammatory and antirheumatic agents, non-steroids",
+      "其他 NSAID"
+    ],
+    [
+      "M01BA",
+      "Antiinflammatory/antirheumatic agents in combination with corticosteroids",
+      "NSAID／類固醇複方"
+    ],
+    [
+      "M01BX",
+      "Other antiinflammatory/antirheumatic agents in combination with other drugs",
+      "抗發炎／抗風濕藥其他複方"
+    ],
+    [
+      "M01CA",
+      "Quinolines",
+      "喹啉類抗風濕藥"
+    ],
+    [
+      "M01CB",
+      "Gold preparations",
+      "金製劑"
+    ],
+    [
+      "M01CC",
+      "Penicillamine and similar agents",
+      "Penicillamine 及類似藥"
+    ],
+    [
+      "M01CX",
+      "Other specific antirheumatic agents",
+      "其他特定抗風濕藥"
+    ],
+    [
+      "M02AA",
+      "Antiinflammatory preparations, non-steroids for topical use",
+      "外用非類固醇抗發炎藥（NSAID）"
+    ],
+    [
+      "M02AB",
+      "Capsaicin and similar agents",
+      "辣椒素及類似藥"
+    ],
+    [
+      "M02AC",
+      "Preparations with salicylic acid derivatives",
+      "水楊酸衍生物外用製劑"
+    ],
+    [
+      "M02AX",
+      "Other topical products for joint and muscular pain",
+      "其他關節與肌肉疼痛外用藥"
+    ],
+    [
+      "M03AA",
+      "Curare alkaloids",
+      "箭毒生物鹼類肌肉鬆弛劑"
+    ],
+    [
+      "M03AB",
+      "Choline derivatives",
+      "膽鹼衍生物肌肉鬆弛劑"
+    ],
+    [
+      "M03AC",
+      "Other quaternary ammonium compounds",
+      "其他四級銨鹽肌肉鬆弛劑"
+    ],
+    [
+      "M03AX",
+      "Other muscle relaxants, peripherally acting agents",
+      "其他周邊作用型肌肉鬆弛劑"
+    ],
+    [
+      "M03BA",
+      "Carbamic acid esters",
+      "胺基甲酸酯類中樞肌肉鬆弛劑"
+    ],
+    [
+      "M03BB",
+      "Oxazol, thiazine, and triazine derivatives",
+      "Oxazole／Thiazine／Triazine 衍生物"
+    ],
+    [
+      "M03BC",
+      "Ethers, chemically close to antihistamines",
+      "類抗組織胺醚類肌肉鬆弛劑"
+    ],
+    [
+      "M03BX",
+      "Other centrally acting agents",
+      "其他中樞作用型肌肉鬆弛劑"
+    ],
+    [
+      "M03CA",
+      "Dantrolene and derivatives",
+      "Dantrolene 及其衍生物"
+    ],
+    [
+      "M04AA",
+      "Preparations inhibiting uric acid production",
+      "抑制尿酸生成藥"
+    ],
+    [
+      "M04AB",
+      "Preparations increasing uric acid excretion",
+      "促進尿酸排泄藥"
+    ],
+    [
+      "M04AC",
+      "Preparations with no effect on uric acid metabolism",
+      "不影響尿酸代謝之痛風用藥"
+    ],
+    [
+      "M04AX",
+      "Other antigout preparations",
+      "其他痛風用藥"
+    ],
+    [
+      "M05BA",
+      "Bisphosphonates",
+      "雙磷酸鹽類"
+    ],
+    [
+      "M05BB",
+      "Bisphosphonates, combinations",
+      "雙磷酸鹽複方"
+    ],
+    [
+      "M05BC",
+      "Bone morphogenetic proteins",
+      "骨生成蛋白"
+    ],
+    [
+      "M05BX",
+      "Other drugs affecting bone structure and mineralization",
+      "其他影響骨結構與礦化之藥物"
+    ],
+    [
+      "M09AA",
+      "Quinine and derivatives",
+      "Quinine 及其衍生物"
+    ],
+    [
+      "M09AB",
+      "Enzymes",
+      "酵素製劑"
+    ],
+    [
+      "M09AX",
+      "Other drugs for disorders of the musculo-skeletal system",
+      "其他肌肉骨骼系統疾病用藥"
+    ],
+    [
+      "N01AA",
+      "Ethers",
+      "醚類"
+    ],
+    [
+      "N01AB",
+      "Halogenated hydrocarbons",
+      "鹵代烴"
+    ],
+    [
+      "N01AF",
+      "Barbiturates, plain",
+      "巴比妥類"
+    ],
+    [
+      "N01AG",
+      "Barbiturates in combination with other drugs",
+      "巴比妥類與其他藥物的複方"
+    ],
+    [
+      "N01AH",
+      "Opioid anesthetics",
+      "類鴉片麻醉藥"
+    ],
+    [
+      "N01AX",
+      "Other general anesthetics",
+      "其他全身麻醉藥"
+    ],
+    [
+      "N01BA",
+      "Esters of aminobenzoic acid",
+      "胺基苯甲酸酯類"
+    ],
+    [
+      "N01BB",
+      "Amides",
+      "醯胺類"
+    ],
+    [
+      "N01BC",
+      "Esters of benzoic acid",
+      "苯甲酸酯類"
+    ],
+    [
+      "N01BX",
+      "Other local anesthetics",
+      "其他局部麻醉藥"
+    ],
+    [
+      "N02AA",
+      "Natural opium alkaloids",
+      "天然鴉片生物鹼類"
+    ],
+    [
+      "N02AB",
+      "Phenylpiperidine derivatives",
+      "苯哌啶衍生物"
+    ],
+    [
+      "N02AC",
+      "Diphenylpropylamine derivatives",
+      "二苯丙胺衍生物"
+    ],
+    [
+      "N02AD",
+      "Benzomorphan derivatives",
+      "苯並啡烷衍生物"
+    ],
+    [
+      "N02AE",
+      "Oripavine derivatives",
+      "東罌粟鹼衍生物"
+    ],
+    [
+      "N02AF",
+      "Morphinan derivatives",
+      "嗎啡喃衍生物"
+    ],
+    [
+      "N02AG",
+      "Opioids in combination with antispasmodics",
+      "鴉片類藥物與解痙藥的複方"
+    ],
+    [
+      "N02AJ",
+      "Opioids in combination with non-opioid analgesics",
+      "鴉片類／非鴉片止痛藥複方"
+    ],
+    [
+      "N02AX",
+      "Other opioids",
+      "其他類鴉片藥物"
+    ],
+    [
+      "N02BA",
+      "Salicylic acid and derivatives",
+      "水楊酸及其衍生物"
+    ],
+    [
+      "N02BB",
+      "Pyrazolones",
+      "吡唑啉酮類"
+    ],
+    [
+      "N02BE",
+      "Anilides",
+      "Anilide 類（如 Acetaminophen）"
+    ],
+    [
+      "N02BF",
+      "Gabapentinoids",
+      "Gabapentinoid 類"
+    ],
+    [
+      "N02BG",
+      "Other analgesics and antipyretics",
+      "其他解熱鎮痛藥"
+    ],
+    [
+      "N02CA",
+      "Ergot alkaloids",
+      "麥角生物鹼類"
+    ],
+    [
+      "N02CB",
+      "Corticosteroid derivatives",
+      "皮質類固醇衍生物類"
+    ],
+    [
+      "N02CC",
+      "Selective serotonin (5HT1) agonists",
+      "選擇性血清素（5HT1）促效藥"
+    ],
+    [
+      "N02CD",
+      "Calcitonin gene-related peptide (CGRP) antagonists",
+      "CGRP 拮抗劑"
+    ],
+    [
+      "N02CX",
+      "Other antimigraine preparations",
+      "其他抗偏頭痛藥"
+    ],
+    [
+      "N03AA",
+      "Barbiturates and derivatives",
+      "巴比妥類及衍生物"
+    ],
+    [
+      "N03AB",
+      "Hydantoin derivatives",
+      "乙內醯脲衍生物"
+    ],
+    [
+      "N03AC",
+      "Oxazolidine derivatives",
+      "噁唑烷衍生物"
+    ],
+    [
+      "N03AD",
+      "Succinimide derivatives",
+      "丁二醯亞胺衍生物"
+    ],
+    [
+      "N03AE",
+      "Benzodiazepine derivatives",
+      "苯二氮平類（BZD）衍生物"
+    ],
+    [
+      "N03AF",
+      "Carboxamide derivatives",
+      "羧醯胺衍生物"
+    ],
+    [
+      "N03AG",
+      "Fatty acid derivatives",
+      "脂肪酸衍生物"
+    ],
+    [
+      "N03AX",
+      "Other antiepileptics",
+      "其他抗癲癇藥"
+    ],
+    [
+      "N04AA",
+      "Tertiary amines",
+      "三級胺類"
+    ],
+    [
+      "N04AB",
+      "Ethers chemically close to antihistamines",
+      "化學結構與抗組織胺近似的醚類"
+    ],
+    [
+      "N04AC",
+      "Ethers of tropine or tropine derivatives",
+      "托品醚類或衍生物類"
+    ],
+    [
+      "N04BA",
+      "Dopa and dopa derivatives",
+      "多巴及其衍生物類"
+    ],
+    [
+      "N04BB",
+      "Adamantane derivatives",
+      "金剛烷（Adamantane）衍生物"
+    ],
+    [
+      "N04BC",
+      "Dopamine agonists",
+      "多巴胺促效藥類"
+    ],
+    [
+      "N04BD",
+      "Monoamine oxidase B inhibitors",
+      "MAO-B 抑制劑"
+    ],
+    [
+      "N04BX",
+      "Other dopaminergic agents",
+      "其他多巴胺能藥"
+    ],
+    [
+      "N04CX",
+      "Other antiparkinson drugs",
+      "其他抗巴金森氏症藥"
+    ],
+    [
+      "N05AA",
+      "Phenothiazines with aliphatic side-chain",
+      "脂肪族側鏈 Phenothiazine 類"
+    ],
+    [
+      "N05AB",
+      "Phenothiazines with piperazine structure",
+      "哌嗪結構 Phenothiazine 類"
+    ],
+    [
+      "N05AC",
+      "Phenothiazines with piperidine structure",
+      "哌啶結構 Phenothiazine 類"
+    ],
+    [
+      "N05AD",
+      "Butyrophenone derivatives",
+      "丁醯苯衍生物"
+    ],
+    [
+      "N05AE",
+      "Indole derivatives",
+      "吲哚衍生物"
+    ],
+    [
+      "N05AF",
+      "Thioxanthene derivatives",
+      "硫雜蒽衍生物"
+    ],
+    [
+      "N05AG",
+      "Diphenylbutylpiperidine derivatives",
+      "二苯基丁基哌啶衍生物"
+    ],
+    [
+      "N05AH",
+      "Diazepines, oxazepines, thiazepines and oxepines",
+      "二氮雜䓬、氧氮雜䓬、硫氮雜䓬與氧雜䓬類"
+    ],
+    [
+      "N05AL",
+      "Benzamides",
+      "苯甲醯胺類"
+    ],
+    [
+      "N05AN",
+      "Lithium",
+      "鋰鹽"
+    ],
+    [
+      "N05AX",
+      "Other antipsychotics",
+      "其他抗精神病藥"
+    ],
+    [
+      "N05BA",
+      "Benzodiazepine derivatives",
+      "苯二氮平類（BZD）衍生物"
+    ],
+    [
+      "N05BB",
+      "Diphenylmethane derivatives",
+      "二苯甲烷衍生物"
+    ],
+    [
+      "N05BC",
+      "Carbamates",
+      "胺基甲酸酯類"
+    ],
+    [
+      "N05BD",
+      "Dibenzo-bicyclo-octadiene derivatives",
+      "二苯并雙環辛二烯衍生物"
+    ],
+    [
+      "N05BE",
+      "Azaspirodecanedione derivatives",
+      "氮雜螺癸二酮衍生物"
+    ],
+    [
+      "N05BX",
+      "Other anxiolytics",
+      "其他抗焦慮藥"
+    ],
+    [
+      "N05CA",
+      "Barbiturates, plain",
+      "巴比妥類單方"
+    ],
+    [
+      "N05CB",
+      "Barbiturates, combinations",
+      "巴比妥類複方"
+    ],
+    [
+      "N05CC",
+      "Aldehydes and derivatives",
+      "醛類及衍生物"
+    ],
+    [
+      "N05CD",
+      "Benzodiazepine derivatives",
+      "苯二氮平類（BZD）衍生物"
+    ],
+    [
+      "N05CE",
+      "Piperidinedione derivatives",
+      "哌啶二酮衍生物"
+    ],
+    [
+      "N05CF",
+      "Benzodiazepine related drugs",
+      "苯二氮平類相關藥物（Z-drug）"
+    ],
+    [
+      "N05CH",
+      "Melatonin receptor agonists",
+      "褪黑激素受體促效劑"
+    ],
+    [
+      "N05CJ",
+      "Orexin receptor antagonists",
+      "Orexin 受體拮抗劑"
+    ],
+    [
+      "N05CM",
+      "Other hypnotics and sedatives",
+      "其他安眠與鎮靜藥"
+    ],
+    [
+      "N05CX",
+      "Hypnotics and sedatives in combination, excl. barbiturates",
+      "安眠與鎮靜藥複方（不含巴比妥類）"
+    ],
+    [
+      "N06AA",
+      "Non-selective monoamine reuptake inhibitors",
+      "非選擇性單胺再吸收抑制劑（三環抗憂鬱劑 TCA）"
+    ],
+    [
+      "N06AB",
+      "Selective serotonin reuptake inhibitors",
+      "選擇性血清素再吸收抑制劑（SSRI）"
+    ],
+    [
+      "N06AF",
+      "Monoamine oxidase inhibitors, non-selective",
+      "非選擇性 MAOI"
+    ],
+    [
+      "N06AG",
+      "Monoamine oxidase A inhibitors",
+      "MAO-A 抑制劑"
+    ],
+    [
+      "N06AX",
+      "Other antidepressants",
+      "其他抗憂鬱藥"
+    ],
+    [
+      "N06BA",
+      "Centrally acting sympathomimetics",
+      "中樞作用擬交感神經藥"
+    ],
+    [
+      "N06BC",
+      "Xanthine derivatives",
+      "黃嘌呤衍生物"
+    ],
+    [
+      "N06BX",
+      "Other psychostimulants and nootropics",
+      "其他精神刺激劑與益智藥"
+    ],
+    [
+      "N06CA",
+      "Antidepressants in combination with psycholeptics",
+      "抗憂鬱藥與精神安定劑複方"
+    ],
+    [
+      "N06CB",
+      "Psychostimulants in combination with psycholeptics",
+      "精神刺激劑與精神安定劑複方"
+    ],
+    [
+      "N06DA",
+      "Anticholinesterases",
+      "膽鹼酯酶抑制劑（失智症治療用）"
+    ],
+    [
+      "N06DX",
+      "Other anti-dementia drugs",
+      "其他抗失智症藥"
+    ],
+    [
+      "N07AA",
+      "Anticholinesterases",
+      "膽鹼酯酶抑制劑"
+    ],
+    [
+      "N07AB",
+      "Choline esters",
+      "膽鹼酯類"
+    ],
+    [
+      "N07AX",
+      "Other parasympathomimetics",
+      "其他擬副交感神經藥物"
+    ],
+    [
+      "N07BA",
+      "Drugs used in nicotine dependence",
+      "用於尼古丁依賴的藥物"
+    ],
+    [
+      "N07BB",
+      "Drugs used in alcohol dependence",
+      "用於酒精依賴的藥物"
+    ],
+    [
+      "N07BC",
+      "Drugs used in opioid dependence",
+      "用於類鴉片依賴的藥物"
+    ],
+    [
+      "N07CA",
+      "Antivertigo preparations",
+      "抗眩暈藥"
+    ],
+    [
+      "N07XA",
+      "Gangliosides and ganglioside derivatives",
+      "神經節苷脂類及神經節苷脂衍生物"
+    ],
+    [
+      "N07XX",
+      "Other nervous system drugs",
+      "其他神經系統用藥"
+    ],
+    [
+      "P01AA",
+      "Hydroxyquinoline derivatives",
+      "羥基喹啉衍生物"
+    ],
+    [
+      "P01AB",
+      "Nitroimidazole derivatives",
+      "硝基咪唑衍生物"
+    ],
+    [
+      "P01AC",
+      "Dichloroacetamide derivatives",
+      "二氯乙醯胺衍生物"
+    ],
+    [
+      "P01AR",
+      "Arsenic compounds",
+      "砷化合物"
+    ],
+    [
+      "P01AX",
+      "Other agents against amoebiasis and other protozoal diseases",
+      "其他抗阿米巴與原蟲藥"
+    ],
+    [
+      "P01BA",
+      "Aminoquinolines",
+      "胺基喹啉類抗瘧藥"
+    ],
+    [
+      "P01BB",
+      "Biguanides",
+      "雙胍類抗瘧藥"
+    ],
+    [
+      "P01BC",
+      "Methanolquinolines",
+      "甲醇喹啉類抗瘧藥"
+    ],
+    [
+      "P01BD",
+      "Diaminopyrimidines",
+      "二胺基嘧啶類抗瘧藥"
+    ],
+    [
+      "P01BE",
+      "Artemisinin and derivatives, plain",
+      "青蒿素及其衍生物"
+    ],
+    [
+      "P01BF",
+      "Artemisinin and derivatives, combinations",
+      "青蒿素衍生物複方"
+    ],
+    [
+      "P01BX",
+      "Other antimalarials",
+      "其他抗瘧藥"
+    ],
+    [
+      "P01CA",
+      "Nitroimidazole derivatives",
+      "硝基咪唑類抗利什曼原蟲藥"
+    ],
+    [
+      "P01CB",
+      "Antimony compounds",
+      "銻化合物"
+    ],
+    [
+      "P01CC",
+      "Nitrofuran derivatives",
+      "硝基呋喃衍生物"
+    ],
+    [
+      "P01CD",
+      "Arsenic compounds",
+      "砷化合物"
+    ],
+    [
+      "P01CX",
+      "Other agents against leishmaniasis and trypanosomiasis",
+      "其他抗利什曼原蟲與錐蟲藥"
+    ],
+    [
+      "P02BA",
+      "Quinoline derivatives and related substances",
+      "喹啉衍生物與相關吸蟲藥"
+    ],
+    [
+      "P02BB",
+      "Organophosphorous compounds",
+      "有機磷化合物類吸蟲藥"
+    ],
+    [
+      "P02BX",
+      "Other antitrematodal agents",
+      "其他抗吸蟲藥"
+    ],
+    [
+      "P02CA",
+      "Benzimidazole derivatives",
+      "Benzimidazole 類驅蟲藥"
+    ],
+    [
+      "P02CB",
+      "Piperazine and derivatives",
+      "Piperazine 類驅蟲藥"
+    ],
+    [
+      "P02CC",
+      "Tetrahydropyrimidine derivatives",
+      "四氫嘧啶類驅蟲藥"
+    ],
+    [
+      "P02CE",
+      "Imidazothiazole derivatives",
+      "Imidazothiazole 類驅蟲藥"
+    ],
+    [
+      "P02CF",
+      "Avermectines",
+      "Avermectin 類驅蟲藥"
+    ],
+    [
+      "P02CX",
+      "Other antinematodals",
+      "其他抗線蟲藥"
+    ],
+    [
+      "P02DA",
+      "Salicylic acid derivatives",
+      "水楊酸衍生物類抗絛蟲藥"
+    ],
+    [
+      "P02DX",
+      "Other anticestodals",
+      "其他抗絛蟲藥"
+    ],
+    [
+      "P03AA",
+      "Sulfur containing products",
+      "含硫外用驅蟲藥"
+    ],
+    [
+      "P03AB",
+      "Chlorine containing products",
+      "含氯外用驅蟲藥"
+    ],
+    [
+      "P03AC",
+      "Pyrethrines, incl. synthetic compounds",
+      "除蟲菊精類（含合成製劑）"
+    ],
+    [
+      "P03AX",
+      "Other ectoparasiticides, incl. scabicides",
+      "其他體外寄生蟲治療藥（含疥瘡藥）"
+    ],
+    [
+      "P03BA",
+      "Pyrethrines",
+      "除蟲菊精類殺蟲劑"
+    ],
+    [
+      "P03BX",
+      "Other insecticides and repellents",
+      "其他殺蟲劑與驅蟲劑"
+    ],
+    [
+      "R01AA",
+      "Sympathomimetics, plain",
+      "單方鼻用擬交感神經藥"
+    ],
+    [
+      "R01AB",
+      "Sympathomimetics, combinations excl. corticosteroids",
+      "鼻用擬交感神經複方（不含類固醇）"
+    ],
+    [
+      "R01AC",
+      "Antiallergic agents, excl. corticosteroids",
+      "鼻用抗過敏藥（不含類固醇）"
+    ],
+    [
+      "R01AD",
+      "Corticosteroids",
+      "鼻用類固醇"
+    ],
+    [
+      "R01AX",
+      "Other nasal preparations",
+      "其他鼻用製劑"
+    ],
+    [
+      "R01BA",
+      "Sympathomimetics",
+      "全身性鼻塞緩解劑"
+    ],
+    [
+      "R02AA",
+      "Antiseptics",
+      "喉部用消毒藥"
+    ],
+    [
+      "R02AB",
+      "Antibiotics",
+      "喉部用抗生素"
+    ],
+    [
+      "R02AD",
+      "Anesthetics, local",
+      "喉部用局部麻醉藥"
+    ],
+    [
+      "R02AX",
+      "Other throat preparations",
+      "其他喉部製劑"
+    ],
+    [
+      "R03AA",
+      "Alpha- and beta-adrenoreceptor agonists",
+      "α／β agonist"
+    ],
+    [
+      "R03AB",
+      "Non-selective beta-adrenoreceptor agonists",
+      "非選擇性 β agonist"
+    ],
+    [
+      "R03AC",
+      "Selective beta-2-adrenoreceptor agonists",
+      "選擇性 β2 agonist（SABA／LABA）"
+    ],
+    [
+      "R03AH",
+      "Combinations of adrenergics",
+      "腎上腺素性藥物複方"
+    ],
+    [
+      "R03AK",
+      "Adrenergics in combination with corticosteroids or other drugs, excl. anticholinergics",
+      "β2 agonist／ICS 等複方"
+    ],
+    [
+      "R03AL",
+      "Adrenergics in combination with anticholinergics incl. triple combinations with corticosteroids",
+      "β2 agonist／抗膽鹼劑複方（含三合一）"
+    ],
+    [
+      "R03BA",
+      "Glucocorticoids",
+      "吸入型類固醇（ICS）"
+    ],
+    [
+      "R03BB",
+      "Anticholinergics",
+      "吸入型抗膽鹼劑（SAMA／LAMA）"
+    ],
+    [
+      "R03BC",
+      "Antiallergic agents, excl. corticosteroids",
+      "吸入型抗過敏藥（不含類固醇）"
+    ],
+    [
+      "R03BX",
+      "Other drugs for obstructive airway diseases, inhalants",
+      "其他吸入型阻塞性呼吸道用藥"
+    ],
+    [
+      "R03CA",
+      "Alpha- and beta-adrenoreceptor agonists",
+      "全身性 α／β agonist"
+    ],
+    [
+      "R03CB",
+      "Non-selective beta-adrenoreceptor agonists",
+      "全身性非選擇性 β agonist"
+    ],
+    [
+      "R03CC",
+      "Selective beta-2-adrenoreceptor agonists",
+      "全身性選擇性 β2 agonist"
+    ],
+    [
+      "R03CK",
+      "Adrenergics and other drugs for obstructive airway diseases",
+      "全身性腎上腺素性藥與其他呼吸道用藥"
+    ],
+    [
+      "R03DA",
+      "Xanthines",
+      "Xanthine 類"
+    ],
+    [
+      "R03DB",
+      "Xanthines and adrenergics",
+      "Xanthine／腎上腺素性藥物複方"
+    ],
+    [
+      "R03DC",
+      "Leukotriene receptor antagonists",
+      "白三烯受體拮抗劑（LTRA）"
+    ],
+    [
+      "R03DX",
+      "Other systemic drugs for obstructive airway diseases",
+      "其他全身性阻塞性呼吸道用藥"
+    ],
+    [
+      "R05CA",
+      "Expectorants",
+      "祛痰劑"
+    ],
+    [
+      "R05CB",
+      "Mucolytics",
+      "化痰劑"
+    ],
+    [
+      "R05DA",
+      "Opium alkaloids and derivatives",
+      "鴉片生物鹼類止咳藥"
+    ],
+    [
+      "R05DB",
+      "Other cough suppressants",
+      "其他止咳藥"
+    ],
+    [
+      "R05FA",
+      "Opium derivatives and expectorants",
+      "鴉片衍生物／祛痰劑複方"
+    ],
+    [
+      "R05FB",
+      "Other cough suppressants and expectorants",
+      "其他止咳／祛痰複方"
+    ],
+    [
+      "R06AA",
+      "Aminoalkyl ethers",
+      "胺基烷基醚類抗組織胺"
+    ],
+    [
+      "R06AB",
+      "Substituted alkylamines",
+      "取代烷基胺類抗組織胺"
+    ],
+    [
+      "R06AC",
+      "Substituted ethylene diamines",
+      "取代乙二胺類抗組織胺"
+    ],
+    [
+      "R06AD",
+      "Phenothiazine derivatives",
+      "Phenothiazine 類抗組織胺"
+    ],
+    [
+      "R06AE",
+      "Piperazine derivatives",
+      "Piperazine 類抗組織胺"
+    ],
+    [
+      "R06AK",
+      "Combinations of antihistamines",
+      "抗組織胺複方"
+    ],
+    [
+      "R06AX",
+      "Other antihistamines for systemic use",
+      "其他全身性抗組織胺"
+    ],
+    [
+      "R07AA",
+      "Lung surfactants",
+      "肺表面張力素"
+    ],
+    [
+      "R07AB",
+      "Respiratory stimulants",
+      "呼吸興奮劑"
+    ],
+    [
+      "R07AX",
+      "Other respiratory system products",
+      "其他呼吸系統用藥"
+    ],
+    [
+      "S01AA",
+      "Antibiotics",
+      "抗生素"
+    ],
+    [
+      "S01AB",
+      "Sulfonamides",
+      "磺胺類藥物"
+    ],
+    [
+      "S01AD",
+      "Antivirals",
+      "抗病毒藥"
+    ],
+    [
+      "S01AE",
+      "Fluoroquinolones",
+      "眼用 Fluoroquinolone 類"
+    ],
+    [
+      "S01AX",
+      "Other antiinfectives",
+      "其他眼用抗感染藥"
+    ],
+    [
+      "S01BA",
+      "Corticosteroids, plain",
+      "皮質類固醇"
+    ],
+    [
+      "S01BB",
+      "Corticosteroids and mydriatics in combination",
+      "眼用類固醇／散瞳劑複方"
+    ],
+    [
+      "S01BC",
+      "Antiinflammatory agents, non-steroids",
+      "眼用非類固醇抗發炎藥（NSAID）"
+    ],
+    [
+      "S01CA",
+      "Corticosteroids and antiinfectives in combination",
+      "眼用類固醇／抗感染複方"
+    ],
+    [
+      "S01CB",
+      "Corticosteroids/antiinfectives/mydriatics in combination",
+      "眼用類固醇／抗感染／散瞳複方"
+    ],
+    [
+      "S01CC",
+      "Antiinflammatory agents, non-steroids and antiinfectives in combination",
+      "眼用 NSAID／抗感染複方"
+    ],
+    [
+      "S01EA",
+      "Sympathomimetics in glaucoma therapy",
+      "眼用 α2 agonist"
+    ],
+    [
+      "S01EB",
+      "Parasympathomimetics",
+      "擬副交感神經藥"
+    ],
+    [
+      "S01EC",
+      "Carbonic anhydrase inhibitors",
+      "碳酸酐酶抑制劑"
+    ],
+    [
+      "S01ED",
+      "Beta blocking agents",
+      "眼用 β blocker"
+    ],
+    [
+      "S01EE",
+      "Prostaglandin analogues",
+      "前列腺素類似物"
+    ],
+    [
+      "S01EX",
+      "Other antiglaucoma preparations",
+      "其他抗青光眼製劑"
+    ],
+    [
+      "S01FA",
+      "Anticholinergics",
+      "抗膽鹼藥"
+    ],
+    [
+      "S01FB",
+      "Sympathomimetics excl. antiglaucoma preparations",
+      "非青光眼用擬交感神經藥"
+    ],
+    [
+      "S01GA",
+      "Sympathomimetics used as decongestants",
+      "眼用去充血（血管收縮）擬交感神經藥"
+    ],
+    [
+      "S01GX",
+      "Other antiallergics",
+      "其他抗過敏藥"
+    ],
+    [
+      "S01HA",
+      "Local anesthetics",
+      "局部麻醉藥"
+    ],
+    [
+      "S01JA",
+      "Colouring agents",
+      "眼科用染色劑（如螢光素）"
+    ],
+    [
+      "S01JX",
+      "Other ophthalmological diagnostic agents",
+      "其他眼科診斷試劑"
+    ],
+    [
+      "S01KA",
+      "Viscoelastic substances",
+      "黏彈性物質"
+    ],
+    [
+      "S01KX",
+      "Other surgical aids",
+      "其他外科輔助"
+    ],
+    [
+      "S01LA",
+      "Antineovascularisation agents",
+      "抗新生血管藥物（anti-VEGF）"
+    ],
+    [
+      "S01XA",
+      "Other ophthalmologicals",
+      "其他眼科用藥"
+    ],
+    [
+      "S02AA",
+      "Antiinfectives",
+      "耳用抗感染藥"
+    ],
+    [
+      "S02BA",
+      "Corticosteroids",
+      "皮質類固醇類"
+    ],
+    [
+      "S02CA",
+      "Corticosteroids and antiinfectives in combination",
+      "耳用類固醇／抗感染複方"
+    ],
+    [
+      "S02DA",
+      "Analgesics and anesthetics",
+      "鎮痛藥和麻醉藥"
+    ],
+    [
+      "S02DC",
+      "Indifferent preparations",
+      "惰性製劑"
+    ],
+    [
+      "S03AA",
+      "Antiinfectives",
+      "眼耳用抗感染藥"
+    ],
+    [
+      "S03BA",
+      "Corticosteroids",
+      "眼耳用類固醇"
+    ],
+    [
+      "S03CA",
+      "Corticosteroids and antiinfectives in combination",
+      "眼耳用類固醇／抗感染複方"
+    ],
+    [
+      "V01AA",
+      "Allergen extracts",
+      "過敏原提取物"
+    ],
+    [
+      "V03AB",
+      "Antidotes",
+      "解毒劑"
+    ],
+    [
+      "V03AC",
+      "Iron chelating agents",
+      "鐵螯合劑類"
+    ],
+    [
+      "V03AE",
+      "Drugs for treatment of hyperkalemia and hyperphosphatemia",
+      "高鉀血症和高磷酸鹽血症治療藥"
+    ],
+    [
+      "V03AF",
+      "Detoxifying agents for antineoplastic treatment",
+      "用於抗腫瘤治療的解毒劑"
+    ],
+    [
+      "V03AG",
+      "Drugs for treatment of hypercalcemia",
+      "治療高鈣血症的藥物"
+    ],
+    [
+      "V03AH",
+      "Drugs for treatment of hypoglycemia",
+      "低血糖治療藥"
+    ],
+    [
+      "V03AK",
+      "Tissue adhesives",
+      "組織粘合劑"
+    ],
+    [
+      "V03AM",
+      "Drugs for embolisation",
+      "栓塞藥"
+    ],
+    [
+      "V03AN",
+      "Medical gases",
+      "醫用氣體"
+    ],
+    [
+      "V03AX",
+      "Other therapeutic products",
+      "其他治療用藥物"
+    ],
+    [
+      "V03AZ",
+      "Nerve depressants",
+      "神經抑制藥"
+    ],
+    [
+      "V04CA",
+      "Tests for diabetes",
+      "糖尿病檢測"
+    ],
+    [
+      "V04CB",
+      "Tests for fat absorption",
+      "脂肪吸收的檢測"
+    ],
+    [
+      "V04CC",
+      "Tests for bile duct patency",
+      "膽道通暢檢查"
+    ],
+    [
+      "V04CD",
+      "Tests for pituitary function",
+      "腦下垂體功能檢查"
+    ],
+    [
+      "V04CE",
+      "Tests for liver functional capacity",
+      "肝功能檢測"
+    ],
+    [
+      "V04CF",
+      "Tuberculosis diagnostics",
+      "結核診斷藥"
+    ],
+    [
+      "V04CG",
+      "Tests for gastric secretion",
+      "胃液分泌檢測"
+    ],
+    [
+      "V04CH",
+      "Tests for renal function and ureteral injuries",
+      "腎功能與輸尿管損傷檢查藥"
+    ],
+    [
+      "V04CJ",
+      "Tests for thyreoidea function",
+      "甲狀腺功能檢測"
+    ],
+    [
+      "V04CK",
+      "Tests for pancreatic function",
+      "胰臟功能檢查"
+    ],
+    [
+      "V04CL",
+      "Tests for allergic diseases",
+      "過敏性疾病檢測"
+    ],
+    [
+      "V04CM",
+      "Tests for fertility disturbances",
+      "生育障礙檢測"
+    ],
+    [
+      "V04CX",
+      "Other diagnostic agents",
+      "其他診斷試劑"
+    ],
+    [
+      "V06AA",
+      "Low-energy diets",
+      "低熱量飲食"
+    ],
+    [
+      "V06CA",
+      "Nutrients without phenylalanine",
+      "不含苯丙胺酸之營養品"
+    ],
+    [
+      "V06DA",
+      "Carbohydrates/proteins/minerals/vitamins, combinations",
+      "碳水化合物/蛋白質/礦物質/維生素，複方"
+    ],
+    [
+      "V06DB",
+      "Fat/carbohydrates/proteins/minerals/vitamins, combinations",
+      "脂肪/碳水化合物/蛋白質/礦物質/維生素，複方"
+    ],
+    [
+      "V06DC",
+      "Carbohydrates",
+      "碳水化合物"
+    ],
+    [
+      "V06DD",
+      "Amino acids, incl. combinations with polypeptides",
+      "胺基酸（含多肽複方）"
+    ],
+    [
+      "V06DE",
+      "Amino acids/carbohydrates/minerals/vitamins, combinations",
+      "胺基酸/碳水化合物/礦物質/維生素，複方"
+    ],
+    [
+      "V06DF",
+      "Milk substitutes",
+      "代乳品"
+    ],
+    [
+      "V06DX",
+      "Other combinations of nutrients",
+      "其他營養複方"
+    ],
+    [
+      "V07AA",
+      "Plasters",
+      "石膏類"
+    ],
+    [
+      "V07AB",
+      "Solvents and diluting agents, incl. irrigating solutions",
+      "溶劑、稀釋劑與沖洗液"
+    ],
+    [
+      "V07AC",
+      "Blood transfusion, auxiliary products",
+      "輸血，輔助用品"
+    ],
+    [
+      "V07AD",
+      "Blood tests, auxiliary products",
+      "驗血，輔助用品"
+    ],
+    [
+      "V07AN",
+      "Incontinence equipment",
+      "失禁照護用品"
+    ],
+    [
+      "V07AR",
+      "Sensitivity tests, discs and tablets",
+      "敏感性檢測，盤和片"
+    ],
+    [
+      "V07AS",
+      "Stomi equipment",
+      "造口照護器材"
+    ],
+    [
+      "V07AT",
+      "Cosmetics",
+      "化妝品"
+    ],
+    [
+      "V07AV",
+      "Technical disinfectants",
+      "工業消毒劑"
+    ],
+    [
+      "V07AX",
+      "Washing agents etc.",
+      "洗滌劑等"
+    ],
+    [
+      "V07AY",
+      "Other non-therapeutic auxiliary products",
+      "其他非治療用輔助物品"
+    ],
+    [
+      "V07AZ",
+      "Chemicals and reagents for analysis",
+      "分析用化學品和試劑"
+    ],
+    [
+      "V08AA",
+      "Watersoluble, nephrotropic, high osmolar X-ray contrast media",
+      "水溶性腎排高滲透壓 X 光顯影劑"
+    ],
+    [
+      "V08AB",
+      "Watersoluble, nephrotropic, low osmolar X-ray contrast media",
+      "水溶性腎排低滲透壓 X 光顯影劑"
+    ],
+    [
+      "V08AC",
+      "Watersoluble, hepatotropic X-ray contrast media",
+      "水溶性肝親和性 X 光顯影劑"
+    ],
+    [
+      "V08AD",
+      "Non-watersoluble X-ray contrast media",
+      "非水溶性 X 光顯影劑"
+    ],
+    [
+      "V08BA",
+      "Barium sulfate containing X-ray contrast media",
+      "含硫酸鋇的 X 光顯影劑"
+    ],
+    [
+      "V08CA",
+      "Paramagnetic contrast media",
+      "順磁性顯影劑"
+    ],
+    [
+      "V08CB",
+      "Superparamagnetic contrast media",
+      "超順磁性顯影劑"
+    ],
+    [
+      "V08CX",
+      "Other magnetic resonance imaging contrast media",
+      "其他磁振造影（MRI）顯影劑"
+    ],
+    [
+      "V08DA",
+      "Ultrasound contrast media",
+      "超音波顯影劑"
+    ],
+    [
+      "V09AX",
+      "Other central nervous system diagnostic radiopharmaceuticals",
+      "其他中樞神經系統診斷用放射性藥物"
+    ],
+    [
+      "V09CX",
+      "Other renal system diagnostic radiopharmaceuticals",
+      "其他腎臟系統診斷用放射性藥物"
+    ],
+    [
+      "V09DX",
+      "Other hepatic and reticulo endothelial system diagnostic radiopharmaceuticals",
+      "其他肝臟和網狀內皮系統診斷用放射性藥物"
+    ],
+    [
+      "V09EX",
+      "Other respiratory system diagnostic radiopharmaceuticals",
+      "其他呼吸系統診斷用放射性藥物"
+    ],
+    [
+      "V09FX",
+      "Various thyroid diagnostic radiopharmaceuticals",
+      "各種甲狀腺診斷用放射性藥物"
+    ],
+    [
+      "V09GX",
+      "Other cardiovascular system diagnostic radiopharmaceuticals",
+      "其他心血管系統的診斷用放射性藥物"
+    ],
+    [
+      "V09HX",
+      "Other diagnostic radiopharmaceuticals for inflammation and infection detection",
+      "其他用於炎症和感染檢測的診斷用放射性藥物"
+    ],
+    [
+      "V09IX",
+      "Other diagnostic radiopharmaceuticals for tumour detection",
+      "其他用於腫瘤檢測的診斷用放射性藥物"
+    ],
+    [
+      "V09XX",
+      "Various diagnostic radiopharmaceuticals",
+      "各種診斷用放射性藥物"
+    ],
+    [
+      "V10AX",
+      "Other antiinflammatory therapeutic radiopharmaceuticals",
+      "其他抗發炎治療用放射性藥品"
+    ],
+    [
+      "V10BX",
+      "Various pain palliation radiopharmaceuticals",
+      "緩解疼痛的放射性藥物"
+    ],
+    [
+      "V10XX",
+      "Various therapeutic radiopharmaceuticals",
+      "各種治療用放射性藥物"
+    ]
+  ]
+}

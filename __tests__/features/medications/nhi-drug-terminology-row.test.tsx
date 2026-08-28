@@ -155,4 +155,36 @@ describe('useMedicationRows — official NHI terminology view model', () => {
       new Date(inpatientOrder.dispenseRequest.validityPeriod.end).toLocaleDateString(),
     )
   })
+
+  it('preserves a composite hospital frequency code from the dosage text', () => {
+    const sourceSig = {
+      ...medication,
+      dosageInstruction: [{ text: '1 tablet QDPC' }],
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([sourceSig], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0].frequency).toBe('QDPC')
+    expect(result.current[0].searchHaystack).toContain('qdpc')
+  })
+
+  it('combines a structured frequency with its after-meal timing', () => {
+    const structuredSig = {
+      ...medication,
+      dosageInstruction: [{
+        timing: {
+          code: { coding: [{ code: 'BID' }] },
+          repeat: { frequency: 2, period: 1, periodUnit: 'd', when: ['PC'] },
+        },
+      }],
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([structuredSig], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0].frequency).toBe('BIDPC')
+  })
 })

@@ -149,6 +149,8 @@ export function useMedicationRows(
         doseText: dosage?.text,
         route: dosage?.route,
         repeat: dosage?.timing?.repeat,
+        timingCode: dosage?.timing?.code,
+        additionalInstruction: dosage?.additionalInstruction,
         audience,
         locale,
       })

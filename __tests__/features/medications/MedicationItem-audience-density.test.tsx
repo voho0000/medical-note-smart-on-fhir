@@ -18,6 +18,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         durationCompact: '{n} 天',
         refillSummary: '累計 {count} 次',
         refillSummarySince: '累計 {count} 次 · {date} 起',
+        frequencyLabel: '頻次',
         terminologySource: '健保署藥品主檔補充',
         terminologyIngredientLabel: '成分／含量',
         terminologyOfficialNameZhLabel: '中文品名',
@@ -204,6 +205,21 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(row).toHaveClass('grid', 'bg-muted/40', 'py-1', 'dark:bg-muted/30')
     expect(badge.closest('[data-medication-cell="supply"]')).toHaveClass('w-[4.75rem]')
     expect(badge.parentElement).toHaveClass('w-full')
+  })
+
+  it('keeps the source frequency first in the compact schedule line', () => {
+    mockAudience = 'medical'
+    const medication = {
+      ...medicationRow('ACETYLCYSTEINE 600 MG'),
+      frequency: 'QDPC',
+    }
+    const { container } = render(<MedicationItem medication={medication} />)
+
+    const scheduleLine = container.querySelector('[data-medication-schedule]')
+    const frequency = container.querySelector('[data-medication-frequency]')
+    expect(frequency).toHaveTextContent('QDPC')
+    expect(frequency).toHaveAttribute('aria-label', '頻次：QDPC')
+    expect(scheduleLine?.firstElementChild).toContainElement(frequency)
   })
 
   it('drops the individual card boundary inside a grouped medication surface', () => {

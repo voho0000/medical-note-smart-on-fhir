@@ -1,6 +1,12 @@
 import { ATC_LEVEL_2_HIERARCHY, resolveAtcLevel2 } from "./atc-level2";
+import {
+	ATC_HIERARCHY,
+	resolveAtcLevel3,
+	resolveAtcLevel4,
+} from "./atc-hierarchy";
 import { NHI_DRUG_TERMINOLOGY_SNAPSHOT } from "./snapshot";
 import type {
+	AtcHierarchySnapshot,
 	AtcLevel2HierarchySnapshot,
 	NhiDrugSnapshotRow,
 	NhiDrugTerminologyCoverageReport,
@@ -32,6 +38,7 @@ function rowToRecord(
 	snapshotId: string,
 	rowIndex: number,
 	atcLevel2Hierarchy: AtcLevel2HierarchySnapshot,
+	atcHierarchy: AtcHierarchySnapshot,
 ): NhiDrugTerminologyRecord {
 	const [
 		nhiDrugCode,
@@ -52,6 +59,8 @@ function rowToRecord(
 	const atcLevel2 = atcCode
 		? resolveAtcLevel2(atcCode, atcLevel2Hierarchy)
 		: undefined;
+	const atcLevel3 = atcCode ? resolveAtcLevel3(atcCode, atcHierarchy) : undefined;
+	const atcLevel4 = atcCode ? resolveAtcLevel4(atcCode, atcHierarchy) : undefined;
 	return {
 		nhiDrugCode,
 		validFrom,
@@ -66,6 +75,8 @@ function rowToRecord(
 		...(atcNameEn ? { atcNameEn } : {}),
 		...(atcNameZh ? { atcNameZh } : {}),
 		...(atcLevel2 ? { atcLevel2 } : {}),
+		...(atcLevel3 ? { atcLevel3 } : {}),
+		...(atcLevel4 ? { atcLevel4 } : {}),
 		...(officialProductUrl ? { officialProductUrl } : {}),
 		...(compoundType ? { compoundType } : {}),
 		snapshotId,
@@ -91,6 +102,7 @@ function emptyStatusCounts(): Record<
 export function createNhiDrugTerminologyResolver(
 	snapshot: NhiDrugTerminologySnapshot,
 	atcLevel2Hierarchy: AtcLevel2HierarchySnapshot = ATC_LEVEL_2_HIERARCHY,
+	atcHierarchy: AtcHierarchySnapshot = ATC_HIERARCHY,
 ): NhiDrugTerminologyResolver {
 	const rowsByCode = new Map<
 		string,
@@ -135,9 +147,10 @@ export function createNhiDrugTerminologyResolver(
 			rowToRecord(
 				row,
 				snapshot.manifest.snapshotId,
-				rowIndex,
-				atcLevel2Hierarchy,
-			),
+					rowIndex,
+					atcLevel2Hierarchy,
+					atcHierarchy,
+				),
 		);
 		if (candidates.length !== 1) {
 			return { ...base, status: "conflict", candidates };
@@ -148,6 +161,7 @@ export function createNhiDrugTerminologyResolver(
 	return {
 		snapshot,
 		atcLevel2Hierarchy,
+		atcHierarchy,
 		resolve,
 		resolveMany(inputs) {
 			const resolutions = inputs.map(({ nhiDrugCode, prescriptionDate }) =>

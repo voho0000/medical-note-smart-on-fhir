@@ -136,9 +136,25 @@ export function MedicationItem({
     hasDaysRemaining && (!medication.isInactive || isActivePastSupplyEnd)
 
   // The left metadata lane is deliberately ordered by clinical scanning
-  // priority: coverage dates, source institution, then dose/route/frequency.
+  // priority: source-recorded frequency, coverage dates, source institution,
+  // then dose/route. Frequency must not disappear at routine panel widths.
   // All optional values collapse without moving the ICD or supply columns.
   const scheduleParts: React.ReactNode[] = []
+
+  if (medication.frequency) {
+    const frequencyTitle = `${mt.frequencyLabel ?? 'Frequency'}：${medication.frequency}`
+    scheduleParts.push(
+      <span
+        key="freq"
+        data-medication-frequency
+        aria-label={frequencyTitle}
+        title={frequencyTitle}
+        className="shrink-0 font-semibold text-foreground/80"
+      >
+        {medication.frequency}
+      </span>,
+    )
+  }
 
   const normalizedExecutionPeriods = (executionPeriods ?? [])
     .filter((period) => period.start || period.end)
@@ -229,7 +245,6 @@ export function MedicationItem({
   }
   if (medication.dose) scheduleParts.push(<span key="dose">{medication.dose}</span>)
   if (medication.route) scheduleParts.push(<span key="route">{medication.route}</span>)
-  if (medication.frequency) scheduleParts.push(<span key="freq">{medication.frequency}</span>)
   const firstRefillDate = shortDate(medication.firstRefillDate)
   const refillSummary = medication.refillCount > 1
     ? (firstRefillDate
