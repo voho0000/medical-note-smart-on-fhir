@@ -69,26 +69,26 @@ describe('CancerScreeningRow', () => {
   })
 
   it('summarizes a screening programme with its latest result', () => {
-    render(<CancerScreeningRow row={groupedColorectalRow()} />)
+    const { container } = render(<CancerScreeningRow row={groupedColorectalRow()} />)
 
     expect(screen.getByText('大腸癌篩檢')).toBeInTheDocument()
     expect(screen.getByText('最新')).toBeInTheDocument()
     expect(screen.getByText('無異常')).toBeInTheDocument()
     expect(screen.getByText('共 2 次')).toBeInTheDocument()
     expect(screen.getByLabelText('新北市聯合醫院')).toBeInTheDocument()
-    expect(screen.getByText('2023/4/20')).toBeInTheDocument()
+    expect(container.querySelector('time[datetime="2023-04-20"]')).toBeInTheDocument()
     expect(screen.queryByText('建議每2年定期接受糞便潛血檢查。')).not.toBeInTheDocument()
   })
 
   it('opens result history and the programme-level recommendation together', () => {
-    render(<CancerScreeningRow row={groupedColorectalRow()} />)
+    const { container } = render(<CancerScreeningRow row={groupedColorectalRow()} />)
 
     fireEvent.click(screen.getByRole('button', {
       name: '展開 大腸癌篩檢 的歷次結果與篩檢建議',
     }))
 
     expect(screen.getByText('歷次結果')).toBeInTheDocument()
-    expect(screen.getByText('2016/12/16')).toBeInTheDocument()
+    expect(container.querySelector('time[datetime="2016-12-16"]')).toBeInTheDocument()
     expect(screen.getByLabelText('三重衛生所')).toBeInTheDocument()
     expect(screen.getByText('篩檢建議')).toBeInTheDocument()
     expect(screen.getByText('建議每2年定期接受糞便潛血檢查。')).toBeInTheDocument()
