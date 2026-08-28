@@ -1457,6 +1457,7 @@ export const en = {
     institutionAll: 'All institutions',
     institutionLabel: 'Institution',
     institutionCompact: 'Institution',
+    hasMedications: 'With medications',
     hasTests: 'With tests',
     hasReports: 'With exams',
     hasProcedures: 'With procedures',

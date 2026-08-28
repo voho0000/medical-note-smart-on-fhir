@@ -267,6 +267,42 @@ describe('useEncounterDetails — narrative reports (conclusion-only)', () => {
     })
   })
 
+  it('merges a narrative report and its Viewer-only companion into the same shared row', () => {
+    const narrative = report({
+      id: 'ultrasound-narrative',
+      code: { text: '頭頸部軟組織超音波' },
+      conclusion: 'Head and neck soft tissue echo\nautoimmune thyroiditis',
+      performer: [{ display: '新北市聯醫' }],
+    })
+    const viewerOnly = report({
+      id: 'ultrasound-viewer',
+      code: { text: '頭頸部軟組織超音波' },
+      conclusion: '   ',
+      performer: [{ display: '新北市聯醫' }],
+      extension: [{
+        url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request',
+        extension: [
+          { url: 'version', valueInteger: 1 },
+          { url: 'proc-id', valueCode: 'IMUE0130' },
+          { url: 'patient-context-hash', valueString: 'e'.repeat(64) },
+          { url: 'ipl-case-seq-no', valueString: 'ULTRASOUND-CASE' },
+        ],
+      }],
+    })
+
+    const details = runReports([narrative, viewerOnly])
+
+    expect(details.reports).toHaveLength(1)
+    expect(details.reports[0].conclusion).toBe(
+      'Head and neck soft tissue echo\nautoimmune thyroiditis',
+    )
+    expect(details.reports[0].row.diagnosticReportIds).toEqual([
+      'ultrasound-narrative',
+      'ultrasound-viewer',
+    ])
+    expect(details.reports[0].row.viewerActions).toHaveLength(1)
+  })
+
   it('ignores a report with no conclusion (nothing to show)', () => {
     const details = runReports([report({ conclusion: '   ' })])
     expect(details.reports).toHaveLength(0)

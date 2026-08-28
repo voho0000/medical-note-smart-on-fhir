@@ -22,7 +22,9 @@ describe('useVisitStats content filters', () => {
 
     const { result } = renderHook(() => useVisitStats(encounterDetails as any))
 
+    expect(result.current.get('medication-only')?.hasMedications).toBe(true)
     expect(result.current.get('medication-only')?.hasReports).toBe(false)
+    expect(result.current.get('report-visit')?.hasMedications).toBe(true)
     expect(result.current.get('report-visit')?.hasReports).toBe(true)
   })
 })

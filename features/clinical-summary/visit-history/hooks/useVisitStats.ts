@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import type { EncounterDetails } from './useEncounterDetails'
 
 export interface VisitStats {
+  hasMedications: boolean
   hasTests: boolean
   hasReports: boolean
   hasProcedures: boolean
@@ -37,6 +38,7 @@ export function useVisitStats(
     const map = new Map<string, VisitStats>()
     encounterDetails.forEach((d, id) => {
       map.set(id, {
+        hasMedications:  d.medications.length > 0,
         hasTests:        d.tests.length > 0,
         hasReports:      d.reports.length > 0,
         hasProcedures:   d.procedures.length > 0,

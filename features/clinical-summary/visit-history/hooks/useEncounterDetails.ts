@@ -1,8 +1,6 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
 import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
-import { getCodeableConceptText, getConceptText } from "@/features/clinical-summary/reports/utils/fhir-helpers"
-import { inferGroupFromCategory } from "@/features/clinical-summary/reports/utils/grouping-helpers"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import { getAnalyteDisplayForObs, getAnalyteLabel, getAnalyteCanonicalKey, type DisplayLang } from "@/src/shared/utils/lab-normalize"
 import {
@@ -11,12 +9,8 @@ import {
   categorizeObservation,
   compareTestsByPreferred,
 } from "@/src/shared/utils/lab-categories"
-import { decodeBase64Utf8 } from "@/src/shared/utils/base64.utils"
-import type { NhiViewerAction, Observation, ReportImage, Row } from "@/features/clinical-summary/reports/types"
-import {
-  getNhiViewerActions,
-  isTrustedLegacyNhiViewerAttachment,
-} from "@/features/clinical-summary/reports/utils/nhi-viewer-request"
+import type { Row } from "@/features/clinical-summary/reports/types"
+import { buildReportsData } from "@/features/clinical-summary/reports/hooks/useReportsData"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -335,118 +329,6 @@ function detectMultiDay(tests: EncounterObservation[]): boolean {
   return false
 }
 
-function getDiagnosticReportInstitution(report: any): string | undefined {
-  return report?._observations?.[0]?.performer?.[0]?.display
-    || report?.performer?.[0]?.display
-    || undefined
-}
-
-function getDiagnosticReportDate(report: any): string | undefined {
-  return report?.effectiveDateTime || report?.issued
-}
-
-function getDiagnosticReportCategoryText(report: any): string {
-  const category = report?.category
-  const text = Array.isArray(category)
-    ? category.map((c: any) => getCodeableConceptText(c)).filter((s: string) => s && s !== '—').join(', ')
-    : getCodeableConceptText(category)
-  return text && text !== '—' ? text : 'Report'
-}
-
-function collectReportPayload(report: any): { text: string; images: ReportImage[]; viewerActions: NhiViewerAction[] } {
-  const parts: string[] = []
-  const images: ReportImage[] = []
-  const viewerActions = getNhiViewerActions(report)
-
-  if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
-    parts.push(report.conclusion.trim())
-  }
-
-  const conclusionCodes = getConceptText(report?.conclusionCode)
-  if (conclusionCodes && conclusionCodes !== '—') {
-    parts.push(`Conclusion Codes: ${conclusionCodes}`)
-  }
-
-  if (Array.isArray(report?.note)) {
-    for (const note of report.note) {
-      if (typeof note?.text === 'string' && note.text.trim()) {
-        parts.push(note.text.trim())
-      }
-    }
-  }
-
-  if (Array.isArray(report?.presentedForm)) {
-    for (const form of report.presentedForm) {
-      if (isTrustedLegacyNhiViewerAttachment(form)) {
-        continue
-      }
-      const contentType = (form?.contentType || '').toLowerCase()
-      if (form?._imageRef) {
-        images.push({
-          ref: form._imageRef,
-          contentType: form.contentType || 'image/jpeg',
-          title: form.title,
-          size: form.size,
-        })
-        continue
-      }
-      if (form?.data && contentType.startsWith('image/')) {
-        images.push({
-          data: form.data,
-          contentType: form.contentType || 'image/jpeg',
-          title: form.title,
-          size: form.size,
-        })
-        continue
-      }
-      if (form?.data && contentType.startsWith('text/') && !contentType.includes('html')) {
-        try {
-          const decoded = decodeBase64Utf8(form.data).trim()
-          if (decoded) parts.push(decoded)
-        } catch {
-          // Ignore malformed attachment text; the report row still shows any
-          // conclusion/note/images that were valid.
-        }
-      }
-    }
-  }
-
-  return { text: parts.join('\n\n'), images, viewerActions }
-}
-
-function toEncounterReportRow(
-  report: any,
-  title: string,
-  text: string,
-  images: ReportImage[],
-  viewerActions: NhiViewerAction[],
-): Row {
-  const rawDate = getDiagnosticReportDate(report)
-  const status = report?.status
-  const reportId = report?.id || `encounter-report-${Math.random().toString(36).slice(2, 10)}`
-  const summaryObservation: Observation = {
-    resourceType: 'Observation',
-    id: `dr-summary-${reportId}`,
-    code: { text: 'Report Summary' },
-    valueString: text,
-    effectiveDateTime: rawDate,
-    status,
-  } as Observation
-
-  return {
-    id: reportId,
-    title,
-    rawTitle: title,
-    meta: `${getDiagnosticReportCategoryText(report)} • ${status || '—'}`,
-    obs: [summaryObservation],
-    group: inferGroupFromCategory(report?.category),
-    institution: getDiagnosticReportInstitution(report),
-    effectiveDate: rawDate,
-    images: images.length > 0 ? images : undefined,
-    viewerActions: viewerActions.length > 0 ? viewerActions : undefined,
-  }
-}
-
 /** Group medications by drug name. Only invoked when the visit is multi-day
  *  AND the drug appears multiple times — single-refill drugs stay in the flat
  *  `medications` list (the renderer falls back to those for the non-grouped
@@ -601,10 +483,14 @@ export function useEncounterDetails(
     }
 
     if (Array.isArray(diagnosticReports)) {
+      const reportsByEncounter = new Map<string, any[]>()
       diagnosticReports.forEach((report: any) => {
         const encounterId = getReferenceId(report?.encounter)
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
+        const encounterReports = reportsByEncounter.get(encounterId) || []
+        encounterReports.push(report)
+        reportsByEncounter.set(encounterId, encounterReports)
         const observations = Array.isArray(report?._observations)
           ? report._observations
           : []
@@ -615,26 +501,38 @@ export function useEncounterDetails(
           entry.tests.push(normalized)
         })
 
-        // Narrative report (EKG / imaging / endoscopy / pathology): the finding
-        // lives in `conclusion` with no member Observations, so it produced no
-        // test rows above. Surface it as its own row — otherwise a linked EKG
-        // etc. is invisible under the visit despite the encounter link.
-        const payload = collectReportPayload(report)
-        if (payload.text || payload.images.length > 0 || payload.viewerActions.length > 0) {
-          const reportId = report?.id || `${encounterId}-report-${entry.reports.length}`
-          if (!entry.reports.some((r) => r.id === reportId)) {
-            const title = getCodeText(report?.code) || "Report"
-            entry.reports.push({
-              id: reportId,
-              title,
-              conclusion: payload.text,
-              effectiveDateTime: getDiagnosticReportDate(report),
-              status: report?.status,
-              row: toEncounterReportRow(report, title, payload.text, payload.images, payload.viewerActions),
-            })
-          }
-        }
       })
+
+      for (const [encounterId, reports] of reportsByEncounter) {
+        const entry = ensureEntry(encounterId)
+        const rows = buildReportsData(
+          reports,
+          [],
+          'standardized',
+          audience,
+          locale === 'zh-TW' ? 'zh-TW' : 'en',
+        ).reportRows
+
+        // Numeric/member-observation DiagnosticReports already appear in the
+        // visit's laboratory section. The report section retains its existing
+        // narrative/image scope while consuming the exact same grouped Row
+        // model as Reports > Imaging.
+        for (const row of rows) {
+          const summary = row.obs.find((obs) => obs?.code?.text === 'Report Summary')
+          if (!summary) continue
+          const sourceReport = reports.find((report) =>
+            row.diagnosticReportIds?.includes(report?.id),
+          ) || reports[0]
+          entry.reports.push({
+            id: row.id,
+            title: row.title,
+            conclusion: summary.valueString || '',
+            effectiveDateTime: row.effectiveDate,
+            status: sourceReport?.status,
+            row,
+          })
+        }
+      }
     }
 
     if (Array.isArray(observations)) {

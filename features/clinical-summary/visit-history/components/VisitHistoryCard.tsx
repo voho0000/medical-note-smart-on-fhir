@@ -36,7 +36,7 @@ import {
 type VisitTypeFilter = 'all' | 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'pharmacy'
 type CareDisciplineFilter = 'all' | VisitCareDiscipline
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
-type ContentFlag = 'tests' | 'reports' | 'procedures' | 'discharge'
+type ContentFlag = 'medications' | 'tests' | 'reports' | 'procedures' | 'discharge'
 
 const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'outpatient-or-emergency', 'inpatient', 'emergency', 'pharmacy']
 const CARE_DISCIPLINES: CareDisciplineFilter[] = ['all', 'western', 'tcm', 'dental']
@@ -176,6 +176,7 @@ export function VisitHistoryCard() {
   // ── Filter + sort pipeline ─────────────────────────────────────────────
   const filteredVisits = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
+    const wantsMedications = contentFlags.has('medications')
     const wantsTests = contentFlags.has('tests')
     const wantsReports = contentFlags.has('reports')
     const wantsProcs = contentFlags.has('procedures')
@@ -189,9 +190,10 @@ export function VisitHistoryCard() {
       // institution
       if (institutionFilter !== 'all' && v.institution !== institutionFilter) return false
       // content flags
-      if (wantsTests || wantsReports || wantsProcs) {
+      if (wantsMedications || wantsTests || wantsReports || wantsProcs) {
         const s = visitStats.get(v.id)
         if (!s) return false
+        if (wantsMedications && !s.hasMedications) return false
         if (wantsTests && !s.hasTests) return false
         if (wantsReports && !s.hasReports) return false
         if (wantsProcs && !s.hasProcedures) return false
@@ -481,6 +483,12 @@ export function VisitHistoryCard() {
               {/* Divider between the single-select filters and the content toggles */}
               <span className="mx-0.5 h-4 w-px shrink-0 bg-border @max-[36rem]:hidden" aria-hidden />
               <ContentToggle
+                label={vt.medications}
+                accessibleLabel={vt.hasMedications}
+                active={contentFlags.has('medications')}
+                onClick={() => toggleContent('medications')}
+              />
+              <ContentToggle
                 label={vt.tests}
                 accessibleLabel={vt.hasTests}
                 active={contentFlags.has('tests')}
@@ -588,6 +596,7 @@ function ContentToggle({
       type="button"
       onClick={onClick}
       aria-label={accessibleLabel}
+      aria-pressed={active}
       title={accessibleLabel}
       className={cn(
         // Narrow containers keep the full px-2 rather than dropping to px-1:

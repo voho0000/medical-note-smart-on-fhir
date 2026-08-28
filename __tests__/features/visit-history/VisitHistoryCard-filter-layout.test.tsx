@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history/components/VisitHistoryCard'
 
@@ -29,6 +29,8 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         },
         institutionCompact: '機構',
         institutionAll: '所有機構',
+        medications: '用藥',
+        hasMedications: '含用藥',
         tests: '檢驗',
         hasTests: '含檢驗',
         examReportsShort: '檢查',
@@ -75,13 +77,22 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
 }))
 
 jest.mock('@/features/clinical-summary/visit-history/hooks/useVisitHistory', () => ({
-  useVisitHistory: () => ([{
-    id: 'enc-1',
-    date: '2026-08-12',
-    type: 'outpatient',
-    careDiscipline: 'western',
-    institution: '示範醫院',
-  }]),
+  useVisitHistory: () => ([
+    {
+      id: 'enc-1',
+      date: '2026-08-12',
+      type: 'outpatient',
+      careDiscipline: 'western',
+      institution: '示範醫院',
+    },
+    {
+      id: 'enc-2',
+      date: '2026-08-11',
+      type: 'outpatient',
+      careDiscipline: 'western',
+      institution: '示範醫院',
+    },
+  ]),
 }))
 
 jest.mock('@/features/clinical-summary/visit-history/hooks/useEncounterDetails', () => ({
@@ -94,9 +105,16 @@ jest.mock('@/features/clinical-summary/visit-history/hooks/useClinicalNotes', ()
 
 jest.mock('@/features/clinical-summary/visit-history/hooks/useVisitStats', () => ({
   useVisitStats: () => new Map([['enc-1', {
+    hasMedications: true,
     hasTests: true,
     hasReports: true,
     hasProcedures: true,
+    abnormalCount: 0,
+  }], ['enc-2', {
+    hasMedications: false,
+    hasTests: false,
+    hasReports: false,
+    hasProcedures: false,
     abnormalCount: 0,
   }]]),
 }))
@@ -122,7 +140,7 @@ jest.mock('@/src/application/stores/resource-navigation.store', () => ({
 }))
 
 jest.mock('@/features/clinical-summary/visit-history/components/VisitItem', () => ({
-  VisitItem: () => <li>就診資料</li>,
+  VisitItem: ({ visit }: { visit: { id: string } }) => <li>{visit.id}</li>,
 }))
 
 describe('VisitHistoryCard filter layout', () => {
@@ -133,6 +151,21 @@ describe('VisitHistoryCard filter layout', () => {
     expect(strip).toHaveClass('flex-nowrap', 'overflow-x-auto')
     expect(strip).not.toHaveClass('flex-wrap')
     expect(strip.querySelector('.basis-full')).toBeNull()
-    expect(screen.getByText('1 筆')).not.toBeNull()
+    expect(screen.getByText('2 筆')).not.toBeNull()
+  })
+
+  it('restores the medication content filter and filters visits with medications', () => {
+    render(<VisitHistoryCard />)
+
+    const medicationFilter = screen.getByRole('button', { name: '含用藥' })
+    expect(medicationFilter).toHaveTextContent('用藥')
+    expect(medicationFilter).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(medicationFilter)
+
+    expect(medicationFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('enc-1')).toBeInTheDocument()
+    expect(screen.queryByText('enc-2')).not.toBeInTheDocument()
+    expect(screen.getByText('1 / 2 筆')).toBeInTheDocument()
   })
 })

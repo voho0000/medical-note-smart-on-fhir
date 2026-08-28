@@ -1458,6 +1458,7 @@ export const zhTW = {
     institutionAll: '所有機構',
     institutionLabel: '機構',
     institutionCompact: '機構',
+    hasMedications: '含用藥',
     hasTests: '含檢驗',
     hasReports: '含檢查',
     hasProcedures: '含處置',
