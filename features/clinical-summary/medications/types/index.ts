@@ -47,6 +47,9 @@ export interface MedicationRow {
   route?: string
   frequency?: string
   detail?: string
+  /** Source-reported total dispensed quantity. The compact medication row
+   *  shows the numeric value only, matching the NHI cloud medication layout. */
+  totalQuantity?: number
   startedOn?: string
   stoppedOn?: string
   durationDays?: number
@@ -54,14 +57,21 @@ export interface MedicationRow {
   endDate?: string
   /** Days remaining until endDate (negative if already past) */
   daysRemaining?: number
+  /** Primary readout: today's cloud single-prescription snapshot when fresh,
+   * otherwise the App's date-based estimate. */
+  displayRemainingDays?: number
+  displayRemainingSource?: 'cloud-single' | 'app-estimate'
+  singlePrescriptionRemainingDays?: number
+  singlePrescriptionRemainingCapturedAt?: string
+  singlePrescriptionRemainingIsCurrent?: boolean
   /** True if status is stopped/completed OR computed endDate has passed */
   isInactive: boolean
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean
   /** Audience-aware drug-category label (e.g. "降血壓藥" or "HYPOTENSIVE AGENTS").
-   *  Sourced from FHIR MedicationRequest.category[0]. Empty when no category
-   *  is attached (older bundles or uncategorised one-off meds). */
+   *  MediCloud ATC3 takes precedence; other sources fall back to FHIR
+   *  MedicationRequest.category[0]. Empty when neither is available. */
   category?: string
   /** Official, date-effective drug-master data added by the App. */
   drugTerminology?: MedicationEntity['drugTerminology']

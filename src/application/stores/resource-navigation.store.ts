@@ -25,6 +25,9 @@ export interface ResourceNavTarget {
   cumulativeCategoryId?: string
   /** Canonical cumulative column to reveal after the panel opens. */
   cumulativeAnalyteKey?: string
+  /** Medication destinations may request the owning drug's refill history to
+   *  open after the row claims navigation (used by 健保署餘藥計算). */
+  expandMedicationHistory?: boolean
 }
 
 /** resourceType → left-panel tab id (feature-registry ids). */

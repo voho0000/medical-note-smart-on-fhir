@@ -31,14 +31,20 @@ import { useActiveAllergies } from '../allergies/hooks/useActiveAllergies'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import { MedicationList } from './components/MedicationList'
+import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
 import { AllergyList } from '../allergies/components/AllergyList'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { MedicationNameMode } from './types'
+import {
+  partitionMedicationRecords,
+  relatedMedicationNavigationTarget,
+} from './utils/remaining-supply'
+import type { MedicationRemainingSummaryEntity } from '@/src/core/entities/clinical-data.entity'
 
 type DataTab = 'medications' | 'allergies' | 'vaccines'
-type MedView = 'list' | 'timeline'
+type MedView = 'list' | 'timeline' | 'remaining'
 
 // Right-pane detail source id for the medication timeline (one per app).
 const MED_TIMELINE_ID = 'med-timeline'
@@ -52,8 +58,17 @@ export function MedListCard() {
   const { allergies, isLoading: allergiesLoading, error: allergiesError } = useAllergies()
   // FHIR R4 Immunization resources — distinct from MedicationRequests that
   // happen to be vaccine products. Bridge ships these from 疾病管制署.
-  const { immunizations } = useClinicalData()
-  const rows = useMedicationRows(medications, audience, locale)
+  const {
+    immunizations,
+    medicationRemainingSummaries = [],
+  } = useClinicalData()
+  const {
+    prescriptions: prescriptionMedications,
+  } = useMemo(
+    () => partitionMedicationRecords(medications),
+    [medications],
+  )
+  const rows = useMedicationRows(prescriptionMedications, audience, locale)
   const sourceMix = useMedicationSourceMix(rows)
   const vaccines = useVaccineRows(immunizations, audience, locale)
   const activeAllergies = useActiveAllergies(allergies)
@@ -66,6 +81,7 @@ export function MedListCard() {
   const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   const pendingNav = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
+  const navigateToResource = useResourceNavigationStore((s) => s.navigate)
 
   useEffect(() => {
     if (!pendingNav || ![
@@ -97,16 +113,29 @@ export function MedListCard() {
     [rows, q],
   )
   const filteredMedications = useMemo(() => {
-    if (!q) return medications
+    if (!q) return prescriptionMedications
     const ids = new Set(filteredRows.map((r) => r.id))
-    return medications.filter((m: any) => ids.has(m?.id))
-  }, [medications, filteredRows, q])
+    return prescriptionMedications.filter((m: any) => ids.has(m?.id))
+  }, [prescriptionMedications, filteredRows, q])
+  const filteredRemainingSupplySummaries = useMemo(() => {
+    if (!q) return medicationRemainingSummaries
+    return medicationRemainingSummaries.filter((summary) => [
+      summary.atc5Name,
+      summary.groupName,
+      summary.groupIdentifier,
+      summary.drugGroupCode,
+      summary.sameIngredientDosageFormEndDate,
+      summary.calculatedAt,
+      summary.adherenceExpectedRemainingDays,
+    ].filter(Boolean).join(' ').toLowerCase().includes(q))
+  }, [medicationRemainingSummaries, q])
 
   const tabMedicationsLabel = mt.tabMedications ?? '用藥'
   const tabAllergiesLabel = mt.tabAllergies ?? t.allergies.title
   const tabVaccinesLabel = mt.tabVaccines ?? '疫苗'
   const listLabel = mt.viewList ?? '清單'
   const timelineLabel = mt.viewTimeline ?? '時間軸'
+  const remainingViewLabel = mt.remainingSupplyView ?? '健保署餘藥計算'
   const hasProductNames = rows.some((row) => Boolean(row.secondaryTitle))
 
   // 向右展開：push the timeline into the right pane so the list (left) and the
@@ -131,6 +160,25 @@ export function MedListCard() {
     // re-sync only when the filtered set changes (not on every rightDetail tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredMedications])
+
+  useEffect(() => {
+    if (view !== 'remaining' || medicationRemainingSummaries.length > 0) return
+    const timer = window.setTimeout(() => setView('list'), 0)
+    return () => window.clearTimeout(timer)
+  }, [medicationRemainingSummaries.length, view])
+
+  const viewRelatedMedication = (
+    summary: MedicationRemainingSummaryEntity,
+    reference: string,
+  ) => {
+    const target = relatedMedicationNavigationTarget(summary, reference)
+    if (!target) return
+    setView('list')
+    setSearchQuery('')
+    window.setTimeout(() => {
+      navigateToResource(target)
+    }, 0)
+  }
 
   useEffect(() => {
     if (!tourActive || !tourStep || ![
@@ -162,7 +210,10 @@ export function MedListCard() {
 
   // Card-level isEmpty: only suppress the whole card when ALL three concerns
   // are empty (otherwise we'd hide allergies just because there's no meds).
-  const isEmpty = rows.length === 0 && vaccines.length === 0 && activeAllergies.length === 0
+  const isEmpty = rows.length === 0
+    && medicationRemainingSummaries.length === 0
+    && vaccines.length === 0
+    && activeAllergies.length === 0
 
   // FeatureCard expects a single isLoading / error pair — combine the two
   // queries pessimistically: any loading → show loading; any error → show
@@ -212,26 +263,41 @@ export function MedListCard() {
         <TabsContent value="medications" className="mt-0 space-y-2 md:space-y-3">
           <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <div className="inline-flex h-[36px] rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
-                {(['list', 'timeline'] as MedView[]).map((v) => (
+              <div className="inline-flex h-[36px] min-w-0 rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
+                {([
+                  'list',
+                  'timeline',
+                  ...(medicationRemainingSummaries.length > 0 ? ['remaining' as const] : []),
+                ] as MedView[]).map((v) => (
                   <button
                     key={v}
                     type="button"
                     data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
-                    onClick={() => setView(v)}
+                    onClick={() => {
+                      setView(v)
+                      setSearchQuery('')
+                    }}
+                    aria-label={v === 'remaining' ? remainingViewLabel : undefined}
                     className={cn(
-                      'h-[30px] rounded-sm px-2 py-0 transition-colors md:h-auto md:px-3 md:py-1',
+                      'h-[30px] min-w-0 rounded-sm px-2 py-0 transition-colors md:h-auto md:px-3 md:py-1',
                       view === v
                         ? 'bg-background text-foreground shadow-sm font-medium'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {v === 'list' ? listLabel : timelineLabel}
+                    {v === 'list' ? listLabel : v === 'timeline' ? timelineLabel : (
+                      <>
+                        <span className="hidden sm:inline">{remainingViewLabel}</span>
+                        <span className="sm:hidden">
+                          {mt.remainingSupplyViewCompact ?? '健保餘藥'}
+                        </span>
+                      </>
+                    )}
                   </button>
                 ))}
               </div>
               {/* 向右展開：時間軸移到右側面板，與左側清單並排（桌機限定） */}
-              {rows.length > 0 && (
+              {rows.length > 0 && view !== 'remaining' && (
                 <button
                   type="button"
                   data-tour="medication-open-right"
@@ -263,7 +329,9 @@ export function MedListCard() {
                 data-lpignore="true"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={mt.searchPlaceholder ?? '搜尋藥名、分類、適應症、機構、日期…'}
+                placeholder={view === 'remaining'
+                  ? (mt.remainingSupplySearchPlaceholder ?? '搜尋 ATC5、同成分同劑型名稱、日期…')
+                  : (mt.searchPlaceholder ?? '搜尋藥名、分類、適應症、機構、日期…')}
                 className="h-[36px] w-full rounded-md border bg-background py-0 pl-7 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 max-md:text-[16px] md:h-auto md:py-1 [&::-webkit-search-cancel-button]:appearance-none"
               />
               {searchQuery && (
@@ -281,31 +349,46 @@ export function MedListCard() {
           {/* Card-level source hint: surfaces only when every row originated
               from a MedicationStatement (typical IPS dataset). Mixed lists
               fall through to the per-row chip rendered inside MedicationItem. */}
-          {sourceMix === 'statement-only' && (
+          {view !== 'remaining' && sourceMix === 'statement-only' && (
             <div className="flex items-start gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[0.6875rem] text-muted-foreground">
               <Info className="h-3.5 w-3.5 shrink-0 mt-[1px]" aria-hidden />
               <span>{sourceHintStatement}</span>
             </div>
           )}
-          {q && filteredRows.length === 0 ? (
+          {q && (
+            view === 'remaining'
+              ? filteredRemainingSupplySummaries.length === 0
+              : filteredRows.length === 0
+          ) ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               {mt.searchNoMatch ?? '無符合的藥物'}
             </div>
-          ) : view === 'list' ? (
-            <MedicationList
-              medications={filteredRows}
-              isLoading={false}
-              error={null}
-              showSourceChip={sourceMix === 'mixed'}
-              sourceChipStatementLabel={sourceChipStatement}
-              sourceChipStatementTooltip={sourceHintStatement}
-              nameMode={nameMode}
-              showNameModeSwitch={hasProductNames}
-              onNameModeChange={setNameMode}
-            />
           ) : (
-            <div data-tour="medication-timeline">
-              <MedicationTimeline medications={filteredMedications} />
+            <div className="space-y-4">
+              {view === 'list' ? (
+                filteredRows.length > 0 && (
+                  <MedicationList
+                    medications={filteredRows}
+                    isLoading={false}
+                    error={null}
+                    showSourceChip={sourceMix === 'mixed'}
+                    sourceChipStatementLabel={sourceChipStatement}
+                    sourceChipStatementTooltip={sourceHintStatement}
+                    nameMode={nameMode}
+                    showNameModeSwitch={hasProductNames}
+                    onNameModeChange={setNameMode}
+                  />
+                )
+              ) : view === 'timeline' ? (
+                <div data-tour="medication-timeline">
+                  <MedicationTimeline medications={filteredMedications} />
+                </div>
+              ) : (
+                <MedicationRemainingSupplyList
+                  summaries={filteredRemainingSupplySummaries}
+                  onViewRelated={viewRelatedMedication}
+                />
+              )}
             </div>
           )}
         </TabsContent>

@@ -14,7 +14,8 @@ export const medicationHistoryCategoryChipClass =
   `${MEDICATION_CATEGORY_CHIP_BASE} max-w-[9rem]`
 
 // Billing ICD shares the same quiet diagnostic role as visit-history ICDs.
-// The common tone is intentionally softer than near-depletion amber.
+// Its sand tone stays restrained; remaining supply uses a separate status
+// palette below so the two fields do not compete.
 export const medicationIcdChipClass =
   `inline-flex h-5 min-w-0 max-w-full items-center gap-1 rounded-sm px-1.5 py-0 text-xs ${clinicalIcdToneClass}`
 
@@ -36,15 +37,12 @@ export function getMedicationDaysLeftBadgeClass(daysRemaining: number) {
     return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_LABEL} border-destructive/35 bg-destructive/10 text-destructive dark:bg-destructive/15`
   }
   if (daysRemaining === 0) {
-    return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_LABEL} border-amber-400 bg-amber-100 text-amber-950 dark:border-amber-500/60 dark:bg-amber-500/20 dark:text-amber-100`
+    return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_LABEL} border-orange-400 bg-orange-100 text-orange-950 dark:border-orange-500/60 dark:bg-orange-500/20 dark:text-orange-100`
   }
   if (daysRemaining <= 3) {
-    return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-amber-400 bg-amber-100 text-amber-950 dark:border-amber-500/60 dark:bg-amber-500/20 dark:text-amber-100`
+    return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-orange-400 bg-orange-100 text-orange-950 dark:border-orange-500/60 dark:bg-orange-500/20 dark:text-orange-100`
   }
-  if (daysRemaining <= 7) {
-    return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200`
-  }
-  return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-border/70 bg-muted/45 text-muted-foreground hover:bg-muted/45 dark:border-border dark:bg-muted/30 dark:text-muted-foreground`
+  return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200`
 }
 
 // Chronic-prescription visual language is shared by the list badge and the
@@ -56,7 +54,7 @@ export const medicationChronicBadgeClass =
 export function getMedicationStatusBadgeClass(status: string) {
   return status.toLowerCase() === "active"
     ? "border-border bg-muted/45 text-foreground/70 dark:bg-muted/30 dark:text-muted-foreground"
-    : "border-border/70 bg-transparent text-muted-foreground"
+    : "border-border/70 bg-muted/25 text-muted-foreground dark:bg-muted/20 dark:text-muted-foreground"
 }
 
 export const medicationChronicSwatchClass =

@@ -628,7 +628,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           </div>
           {hover.bar.frequency && (
             <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
-              {mt.frequencyLabel ?? 'Frequency'}:{' '}
+              {mt.dosageInstructionLabel ?? mt.frequencyLabel ?? 'Dosage instructions'}:{' '}
               <span className="font-semibold text-foreground">{hover.bar.frequency}</span>
             </div>
           )}

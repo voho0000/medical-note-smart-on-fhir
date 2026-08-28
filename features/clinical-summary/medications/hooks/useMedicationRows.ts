@@ -8,11 +8,20 @@ import {
   pickLocalizedText,
   pickByLocale,
 } from '../utils/fhir-helpers'
-import { humanDoseAmount, humanDosageFrequency, buildDetail } from '../utils/dose-helpers'
+import { humanDoseAmount, displayDosageInstruction, buildDetail } from '../utils/dose-helpers'
 import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
+import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
+import {
+  resolveSinglePrescriptionRemainingDisplay,
+} from '../utils/remaining-supply'
+import {
+  MEDCLOUD_ATC_LEVEL_3_URL,
+  MEDCLOUD_SOURCE_DRUG_CLASS_URL,
+  MEDCLOUD_SOURCE_SETTING_URL,
+} from '@/src/shared/constants/medcloud.constants'
 
 /** Keep descriptive drug classes aligned with the UI language. Some bridge
  *  payloads carry a bilingual zh label such as
@@ -36,6 +45,52 @@ function localizedMedicationCategory(concept: any, locale: string): string {
   return raw
     .replace(/\s*[（(][^()（）]*[A-Za-z][^()（）]*[)）]\s*$/, '')
     .trim() || raw
+}
+
+/** MediCloud calls the three-character ATC group "ATC3". In the governed WHO
+ * hierarchy used by the App that same group is level 2 (for example N06).
+ * Requiring the source extension keeps Health Bank rows on their existing
+ * category path while allowing cloud prescriptions to reuse the same UI slot. */
+function localizedMedcloudAtc3Category(medication: any, locale: string): string {
+  const extensions = Array.isArray(medication?.extension)
+    ? medication.extension
+    : []
+
+  // Real IMUE0008 payloads may put the display itself (for example
+  // "甲狀腺治療（Thyroid therapy）") in the field named drug_atc3_code.
+  // The bridge correctly retains that non-code value as a source class
+  // extension, so it is the most faithful category label available.
+  const sourceClass = extensions.find(
+    (extension: any) =>
+      extension?.url === MEDCLOUD_SOURCE_DRUG_CLASS_URL
+      && typeof extension?.valueString === 'string'
+      && extension.valueString.trim(),
+  )
+  if (sourceClass) {
+    return localizedMedicationCategory({ text: sourceClass.valueString }, locale)
+  }
+
+  const sourceAtc3 = extensions.find(
+    (extension: any) => extension?.url === MEDCLOUD_ATC_LEVEL_3_URL,
+  )
+  if (!sourceAtc3) return ''
+
+  const sourceDisplay = sourceAtc3.valueCoding?.display?.trim()
+  if (sourceDisplay) {
+    return localizedMedicationCategory({ text: sourceDisplay }, locale)
+  }
+
+  const sourceCode = sourceAtc3.valueCoding?.code?.trim().toUpperCase()
+  const terminology = medication.drugTerminology ?? medication.atcClassification
+  const resolvedCode = terminology?.atcLevel2Code?.trim().toUpperCase()
+  if (sourceCode && resolvedCode && sourceCode !== resolvedCode) return ''
+
+  const resolvedName = locale === 'en'
+    ? terminology?.atcLevel2NameEn || terminology?.atcLevel2NameZh
+    : terminology?.atcLevel2NameZh || terminology?.atcLevel2NameEn
+  return typeof resolvedName === 'string'
+    ? localizedMedicationCategory({ text: resolvedName }, locale)
+    : ''
 }
 
 export function useMedicationRows(
@@ -142,7 +197,12 @@ export function useMedicationRows(
       // coding without display/text renders per audience — PO for medical
       // staff, 口服 for patients — instead of the raw 26643006.
       const routeSummary = routeDisplayText(dosage?.route, { audience, locale })
-      const frequencySummary = humanDosageFrequency(dosage)
+      const frequencySummary = displayDosageInstruction(dosage)
+      const sourceQuantityValue = med.dispenseRequest?.quantity?.value
+      const totalQuantity =
+        typeof sourceQuantityValue === 'number' && Number.isFinite(sourceQuantityValue)
+          ? sourceQuantityValue
+          : undefined
 
       const detail = buildDetail({
         doseAndRate: dosage?.doseAndRate,
@@ -204,6 +264,11 @@ export function useMedicationRows(
 
       // Inactive = explicitly stopped/completed OR computed endDate has passed
       const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
+      const remainingDisplay = resolveSinglePrescriptionRemainingDisplay(
+        med,
+        daysRemaining,
+        nowMs,
+      )
       // Drug-level chronic: true if any refill of this drug was chronic
       const drugKey = medicationClinicalIdentityKey(med)
       const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
@@ -213,14 +278,24 @@ export function useMedicationRows(
       const firstRefillDate = refillAgg?.firstDate ? formatDate(refillAgg.firstDate) : undefined
 
       // Per-refill metadata that downstream UI surfaces inline.
-      const pharmacy = med?.requester?.display?.trim() || undefined
+      const requesterDisplay = med?.requester?.display?.trim()
+      const sourceSetting = Array.isArray(med?.extension)
+        ? med.extension.find(
+          (extension: any) => extension?.url === MEDCLOUD_SOURCE_SETTING_URL,
+        )?.valueString
+        : undefined
+      const formattedRequesterDisplay = requesterDisplay
+        ? formatOrganizationContextDisplay(requesterDisplay, sourceSetting, locale)
+        : ''
+      const pharmacy = formattedRequesterDisplay || undefined
       // Drug category (e.g. "降血壓藥" / "HYPOTENSIVE AGENTS"). Bridge
       // v0.6.10+ sends both Chinese (text) and English (coding[].display).
       // Follow UI locale, NOT audience — medical professionals on a zh-TW
       // UI still expect 降血壓藥 because category is a descriptor (not a
       // technical pharmacology name like the drug itself).
-      const categoryRaw = localizedMedicationCategory(med?.category?.[0], locale)
-      const category = categoryRaw || undefined
+      const sourceCategory = localizedMedicationCategory(med?.category?.[0], locale)
+      const cloudAtc3Category = localizedMedcloudAtc3Category(med, locale)
+      const category = cloudAtc3Category || sourceCategory || undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
       // ICD descriptions follow UI locale, NOT audience: medical users on a
@@ -245,8 +320,9 @@ export function useMedicationRows(
         cc?.coding?.[0]?.display,                    // 藥名 英文
         cc?.coding?.[0]?.code,                       // NHI 藥碼
         med.medicationReference?.display,            // fallback name
-        med?.category?.[0]?.text,                    // 分類 中文
-        med?.category?.[0]?.coding?.[0]?.display,    // 分類 英文
+        category,                                    // 畫面使用的來源優先分類
+        med?.category?.[0]?.text,                    // 健康存摺分類 中文
+        med?.category?.[0]?.coding?.[0]?.display,    // 健康存摺分類 英文
         drugTerminology?.officialNameZh,             // 官方藥名 中文
         drugTerminology?.officialNameEn,             // 官方藥名 英文
         drugTerminology?.ingredientText,              // 成分
@@ -262,6 +338,8 @@ export function useMedicationRows(
         icdCode,                                     // 診斷 ICD 碼
         pharmacy,                                    // 機構 / 藥局
         frequencySummary,                            // 用法頻次（QD／BID／QDPC…）
+        totalQuantity,                               // 藥品總量
+        remainingDisplay.sourceDays,
         ...dateSearchTokens(startDateRaw),           // 日期 西元 + 民國
         ...dateSearchTokens(refillAgg?.firstDate),
       ].filter(Boolean).join(' ').toLowerCase()
@@ -279,11 +357,17 @@ export function useMedicationRows(
         dose: doseSummary || undefined,
         route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
         frequency: frequencySummary || undefined,
+        totalQuantity,
         startedOn: formatDate(startDateRaw),
         stoppedOn: stopDateRaw ? formatDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? formatDate(endDate) : undefined,
         daysRemaining,
+        displayRemainingDays: remainingDisplay.displayDays,
+        displayRemainingSource: remainingDisplay.displaySource,
+        singlePrescriptionRemainingDays: remainingDisplay.sourceDays,
+        singlePrescriptionRemainingCapturedAt: remainingDisplay.capturedAt,
+        singlePrescriptionRemainingIsCurrent: remainingDisplay.isCurrent,
         isInactive,
         isChronic,
         category,

@@ -1,5 +1,9 @@
 import { renderHook } from '@testing-library/react'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
+import {
+  MEDCLOUD_ATC_LEVEL_3_URL,
+  MEDCLOUD_SOURCE_DRUG_CLASS_URL,
+} from '@/src/shared/constants/medcloud.constants'
 
 const medication = {
   resourceType: 'MedicationRequest',
@@ -80,6 +84,97 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     expect(zh.result.current[0].category).toBe('痰液溶解劑')
     expect(en.result.current[0].category).toBe('MUCOLYTIC AGENTS')
     expect(zh.result.current[0].searchHaystack).toContain('mucolytic agents')
+  })
+
+  it('uses the MediCloud ATC3 group in the existing category slot', () => {
+    const cloudMedication = {
+      ...medication,
+      extension: [{
+        url: MEDCLOUD_ATC_LEVEL_3_URL,
+        valueCoding: { system: 'http://www.whocc.no/atc', code: 'N06' },
+      }],
+      drugTerminology: {
+        ...medication.drugTerminology,
+        atcLevel2Code: 'N06',
+        atcLevel2NameZh: '精神興奮劑',
+        atcLevel2NameEn: 'PSYCHOANALEPTICS',
+      },
+    }
+
+    const zh = renderHook(() =>
+      useMedicationRows([cloudMedication], 'medical', 'zh-TW'),
+    )
+    const en = renderHook(() =>
+      useMedicationRows([cloudMedication], 'medical', 'en'),
+    )
+
+    expect(zh.result.current[0].category).toBe('精神興奮劑')
+    expect(en.result.current[0].category).toBe('PSYCHOANALEPTICS')
+    expect(zh.result.current[0].searchHaystack).toContain('精神興奮劑')
+  })
+
+  it('uses the source ATC3 name when MediCloud carries a display instead of a code', () => {
+    const cloudMedication = {
+      ...medication,
+      extension: [{
+        url: MEDCLOUD_SOURCE_DRUG_CLASS_URL,
+        valueString: '甲狀腺治療（Thyroid therapy）',
+      }],
+      drugTerminology: {
+        ...medication.drugTerminology,
+        atcLevel2Code: 'H03',
+        atcLevel2NameZh: 'APP 翻譯分類',
+      },
+    }
+
+    const zh = renderHook(() =>
+      useMedicationRows([cloudMedication], 'medical', 'zh-TW'),
+    )
+    const en = renderHook(() =>
+      useMedicationRows([cloudMedication], 'medical', 'en'),
+    )
+
+    expect(zh.result.current[0].category).toBe('甲狀腺治療')
+    expect(en.result.current[0].category).toBe('Thyroid therapy')
+  })
+
+  it('shows only the institution name from a legacy requester display', () => {
+    const legacyRequester = {
+      ...medication,
+      requester: { display: '新北市聯合醫院;門診;0131020016' },
+    }
+    const codeOnlyRequester = {
+      ...medication,
+      id: 'mr-code-only',
+      requester: { display: '0131020016' },
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([legacyRequester, codeOnlyRequester], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current.find((row) => row.id === 'mr-1')?.pharmacy)
+      .toBe('新北市聯合醫院 門診')
+    expect(result.current.find((row) => row.id === 'mr-code-only')?.pharmacy)
+      .toBeUndefined()
+  })
+
+  it('adds the structured MediCloud care setting to a name-only requester', () => {
+    const cloudRequester = {
+      ...medication,
+      requester: { display: '新北市聯合醫院' },
+      extension: [{
+        url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-setting',
+        valueString: '住院',
+      }],
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([cloudRequester], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0].pharmacy).toBe('新北市聯合醫院 住院')
+    expect(result.current[0].searchHaystack).not.toContain('0131020016')
   })
 
   it('does not replace a zh-TW patient source name with an English-only enrichment', () => {
@@ -166,8 +261,22 @@ describe('useMedicationRows — official NHI terminology view model', () => {
       useMedicationRows([sourceSig], 'medical', 'zh-TW'),
     )
 
-    expect(result.current[0].frequency).toBe('QDPC')
+    expect(result.current[0].frequency).toBe('1 tablet QDPC')
     expect(result.current[0].searchHaystack).toContain('qdpc')
+  })
+
+  it('keeps an unsupported source dosage instruction visible', () => {
+    const localInstruction = {
+      ...medication,
+      dosageInstruction: [{ text: 'HOSPITAL-LOCAL-SIG' }],
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([localInstruction], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0].frequency).toBe('HOSPITAL-LOCAL-SIG')
+    expect(result.current[0].searchHaystack).toContain('hospital-local-sig')
   })
 
   it('combines a structured frequency with its after-meal timing', () => {
@@ -186,5 +295,26 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     )
 
     expect(result.current[0].frequency).toBe('BIDPC')
+  })
+
+  it('maps structured dispense quantity and days into separate row facts', () => {
+    const cloudPrescription = {
+      ...medication,
+      dosageInstruction: [{ text: 'QOD' }],
+      dispenseRequest: {
+        quantity: { value: 15 },
+        expectedSupplyDuration: { value: 30, unit: 'days', code: 'd' },
+      },
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([cloudPrescription], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0]).toMatchObject({
+      frequency: 'QOD',
+      totalQuantity: 15,
+      durationDays: 30,
+    })
   })
 })

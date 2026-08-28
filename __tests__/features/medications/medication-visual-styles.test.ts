@@ -57,25 +57,32 @@ describe('medication status visual language', () => {
     expect(medicationFutureTimelineSwatchClass).toContain('border-dashed')
   })
 
-  it('keeps routine supply metadata quiet and escalates only near depletion', () => {
-    expect(getMedicationDaysLeftBadgeClass(20)).toContain('bg-muted/45')
+  it('uses pale blue from day four onward and escalates only near depletion', () => {
+    expect(getMedicationDaysLeftBadgeClass(20)).toContain('bg-sky-50')
+    expect(getMedicationDaysLeftBadgeClass(20)).not.toContain('bg-muted/45')
     expect(getMedicationDaysLeftBadgeClass(20)).toContain('w-full')
     expect(getMedicationDaysLeftBadgeClass(20)).toContain('min-w-0')
     expect(getMedicationDaysLeftBadgeClass(20)).toContain('max-w-none')
+    expect(getMedicationDaysLeftBadgeClass(8)).toContain('bg-sky-50')
     expect(getMedicationDaysLeftBadgeClass(7)).toContain('w-full')
-    expect(getMedicationDaysLeftBadgeClass(7)).toContain('bg-amber-50')
+    expect(getMedicationDaysLeftBadgeClass(7)).toContain('bg-sky-50')
+    expect(getMedicationDaysLeftBadgeClass(4)).toContain('bg-sky-50')
     expect(getMedicationDaysLeftBadgeClass(3)).toContain('w-full')
-    expect(getMedicationDaysLeftBadgeClass(3)).toContain('bg-amber-100')
+    expect(getMedicationDaysLeftBadgeClass(3)).toContain('bg-orange-100')
     expect(getMedicationDaysLeftBadgeClass(0)).toContain('justify-center')
+    expect(getMedicationDaysLeftBadgeClass(0)).toContain('bg-orange-100')
     expect(getMedicationDaysLeftBadgeClass(-1)).toContain('text-destructive')
   })
 
   it('keeps routine active status neutral so it does not compete with chronic type', () => {
     expect(getMedicationStatusBadgeClass('active')).toContain('bg-muted')
     expect(getMedicationStatusBadgeClass('active')).not.toMatch(/sky|violet|purple/)
+    expect(getMedicationStatusBadgeClass('ended')).toContain('bg-muted/25')
+    expect(getMedicationStatusBadgeClass('ended')).toContain('text-muted-foreground')
+    expect(getMedicationStatusBadgeClass('ended')).not.toMatch(/destructive|red-/)
   })
 
-  it('shares the restrained diagnosis tone used by visit-history ICDs', () => {
+  it('restores the restrained diagnosis tone used by visit-history ICDs', () => {
     expect(medicationIcdChipClass).toContain(clinicalIcdToneClass)
     expect(medicationIcdCodeClass).toContain(clinicalIcdCodeToneClass)
     expect(medicationIcdDescriptionClass).toContain(clinicalIcdDescriptionToneClass)

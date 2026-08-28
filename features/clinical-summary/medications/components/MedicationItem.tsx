@@ -1,19 +1,17 @@
 // Medication Item Component — a dense, container-responsive three-lane row.
-// Wide: identity/schedule | category/ICD | supply/refills (two lines total).
-// Narrow: identity + supply stay first; clinical metadata moves below instead
-// of being clipped, so the same row remains usable inside the right pane.
+// Wide: medication/prescription | source/classification | status/refills.
+// Each lane has two aligned lines; narrow containers keep the same information
+// order while allowing source/diagnosis context to use a full-width line.
 //
 // Container-query thresholds are in **px**, not rem: the app's root font-size
 // is 12px, so a rem threshold silently shifts with the reader's font-size
 // setting. The values are the ones the three-lane layout has always used in
 // practice (312/336/384/456), now stated literally.
 //
-// The identity lane is ~151px on a 375pt phone, and a full
-// "start → end (N 天) · institution" needs ~205px — that overflow is what used
-// to make the date overprint the pharmacy. Rather than spend a third line on
-// it (which costs roughly a third of the medications visible per screen), the
-// end date folds away below DATE_RANGE_END_MIN_WIDTH; see there for why that
-// is safe.
+// The title keeps the route beside the medication name. Its second line reads
+// coverage dates (supply days) → dose → frequency → total quantity. The
+// middle lane pairs diagnosis above institution, ATC3, and prescription state.
+import type { ReactNode } from 'react'
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
@@ -21,6 +19,7 @@ import { clinicalTooltipSurfaceClass } from "@/features/clinical-summary/compone
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
+import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDate as formatCalendarDate } from "@/src/shared/utils/date.utils"
 import type { MedicationExecutionPeriod, MedicationNameMode, MedicationRow } from '../types'
@@ -53,17 +52,39 @@ interface MedicationItemProps {
   /** Removes the individual card boundary when rows live in a shared list
    *  frame. The internal three-lane information grid stays identical. */
   grouped?: boolean
+  /** Optional full-height leading action, used to reveal this current drug's
+   *  older prescriptions without duplicating it in the history section. */
+  leadingControl?: ReactNode
+  /** Runs only after this exact medication row claims a resource-navigation
+   *  request, so a parent can open refill details without racing consumption. */
+  onResourceNavigationMatch?: (
+    sequence: number,
+    target: ResourceNavTarget,
+  ) => void
+  /** Additional MedicationRequest ids represented by this row, such as older
+   *  fills hidden inside its refill-history toggle. */
+  resourceNavigationIds?: string[]
 }
 
 function getStatusBadge(medication: MedicationRow, mt: any) {
   if (medication.isInactive) {
-    return { label: medication.status === 'active' ? (mt.statusEnded ?? 'ended') : medication.status, variant: 'secondary' as const }
+    return { label: mt.statusEnded ?? 'ended', variant: 'secondary' as const }
   }
-  if (medication.daysRemaining !== undefined) {
-    if (medication.daysRemaining <= 0) {
+  const remainingDays = medication.displayRemainingDays ?? medication.daysRemaining
+  if (remainingDays !== undefined) {
+    if (remainingDays < 0 && medication.displayRemainingSource !== 'cloud-single') {
+      return { label: mt.statusOverdue ?? 'overdue', variant: 'outline' as const }
+    }
+    if (remainingDays === 0 && medication.displayRemainingSource !== 'cloud-single') {
       return { label: mt.statusEndingToday ?? 'ending today', variant: 'outline' as const }
     }
-    return { label: (mt.daysLeft ?? '{n}d left').replace('{n}', String(medication.daysRemaining)), variant: 'default' as const }
+    const template = medication.displayRemainingSource === 'cloud-single'
+      ? (mt.singlePrescriptionRemainingCompact ?? mt.daysLeft ?? '{n} days left')
+      : (mt.appEstimatedDaysLeft ?? mt.daysLeft ?? '{n} days left')
+    return {
+      label: template.replace('{n}', String(remainingDays)),
+      variant: 'default' as const,
+    }
   }
   return { label: medication.status, variant: 'default' as const }
 }
@@ -87,15 +108,6 @@ function sourceCalendarDate(value: string, locale: string): string {
   }).format(new Date(Number(year), Number(month) - 1, Number(day)))
 }
 
-/** Container width at which the identity lane can hold a full date RANGE
- *  alongside the institution. Below it the end date folds away — see the
- *  schedule builder for the conditions that make that lossless. */
-const DATE_RANGE_END_CLASS = 'hidden @min-[416px]:inline'
-
-function Sep() {
-  return <span className="text-muted-foreground/40 select-none" aria-hidden>·</span>
-}
-
 export function MedicationItem({
   medication,
   showSourceChip = false,
@@ -104,6 +116,9 @@ export function MedicationItem({
   executionPeriods,
   nameMode = 'ingredient',
   grouped = false,
+  leadingControl,
+  onResourceNavigationMatch,
+  resourceNavigationIds,
 }: MedicationItemProps) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
@@ -126,35 +141,35 @@ export function MedicationItem({
     nameMode === 'product' && medication.secondaryTitle
       ? medication.secondaryTitle
       : medication.title
-  const hasDaysRemaining = medication.daysRemaining !== undefined
-  const isActivePastSupplyEnd =
-    medication.isInactive &&
-    medication.status === 'active' &&
-    hasDaysRemaining &&
-    medication.daysRemaining! < 0
+  const displayedRemainingDays = medication.displayRemainingDays ?? medication.daysRemaining
   const showDaysLeftIndicator =
-    hasDaysRemaining && (!medication.isInactive || isActivePastSupplyEnd)
+    displayedRemainingDays !== undefined && !medication.isInactive
+  const frequencyTitle = medication.frequency
+    ? `${mt.dosageInstructionLabel ?? mt.frequencyLabel ?? '用法用量'}：${medication.frequency}`
+    : undefined
+  const routeTitle = medication.route
+    ? `${mt.routeLabel ?? '途徑'}：${medication.route}`
+    : undefined
 
-  // The left metadata lane is deliberately ordered by clinical scanning
-  // priority: source-recorded frequency, coverage dates, source institution,
-  // then dose/route. Frequency must not disappear at routine panel widths.
-  // All optional values collapse without moving the ICD or supply columns.
-  const scheduleParts: React.ReactNode[] = []
+  // The prescription lane follows the agreed scan order: coverage window,
+  // dose, frequency, then dispensed quantity. The coverage date is the flexible
+  // segment that yields space first when the middle column narrows.
+  const scheduleParts: Array<{
+    key: string
+    node: React.ReactNode
+    fixed: boolean
+  }> = []
 
-  if (medication.frequency) {
-    const frequencyTitle = `${mt.frequencyLabel ?? 'Frequency'}：${medication.frequency}`
-    scheduleParts.push(
-      <span
-        key="freq"
-        data-medication-frequency
-        aria-label={frequencyTitle}
-        title={frequencyTitle}
-        className="shrink-0 font-semibold text-foreground/80"
-      >
-        {medication.frequency}
-      </span>,
-    )
-  }
+  const formatCompactNumber = (value: number): string =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value)
+
+  const durationLabel = medication.durationDays !== undefined
+    ? (mt.durationCompact ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d'))
+      .replace('{n}', formatCompactNumber(medication.durationDays))
+    : ''
+  const durationSuffix = durationLabel
+    ? (locale.startsWith('zh') ? `（${durationLabel}）` : ` (${durationLabel})`)
+    : ''
 
   const normalizedExecutionPeriods = (executionPeriods ?? [])
     .filter((period) => period.start || period.end)
@@ -178,73 +193,101 @@ export function MedicationItem({
       return `${start}–${end}`
     }).filter(Boolean)
     const executionLabel = `${mt.executionPeriod ?? '執行'} ${periodLabels.join('、')}`
-    scheduleParts.push(
-      <span key="execution-period" className="truncate" title={executionLabel}>
-        {executionLabel}
-      </span>,
-    )
+    const executionTitle = `${executionLabel}${durationSuffix}`
+    scheduleParts.push({
+      key: 'execution-period',
+      fixed: false,
+      node: (
+        <span className="block min-w-0 truncate" title={executionTitle}>
+          {executionLabel}
+          {durationSuffix && (
+            <span data-medication-supply-days className="tabular-nums">
+              {durationSuffix}
+            </span>
+          )}
+        </span>
+      ),
+    })
   } else {
-    // Generic medication list: prefer "start → end" for active and
-    // "ended end" for inactive. Inpatient execution dates use the branch
-    // above because their source semantics are different from supply coverage.
+    // Generic medication list: keep supply days attached to the coverage
+    // window. Inpatient execution dates use the branch above because they are
+    // administration windows, not supply coverage.
     const startShort = shortDate(medication.startedOn)
     const endShort = shortDate(medication.endDate)
     if (startShort || endShort) {
-      const durationTemplate = mt.durationCompact
-        ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d')
-      const durationLabel = medication.durationDays && !medication.isInactive
-        ? durationTemplate.replace('{n}', String(medication.durationDays))
-        : ''
+      const dateLabel = startShort && endShort
+        ? `${startShort} → ${endShort}`
+        : (startShort || endShort)
+      const dateTitle = `${dateLabel}${durationSuffix}`
 
-      let leadLabel: string
-      let rangeEnd = ''
-      if (medication.isInactive && endShort) {
-        leadLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
-      } else if (startShort && endShort) {
-        leadLabel = startShort
-        rangeEnd = ` → ${endShort}`
-      } else {
-        leadLabel = startShort || endShort
-      }
-      const durationSuffix = durationLabel ? ` (${durationLabel})` : ''
-      const dateLabel = `${leadLabel}${rangeEnd}${durationSuffix}`
-
-      // Folding the end date is only lossless when the duration is there to
-      // rebuild it: start + N 天 gives the same window, and the 「剩 N 天」 badge
-      // beside it already carries the part a clinician acts on. Without a
-      // duration the end date IS the coverage information, so it stays put and
-      // the row truncates instead. Inactive rows lead with the end date and
-      // never reach this branch.
-      const foldsEndDate = Boolean(rangeEnd && durationLabel)
-
-      scheduleParts.push(
-        <span key="date" data-testid="medication-schedule-date" className="min-w-0 truncate" title={dateLabel}>
-          {leadLabel}
-          {rangeEnd ? (
-            <span className={foldsEndDate ? DATE_RANGE_END_CLASS : undefined}>{rangeEnd}</span>
-          ) : null}
-          {durationSuffix}
-        </span>,
-      )
+      scheduleParts.push({
+        key: 'date',
+        fixed: false,
+        node: (
+          <span
+            data-testid="medication-schedule-date"
+            className="block min-w-0 truncate tabular-nums"
+            title={dateTitle}
+          >
+            {dateLabel}
+            {durationSuffix && (
+              <span data-medication-supply-days>{durationSuffix}</span>
+            )}
+          </span>
+        ),
+      })
+    } else if (durationLabel) {
+      scheduleParts.push({
+        key: 'duration',
+        fixed: true,
+        node: (
+          <span data-medication-supply-days className="tabular-nums">
+            {durationLabel}
+          </span>
+        ),
+      })
     }
   }
 
-  if (medication.pharmacy) {
-    scheduleParts.push(
-      <span
-        key="pharm"
-        title={medication.pharmacy}
-        className={cn(
-          "inline-flex h-5 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
-          CLINICAL_SOURCE_TONE,
-        )}
-      >
-        <span className="truncate">{medication.pharmacy}</span>
-      </span>
-    )
+  if (medication.dose) {
+    scheduleParts.push({
+      key: 'dose',
+      fixed: true,
+      node: <span>{medication.dose}</span>,
+    })
   }
-  if (medication.dose) scheduleParts.push(<span key="dose">{medication.dose}</span>)
-  if (medication.route) scheduleParts.push(<span key="route">{medication.route}</span>)
+
+  if (medication.frequency && frequencyTitle) {
+    scheduleParts.push({
+      key: 'frequency',
+      fixed: true,
+      node: (
+        <span
+          data-medication-frequency
+          aria-label={frequencyTitle}
+          title={frequencyTitle}
+          className="font-normal text-muted-foreground"
+        >
+          {medication.frequency}
+        </span>
+      ),
+    })
+  }
+
+  if (medication.totalQuantity !== undefined) {
+    const quantityLabel = (mt.totalQuantityCompact
+      ?? (locale.startsWith('zh') ? '總量 {n}' : 'Total {n}'))
+      .replace('{n}', formatCompactNumber(medication.totalQuantity))
+    scheduleParts.push({
+      key: 'total-quantity',
+      fixed: true,
+      node: (
+        <span data-medication-total-quantity className="tabular-nums">
+          {quantityLabel}
+        </span>
+      ),
+    })
+  }
   const firstRefillDate = shortDate(medication.firstRefillDate)
   const refillSummary = medication.refillCount > 1
     ? (firstRefillDate
@@ -267,7 +310,8 @@ export function MedicationItem({
   // MedicationStatement, so this row answers to both.
   const anchorRef = useResourceAnchor(
     ['MedicationRequest', 'MedicationStatement'],
-    medication.id,
+    resourceNavigationIds ?? medication.id,
+    onResourceNavigationMatch,
   )
 
   return (
@@ -275,15 +319,24 @@ export function MedicationItem({
       ref={anchorRef}
       data-medication-row-layout="three-lane"
       className={cn(
-        "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden px-3 py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
           ? "rounded-none border-0 bg-transparent"
           : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
       )}
     >
-      {/* Identity lane: medication on top, coverage/source underneath. */}
-      <div data-medication-cell="identity" className="min-w-0 overflow-hidden">
-        <div className="flex h-5 min-w-0 items-center">
+      {leadingControl && (
+        <div className="absolute inset-y-0 left-0 flex w-9 items-stretch">
+          {leadingControl}
+        </div>
+      )}
+      {/* Medication/prescription lane: drug + route, then the full regimen. */}
+      <div
+        data-medication-cell="identity"
+        className="min-w-0 overflow-hidden @max-[455px]:contents"
+      >
+        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center">
           <MedicationTerminologyTooltip medication={medication} enabled>
             <span
               className={cn(
@@ -300,81 +353,64 @@ export function MedicationItem({
               </span>
             </span>
           </MedicationTerminologyTooltip>
+          {medication.route && routeTitle ? (
+            <span
+              data-medication-route
+              aria-label={routeTitle}
+              title={routeTitle}
+              className="ml-2 shrink-0 text-[0.6875rem] font-semibold text-foreground/80"
+            >
+              {medication.route}
+            </span>
+          ) : null}
         </div>
 
         <div
           data-medication-schedule
-          className="flex h-5 min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground"
+          className="col-span-2 col-start-1 row-start-3 flex h-5 min-w-0 items-center overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-3 @min-[312px]:row-start-2"
         >
-          {scheduleParts.map((node, i) => (
-            <span key={i} className="inline-flex min-w-0 items-center gap-x-1">
-              {i > 0 && <Sep />}
-              {node}
+          {scheduleParts.map((part, index) => (
+            <span
+              key={part.key}
+              className={cn(
+                "inline-flex min-w-0 items-center",
+                part.fixed ? "shrink-0" : "shrink",
+              )}
+            >
+              {index > 0 && (
+                <span
+                  aria-hidden
+                  data-medication-frequency-total-gap={
+                    part.key === 'total-quantity'
+                    && scheduleParts[index - 1]?.key === 'frequency'
+                      ? 'true'
+                      : undefined
+                  }
+                  className="whitespace-pre"
+                >
+                  {part.key === 'total-quantity'
+                    && scheduleParts[index - 1]?.key === 'frequency'
+                    ? '  '
+                    : ' '}
+                </span>
+              )}
+              {part.node}
             </span>
           ))}
         </div>
       </div>
 
-      {/* Clinical lane: stable tag rail above a quiet, borderless ICD line.
-          On narrow containers it drops below the identity/status pair; once
-          the panel reaches 26rem it becomes a compact middle column, then
-          gains space progressively at 28rem, 32rem, and 38rem. */}
+      {/* Diagnosis/classification lane: ICD above institution, source ATC3,
+          and prescription-state tags. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1 @min-[312px]:h-10 @min-[312px]:grid-cols-1 @min-[312px]:grid-rows-2 @min-[312px]:gap-x-0"
+        className="col-span-2 row-start-2 grid h-10 min-w-0 grid-rows-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
       >
-        <div className="col-start-2 row-start-1 flex h-5 min-w-0 items-center justify-end gap-1 overflow-hidden @min-[312px]:col-start-1 @min-[312px]:justify-start">
-          {medication.category && (
-            <span
-              title={medication.category}
-              className={medicationCategoryChipClass}
-            >
-              {medication.category}
-            </span>
-          )}
-          {/* Keep one natural-width chronic-prescription slot on every row.
-              Hiding (rather than removing) the badge prevents the category
-              column from drifting horizontally between chronic and acute
-              medications, while still adapting to the localized label. */}
-          <span
-            data-medication-chronic-slot
-            data-visible={medication.isChronic ? 'true' : 'false'}
-            aria-hidden={medication.isChronic ? undefined : true}
-            title={medication.isChronic
-              ? (mt.chronicTooltip ?? 'Continuous long term therapy')
-              : undefined}
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[0.625rem] font-medium",
-              medicationChronicBadgeClass,
-              !medication.isChronic && "invisible",
-            )}
-          >
-            {chronicLabel}
-          </span>
-          {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
-              the SAME institution is still inside its window and was folded
-              into this row (one continuing prescription). Cross-institution
-              same-drug rows are never merged — that would mask a potential
-              duplicate-therapy signal. */}
-          {(medication.overlapCount ?? 0) > 0 && (
-            <span
-              title={mt.renewedTooltip ?? 'Previous fill from the same institution still in window; showing the latest fill of one continuing prescription.'}
-              className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/50 px-1.5 py-0 text-[0.625rem] font-medium text-muted-foreground"
-            >
-              {mt.renewed ?? '已續領'}
-            </span>
-          )}
-          {showStatementChip && (
-            <span
-              title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
-              className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
-            >
-              {sourceChipStatementLabel ?? '目前服用'}
-            </span>
-          )}
-        </div>
-
-        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center overflow-hidden @min-[312px]:row-start-2">
+        <div
+          data-medication-context
+          data-medication-diagnosis
+          className="row-start-1 flex h-5 min-w-0 items-center overflow-hidden whitespace-nowrap"
+        >
           {isMedical && medication.icdCode && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -403,6 +439,65 @@ export function MedicationItem({
             </Tooltip>
           )}
         </div>
+
+        <div
+          data-medication-classification
+          className="row-start-2 flex h-5 min-w-0 items-center gap-1 overflow-hidden"
+        >
+          {medication.pharmacy && (
+            <span
+              title={medication.pharmacy}
+              className={cn(
+                "inline-flex h-5 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
+                CLINICAL_SOURCE_TONE,
+              )}
+            >
+              <span className="truncate">{medication.pharmacy}</span>
+            </span>
+          )}
+          {medication.category && (
+            <span
+              title={medication.category}
+              className={cn(medicationCategoryChipClass, "shrink")}
+            >
+              {medication.category}
+            </span>
+          )}
+          {medication.isChronic && (
+            <span
+              data-medication-chronic-slot
+              data-visible="true"
+              title={mt.chronicTooltip ?? 'Continuous long term therapy'}
+              className={cn(
+                "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[0.625rem] font-medium",
+                medicationChronicBadgeClass,
+              )}
+            >
+              {chronicLabel}
+            </span>
+          )}
+          {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
+              the SAME institution is still inside its window and was folded
+              into this row (one continuing prescription). Cross-institution
+              same-drug rows are never merged — that would mask a potential
+              duplicate-therapy signal. */}
+          {(medication.overlapCount ?? 0) > 0 && (
+            <span
+              title={mt.renewedTooltip ?? 'Previous fill from the same institution still in window; showing the latest fill of one continuing prescription.'}
+              className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/50 px-1.5 py-0 text-[0.625rem] font-medium text-muted-foreground"
+            >
+              {mt.renewed ?? '已續領'}
+            </span>
+          )}
+          {showStatementChip && (
+            <span
+              title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
+              className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
+            >
+              {sourceChipStatementLabel ?? '目前服用'}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Supply lane: a fixed-width status/readout pair. Keeping both values
@@ -418,8 +513,10 @@ export function MedicationItem({
             className={cn(
               "h-5 w-full min-w-0 shrink-0 justify-center overflow-hidden px-1 py-0 text-[0.625rem]",
               showDaysLeftIndicator
-                ? getMedicationDaysLeftBadgeClass(medication.daysRemaining!)
-                : getMedicationStatusBadgeClass(medication.status),
+                ? getMedicationDaysLeftBadgeClass(displayedRemainingDays!)
+                : getMedicationStatusBadgeClass(
+                    medication.isInactive ? 'ended' : medication.status,
+                  ),
             )}
           >
             <span className="truncate">{badge.label}</span>

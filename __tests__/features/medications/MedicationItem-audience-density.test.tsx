@@ -14,11 +14,19 @@ jest.mock('@/src/application/providers/language.provider', () => ({
     t: {
       medications: {
         daysLeft: '剩 {n} 天',
+        statusEnded: '已結束',
+        statusEndingToday: '今日到期',
+        statusOverdue: '已逾期',
+        singlePrescriptionRemainingCompact: '剩 {n} 天',
         executionPeriod: '執行',
         durationCompact: '{n} 天',
+        totalQuantityCompact: '總量 {n}',
+        supplyDaysCompact: '天數 {n}',
         refillSummary: '累計 {count} 次',
         refillSummarySince: '累計 {count} 次 · {date} 起',
         frequencyLabel: '頻次',
+        dosageInstructionLabel: '用法用量',
+        routeLabel: '途徑',
         terminologySource: '健保署藥品主檔補充',
         terminologyIngredientLabel: '成分／含量',
         terminologyOfficialNameZhLabel: '中文品名',
@@ -128,11 +136,15 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(within(tooltip).getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
     expect(within(tooltip).getByText(/健保署藥品主檔補充/)).toBeInTheDocument()
     const scheduleLine = container.querySelector('[data-medication-schedule]')
+    const contextLine = container.querySelector('[data-medication-context]')
+    const classificationLine = container.querySelector('[data-medication-classification]')
     const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
     const supplyLane = container.querySelector('[data-medication-cell="supply"]')
     expect(scheduleLine).not.toHaveTextContent('R05CB01')
-    expect(scheduleLine).toHaveTextContent('2026/7/22 → 2026/8/12 (21 天)')
-    expect(scheduleLine).toHaveTextContent('長庚嘉義')
+    expect(scheduleLine).toHaveTextContent('2026/7/22 → 2026/8/12（21 天）')
+    expect(scheduleLine).not.toHaveTextContent('長庚嘉義')
+    expect(contextLine).not.toHaveTextContent('長庚嘉義')
+    expect(classificationLine).toHaveTextContent('長庚嘉義')
     expect(clinicalLane).not.toHaveTextContent('R05CB01')
     expect(supplyLane).toHaveTextContent('累計 15 次')
     expect(screen.getByText('累計 15 次 · 2025/1/29 起').parentElement)
@@ -207,19 +219,69 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(badge.parentElement).toHaveClass('w-full')
   })
 
-  it('keeps the source frequency first in the compact schedule line', () => {
+  it('shows a current zero-day cloud calculation without treating zero as missing', () => {
+    const medication = {
+      ...medicationRow('ACETYLCYSTEINE 600 MG'),
+      daysRemaining: 2,
+      displayRemainingDays: 0,
+      displayRemainingSource: 'cloud-single' as const,
+      singlePrescriptionRemainingDays: 0,
+      singlePrescriptionRemainingCapturedAt: '2026-08-28T10:00:00+08:00',
+      singlePrescriptionRemainingIsCurrent: true,
+    }
+
+    render(<MedicationItem medication={medication} />)
+
+    expect(screen.getByText('剩 0 天')).toBeInTheDocument()
+    expect(screen.queryByText(/單筆餘藥日數試算/)).not.toBeInTheDocument()
+  })
+
+  it('keeps ended history neutral even when its calculated supply is past due', () => {
+    const medication = {
+      ...medicationRow('AMOXICILLIN 500 MG'),
+      isInactive: true,
+      daysRemaining: -5,
+    }
+
+    render(<MedicationItem medication={medication} />)
+
+    const badge = screen.getByText('已結束').parentElement
+    expect(badge).toHaveClass('bg-muted/25', 'text-muted-foreground')
+    expect(badge).not.toHaveClass('bg-destructive/10', 'text-destructive')
+  })
+
+  it('uses the overdue label and red tone only for a still-active past-due row', () => {
+    const medication = {
+      ...medicationRow('AMOXICILLIN 500 MG'),
+      daysRemaining: -5,
+    }
+
+    render(<MedicationItem medication={medication} />)
+
+    const badge = screen.getByText('已逾期').parentElement
+    expect(badge).toHaveClass('bg-destructive/10', 'text-destructive')
+  })
+
+  it('shows route beside the medication name and frequency in the prescription lane', () => {
     mockAudience = 'medical'
     const medication = {
       ...medicationRow('ACETYLCYSTEINE 600 MG'),
       frequency: 'QDPC',
+      route: 'PO',
     }
     const { container } = render(<MedicationItem medication={medication} />)
 
     const scheduleLine = container.querySelector<HTMLElement>('[data-medication-schedule]')
     const frequency = container.querySelector<HTMLElement>('[data-medication-frequency]')
+    const route = container.querySelector<HTMLElement>('[data-medication-route]')
     expect(frequency).toHaveTextContent('QDPC')
-    expect(frequency).toHaveAttribute('aria-label', '頻次：QDPC')
-    expect(scheduleLine?.firstElementChild).toContainElement(frequency)
+    expect(frequency).toHaveAttribute('aria-label', '用法用量：QDPC')
+    expect(scheduleLine).toContainElement(frequency)
+    expect(route).toHaveTextContent('PO')
+    expect(route).toHaveAttribute('aria-label', '途徑：PO')
+    expect(route?.parentElement).toBe(
+      container.querySelector('[data-medication-cell="identity"]')?.firstElementChild,
+    )
   })
 
   it('drops the individual card boundary inside a grouped medication surface', () => {
@@ -233,7 +295,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(row).not.toHaveClass('rounded-md', 'bg-muted/40')
   })
 
-  it('reserves the localized chronic-badge width when a row is not chronic', () => {
+  it('does not reserve an invisible chronic badge when a row is not chronic', () => {
     mockAudience = 'medical'
     const medication = {
       ...medicationRow(
@@ -246,58 +308,92 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const { container } = render(<MedicationItem medication={medication} />)
 
     const chronicSlot = container.querySelector('[data-medication-chronic-slot]')
-    expect(chronicSlot).toHaveAttribute('data-visible', 'false')
-    expect(chronicSlot).toHaveAttribute('aria-hidden', 'true')
-    expect(chronicSlot).toHaveClass('invisible', 'shrink-0')
-    expect(chronicSlot).toHaveTextContent('慢箋')
+    expect(chronicSlot).toBeNull()
     expect(screen.getByText('縮瞳劑')).toBeInTheDocument()
   })
 
-  describe('narrow-row date folding', () => {
-    // A 375pt phone gives the identity lane ~151px, and the full
-    // "start → end (N 天) · institution" needs ~205px. Rather than spend a
-    // third line on it — which cuts roughly a third of the medications visible
-    // per screen — the end date folds away, but ONLY where it can be rebuilt.
+  describe('compact supply summary', () => {
     const dateText = () =>
       screen.getByTestId('medication-schedule-date')
 
-    it('folds the end date behind a container query when the duration can rebuild it', () => {
+    it('puts route with the name and the complete prescription in the left lane', () => {
       mockAudience = 'medical'
-      render(<MedicationItem medication={medicationRow('AMOXICILLIN 500 MG')} />)
+      const medication = {
+        ...medicationRow('LEVOTHYROXINE SODIUM 0.05 MG'),
+        frequency: 'QOD',
+        totalQuantity: 15,
+        durationDays: 30,
+        startedOn: '2026/8/5',
+        endDate: '2026/9/4',
+        pharmacy: '新北市聯合醫院',
+        dose: '1 錠',
+        route: 'PO',
+      }
+      const { container } = render(<MedicationItem medication={medication} />)
 
-      const foldable = within(dateText()).getByText(/→/)
-      expect(foldable).toHaveClass('hidden', '@min-[416px]:inline')
-      // The start and the duration stay unconditionally — together they are the
-      // same coverage window the range expressed.
-      expect(dateText()).toHaveTextContent('2026/7/22')
-      expect(dateText()).toHaveTextContent('21 天')
-      // Nothing is lost on a pointer device even while folded.
-      expect(dateText()).toHaveAttribute('title', '2026/7/22 → 2026/8/12 (21 天)')
+      const schedule = container.querySelector<HTMLElement>('[data-medication-schedule]')
+      const context = container.querySelector<HTMLElement>('[data-medication-context]')
+      const classification = container.querySelector<HTMLElement>(
+        '[data-medication-classification]',
+      )
+      expect(container.querySelector('[data-medication-frequency]')).toHaveTextContent('QOD')
+      expect(container.querySelector('[data-medication-route]')).toHaveTextContent('PO')
+      expect(schedule?.textContent).toBe(
+        '2026/8/5 → 2026/9/4（30 天） 1 錠 QOD  總量 15',
+      )
+      expect(
+        container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
+      ).toBe('  ')
+      expect(container.querySelector('[data-medication-total-separator]')).toBeNull()
+      expect(container.querySelector('[data-medication-frequency]'))
+        .toHaveClass('font-normal', 'text-muted-foreground')
+      expect(container.querySelector('[data-medication-frequency]'))
+        .not.toHaveClass('font-semibold', 'text-foreground/80')
+      expect(context).not.toHaveTextContent('新北市聯合醫院')
+      expect(classification).toHaveTextContent('新北市聯合醫院')
+      expect(schedule).not.toHaveTextContent('新北市聯合醫院')
+      expect(container.querySelector('[data-medication-total-quantity]'))
+        .toHaveTextContent('總量 15')
+      expect(container.querySelector('[data-medication-supply-days]'))
+        .toHaveTextContent('（30 天）')
+      expect(dateText()).toHaveAttribute('title', '2026/8/5 → 2026/9/4（30 天）')
+      expect(dateText().parentElement).toHaveClass('shrink')
+      expect(screen.getByText('1 錠').parentElement).toHaveClass('shrink-0')
+      expect(container.querySelector('[data-medication-cell="identity"]'))
+        .toHaveClass('@max-[455px]:contents')
+      expect(schedule).toHaveClass(
+        'col-span-2',
+        'row-start-3',
+        '@min-[312px]:col-span-3',
+        '@min-[312px]:row-start-2',
+      )
+      expect(context).toHaveClass('row-start-1')
     })
 
-    it('keeps the end date visible when there is no duration to rebuild it', () => {
+    it('omits missing supply facts without leaving empty labels', () => {
       mockAudience = 'medical'
-      const medication = { ...medicationRow('AMOXICILLIN 500 MG'), durationDays: undefined }
-      render(<MedicationItem medication={medication} />)
+      const medication = {
+        ...medicationRow('AMOXICILLIN 500 MG'),
+        totalQuantity: undefined,
+        durationDays: undefined,
+      }
+      const { container } = render(<MedicationItem medication={medication} />)
 
-      // Without a duration the end date IS the coverage information, so folding
-      // it would drop the only record of when the supply runs out.
-      const end = within(dateText()).getByText(/→/)
-      expect(end).not.toHaveClass('hidden')
-      expect(dateText()).toHaveTextContent('2026/8/12')
+      expect(container.querySelector('[data-medication-total-quantity]')).toBeNull()
+      expect(container.querySelector('[data-medication-supply-days]')).toBeNull()
+      expect(dateText()).toHaveTextContent('2026/7/22 → 2026/8/12')
     })
 
-    it('leaves a stopped medication showing the date it ended', () => {
+    it('keeps the complete coverage range for a stopped medication', () => {
       mockAudience = 'medical'
       const medication = { ...medicationRow('AMOXICILLIN 500 MG'), isInactive: true }
       render(<MedicationItem medication={medication} />)
 
-      expect(dateText()).toHaveTextContent('2026/8/12')
-      expect(within(dateText()).queryByText(/→/)).toBeNull()
+      expect(dateText()).toHaveTextContent('2026/7/22 → 2026/8/12（21 天）')
     })
   })
 
-  it('gives category and ICD separate wide-layout rows instead of competing for one line', () => {
+  it('stacks diagnosis above institution and classification in the middle lane', () => {
     mockAudience = 'medical'
     const medication = {
       ...medicationRow(
@@ -311,24 +407,32 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const { container } = render(<MedicationItem medication={medication} />)
 
     const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
+    const contextLine = container.querySelector('[data-medication-context]')
+    const classificationLine = container.querySelector('[data-medication-classification]')
     const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑')
     const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
 
     // Thresholds are px, not rem: the root font-size is 12px here, so a rem
     // threshold would shift with the reader's font-size setting. The values are
-    // the ones this layout has always used in practice. Phones stay on the
-    // dense three-lane row — the date range, not the breakpoint, is what gives
-    // way when the identity lane runs short (see the folding test below).
+    // the ones this layout has always used in practice. The source/diagnosis
+    // column gets the larger flexible share, while the prescription date is
+    // the flexible segment in the left lane.
     expect(container.firstElementChild).toHaveClass(
-      '@min-[312px]:grid-cols-[minmax(0,1.25fr)_minmax(7.5rem,0.75fr)_4.75rem]',
-      '@min-[336px]:grid-cols-[minmax(0,1.2fr)_minmax(8.5rem,0.8fr)_4.75rem]',
-      '@min-[384px]:grid-cols-[minmax(0,1.15fr)_minmax(10.5rem,1fr)_4.75rem]',
-      '@min-[456px]:grid-cols-[minmax(0,1.15fr)_minmax(14rem,1fr)_4.75rem]',
+      '@min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem]',
+      '@min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem]',
+      '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
+      '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem]',
     )
-    expect(clinicalLane).toHaveClass('@min-[312px]:h-10', '@min-[312px]:grid-rows-2')
+    expect(clinicalLane).toHaveClass('h-10', 'grid-rows-2')
     expect(category).toHaveClass('max-w-full')
     expect(category).not.toHaveClass('max-w-[10rem]')
-    expect(icd.parentElement).toHaveClass('@min-[312px]:row-start-2')
+    expect(contextLine).toContainElement(icd)
+    expect(icd).toHaveClass('inline-flex', 'max-w-full')
+    expect(icd).not.toHaveClass('flex-1')
+    expect(contextLine).not.toHaveTextContent('長庚嘉義')
+    expect(classificationLine).toHaveTextContent('長庚嘉義')
+    expect(classificationLine).toContainElement(category)
+    expect(clinicalLane).toContainElement(icd)
     const icdTooltip = screen.getByTestId('medication-icd-tooltip')
     expect(icdTooltip).toHaveClass(
       'border-primary/20',

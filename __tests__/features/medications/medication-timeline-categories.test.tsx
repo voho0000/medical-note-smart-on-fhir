@@ -290,6 +290,18 @@ describe('useMedicationTimeline category grouping', () => {
     expect(result.current.drugs[0].bars[0].frequency).toBe('QDPC')
   })
 
+  it('carries an unsupported source dosage instruction into the timeline', () => {
+    const localInstruction = medication({
+      dosageInstruction: [{ text: 'HOSPITAL-LOCAL-SIG' }],
+    })
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline([localInstruction], 'medical', 'all', 'Other', 'en'),
+    )
+
+    expect(result.current.drugs[0].bars[0].frequency).toBe('HOSPITAL-LOCAL-SIG')
+  })
+
   it('uses the official English level two name in an English UI', () => {
     const { result } = renderHook(() =>
       useMedicationTimeline(

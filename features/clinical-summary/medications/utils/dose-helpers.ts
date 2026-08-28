@@ -110,16 +110,43 @@ function administrationMealTiming(dosage?: DosageInstruction): 'AC' | 'PC' | '' 
  * derive a conventional frequency from structured FHIR repeat fields. */
 export function humanDosageFrequency(dosage?: DosageInstruction): string {
   if (!dosage) return ''
-  const explicitFrequency = [
+  const sourceValues = [
     ...conceptValues(dosage.timing?.code),
     dosage.text,
-  ].map(extractFrequencyFromText).find(Boolean) || ''
+  ]
+  const explicitFrequency = sourceValues
+    .map(extractFrequencyFromText)
+    .find(Boolean) || ''
   const frequency = explicitFrequency || humanDoseFreq(dosage.timing?.repeat)
   const mealTiming = administrationMealTiming(dosage)
   if (mealTiming && /^(?:QD|BID|TID|QID)$/.test(frequency)) {
     return `${frequency}${mealTiming}`
   }
-  return frequency
+  if (frequency) return frequency
+
+  // Unknown source SIG values on true prescriptions remain clinically
+  // meaningful; preserve hospital-local instructions that are not whitelisted.
+  return sourceValues
+    .find((value) => typeof value === 'string' && value.trim().length > 0)
+    ?.trim() || ''
+}
+
+/** Exact source dosage text for display, with structured timing as fallback.
+ * FHIR dosageInstruction.text is the source's complete human-readable SIG and
+ * therefore takes precedence over an App-normalized frequency abbreviation. */
+export function displayDosageInstruction(dosage?: DosageInstruction): string {
+  const sourceText = dosage?.text?.trim()
+  if (sourceText && /(?:給藥總量|給藥日數|平均每日)/.test(sourceText)) {
+    // Health-passbook records sometimes put dispensing arithmetic in
+    // dosageInstruction.text. It is useful supply metadata, but it is not a
+    // SIG. Keep any actual code such as QOD if present; otherwise let the
+    // compact row render quantity and days from dispenseRequest instead of
+    // repeating the entire arithmetic sentence in the dosage position.
+    const normalized = humanDosageFrequency(dosage)
+    if (normalized && normalized !== sourceText) return normalized
+    return humanDosageFrequency({ ...dosage, text: undefined })
+  }
+  return sourceText || humanDosageFrequency(dosage)
 }
 
 export function buildDetail({

@@ -1,8 +1,8 @@
 // MedicationHistoryList — 已停用（用藥歷史）的統一列表。
 //
-// 取代舊設計「單筆處方=完整卡片、多筆處方=摺疊 accordion」的混雜排版：現在
-// 每一種藥都是一條等高的細列，右側直接標示重複開立次數與最近日期，點開才展開
-// 各次處方明細。等高、可掃視、重複次數一眼可見，不再被 toggle 藏起來。
+// 收合列與「現在用藥」共用 MedicationItem，讓藥名、用法、總量、天數、日期、
+// 機構、分類與診斷保持同一閱讀位置。歷史區只額外保留展開控制，展開後才顯示
+// 每次處方明細。
 //
 // 注射劑分流：靜脈／肌肉／皮下注射（多為住院或急性期給藥）依「給藥途徑」抓出，
 // 收進獨立、預設收合的子區塊，避免把口服常規用藥淹沒。注意：這是依 route 判斷，
@@ -10,25 +10,17 @@
 // 不臆測。
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { startTransition, useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { ChevronRight, Syringe } from 'lucide-react'
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
-import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
-import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
+import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+import { MedicationItem } from './MedicationItem'
 
-export interface MedicationHistoryGroup {
-  /** Stable grouping identity; distinct products may share the same display name. */
-  key: string
-  name: string
-  count: number
-  /** Newest-first (sorted upstream in useGroupedMedications). */
-  medications: MedicationRow[]
-}
+export type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 
 /** SNOMED-mapped injection route abbreviations (see route-display.ts). */
 const INJECTION_ABBR = new Set(['IV', 'IM', 'SC'])
@@ -36,6 +28,13 @@ const INJECTION_ABBR = new Set(['IV', 'IM', 'SC'])
 // patient-locale label) AND the drug name — TW product names spell it out
 // (注射液 / 注射劑 / 針), which is the most reliable signal when route is blank.
 const INJECTION_RE = /注射|點滴|靜脈|肌肉|皮下|針劑|inject|intraven|intramus|subcut|infusion/i
+
+// The history section is open by default, so keep its first render bounded to
+// roughly one scroll viewport. Remaining groups are appended during browser
+// idle time instead of competing with the current-medication rows for first
+// paint. Individual prescription details remain collapsed until requested.
+const INITIAL_HISTORY_GROUP_COUNT = 12
+const HISTORY_GROUP_BATCH_SIZE = 24
 
 /** Route- and name-based heuristic for an injectable / infusion medication.
  *  NOT an inpatient detector — route only. */
@@ -53,9 +52,9 @@ function latestDateOf(m?: MedicationRow): string {
   return m?.endDate || m?.stoppedOn || m?.startedOn || ''
 }
 
-/** "start – end" when both known, else whichever single date exists. */
+/** "start → end" when both known, else whichever single date exists. */
 function dateRangeOf(m: MedicationRow): string {
-  if (m.startedOn && m.endDate) return `${m.startedOn} – ${m.endDate}`
+  if (m.startedOn && m.endDate) return `${m.startedOn} → ${m.endDate}`
   return m.endDate || m.stoppedOn || m.startedOn || ''
 }
 
@@ -91,23 +90,96 @@ export function MedicationHistoryList({
     return { regular: reg, injectable: inj }
   }, [groups])
 
+  const regularRenderKey = useMemo(
+    () => regular.map((group) => group.key).join('\u001f'),
+    [regular],
+  )
+  const initialRegularCount = Math.min(INITIAL_HISTORY_GROUP_COUNT, regular.length)
+  const [regularRenderWindow, setRegularRenderWindow] = useState({
+    key: '',
+    count: INITIAL_HISTORY_GROUP_COUNT,
+  })
+  const visibleRegularCount = regularRenderWindow.key === regularRenderKey
+    ? Math.min(regularRenderWindow.count, regular.length)
+    : initialRegularCount
+  const visibleRegular = regular.slice(0, visibleRegularCount)
+
+  useEffect(() => {
+    if (visibleRegularCount >= regular.length) return
+
+    let cancelled = false
+    let idleId: number | undefined
+    let timer: number | undefined
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const revealNextBatch = () => {
+      if (cancelled) return
+      startTransition(() => {
+        setRegularRenderWindow((current) => {
+          const currentCount = current.key === regularRenderKey
+            ? current.count
+            : initialRegularCount
+          return {
+            key: regularRenderKey,
+            count: Math.min(
+              currentCount + HISTORY_GROUP_BATCH_SIZE,
+              regular.length,
+            ),
+          }
+        })
+      })
+    }
+
+    if (browserWindow.requestIdleCallback) {
+      idleId = browserWindow.requestIdleCallback(revealNextBatch, { timeout: 600 })
+    } else {
+      timer = window.setTimeout(revealNextBatch, 80)
+    }
+
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+      if (idleId !== undefined) browserWindow.cancelIdleCallback?.(idleId)
+    }
+  }, [initialRegularCount, regular.length, regularRenderKey, visibleRegularCount])
+
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
+    const targetInRegular = regular.findIndex((group) =>
+      group.medications.some((medication) => medication.id === pending.resourceId),
+    )
     const targetInInjectables = injectable.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    if (!targetInInjectables) return
-    const timer = window.setTimeout(() => setShowInjectables(true), 0)
+    if (targetInRegular < 0 && !targetInInjectables) return
+    const timer = window.setTimeout(() => {
+      if (targetInInjectables) setShowInjectables(true)
+      if (targetInRegular >= 0) {
+        setRegularRenderWindow((current) => current.key === regularRenderKey
+          ? { ...current, count: Math.max(current.count, targetInRegular + 1) }
+          : { key: regularRenderKey, count: targetInRegular + 1 })
+      }
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [pending, navSeq, injectable])
+  }, [pending, navSeq, injectable, regular, regularRenderKey])
 
   return (
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
-      <ul className="space-y-1.5">
-        {regular.map((group) => (
-          <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
-        ))}
-      </ul>
+      {regular.length > 0 && (
+        <ul
+          data-medication-list-surface="grouped"
+          className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
+        >
+          {visibleRegular.map((group) => (
+            <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
+          ))}
+        </ul>
+      )}
 
       {injectable.length > 0 && (
         <div className="rounded-md border border-dashed border-border/70">
@@ -129,7 +201,10 @@ export function MedicationHistoryList({
             </span>
           </button>
           {showInjectables && (
-            <ul className="space-y-1.5 px-1.5 pb-1.5">
+            <ul
+              data-medication-list-surface="grouped"
+              className="@container divide-y divide-border/70 overflow-hidden border-t border-border/60 bg-muted/30"
+            >
               {injectable.map((group) => (
                 <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
               ))}
@@ -150,120 +225,120 @@ function HistoryRow({
   mt: any
   nameMode: MedicationNameMode
 }) {
-  const { audience } = useAudience()
-  const isMedical = audience === 'medical'
   const [open, setOpen] = useState(false)
-  const pending = useResourceNavigationStore((s) => s.pending)
-  const navSeq = useResourceNavigationStore((s) => s.seq)
+  const detailsId = useId()
   const latest = group.medications[0]
-  const displayMedicationTitle =
-    nameMode === 'product' && latest?.secondaryTitle
-      ? latest.secondaryTitle
-      : group.name
-  const latestDate = latestDateOf(latest)
-  const timesUnit = mt.refillTimes ?? '次'
-  const fullMedicationTitle = [
-    group.name,
-    latest?.secondaryTitle,
-    latest?.drugTerminology?.atcCode
-      ? `ATC ${latest.drugTerminology.atcCode}`
-      : undefined,
-  ].filter(Boolean).join(' · ')
-  const groupAnchorRef = useResourceAnchor<HTMLLIElement>(
-    ['MedicationRequest', 'MedicationStatement'],
-    group.medications.map((medication) => medication.id),
-  )
-
-  useEffect(() => {
-    if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
-    if (!group.medications.some((medication) => medication.id === pending.resourceId)) return
-    const timer = window.setTimeout(() => setOpen(true), 0)
-    return () => window.clearTimeout(timer)
-  }, [pending, navSeq, group.medications])
-
+  const canExpand = group.medications.length > 1
+  const historyMedication = {
+    ...latest,
+    refillCount: group.count,
+  }
+  const toggleLabel = (open
+    ? (mt.hideMedicationHistory ?? '收合 {name} 的過往用藥紀錄（{count}）')
+    : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
+    .replace('{name}', group.name)
+    .replace('{count}', String(group.count))
+  const openForNavigation = useCallback(() => setOpen(true), [])
   return (
-    <li ref={groupAnchorRef} className="rounded-md border border-border/75 bg-background/60 dark:bg-secondary/55">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-primary/[0.035] dark:hover:bg-secondary/70"
-      >
-        <ChevronRight
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-90",
-          )}
-          aria-hidden
-        />
-        <MedicationTerminologyTooltip medication={latest} enabled>
-          <span
-            className={cn(
-              "flex min-w-0 flex-1 items-baseline gap-1",
-              latest?.drugTerminology && "cursor-help",
-            )}
-            title={fullMedicationTitle}
-            tabIndex={latest?.drugTerminology ? 0 : undefined}
+    <li className="min-w-0">
+      <MedicationItem
+        medication={historyMedication}
+        nameMode={nameMode}
+        grouped
+        resourceNavigationIds={group.medications.map((medication) => medication.id)}
+        onResourceNavigationMatch={canExpand ? openForNavigation : undefined}
+        leadingControl={canExpand ? (
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-controls={detailsId}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
           >
-            <span
-              className="min-w-0 truncate text-[0.8125rem] font-medium"
-            >
-              {displayMedicationTitle}
-            </span>
-          </span>
-        </MedicationTerminologyTooltip>
-        {latest?.category && (
-          <span
-            title={latest.category}
-            className={medicationHistoryCategoryChipClass}
-          >
-            {latest.category}
-          </span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          {group.count > 1 && (
-            <span className="rounded-full bg-muted px-1.5 py-0 font-medium tabular-nums text-foreground/70">
-              {group.count} {timesUnit}
-            </span>
-          )}
-          {latestDate && <span className="tabular-nums">{latestDate}</span>}
-        </span>
-      </button>
+            <ChevronRight
+              className={cn(
+                'h-4 w-4 transition-transform',
+                open && 'rotate-90',
+              )}
+              aria-hidden
+            />
+          </button>
+        ) : undefined}
+      />
 
-      {open && (
-        <div className="space-y-1 border-t border-border/40 px-2.5 py-1.5 pl-7">
-          {group.medications.map((m, i) => {
-            const parts: string[] = []
-            const range = dateRangeOf(m)
-            if (range) parts.push(range)
-            if (m.dose) parts.push(m.dose)
-            if (m.route) parts.push(m.route)
-            if (m.frequency) parts.push(m.frequency)
-            if (m.durationDays) parts.push(`${m.durationDays} ${mt.durationDaysUnit ?? 'days'}`)
-            if (m.pharmacy) parts.push(m.pharmacy)
-            if (isMedical && m.icdCode) parts.push(`${m.icdCode}${m.icdText ? ` ${m.icdText}` : ''}`)
-            return (
-              <MedicationHistoryDetail
-                key={m.id || i}
-                medication={m}
-                text={parts.length > 0 ? parts.join('  ·  ') : (mt.noDetail ?? '')}
-              />
-            )
-          })}
-        </div>
+      {canExpand && open && (
+        <MedicationHistoryDetails
+          id={detailsId}
+          medications={group.medications}
+          className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
+        />
       )}
     </li>
   )
 }
 
-function MedicationHistoryDetail({ medication, text }: { medication: MedicationRow; text: string }) {
-  const anchorRef = useResourceAnchor<HTMLDivElement>(
-    ['MedicationRequest', 'MedicationStatement'],
-    medication.id,
-  )
+export function MedicationHistoryDetails({
+  medications,
+  className,
+  id,
+}: {
+  medications: MedicationRow[]
+  className?: string
+  id?: string
+}) {
+  const { audience } = useAudience()
+  const { t, locale } = useLanguage()
+  const mt = (t.medications as any)
+  const isMedical = audience === 'medical'
+  const formatCompactNumber = (value: number): string =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value)
 
   return (
-    <div ref={anchorRef} className="rounded-sm px-1 py-0.5 text-[0.6875rem] leading-relaxed text-muted-foreground">
+    <div id={id} className={cn('space-y-1', className)}>
+      {medications.map((medication, index) => {
+        const parts: string[] = []
+        const range = dateRangeOf(medication)
+        const durationLabel = medication.durationDays !== undefined
+          ? (mt.durationCompact ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d'))
+            .replace('{n}', formatCompactNumber(medication.durationDays))
+          : ''
+        const durationSuffix = durationLabel
+          ? (locale.startsWith('zh') ? `（${durationLabel}）` : ` (${durationLabel})`)
+          : ''
+        if (range) parts.push(`${range}${durationSuffix}`)
+        else if (durationLabel) parts.push(durationLabel)
+        if (medication.dose) parts.push(medication.dose)
+        if (medication.route) parts.push(medication.route)
+        if (medication.frequency) parts.push(medication.frequency)
+        if (medication.totalQuantity !== undefined) {
+          parts.push(
+            (mt.totalQuantityCompact
+              ?? (locale.startsWith('zh') ? '總量 {n}' : 'Total {n}'))
+              .replace('{n}', formatCompactNumber(medication.totalQuantity)),
+          )
+        }
+        if (medication.pharmacy) parts.push(medication.pharmacy)
+        if (isMedical && medication.icdCode) {
+          parts.push(
+            `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`,
+          )
+        }
+        return (
+          <MedicationHistoryDetail
+            key={medication.id || index}
+            text={parts.length > 0 ? parts.join('  ·  ') : (mt.noDetail ?? '')}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function MedicationHistoryDetail({ text }: { text: string }) {
+  return (
+    <div className="rounded-sm px-1 py-0.5 text-[0.6875rem] leading-relaxed text-muted-foreground">
       {text}
     </div>
   )

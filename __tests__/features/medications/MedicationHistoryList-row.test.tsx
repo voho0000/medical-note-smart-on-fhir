@@ -1,0 +1,239 @@
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { MedicationHistoryList } from '@/features/clinical-summary/medications/components/MedicationHistoryList'
+import type { MedicationRow } from '@/features/clinical-summary/medications/types'
+import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
+
+let mockAnchorOnMatch: ((sequence: number, target: ResourceNavTarget) => void) | undefined
+let mockAnchorResourceId: string | string[] | undefined
+
+jest.mock('@/src/application/providers/audience.provider', () => ({
+  useAudience: () => ({ audience: 'medical' }),
+}))
+
+jest.mock('@/src/application/providers/language.provider', () => ({
+  useLanguage: () => ({
+    locale: 'zh-TW',
+    t: {
+      medications: {
+        statusEnded: '已結束',
+        totalQuantityCompact: '總量 {n}',
+        supplyDaysCompact: '天數 {n}',
+        refillSummary: '累計 {count} 次',
+        refillSummarySince: '累計 {count} 次 · {date} 起',
+        dosageInstructionLabel: '用法用量',
+        durationDaysUnit: '天',
+        billingIcdTooltip: '處方診斷',
+        chronic: '慢箋',
+        showMedicationHistory: '顯示 {name} 的過往用藥紀錄（{count}）',
+        hideMedicationHistory: '收合 {name} 的過往用藥紀錄（{count}）',
+      },
+    },
+  }),
+}))
+
+jest.mock('@/src/application/hooks/use-resource-anchor.hook', () => ({
+  useResourceAnchor: (
+    _resourceType: string | string[],
+    resourceId?: string | string[],
+    onMatch?: (sequence: number, target: ResourceNavTarget) => void,
+  ) => {
+    mockAnchorResourceId = resourceId
+    if (onMatch) mockAnchorOnMatch = onMatch
+    return null
+  },
+}))
+
+jest.mock('@/src/application/stores/resource-navigation.store', () => ({
+  useResourceNavigationStore: (
+    selector: (state: { pending: null; seq: number }) => unknown,
+  ) => selector({ pending: null, seq: 0 }),
+}))
+
+const latestMedication = {
+  id: 'history-latest',
+  title: 'LEVOTHYROXINE SODIUM 0.05 MG',
+  status: 'completed',
+  isInactive: true,
+  isChronic: false,
+  searchHaystack: '',
+  frequency: 'QOD',
+  totalQuantity: 15,
+  durationDays: 30,
+  startedOn: '2026/8/5',
+  endDate: '2026/9/4',
+  pharmacy: '新北市聯合醫院',
+  category: '甲狀腺製劑',
+  icdCode: 'E07.9',
+  icdText: '甲狀腺疾患',
+} as MedicationRow
+
+const olderMedication = {
+  ...latestMedication,
+  id: 'history-older',
+  startedOn: '2026/7/6',
+  endDate: '2026/8/5',
+} as MedicationRow
+
+describe('MedicationHistoryList row parity', () => {
+  beforeEach(() => {
+    mockAnchorOnMatch = undefined
+    mockAnchorResourceId = undefined
+  })
+
+  it('uses the same MedicationItem layout as the current-medication list', () => {
+    const { container } = render(
+      <MedicationHistoryList
+        groups={[{
+          key: 'levothyroxine',
+          name: latestMedication.title,
+          count: 2,
+          medications: [latestMedication, olderMedication],
+        }]}
+      />,
+    )
+
+    expect(container.querySelector('[data-medication-list-surface="grouped"]'))
+      .toBeInTheDocument()
+    expect(container.querySelector('[data-medication-row-layout="three-lane"]'))
+      .toBeInTheDocument()
+    expect(screen.getByText(latestMedication.title)).toBeInTheDocument()
+    expect(screen.getByText('QOD')).toBeInTheDocument()
+    expect(screen.getByText('總量 15')).toBeInTheDocument()
+    expect(container.querySelector('[data-medication-schedule]')).toHaveTextContent(
+      '2026/8/5 → 2026/9/4（30 天） QOD 總量 15',
+    )
+    expect(
+      container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
+    ).toBe('  ')
+    expect(container.querySelector('[data-medication-diagnosis]')).toHaveTextContent(
+      'E07.9甲狀腺疾患',
+    )
+    expect(container.querySelector('[data-medication-diagnosis]'))
+      .not.toHaveTextContent('新北市聯合醫院')
+    expect(container.querySelector('[data-medication-classification]'))
+      .toHaveTextContent('新北市聯合醫院甲狀腺製劑')
+    expect(screen.getByText('甲狀腺製劑')).toBeInTheDocument()
+    expect(screen.getByText('已結束')).toBeInTheDocument()
+    expect(screen.getByText('累計 2 次')).toBeInTheDocument()
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
+    expect(details).toBeInTheDocument()
+    expect(details).toHaveTextContent(
+      '2026/8/5 → 2026/9/4（30 天） · QOD · 總量 15 · 新北市聯合醫院',
+    )
+    expect(details).toHaveTextContent(
+      '2026/7/6 → 2026/8/5（30 天） · QOD · 總量 15 · 新北市聯合醫院',
+    )
+  })
+
+  it('bounds the initial history render and appends the remaining rows during idle time', () => {
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const originalRequestIdleCallback = browserWindow.requestIdleCallback
+    const originalCancelIdleCallback = browserWindow.cancelIdleCallback
+    let idleCallback: IdleRequestCallback | undefined
+    browserWindow.requestIdleCallback = jest.fn((callback: IdleRequestCallback) => {
+      idleCallback = callback
+      return 1
+    })
+    browserWindow.cancelIdleCallback = jest.fn()
+
+    const groups = Array.from({ length: 20 }, (_, index) => ({
+      key: `history-${index}`,
+      name: `HISTORY MEDICATION ${index}`,
+      count: 1,
+      medications: [{
+        ...latestMedication,
+        id: `history-${index}`,
+        title: `HISTORY MEDICATION ${index}`,
+      }],
+    }))
+
+    try {
+      const { container } = render(<MedicationHistoryList groups={groups} />)
+
+      expect(container.querySelectorAll('[data-medication-row-layout="three-lane"]'))
+        .toHaveLength(12)
+      expect(idleCallback).toBeDefined()
+
+      act(() => {
+        idleCallback?.({
+          didTimeout: false,
+          timeRemaining: () => 50,
+        })
+      })
+
+      expect(container.querySelectorAll('[data-medication-row-layout="three-lane"]'))
+        .toHaveLength(20)
+    } finally {
+      browserWindow.requestIdleCallback = originalRequestIdleCallback
+      browserWindow.cancelIdleCallback = originalCancelIdleCallback
+    }
+  })
+
+  it('hides the row toggle for a single prescription while keeping the name aligned', () => {
+    const { container } = render(
+      <MedicationHistoryList
+        groups={[{
+          key: 'single-prescription',
+          name: latestMedication.title,
+          count: 1,
+          medications: [latestMedication],
+        }]}
+      />,
+    )
+
+    expect(screen.queryByRole('button', {
+      name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（1）',
+    })).not.toBeInTheDocument()
+    expect(container.querySelector('[data-medication-row-layout="three-lane"]'))
+      .toHaveClass('pl-9', 'pr-3')
+  })
+
+  it('opens the matched historical drug group when resource navigation claims it', () => {
+    render(
+      <MedicationHistoryList
+        groups={[{
+          key: 'levothyroxine',
+          name: latestMedication.title,
+          count: 2,
+          medications: [latestMedication, olderMedication],
+        }]}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(mockAnchorResourceId).toEqual([
+      latestMedication.id,
+      olderMedication.id,
+    ])
+
+    act(() => {
+      mockAnchorOnMatch?.(1, {
+        resourceType: 'MedicationRequest',
+        resourceId: olderMedication.id,
+        expandMedicationHistory: true,
+      })
+    })
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById(toggle.getAttribute('aria-controls') ?? ''))
+      .toHaveTextContent('2026/8/5 → 2026/9/4（30 天） · QOD · 總量 15')
+  })
+})

@@ -10,8 +10,14 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import { MedicationItem } from './MedicationItem'
-import { MedicationHistoryList } from './MedicationHistoryList'
-import { useGroupedMedications } from '../hooks/useGroupedMedications'
+import {
+  MedicationHistoryDetails,
+  MedicationHistoryList,
+} from './MedicationHistoryList'
+import {
+  useGroupedMedications,
+  type MedicationHistoryGroup,
+} from '../hooks/useGroupedMedications'
 
 interface MedicationListProps {
   medications: MedicationRow[]
@@ -43,10 +49,18 @@ export function MedicationList({
   const { t } = useLanguage()
   const mt = (t.medications as any)
   const [showActive, setShowActive] = useState(true)
-  const [showInactive, setShowInactive] = useState(false)
+  const [showInactive, setShowInactive] = useState(true)
+  const [openActiveHistories, setOpenActiveHistories] = useState<Set<string>>(
+    () => new Set(),
+  )
   const activeListId = useId()
+  const inactiveListId = useId()
   const nameModeSwitchId = useId()
-  const { activeMedications, inactiveMedicationGroups } = useGroupedMedications(medications)
+  const {
+    activeMedications,
+    activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>(),
+    inactiveMedicationGroups,
+  } = useGroupedMedications(medications)
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
@@ -58,13 +72,31 @@ export function MedicationList({
     const targetInHistory = inactiveMedicationGroups.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    if (!targetInActive && !targetInHistory) return
+    const activeHistoryOwner = [...activeHistoryByMedicationId.entries()].find(
+      ([, group]) => group.medications.some(
+        (medication) => medication.id === pending.resourceId,
+      ),
+    )?.[0]
+    if (!targetInActive && !targetInHistory && !activeHistoryOwner) return
     const timer = window.setTimeout(() => {
-      if (targetInActive) setShowActive(true)
+      if (targetInActive || activeHistoryOwner) setShowActive(true)
       if (targetInHistory) setShowInactive(true)
+      if (activeHistoryOwner) {
+        setOpenActiveHistories((current) => {
+          const next = new Set(current)
+          next.add(activeHistoryOwner)
+          return next
+        })
+      }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [pending, navSeq, activeMedications, inactiveMedicationGroups])
+  }, [
+    pending,
+    navSeq,
+    activeMedications,
+    activeHistoryByMedicationId,
+    inactiveMedicationGroups,
+  ])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">{t.common.loading}</div>
@@ -159,18 +191,78 @@ export function MedicationList({
               data-medication-list-surface="grouped"
               className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
             >
-              {activeMedications.map((medication) => (
-                <li key={medication.id} className="min-w-0">
-                  <MedicationItem
-                    medication={medication}
-                    showSourceChip={showSourceChip}
-                    sourceChipStatementLabel={sourceChipStatementLabel}
-                    sourceChipStatementTooltip={sourceChipStatementTooltip}
-                    nameMode={nameMode}
-                    grouped
-                  />
-                </li>
-              ))}
+              {activeMedications.map((medication) => {
+                const history = activeHistoryByMedicationId.get(medication.id)
+                const historyOpen = openActiveHistories.has(medication.id)
+                const historyDetailsId = `${activeListId}-${medication.id}-history`
+                const historyToggleLabel = (historyOpen
+                  ? (mt.hideMedicationHistory ?? '收合 {name} 的過往用藥紀錄（{count}）')
+                  : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
+                  .replace('{name}', medication.title)
+                  .replace('{count}', String(history?.count ?? 0))
+
+                return (
+                  <li key={medication.id} className="min-w-0">
+                    <MedicationItem
+                      medication={medication}
+                      showSourceChip={showSourceChip}
+                      sourceChipStatementLabel={sourceChipStatementLabel}
+                      sourceChipStatementTooltip={sourceChipStatementTooltip}
+                      nameMode={nameMode}
+                      grouped
+                      resourceNavigationIds={history
+                        ? [
+                            medication.id,
+                            ...history.medications.map((item) => item.id),
+                          ]
+                        : undefined}
+                      onResourceNavigationMatch={history ? ((_sequence, target) => {
+                        const targetsHistoricalFill = history.medications.some(
+                          (item) => item.id === target.resourceId,
+                        )
+                        if (!target.expandMedicationHistory && !targetsHistoricalFill) return
+                        setShowActive(true)
+                        setOpenActiveHistories((current) => {
+                          const next = new Set(current)
+                          next.add(medication.id)
+                          return next
+                        })
+                      }) : undefined}
+                      leadingControl={history ? (
+                        <button
+                          type="button"
+                          aria-expanded={historyOpen}
+                          aria-controls={historyDetailsId}
+                          aria-label={historyToggleLabel}
+                          title={historyToggleLabel}
+                          onClick={() => setOpenActiveHistories((current) => {
+                            const next = new Set(current)
+                            if (next.has(medication.id)) next.delete(medication.id)
+                            else next.add(medication.id)
+                            return next
+                          })}
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                        >
+                          <ChevronRight
+                            className={cn(
+                              'h-4 w-4 transition-transform',
+                              historyOpen && 'rotate-90',
+                            )}
+                            aria-hidden
+                          />
+                        </button>
+                      ) : undefined}
+                    />
+                    {history && historyOpen && (
+                      <MedicationHistoryDetails
+                        id={historyDetailsId}
+                        medications={history.medications}
+                        className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
+                      />
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
@@ -182,7 +274,9 @@ export function MedicationList({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowInactive(!showInactive)}
+            aria-expanded={showInactive}
+            aria-controls={inactiveListId}
+            onClick={() => setShowInactive((visible) => !visible)}
             className="w-full justify-between px-0 hover:bg-transparent"
           >
             <div className="flex items-center gap-2">
@@ -195,7 +289,9 @@ export function MedicationList({
           </Button>
 
           {showInactive && (
-            <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
+            <div id={inactiveListId}>
+              <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
+            </div>
           )}
         </div>
       )}

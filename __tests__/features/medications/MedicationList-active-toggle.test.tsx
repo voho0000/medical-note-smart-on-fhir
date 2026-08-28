@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MedicationList } from '@/features/clinical-summary/medications/components/MedicationList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
+import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 
 const mockActiveMedication = {
   id: 'active-medication-1',
@@ -11,12 +12,30 @@ const mockActiveMedication = {
   searchHaystack: '',
 } as MedicationRow
 
+const mockHistoricalMedication = {
+  ...mockActiveMedication,
+  id: 'historical-medication-1',
+  status: 'completed',
+  isInactive: true,
+  startedOn: '2026/7/6',
+  endDate: '2026/8/5',
+} as MedicationRow
+
+let mockInactiveMedicationGroups: Array<{
+  key: string
+  name: string
+  count: number
+  medications: MedicationRow[]
+}> = []
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
     t: {
       common: { loading: '載入中' },
       medications: {
         currentlyInUse: '使用中',
+        showMedicationHistory: '顯示 {name} 的過往用藥紀錄（{count}）',
+        hideMedicationHistory: '收合 {name} 的過往用藥紀錄（{count}）',
         noData: '無資料',
         history: '用藥歷史',
         historyStopped: '已停用',
@@ -38,21 +57,75 @@ jest.mock('@/src/application/stores/resource-navigation.store', () => ({
 jest.mock('@/features/clinical-summary/medications/hooks/useGroupedMedications', () => ({
   useGroupedMedications: () => ({
     activeMedications: [mockActiveMedication],
-    inactiveMedicationGroups: [],
+    activeHistoryByMedicationId: new Map([
+      [mockActiveMedication.id, {
+        key: mockActiveMedication.title,
+        name: mockActiveMedication.title,
+        count: 1,
+        medications: [mockHistoricalMedication],
+      }],
+    ]),
+    inactiveMedicationGroups: mockInactiveMedicationGroups,
   }),
 }))
 
 jest.mock('@/features/clinical-summary/medications/components/MedicationItem', () => ({
-  MedicationItem: ({ medication }: { medication: MedicationRow }) => (
-    <span>{medication.title}</span>
+  MedicationItem: ({
+    medication,
+    leadingControl,
+    onResourceNavigationMatch,
+    resourceNavigationIds,
+  }: {
+    medication: MedicationRow
+    leadingControl?: React.ReactNode
+    resourceNavigationIds?: string[]
+    onResourceNavigationMatch?: (
+      sequence: number,
+      target: ResourceNavTarget,
+    ) => void
+  }) => (
+    <div>
+      {leadingControl}
+      <span>{medication.title}</span>
+      {onResourceNavigationMatch && (
+        <button
+          type="button"
+          onClick={() => onResourceNavigationMatch(1, {
+            resourceType: 'MedicationRequest',
+            resourceId: medication.id,
+            expandMedicationHistory: true,
+          })}
+        >
+          模擬查看相關用藥
+        </button>
+      )}
+      {onResourceNavigationMatch && resourceNavigationIds?.[1] && (
+        <button
+          type="button"
+          onClick={() => onResourceNavigationMatch(2, {
+            resourceType: 'MedicationRequest',
+            resourceId: resourceNavigationIds[1],
+          })}
+        >
+          模擬舊處方導引
+        </button>
+      )}
+    </div>
   ),
 }))
 
 jest.mock('@/features/clinical-summary/medications/components/MedicationHistoryList', () => ({
-  MedicationHistoryList: () => null,
+  MedicationHistoryList: () => <div data-testid="medication-history-list" />,
+  MedicationHistoryDetails: ({ medications }: { medications: MedicationRow[] }) => (
+    <div>{medications.map((medication) => medication.id).join(',')}</div>
+  ),
 }))
 
 describe('MedicationList active section toggle', () => {
+  beforeEach(() => {
+    mockInactiveMedicationGroups = []
+  })
+
   it('collapses and expands the current medication rows without hiding the name switch', () => {
     render(
       <MedicationList
@@ -83,5 +156,99 @@ describe('MedicationList active section toggle', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
+  })
+
+  it('expands the same drug history from the current medication row', () => {
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('historical-medication-1')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /用藥歷史/ })).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+  })
+
+  it('opens current-drug refill history when related-medication navigation lands on it', () => {
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: '模擬查看相關用藥' }))
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+  })
+
+  it('opens current-drug refill history when navigation targets an older fill', () => {
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: '模擬舊處方導引' }))
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+  })
+
+  it('opens the stopped-medication section by default and still allows collapsing it', () => {
+    mockInactiveMedicationGroups = [{
+      key: 'stopped-medication',
+      name: 'STOPPED MEDICATION',
+      count: 110,
+      medications: [mockHistoricalMedication],
+    }]
+
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', { name: '用藥歷史 (110 已停用)' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveAttribute('aria-controls')
+    expect(screen.getByTestId('medication-history-list')).toBeInTheDocument()
+
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByTestId('medication-history-list')).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('medication-history-list')).toBeInTheDocument()
   })
 })

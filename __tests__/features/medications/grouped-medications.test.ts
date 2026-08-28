@@ -121,6 +121,55 @@ describe('groupMedications — active-list merge', () => {
     expect(g.inactiveMedicationGroups[0].count).toBe(2) // both fills preserved
   })
 
+  it('attaches prior fills to the current row and removes the duplicate history group', () => {
+    const current = row({
+      title: 'LEVOTHYROXINE SODIUM .05 MG',
+      drugKey: 'NHI-LEVOTHYROXINE',
+      id: 'current-levothyroxine',
+    })
+    const prior = row({
+      title: 'LEVOTHYROXINE SODIUM .05 MG',
+      drugKey: 'NHI-LEVOTHYROXINE',
+      isInactive: true,
+      startedOn: '2026-07-06',
+    })
+
+    const grouped = groupMedications([current, prior])
+
+    expect(grouped.activeHistoryByMedicationId.get('current-levothyroxine')).toMatchObject({
+      key: 'NHI-LEVOTHYROXINE',
+      count: 1,
+      medications: [prior],
+    })
+    expect(grouped.inactiveMedicationGroups).toEqual([])
+  })
+
+  it('assigns shared drug history to only one current row when two clinics prescribe it', () => {
+    const clinicA = row({
+      title: '普拿疼',
+      drugKey: 'NHI-PANADOL',
+      pharmacy: 'A院',
+      id: 'active-a',
+    })
+    const clinicB = row({
+      title: '普拿疼',
+      drugKey: 'NHI-PANADOL',
+      pharmacy: 'B院',
+      id: 'active-b',
+    })
+    const prior = row({
+      title: '普拿疼',
+      drugKey: 'NHI-PANADOL',
+      isInactive: true,
+    })
+
+    const grouped = groupMedications([clinicA, clinicB, prior])
+
+    expect(grouped.activeHistoryByMedicationId.size).toBe(1)
+    expect(grouped.activeHistoryByMedicationId.get('active-a')?.medications).toEqual([prior])
+    expect(grouped.inactiveMedicationGroups).toEqual([])
+  })
+
   it('gives same-named inactive product groups distinct stable keys', () => {
     const first = row({
       drugKey: 'NHI-BRIMONIDINE-A',

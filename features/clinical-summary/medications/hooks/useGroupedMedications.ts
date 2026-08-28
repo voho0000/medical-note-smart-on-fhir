@@ -8,6 +8,15 @@ export interface MedicationGroup {
   inactiveMedications: MedicationRow[]
 }
 
+export interface MedicationHistoryGroup {
+  /** Stable drug/product identity shared with the active row. */
+  key: string
+  name: string
+  count: number
+  /** Newest-first historical prescriptions. */
+  medications: MedicationRow[]
+}
+
 /** Pure grouping logic — exported for direct unit testing (the hook is just
  *  a useMemo wrapper). */
 export function groupMedications(medications: MedicationRow[]) {
@@ -107,14 +116,39 @@ export function groupMedications(medications: MedicationRow[]) {
     })
   })
 
-  return {
-    activeMedications: active,
-    inactiveMedicationGroups: Array.from(inactiveByKey.entries()).map(([key, { name, medications }]) => ({
+  const historyGroups = Array.from(
+    inactiveByKey.entries(),
+    ([key, { name, medications }]): MedicationHistoryGroup => ({
       key,
       name,
       count: medications.length,
       medications,
-    }))
+    }),
+  )
+
+  // When the same product has a current prescription, its older fills belong
+  // to that current therapy row. Attach the history to the first active row
+  // for the product (important when two clinics currently prescribe the same
+  // drug) and remove it from the separate stopped-medication section so the
+  // UI never presents the same drug twice.
+  const activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>()
+  const attachedHistoryKeys = new Set<string>()
+  const historyByKey = new Map(historyGroups.map((group) => [group.key, group]))
+  for (const medication of active) {
+    const key = groupKeyOf(medication)
+    if (attachedHistoryKeys.has(key)) continue
+    const history = historyByKey.get(key)
+    if (!history) continue
+    activeHistoryByMedicationId.set(medication.id, history)
+    attachedHistoryKeys.add(key)
+  }
+
+  return {
+    activeMedications: active,
+    activeHistoryByMedicationId,
+    inactiveMedicationGroups: historyGroups.filter(
+      (group) => !attachedHistoryKeys.has(group.key),
+    ),
   }
 }
 

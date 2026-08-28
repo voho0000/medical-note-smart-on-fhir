@@ -31,6 +31,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         terminologySource: '健保署藥品主檔補充',
         timelineAfterToday: '今日後',
         frequencyLabel: '頻次',
+        dosageInstructionLabel: '用法用量',
       },
     },
   }),
@@ -181,7 +182,7 @@ describe('TimelineSvg patient terminology hover', () => {
       .not.toHaveClass('truncate')
     expect(within(tooltip).getByText(/測試醫學中心附設門診藥局與長名稱調劑機構/))
       .toHaveClass('break-words')
-    expect(within(tooltip).getByText('頻次:')).toBeInTheDocument()
+    expect(within(tooltip).getByText('用法用量:')).toBeInTheDocument()
     expect(within(tooltip).getByText('BIDPC')).toBeInTheDocument()
     expect(tooltip.querySelector('.truncate')).not.toBeInTheDocument()
     expect(screen.getByText('健保署藥品主檔補充')).toBeInTheDocument()

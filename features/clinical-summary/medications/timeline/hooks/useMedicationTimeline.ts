@@ -6,6 +6,7 @@
 // drug-master terminology or the strict source-WHO-ATC fallback; this hook
 // never invents level 2-4 labels by slicing a full ingredient code.
 import { useMemo, useState } from 'react'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import {
   isChronicPrescription,
@@ -14,7 +15,7 @@ import {
   pickLocalizedText,
   pickByLocale,
 } from '../../utils/fhir-helpers'
-import { humanDosageFrequency } from '../../utils/dose-helpers'
+import { displayDosageInstruction } from '../../utils/dose-helpers'
 
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 export type TimelineGroupingMode = 'atc' | 'organization'
@@ -217,7 +218,7 @@ function organizationOf(
   fallbackOrganizationLabel: string,
 ): { key: string; label: string } {
   const label = typeof medication?.requester?.display === 'string'
-    ? medication.requester.display.replace(/\s+/g, ' ').trim()
+    ? formatOrganizationDisplay(medication.requester.display).replace(/\s+/g, ' ').trim()
     : ''
   if (!label) {
     return { key: FALLBACK_ORGANIZATION_KEY, label: fallbackOrganizationLabel }
@@ -397,7 +398,10 @@ export function useMedicationTimeline(
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-      const frequency = humanDosageFrequency(dosage)
+      const frequency = displayDosageInstruction(dosage)
+      const requesterDisplay = med.requester?.display
+        ? formatOrganizationDisplay(med.requester.display)
+        : ''
 
       const bar: RefillBar = {
         refillId: med.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
@@ -407,7 +411,7 @@ export function useMedicationTimeline(
         authoredOnIso: startIso,
         sourceMedicationCode: medicationSourceCode(med) || undefined,
         frequency: frequency || undefined,
-        pharmacy: med.requester?.display?.trim() || undefined,
+        pharmacy: requesterDisplay || undefined,
         icdCode,
         icdText,
         isChronic,
