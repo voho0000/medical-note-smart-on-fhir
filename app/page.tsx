@@ -150,6 +150,7 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+  const detailOverlayRef = useRef<HTMLDivElement | null>(null)
   const leftPanelRef = useRef<HTMLElement | null>(null)
   const detailOriginScrollRef = useRef<{
     sourceId: string
@@ -389,6 +390,17 @@ function PageContent() {
   }, [detailVisible])
 
   useLayoutEffect(() => {
+    if (!detailVisible) return
+    const panel = rightPanelRef.current
+    const overlay = detailOverlayRef.current
+    if (!panel || !overlay) return
+    // The panel keeps its feature scroll position while the absolute detail
+    // layer is open. Align that layer with the currently visible scrollport
+    // before paint instead of forcing the underlying workspace back to zero.
+    overlay.style.top = `${panel.scrollTop}px`
+  }, [detail?.sourceId, detailVisible])
+
+  useLayoutEffect(() => {
     const panel = rightPanelRef.current
     const hasDetail = detailVisible
     const hadDetail = hadDetailRef.current
@@ -559,6 +571,7 @@ function PageContent() {
           ref={rightPanelRef}
           onScroll={handleRightPanelScroll}
           aria-label={t.header.features}
+          className={detailVisible ? "relative overflow-y-hidden" : "relative"}
           mobileActive={mobileView === 'right'}
           desktopState={
             collapsed === 'right'
@@ -574,17 +587,26 @@ function PageContent() {
           }
         >
           <ErrorBoundary>
-            {/* The detail view (lab trend, report image…) takes over this
-                column, but it must NOT unmount the feature panel: that aborts
-                an in-flight AI stream mid-answer and throws away calculator
-                inputs and IPS clinician confirmations. Hide it with CSS
-                instead — same approach as the mobile panel switch. `contents`
-                keeps the layout identical to rendering it directly. */}
-            <div className={detailVisible ? 'hidden' : 'contents'}>
+            {/* Keep the feature panel laid out underneath the detail overlay.
+                Removing it from layout made every close synchronously rebuild
+                this large clinical workspace on slower devices. `inert` and
+                aria-hidden keep the covered controls out of pointer, keyboard,
+                and assistive-technology navigation without discarding their
+                layout, in-flight AI stream, or local input state. */}
+            <div
+              className="contents"
+              aria-hidden={detailVisible}
+              inert={detailVisible || undefined}
+            >
               <StableRightPanelFeature />
             </div>
             {detail && (
-              <div className={detailVisible ? 'contents' : 'hidden'}>
+              <div
+                ref={detailOverlayRef}
+                className={detailVisible
+                  ? 'absolute inset-x-0 z-30 h-full bg-panel'
+                  : 'hidden'}
+              >
                 <RightDetailPane title={detail.title} onClose={closeDetailAfterPaint}>
                   {detail.node}
                 </RightDetailPane>
