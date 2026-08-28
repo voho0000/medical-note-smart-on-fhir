@@ -238,6 +238,7 @@ function HistoryRow({
     : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
     .replace('{name}', group.name)
     .replace('{count}', String(group.count))
+  const toggleHistory = useCallback(() => setOpen((current) => !current), [])
   const openForNavigation = useCallback(() => setOpen(true), [])
   return (
     <li className="min-w-0">
@@ -245,12 +246,13 @@ function HistoryRow({
         medication={historyMedication}
         nameMode={nameMode}
         grouped
+        onRowToggle={canExpand ? toggleHistory : undefined}
         resourceNavigationIds={group.medications.map((medication) => medication.id)}
         onResourceNavigationMatch={canExpand ? openForNavigation : undefined}
         leadingControl={canExpand ? (
           <button
             type="button"
-            onClick={() => setOpen((current) => !current)}
+            onClick={toggleHistory}
             aria-expanded={open}
             aria-controls={detailsId}
             aria-label={toggleLabel}

@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   useMedicationTimeline,
@@ -20,6 +21,7 @@ import {
   medicationChronicSwatchClass,
   medicationFutureTimelineSwatchClass,
   medicationNonChronicSwatchClass,
+  medicationUnrecordedSwatchClass,
 } from '../components/medication-chip-styles'
 
 const RANGES: TimeRange[] = ['3m', '6m', '1y', '3y', 'all']
@@ -129,16 +131,16 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
       <div className="space-y-2 border-b pb-2">
         <div
           data-timeline-primary-controls
-          className="flex flex-wrap items-center gap-x-4 gap-y-2"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 md:flex-nowrap md:overflow-x-auto"
         >
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="shrink-0 text-xs font-medium text-muted-foreground">
               {mt.timelineRangeLabel ?? '時段'}
             </span>
             <div
               role="group"
               aria-label={mt.timelineRangeLabel ?? '時段'}
-              className="inline-flex min-w-0 overflow-hidden rounded-md border bg-background"
+              className="inline-flex min-w-0 overflow-hidden rounded-md border bg-background md:p-0.5"
             >
               {RANGES.map((r, index) => (
                 <button
@@ -147,7 +149,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                   aria-pressed={range === r}
                   onClick={() => setRange(r)}
                   className={cn(
-                    'min-h-[44px] min-w-0 border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8 sm:px-2',
+                    'min-h-[44px] min-w-0 whitespace-nowrap border-l px-2.5 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 md:min-h-0 md:rounded-sm md:px-2 md:py-1',
                     range === r
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -160,14 +162,14 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="shrink-0 text-xs font-medium text-muted-foreground">
-              {mt.timelineGroupingLabel ?? '分組方式'}
+              {mt.timelineGroupingLabel ?? '分組'}
             </span>
             <div
               role="group"
-              aria-label={mt.timelineGroupingLabel ?? '分組方式'}
-              className="inline-flex overflow-hidden rounded-md border bg-background"
+              aria-label={mt.timelineGroupingLabel ?? '分組'}
+              className="inline-flex overflow-hidden rounded-md border bg-background md:p-0.5"
             >
               {(['atc', 'organization'] as const).map((mode, index) => (
                 <button
@@ -176,7 +178,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                   aria-pressed={groupingMode === mode}
                   onClick={() => setGroupingMode(mode)}
                   className={cn(
-                    'min-h-[44px] border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8',
+                    'min-h-[44px] whitespace-nowrap border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 md:min-h-0 md:rounded-sm md:py-1',
                     groupingMode === mode
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -192,14 +194,14 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
           </div>
 
           {groupingMode === 'atc' ? (
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                {mt.timelineAtcDetailLabel ?? '分類細節'}
+                {mt.timelineAtcDetailLabel ?? '藥理分類'}
               </span>
               <div
                 role="group"
-                aria-label={mt.timelineAtcDetailLabel ?? '分類細節'}
-                className="inline-flex overflow-hidden rounded-md border bg-background"
+                aria-label={mt.timelineAtcDetailLabel ?? '藥理分類'}
+                className="inline-flex overflow-hidden rounded-md border bg-background md:p-0.5"
               >
                 {(['2', '4'] as const).map((level, index) => (
                   <button
@@ -208,7 +210,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                     aria-pressed={atcLevel === level}
                     onClick={() => setAtcLevel(level)}
                     className={cn(
-                      'min-h-[44px] border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 sm:min-h-8',
+                      'min-h-[44px] whitespace-nowrap border-l px-3 text-xs font-medium transition-colors first:border-l-0 focus-visible:z-10 md:min-h-0 md:rounded-sm md:py-1',
                       atcLevel === level
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -245,7 +247,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                 aria-label={mt.timelinePrescriptionType ?? 'Prescription type'}
                 className="inline-flex items-center gap-2 border-l border-border/80 pl-2"
               >
-                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                {data.chronicCount > 0 ? <span className="inline-flex items-center gap-1 whitespace-nowrap">
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -257,8 +259,8 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                   <span className="font-medium text-foreground">
                     {data.chronicCount}
                   </span>
-                </span>
-                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                </span> : null}
+                {data.nonChronicCount > 0 ? <span className="inline-flex items-center gap-1 whitespace-nowrap">
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -270,7 +272,29 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
                   <span className="font-medium text-foreground">
                     {data.nonChronicCount}
                   </span>
-                </span>
+                </span> : null}
+                {data.unrecordedCount > 0 ? (
+                  <TapTooltip
+                    content={mt.timelinePrescriptionTypeUnrecordedTooltip
+                      ?? 'This source does not provide prescription-type metadata.'}
+                    contentTestId="timeline-prescription-type-unrecorded-tooltip"
+                    contentClassName="max-w-[min(90vw,24rem)] whitespace-normal text-left"
+                  >
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "inline-block h-2 w-3 rounded-[2px] border",
+                          medicationUnrecordedSwatchClass,
+                        )}
+                      />
+                      <span>{mt.timelinePrescriptionTypeUnrecorded ?? 'Prescription type not recorded'}</span>
+                      <span className="font-medium text-foreground">
+                        {data.unrecordedCount}
+                      </span>
+                    </span>
+                  </TapTooltip>
+                ) : null}
               </span>
               <span
                 role="group"

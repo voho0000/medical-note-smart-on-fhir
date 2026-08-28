@@ -82,14 +82,16 @@ describe('MedicationHistoryList row parity', () => {
 
   it('uses the same MedicationItem layout as the current-medication list', () => {
     const { container } = render(
-      <MedicationHistoryList
-        groups={[{
-          key: 'levothyroxine',
-          name: latestMedication.title,
-          count: 2,
-          medications: [latestMedication, olderMedication],
-        }]}
-      />,
+      <div tabIndex={0}>
+        <MedicationHistoryList
+          groups={[{
+            key: 'levothyroxine',
+            name: latestMedication.title,
+            count: 2,
+            medications: [latestMedication, olderMedication],
+          }]}
+        />
+      </div>,
     )
 
     expect(container.querySelector('[data-medication-list-surface="grouped"]'))
@@ -132,6 +134,33 @@ describe('MedicationHistoryList row parity', () => {
     expect(details).toHaveTextContent(
       '2026/7/6 → 2026/8/5（30 天） · QOD · 總量 15 · 新北市聯合醫院',
     )
+  })
+
+  it('toggles a historical medication group from the full row', () => {
+    const { container } = render(
+      <MedicationHistoryList
+        groups={[{
+          key: 'levothyroxine',
+          name: latestMedication.title,
+          count: 2,
+          medications: [latestMedication, olderMedication],
+        }]}
+      />,
+    )
+
+    const row = container.querySelector('[data-medication-row-layout="three-lane"]')
+    const toggle = screen.getByRole('button', {
+      name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
+    })
+    expect(row).toHaveAttribute('data-medication-row-toggle', 'true')
+
+    fireEvent.click(row!)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById(toggle.getAttribute('aria-controls') ?? ''))
+      .toBeInTheDocument()
+
+    fireEvent.click(row!)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('bounds the initial history render and appends the remaining rows during idle time', () => {
@@ -201,6 +230,8 @@ describe('MedicationHistoryList row parity', () => {
     })).not.toBeInTheDocument()
     expect(container.querySelector('[data-medication-row-layout="three-lane"]'))
       .toHaveClass('pl-9', 'pr-3')
+    expect(container.querySelector('[data-medication-row-layout="three-lane"]'))
+      .not.toHaveAttribute('data-medication-row-toggle')
   })
 
   it('opens the matched historical drug group when resource navigation claims it', () => {

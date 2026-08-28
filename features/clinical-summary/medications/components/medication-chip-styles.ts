@@ -78,5 +78,17 @@ export const medicationNonChronicTimelineBarClass =
 export const medicationNonChronicFutureTimelineBarClass =
   "fill-slate-100 stroke-slate-400 dark:fill-slate-950/70 dark:stroke-slate-400/80"
 
+// Missing prescription-type metadata is a provenance uncertainty, so it uses
+// a restrained amber treatment already established for unconfirmed data. It
+// must not reuse non-chronic slate or the brighter risk/error colours.
+export const medicationUnrecordedSwatchClass =
+  "border-amber-600 bg-amber-100 dark:border-amber-400 dark:bg-amber-900/50"
+
+export const medicationUnrecordedTimelineBarClass =
+  "fill-amber-100 stroke-amber-600 dark:fill-amber-900/50 dark:stroke-amber-400"
+
+export const medicationUnrecordedFutureTimelineBarClass =
+  "fill-amber-50 stroke-amber-500 dark:fill-amber-950/40 dark:stroke-amber-400/80"
+
 export const medicationFutureTimelineSwatchClass =
   "border-dashed border-muted-foreground/70 bg-muted/25 dark:border-muted-foreground/80 dark:bg-muted/15"

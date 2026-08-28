@@ -55,6 +55,10 @@ interface MedicationItemProps {
   /** Optional full-height leading action, used to reveal this current drug's
    *  older prescriptions without duplicating it in the history section. */
   leadingControl?: ReactNode
+  /** Makes the non-interactive area of an expandable medication row trigger
+   *  the same action as its leading control. Nested controls keep their own
+   *  behavior and never bubble into this row action. */
+  onRowToggle?: () => void
   /** Runs only after this exact medication row claims a resource-navigation
    *  request, so a parent can open refill details without racing consumption. */
   onResourceNavigationMatch?: (
@@ -117,6 +121,7 @@ export function MedicationItem({
   nameMode = 'ingredient',
   grouped = false,
   leadingControl,
+  onRowToggle,
   onResourceNavigationMatch,
   resourceNavigationIds,
 }: MedicationItemProps) {
@@ -318,8 +323,18 @@ export function MedicationItem({
     <div
       ref={anchorRef}
       data-medication-row-layout="three-lane"
+      data-medication-row-toggle={onRowToggle ? 'true' : undefined}
+      onClick={onRowToggle ? (event) => {
+        const target = event.target as HTMLElement
+        const interactiveTarget = target.closest(
+          'button, a, input, select, textarea, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"])',
+        )
+        if (interactiveTarget && event.currentTarget.contains(interactiveTarget)) return
+        onRowToggle()
+      } : undefined}
       className={cn(
         "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        onRowToggle && "cursor-pointer",
         grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
           ? "rounded-none border-0 bg-transparent"

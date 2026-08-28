@@ -200,6 +200,12 @@ export function MedicationList({
                   : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
                   .replace('{name}', medication.title)
                   .replace('{count}', String(history?.count ?? 0))
+                const toggleHistory = () => setOpenActiveHistories((current) => {
+                  const next = new Set(current)
+                  if (next.has(medication.id)) next.delete(medication.id)
+                  else next.add(medication.id)
+                  return next
+                })
 
                 return (
                   <li key={medication.id} className="min-w-0">
@@ -210,6 +216,7 @@ export function MedicationList({
                       sourceChipStatementTooltip={sourceChipStatementTooltip}
                       nameMode={nameMode}
                       grouped
+                      onRowToggle={history ? toggleHistory : undefined}
                       resourceNavigationIds={history
                         ? [
                             medication.id,
@@ -235,12 +242,7 @@ export function MedicationList({
                           aria-controls={historyDetailsId}
                           aria-label={historyToggleLabel}
                           title={historyToggleLabel}
-                          onClick={() => setOpenActiveHistories((current) => {
-                            const next = new Set(current)
-                            if (next.has(medication.id)) next.delete(medication.id)
-                            else next.add(medication.id)
-                            return next
-                          })}
+                          onClick={toggleHistory}
                           className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
                         >
                           <ChevronRight

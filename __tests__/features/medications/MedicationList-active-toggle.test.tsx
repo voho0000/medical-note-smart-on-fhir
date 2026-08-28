@@ -73,18 +73,26 @@ jest.mock('@/features/clinical-summary/medications/components/MedicationItem', (
   MedicationItem: ({
     medication,
     leadingControl,
+    onRowToggle,
     onResourceNavigationMatch,
     resourceNavigationIds,
   }: {
     medication: MedicationRow
     leadingControl?: React.ReactNode
+    onRowToggle?: () => void
     resourceNavigationIds?: string[]
     onResourceNavigationMatch?: (
       sequence: number,
       target: ResourceNavTarget,
     ) => void
   }) => (
-    <div>
+    <div
+      data-testid="medication-row"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('button')) return
+        onRowToggle?.()
+      }}
+    >
       {leadingControl}
       <span>{medication.title}</span>
       {onResourceNavigationMatch && (
@@ -178,6 +186,29 @@ describe('MedicationList active section toggle', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+  })
+
+  it('toggles current-drug history when the medication row is clicked', () => {
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
+    })
+    const row = screen.getByTestId('medication-row')
+
+    fireEvent.click(row)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+
+    fireEvent.click(row)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('historical-medication-1')).not.toBeInTheDocument()
   })
 
   it('opens current-drug refill history when related-medication navigation lands on it', () => {

@@ -20,6 +20,7 @@ import { displayDosageInstruction } from '../../utils/dose-helpers'
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 export type TimelineGroupingMode = 'atc' | 'organization'
 export type TimelineAtcLevel = '2' | '4'
+export type TimelinePrescriptionType = 'chronic' | 'non-chronic' | 'unrecorded'
 
 export interface RefillBar {
   refillId: string
@@ -32,7 +33,7 @@ export interface RefillBar {
   pharmacy?: string
   icdCode?: string
   icdText?: string
-  isChronic: boolean
+  prescriptionType: TimelinePrescriptionType
 }
 
 interface TimelineClassification {
@@ -51,7 +52,7 @@ export interface TimelineDrug {
   drugName: string
   drugProductName?: string
   drugTerminology?: MedicationEntity['drugTerminology']
-  isChronic: boolean
+  prescriptionType: TimelinePrescriptionType
   categoryKey: string
   categoryLabel: string
   atcLevel2?: TimelineClassification
@@ -78,8 +79,11 @@ export interface CategoryGroup {
   depth?: number
   level?: 1 | 2 | 3 | 4 | 'source' | 'other' | 'organization'
   drugCount?: number
+  /** Number of rendered drug rows whose coverage includes today. */
+  currentDrugCount?: number
   chronicCount: number
   nonChronicCount: number
+  unrecordedCount: number
 }
 
 export interface TimelineData {
@@ -94,6 +98,7 @@ export interface TimelineData {
   totalRows: number
   chronicCount: number
   nonChronicCount: number
+  unrecordedCount: number
   organizationCount: number
 }
 
@@ -118,6 +123,35 @@ type MedicationAtcData =
 
 function medicationAtcData(medication: any): MedicationAtcData | undefined {
   return medication?.drugTerminology ?? medication?.atcClassification
+}
+
+function recordedPrescriptionType(medication: any): TimelinePrescriptionType {
+  if (isChronicPrescription(medication)) return 'chronic'
+
+  const course = medication?.courseOfTherapyType
+  const hasExplicitNonChronicCode = Array.isArray(course?.coding)
+    && course.coding.some((coding: any) => {
+      const code = typeof coding?.code === 'string'
+        ? coding.code.trim().toLowerCase()
+        : ''
+      return code === 'acute' || code === 'seasonal'
+    })
+  const hasExplicitNonChronicText = typeof course?.text === 'string'
+    && /\b(acute|seasonal)\b/i.test(course.text)
+
+  return hasExplicitNonChronicCode || hasExplicitNonChronicText
+    ? 'non-chronic'
+    : 'unrecorded'
+}
+
+function resolvedPrescriptionType(
+  types: Set<TimelinePrescriptionType> | undefined,
+): TimelinePrescriptionType {
+  if (types?.has('chronic')) return 'chronic'
+  // Missing metadata wins over an explicit non-chronic record: a grouped row
+  // must only say non-chronic when every represented record says so.
+  if (types?.has('unrecorded')) return 'unrecorded'
+  return 'non-chronic'
 }
 
 function localizedTerminologyName(
@@ -231,9 +265,14 @@ function organizationOf(
 
 function countGroup(drugs: TimelineDrug[]) {
   return {
-    chronicCount: drugs.filter((drug) => drug.isChronic).length,
-    nonChronicCount: drugs.filter((drug) => !drug.isChronic).length,
+    chronicCount: drugs.filter((drug) => drug.prescriptionType === 'chronic').length,
+    nonChronicCount: drugs.filter((drug) => drug.prescriptionType === 'non-chronic').length,
+    unrecordedCount: drugs.filter((drug) => drug.prescriptionType === 'unrecorded').length,
   }
+}
+
+export function isTimelineDrugCurrent(drug: TimelineDrug, nowMs: number): boolean {
+  return drug.bars.some((bar) => bar.startMs <= nowMs && bar.endMs >= nowMs)
 }
 
 function sortGroups(groups: CategoryGroup[]): CategoryGroup[] {
@@ -248,6 +287,20 @@ function sortGroups(groups: CategoryGroup[]): CategoryGroup[] {
     if (aHasChronic !== bHasChronic) return aHasChronic ? -1 : 1
     const countOrder = (b.drugCount ?? b.drugs.length) - (a.drugCount ?? a.drugs.length)
     return countOrder || a.key.localeCompare(b.key)
+  })
+}
+
+function sortOrganizationGroups(groups: CategoryGroup[]): CategoryGroup[] {
+  return groups.sort((a, b) => {
+    const aFallback = a.key === FALLBACK_ORGANIZATION_KEY
+    const bFallback = b.key === FALLBACK_ORGANIZATION_KEY
+    if (aFallback !== bFallback) return aFallback ? 1 : -1
+
+    const currentOrder = (b.currentDrugCount ?? 0) - (a.currentDrugCount ?? 0)
+    if (currentOrder !== 0) return currentOrder
+
+    const totalOrder = (b.drugCount ?? b.drugs.length) - (a.drugCount ?? a.drugs.length)
+    return totalOrder || a.label.localeCompare(b.label)
   })
 }
 
@@ -315,16 +368,19 @@ export function useMedicationTimeline(
       totalRows: 0,
       chronicCount: 0,
       nonChronicCount: 0,
+      unrecordedCount: 0,
       organizationCount: 0,
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
 
-    const chronicDrugs = new Set<string>()
+    const prescriptionTypesByDrug = new Map<string, Set<TimelinePrescriptionType>>()
     for (const medication of medications) {
-      if (medication && isChronicPrescription(medication)) {
-        const key = medicationClinicalIdentityKey(medication)
-        if (key) chronicDrugs.add(key)
-      }
+      if (!medication) continue
+      const key = medicationClinicalIdentityKey(medication)
+      if (!key) continue
+      const types = prescriptionTypesByDrug.get(key) ?? new Set<TimelinePrescriptionType>()
+      types.add(recordedPrescriptionType(medication))
+      prescriptionTypesByDrug.set(key, types)
     }
 
     const months = RANGE_MONTHS[range]
@@ -353,7 +409,9 @@ export function useMedicationTimeline(
 
       const supplyDays = Number(med.dispenseRequest?.expectedSupplyDuration?.value) || 30
       const endMs = startMs + supplyDays * 24 * 60 * 60 * 1000
-      const isChronic = chronicDrugs.has(clinicalDrugKey)
+      const prescriptionType = resolvedPrescriptionType(
+        prescriptionTypesByDrug.get(clinicalDrugKey),
+      )
       const officialProductName = audience === 'medical'
         ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
         : locale === 'en'
@@ -414,7 +472,7 @@ export function useMedicationTimeline(
         pharmacy: requesterDisplay || undefined,
         icdCode,
         icdText,
-        isChronic,
+        prescriptionType: recordedPrescriptionType(med),
       }
 
       clinicalDrugKeys.add(clinicalDrugKey)
@@ -446,7 +504,7 @@ export function useMedicationTimeline(
           drugName,
           drugProductName,
           drugTerminology: med.drugTerminology,
-          isChronic,
+          prescriptionType,
           categoryKey: category.key,
           categoryLabel: category.label,
           atcLevel2,
@@ -467,7 +525,13 @@ export function useMedicationTimeline(
     if (domainMin === Infinity) domainMin = now
 
     const drugs = [...drugsMap.values()].sort((a, b) => {
-      if (a.isChronic !== b.isChronic) return a.isChronic ? -1 : 1
+      const rank: Record<TimelinePrescriptionType, number> = {
+        chronic: 0,
+        'non-chronic': 1,
+        unrecorded: 2,
+      }
+      const prescriptionTypeOrder = rank[a.prescriptionType] - rank[b.prescriptionType]
+      if (prescriptionTypeOrder !== 0) return prescriptionTypeOrder
       return a.firstStartMs - b.firstStartMs
     })
 
@@ -480,8 +544,9 @@ export function useMedicationTimeline(
         if (existing) {
           existing.drugs.push(drug)
           existing.drugCount = (existing.drugCount ?? 0) + 1
-          if (drug.isChronic) existing.chronicCount++
-          else existing.nonChronicCount++
+          if (drug.prescriptionType === 'chronic') existing.chronicCount++
+          else if (drug.prescriptionType === 'non-chronic') existing.nonChronicCount++
+          else existing.unrecordedCount++
         } else {
           groupsMap.set(drug.organizationKey, {
             key: drug.organizationKey,
@@ -491,21 +556,29 @@ export function useMedicationTimeline(
             drugs: [drug],
             children: [],
             drugCount: 1,
-            chronicCount: drug.isChronic ? 1 : 0,
-            nonChronicCount: drug.isChronic ? 0 : 1,
+            chronicCount: drug.prescriptionType === 'chronic' ? 1 : 0,
+            nonChronicCount: drug.prescriptionType === 'non-chronic' ? 1 : 0,
+            unrecordedCount: drug.prescriptionType === 'unrecorded' ? 1 : 0,
           })
         }
       }
       const organizationGroups = [...groupsMap.values()]
       for (const group of organizationGroups) {
+        group.currentDrugCount = group.drugs.filter(
+          (drug) => isTimelineDrugCurrent(drug, now),
+        ).length
         group.drugs.sort((a, b) => {
+          const currentOrder = Number(isTimelineDrugCurrent(b, now))
+            - Number(isTimelineDrugCurrent(a, now))
+          if (currentOrder !== 0) return currentOrder
+
           const prescribedDateOrder = a.firstStartMs - b.firstStartMs
           if (prescribedDateOrder !== 0) return prescribedDateOrder
           const nameOrder = a.drugName.localeCompare(b.drugName, locale)
           return nameOrder || a.drugKey.localeCompare(b.drugKey)
         })
       }
-      categories = sortGroups(organizationGroups)
+      categories = sortOrganizationGroups(organizationGroups)
     } else {
       const baseGroups = new Map<string, {
         classification: TimelineClassification
@@ -553,12 +626,17 @@ export function useMedicationTimeline(
     return {
       categories,
       drugs,
-      domainStartMs: domainMin,
+      // A named range is a stable comparison window, not a request to zoom
+      // tightly around whatever records happen to exist inside it. Keep the
+      // selected lookback boundary even when the earliest medication is much
+      // newer; only the open-ended "all" view follows the data minimum.
+      domainStartMs: months === null ? domainMin : rangeStart,
       domainEndMs: domainMax,
       totalDrugs: clinicalDrugKeys.size,
       totalRows: drugs.length,
-      chronicCount: drugs.filter((drug) => drug.isChronic).length,
-      nonChronicCount: drugs.filter((drug) => !drug.isChronic).length,
+      chronicCount: drugs.filter((drug) => drug.prescriptionType === 'chronic').length,
+      nonChronicCount: drugs.filter((drug) => drug.prescriptionType === 'non-chronic').length,
+      unrecordedCount: drugs.filter((drug) => drug.prescriptionType === 'unrecorded').length,
       organizationCount: groupingMode === 'organization' ? categories.length : 0,
     }
   }, [

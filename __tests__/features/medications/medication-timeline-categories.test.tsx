@@ -567,6 +567,115 @@ describe('useMedicationTimeline category grouping', () => {
     expect(result.current.categories.every((group) => group.drugs.length === 1)).toBe(true)
   })
 
+  it('orders organizations by current medication rows before total row count', () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(
+      new Date('2026-08-29T12:00:00+08:00').getTime(),
+    )
+    const organizationMedication = (
+      id: string,
+      code: string,
+      organization: string,
+      authoredOn: string,
+      supplyDays: number,
+    ) => medication({
+      id,
+      authoredOn,
+      requester: { display: organization },
+      medicationCodeableConcept: {
+        coding: [{ code, display: code }],
+        text: code,
+      },
+      dispenseRequest: {
+        expectedSupplyDuration: { value: supplyDays, unit: 'days' },
+      },
+      drugTerminology: undefined,
+    })
+    const medications = [
+      organizationMedication('larger-past-1', 'LARGER-1', '總數較多醫院', '2026-01-01', 14),
+      organizationMedication('larger-past-2', 'LARGER-2', '總數較多醫院', '2026-02-01', 14),
+      organizationMedication('larger-current', 'LARGER-3', '總數較多醫院', '2026-08-20', 30),
+      organizationMedication('current-1', 'CURRENT-1', '目前用藥較多醫院', '2026-08-10', 30),
+      organizationMedication('current-2', 'CURRENT-2', '目前用藥較多醫院', '2026-08-15', 30),
+    ]
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'organization',
+        '4',
+        '未提供機構',
+      ),
+    )
+
+    expect(result.current.categories.map((group) => group.label))
+      .toEqual(['目前用藥較多醫院', '總數較多醫院'])
+    expect(result.current.categories.map((group) => group.currentDrugCount))
+      .toEqual([2, 1])
+    expect(result.current.categories.map((group) => group.drugCount))
+      .toEqual([2, 3])
+
+    nowSpy.mockRestore()
+  })
+
+  it('places current medications before history within an organization', () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(
+      new Date('2026-08-29T12:00:00+08:00').getTime(),
+    )
+    const organizationMedication = (
+      id: string,
+      authoredOn: string,
+      supplyDays: number,
+    ) => medication({
+      id,
+      authoredOn,
+      requester: { display: '排序測試醫院' },
+      medicationCodeableConcept: {
+        coding: [{ code: id, display: id }],
+        text: id,
+      },
+      dispenseRequest: {
+        expectedSupplyDuration: { value: supplyDays, unit: 'days' },
+      },
+      drugTerminology: undefined,
+    })
+    const medications = [
+      organizationMedication('CURRENT-LATER', '2026-08-20', 30),
+      organizationMedication('PAST-EARLIER', '2026-01-01', 14),
+      organizationMedication('CURRENT-EARLIER', '2026-08-10', 30),
+      organizationMedication('PAST-LATER', '2026-02-01', 14),
+    ]
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        medications,
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        {},
+        'organization',
+        '4',
+        '未提供機構',
+      ),
+    )
+
+    expect(result.current.categories[0].currentDrugCount).toBe(2)
+    expect(result.current.categories[0].drugs.map((drug) => drug.drugName))
+      .toEqual([
+        'CURRENT-EARLIER',
+        'CURRENT-LATER',
+        'PAST-EARLIER',
+        'PAST-LATER',
+      ])
+
+    nowSpy.mockRestore()
+  })
+
   it('keeps medications first prescribed on the same day together in organization groups', () => {
     const organization = { display: '示範宏恩醫院' }
     const timelineMedication = (
@@ -597,7 +706,11 @@ describe('useMedicationTimeline category grouping', () => {
               coding: [{ code: 'continuous' }],
             },
           }
-        : {}),
+        : {
+            courseOfTherapyType: {
+              coding: [{ code: 'acute' }],
+            },
+          }),
     })
     const medications = [
       timelineMedication('early-chronic', '2026-06-02', 'EARLY CHRONIC', true),
@@ -622,7 +735,145 @@ describe('useMedicationTimeline category grouping', () => {
     const organizationDrugs = result.current.categories[0].drugs
     expect(organizationDrugs.map((drug) => drug.bars[0].authoredOnIso))
       .toEqual(['2026-06-02', '2026-06-02', '2026-07-01'])
-    expect(organizationDrugs.map((drug) => drug.isChronic))
-      .toEqual([false, true, true])
+    expect(organizationDrugs.map((drug) => drug.prescriptionType))
+      .toEqual(['non-chronic', 'chronic', 'chronic'])
+  })
+
+  it.each([
+    ['3m', 3],
+    ['6m', 6],
+    ['1y', 12],
+    ['3y', 36],
+  ] as const)(
+    'keeps the %s timeline at its fixed lookback boundary when data is newer',
+    (range, months) => {
+      const now = new Date('2026-08-28T12:00:00+08:00')
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+      const expectedStart = new Date(now)
+      expectedStart.setMonth(expectedStart.getMonth() - months)
+
+      const { result } = renderHook(() =>
+        useMedicationTimeline(
+          [medication({ authoredOn: '2026-08-01' })],
+          'medical',
+          range,
+          '其他',
+          'zh-TW',
+          zhAtcCategories,
+        ),
+      )
+
+      expect(result.current.domainStartMs).toBe(expectedStart.getTime())
+      expect(result.current.domainEndMs).toBeGreaterThanOrEqual(now.getTime())
+      nowSpy.mockRestore()
+    },
+  )
+
+  it('keeps the all-time range fitted to the earliest medication', () => {
+    const nowSpy = jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-08-28T12:00:00+08:00').getTime())
+    const earliest = new Date('2026-07-12').getTime()
+
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [medication({ authoredOn: '2026-07-12' })],
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.domainStartMs).toBe(earliest)
+    nowSpy.mockRestore()
+  })
+
+  it('does not treat missing prescription-type metadata as non-chronic', () => {
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [medication()],
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.drugs[0].prescriptionType).toBe('unrecorded')
+    expect(result.current).toMatchObject({
+      chronicCount: 0,
+      nonChronicCount: 0,
+      unrecordedCount: 1,
+    })
+  })
+
+  it('only treats an explicitly recorded acute course as non-chronic', () => {
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [medication({
+          courseOfTherapyType: {
+            coding: [{ code: 'acute' }],
+          },
+        })],
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.drugs[0].prescriptionType).toBe('non-chronic')
+    expect(result.current).toMatchObject({
+      chronicCount: 0,
+      nonChronicCount: 1,
+      unrecordedCount: 0,
+    })
+  })
+
+  it('keeps an unfamiliar course value unrecorded instead of assuming non-chronic', () => {
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [medication({
+          courseOfTherapyType: {
+            coding: [{ code: 'unknown-source-value' }],
+            text: 'Not supplied by source',
+          },
+        })],
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.drugs[0].prescriptionType).toBe('unrecorded')
+  })
+
+  it('keeps a grouped drug unrecorded when acute and missing metadata are mixed', () => {
+    const { result } = renderHook(() =>
+      useMedicationTimeline(
+        [
+          medication({ id: 'unknown', authoredOn: '2026-07-01' }),
+          medication({
+            id: 'acute',
+            authoredOn: '2026-07-02',
+            courseOfTherapyType: { coding: [{ code: 'acute' }] },
+          }),
+        ],
+        'medical',
+        'all',
+        '其他',
+        'zh-TW',
+        zhAtcCategories,
+      ),
+    )
+
+    expect(result.current.drugs).toHaveLength(1)
+    expect(result.current.drugs[0].prescriptionType).toBe('unrecorded')
   })
 })

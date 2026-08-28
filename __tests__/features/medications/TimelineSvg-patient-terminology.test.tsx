@@ -30,6 +30,10 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         terminologySnapshotLabel: '藥典版本',
         terminologySource: '健保署藥品主檔補充',
         timelineAfterToday: '今日後',
+        timelineCurrentMedication: '目前用藥',
+        timelineOrganizationTotal: '共',
+        timelineExpandOrganization: '展開機構',
+        timelineCollapseOrganization: '收合機構',
         frequencyLabel: '頻次',
         dosageInstructionLabel: '用法用量',
       },
@@ -42,12 +46,13 @@ const categories: CategoryGroup[] = [{
   label: '咳嗽與感冒製劑',
   chronicCount: 1,
   nonChronicCount: 0,
+  unrecordedCount: 0,
   drugs: [{
     drugKey: 'AC49322100',
     clinicalDrugKey: 'AC49322100',
     drugName: '愛克痰發泡錠600毫克',
     drugProductName: 'ACTEIN EFFERVESCENT TABLETS 600MG (ACETYLCYSTEINE)',
-    isChronic: true,
+    prescriptionType: 'chronic',
     categoryKey: 'atc-level2:R05',
     categoryLabel: '咳嗽與感冒製劑',
     organizationKey: 'organization:test',
@@ -75,7 +80,7 @@ const categories: CategoryGroup[] = [{
       endMs: new Date('2026-07-15').getTime(),
       supplyDays: 14,
       authoredOnIso: '2026-07-01',
-      isChronic: true,
+      prescriptionType: 'chronic',
       frequency: 'BIDPC',
       pharmacy: '測試醫學中心附設門診藥局與長名稱調劑機構',
     }],
@@ -83,6 +88,42 @@ const categories: CategoryGroup[] = [{
 }]
 
 describe('TimelineSvg patient terminology hover', () => {
+  it('collapses and expands an organization from its header', () => {
+    const organizationCategories: CategoryGroup[] = [{
+      ...categories[0],
+      key: 'organization:test',
+      label: '測試醫院',
+      level: 'organization',
+      currentDrugCount: 1,
+    }]
+
+    const { container } = render(
+      <TimelineSvg
+        categories={organizationCategories}
+        domainStartMs={new Date('2026-06-01').getTime()}
+        domainEndMs={new Date('2026-08-01').getTime()}
+        width={720}
+      />,
+    )
+
+    const collapse = screen.getByRole('button', { name: '收合機構：測試醫院' })
+    expect(collapse).toHaveAttribute('aria-expanded', 'true')
+    expect(collapse).toHaveTextContent('測試醫院 (目前用藥 1 / 共 1)')
+    expect(container.querySelector('[data-timeline-drug-label]')).not.toBeNull()
+
+    fireEvent.click(collapse)
+
+    const expand = screen.getByRole('button', { name: '展開機構：測試醫院' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    expect(container.querySelector('[data-timeline-drug-label]')).toBeNull()
+    expect(container.querySelector('[data-timeline-group-collapsed="true"]')).not.toBeNull()
+
+    fireEvent.click(expand)
+    expect(screen.getByRole('button', { name: '收合機構：測試醫院' }))
+      .toHaveAttribute('aria-expanded', 'true')
+    expect(container.querySelector('[data-timeline-drug-label]')).not.toBeNull()
+  })
+
   it('keeps ATC codes in accessible group details instead of visible headers', () => {
     const nestedCategories: CategoryGroup[] = [{
       ...categories[0],
@@ -104,6 +145,7 @@ describe('TimelineSvg patient terminology hover', () => {
         drugCount: 1,
         chronicCount: 1,
         nonChronicCount: 0,
+        unrecordedCount: 0,
         drugs: categories[0].drugs,
       }],
     }]
@@ -147,6 +189,15 @@ describe('TimelineSvg patient terminology hover', () => {
       .toHaveAccessibleName(
         'β2 促效劑／抗膽鹼劑複方（含三合一）。ATC 分類：R03AL。WHO 英文原文：Adrenergics in combination with anticholinergics incl. triple combinations with corticosteroids',
       )
+    const nestedHeaderX = Number(
+      longHeader?.querySelector('foreignObject')?.getAttribute('x'),
+    )
+    const nestedDrugLabelX = Number(
+      container
+        .querySelector('[data-timeline-drug-depth="1"] foreignObject')
+        ?.getAttribute('x'),
+    )
+    expect(nestedDrugLabelX - nestedHeaderX).toBe(12)
 
     fireEvent.click(originalEnglishTrigger!)
     const groupDetails = screen.getByTestId('timeline-atc-group-details')
@@ -186,6 +237,30 @@ describe('TimelineSvg patient terminology hover', () => {
     expect(within(tooltip).getByText('BIDPC')).toBeInTheDocument()
     expect(tooltip.querySelector('.truncate')).not.toBeInTheDocument()
     expect(screen.getByText('健保署藥品主檔補充')).toBeInTheDocument()
+  })
+
+  it('shows the same complete terminology card from the truncated drug label', () => {
+    const { container } = render(
+      <TimelineSvg
+        categories={categories}
+        domainStartMs={new Date('2026-06-01').getTime()}
+        domainEndMs={new Date('2026-08-01').getTime()}
+        width={360}
+      />,
+    )
+
+    const drugLabel = container.querySelector('[data-timeline-drug-label]')
+    expect(drugLabel).toHaveAttribute('tabindex', '0')
+
+    fireEvent.click(drugLabel!)
+
+    const tooltip = screen.getByTestId('medication-terminology-tooltip')
+    expect(within(tooltip).getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
+    expect(within(tooltip).getByText('ACTEIN EFFERVESCENT TABLETS 600MG'))
+      .toBeInTheDocument()
+    expect(within(tooltip).getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
+    expect(within(tooltip).getByText(/nhi-drug-terminology-20260728/))
+      .toBeInTheDocument()
   })
 
   it('splits a medication period at today and marks the future portion with a dashed lighter segment', () => {

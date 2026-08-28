@@ -15,13 +15,21 @@ import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
-import type { CategoryGroup, RefillBar, TimelineDrug } from '../hooks/useMedicationTimeline'
+import {
+  isTimelineDrugCurrent,
+  type CategoryGroup,
+  type RefillBar,
+  type TimelineDrug,
+} from '../hooks/useMedicationTimeline'
 import {
   medicationChronicFutureTimelineBarClass,
   medicationChronicTimelineBarClass,
   medicationNonChronicFutureTimelineBarClass,
   medicationNonChronicTimelineBarClass,
+  medicationUnrecordedFutureTimelineBarClass,
+  medicationUnrecordedTimelineBarClass,
 } from '../../components/medication-chip-styles'
+import { MedicationTerminologyTooltip } from '../../components/MedicationTerminologyTooltip'
 
 interface TimelineSvgProps {
   categories: CategoryGroup[]
@@ -32,12 +40,15 @@ interface TimelineSvgProps {
 
 const ROW_HEIGHT = 18
 const CATEGORY_HEADER_HEIGHT = 22
+const ORGANIZATION_HEADER_HEIGHT = 24
 const CATEGORY_HEADER_LINE_HEIGHT = 14
 const LABEL_COLUMN_WIDTH = 180
 const AXIS_HEIGHT = 22
 const BAR_HEIGHT = 10
 const BAR_VERTICAL_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2
 const CATEGORY_GAP = 4
+const GROUP_DEPTH_INDENT = 12
+const DRUG_LABEL_INDENT = 12
 
 interface HoverState {
   bar: RefillBar
@@ -111,6 +122,9 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const [hover, setHover] = useState<HoverState | null>(null)
+  const [collapsedOrganizationKeys, setCollapsedOrganizationKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [todayMs] = useState(() => Date.now())
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [tooltipHeight, setTooltipHeight] = useState(0)
@@ -138,13 +152,19 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
   const rows: Row[] = []
   let cursorY = AXIS_HEIGHT
   const appendGroup = (group: CategoryGroup) => {
+    const isOrganization = group.level === 'organization'
+    const isCollapsed = isOrganization && collapsedOrganizationKeys.has(group.key)
+    const headerHeight = isOrganization
+      ? ORGANIZATION_HEADER_HEIGHT
+      : CATEGORY_HEADER_HEIGHT
     rows.push({
       kind: 'category',
       y: cursorY,
-      height: CATEGORY_HEADER_HEIGHT,
+      height: headerHeight,
       group,
     })
-    cursorY += CATEGORY_HEADER_HEIGHT
+    cursorY += headerHeight
+    if (isCollapsed) return
     const depth = group.depth ?? 0
     for (const drug of group.drugs) {
       rows.push({ kind: 'drug', y: cursorY, drug, depth })
@@ -242,8 +262,11 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
         {rows.map((row, idx) => {
           if (row.kind === 'category') {
             const depth = row.group.depth ?? 0
-            const headerX = 6 + depth * 12
+            const headerX = 6 + depth * GROUP_DEPTH_INDENT
             const count = row.group.drugCount ?? row.group.drugs.length
+            const isOrganization = row.group.level === 'organization'
+            const isCollapsed = isOrganization
+              && collapsedOrganizationKeys.has(row.group.key)
             const originalEnglish = locale !== 'en'
               && row.group.nameZh === row.group.label
               && row.group.nameEn
@@ -252,10 +275,17 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 : undefined
             const hasAtcDetails = Boolean(row.group.code || originalEnglish)
             const headerContent = (
-              <span className="inline-block whitespace-nowrap">
+              <span className="inline-flex items-center whitespace-nowrap">
+                {isOrganization ? (
+                  <span aria-hidden="true" className="mr-1 inline-block w-2.5 text-muted-foreground">
+                    {isCollapsed ? '▸' : '▾'}
+                  </span>
+                ) : null}
                 {row.group.label}{' '}
                 <span style={{ color: 'var(--muted-foreground)', fontWeight: 400 }}>
-                  ({count})
+                  {isOrganization
+                    ? `(${mt.timelineCurrentMedication ?? 'Current medication'} ${row.group.currentDrugCount ?? 0} / ${mt.timelineOrganizationTotal ?? 'total'} ${count})`
+                    : `(${count})`}
                 </span>
               </span>
             )
@@ -265,6 +295,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 data-timeline-group-depth={depth}
                 data-timeline-group-level={row.group.level}
                 data-timeline-group-header-lines={1}
+                data-timeline-group-collapsed={isOrganization ? String(isCollapsed) : undefined}
               >
                 <rect
                   x={0}
@@ -291,11 +322,35 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                       lineHeight: `${CATEGORY_HEADER_LINE_HEIGHT}px`,
                       minHeight: '100%',
                       overflow: 'visible',
-                      paddingBlock: 4,
+                      paddingBlock: isOrganization ? 0 : 4,
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {hasAtcDetails ? (
+                    {isOrganization ? (
+                      <button
+                        type="button"
+                        data-timeline-organization-toggle
+                        aria-expanded={!isCollapsed}
+                        aria-label={`${
+                          isCollapsed
+                            ? mt.timelineExpandOrganization ?? 'Expand organization'
+                            : mt.timelineCollapseOrganization ?? 'Collapse organization'
+                        }：${row.group.label}`}
+                        className="inline-flex min-h-6 appearance-none items-center rounded-[2px] border-0 bg-transparent p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        style={{ color: 'inherit', font: 'inherit', lineHeight: 'inherit' }}
+                        onClick={() => {
+                          setHover(null)
+                          setCollapsedOrganizationKeys((current) => {
+                            const next = new Set(current)
+                            if (next.has(row.group.key)) next.delete(row.group.key)
+                            else next.add(row.group.key)
+                            return next
+                          })
+                        }}
+                      >
+                        {headerContent}
+                      </button>
+                    ) : hasAtcDetails ? (
                       <TapTooltip
                         asChild
                         selectable
@@ -350,13 +405,15 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           }
 
           const drug = row.drug
-          const isCurrent = drug.bars.some(
-            (bar) => bar.startMs <= todayMs && bar.endMs >= todayMs,
-          )
+          const isCurrent = isTimelineDrugCurrent(drug, todayMs)
+          const drugLabelX = 6
+            + row.depth * GROUP_DEPTH_INDENT
+            + DRUG_LABEL_INDENT
           return (
             <g
               key={drug.drugKey}
               data-timeline-drug-current={isCurrent ? 'true' : 'false'}
+              data-timeline-drug-depth={row.depth}
             >
               {isCurrent ? (
                 <rect
@@ -371,30 +428,40 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               ) : null}
               {/* drug name label (left column) */}
               <foreignObject
-                x={4 + row.depth * 12}
+                x={drugLabelX}
                 y={row.y}
-                width={LABEL_COLUMN_WIDTH - 8 - row.depth * 12}
+                width={LABEL_COLUMN_WIDTH - drugLabelX - 4}
                 height={ROW_HEIGHT}
               >
-                <div
-                  // @ts-expect-error xmlns is valid here
-                  xmlns="http://www.w3.org/1999/xhtml"
-                  title={[
-                    drug.drugName,
-                    drug.drugProductName,
-                  ].filter(Boolean).join(' · ')}
-                  style={{
-                    fontSize: 11,
-                    lineHeight: `${ROW_HEIGHT}px`,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    color: 'var(--foreground)',
-                    fontWeight: drug.isChronic ? 600 : 500,
-                  }}
+                <MedicationTerminologyTooltip
+                  medication={{ drugTerminology: drug.drugTerminology }}
+                  enabled
                 >
-                  {drug.drugName}
-                </div>
+                  <div
+                    // @ts-expect-error xmlns is valid here
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    data-timeline-drug-label
+                    title={[
+                      drug.drugName,
+                      drug.drugProductName,
+                    ].filter(Boolean).join(' · ')}
+                    tabIndex={drug.drugTerminology ? 0 : undefined}
+                    className={drug.drugTerminology
+                      ? 'cursor-help outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
+                      : undefined}
+                    style={{
+                      fontSize: 11,
+                      lineHeight: `${ROW_HEIGHT}px`,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--foreground)',
+                      fontWeight: drug.prescriptionType === 'chronic' ? 600 : 500,
+                    }}
+                  >
+                    {drug.drugName}
+                  </div>
+                </MedicationTerminologyTooltip>
               </foreignObject>
 
               {/* refill bars */}
@@ -432,6 +499,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     {hasElapsedSegment && (
                       <rect
                         data-timeline-segment="elapsed"
+                        data-timeline-prescription-type={drug.prescriptionType}
                         x={LABEL_COLUMN_WIDTH + x1}
                         y={row.y + BAR_VERTICAL_OFFSET}
                         width={Math.max(elapsedEndX - x1, 1)}
@@ -439,9 +507,11 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                         strokeWidth={0.5}
                         rx={1}
                         className={
-                          drug.isChronic
+                          drug.prescriptionType === 'chronic'
                             ? medicationChronicTimelineBarClass
-                            : medicationNonChronicTimelineBarClass
+                            : drug.prescriptionType === 'non-chronic'
+                              ? medicationNonChronicTimelineBarClass
+                              : medicationUnrecordedTimelineBarClass
                         }
                         onMouseEnter={(e) => showBarHover(e, 'elapsed')}
                         style={{ cursor: 'pointer' }}
@@ -450,6 +520,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     {hasFutureSegment && (
                       <rect
                         data-timeline-segment="future"
+                        data-timeline-prescription-type={drug.prescriptionType}
                         x={LABEL_COLUMN_WIDTH + futureStartX}
                         y={row.y + BAR_VERTICAL_OFFSET}
                         width={Math.max(x2 - futureStartX, 1)}
@@ -458,9 +529,11 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                         strokeDasharray="2 1.5"
                         rx={1}
                         className={
-                          drug.isChronic
+                          drug.prescriptionType === 'chronic'
                             ? medicationChronicFutureTimelineBarClass
-                            : medicationNonChronicFutureTimelineBarClass
+                            : drug.prescriptionType === 'non-chronic'
+                              ? medicationNonChronicFutureTimelineBarClass
+                              : medicationUnrecordedFutureTimelineBarClass
                         }
                         onMouseEnter={(e) => showBarHover(e, 'future')}
                         style={{ cursor: 'pointer' }}

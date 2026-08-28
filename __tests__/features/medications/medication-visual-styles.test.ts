@@ -11,6 +11,9 @@ import {
   medicationNonChronicFutureTimelineBarClass,
   medicationNonChronicSwatchClass,
   medicationNonChronicTimelineBarClass,
+  medicationUnrecordedFutureTimelineBarClass,
+  medicationUnrecordedSwatchClass,
+  medicationUnrecordedTimelineBarClass,
   getMedicationDaysLeftBadgeClass,
   getMedicationStatusBadgeClass,
 } from '@/features/clinical-summary/medications/components/medication-chip-styles'
@@ -47,6 +50,16 @@ describe('medication status visual language', () => {
   it('uses one neutral family for non-chronic medication timeline marks', () => {
     expect(medicationNonChronicSwatchClass).toContain('slate-')
     expect(medicationNonChronicTimelineBarClass).toContain('slate-')
+  })
+
+  it('uses restrained amber for unrecorded prescription-type marks', () => {
+    expect(medicationUnrecordedSwatchClass).toContain('border-amber-600')
+    expect(medicationUnrecordedSwatchClass).toContain('bg-amber-100')
+    expect(medicationUnrecordedTimelineBarClass).toContain('fill-amber-100')
+    expect(medicationUnrecordedTimelineBarClass).toContain('stroke-amber-600')
+    expect(medicationUnrecordedFutureTimelineBarClass).toContain('fill-amber-50')
+    expect(medicationUnrecordedFutureTimelineBarClass).toContain('stroke-amber-500')
+    expect(medicationUnrecordedTimelineBarClass).not.toMatch(/red-|destructive/)
   })
 
   it('uses lighter type-aware colours plus a dashed key for after-today periods', () => {
