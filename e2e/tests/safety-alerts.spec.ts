@@ -96,9 +96,9 @@ test.describe('safety alerts (mocked)', () => {
 
     // Free models are selectable; premium models route to key setup.
     await expect(page.getByRole('menuitem', { name: /Claude Haiku 4\.5/ })).toBeVisible()
-    const opusKeyLink = page.getByTestId('model-picker-key-link-claude-opus-4-8')
+    const opusKeyLink = page.getByTestId('model-picker-key-link-claude-opus-5')
     await expect(opusKeyLink).toBeVisible()
-    await expect(opusKeyLink).toHaveAccessibleName('Claude Opus 4.8，設定金鑰')
+    await expect(opusKeyLink).toHaveAccessibleName('Claude Opus 5，設定金鑰')
 
     // Pick a free model → label updates.
     await page.getByRole('menuitem', { name: /Claude Haiku 4\.5/ }).click()
