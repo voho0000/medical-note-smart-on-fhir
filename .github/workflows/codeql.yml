@@ -5,11 +5,25 @@ name: CodeQL
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   pull_request:
     branches: [master]
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   schedule:
     # Weekly, so newly-disclosed query packs catch existing code too.
     - cron: "27 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:

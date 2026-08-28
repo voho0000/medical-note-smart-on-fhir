@@ -8,7 +8,16 @@ name: E2E
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   workflow_dispatch: {}
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e:

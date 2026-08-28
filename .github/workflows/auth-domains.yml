@@ -11,7 +11,16 @@ on:
     - cron: '17 1 * * *'   # daily ~01:17 UTC — catches config drift within a day
   push:
     branches: [master]     # immediate post-deploy re-validation (cheap, ~2s)
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   workflow_dispatch:
+
+concurrency:
+  group: auth-domains-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:

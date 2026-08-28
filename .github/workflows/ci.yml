@@ -17,7 +17,17 @@ name: CI
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   pull_request:
+    paths-ignore:
+      - ".gitignore"
+      - "**/*.md"
+      - "docs/**"
+      - "outputs/**"
   workflow_dispatch: {}
 
 # Cancel in-flight runs when a newer commit is pushed to the same branch —
