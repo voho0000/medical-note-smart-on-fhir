@@ -97,7 +97,7 @@ describe('useReportsData NHI DICOM viewer actions', () => {
     expect(result.current.reportRows.every((row) => row.viewerActions?.length === 1)).toBe(true)
   })
 
-  it('preserves every extension when duplicate report narratives and a shared Study UID collapse into one row', () => {
+  it('collapses viewer requests when duplicate report narratives share one ImagingStudy', () => {
     const reports = ['CASE-A', 'CASE-B'].map((caseNo, index) => ({
       id: `duplicate-report-${index + 1}`,
       status: 'final',
@@ -114,6 +114,43 @@ describe('useReportsData NHI DICOM viewer actions', () => {
     expect(result.current.reportRows).toHaveLength(1)
     expect(result.current.reportRows[0].viewerActions?.map((action) => (
       action.kind === 'live' ? action.descriptor.iplCaseSeqNo : action.url
+    ))).toEqual(['CASE-A'])
+    expect(result.current.reportRows[0].bridgeDupCount).toBe(1)
+  })
+
+  it('keeps distinct viewer requests when copied narratives point to different ImagingStudies', () => {
+    const reports = ['CASE-A', 'CASE-B'].map((caseNo, index) => ({
+      id: `distinct-study-report-${index + 1}`,
+      status: 'final',
+      code: { text: '胸部電腦斷層' },
+      effectiveDateTime: '2026-08-12',
+      performer: [{ display: '示範醫院;門診;1234567890' }],
+      conclusion: 'Same complete imaging narrative.',
+      imagingStudy: [{ reference: `ImagingStudy/study-${index + 1}` }],
+      extension: [liveExtension(caseNo)],
+    }))
+
+    const { result } = renderHook(() => useReportsData(reports), { wrapper: Wrapper })
+
+    expect(result.current.reportRows).toHaveLength(1)
+    expect(result.current.reportRows[0].viewerActions?.map((action) => (
+      action.kind === 'live' ? action.descriptor.iplCaseSeqNo : action.url
     ))).toEqual(['CASE-A', 'CASE-B'])
+  })
+
+  it('collapses an exact duplicate viewer descriptor without requiring an ImagingStudy', () => {
+    const reports = [1, 2].map((index) => ({
+      id: `exact-viewer-copy-${index}`,
+      status: 'final',
+      code: { text: '胸部X光' },
+      effectiveDateTime: '2026-08-12',
+      performer: [{ display: '示範醫院;門診;1234567890' }],
+      conclusion: 'Same complete imaging narrative.',
+      extension: [liveExtension('CASE-SAME')],
+    }))
+
+    const { result } = renderHook(() => useReportsData(reports), { wrapper: Wrapper })
+
+    expect(result.current.reportRows[0].viewerActions).toHaveLength(1)
   })
 })

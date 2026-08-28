@@ -1,5 +1,6 @@
 import { observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import type { Row } from '../types'
 
 // Match both the raw FHIR name and the canonical analyte label rendered by the
@@ -43,4 +44,21 @@ export function rowInnerMatch(row: Row, rawQuery: string): boolean {
         nameMatch(component, query) || resultMatch(component, query)
       ))
   })
+}
+
+/** Search a rendered report row, including members folded into display groups. */
+export function rowMatchesSearch(row: Row, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) return false
+
+  const ownMatch = (
+    row.title.toLowerCase().includes(query)
+    || row.meta.toLowerCase().includes(query)
+    || (row.institution ?? '').toLowerCase().includes(query)
+    || dateSearchTokens(row.effectiveDate).some((value) => value.toLowerCase().includes(query))
+    || rowInnerMatch(row, query)
+  )
+  if (ownMatch) return true
+
+  return row.groupedRows?.some((member) => rowMatchesSearch(member, query)) ?? false
 }

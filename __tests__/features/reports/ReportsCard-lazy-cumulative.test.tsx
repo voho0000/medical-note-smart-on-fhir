@@ -17,6 +17,16 @@ const mockUseReportsData = jest.fn((_reports: unknown[], _imagingStudies: unknow
   seenIds: new Set<string>(),
 }))
 const mockUseReportTabCounts = jest.fn()
+const CANCER_SCREENING_OBSERVATION = {
+  id: 'obs-1',
+  resourceType: 'Observation',
+  category: [{
+    coding: [{
+      system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/medcloud-observation-program',
+      code: 'cancer-screening',
+    }],
+  }],
+}
 
 const activeNameSwitches = () => screen.queryAllByRole('switch', { name: '名稱顯示' })
   .filter((element) => !element.closest('[data-slot="tabs-content"][data-state="inactive"]'))
@@ -44,6 +54,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
           lab: '檢驗',
           imaging: '影像',
           pathology: '病理',
+          cancerScreening: '癌篩',
           vitals: '生命徵象',
           procedures: '處置',
         },
@@ -117,6 +128,7 @@ describe('ReportsCard lazy cumulative loading', () => {
       lab: 31,
       imaging: 7,
       pathology: 2,
+      cancerScreening: 3,
       vitals: 10,
       procedures: 2,
     })
@@ -146,7 +158,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     mockUseClinicalData.mockReturnValue({
       diagnosticReports: [],
       imagingStudies: [],
-      observations: [{ id: 'obs-1', resourceType: 'Observation' }],
+      observations: [CANCER_SCREENING_OBSERVATION],
       procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
       resourceReady: ALL_TYPES_READY,
       error: null,
@@ -172,7 +184,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     mockUseClinicalData.mockReturnValue({
       diagnosticReports,
       imagingStudies,
-      observations: [{ id: 'obs-1', resourceType: 'Observation' }],
+      observations: [CANCER_SCREENING_OBSERVATION],
       procedures: [{ id: 'proc-1', resourceType: 'Procedure' }],
       resourceReady: ALL_TYPES_READY,
       error: null,
@@ -192,6 +204,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByRole('tab', { name: '檢驗 (31)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '影像 (7)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '病理 (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '癌篩 (3)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '生命徵象 (10)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '處置 (2)' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand to fullscreen' })).toHaveClass(
@@ -267,6 +280,7 @@ describe('ReportsCard lazy cumulative loading', () => {
 
     render(<ReportsCard />)
 
+    expect(screen.queryByRole('tab', { name: /癌篩/ })).not.toBeInTheDocument()
     fireEvent.mouseDown(screen.getByRole('tab', { name: /全部/ }), {
       button: 0,
       ctrlKey: false,

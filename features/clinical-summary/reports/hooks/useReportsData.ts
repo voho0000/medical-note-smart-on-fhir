@@ -20,6 +20,7 @@ import { getOrderNameDisplay, NHI_ORDER_CODE_TO_ZH, NHI_ORDER_CODE_TO_EN } from 
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import type { Locale } from '@/src/shared/i18n/i18n.config'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   formatImagingStudyMetadata,
@@ -65,14 +66,35 @@ function getDrDate(dr: any): string | undefined {
   return dr?.effectiveDateTime || dr?.issued
 }
 
-export function useReportsData(
+function viewerActionIdentity(action: NhiViewerAction): string {
+  if (action.kind === 'legacy') return `legacy|${action.url}`
+  const descriptor = action.descriptor
+  return [
+    'live',
+    descriptor.version,
+    descriptor.procId,
+    descriptor.patientContextHash,
+    descriptor.iplCaseSeqNo,
+    descriptor.readPos,
+    descriptor.ordMark,
+    descriptor.fileType,
+    descriptor.fileQty,
+    descriptor.feeYm,
+  ].join('|')
+}
+
+/**
+ * Shared DiagnosticReport -> Row projection used by both the Reports page and
+ * encounter details. Keep grouping, narrative/image merging, and source ids in
+ * this pure builder so every ReportRow consumer receives the same model.
+ */
+export function buildReportsData(
   diagnosticReports: any[],
   imagingStudies: any[] = [],
   nameMode: AnalyteNameMode = 'standardized',
+  audience: 'medical' | 'patient' = 'medical',
+  locale: Locale = 'en',
 ) {
-  const { audience } = useAudience()
-  const { locale } = useLanguage()
-  return useMemo(() => {
     const rows: Row[] = []
     const seen = new Set() as Set<string>
     const studyById = new Map<string, ImagingStudy>()
@@ -307,8 +329,40 @@ export function useReportsData(
       const summaryParts: string[] = []
       const attachments: string[] = []
       const images: ReportImage[] = []
-      const viewerActions: NhiViewerAction[] = (viewerReportsByKey.get(key) ?? grp)
-        .flatMap((report) => getNhiViewerActions(report))
+      const viewerReports = viewerReportsByKey.get(key) ?? grp
+      const viewerEntries = viewerReports.flatMap((report) => (
+        getNhiViewerActions(report).map((action) => ({ action, report }))
+      ))
+      // Exact duplicate extensions are always the same request and are safe to
+      // collapse. This catches bridge retries even when no ImagingStudy link
+      // was supplied.
+      const seenViewerActions = new Set<string>()
+      const uniqueViewerEntries = viewerEntries.filter((entry) => {
+        const actionKey = viewerActionIdentity(entry.action)
+        if (seenViewerActions.has(actionKey)) return false
+        seenViewerActions.add(actionKey)
+        return true
+      })
+
+      // A strict-prefix narrative duplicate can still carry a different
+      // viewer request descriptor on each copied DiagnosticReport. When every
+      // viewer-bearing copy explicitly references the SAME ImagingStudy, those
+      // requests lead to one study and only one action belongs in the UI.
+      // Never apply this rule without that stable FHIR identity: same-day CTs
+      // can represent genuinely different body regions.
+      const sharedViewerStudyIds = uniqueViewerEntries.map(({ report }) => {
+        const ids = [...new Set((report.imagingStudy ?? [])
+          .map((reference) => referenceId(reference.reference))
+          .filter((id): id is string => !!id))]
+        return ids.length === 1 ? ids[0] : null
+      })
+      const hasOneSharedViewerStudy = sharedViewerStudyIds.length > 1
+        && sharedViewerStudyIds.every((id) => id !== null && id === sharedViewerStudyIds[0])
+      const viewerActions: NhiViewerAction[] = (
+        (dupCountByKey.get(key) ?? 0) > 0 && hasOneSharedViewerStudy
+          ? uniqueViewerEntries.slice(0, 1)
+          : uniqueViewerEntries
+      ).map(({ action }) => action)
       const allObs: Observation[] = []
 
       for (const dr of grp) {
@@ -707,5 +761,17 @@ export function useReportsData(
     }
 
     return { reportRows: rows, seenIds: seen }
-  }, [diagnosticReports, imagingStudies, audience, locale, nameMode])
+}
+
+export function useReportsData(
+  diagnosticReports: any[],
+  imagingStudies: any[] = [],
+  nameMode: AnalyteNameMode = 'standardized',
+) {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
+  return useMemo(
+    () => buildReportsData(diagnosticReports, imagingStudies, nameMode, audience, locale),
+    [diagnosticReports, imagingStudies, audience, locale, nameMode],
+  )
 }

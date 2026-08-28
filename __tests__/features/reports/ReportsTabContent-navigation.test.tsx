@@ -39,7 +39,13 @@ jest.mock('@tanstack/react-virtual', () => ({
 }))
 
 jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
-  ReportRow: ({ row }: { row: { title: string } }) => <div>{row.title}</div>,
+  ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="generic-report-row">{row.title}</div>,
+}))
+
+jest.mock('@/features/clinical-summary/reports/components/CancerScreeningRow', () => ({
+  CancerScreeningRow: ({ row }: { row: { title: string } }) => (
+    <div data-testid="cancer-screening-row">{row.title}</div>
+  ),
 }))
 
 class ResizeObserverMock {
@@ -134,6 +140,27 @@ describe('ReportsTabContent source navigation', () => {
       expect(mockScrollToIndex).toHaveBeenCalledWith(0, { align: 'center' })
       expect(onScrollResolved).toHaveBeenCalledWith(7)
     }, { timeout: 1000 })
+  })
+
+  it('uses the dedicated row renderer for cancer-screening records', async () => {
+    const row = {
+      id: 'screening-row',
+      title: '大腸癌篩檢',
+      meta: '癌篩',
+      obs: [{ valueString: '無異常' }],
+      group: 'cancer-screening' as const,
+    }
+
+    render(
+      <div style={{ height: 400, overflowY: 'auto' }}>
+        <Tabs value="cancer-screening">
+          <ReportsTabContent value="cancer-screening" rows={[row]} isActive />
+        </Tabs>
+      </div>,
+    )
+
+    expect(await screen.findByTestId('cancer-screening-row')).toHaveTextContent('大腸癌篩檢')
+    expect(screen.queryByTestId('generic-report-row')).not.toBeInTheDocument()
   })
 
   it('uses the tab-owned viewport instead of the shared outer panel', async () => {

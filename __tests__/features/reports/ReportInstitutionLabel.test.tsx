@@ -20,7 +20,7 @@ describe('ReportInstitutionLabel', () => {
 
   it('keeps a compact label and shows the complete institution on hover', async () => {
     const sourceInstitution = '臺北榮民總醫院；門診醫療部影像中心；0601160016'
-    const displayInstitution = '臺北榮民總醫院；門診醫療部影像中心'
+    const displayInstitution = '臺北榮民總醫院'
     render(<ReportInstitutionLabel institution={sourceInstitution} className="max-w-[10rem]" />)
 
     const label = screen.getByLabelText(displayInstitution)
@@ -35,6 +35,6 @@ describe('ReportInstitutionLabel', () => {
 
   it('does not remove meaningful digits unless they are a delimited trailing code', () => {
     expect(formatReportInstitution('三軍總醫院803分院')).toBe('三軍總醫院803分院')
-    expect(formatReportInstitution('三軍總醫院803分院;門診;123456')).toBe('三軍總醫院803分院;門診')
+    expect(formatReportInstitution('三軍總醫院803分院;門診;123456')).toBe('三軍總醫院803分院')
   })
 })

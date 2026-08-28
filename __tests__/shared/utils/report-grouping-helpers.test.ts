@@ -1,8 +1,38 @@
 import {
   HEALTH_BANK_SDK_SECTION_SYSTEM,
+  inferGroupFromObservation,
   inferGroupFromDiagnosticReport,
   inferReportDisplayGroup,
+  isCancerScreeningCategory,
 } from '@/src/shared/utils/report-grouping-helpers'
+
+describe('MediCloud cancer-screening classification', () => {
+  const category = [{
+    coding: [{
+      system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/medcloud-observation-program',
+      code: 'CANCER-SCREENING',
+      display: '癌症篩檢',
+    }],
+  }]
+
+  it('uses the explicit source category for cancer-screening observations', () => {
+    expect(isCancerScreeningCategory(category)).toBe(true)
+    expect(inferGroupFromObservation({ category, code: { text: '大腸癌篩檢' } }))
+      .toBe('cancer-screening')
+  })
+
+  it('does not infer cancer screening from a tumour-marker name', () => {
+    expect(inferGroupFromObservation({
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+          code: 'laboratory',
+        }],
+      }],
+      code: { text: 'CEA cancer marker' },
+    })).toBe('lab')
+  })
+})
 
 describe('inferGroupFromDiagnosticReport', () => {
   it('recognizes a category-less Health Bank chest X-ray by NHI order code', () => {

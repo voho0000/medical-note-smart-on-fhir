@@ -1,8 +1,14 @@
 "use client"
 
 import { useState } from 'react'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ChevronDown, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { NhiViewerAction } from '../types'
@@ -35,6 +41,9 @@ const ERROR_EN: Record<NhiViewerErrorCode, string> = {
   UNSUPPORTED_ORIGIN: 'Live NHI imaging is available on the official MediPrisma site or the local development site at http://localhost:3001.',
   EXTENSION_UNAVAILABLE: 'Cannot connect to the Health Catcher extension. Confirm it is enabled and retry.',
 }
+
+const LIVE_ACTION_CLASS = 'inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-xs font-medium leading-none text-sky-800 transition-colors hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-sky-300/50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/15'
+const LEGACY_ACTION_CLASS = 'inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium leading-none text-amber-800 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-amber-300/50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
 
 function LiveViewerButton({
   action,
@@ -69,8 +78,6 @@ function LiveViewerButton({
       <span>{loading && locale === 'zh-TW' ? '開啟中…' : loading ? 'Opening…' : visibleLabel}</span>
     </>
   )
-  const className = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-sky-800 transition-colors hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-sky-300/50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/15'
-
   if (nestedInButton) {
     return (
       <span
@@ -90,7 +97,7 @@ function LiveViewerButton({
             void open()
           }
         }}
-        className={className}
+        className={LIVE_ACTION_CLASS}
       >
         {content}
       </span>
@@ -106,7 +113,7 @@ function LiveViewerButton({
         void open()
       }}
       onKeyDown={(event) => event.stopPropagation()}
-      className={className}
+      className={LIVE_ACTION_CLASS}
       aria-label={action.title ? `${accessibleLabel}：${action.title}` : accessibleLabel}
       title={accessibleLabel}
     >
@@ -164,7 +171,7 @@ export function NhiViewerActions({
             if (opened) opened.opener = null
           }
         }}
-        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        className={LEGACY_ACTION_CLASS}
         aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${label}`}
         title={legacyHint}
       >
@@ -181,7 +188,7 @@ export function NhiViewerActions({
         referrerPolicy="no-referrer"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
-        className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium leading-none text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        className={LEGACY_ACTION_CLASS}
         aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${label}`}
         title={legacyHint}
       >
@@ -191,10 +198,133 @@ export function NhiViewerActions({
     )
   })
 
-  const containerClassName = cn('flex flex-wrap items-center gap-1.5', className)
+  const containerClassName = cn('inline-flex shrink-0 items-center', className)
+  if (safeActions.length > 1) {
+    return (
+      <NhiViewerActionMenu
+        actions={safeActions}
+        nestedInButton={nestedInButton}
+        className={containerClassName}
+      />
+    )
+  }
   return nestedInButton ? (
     <span className={containerClassName} data-nhi-viewer-actions>{controls}</span>
   ) : (
     <div className={containerClassName} data-nhi-viewer-actions>{controls}</div>
+  )
+}
+
+function NhiViewerActionMenu({
+  actions,
+  nestedInButton,
+  className,
+}: {
+  actions: NhiViewerAction[]
+  nestedInButton: boolean
+  className?: string
+}) {
+  const { locale } = useLanguage()
+  const [openingIndex, setOpeningIndex] = useState<number | null>(null)
+  const allLegacy = actions.every((action) => action.kind === 'legacy')
+  const count = actions.length
+  const visibleLabel = locale === 'zh-TW' ? `健保影像 ${count}` : `NHI imaging ${count}`
+  const accessibleLabel = locale === 'zh-TW'
+    ? `選擇健保影像，共 ${count} 筆`
+    : `Choose NHI imaging, ${count} studies`
+
+  const openLive = async (action: Extract<NhiViewerAction, { kind: 'live' }>, index: number) => {
+    if (openingIndex !== null) return
+    setOpeningIndex(index)
+    try {
+      const result = await requestNhiViewerOpen(action.descriptor)
+      if (!result.ok) toast.error((locale === 'zh-TW' ? ERROR_ZH : ERROR_EN)[result.code] ?? ERROR_ZH.OPEN_FAILED)
+    } finally {
+      setOpeningIndex(null)
+    }
+  }
+
+  const triggerContent = (
+    <>
+      {openingIndex !== null
+        ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        : <ExternalLink className="h-3 w-3" aria-hidden />}
+      <span>{openingIndex !== null && locale === 'zh-TW' ? '開啟中…' : openingIndex !== null ? 'Opening…' : visibleLabel}</span>
+      <ChevronDown className="h-3 w-3" aria-hidden />
+    </>
+  )
+  const triggerClassName = allLegacy ? LEGACY_ACTION_CLASS : LIVE_ACTION_CLASS
+  const trigger = nestedInButton ? (
+    <span
+      role="button"
+      tabIndex={openingIndex === null ? 0 : -1}
+      aria-disabled={openingIndex !== null}
+      aria-label={accessibleLabel}
+      className={triggerClassName}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {triggerContent}
+    </span>
+  ) : (
+    <button
+      type="button"
+      disabled={openingIndex !== null}
+      aria-label={accessibleLabel}
+      className={triggerClassName}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {triggerContent}
+    </button>
+  )
+
+  return (
+    <span className={className} data-nhi-viewer-actions>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[11rem]">
+          {actions.map((action, index) => {
+            const itemLabel = locale === 'zh-TW' ? `健保影像 ${index + 1}` : `NHI imaging ${index + 1}`
+            if (action.kind === 'live') {
+              return (
+                <DropdownMenuItem
+                  key={`live:${index}:${action.descriptor.iplCaseSeqNo}`}
+                  disabled={openingIndex !== null}
+                  aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${itemLabel}`}
+                  onSelect={(event) => {
+                    event.stopPropagation()
+                    void openLive(action, index)
+                  }}
+                >
+                  <ExternalLink aria-hidden />
+                  <span>{itemLabel}</span>
+                  {action.title ? <span className="ml-auto max-w-[12rem] truncate text-xs text-muted-foreground">{action.title}</span> : null}
+                </DropdownMenuItem>
+              )
+            }
+            return (
+              <DropdownMenuItem key={`legacy:${index}:${action.title ?? ''}`} asChild>
+                <a
+                  href={action.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  referrerPolicy="no-referrer"
+                  aria-label={`${locale === 'zh-TW' ? '開啟' : 'Open'} ${itemLabel}`}
+                  title={locale === 'zh-TW' ? '此為舊資料中的短效連結，可能已過期。' : 'This short-lived link comes from legacy data and may have expired.'}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink aria-hidden />
+                  <span>{itemLabel}</span>
+                  {action.title ? <span className="ml-auto max-w-[12rem] truncate text-xs text-muted-foreground">{action.title}</span> : null}
+                </a>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
   )
 }

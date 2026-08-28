@@ -6,6 +6,7 @@ import { inferGroupFromObservation } from '../utils/grouping-helpers'
 import { getAnalyteDisplayForMode, type AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 
 export function useOrphanObservations(
   observations: any[],
@@ -13,7 +14,7 @@ export function useOrphanObservations(
   nameMode: AnalyteNameMode = 'standardized',
 ) {
   const { audience } = useAudience()
-  const { locale } = useLanguage()
+  const { locale, t } = useLanguage()
   return useMemo(() => {
     if (!Array.isArray(observations)) return []
 
@@ -52,6 +53,15 @@ export function useOrphanObservations(
     return Array.from(groups.entries()).map(([k, lst]) => {
       const first = lst[0]
       const institution = (first as any).performer?.[0]?.display
+      const group = inferGroupFromObservation(first)
+      const displayObservations = group === 'cancer-screening'
+        ? lst.map((observation) => ({
+            ...observation,
+            valueString: typeof observation.valueString === 'string'
+              ? stripHtmlToText(observation.valueString)
+              : observation.valueString,
+          }))
+        : lst
       return {
         id: `orphan:${k}`,
         // Audience-aware analyte label so orphan rows match DR-attached
@@ -59,12 +69,14 @@ export function useOrphanObservations(
         // → long-form translation in the active UI language. Non-canonical
         // orphans (cultures, free-text obs) keep their bridge-sent label.
         title: getAnalyteDisplayForMode(first, audience, locale, nameMode),
-        meta: `Observation Group`,
-        obs: lst,
-        group: inferGroupFromObservation(first),
+        meta: group === 'cancer-screening'
+          ? t.reports.tabs.cancerScreening
+          : `Observation Group`,
+        obs: displayObservations,
+        group,
         institution,
         effectiveDate: first.effectiveDateTime,
       }
     })
-  }, [observations, seenIds, audience, locale, nameMode])
+  }, [observations, seenIds, audience, locale, nameMode, t])
 }

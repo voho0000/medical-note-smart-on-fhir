@@ -133,6 +133,7 @@ describe('calculateReportTabCounts', () => {
       lab: 2,
       imaging: 2,
       pathology: 1,
+      cancerScreening: 0,
       vitals: 1,
       procedures: 2,
     })
@@ -156,6 +157,7 @@ describe('calculateReportTabCounts', () => {
       lab: 0,
       imaging: 1,
       pathology: 0,
+      cancerScreening: 0,
       vitals: 0,
       procedures: 0,
     })
@@ -191,6 +193,7 @@ describe('calculateReportTabCounts', () => {
       lab: 0,
       imaging: 2,
       pathology: 1,
+      cancerScreening: 0,
       vitals: 0,
       procedures: 0,
     })
@@ -210,6 +213,49 @@ describe('calculateReportTabCounts', () => {
 
     expect(counts.all).toBe(1)
     expect(counts.imaging).toBe(1)
+  })
+
+  it('counts only the explicit MediCloud program category as cancer screening', () => {
+    const cancerScreeningCategory = [{
+      coding: [{
+        system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/medcloud-observation-program',
+        code: 'cancer-screening',
+      }],
+    }]
+    const counts = calculateReportTabCounts([], [], [
+      {
+        id: 'screening-colorectal',
+        category: cancerScreeningCategory,
+        code: { text: '大腸癌篩檢' },
+        valueString: '無異常',
+        effectiveDateTime: '2023-04-20',
+      },
+      {
+        id: 'screening-colorectal-proposal',
+        category: cancerScreeningCategory,
+        code: { text: '大腸癌篩檢建議' },
+        valueString: '<p>建議每2年定期接受糞便潛血檢查。</p>',
+      },
+      {
+        id: 'screening-mammography-proposal',
+        category: cancerScreeningCategory,
+        code: { text: '乳癌篩檢建議' },
+        valueString: '<p>建議每2年定期接受乳房X光攝影檢查。</p>',
+      },
+      {
+        id: 'tumor-marker-cea',
+        category: category('laboratory'),
+        code: { text: 'CEA cancer marker' },
+        valueQuantity: { value: 2.1, unit: 'ng/mL' },
+        effectiveDateTime: '2023-04-20',
+      },
+    ], [])
+
+    // Result + recommendation are separate FHIR resources but one clickable
+    // screening-programme group in both All and Cancer screening.
+    expect(counts.all).toBe(3)
+    expect(counts.cancerScreening).toBe(2)
+    expect(counts.lab).toBe(1)
   })
 })
 

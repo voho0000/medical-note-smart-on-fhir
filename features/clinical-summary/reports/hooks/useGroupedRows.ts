@@ -7,6 +7,7 @@ export function useGroupedRows(rows: Row[]) {
     const lab = rows.filter((row) => row.group === "lab")
     const imaging = rows.filter((row) => row.group === "imaging")
     const pathology = rows.filter((row) => row.group === "pathology")
+    const cancerScreening = rows.filter((row) => row.group === "cancer-screening")
     const proceduresOnly = rows.filter((row) => row.group === "procedures")
     const vitals = rows.filter((row) => row.group === "vitals")
     const other = rows.filter((row) => row.group === "other")
@@ -16,6 +17,7 @@ export function useGroupedRows(rows: Row[]) {
       lab,
       imaging,
       pathology,
+      cancerScreening,
       procedures: proceduresOnly,
       vitals,
       other,

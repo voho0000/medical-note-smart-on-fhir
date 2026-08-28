@@ -11,6 +11,7 @@ import {
   imagingStudyInstitution,
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
+import { cancerScreeningProgramKey } from './cancer-screening-grouping'
 
 /**
  * Lightweight counts for the ReportsCard primary tabs.
@@ -25,6 +26,7 @@ export interface ReportTabCounts {
   lab: number
   imaging: number
   pathology: number
+  cancerScreening: number
   vitals: number
   procedures: number
 }
@@ -344,12 +346,17 @@ export function calculateReportTabCounts(
   const labRows = rows.filter((row) => row.group === 'lab')
   const imagingRows = rows.filter((row) => row.group === 'imaging')
   const pathologyRows = rows.filter((row) => row.group === 'pathology')
+  const cancerScreeningRows = rows.filter((row) => row.group === 'cancer-screening')
+  const cancerScreeningPrograms = new Set(
+    cancerScreeningRows.map((row) => cancerScreeningProgramKey(row.rawTitle)),
+  ).size
 
   return {
-    all: rows.length,
+    all: rows.length - cancerScreeningRows.length + cancerScreeningPrograms,
     lab: countLabDayRows(labRows),
     imaging: countReportRows(imagingRows),
     pathology: countReportRows(pathologyRows),
+    cancerScreening: cancerScreeningPrograms,
     vitals: rows.filter((row) => row.group === 'vitals').length,
     procedures: rows.filter((row) => row.group === 'procedures').length,
   }

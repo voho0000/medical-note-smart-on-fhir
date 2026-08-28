@@ -16,6 +16,7 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { Loader2 } from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Row } from '../types'
+import { CancerScreeningRow } from './CancerScreeningRow'
 import { ReportRow } from './ReportRow'
 
 interface ReportsTabContentProps {
@@ -286,7 +287,11 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
                     paddingBottom: 0,
                   }}
                 >
-                  <ReportRow row={row} defaultOpen={openIds} query={query} />
+                  {row.group === 'cancer-screening' ? (
+                    <CancerScreeningRow row={row} defaultOpen={openIds} query={query} />
+                  ) : (
+                    <ReportRow row={row} defaultOpen={openIds} query={query} />
+                  )}
                 </div>
               )
             })}

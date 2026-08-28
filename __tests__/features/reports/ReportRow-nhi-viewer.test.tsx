@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { ReportRow } from '@/features/clinical-summary/reports/components/ReportRow'
 import type { Row } from '@/features/clinical-summary/reports/types'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -60,7 +60,7 @@ describe('ReportRow NHI DICOM viewer actions', () => {
     expect(document.body.innerHTML).not.toContain('nhi.gov.tw')
   })
 
-  it('renders every trusted legacy fallback as a referrer-free new-tab link and re-rejects bad rows', () => {
+  it('groups trusted legacy fallbacks behind one compact selector and re-rejects bad rows', () => {
     const row = baseRow()
     row.viewerActions = [
       { kind: 'legacy', contentType: 'text/html', url: 'https://medvpnimg.nhi.gov.tw/ZFP?ticket=one#pl=one', title: 'One' },
@@ -70,7 +70,12 @@ describe('ReportRow NHI DICOM viewer actions', () => {
     ]
     renderRow(row)
 
-    const links = screen.getAllByRole('link', { name: /開啟 舊健保影像/ })
+    const trigger = screen.getByRole('button', { name: '選擇健保影像，共 3 筆' })
+    expect(trigger).toHaveTextContent('健保影像 3')
+    expect(screen.queryByRole('link', { name: /開啟/ })).not.toBeInTheDocument()
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const links = screen.getAllByRole('menuitem', { name: /開啟 健保影像/ })
     expect(links).toHaveLength(3)
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       'https://medvpnimg.nhi.gov.tw/ZFP?ticket=one#pl=one',
@@ -83,6 +88,36 @@ describe('ReportRow NHI DICOM viewer actions', () => {
       expect(link).toHaveAttribute('referrerpolicy', 'no-referrer')
     })
     expect(document.body.innerHTML).not.toContain('evil.example')
+  })
+
+  it('keeps a long report title readable when several distinct viewers remain', () => {
+    const row = baseRow()
+    row.title = '這是一個很長的影像檢查名稱，用來確認 Viewer 動作不會再把標題擠到完全消失'
+    row.obs[0].valueString = 'A long report narrative that keeps this report in the expandable text layout for responsive testing.'
+    row.viewerActions = ['CASE-1', 'CASE-2', 'CASE-3'].map((caseNo) => ({
+      kind: 'live' as const,
+      descriptor: {
+        version: 1 as const,
+        procId: 'IMUE0130' as const,
+        patientContextHash: 'f'.repeat(64),
+        iplCaseSeqNo: caseNo,
+        readPos: '',
+        ordMark: '' as const,
+        fileType: '',
+        fileQty: '',
+        feeYm: '',
+      },
+    }))
+    renderRow(row)
+
+    const trigger = screen.getByRole('button', { name: '選擇健保影像，共 3 筆' })
+    expect(trigger).toHaveTextContent('健保影像 3')
+    expect(screen.queryByRole('button', { name: /健保影像 1/ })).not.toBeInTheDocument()
+    const titleContainer = screen.getByText(row.title).parentElement
+    expect(titleContainer).toHaveClass('basis-0', 'sm:w-auto', 'sm:min-w-[12rem]')
+    expect(titleContainer?.parentElement).toHaveClass('sm:flex-nowrap')
+    expect(screen.getByText(row.title)).toHaveClass('min-w-0', 'flex-1', 'truncate')
+    expect(screen.getByRole('button', { name: '在右側面板展開全文' })).toBeInTheDocument()
   })
 
   it('keeps the action inside a multi-item header instead of adding a separate row', () => {

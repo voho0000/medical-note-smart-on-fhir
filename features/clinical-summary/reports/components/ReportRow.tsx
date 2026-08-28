@@ -638,8 +638,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               className={cn(
                 'flex rounded-md transition-all outline-none sm:mb-0.5',
                 hasText
-                  ? 'flex-col items-stretch gap-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2'
-                  : 'items-center justify-between gap-2',
+                  ? 'flex-col items-stretch gap-0 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between sm:gap-2'
+                  : 'flex-wrap items-center justify-between gap-2',
                 hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
               )}
               role={hasText ? 'button' : undefined}
@@ -659,12 +659,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 }
               }}
             >
-              <div className={cn('flex min-w-0 flex-1 items-center gap-1.5', hasText && 'w-full sm:w-auto')}>
+              <div className={cn('flex min-w-[8rem] flex-1 basis-0 items-center gap-1.5', hasText && 'w-full sm:w-auto sm:min-w-[12rem]')}>
                 <ReportTitle
                   title={row.title}
                   expanded={hasText && textExpanded}
                   expandable={hasText}
-                  className="text-sm font-semibold text-foreground"
+                  className="min-w-0 flex-1 text-sm font-semibold text-foreground"
                 >
                   <HighlightText text={row.title} query={query} />
                 </ReportTitle>
@@ -673,7 +673,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               </div>
               <div
                 className={cn(
-                  'flex items-center',
+                  'flex max-w-full shrink-0 items-center',
                   hasText
                     ? 'min-w-0 flex-nowrap justify-end gap-1 sm:gap-2'
                     : 'gap-2',

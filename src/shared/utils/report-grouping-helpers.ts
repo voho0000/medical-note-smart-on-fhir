@@ -21,11 +21,30 @@ interface DiagnosticReportLike {
   presentedForm?: Array<unknown>
 }
 
-export type ReportGroup = 'lab' | 'imaging' | 'procedures' | 'vitals' | 'other'
+export type ReportGroup = 'lab' | 'imaging' | 'cancer-screening' | 'procedures' | 'vitals' | 'other'
 export type ReportDisplayGroup = ReportGroup | 'pathology'
 
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
+
+export const MEDCLOUD_CANCER_SCREENING_CATEGORY_CODE = 'cancer-screening'
+const MEDCLOUD_OBSERVATION_PROGRAM_SYSTEM_SUFFIX =
+  '/codesystem/medcloud-observation-program'
+
+/** Exact source classification for MediCloud IMUE0150 cancer-screening rows.
+ * Do not infer from titles containing "cancer": tumour-marker laboratory
+ * results are a different clinical data class and must remain under Lab. */
+export function isCancerScreeningCategory(
+  category?: CodeableConcept | CodeableConcept[],
+): boolean {
+  const concepts = Array.isArray(category) ? category : category ? [category] : []
+  return concepts.some((concept) => concept?.coding?.some((coding) => {
+    const system = coding.system?.trim().toLowerCase() || ''
+    const code = coding.code?.trim().toLowerCase() || ''
+    return system.endsWith(MEDCLOUD_OBSERVATION_PROGRAM_SYSTEM_SUFFIX)
+      && code === MEDCLOUD_CANCER_SCREENING_CATEGORY_CODE
+  }))
+}
 
 /**
  * The NHI bridge turns Health Bank laboratory Observations into lightweight
@@ -180,6 +199,8 @@ function isPathologyCategory(category?: CodeableConcept | CodeableConcept[]): bo
 
 export function inferGroupFromCategory(category?: CodeableConcept | CodeableConcept[]): ReportGroup {
   const concepts = Array.isArray(category) ? category : category ? [category] : []
+
+  if (isCancerScreeningCategory(concepts)) return 'cancer-screening'
   
   // First, check for FHIR standard codes
   for (const concept of concepts) {

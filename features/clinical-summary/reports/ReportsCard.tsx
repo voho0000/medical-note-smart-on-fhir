@@ -13,7 +13,6 @@ import { Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
-import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
@@ -24,7 +23,7 @@ import { groupLabReportsByDay } from './utils/lab-day-grouping'
 import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
-import { rowInnerMatch } from './utils/report-search'
+import { rowInnerMatch, rowMatchesSearch } from './utils/report-search'
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
@@ -38,6 +37,8 @@ import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { TrendWindow } from './utils/trend-time-scale'
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
+import { isCancerScreeningCategory } from '@/src/shared/utils/report-grouping-helpers'
+import { groupCancerScreeningRows } from './utils/cancer-screening-grouping'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -368,26 +369,13 @@ export function ReportsCard() {
       if ((dupCount.get(dupKey(row)) || 0) > 1) row.isPossibleDuplicate = true
     }
 
-    return all
+    return groupCancerScreeningRows(all)
   }, [reportRows, orphanRows, procedureRows])
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return rows
-    return rows.filter((row) => {
-      // Gregorian + 民國(ROC) date tokens so 2025/11/20 and 114/11/20 both match.
-      const dateStrs = dateSearchTokens(row.effectiveDate)
-      // rowInnerMatch also looks inside accordion children — a multi-item panel
-      // like "全套血液檢查Ⅰ（八項）" keeps its analytes (RBC, WBC…) in row.obs,
-      // including numeric, coded, and free-text result values.
-      return (
-        row.title.toLowerCase().includes(q) ||
-        row.meta.toLowerCase().includes(q) ||
-        (row.institution ?? '').toLowerCase().includes(q) ||
-        dateStrs.some(s => s.toLowerCase().includes(q)) ||
-        rowInnerMatch(row, q)
-      )
-    })
+    return rows.filter((row) => rowMatchesSearch(row, q))
   }, [rows, searchQuery])
 
   // Ids of rows whose match came from inner observations — we auto-expand
@@ -400,7 +388,10 @@ export function ReportsCard() {
     for (const row of filteredRows) {
       // Skip if the row itself already matches on title — no need to expand.
       if (row.title.toLowerCase().includes(q)) continue
-      if (rowInnerMatch(row, q)) ids.push(row.id)
+      if (
+        rowInnerMatch(row, q)
+        || row.groupedRows?.some((member) => rowMatchesSearch(member, q))
+      ) ids.push(row.id)
     }
     // Preserve referential equality across renders when nothing changes so
     // React.memo on ReportRow keeps skipping.
@@ -408,6 +399,10 @@ export function ReportsCard() {
   }, [filteredRows, searchQuery])
 
   const groupedRows = useGroupedRows(filteredRows)
+  const hasCancerScreeningData = useMemo(
+    () => observations.some((observation) => isCancerScreeningCategory(observation?.category)),
+    [observations],
+  )
 
   const procedureCategoryCounts = useMemo(() => {
     const counts: Record<Exclude<ProcedureCategoryFilter, 'all'>, number> = {
@@ -510,6 +505,7 @@ export function ReportsCard() {
       lab: labRows.length,
       imaging: imagingRows.length,
       pathology: groupedRows.pathology.length,
+      cancerScreening: groupedRows.cancerScreening.length,
       vitals: groupedRows.vitals.length,
       procedures: filteredProcedureRows.length,
     }
@@ -528,6 +524,7 @@ export function ReportsCard() {
       // the cards they can click on match.
       { value: "imaging", label: withCount(reportTabs.imaging, displayCounts?.imaging), rows: imagingRows, isCumulative: false },
       { value: "pathology", label: withCount(reportTabs.pathology, displayCounts?.pathology), rows: groupedRows.pathology, isCumulative: false },
+      { value: "cancer-screening", label: withCount(reportTabs.cancerScreening, displayCounts?.cancerScreening), rows: groupedRows.cancerScreening, isCumulative: false },
       { value: "vitals", label: withCount(reportTabs.vitals, displayCounts?.vitals), rows: groupedRows.vitals, isCumulative: false },
       { value: "procedures", label: withCount(reportTabs.procedures, displayCounts?.procedures), rows: filteredProcedureRows, isCumulative: false },
     ]
@@ -536,11 +533,15 @@ export function ReportsCard() {
     return configs.filter(
       // Use the underlying resources rather than lazy-built rows so users can
       // open Procedures directly from the default cumulative view.
-      (config) => config.value !== "procedures" || procedures.length > 0,
+      (config) => (
+        (config.value !== "procedures" || procedures.length > 0)
+        && (config.value !== "cancer-screening" || hasCancerScreeningData)
+      ),
     )
   }, [
     filteredProcedureRows,
     groupedRows,
+    hasCancerScreeningData,
     imagingRows,
     initialTabCounts,
     labRows,
@@ -592,7 +593,10 @@ export function ReportsCard() {
         || r.obs.some((o) => o?.id === navPending.resourceId),
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
-    const tab = tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))
+    const preferredTabValue = hit.group === 'cancer-screening' ? 'cancer-screening' : undefined
+    const tab = tabConfigs.find((c) => (
+      c.value === preferredTabValue && c.rows.some((r) => r.id === hit.id)
+    )) || tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))
     if (!tab) return
     // Do not use handleTabChange: requestAnimationFrame is frozen in
     // backgrounded tabs. A timer preserves that behaviour while keeping the
@@ -712,7 +716,9 @@ export function ReportsCard() {
                   data-lpignore="true"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜尋檢驗名稱、結果、機構、日期..."
+                  placeholder={activeTab === 'cancer-screening'
+                    ? t.reports.cancerScreeningRow.searchPlaceholder
+                    : '搜尋檢驗名稱、結果、機構、日期...'}
                   className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm max-md:text-[16px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
