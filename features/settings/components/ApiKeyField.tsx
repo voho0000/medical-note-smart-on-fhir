@@ -11,7 +11,6 @@ import {
   KeyRound,
   LockKeyhole,
   Server,
-  ShieldCheck,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -20,7 +19,6 @@ import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { useModelPrefsStore } from "@/src/application/stores/model-prefs.store"
 import { useSummaryPrefsStore } from "@/src/application/hooks/medical-summary/use-medical-summary.hook"
 import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
-import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
 import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
 import {
@@ -144,8 +142,6 @@ function CredentialDisclosure({
 }
 
 interface ModelAndKeySettingsProps {
-  /** Test/deployment seam; production follows the build-time offline mode. */
-  offlineMode?: boolean
   /** Optional deep-link destination supplied by the right-panel navigator. */
   settingsTarget?: SettingsNavigationTarget | null
   /** Clears a deep-link only after its final field has been revealed and focused. */
@@ -153,7 +149,6 @@ interface ModelAndKeySettingsProps {
 }
 
 export function ModelAndKeySettings({
-  offlineMode = ENV_CONFIG.offlineMode,
   settingsTarget = null,
   onSettingsTargetHandled,
 }: ModelAndKeySettingsProps = {}) {
@@ -325,19 +320,6 @@ export function ModelAndKeySettings({
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNoteShort}</p>
 
-      {offlineMode ? (
-        <div className="flex items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 dark:border-emerald-500/25 dark:bg-emerald-500/[0.07]">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium">{t.settings.offlineDeployment}</p>
-            <p className="text-[0.6875rem] text-muted-foreground">
-              {t.settings.offlineDeploymentDescription}
-            </p>
-          </div>
-          <StatusBadge label={t.settings.offlineOnly} tone="success" />
-        </div>
-      ) : null}
-
       <Accordion
         type="single"
         collapsible
@@ -373,8 +355,7 @@ export function ModelAndKeySettings({
           </AccordionContent>
         </AccordionItem>
 
-        {!offlineMode ? (
-          <AccordionItem value="cloud" className="px-3">
+        <AccordionItem value="cloud" className="px-3">
             <AccordionTrigger className="py-3 hover:no-underline">
               <SectionTriggerContent
                 icon={<Cloud className="h-4 w-4" />}
@@ -446,11 +427,9 @@ export function ModelAndKeySettings({
                 </CredentialDisclosure>
               </div>
             </AccordionContent>
-          </AccordionItem>
-        ) : null}
+        </AccordionItem>
 
-        {!offlineMode ? (
-          <AccordionItem value="tools" className="px-3">
+        <AccordionItem value="tools" className="px-3">
             <AccordionTrigger className="py-3 hover:no-underline">
               <SectionTriggerContent
                 icon={<BookOpen className="h-4 w-4" />}
@@ -476,8 +455,7 @@ export function ModelAndKeySettings({
                 />
               </div>
             </AccordionContent>
-          </AccordionItem>
-        ) : null}
+        </AccordionItem>
 
         <AccordionItem value="privacy" className="px-3">
           <AccordionTrigger className="py-3 hover:no-underline">

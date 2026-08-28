@@ -23,7 +23,6 @@ import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
-import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
@@ -167,24 +166,21 @@ export function DisplaySettings() {
         </div>
       )}
 
-      {/* The hosted feedback sink does not exist in a static on-prem build. */}
-      {DEPLOYMENT_CONFIG.isCloud ? (
-        <div className="space-y-3">
-          <Label className="text-xs uppercase text-muted-foreground">
-            {t.feedback?.title ?? '問題回報'}
-          </Label>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
-              <Bug className="h-4 w-4" />
-              {(t.settings as any).openFeedback ?? '開啟回報表單'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setFeatureRequestsOpen(true)} className="gap-2">
-              <Lightbulb className="h-4 w-4" />
-              {t.featureRequests.openPool}
-            </Button>
-          </div>
+      <div className="space-y-3">
+        <Label className="text-xs uppercase text-muted-foreground">
+          {t.feedback?.title ?? '問題回報'}
+        </Label>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
+            <Bug className="h-4 w-4" />
+            {(t.settings as any).openFeedback ?? '開啟回報表單'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setFeatureRequestsOpen(true)} className="gap-2">
+            <Lightbulb className="h-4 w-4" />
+            {t.featureRequests.openPool}
+          </Button>
         </div>
-      ) : null}
+      </div>
 
       {/* About */}
       <div className="space-y-3">
@@ -202,39 +198,33 @@ export function DisplaySettings() {
               "隱私政策" jumps to the markdown file on GitHub (rendered
               there) so we don't have to keep the in-app /privacy route
               in sync — single source of truth in the repo. */}
-          {DEPLOYMENT_CONFIG.isCloud ? (
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild className="gap-2">
-                <a
-                  href={`https://github.com/${REPO}/releases`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {(t.settings as any).allReleases ?? '所有版本'}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </Button>
-              <Button variant="outline" size="sm" asChild className="gap-2">
-                <a
-                  href={`https://github.com/${REPO}/blob/master/PRIVACY_POLICY.md`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {(t.settings as any).privacyPolicy ?? '隱私政策'}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" asChild className="gap-2">
+              <a
+                href={`https://github.com/${REPO}/releases`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {(t.settings as any).allReleases ?? '所有版本'}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild className="gap-2">
+              <a
+                href={`https://github.com/${REPO}/blob/master/PRIVACY_POLICY.md`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {(t.settings as any).privacyPolicy ?? '隱私政策'}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
 
-      {DEPLOYMENT_CONFIG.isCloud ? (
-        <>
-          <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
-          <FeatureRequestPoolDialog open={featureRequestsOpen} onOpenChange={setFeatureRequestsOpen} />
-        </>
-      ) : null}
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      <FeatureRequestPoolDialog open={featureRequestsOpen} onOpenChange={setFeatureRequestsOpen} />
     </div>
   )
 }

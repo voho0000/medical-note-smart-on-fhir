@@ -1,5 +1,3 @@
-import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
-
 export type ModelProvider = 'openai' | 'gemini' | 'claude' | 'custom'
 
 /** How a model is allowed to obtain credentials at runtime. */
@@ -440,11 +438,7 @@ export const MODEL_ROLE_IDS: Readonly<Record<ModelRole, string>> = Object.freeze
   'followup-suggestions': modelIdForRole('followup-suggestions'),
 })
 
-export const CLOUD_DEFAULT_MODEL_ID = MODEL_ROLE_IDS.default as GeminiModelId
-export const ONPREM_DEFAULT_MODEL_ID: CustomModelId = CUSTOM_OPENAI_MODEL_ID
-export const DEFAULT_MODEL_ID: ModelId = DEPLOYMENT_CONFIG.isOnPrem
-  ? ONPREM_DEFAULT_MODEL_ID
-  : CLOUD_DEFAULT_MODEL_ID
+export const DEFAULT_MODEL_ID: ModelId = MODEL_ROLE_IDS.default as GeminiModelId
 export const SMART_TITLE_MODEL_ID = MODEL_ROLE_IDS['smart-title']
 
 export function modelRequiresUserKey(model: string | ModelDefinition): boolean {
@@ -499,11 +493,6 @@ export function gateModel(
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
   const definition = getModelDefinition(modelId)
-  if (DEPLOYMENT_CONFIG.isOnPrem) {
-    return definition?.provider === 'custom' && definition.status !== 'disabled'
-      ? modelId
-      : ONPREM_DEFAULT_MODEL_ID
-  }
   if (!definition || definition.status === 'disabled') return fallback
   if (modelRequiresUserKey(definition) && !hasProviderKey) return fallback
   return modelId
@@ -520,11 +509,6 @@ export function gateModelForKeys(
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
   const definition = getModelDefinition(modelId)
-  if (DEPLOYMENT_CONFIG.isOnPrem) {
-    return definition?.provider === 'custom' && definition.status !== 'disabled'
-      ? modelId
-      : ONPREM_DEFAULT_MODEL_ID
-  }
   if (!definition || definition.status === 'disabled') return fallback
   // Custom endpoints fail closed at their runtime/profile boundary and never
   // silently turn into an owner-funded cloud request.
@@ -545,8 +529,5 @@ export function gateModelForAgentSupport(
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
   const definition = getModelDefinition(modelId)
-  if (DEPLOYMENT_CONFIG.isOnPrem && definition?.provider !== 'custom') {
-    return ONPREM_DEFAULT_MODEL_ID
-  }
   return !definition || definition.status === 'disabled' ? fallback : modelId
 }

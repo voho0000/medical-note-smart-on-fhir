@@ -3,7 +3,7 @@
 **生效／最後更新：2026-07-22**
 **適用程式基準：v0.43.0**
 
-本政策主要說明 MediPrisma 官方 `cloud` 公開部署在目前 codebase 下如何處理資料。同一 codebase 也可建置成不含 Firebase 的 `onprem` artifact；自行部署者會決定自己的 FHIR、院內 AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
+本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
 
 MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取得 HIPAA、GDPR、臺灣個資法或其他法規認證。
 
@@ -17,8 +17,6 @@ MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取
 
 完整原始 Bundle 不會因載入畫面而自動上傳到 MediPrisma server。當您主動使用 AI、語音、雲端對話、共享範本或回饋功能時，相關資料會依下列說明送往對應服務。
 
-官方網站與 GitHub Pages 使用 `cloud` profile。醫療機構可使用 `onprem` profile，將 App、FHIR、OAuth、Gateway 與 OpenAI-compatible 模型限制在院內；此模式不初始化 Firebase、Firestore、App Check、Prompt Gallery、雲端回饋或公共 AI provider。是否確實沒有 Internet egress，仍由部署者的 DNS、防火牆、reverse proxy、模型服務、瀏覽器與主機設定共同決定。
-
 ## 2. 我們處理的資料
 
 ### 2.1 FHIR 臨床資料
@@ -28,8 +26,6 @@ MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取
 用途：呈現臨床資料、產生趨勢、AI 摘要／解讀／安全提醒、回答問題、帶入計算機與產生 IPS。
 
 ### 2.2 Firebase session 與帳號
-
-本節只適用於 `cloud` profile。
 
 為了讓沒有登入的訪客使用有限免費 proxy 額度，app 會嘗試建立 Firebase 匿名 session；匿名 uid 不會建立一般使用者 profile。
 
@@ -59,11 +55,9 @@ MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取
 
 使用者也可以設定自訂 OpenAI-compatible endpoint，並明確選擇資料路徑。選擇「瀏覽器直連」時，提示、所選臨床內容、API key 與回應由瀏覽器直接送往該 endpoint，不經 MediPrisma proxy。若第三方 provider 不支援瀏覽器 CORS，使用者可選擇「Firebase Gateway」；此時上述資料會在當次請求中暫時經過 MediPrisma Firebase／Google Cloud，再轉送至白名單 provider。Gateway 不應保存 API key 或 prompt／response，但基礎設施仍可能處理一般 request metadata。
 
-`onprem` profile 只允許同源、loopback 或部署者在 `NEXT_PUBLIC_ONPREM_AI_ALLOWED_ORIGINS` 明列的院內 endpoint，且不提供 Firebase Gateway 或公共 provider fallback。端點不可用時，請求失敗而不會改送 MediPrisma 或其他公共 AI。
-
 ### 2.4 對話與個人設定
 
-Cloud profile 登入且非無痕模式時，文字對話會保存至 Firestore，包含：
+登入且非無痕模式時，文字對話會保存至 Firestore，包含：
 
 - user id、patient id、FHIR server key
 - title、文字訊息、時間、實際 model id
@@ -73,11 +67,7 @@ Cloud profile 登入且非無痕模式時，文字對話會保存至 Firestore�
 
 登入使用者的 chat templates、custom summary modules 與其設定可能同步至 Firestore；訪客版本留在 localStorage。使用者分享至 Prompt Gallery 的內容、分類、受眾、作者顯示／匿名選項與 usage count 會存於 `sharedPrompts`，並可能讓其他使用者讀取。
 
-On-prem profile 不使用 Firestore 或 shared Prompt Gallery；對話不跨裝置同步，templates 與 custom summary modules 留在目前瀏覽器裝置。
-
 ### 2.5 使用額度
-
-本節只適用於 `cloud` profile。
 
 Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplexity、Whisper 等服務的使用次數，以執行與顯示每日 quota。實際後端欄位、期限與限制由 `firebase-smart-on-fhir` 部署設定決定。
 
@@ -89,8 +79,6 @@ Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplex
 - 時間、user agent、螢幕解析度、瀏覽器語言、目前 path 與 FHIR server URL。
 
 表單刻意不收 patientId，並提醒不要輸入姓名、病歷號等個資；自由文字仍由您控制。回饋可能經 Firebase Function 與 Resend 寄給維護者。
-
-On-prem profile 不載入上述雲端回饋服務；部署者若自行加入院內回饋管道，必須另行揭露其欄位、接收者與保存政策。
 
 ### 2.7 一般裝置與網路資料
 
@@ -121,15 +109,15 @@ Medical Summary、Safety、Report Interpretation 等結果可能以加密形式�
 
 瀏覽器端加密不能防禦同 origin 的惡意程式碼、惡意 extension 或已被控制的裝置。
 
-自訂 OpenAI-compatible profiles（Chat Completions URL 會正規化為 Base URL）以 localStorage v2 envelope 保留於目前裝置；最多 10 個。每個 profile 的 model id、transport、endpoint metadata 與各自加密的 optional key 原子保存，不會同步或持久化至 MediPrisma Firebase，直到使用者刪除 profile、清除 app keys 或移除網站資料。Cloud profile 只有在使用者明確選擇 Firebase Gateway 時，key 才會在每次請求中暫時經過該 Function；on-prem profile 不提供此 transport。
+自訂 OpenAI-compatible profiles（Chat Completions URL 會正規化為 Base URL）以 localStorage v2 envelope 保留於目前裝置；最多 10 個。每個 profile 的 model id、transport、endpoint metadata 與各自加密的 optional key 原子保存，不會同步或持久化至 MediPrisma Firebase，直到使用者刪除 profile、清除 app keys 或移除網站資料。只有在使用者明確選擇 Firebase Gateway 時，key 才會在每次請求中暫時經過該 Function。
 
 ### 3.4 偏好與必要狀態
 
-LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、onboarding、資料選擇、模型偏好、卡片版面、template、media consent 與 SMART OAuth session 等必要狀態。Cloud profile 的 Firebase Auth／Firestore／App Check 也可能使用瀏覽器 storage、cookie 或 IndexedDB 維持 session 與防濫用；on-prem profile 不初始化它們。
+LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、onboarding、資料選擇、模型偏好、卡片版面、template、media consent 與 SMART OAuth session 等必要狀態。Firebase Auth／Firestore／App Check 也可能使用瀏覽器 storage、cookie 或 IndexedDB 維持 session 與防濫用。
 
 ## 4. 第三方與資料接收者
 
-只有啟用對應功能時才會使用相關服務。下表的 Firebase、公共 AI、Perplexity、Resend 與公共 Hosting 項目適用於 cloud profile；標準 on-prem build 不會載入這些整合：
+只有啟用對應功能時才會使用相關服務：
 
 | 類別 | 可能服務 | 目的 |
 |---|---|---|
@@ -140,9 +128,9 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | 語音 | Whisper 相容 endpoint／proxy | 音訊轉文字 |
 | 回饋郵件 | Resend 與部署的 feedback function | 傳送問題回報 |
 | Hosting | GitHub Pages；可選 mediprisma.tw host | 提供靜態 app |
-| 自訂 AI | 使用者／醫療機構設定的 OpenAI-compatible endpoint；cloud 可選 MediPrisma Firebase Gateway | 依使用者明確選擇直接處理；cloud 可經受限 Gateway 轉送，on-prem 只允許院內 direct endpoint |
+| 自訂 AI | 使用者／醫療機構設定的 OpenAI-compatible endpoint；可選 MediPrisma Firebase Gateway | 依使用者明確選擇直接處理，或經受限 Gateway 轉送 |
 
-Cloud profile 中，自備 API key 的請求通常由瀏覽器直接送到該 provider；自訂 OpenAI-compatible endpoint 可由使用者明確改選 Firebase Gateway；免費內建模型通常經 MediPrisma Firebase Functions proxy。On-prem profile 則只會直連允許的院內 endpoint。各接收端會依自己的條款或院內政策處理資料，部署者應確認資料地區、保留、訓練使用、subprocessor、刪除與契約條件。
+自備 API key 的請求通常由瀏覽器直接送到該 provider；自訂 OpenAI-compatible endpoint 可由使用者明確改選 Firebase Gateway；免費內建模型通常經 MediPrisma Firebase Functions proxy。各接收端會依自己的條款或機構政策處理資料，部署者應確認資料地區、保留、訓練使用、subprocessor、刪除與契約條件。
 
 我們不出售個人資料，也不以病人資料進行廣告 targeting。依法令、法院命令或保護權利／安全所必要時，部署者可能依法揭露資料。
 
@@ -153,11 +141,11 @@ Cloud profile 中，自備 API key 的請求通常由瀏覽器直接送到該 pr
 | Local Bundle／images | tab session 且最長 12 小時 |
 | 加密 AI cache | 最長 12 小時 |
 | Session API keys | 關閉 session 或登出 |
-| Remembered cloud-provider API keys | 直到清除、改保存模式、登出或瀏覽器資料被移除；on-prem 不接受這些 keys |
+| Remembered provider API keys | 直到清除、改保存模式、登出或瀏覽器資料被移除 |
 | 自訂 endpoint profiles／keys | 直到刪除 profile、清除 app keys 或瀏覽器網站資料被移除 |
-| Firestore chat history（cloud） | 直到使用者在 history 刪除或依部署者政策刪除；codebase 無自動 TTL；on-prem 不使用 Firestore |
-| User templates／modules | Cloud 可同步至帳號；on-prem 保留於目前瀏覽器，直到使用者刪除、重設或移除網站資料 |
-| Shared prompts（cloud） | 直到作者／管理者刪除或依社群政策移除；on-prem 不連接 shared Prompt Gallery |
+| Firestore chat history | 直到使用者在 history 刪除或依部署者政策刪除；codebase 無自動 TTL |
+| User templates／modules | 登入時可同步至帳號；訪客保留於目前瀏覽器，直到使用者刪除、重設或移除網站資料 |
+| Shared prompts | 直到作者／管理者刪除或依社群政策移除 |
 | Feedback email／service logs | 由部署者、Resend 與服務政策決定 |
 
 點選「清除本地資料」可刪除 app 管理的 Bundle、影像與 AI result caches。清除瀏覽器網站資料也可移除 local storage；這不會自動刪除 Firestore 或第三方已收到的請求。
@@ -176,7 +164,7 @@ Codebase 尚未提供完整的「刪除 Firebase 帳號及所有子 collection�
 
 ## 7. 資料安全
 
-目前控制包括 SMART PKCE、本地 AES-GCM、session-scoped key、cloud profile 的 Firebase Auth token／可選 App Check／Firestore Rules（由後端 repo 部署）、PII minimization、DOMPurify、generic error、feedback HTML escaping／origin check／rate limit、CI、CodeQL 與 dependency monitoring。On-prem 另有 build-time module replacement、SMART issuer／AI origin allowlist、公共 endpoint artifact audit 與 fail-closed model selection。
+目前控制包括 SMART PKCE、本地 AES-GCM、session-scoped key、Firebase Auth token／可選 App Check／Firestore Rules（由後端 repo 部署）、PII minimization、DOMPurify、generic error、feedback HTML escaping／origin check／rate limit、CI、CodeQL 與 dependency monitoring。
 
 沒有任何系統能保證絕對安全。使用者與部署者應避免在未經授權的裝置、瀏覽器 extension 或網路環境處理真實病人資料，並建立事件應變與通知程序。更多限制見 [Security Guide](./docs/SECURITY.md)。
 
@@ -187,8 +175,6 @@ Codebase 尚未提供完整的「刪除 Firebase 帳號及所有子 collection�
 ## 9. 跨境處理
 
 Firebase、GitHub、AI providers、Perplexity、Resend 或其他 subprocessor 可能在您所在司法管轄區之外處理資料。部署者在啟用真實病人資料前應確認適用的傳輸機制、契約與資料地區設定。
-
-純內網部署可將 App、FHIR、Gateway 與模型全部限制於院內網路並停用上述雲端整合；是否確實沒有跨境或 Internet egress，仍須由部署者以 DNS、防火牆、憑證、logging 與封包稽核驗證。
 
 ## 10. 法規角色與合規邊界
 

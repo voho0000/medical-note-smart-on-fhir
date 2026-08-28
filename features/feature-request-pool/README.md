@@ -21,5 +21,3 @@ featureRequestVotes/{userId}/requests/{requestId}
 ```
 
 Security rules and emulator tests live in the sibling `firebase-smart-on-fhir` repository. Deploy those rules before releasing the UI; undeployed rules intentionally produce the feature's error state.
-
-The on-prem build aliases `service.ts` to `service.onprem.ts` and does not render the entry point.

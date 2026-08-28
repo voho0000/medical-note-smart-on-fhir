@@ -1221,7 +1221,7 @@ const moduleBlockStart = (moduleId: MedicalSummaryModuleId) =>
 const moduleBlockEnd = (moduleId: MedicalSummaryModuleId) =>
   `<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`
 
-// Put the medication card first. Smaller on-prem models commonly exhaust or
+// Put the medication card first. Smaller custom models commonly exhaust or
 // drift from the multi-block contract near the end of a long completion; the
 // medication-reconciliation card is the largest block and was therefore the
 // one most often omitted. Parsing remains marker-based, so presentation order
@@ -1307,7 +1307,7 @@ export interface FinalizeMedicalSummaryOptions {
   audience?: 'medical' | 'patient'
   locale?: 'en' | 'zh-TW'
   /** Enforce conservative semantic claims for clinical release candidates.
-   * Custom/on-prem generation enables this; callers may opt in explicitly. */
+   * Custom-model generation enables this; callers may opt in explicitly. */
   strictGrounding?: boolean
 }
 

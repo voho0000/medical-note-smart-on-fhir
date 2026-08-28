@@ -96,7 +96,7 @@ export const MEDICAL_SUMMARY_CARD_REGISTRY: Readonly<
 
 const LOCAL_CARD_ORDER: readonly MedicalSummaryCardId[] = [
   'priorities',
-  // Put the compact, immediately useful card first so slower on-prem models
+  // Put the compact, immediately useful card first so slower custom models
   // can paint a result before generating the much larger medication payload.
   // Keep medications second (rather than last) to limit tail-truncation risk.
   'medications',

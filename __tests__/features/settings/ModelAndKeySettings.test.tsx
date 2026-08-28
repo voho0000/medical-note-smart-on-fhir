@@ -55,7 +55,6 @@ jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => 
 }))
 
 function renderSettings(
-  offlineMode: boolean,
   navigation?: {
     settingsTarget: SettingsNavigationTarget
     onSettingsTargetHandled: () => void
@@ -63,7 +62,7 @@ function renderSettings(
 ) {
   return render(
     <LanguageProvider>
-      <ModelAndKeySettings offlineMode={offlineMode} {...navigation} />
+      <ModelAndKeySettings {...navigation} />
     </LanguageProvider>,
   )
 }
@@ -99,21 +98,8 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     setConfiguredLocalEndpoint()
   })
 
-  it('keeps an offline deployment compact and removes cloud-only settings', () => {
-    renderSettings(true)
-
-    expect(screen.queryByRole('heading', { name: 'AI 連線狀態' })).not.toBeInTheDocument()
-    expect(screen.getAllByText(/qwen2\.5:7b · 127\.0\.0\.1:11434/)).toHaveLength(1)
-    expect(screen.getByText('純內網部署')).toBeInTheDocument()
-    expect(screen.queryByText('雲端 AI')).not.toBeInTheDocument()
-    expect(screen.queryByText('深入對話工具')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('auth-status')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/個人 OpenAI API 金鑰/)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/個人 Perplexity API 金鑰/)).not.toBeInTheDocument()
-  })
-
   it('shows each hosted connection only once instead of repeating a status overview', () => {
-    renderSettings(false)
+    renderSettings()
 
     expect(screen.queryByRole('heading', { name: 'AI 連線狀態' })).not.toBeInTheDocument()
     expect(screen.getAllByText('雲端 AI')).toHaveLength(1)
@@ -122,7 +108,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('shows all custom endpoint settings without a nested Advanced toggle', () => {
-    renderSettings(true)
+    renderSettings()
 
     const localTrigger = screen.getByRole('button', {
       name: /自訂 AI 端點/,
@@ -155,7 +141,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatible: gatewayProfile,
     })
 
-    renderSettings(false)
+    renderSettings()
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
 
     expect(screen.getByText(
@@ -179,7 +165,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     })
 
     try {
-      renderSettings(true, {
+      renderSettings({
         settingsTarget: 'openai-compatible-context-window',
         onSettingsTargetHandled,
       })
@@ -217,7 +203,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatible: legacy,
     })
 
-    renderSettings(true, {
+    renderSettings({
       settingsTarget: {
         kind: 'openai-compatible-context-window',
         profileId: 'profile-2',
@@ -237,7 +223,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   it('opens a blank custom-model form from the model-picker add target', async () => {
     const onSettingsTargetHandled = jest.fn()
 
-    renderSettings(true, {
+    renderSettings({
       settingsTarget: 'openai-compatible-add-profile',
       onSettingsTargetHandled,
     })
@@ -260,7 +246,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
 
   it('locks endpoint and cloud credential controls until browser settings finish loading', () => {
     useAiConfigStore.setState({ credentialsHydrating: true })
-    renderSettings(false)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
@@ -296,7 +282,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         contextWindowSource: 'suggested',
       },
     })
-    renderSettings(true)
+    renderSettings()
 
     const hydrated = {
       profileId: 'legacy',
@@ -336,7 +322,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         contextWindowSource: 'suggested',
       },
     })
-    const { unmount } = renderSettings(true)
+    const { unmount } = renderSettings()
     expect(screen.getByRole('button', { name: /自訂 AI 端點/ })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -355,7 +341,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatibleProfiles: [{ profileId: 'legacy', ...disabledConfig }],
       openAiCompatible: disabledConfig,
     })
-    renderSettings(true)
+    renderSettings()
     expect(screen.getAllByText('已停用').length).toBeGreaterThan(0)
     expect(screen.queryByText('尚未設定端點')).not.toBeInTheDocument()
   })
@@ -372,7 +358,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         contextWindowSource: 'suggested',
       },
     })
-    renderSettings(true)
+    renderSettings()
 
     const contextInput = screen.getByRole('spinbutton', {
       name: '內容視窗（tokens）',
@@ -392,7 +378,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('preserves an unsaved endpoint draft when the outer section is collapsed', () => {
-    renderSettings(true)
+    renderSettings()
 
     const localTrigger = screen.getByRole('button', {
       name: /自訂 AI 端點/,
@@ -417,7 +403,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: 40960,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const saveButton = screen.getByRole('button', { name: /儲存/ })
@@ -447,7 +433,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
 
   it('checks Agent support and automatically saves a verified result', async () => {
     mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     expect(screen.getByRole('radio', { name: '自動偵測' })).toBeChecked()
@@ -489,7 +475,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatible: disabled,
     })
     mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
@@ -510,7 +496,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       status: 'unsupported',
       reason: 'tools are not accepted',
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
@@ -557,7 +543,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       status: 'inconclusive',
       reason: 'request timed out',
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
@@ -586,7 +572,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     expect(screen.getByLabelText('Agent 能力: 已驗證')).toBeInTheDocument()
@@ -639,7 +625,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const now = jest.spyOn(Date, 'now').mockReturnValue(testedAt)
 
     try {
-      renderSettings(true)
+      renderSettings()
       fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
       fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
         target: { value: 'qwen3:8b' },
@@ -681,7 +667,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
@@ -726,7 +712,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: true,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
       target: { value: 'https://new.intra.example/v1/chat/completions' },
@@ -765,7 +751,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       detectedContextWindowTokens: null,
     })
     mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
       target: { value: 'https://new.intra.example/v1/chat/completions' },
@@ -814,7 +800,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       status: 'inconclusive',
       reason: 'request timed out',
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
       target: { value: 'https://new.intra.example/v1/chat/completions' },
@@ -840,7 +826,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       detectedContextWindowTokens: 65536,
     })
     const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '新增模型' }))
@@ -896,7 +882,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatible: first,
     })
     const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
-    renderSettings(true)
+    renderSettings()
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const profileSelect = screen.getByRole('combobox', {
       name: '選擇要編輯的模型',
@@ -942,7 +928,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
     await screen.findByText(/連線成功，模型清單端點回應正常/)
@@ -966,7 +952,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
 
   it('does not discard an unsaved profile draft when enable is toggled without confirmation', () => {
     const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
-    renderSettings(true)
+    renderSettings()
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
     fireEvent.change(endpointInput, {
@@ -999,7 +985,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatibleProfiles: profiles,
       openAiCompatible: profiles[0],
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     expect(screen.getByText('已儲存 10 / 10')).toBeInTheDocument()
@@ -1013,7 +999,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
@@ -1040,7 +1026,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         usedChatProbe: false,
         detectedContextWindowTokens: 131072,
       })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1091,7 +1077,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       openAiCompatibleProfiles: [{ profileId: 'legacy', ...manualConfig }],
       openAiCompatible: manualConfig,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const contextInput = screen.getByRole('spinbutton', {
@@ -1122,7 +1108,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: 262144,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1143,7 +1129,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('shows when the context window is a system suggestion before testing', () => {
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
 
@@ -1168,7 +1154,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: 262144,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1195,7 +1181,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       usedChatProbe: false,
       detectedContextWindowTokens: null,
     })
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     const contextInput = screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })
@@ -1215,7 +1201,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     mockTestOpenAiCompatibleConnection.mockImplementation(() => new Promise((resolve) => {
       resolveConnection = resolve
     }))
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1244,7 +1230,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     mockTestOpenAiCompatibleAgentCapability.mockImplementation(() => new Promise((resolve) => {
       resolveAgentCheck = resolve
     }))
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
     fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
@@ -1260,7 +1246,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('separates cloud model credentials from the Perplexity Agent tool', () => {
-    renderSettings(false)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /^雲端 AI 0 \/ 3/ }))
     expect(screen.getByTestId('auth-status')).toBeInTheDocument()
@@ -1275,7 +1261,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('labels and updates persistence for cloud and tool keys', async () => {
-    renderSettings(true)
+    renderSettings()
 
     fireEvent.click(screen.getByRole('button', { name: /隱私與裝置保存/ }))
     const persistenceSwitch = screen.getByRole('switch', {

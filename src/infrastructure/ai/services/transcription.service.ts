@@ -3,10 +3,6 @@ import type { ITranscriptionService } from '@/src/core/interfaces/services/trans
 import type { TranscriptionRequest, TranscriptionResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '@/src/infrastructure/ai/utils/proxy-auth'
-import {
-  assertCloudCapabilityAllowed,
-  DEPLOYMENT_CONFIG,
-} from '@/src/shared/config/deployment-profile.config'
 import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 export class TranscriptionService implements ITranscriptionService {
@@ -17,11 +13,10 @@ export class TranscriptionService implements ITranscriptionService {
   }
 
   isAvailable(): boolean {
-    return DEPLOYMENT_CONFIG.allowsCloudAi && Boolean(this.apiKey || ENV_CONFIG.hasWhisperProxy)
+    return Boolean(this.apiKey || ENV_CONFIG.hasWhisperProxy)
   }
 
   async transcribe(request: TranscriptionRequest): Promise<TranscriptionResponse> {
-    assertCloudCapabilityAllowed('Cloud transcription')
     const useProxy = !this.apiKey && ENV_CONFIG.hasWhisperProxy
 
     if (!this.apiKey && !useProxy) {

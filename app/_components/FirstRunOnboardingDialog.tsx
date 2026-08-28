@@ -19,7 +19,6 @@ import { Stethoscope, User, Sparkles, LogIn, Lock } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
-import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding.hook'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
@@ -53,7 +52,7 @@ export function FirstRunOnboardingDialog({ launchHref }: FirstRunOnboardingDialo
     && !isMedcloudLaunchRoute(launchHref)
 
   const steps: StepId[] = ['welcome', 'audience']
-  if (SHOW_SIGN_IN_STEP && !user && !ENV_CONFIG.offlineMode) steps.push('signIn')
+  if (SHOW_SIGN_IN_STEP && !user) steps.push('signIn')
 
   // AuthDialog is always rendered so a 登入 choice (which closes this flow
   // first) can still surface it afterwards.

@@ -9,10 +9,6 @@ import {
   resolveModelTemperature,
 } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
-import {
-  assertCloudCapabilityAllowed,
-  DEPLOYMENT_CONFIG,
-} from '@/src/shared/config/deployment-profile.config'
 import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 export class OpenAiService {
@@ -25,11 +21,10 @@ export class OpenAiService {
   }
 
   isAvailable(): boolean {
-    return DEPLOYMENT_CONFIG.allowsCloudAi && Boolean(this.apiKey || ENV_CONFIG.hasChatProxy)
+    return Boolean(this.apiKey || ENV_CONFIG.hasChatProxy)
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    assertCloudCapabilityAllowed('OpenAI')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'openai') {
       throw new Error(`Model ${request.modelId} is not an OpenAI model`)

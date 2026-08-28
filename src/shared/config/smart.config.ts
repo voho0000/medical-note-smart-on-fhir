@@ -1,4 +1,4 @@
-export const CLOUD_SMART_CONFIG = {
+export const SMART_CONFIG = {
   trustedIssuerOrigins: [
     'https://launch.smarthealthit.org',
     'http://localhost',

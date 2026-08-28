@@ -39,8 +39,6 @@ try {
     env: {
       ...process.env,
       DEPLOY_BASE_PATH: BASE_PATH,
-      NEXT_PUBLIC_DEPLOYMENT_PROFILE: 'cloud',
-      NEXT_PUBLIC_OFFLINE_MODE: '0',
     },
   })
 } finally {

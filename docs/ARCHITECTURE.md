@@ -19,7 +19,7 @@ FHIR Bundle JSON ─ AES-GCM / IndexedDB ───────────┘
                          └──────────── source navigation / shared cache ──────────┘
 ```
 
-同一份原始碼有兩個 build-time deployment profile。`cloud` 是預設，GitHub Pages 與 mediprisma.tw `/app` 都明確使用它，並由 Firebase 提供 Auth、Firestore 與 owner-funded AI／語音／回饋代理；Functions 與 Firestore Rules 位於獨立的 `firebase-smart-on-fhir` repo。`onprem` 在 dependency graph 建立前以 aliases 換掉 Firebase、cloud AI、Prompt Gallery 與 chat persistence boundaries，產生 Firebase-free root static export，只允許院內 OpenAI-compatible endpoint。
+正式版本由 Firebase 提供 Auth、Firestore 與 owner-funded AI／語音／回饋代理；Functions 與 Firestore Rules 位於獨立的 `firebase-smart-on-fhir` repo。GitHub Pages 與 mediprisma.tw `/app` 分別使用專用 build script 產生對應 base path 的靜態版本。
 
 ## 分層與依賴方向
 
@@ -42,8 +42,6 @@ src/core  <-  src/shared  <-  src/infrastructure  <-  src/application  <-  featu
 
 - `src/application/composition.ts`：依 SMART context 與 local bundle 狀態選擇 `FhirClinicalDataRepository` 或 `LocalBundleRepository`。有有效 SMART token 時，SMART 優先於先前匯入的 bundle。
 - `src/application/composition.chat.ts`：建立聊天 session repository，避免一般臨床資料 import graph 連帶初始化 Firebase。
-- `src/shared/config/deployment-profile.config.ts`：解析 `cloud`／`onprem` build boundary；legacy `NEXT_PUBLIC_OFFLINE_MODE=1` 永遠 fail closed 到 on-prem。
-- `next.config.ts`：on-prem build 在 module graph 建立前將 Auth、Firestore sync、cloud service、Prompt Gallery、SMART public defaults 等 imports 換成 `src/infrastructure/onprem/` adapters。Runtime `if` 只作第二層防線，不負責從 bundle 移除 Firebase。
 - `src/shared/config/feature-registry.ts`：左側 tabs 與 feature 元件。
 - `src/shared/config/right-panel-registry.ts`：右側功能順序、顯示、pin、force-mount 與 scroll mode。
 
@@ -114,7 +112,7 @@ FHIR 搜尋使用 `requestAllPages()` 跟隨 `Bundle.link[relation="next"]`，�
 
 ### Provider 與模型
 
-`ai-provider.factory.ts` 依 model registry 選擇 OpenAI、Gemini、Claude 或自訂 OpenAI-compatible profile。Cloud profile 沒有 user key 時可走 Firebase Functions proxy；premium model 缺 key 時由 `gateModel*()` 降級至免費預設，UI 顯示實際執行模型。On-prem profile 的 model gate 只接受自訂 profile logical id，未知或公共 provider id 會回到未設定的地端 sentinel，不會轉向免費 cloud model。
+`ai-provider.factory.ts` 依 model registry 選擇 OpenAI、Gemini、Claude 或自訂 OpenAI-compatible profile。沒有 user key 時可走 Firebase Functions proxy；premium model 缺 key 時由 `gateModel*()` 降級至免費預設，UI 顯示實際執行模型。
 
 可保存最多 10 個 OpenAI-compatible profiles。舊連線保留 logical id `openai-compatible-custom`，新增連線使用 `openai-compatible-custom:<profileId>`，因此相同 upstream model 也能依 endpoint 獨立選取。設定畫面主推完整 Chat Completions URL，並在儲存前正規化為 canonical HTTPS Base URL；upstream model id、optional key 與明確 transport 存在 browser config，舊 profile 一律遷移為 `direct`。direct transport 由 browser 呼叫，`mediprisma-gateway` transport 則以 Firebase ID token／App Check 呼叫受限 BYO Gateway，provider key 使用獨立 header。兩者不會自動互相 fallback。串流、非串流與標準對話共用 exact-profile fail-closed 規則，cache identity 加入 transport／endpoint／model fingerprint。
 
@@ -152,12 +150,12 @@ Medical Summary 不是任意 Markdown，而是 Zod 驗證後的固定 schema：�
 | AI-derived cache | localStorage + session AES key | 不可跨 tab 解密，最多 12 小時 |
 | 雲端 provider API keys | encrypted sessionStorage | 預設關窗清除；可明確改為 localStorage |
 | 自訂 endpoint profiles／keys | localStorage v2 envelope + per-key encryption | 最多 10 個；明確刪除或清除裝置資料時移除 |
-| Chat history | Firestore `users/{uid}/chats` 或 no-op repository | Cloud 僅登入且非無痕對話；on-prem 不跨裝置同步；影像不儲存 |
-| User templates/modules | Firestore or localStorage | Cloud 登入時同步；on-prem 與訪客留在本機 |
+| Chat history | Firestore `users/{uid}/chats` 或 no-op repository | 僅登入且非無痕對話；影像不儲存 |
+| User templates/modules | Firestore or localStorage | 登入時同步；訪客留在本機 |
 
 匯入／清除 bundle 會發出 `mediprisma:local-bundle-changed`，重設對話與病人衍生狀態，避免上一位病人的內容殘留。
 
-## Cloud profile：Firebase 與 proxy
+## Firebase 與 proxy
 
 啟動時可建立匿名 Firebase session，讓訪客在免費額度內使用代理；登入帳號解鎖跨裝置資料。代理請求移除 provider key，加入：
 
@@ -169,27 +167,14 @@ Medical Summary 不是任意 Markdown，而是 Zod 驗證後的固定 schema：�
 
 BYO OpenAI-compatible Gateway 另外接受 `X-Upstream-Base-URL`、`X-Upstream-Path` 與 `X-Upstream-API-Key`。後端只允許明確白名單 provider 和 `models`／`chat/completions`，不持久化使用者 key，也不取得 owner-funded secrets。此 transport 代表 prompt／response 會經 Firebase，設定 UI 必須明示。
 
-## On-prem profile：Firebase-free boundary
-
-`build:onprem` 會載入 `.env.intranet`，強制 `NEXT_PUBLIC_DEPLOYMENT_PROFILE=onprem` 與 `NEXT_PUBLIC_OFFLINE_MODE=1`，並清除 build shell 內所有 Firebase、MediPrisma proxy、Whisper、Perplexity、feedback、App Check 與 public-provider 設定。主要差異：
-
-- Auth 使用本機 provider；chat repository、template／insight sync 與 Prompt Gallery 使用 on-prem adapter，不建立 Firebase session 或 Firestore listener。
-- AI 只接受 enabled、runtime-ready 的 OpenAI-compatible profiles。Direct endpoint 必須為同源、loopback 或符合 `NEXT_PUBLIC_ONPREM_AI_ALLOWED_ORIGINS` 的 exact origin；Firebase Gateway transport 因 cloud capability 不可用而 fail closed。
-- SMART issuer 只接受 `NEXT_PUBLIC_SMART_ALLOWED_ISS`；沒有 `iss` 時不導向 public SMART sandbox。
-- 建置完成後先清除第三方 SDK 中未使用但仍存在的 public default，再掃描 static artifact；Firebase、公共 AI domain 或 public SMART sandbox 再出現時 build 失敗。
-- `package:onprem` 將已稽核的 `out/`、Caddyfile、env 範例、文件與 manifest 封裝成版本化 `tar.gz`，並產生 SHA-256。
-
 ## 部署
 
 | 模式 | 指令 | 特性 |
 |---|---|---|
-| Cloud local dev | `npm run dev:cloud`（`dev` 為預設別名） | port 3001；Firebase 與 Next API route 可用 |
-| On-prem local dev | `npm run dev:onprem` | port 3100；Firebase-free，可與 cloud process 同時執行 |
-| Cloud Node build | `npm run build:cloud` | 完整 Next build；`headers()` 與 `/api/feedback` 可用 |
-| GitHub Pages cloud | `npm run build:gh` | 強制 cloud、static export、base path `/medical-note-smart-on-fhir` |
-| mediprisma cloud mirror | `npm run build:mediprisma` | 強制 cloud、static export、base path `/app` |
-| 院內 HTTPS on-prem | `npm run build:onprem` | root static export、Firebase-free、artifact audit；`build:intranet` 為相容別名 |
-| 院內離線套件 | `npm run package:onprem` | 重新建置並輸出 `tar.gz`、manifest 與 SHA-256 |
+| Local dev | `npm run dev` | port 3001；Firebase 與 Next API route 可用 |
+| Node build | `npm run build` | 完整 Next build；`headers()` 與 `/api/feedback` 可用 |
+| GitHub Pages | `npm run build:gh` | static export、base path `/medical-note-smart-on-fhir` |
+| mediprisma mirror | `npm run build:mediprisma` | static export、base path `/app` |
 
 Static host 不會執行 `next.config.ts.headers()` 或 `/api/feedback`，因此正式回饋需設定 `NEXT_PUBLIC_FEEDBACK_URL` 指向外部 function。
 
@@ -200,9 +185,8 @@ Static host 不會執行 `next.config.ts.headers()` 或 `/api/feedback`，因此
 - `npm test`
 - `npm run test:e2e`
 - `npm run build:gh`
-- `npm run build:onprem`
 
-CI 在 master 與 PR 執行 typecheck、lint、Jest、cloud static build 與 on-prem artifact audit；E2E 另在 master 執行。CodeQL 每週與 push／PR 執行。`scripts/loop/gate.mjs` 將 typecheck、lint、test 與選用 build 串成可供本機迭代使用的 verifier。
+CI 在 master 與 PR 執行 typecheck、lint、Jest 與 static build；E2E 另在 master 執行。CodeQL 每週與 push／PR 執行。`scripts/loop/gate.mjs` 將 typecheck、lint、test 與選用 build 串成可供本機迭代使用的 verifier。
 
 ## 延伸閱讀
 
@@ -210,5 +194,4 @@ CI 在 master 與 PR 執行 typecheck、lint、Jest、cloud static build 與 on-
 - [AI Agent](AI_AGENT_IMPLEMENTATION.md)
 - [Medical Chat](MEDICAL_CHAT.md)
 - [Security](SECURITY.md)
-- [院內 HTTPS／純內網部署](INTRANET_HTTPS.md)
 - [文件索引](README.md)

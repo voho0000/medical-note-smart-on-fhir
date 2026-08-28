@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, User, Info, Gift, ShieldCheck } from 'lucide-react'
-import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { LogIn, User, Info, Gift } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,22 +52,6 @@ export function HeaderAuthButton() {
     whisperLimit,
   } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
-
-  if (ENV_CONFIG.offlineMode) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
-        aria-label={t.settings.openAiCompatibleGroupLabel}
-        title={t.settings.openAiCompatibleGroupLabel}
-        disabled
-      >
-        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-        <span className="max-md:hidden @max-[72rem]:hidden">{t.settings.openAiCompatibleGroupLabel}</span>
-      </Button>
-    )
-  }
 
   // Anonymous (free-tier) visitor — `user` is null by design. Surface their
   // free usage and a CTA to sign in for the larger quota.

@@ -905,8 +905,7 @@ export function OpenAiCompatibleSettings({
           </datalist>
         </div>
 
-        {!ENV_CONFIG.offlineMode && (
-          <div className="space-y-1">
+        <div className="space-y-1">
             <div className="grid gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
               <div className="flex shrink-0 items-center gap-1.5">
                 <Label className="text-xs">{t.settings.openAiCompatibleTransport}</Label>
@@ -981,8 +980,7 @@ export function OpenAiCompatibleSettings({
                   : t.settings.openAiCompatibleDirectStatus}
               </p>
             </div>
-          </div>
-        )}
+        </div>
 
       </div>
 

@@ -1,19 +1,17 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import { buildSmartAuthorizeConfig } from "@/src/infrastructure/fhir/client/smart-launch-config"
-import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { CLOUD_SMART_CONFIG } from '@/src/shared/config/cloud-smart.config'
+import { SMART_CONFIG } from '@/src/shared/config/smart.config'
 import { isTrustedSmartIssuer } from '@/src/shared/config/smart-issuer-policy'
 
-// In cloud builds an untrusted SMART `iss` shows an explicit confirmation.
-// In on-prem builds it is rejected: a confirmation click must never widen the
-// build-time hospital issuer allowlist. `iss` comes straight off the URL, so
+// An untrusted SMART `iss` shows an explicit confirmation. `iss` comes
+// straight off the URL, so
 // anyone can craft a link that points this app's REAL domain at an
 // attacker-controlled FHIR server (its
 // .well-known/smart-configuration then redirects the clinician to a phishing
 // "login" page, and afterwards the app would faithfully render attacker-
-// authored FHIR data as a real chart). The cloud interstitial keeps arbitrary
+// authored FHIR data as a real chart). The interstitial keeps arbitrary
 // sandboxes usable while making the target impossible to miss. Extra trusted
 // origins can be added at build time via
 // NEXT_PUBLIC_SMART_ALLOWED_ISS (comma-separated origins).
@@ -57,16 +55,10 @@ export default function SmartLaunchPage() {
       const iss = url.searchParams.get("iss") || undefined
       const launch = url.searchParams.get("launch") || undefined
 
-      // Cloud keeps the convenient public demo. An on-prem artifact must be
-      // launched by the hospital EHR and never invent a public issuer.
       if (!iss && !launch) {
-        if (DEPLOYMENT_CONFIG.isOnPrem) {
-          setLaunchError('缺少院內 SMART issuer（iss）。請從院內 EHR 重新啟動應用程式。')
-          return
-        }
         const prefix = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "")
         const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
-        const defaultUrl = `${baseUrl}/smart/launch${CLOUD_SMART_CONFIG.demoLaunchSearch}`
+        const defaultUrl = `${baseUrl}/smart/launch${SMART_CONFIG.demoLaunchSearch}`
         window.location.href = defaultUrl
         return
       }
@@ -77,10 +69,6 @@ export default function SmartLaunchPage() {
       }
 
       if (!isTrustedSmartIssuer(iss)) {
-        if (DEPLOYMENT_CONFIG.isOnPrem) {
-          setLaunchError(`此 FHIR issuer 不在院內允許清單：${iss}`)
-          return
-        }
         setPendingIss(iss)
         setPendingLaunch(launch)
         return
@@ -106,7 +94,7 @@ export default function SmartLaunchPage() {
           SMART 啟動已拒絕 / SMART launch blocked
         </h1>
         <p className="mb-4 text-muted-foreground">
-          此部署只允許管理員設定的院內 FHIR issuer。請從院內 EHR 重新啟動應用程式，或聯絡系統管理員檢查 allowlist。
+          SMART 啟動失敗，請確認啟動連結完整後重試。
         </p>
         <p className="break-all rounded border bg-muted p-3 font-mono text-xs">{launchError}</p>
       </div>

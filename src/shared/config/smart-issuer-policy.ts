@@ -1,4 +1,4 @@
-import { CLOUD_SMART_CONFIG } from '@/src/shared/config/cloud-smart.config'
+import { SMART_CONFIG } from '@/src/shared/config/smart.config'
 
 export interface SmartIssuerPolicyOptions {
   configuredIssuers?: string
@@ -28,7 +28,7 @@ export function isTrustedSmartIssuer(
     .map((value) => value.trim())
     .filter(Boolean)
   const trusted = normalizedOrigins([
-    ...(options.defaultTrustedOrigins ?? CLOUD_SMART_CONFIG.trustedIssuerOrigins),
+    ...(options.defaultTrustedOrigins ?? SMART_CONFIG.trustedIssuerOrigins),
     ...configured,
   ])
 

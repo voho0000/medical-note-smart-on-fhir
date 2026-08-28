@@ -2,17 +2,13 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const isGhPages = process.env.GITHUB_PAGES === "true";
-const isOnPremDeployment =
-  process.env.NEXT_PUBLIC_DEPLOYMENT_PROFILE === "onprem" ||
-  process.env.NEXT_PUBLIC_OFFLINE_MODE === "1";
 
 // Optional second static-export target: the official mirror at
 // mediprisma.tw/app. Set DEPLOY_BASE_PATH=/app to build that artifact.
 // Any non-empty value turns on the same static export + basePath wiring
 // that GitHub Pages uses, just under a different subpath.
 const deployBasePath = process.env.DEPLOY_BASE_PATH || "";
-const isIntranetStaticExport = process.env.INTRANET_STATIC_EXPORT === "true";
-const isStaticExport = isGhPages || deployBasePath !== "" || isIntranetStaticExport;
+const isStaticExport = isGhPages || deployBasePath !== "";
 
 const basePath = deployBasePath
   ? deployBasePath
@@ -25,61 +21,6 @@ const basePath = deployBasePath
 // node_modules, so Turbopack needs to be pointed at the main project root.
 const isWorktree = __dirname.includes('.claude/worktrees/');
 const projectRoot = isWorktree ? path.join(__dirname, '../../..') : __dirname;
-
-// The on-prem artifact swaps Firebase-backed boundary modules before the
-// dependency graph is built. Runtime `if (offline)` checks are insufficient:
-// they still ship Firebase/Auth/Firestore code in browser chunks.
-const onPremAliases: Record<string, string> = {
-  '@/src/application/providers/auth.provider':
-    '@/src/application/providers/onprem/auth.provider.tsx',
-  '@/features/auth/components/EmailVerificationBanner':
-    '@/src/infrastructure/onprem/auth/EmailVerificationBanner.tsx',
-  '@/src/infrastructure/firebase/auth-errors':
-    '@/src/infrastructure/onprem/auth/auth-errors.ts',
-  '@/src/infrastructure/ai/utils/proxy-auth':
-    '@/src/infrastructure/onprem/ai/proxy-auth.ts',
-  '@/src/infrastructure/ai/utils/app-check':
-    '@/src/infrastructure/onprem/ai/app-check.ts',
-  '@/src/infrastructure/ai/factories/ai-provider.factory':
-    '@/src/infrastructure/onprem/ai/ai-provider.factory.ts',
-  '@/src/infrastructure/ai/services/ai.service':
-    '@/src/infrastructure/onprem/ai/ai.service.ts',
-  '@/src/infrastructure/ai/services/openai.service':
-    '@/src/infrastructure/onprem/ai/cloud-services.ts',
-  '@/src/infrastructure/ai/services/transcription.service':
-    '@/src/infrastructure/onprem/ai/cloud-services.ts',
-  '@/src/shared/config/cloud-ai-endpoints.config':
-    '@/src/infrastructure/onprem/ai/cloud-ai-endpoints.config.ts',
-  '@/src/shared/config/cloud-smart.config':
-    '@/src/infrastructure/onprem/smart/cloud-smart.config.ts',
-  '@/src/shared/config/firebase.config':
-    '@/src/infrastructure/onprem/firebase.config.ts',
-  '@/src/infrastructure/firebase/template-sync':
-    '@/src/infrastructure/onprem/sync/template-sync.ts',
-  '@/src/infrastructure/firebase/clinical-insights-sync':
-    '@/src/infrastructure/onprem/sync/clinical-insights-sync.ts',
-  '@/src/application/composition.chat':
-    '@/src/infrastructure/onprem/chat/composition.chat.ts',
-  '@/features/prompt-gallery/services/prompt-gallery.service':
-    '@/features/prompt-gallery/services/prompt-gallery.onprem.service.ts',
-  '@/features/feature-request-pool/service':
-    '@/features/feature-request-pool/service.onprem.ts',
-};
-
-const onPremWebpackAliases = Object.fromEntries(
-  Object.entries(onPremAliases).map(([source, target]) => [
-    source,
-    path.join(__dirname, target.replace(/^@\//, '')),
-  ]),
-);
-
-const configureOnPremWebpack: NonNullable<NextConfig['webpack']> = (config) => {
-  config.resolve.alias = {
-    ...config.resolve.alias,
-    ...onPremWebpackAliases,
-  };
-  return config;
-};
 
 const nextConfig: NextConfig = {
   // Allow phones/tablets on the same local network to load Turbopack's
@@ -97,18 +38,13 @@ const nextConfig: NextConfig = {
   // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
   // worktree mode: point at main project where node_modules lives
   outputFileTracingRoot: projectRoot,
-  ...(isWorktree || isOnPremDeployment
+  ...(isWorktree
     ? {
         turbopack: {
-          ...(isWorktree ? { root: projectRoot } : {}),
-          ...(isOnPremDeployment ? { resolveAlias: onPremAliases } : {}),
+          root: projectRoot,
         },
       }
     : {}),
-  // Keep the webpack fallback available for explicit on-prem webpack builds,
-  // but do not register it for cloud profiles. Next.js 16 treats a webpack
-  // hook without a Turbopack config as an ambiguous production build.
-  ...(isOnPremDeployment ? { webpack: configureOnPremWebpack } : {}),
   // Static-export targets (GH Pages, mediprisma /app) need basePath / assetPrefix
   ...(isStaticExport
     ? {

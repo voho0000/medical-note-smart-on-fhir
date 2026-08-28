@@ -43,8 +43,6 @@ try {
     env: {
       ...process.env,
       GITHUB_PAGES: 'true',
-      NEXT_PUBLIC_DEPLOYMENT_PROFILE: 'cloud',
-      NEXT_PUBLIC_OFFLINE_MODE: '0',
     },
   })
 } finally {
