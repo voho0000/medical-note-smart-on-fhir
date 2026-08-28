@@ -63,12 +63,6 @@ import {
   localBundleMarker,
   readTabLocalImportId,
 } from './local-bundle-scope'
-import { resolveAtcLevel2 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/atc-level2'
-import {
-  resolveAtcLevel3,
-  resolveAtcLevel4,
-} from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/atc-hierarchy'
-import { ATC_CODE_SYSTEM } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
 // New builds keep the active pointer in tab-scoped sessionStorage. These local
 // aliases keep the migration code readable while older origin-wide
@@ -804,61 +798,6 @@ function terminologyFromMedicationKnowledge(
   return undefined
 }
 
-function classificationFromSourceWhoAtc(
-  medication: any,
-): MedicationEntity['atcClassification'] | undefined {
-  const codings = Array.isArray(medication?.medicationCodeableConcept?.coding)
-    ? medication.medicationCodeableConcept.coding
-    : []
-  const atcCodings = codings.filter(
-    (coding: any) =>
-      coding?.system === ATC_CODE_SYSTEM
-      && typeof coding?.code === 'string'
-      && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/i.test(coding.code.trim()),
-  )
-  const codes: string[] = [
-    ...new Set<string>(
-      atcCodings.map((coding: any): string => coding.code.trim().toUpperCase()),
-    ),
-  ]
-  // Multiple distinct full ATC codes are ambiguous (e.g. combination-product
-  // source data). Do not choose one silently or infer from free text.
-  if (codes.length !== 1) return undefined
-
-  const atcCode = codes[0]
-  const level2 = resolveAtcLevel2(atcCode)
-  const level3 = resolveAtcLevel3(atcCode)
-  const level4 = resolveAtcLevel4(atcCode)
-  if (!level2 || !level4) return undefined
-
-  const sourceCoding = atcCodings.find(
-    (coding: any) => coding.code.trim().toUpperCase() === atcCode,
-  )
-  const atcNameEn = typeof sourceCoding?.display === 'string'
-    ? sourceCoding.display.replace(/\s+/g, ' ').trim()
-    : ''
-
-  return {
-    source: 'source-who-atc',
-    atcCode,
-    ...(atcNameEn && atcNameEn !== atcCode ? { atcNameEn } : {}),
-    atcLevel2Code: level2.code,
-    atcLevel2NameEn: level2.nameEn,
-    ...(level2.nameZh ? { atcLevel2NameZh: level2.nameZh } : {}),
-    ...(level3
-      ? {
-          atcLevel3Code: level3.code,
-          atcLevel3NameEn: level3.nameEn,
-          ...(level3.nameZh ? { atcLevel3NameZh: level3.nameZh } : {}),
-        }
-      : {}),
-    atcLevel4Code: level4.code,
-    atcLevel4NameEn: level4.nameEn,
-    ...(level4.nameZh ? { atcLevel4NameZh: level4.nameZh } : {}),
-    atcHierarchySnapshotId: level4.hierarchySnapshotId,
-  }
-}
-
 // Attach encounter references for non-medication resources by same-day match.
 // Used by Observation / Procedure / Condition / DiagnosticReport / ImagingStudy — these
 // don't carry a "requester / provider" field, so date alone is the best we
@@ -1347,7 +1286,6 @@ export const LocalBundleService = {
     // panel can surface "目前服用中" when an IPS dataset is loaded.
     const medicationStatements = byType('MedicationStatement').map((ms: any) => {
       const resolved = resolveMedicationCode(ms)
-      const atcClassification = classificationFromSourceWhoAtc(resolved)
       // Normalize field names that differ between MedicationRequest and MedicationStatement
       return {
         ...resolved,
@@ -1356,7 +1294,6 @@ export const LocalBundleService = {
           ?? resolved.effectivePeriod?.start
           ?? resolved.effectiveDateTime,
         dosageInstruction: resolved.dosageInstruction ?? resolved.dosage,
-        ...(atcClassification ? { atcClassification } : {}),
       }
     })
 
@@ -1369,14 +1306,10 @@ export const LocalBundleService = {
         m,
         medicationKnowledgeMap,
       )
-      const atcClassification = drugTerminology
-        ? undefined
-        : classificationFromSourceWhoAtc(resolved)
       return {
         ...resolved,
         _sourceResourceType: 'MedicationRequest' as const,
         ...(drugTerminology ? { drugTerminology } : {}),
-        ...(atcClassification ? { atcClassification } : {}),
       }
     })
 

@@ -215,8 +215,8 @@ describe('MedicationItem audience-aware compact terminology', () => {
     }
     const { container } = render(<MedicationItem medication={medication} />)
 
-    const scheduleLine = container.querySelector('[data-medication-schedule]')
-    const frequency = container.querySelector('[data-medication-frequency]')
+    const scheduleLine = container.querySelector<HTMLElement>('[data-medication-schedule]')
+    const frequency = container.querySelector<HTMLElement>('[data-medication-frequency]')
     expect(frequency).toHaveTextContent('QDPC')
     expect(frequency).toHaveAttribute('aria-label', '頻次：QDPC')
     expect(scheduleLine?.firstElementChild).toContainElement(frequency)

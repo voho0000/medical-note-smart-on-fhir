@@ -236,10 +236,11 @@ describe('App-side NHI drug terminology enrichment', () => {
     const medication = parsed?.collection.medications[0]
 
     expect(result.report).toMatchObject({
-      status: 'not-applicable',
+      status: 'enriched',
       eligibleRequestCount: 1,
       linkedRequestCount: 0,
       atcResolvedCount: 0,
+      sourceAtcFallbackCount: 1,
     })
     expect(sourceRequest).not.toHaveProperty('drugTerminology')
     expect(sourceRequest).not.toHaveProperty('atcClassification')

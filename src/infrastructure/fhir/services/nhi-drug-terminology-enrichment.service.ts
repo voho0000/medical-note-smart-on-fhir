@@ -5,7 +5,8 @@
  * Bundle, so Health Bank SDK JSON, Health Bank website exports, and any future
  * NHI source share the same terminology policy. The source MedicationRequest
  * remains authoritative: enrichment only adds MedicationKnowledge,
- * supportingInformation links, and Provenance.
+ * supportingInformation links, Provenance, and an app-internal governed ATC
+ * classification when the source already carries one exact WHO ATC code.
  */
 
 import type {
@@ -17,6 +18,7 @@ export const NHI_DRUG_CODE_SYSTEMS = [
   'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw',
 ] as const
 const NHI_DRUG_CODE_SYSTEM_SET = new Set<string>(NHI_DRUG_CODE_SYSTEMS)
+const WHO_ATC_CODE_SYSTEM = 'http://www.whocc.no/atc'
 
 export function isNhiDrugCodeSystem(system: unknown): boolean {
   return typeof system === 'string' && NHI_DRUG_CODE_SYSTEM_SET.has(system)
@@ -47,6 +49,13 @@ interface Candidate {
   lookupKey: string
 }
 
+interface SourceAtcCandidate {
+  entryIndex: number
+  resource: FhirResource
+  atcCode: string
+  atcNameEn?: string
+}
+
 export interface NhiDrugTerminologyEnrichmentReport {
   status: 'not-applicable' | 'enriched' | 'unavailable'
   snapshotId?: string
@@ -55,6 +64,7 @@ export interface NhiDrugTerminologyEnrichmentReport {
   linkedRequestCount: number
   knowledgeResourceCount: number
   atcResolvedCount: number
+  sourceAtcFallbackCount: number
   skipped: {
     missingNhiDrugCode: number
     ambiguousNhiDrugCode: number
@@ -103,7 +113,7 @@ function referencedMedication(
 function medicationCodings(
   request: FhirResource,
   medicationsByReference: Map<string, FhirResource>,
-): Array<{ system?: unknown; code?: unknown }> {
+): Array<{ system?: unknown; code?: unknown; display?: unknown }> {
   const inline = request.medicationCodeableConcept as {
     coding?: unknown
   } | undefined
@@ -112,10 +122,40 @@ function medicationCodings(
   const coding = inline?.coding ?? referencedCode?.coding
   return Array.isArray(coding)
     ? coding.filter(
-      (item): item is { system?: unknown; code?: unknown } =>
+      (item): item is { system?: unknown; code?: unknown; display?: unknown } =>
         !!item && typeof item === 'object',
     )
     : []
+}
+
+function exactSourceWhoAtc(
+  medication: FhirResource,
+  medicationsByReference: Map<string, FhirResource>,
+): { atcCode: string; atcNameEn?: string } | undefined {
+  const codings = medicationCodings(medication, medicationsByReference)
+    .filter(({ system, code }) =>
+      system === WHO_ATC_CODE_SYSTEM
+      && typeof code === 'string'
+      && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/i.test(code.trim()))
+  const codes = [
+    ...new Set(
+      codings.map(({ code }) => String(code).trim().toUpperCase()),
+    ),
+  ]
+  // Multiple distinct full codes are ambiguous for grouping. Never choose one
+  // silently or infer a category from product/class free text.
+  if (codes.length !== 1) return undefined
+  const atcCode = codes[0]
+  const sourceCoding = codings.find(
+    ({ code }) => String(code).trim().toUpperCase() === atcCode,
+  )
+  const atcNameEn = typeof sourceCoding?.display === 'string'
+    ? sourceCoding.display.replace(/\s+/g, ' ').trim()
+    : ''
+  return {
+    atcCode,
+    ...(atcNameEn && atcNameEn !== atcCode ? { atcNameEn } : {}),
+  }
 }
 
 function exactNhiDrugCodes(
@@ -154,6 +194,7 @@ function notApplicableReport(
     linkedRequestCount: 0,
     knowledgeResourceCount: 0,
     atcResolvedCount: 0,
+    sourceAtcFallbackCount: 0,
     skipped,
     byResolutionStatus: {},
   }
@@ -191,11 +232,13 @@ function withAppEnrichmentPolicyTag(resource: FhirResource): FhirResource {
 /**
  * Enrich a local FHIR Bundle without changing any source clinical fields.
  *
- * The 12 MB terminology snapshot is loaded only after an exact NHI drug code
- * and an authoredOn prescription date have both been found. Dates covered by
- * the snapshot retain strict point-in-time matching. A newer prescription is
- * matched against the latest date covered by the bundled snapshot so an exact
- * code still receives the newest terminology known to the App.
+ * The terminology package is loaded only after either an eligible NHI lookup
+ * or an exact source WHO ATC code is found. This function runs in the existing
+ * enrichment worker, keeping both the 12 MB drug snapshot and the ATC hierarchy
+ * off the UI thread. Dates covered by the snapshot retain strict point-in-time
+ * matching. A newer prescription is matched against the latest date covered by
+ * the bundled snapshot so an exact code still receives the newest terminology
+ * known to the App.
  */
 export async function enrichBundleWithNhiDrugTerminology(
   bundle: Record<string, unknown>,
@@ -205,6 +248,11 @@ export async function enrichBundleWithNhiDrugTerminology(
   const medicationRequests = entries
     .map((entry, entryIndex) => ({ entry, entryIndex }))
     .filter(({ entry }) => entry.resource?.resourceType === 'MedicationRequest')
+  const sourceAtcResources = entries
+    .map((entry, entryIndex) => ({ entry, entryIndex }))
+    .filter(({ entry }) =>
+      entry.resource?.resourceType === 'MedicationRequest'
+      || entry.resource?.resourceType === 'MedicationStatement')
   const medicationsByReference = new Map<string, FhirResource>()
   for (const entry of entries) {
     if (entry.resource?.resourceType !== 'Medication') continue
@@ -244,7 +292,19 @@ export async function enrichBundleWithNhiDrugTerminology(
     })
   }
 
-  if (candidates.length === 0) {
+  const sourceAtcCandidates: SourceAtcCandidate[] = []
+  for (const { entry, entryIndex } of sourceAtcResources) {
+    const resource = entry.resource!
+    const sourceAtc = exactSourceWhoAtc(resource, medicationsByReference)
+    if (!sourceAtc) continue
+    sourceAtcCandidates.push({
+      entryIndex,
+      resource,
+      ...sourceAtc,
+    })
+  }
+
+  if (candidates.length === 0 && sourceAtcCandidates.length === 0) {
     return {
       bundle,
       report: notApplicableReport(medicationRequests.length, skipped),
@@ -253,8 +313,8 @@ export async function enrichBundleWithNhiDrugTerminology(
 
   try {
     // Keep this static dynamic import inside the eligible-only branch. Next.js
-    // emits the official snapshot as an async chunk instead of adding it to the
-    // initial application JavaScript.
+    // emits both the official drug snapshot and governed ATC hierarchy as an
+    // async worker chunk instead of adding them to initial application JS.
     const terminology = await import(
       '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/index'
     )
@@ -302,6 +362,8 @@ export async function enrichBundleWithNhiDrugTerminology(
       Partial<Record<NhiDrugTerminologyResolutionStatus, number>> = {}
     let linkedRequestCount = 0
     let atcResolvedCount = 0
+    let sourceAtcFallbackCount = 0
+    const officiallyLinkedEntryIndexes = new Set<number>()
 
     for (const candidate of candidates) {
       const resolution = resolutionByKey.get(candidate.lookupKey)
@@ -405,7 +467,46 @@ export async function enrichBundleWithNhiDrugTerminology(
         resource: linked,
       }
       linkedRequestCount += 1
+      officiallyLinkedEntryIndexes.add(candidate.entryIndex)
       if (resolution.record.atcCode) atcResolvedCount += 1
+    }
+
+    for (const candidate of sourceAtcCandidates) {
+      if (officiallyLinkedEntryIndexes.has(candidate.entryIndex)) continue
+      const level2 = terminology.resolveAtcLevel2(candidate.atcCode)
+      const level3 = terminology.resolveAtcLevel3(candidate.atcCode)
+      const level4 = terminology.resolveAtcLevel4(candidate.atcCode)
+      if (!level2 || !level4) continue
+
+      const currentEntry = nextEntries[candidate.entryIndex]
+      if (!currentEntry) continue
+      const currentResource = currentEntry.resource ?? candidate.resource
+      nextEntries[candidate.entryIndex] = {
+        ...currentEntry,
+        resource: {
+          ...currentResource,
+          atcClassification: {
+            source: 'source-who-atc',
+            atcCode: candidate.atcCode,
+            ...(candidate.atcNameEn ? { atcNameEn: candidate.atcNameEn } : {}),
+            atcLevel2Code: level2.code,
+            atcLevel2NameEn: level2.nameEn,
+            ...(level2.nameZh ? { atcLevel2NameZh: level2.nameZh } : {}),
+            ...(level3
+              ? {
+                  atcLevel3Code: level3.code,
+                  atcLevel3NameEn: level3.nameEn,
+                  ...(level3.nameZh ? { atcLevel3NameZh: level3.nameZh } : {}),
+                }
+              : {}),
+            atcLevel4Code: level4.code,
+            atcLevel4NameEn: level4.nameEn,
+            ...(level4.nameZh ? { atcLevel4NameZh: level4.nameZh } : {}),
+            atcHierarchySnapshotId: level4.hierarchySnapshotId,
+          },
+        },
+      }
+      sourceAtcFallbackCount += 1
     }
 
     for (const knowledge of generatedKnowledge.values()) {
@@ -470,17 +571,20 @@ export async function enrichBundleWithNhiDrugTerminology(
     }
 
     return {
-      bundle: linkedRequestCount > 0
+      bundle: linkedRequestCount > 0 || sourceAtcFallbackCount > 0
         ? { ...bundle, entry: nextEntries }
         : bundle,
       report: {
-        status: linkedRequestCount > 0 ? 'enriched' : 'not-applicable',
+        status: linkedRequestCount > 0 || sourceAtcFallbackCount > 0
+          ? 'enriched'
+          : 'not-applicable',
         snapshotId: terminology.NHI_DRUG_TERMINOLOGY_MANIFEST.snapshotId,
         medicationRequestCount: medicationRequests.length,
         eligibleRequestCount: candidates.length,
         linkedRequestCount,
         knowledgeResourceCount: generatedKnowledge.size,
         atcResolvedCount,
+        sourceAtcFallbackCount,
         skipped,
         byResolutionStatus,
       },
@@ -497,6 +601,7 @@ export async function enrichBundleWithNhiDrugTerminology(
         linkedRequestCount: 0,
         knowledgeResourceCount: 0,
         atcResolvedCount: 0,
+        sourceAtcFallbackCount: 0,
         skipped,
         byResolutionStatus: {},
       },
