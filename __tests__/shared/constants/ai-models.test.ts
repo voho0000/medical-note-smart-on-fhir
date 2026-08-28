@@ -119,6 +119,29 @@ describe('MODEL_CATALOG contract', () => {
       contextLimit: 1_000_000,
     })
   })
+
+  it('keeps the current user-key Gemini and Claude lineup', () => {
+    expect(GEMINI_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
+      'gemini-3.7-flash',
+      'gemini-3.1-pro-preview',
+    ])
+    expect(CLAUDE_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
+      'claude-sonnet-5',
+      'claude-opus-5',
+      'claude-fable-5',
+    ])
+    expect(getModelDefinition('claude-sonnet-5')).toMatchObject({
+      contextLimit: 900_000,
+      temperaturePolicy: 'omit',
+    })
+    expect(getModelDefinition('claude-opus-5')).toMatchObject({
+      contextLimit: 900_000,
+      temperaturePolicy: 'omit',
+    })
+    expect(getModelDefinition('claude-fable-5')).toMatchObject({
+      temperaturePolicy: 'omit',
+    })
+  })
 })
 
 describe('model catalog selectors', () => {
@@ -129,6 +152,9 @@ describe('model catalog selectors', () => {
     expect(isModelId('gpt-5.4-mini')).toBe(false)
     expect(isModelId('gpt-5.4')).toBe(false)
     expect(isModelId('gpt-5.5')).toBe(false)
+    expect(isModelId('gemini-3.5-flash')).toBe(false)
+    expect(isModelId('claude-sonnet-4-6')).toBe(false)
+    expect(isModelId('claude-opus-4-8')).toBe(false)
     expect(() => getModelDefinitionOrThrow('unknown-model')).toThrow('Unsupported AI model')
   })
 

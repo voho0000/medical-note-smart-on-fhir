@@ -44,30 +44,28 @@ export class GeminiService {
       'Content-Type': 'application/json',
     }
 
-    const body: Record<string, unknown> = {
-      model: request.modelId,
-      messages: request.messages,
-    }
-
     const temperature = resolveModelTemperature(modelDef, request.temperature)
-    if (temperature !== undefined) {
-      body.temperature = temperature
+    const generationConfig: Record<string, unknown> = {
+      ...(request.responseFormat === 'json'
+        ? { responseMimeType: 'application/json' }
+        : {}),
+      ...(request.maxTokens !== undefined
+        ? { maxOutputTokens: request.maxTokens }
+        : {}),
     }
 
-    // Best-effort JSON mode (Phase 2.2). Proxies may ignore it; callers still
-    // defensively parse the returned text.
-    if (request.responseFormat === 'json') {
-      body.generationConfig = {
-        ...(body.generationConfig as Record<string, unknown> | undefined),
-        responseMimeType: 'application/json',
-      }
-    }
-    if (request.maxTokens !== undefined) {
-      body.generationConfig = {
-        ...(body.generationConfig as Record<string, unknown> | undefined),
-        maxOutputTokens: request.maxTokens,
-      }
-    }
+    // Firebase's Gemini proxy accepts the app-level request contract. Direct
+    // generateContent calls must instead use Google's Content schema: system
+    // messages become systemInstruction, assistant becomes the `model` role,
+    // and sampling settings live inside generationConfig.
+    const body: Record<string, unknown> = shouldUseProxy
+      ? {
+          model: request.modelId,
+          messages: request.messages,
+          ...(temperature !== undefined ? { temperature } : {}),
+          ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
+        }
+      : this.buildDirectRequestBody(request, temperature, generationConfig)
 
     if (shouldUseProxy) {
       if (ENV_CONFIG.proxyClientKey) {
@@ -117,6 +115,37 @@ export class GeminiService {
 
   private buildDirectApiUrl(modelId: string): string {
     return `${CLOUD_AI_ENDPOINTS.geminiApiBase}/models/${modelId}:generateContent`
+  }
+
+  private buildDirectRequestBody(
+    request: AiQueryRequest,
+    temperature: number | undefined,
+    generationConfig: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const systemInstruction = request.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n')
+
+    const directGenerationConfig = {
+      ...generationConfig,
+      ...(temperature !== undefined ? { temperature } : {}),
+    }
+
+    return {
+      contents: request.messages
+        .filter((message) => message.role !== 'system')
+        .map((message) => ({
+          role: message.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: message.content }],
+        })),
+      ...(systemInstruction
+        ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
+        : {}),
+      ...(Object.keys(directGenerationConfig).length > 0
+        ? { generationConfig: directGenerationConfig }
+        : {}),
+    }
   }
 
   private extractGeminiContent(data: any, shouldUseProxy: boolean): string {

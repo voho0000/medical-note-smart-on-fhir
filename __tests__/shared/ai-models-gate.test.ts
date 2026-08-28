@@ -19,16 +19,16 @@ describe('gateModel — downgrade stranded premium models', () => {
   })
 
   it('keeps a key-required model when the user HAS the provider key', () => {
-    expect(gateModel('gemini-3.5-flash', true)).toBe('gemini-3.5-flash')
+    expect(gateModel('gemini-3.7-flash', true)).toBe('gemini-3.7-flash')
     expect(gateModel('gpt-5.6-terra', true)).toBe('gpt-5.6-terra')
   })
 
   it('downgrades a key-required model to the free default when no key', () => {
     // every stranded premium pick lands on the one free default, regardless of
     // its original provider — a single predictable fallback.
-    expect(gateModel('gemini-3.5-flash', false)).toBe(DEFAULT_MODEL_ID)
+    expect(gateModel('gemini-3.7-flash', false)).toBe(DEFAULT_MODEL_ID)
     expect(gateModel('gpt-5.6-terra', false)).toBe(DEFAULT_MODEL_ID)
-    expect(gateModel('claude-opus-4-8', false)).toBe(DEFAULT_MODEL_ID)
+    expect(gateModel('claude-opus-5', false)).toBe(DEFAULT_MODEL_ID)
   })
 
   it('falls back to the default for an unknown model id', () => {
@@ -41,14 +41,14 @@ describe('gateModel — downgrade stranded premium models', () => {
 // keys and must downgrade exactly like the shared stream adapter does.
 describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
   it('downgrades a key-required model to the free default when no matching key', () => {
-    expect(gateModelForKeys('claude-opus-4-8', {})).toBe(DEFAULT_MODEL_ID)
-    expect(gateModelForKeys('gemini-3.5-flash', {})).toBe(DEFAULT_MODEL_ID)
+    expect(gateModelForKeys('claude-opus-5', {})).toBe(DEFAULT_MODEL_ID)
+    expect(gateModelForKeys('gemini-3.7-flash', {})).toBe(DEFAULT_MODEL_ID)
     expect(gateModelForKeys('gpt-5.6-terra', {})).toBe(DEFAULT_MODEL_ID)
   })
 
   it('keeps a key-required model when the matching provider key IS present', () => {
-    expect(gateModelForKeys('claude-opus-4-8', { claudeKey: 'k' })).toBe('claude-opus-4-8')
-    expect(gateModelForKeys('gemini-3.5-flash', { geminiKey: 'k' })).toBe('gemini-3.5-flash')
+    expect(gateModelForKeys('claude-opus-5', { claudeKey: 'k' })).toBe('claude-opus-5')
+    expect(gateModelForKeys('gemini-3.7-flash', { geminiKey: 'k' })).toBe('gemini-3.7-flash')
     expect(gateModelForKeys('gpt-5.6-terra', { openAiKey: 'k' })).toBe('gpt-5.6-terra')
   })
 
@@ -58,7 +58,7 @@ describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
 
   it('a key for a DIFFERENT provider does not rescue the pick', () => {
     // Opus needs a Claude key; Gemini/OpenAI keys must not keep it on Opus.
-    expect(gateModelForKeys('claude-opus-4-8', { geminiKey: 'k', openAiKey: 'k' })).toBe(DEFAULT_MODEL_ID)
+    expect(gateModelForKeys('claude-opus-5', { geminiKey: 'k', openAiKey: 'k' })).toBe(DEFAULT_MODEL_ID)
   })
 
   it('leaves a free (proxy-eligible) model untouched regardless of keys', () => {

@@ -140,6 +140,22 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({ temperature: 1 }))
   })
 
+  it('omits sampling parameters for Claude 5 adaptive-thinking models', async () => {
+    const create = jest.fn(() => ({ model: { kind: 'claude' }, isGemini: false }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+
+    await adapter.stream({
+      model: 'claude-opus-5',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: 'personal-key',
+      signal: new AbortController().signal,
+      temperature: 0.2,
+      onChunk: jest.fn(),
+    })
+
+    expect(mockStreamText.mock.calls[0][0]).not.toHaveProperty('temperature')
+  })
+
   it('fails before provider creation for an unregistered model', async () => {
     const create = jest.fn()
     const adapter = new AiSdkStreamAdapter({ create } as any)

@@ -91,6 +91,42 @@ describe('GeminiService', () => {
       expect(result.metadata.tokensUsed).toBe(25)
     })
 
+    it('maps app messages to the direct generateContent schema', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+        }),
+      } as Response)
+
+      await service.query({
+        ...mockRequest,
+        modelId: 'gemini-3.7-flash',
+        messages: [
+          { role: 'system', content: 'Follow clinical safety rules.' },
+          { role: 'user', content: 'Summarize the record.' },
+          { role: 'assistant', content: 'What time range?' },
+          { role: 'user', content: 'The past year.' },
+        ],
+      })
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
+      expect(body).toEqual({
+        systemInstruction: {
+          parts: [{ text: 'Follow clinical safety rules.' }],
+        },
+        contents: [
+          { role: 'user', parts: [{ text: 'Summarize the record.' }] },
+          { role: 'model', parts: [{ text: 'What time range?' }] },
+          { role: 'user', parts: [{ text: 'The past year.' }] },
+        ],
+        generationConfig: { temperature: 0.7 },
+      })
+      expect(body).not.toHaveProperty('messages')
+      expect(body).not.toHaveProperty('model')
+      expect(body).not.toHaveProperty('temperature')
+    })
+
     it('should forward caller cancellation to the non-streaming request', async () => {
       mockFetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
         const signal = init?.signal as AbortSignal
@@ -128,7 +164,7 @@ describe('GeminiService', () => {
       await expect(service.query(mockRequest)).rejects.toThrow('Invalid API key')
     })
 
-    it('should include temperature in request', async () => {
+    it('should include temperature in generationConfig', async () => {
       // Arrange
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -143,7 +179,8 @@ describe('GeminiService', () => {
       // Assert
       const fetchCall = mockFetch.mock.calls[0]
       const body = JSON.parse(fetchCall[1]?.body as string)
-      expect(body.temperature).toBe(0.7)
+      expect(body.generationConfig?.temperature).toBe(0.7)
+      expect(body).not.toHaveProperty('temperature')
     })
 
     it('should set generationConfig.responseMimeType when responseFormat is json', async () => {
@@ -178,7 +215,10 @@ describe('GeminiService', () => {
         }),
       } as Response)
 
-      await service.query(mockRequest)
+      await service.query({
+        modelId: mockRequest.modelId,
+        messages: mockRequest.messages,
+      })
 
       const fetchCall = mockFetch.mock.calls[0]
       const body = JSON.parse(fetchCall[1]?.body as string)
@@ -270,6 +310,12 @@ describe('GeminiService', () => {
 
       const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>
       expect(headers['x-proxy-key']).toBe('client-key')
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
+      expect(body).toEqual({
+        model: 'gemini-3.1-flash-lite',
+        messages: [{ role: 'user', content: 'Hello' }],
+      })
+      expect(body).not.toHaveProperty('contents')
       expect(result.text).toBe('hi')
     })
 
@@ -278,7 +324,7 @@ describe('GeminiService', () => {
 
       await expect(proxyService.query({
         ...proxyRequest,
-        modelId: 'gemini-3.5-flash',
+        modelId: 'gemini-3.7-flash',
       })).rejects.toThrow('personal Gemini API key')
       expect(mockFetch).not.toHaveBeenCalled()
     })
