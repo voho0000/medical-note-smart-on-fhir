@@ -203,7 +203,11 @@ export function medicationClinicalIdentityKey(medication: any): string {
 export function extractFrequencyFromText(text?: string): string {
   if (!text) return ""
   const upper = text.toUpperCase()
-  const known = upper.match(/\b(QD|BID|TID|QID|QOD|QHS|HS|PRN)\b/)
+  // Hospital SIGs often concatenate meal timing with frequency (QDPC,
+  // BIDAC…). Keep that exact source code instead of shortening QDPC to QD.
+  const known = upper.match(
+    /(?:^|[^A-Z0-9])(QDAC|QDPC|BIDAC|BIDPC|TIDAC|TIDPC|QIDAC|QIDPC|QOD|QHS|QD|BID|TID|QID|HS|PRN|STAT)(?=$|[^A-Z0-9])/,
+  )
   if (known) return known[1]
   const every = upper.match(/Q(\d+)H/)
   if (every) return `q${every[1]}h`

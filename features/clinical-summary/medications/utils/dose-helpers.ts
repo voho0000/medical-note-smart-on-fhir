@@ -1,5 +1,6 @@
 // Dose and Frequency Helper Functions
 import type { DosageInstruction, CodeableConcept } from '@/src/shared/types/fhir.types'
+import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 import { routeDisplayText } from './route-display'
 
 type DoseAndRate = NonNullable<DosageInstruction['doseAndRate']>[number]
@@ -82,6 +83,43 @@ export function humanDoseFreq(rep?: TimingRepeat): string {
   if (unit === "month" && period > 0 && freq > 0) return `${freq}× every ${period} month${period > 1 ? "s" : ""}`
 
   return ""
+}
+
+function conceptValues(concept?: CodeableConcept): string[] {
+  if (!concept) return []
+  return [
+    ...(concept.coding ?? []).flatMap((coding) => [coding.code, coding.display]),
+    concept.text,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+}
+
+function administrationMealTiming(dosage?: DosageInstruction): 'AC' | 'PC' | '' {
+  const candidates = [
+    ...(dosage?.timing?.repeat?.when ?? []),
+    ...(dosage?.additionalInstruction ?? []).flatMap(conceptValues),
+  ]
+  for (const candidate of candidates) {
+    const normalized = candidate.trim().toUpperCase()
+    if (/^(?:AC|BEFORE\s+MEALS?)$/.test(normalized)) return 'AC'
+    if (/^(?:PC|AFTER\s+MEALS?)$/.test(normalized)) return 'PC'
+  }
+  return ''
+}
+
+/** Prefer an explicit source SIG code (including composite QDPC/BIDAC), then
+ * derive a conventional frequency from structured FHIR repeat fields. */
+export function humanDosageFrequency(dosage?: DosageInstruction): string {
+  if (!dosage) return ''
+  const explicitFrequency = [
+    ...conceptValues(dosage.timing?.code),
+    dosage.text,
+  ].map(extractFrequencyFromText).find(Boolean) || ''
+  const frequency = explicitFrequency || humanDoseFreq(dosage.timing?.repeat)
+  const mealTiming = administrationMealTiming(dosage)
+  if (mealTiming && /^(?:QD|BID|TID|QID)$/.test(frequency)) {
+    return `${frequency}${mealTiming}`
+  }
+  return frequency
 }
 
 export function buildDetail({

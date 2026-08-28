@@ -187,14 +187,17 @@ export interface ImagingStudy {
 export interface DosageInstruction {
   text?: string
   timing?: {
+    code?: CodeableConcept
     repeat?: {
       frequency?: number
       period?: number
       periodUnit?: string
+      when?: string[]
       boundsDuration?: Duration
       boundsPeriod?: Period
     }
   }
+  additionalInstruction?: CodeableConcept[]
   route?: CodeableConcept
   doseAndRate?: Array<{
     doseQuantity?: Quantity

@@ -3,13 +3,12 @@ import { useMemo } from 'react'
 import type { MedicationRow } from '../types'
 import {
   formatDate,
-  extractFrequencyFromText,
   isChronicPrescription,
   medicationClinicalIdentityKey,
   pickLocalizedText,
   pickByLocale,
 } from '../utils/fhir-helpers'
-import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
+import { humanDoseAmount, humanDosageFrequency, buildDetail } from '../utils/dose-helpers'
 import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
@@ -143,7 +142,7 @@ export function useMedicationRows(
       // coding without display/text renders per audience — PO for medical
       // staff, 口服 for patients — instead of the raw 26643006.
       const routeSummary = routeDisplayText(dosage?.route, { audience, locale })
-      const frequencySummary = humanDoseFreq(dosage?.timing?.repeat) || extractFrequencyFromText(dosage?.text) || ""
+      const frequencySummary = humanDosageFrequency(dosage)
 
       const detail = buildDetail({
         doseAndRate: dosage?.doseAndRate,
@@ -260,6 +259,7 @@ export function useMedicationRows(
         med?.reasonCode?.[0]?.coding?.[0]?.display,  // 適應症 英文
         icdCode,                                     // 診斷 ICD 碼
         pharmacy,                                    // 機構 / 藥局
+        frequencySummary,                            // 用法頻次（QD／BID／QDPC…）
         ...dateSearchTokens(startDateRaw),           // 日期 西元 + 民國
         ...dateSearchTokens(refillAgg?.firstDate),
       ].filter(Boolean).join(' ').toLowerCase()

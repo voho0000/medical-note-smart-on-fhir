@@ -85,12 +85,29 @@ export interface MedicationEntity {
       text?: string
     }
     timing?: {
+      code?: {
+        text?: string
+        coding?: Array<{
+          code?: string
+          display?: string
+          system?: string
+        }>
+      }
       repeat?: {
         frequency?: number
         period?: number
         periodUnit?: string
+        when?: string[]
       }
     }
+    additionalInstruction?: Array<{
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+        system?: string
+      }>
+    }>
     doseAndRate?: Array<{
       doseQuantity?: {
         value?: number
