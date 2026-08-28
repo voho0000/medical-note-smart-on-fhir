@@ -3,6 +3,7 @@ import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories
 import type {
   ConditionEntity,
   MedicationEntity,
+  MedicationRemainingSummaryEntity,
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
@@ -20,12 +21,17 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
 import { FhirMapper } from '../mappers/fhir.mapper'
+import { isMedicationRemainingSummaryBasic } from '../mappers/fhir.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 import {
   classifyFhirQueryError,
   shouldRetryBasicFhirSearch,
   successfulFhirQueryStatus,
 } from '../utils/fhir-query-status'
+import {
+  MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM,
+  MEDCLOUD_REMAINING_SUMMARY_CODE,
+} from '@/src/shared/constants/medcloud.constants'
 
 // Skip console noise for the "no SMART client" sentinel — that's a planned
 // fallback (user is in local-bundle mode or the data source went away
@@ -167,6 +173,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     const [
       conditions,
       medications,
+      medicationRemainingSummaries,
       allergies,
       observations,
       diagnosticReports,
@@ -182,6 +189,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     ] = await Promise.all([
       this.fetchConditions(patientId),
       this.fetchMedications(patientId),
+      this.fetchMedicationRemainingSummaries(patientId),
       this.fetchAllergies(patientId),
       this.fetchObservations(patientId),
       this.fetchDiagnosticReports(patientId),
@@ -226,6 +234,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     return {
       conditions,
       medications,
+      medicationRemainingSummaries,
       allergies,
       observations,
       vitalSigns,
@@ -240,6 +249,33 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       devices,
       carePlans,
       resourceQueryStatus: { ...this.resourceQueryStatus },
+    }
+  }
+
+  async fetchMedicationRemainingSummaries(
+    patientId: string,
+  ): Promise<MedicationRemainingSummaryEntity[]> {
+    try {
+      const token = encodeURIComponent(
+        `${MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM}|${MEDCLOUD_REMAINING_SUMMARY_CODE}`,
+      )
+      const response = await this.requestWithBasicFallback(
+        `Basic?subject=Patient/${patientId}&code=${token}&_count=100`,
+        `Basic?subject=Patient/${patientId}&_count=100`,
+      )
+      const summaries: MedicationRemainingSummaryEntity[] = (response.entry ?? [])
+        .map((entry: any) => entry.resource)
+        .filter(isMedicationRemainingSummaryBasic)
+        .map((resource: any) => FhirMapper.toMedicationRemainingSummary(resource))
+      const result = [...new Map(
+        summaries.map((summary: MedicationRemainingSummaryEntity) => [summary.id, summary]),
+      ).values()]
+      this.markQuerySuccess('Basic', 'Basic', result.length)
+      return result
+    } catch (error) {
+      this.markQueryFailure('Basic', 'Basic', error)
+      warnFhirError('Failed to fetch medication remaining summaries:', error)
+      return []
     }
   }
 

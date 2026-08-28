@@ -30,6 +30,7 @@ export class ClinicalDataCollectionService {
     return {
       conditions: data.conditions || [],
       medications: data.medications || [],
+      medicationRemainingSummaries: data.medicationRemainingSummaries || [],
       allergies: data.allergies || [],
       diagnosticReports: data.diagnosticReports || [],
       imagingStudies: data.imagingStudies || [],
@@ -54,6 +55,7 @@ export class ClinicalDataCollectionService {
     return {
       conditions: [],
       medications: [],
+      medicationRemainingSummaries: [],
       allergies: [],
       diagnosticReports: [],
       imagingStudies: [],
@@ -84,6 +86,7 @@ export class ClinicalDataCollectionService {
     return (
       collection.conditions.length > 0 ||
       collection.medications.length > 0 ||
+      collection.medicationRemainingSummaries.length > 0 ||
       collection.allergies.length > 0 ||
       collection.diagnosticReports.length > 0 ||
       collection.imagingStudies.length > 0 ||

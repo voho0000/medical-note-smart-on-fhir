@@ -63,6 +63,7 @@ export const sampleCollection: ClinicalDataCollection = {
       intent: 'order',
     },
   ],
+  medicationRemainingSummaries: [],
   allergies: [
     {
       id: 'allergy-1',

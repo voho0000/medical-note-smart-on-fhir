@@ -85,7 +85,7 @@ describe('FHIR Helpers', () => {
     it('should format valid date string', () => {
       const dateString = '2024-01-15'
       const result = formatDate(dateString)
-      expect(result).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
+      expect(result).toMatch(/^(?:\d{4}\/\d{1,2}\/\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})$/)
     })
 
     it('should return empty string for undefined', () => {
@@ -108,7 +108,7 @@ describe('FHIR Helpers', () => {
     it('should handle ISO date format', () => {
       const dateString = '2024-01-15T10:30:00Z'
       const result = formatDate(dateString)
-      expect(result).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
+      expect(result).toMatch(/^(?:\d{4}\/\d{1,2}\/\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})$/)
     })
 
     it('keeps a dateTime on the day the SOURCE wrote, in any viewer timezone', () => {

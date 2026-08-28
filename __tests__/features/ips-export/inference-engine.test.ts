@@ -13,6 +13,7 @@ function makeData(partial: Partial<ClinicalDataCollection> = {}): ClinicalDataCo
   return {
     conditions: [],
     medications: [],
+    medicationRemainingSummaries: [],
     allergies: [],
     observations: [],
     vitalSigns: [],

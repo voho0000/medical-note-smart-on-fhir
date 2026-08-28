@@ -25,10 +25,10 @@ describe('SourceSup', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /1 · Observation/ }))
 
-    expect(screen.getByText(/Observation · 臺北榮總;門診 · 2026-05-05/)).toBeInTheDocument()
+    expect(screen.getByText(/Observation · 臺北榮總 · 2026-05-05/)).toBeInTheDocument()
     expect(document.body).not.toHaveTextContent('0601160016')
 
-    fireEvent.click(screen.getByRole('button', { name: /Observation · 臺北榮總;門診/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Observation · 臺北榮總/ }))
     expect(onNavigate).toHaveBeenCalledWith({
       resourceType: 'Observation',
       resourceId: 'observation-hba1c',

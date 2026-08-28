@@ -22,7 +22,10 @@
 // load/import, so an imported chart never lingers on a shared workstation.
 // Plaintext data written by older builds is re-encrypted on first read.
 
-import { FhirMapper } from '../mappers/fhir.mapper'
+import {
+  FhirMapper,
+  isMedicationRemainingSummaryBasic,
+} from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
@@ -549,23 +552,32 @@ function resourceDisplayName(res: any): string | undefined {
 
 /**
  * Display canonicalisation: stamp a human-readable `display` onto every
- * in-bundle reference that lacks one and whose target is a person/place
- * resource (Practitioner / PractitionerRole / Organization / Location).
+ * in-bundle reference whose target is a person/place resource (Practitioner /
+ * PractitionerRole / Organization / Location).
  *
  * Why: TW-Core document bundles (e.g. 門診 scenario files) model the attending
  * physician as `Encounter.participant[].individual → Reference(Practitioner)`
  * and the institution as `serviceProvider → Reference(Organization)` with NO
  * display strings — the UI renders only `.display`, so both showed blank.
  * PractitionerRole references resolve through to the underlying practitioner's
- * name. Existing display strings are never overwritten. Mutates in place (the
+ * name. Organization references deliberately prefer the structured
+ * `Organization.name` even when the source already supplied a display: NHI
+ * displays may contain "name;visit type;institution code", which is useful as
+ * source metadata but is not an appropriate institution label. Existing
+ * displays for people and locations remain untouched. Mutates in place (the
  * canonicalised clones, never the cached raw bundle).
  */
 export function attachReferenceDisplays(resources: any[]): void {
   const displayByRef = new Map<string, string>()
+  const organizationRefs = new Set<string>()
   for (const res of resources) {
     if (!['Practitioner', 'Organization', 'Location'].includes(res.resourceType)) continue
     const display = resourceDisplayName(res)
-    if (display) displayByRef.set(`${res.resourceType}/${res.id}`, display)
+    if (display) {
+      const reference = `${res.resourceType}/${res.id}`
+      displayByRef.set(reference, display)
+      if (res.resourceType === 'Organization') organizationRefs.add(reference)
+    }
   }
   // Second pass: PractitionerRole → its practitioner's resolved name.
   for (const res of resources) {
@@ -584,7 +596,10 @@ export function attachReferenceDisplays(resources: any[]): void {
     }
     if (!node || typeof node !== 'object') return
     const obj = node as Record<string, unknown>
-    if (typeof obj.reference === 'string' && !obj.display) {
+    if (
+      typeof obj.reference === 'string'
+      && (!obj.display || organizationRefs.has(obj.reference))
+    ) {
       const display = displayByRef.get(obj.reference)
       if (display) obj.display = display
     }
@@ -1227,6 +1242,9 @@ export const LocalBundleService = {
     attachReferenceDisplays(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
+    const sourceCapturedAt = typeof bundle.timestamp === 'string'
+      ? bundle.timestamp
+      : undefined
 
     // Extract patient
     const patientRaw = byType('Patient')[0]
@@ -1290,6 +1308,7 @@ export const LocalBundleService = {
       return {
         ...resolved,
         _sourceResourceType: 'MedicationStatement' as const,
+        _sourceCapturedAt: sourceCapturedAt,
         authoredOn: resolved.authoredOn
           ?? resolved.effectivePeriod?.start
           ?? resolved.effectiveDateTime,
@@ -1309,6 +1328,7 @@ export const LocalBundleService = {
       return {
         ...resolved,
         _sourceResourceType: 'MedicationRequest' as const,
+        _sourceCapturedAt: sourceCapturedAt,
         ...(drugTerminology ? { drugTerminology } : {}),
       }
     })
@@ -1352,6 +1372,17 @@ export const LocalBundleService = {
       return !isSdkUnitPolicyAgent
     })
     const carePlans = byType('CarePlan')
+    const medicationRemainingSummaries = [...new Map(
+      byType('Basic')
+        .filter(isMedicationRemainingSummaryBasic)
+        .map((resource: any) => {
+          const summary = FhirMapper.toMedicationRemainingSummary(
+            resource,
+            sourceCapturedAt,
+          )
+          return [summary.id, summary] as const
+        }),
+    ).values()]
 
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
@@ -1371,6 +1402,7 @@ export const LocalBundleService = {
     const collection: ClinicalDataCollection = {
       conditions:       conds.map((r: any) => FhirMapper.toCondition(r)),
       medications:      meds.map((r: any) => FhirMapper.toMedication(r)),
+      medicationRemainingSummaries,
       allergies:        allerg.map((r: any) => FhirMapper.toAllergy(r)),
       observations,
       vitalSigns,

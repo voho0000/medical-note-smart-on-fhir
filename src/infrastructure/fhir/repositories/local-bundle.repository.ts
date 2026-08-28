@@ -4,6 +4,7 @@ import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories
 import type {
   ConditionEntity,
   MedicationEntity,
+  MedicationRemainingSummaryEntity,
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
@@ -26,7 +27,7 @@ export class LocalBundleRepository implements IClinicalDataRepository {
   static async create(): Promise<LocalBundleRepository> {
     const data = await LocalBundleService.parseStored()
     const collection = data?.collection ?? {
-      conditions: [], medications: [], allergies: [], observations: [],
+      conditions: [], medications: [], medicationRemainingSummaries: [], allergies: [], observations: [],
       vitalSigns: [], diagnosticReports: [], imagingStudies: [], procedures: [], encounters: [],
       documentReferences: [], compositions: [], immunizations: [],
       consents: [], devices: [], carePlans: [],
@@ -42,6 +43,11 @@ export class LocalBundleRepository implements IClinicalDataRepository {
   }
   async fetchMedications(_patientId: string): Promise<MedicationEntity[]> {
     return this.collection.medications
+  }
+  async fetchMedicationRemainingSummaries(
+    _patientId: string,
+  ): Promise<MedicationRemainingSummaryEntity[]> {
+    return this.collection.medicationRemainingSummaries
   }
   async fetchAllergies(_patientId: string): Promise<AllergyEntity[]> {
     return this.collection.allergies

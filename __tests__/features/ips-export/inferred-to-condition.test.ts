@@ -18,6 +18,7 @@ function emptyCollection(extraConditions: ConditionEntity[] = []): ClinicalDataC
   return {
     conditions: extraConditions,
     medications: [],
+    medicationRemainingSummaries: [],
     allergies: [],
     observations: [],
     vitalSigns: [],

@@ -262,6 +262,7 @@ export function useClinicalDataQuery() {
       ? {
         conditions: entities.conditions,
         medications: entities.medications,
+        medicationRemainingSummaries: entities.medicationRemainingSummaries,
         allergies: entities.allergies,
         observations: entities.observations,
         vitalSigns: aggregate.vitalSigns,
@@ -313,6 +314,7 @@ export function useClinicalData() {
     return {
       conditions: entities.conditions,
       medications: entities.medications,
+      medicationRemainingSummaries: entities.medicationRemainingSummaries,
       allergies: entities.allergies,
       observations: entities.observations,
       vitalSigns: aggregate.vitalSigns,

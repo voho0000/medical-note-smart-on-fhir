@@ -82,6 +82,20 @@ function twcoreOpdBundle(): any {
           serviceProvider: { reference: 'urn:uuid:org-1' },
         },
       },
+      {
+        fullUrl: 'urn:uuid:med-1',
+        resource: {
+          resourceType: 'MedicationRequest',
+          status: 'active',
+          intent: 'order',
+          medicationCodeableConcept: { text: '測試藥品' },
+          subject: { reference: 'urn:uuid:pat-1' },
+          requester: {
+            reference: 'urn:uuid:org-1',
+            display: '衛生福利部臺北醫院;門診;0131020016',
+          },
+        },
+      },
     ],
   }
 }
@@ -112,12 +126,20 @@ describe('attachReferenceDisplays — TW-Core practitioner/organization resoluti
     expect(enc.participant[0].individual.display).toBe('張怡穎')
   })
 
-  it('never overwrites an existing display string', () => {
+  it('prefers Organization.name over a source display containing visit metadata and code', () => {
     const resources = canonicalizeBundleResources(twcoreOpdBundle())
     const enc = resources.find((r) => r.resourceType === 'Encounter')
     enc.serviceProvider.display = '原始名稱'
     attachReferenceDisplays(resources)
-    expect(enc.serviceProvider.display).toBe('原始名稱')
+    expect(enc.serviceProvider.display).toBe('衛生福利部臺北醫院')
+  })
+
+  it('preserves an existing practitioner display string', () => {
+    const resources = canonicalizeBundleResources(twcoreOpdBundle())
+    const enc = resources.find((r) => r.resourceType === 'Encounter')
+    enc.participant[0].individual.display = '原始醫師名稱'
+    attachReferenceDisplays(resources)
+    expect(enc.participant[0].individual.display).toBe('原始醫師名稱')
   })
 
   it('assembles family+given when a Practitioner has no name.text', () => {
@@ -137,5 +159,6 @@ describe('LocalBundleService.parse — physician flows to the encounter entity',
     const enc = data!.collection.encounters[0]
     expect(enc.participant?.[0]?.individual?.display).toBe('張怡穎')
     expect(enc.serviceProvider?.display).toBe('衛生福利部臺北醫院')
+    expect(data!.collection.medications[0].requester?.display).toBe('衛生福利部臺北醫院')
   })
 })

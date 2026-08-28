@@ -41,6 +41,7 @@ function fakeSmartRepository(overrides: Record<string, unknown> = {}) {
     }),
     fetchConditions: jest.fn(async () => [{ id: 'cond-1' }]),
     fetchMedications: jest.fn(async () => [{ id: 'med-1' }]),
+    fetchMedicationRemainingSummaries: jest.fn(empty),
     fetchAllergies: jest.fn(empty),
     fetchObservations: jest.fn(async () => [VITAL, LAB]),
     fetchDiagnosticReports: jest.fn(empty),
@@ -148,7 +149,7 @@ describe('useClinicalData', () => {
   it('fans one collection out to every type when the source cannot serve them all', async () => {
     const collection = {
       conditions: [{ id: 'cond-1' }],
-      medications: [], allergies: [], observations: [VITAL, LAB],
+      medications: [], medicationRemainingSummaries: [], allergies: [], observations: [VITAL, LAB],
       vitalSigns: [VITAL], diagnosticReports: [], imagingStudies: [], procedures: [],
       encounters: [], documentReferences: [{ id: 'doc-1' }], compositions: [],
       immunizations: [], consents: [], devices: [], carePlans: [],

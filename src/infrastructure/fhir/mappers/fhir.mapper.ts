@@ -15,7 +15,8 @@ import type {
   ImmunizationEntity,
   ConsentEntity,
   DeviceEntity,
-  CarePlanEntity
+  CarePlanEntity,
+  MedicationRemainingSummaryEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import type { IDataMapper } from '@/src/core/interfaces/data-mapper.interface'
 import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
@@ -30,10 +31,33 @@ import type {
   Procedure,
   CodeableConcept,
   Reference,
+  Basic,
+  FhirExtension,
 } from '@/src/shared/types/fhir.types'
+import {
+  MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM,
+  MEDCLOUD_DRUG_GROUP_IDENTIFIER_SYSTEM,
+  MEDCLOUD_REMAINING_SUMMARY_CODE,
+  MEDCLOUD_REMAINING_SUMMARY_EXTENSION_URL,
+} from '@/src/shared/constants/medcloud.constants'
 
 // Source system identifier for FHIR data
 const FHIR_SOURCE_SYSTEM = 'fhir'
+
+function extensionChild(
+  extension: FhirExtension | undefined,
+  url: string,
+): FhirExtension | undefined {
+  return extension?.extension?.find((candidate) => candidate.url === url)
+}
+
+export function isMedicationRemainingSummaryBasic(resource: Basic): boolean {
+  return resource.resourceType === 'Basic'
+    && resource.code?.coding?.some((coding) =>
+      coding.system === MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM
+      && coding.code === MEDCLOUD_REMAINING_SUMMARY_CODE,
+    ) === true
+}
 
 /**
  * FhirMapper - FHIR R4 資料轉換器
@@ -126,6 +150,7 @@ export class FhirMapper implements IDataMapper {
 
     return {
       id: fhirResource.id || '',
+      meta: request.meta,
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
       medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
@@ -142,11 +167,63 @@ export class FhirMapper implements IDataMapper {
       requester: request.requester,
       informationSource: statement.informationSource,
       reasonCode: fhirResource.reasonCode,
+      extension: request.extension,
+      note: request.note,
+      reportedBoolean: request.reportedBoolean,
       ...(drugTerminology ? { drugTerminology } : {}),
       ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
+      _sourceCapturedAt: request._sourceCapturedAt,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
+    }
+  }
+
+  static toMedicationRemainingSummary(
+    resource: Basic,
+    fallbackCapturedAt?: string,
+  ): MedicationRemainingSummaryEntity {
+    const summary = resource.extension?.find(
+      (extension) => extension.url === MEDCLOUD_REMAINING_SUMMARY_EXTENSION_URL,
+    )
+    const references = summary?.extension
+      ?.filter((extension) => extension.url === 'relatedMedicationRequest')
+      .map((extension) => extension.valueReference?.reference?.trim())
+      .filter((reference): reference is string => Boolean(reference)) ?? []
+    const remainingDays = extensionChild(summary, 'adherenceExpectedRemainingDays')
+      ?.valueQuantity?.value
+    const prescribedDays = extensionChild(summary, 'prescribedDays')
+      ?.valueQuantity?.value
+
+    return {
+      id: resource.id || '',
+      groupIdentifier: resource.identifier?.find(
+        (identifier) => identifier.system === MEDCLOUD_DRUG_GROUP_IDENTIFIER_SYSTEM,
+      )?.value,
+      groupName: extensionChild(summary, 'medicationGroupName')?.valueString
+        || resource.code?.text,
+      atc5Name: extensionChild(summary, 'atc5Name')?.valueString,
+      adherenceExpectedRemainingDays:
+        typeof remainingDays === 'number' && Number.isFinite(remainingDays) && remainingDays >= 0
+          ? remainingDays
+          : undefined,
+      sameIngredientDosageFormEndDate:
+        extensionChild(summary, 'sameIngredientDosageFormEndDate')?.valueDate,
+      sourceMedicationDate: extensionChild(summary, 'sourceMedicationDate')?.valueDate,
+      drugGroupCode: extensionChild(summary, 'drugGroupCode')?.valueString,
+      drugType: extensionChild(summary, 'drugType')?.valueString,
+      prescribedDays:
+        typeof prescribedDays === 'number' && Number.isFinite(prescribedDays) && prescribedDays >= 0
+          ? prescribedDays
+          : undefined,
+      sourceDiagnosisCode: extensionChild(summary, 'sourceDiagnosis')?.valueCoding?.code,
+      calculatedAt: extensionChild(summary, 'calculatedAt')?.valueInstant || fallbackCapturedAt,
+      relatedMedicationRequestReferences: [...new Set(references)],
+      anchorMedicationRequestReference:
+        extensionChild(summary, 'anchorMedicationRequest')?.valueReference?.reference,
+      sourceModule: extensionChild(summary, 'sourceModule')?.valueCode,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: resource.id,
     }
   }
 

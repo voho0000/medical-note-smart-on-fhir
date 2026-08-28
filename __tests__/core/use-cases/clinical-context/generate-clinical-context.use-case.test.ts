@@ -29,6 +29,7 @@ describe('GenerateClinicalContextUseCase', () => {
       { id: 'med-1', medicationCodeableConcept: { text: 'Metformin 500mg' }, status: 'active', intent: 'order' },
       { id: 'med-2', medicationCodeableConcept: { text: 'Lisinopril 10mg' }, status: 'active', intent: 'order' }
     ],
+    medicationRemainingSummaries: [],
     allergies: [
       { id: 'allergy-1', code: { text: 'Penicillin' } }
     ],
@@ -223,6 +224,7 @@ describe('GenerateClinicalContextUseCase', () => {
       const emptyData: ClinicalDataCollection = {
         conditions: [],
         medications: [],
+        medicationRemainingSummaries: [],
         allergies: [],
         observations: [],
         vitalSigns: [],

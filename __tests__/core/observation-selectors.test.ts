@@ -45,6 +45,7 @@ function emptyCollection(): ClinicalDataCollection {
   return {
     conditions: [],
     medications: [],
+    medicationRemainingSummaries: [],
     allergies: [],
     observations: [],
     vitalSigns: [],

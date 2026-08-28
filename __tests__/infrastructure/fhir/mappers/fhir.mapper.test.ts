@@ -104,6 +104,32 @@ describe('FhirMapper', () => {
       expect(result.status).toBeUndefined()
     })
 
+    it('preserves source metadata and remaining-supply context', () => {
+      const fhirMedication = {
+        resourceType: 'MedicationRequest',
+        id: 'remaining-1',
+        meta: {
+          tag: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/source-module',
+            code: 'imue0120',
+          }],
+        },
+        extension: [{
+          url: 'https://nhi-fhir-bridge.github.io/StructureDefinition/medcloud-prescription-remaining-days',
+          valueQuantity: { value: 12, code: 'd' },
+        }],
+        note: [{ text: '門診藥品餘藥日數：12 天' }],
+        reportedBoolean: true,
+      }
+
+      const result = FhirMapper.toMedication(fhirMedication)
+
+      expect(result.meta).toEqual(fhirMedication.meta)
+      expect(result.extension).toEqual(fhirMedication.extension)
+      expect(result.note).toEqual(fhirMedication.note)
+      expect(result.reportedBoolean).toBe(true)
+    })
+
     it('maps MedicationStatement fields and preserves its source type', () => {
       const statement = {
         resourceType: 'MedicationStatement',
@@ -122,6 +148,69 @@ describe('FhirMapper', () => {
       expect(result.encounter).toEqual(statement.context)
       expect(result.dosageInstruction).toEqual(statement.dosage)
       expect(result._sourceResourceType).toBe('MedicationStatement')
+    })
+  })
+
+  describe('toMedicationRemainingSummary', () => {
+    it('maps the canonical IMUE0120 Basic complex extension', () => {
+      const basic = {
+        resourceType: 'Basic',
+        id: 'summary-1',
+        identifier: [{
+          system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/medcloud-drug-group',
+          value: 'group-thyroxine',
+        }],
+        code: {
+          coding: [{
+            system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/medcloud-basic-resource-type',
+            code: 'medication-remaining-summary',
+          }],
+          text: 'THYROXINE，一般錠劑膠囊劑',
+        },
+        extension: [{
+          url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-medication-remaining-summary',
+          extension: [
+            { url: 'adherenceExpectedRemainingDays', valueQuantity: { value: 0, code: 'd' } },
+            { url: 'sameIngredientDosageFormEndDate', valueDate: '2026-09-10' },
+            { url: 'medicationGroupName', valueString: 'THYROXINE，一般錠劑膠囊劑' },
+            { url: 'atc5Name', valueString: 'THYROXINE' },
+            { url: 'calculatedAt', valueInstant: '2026-08-28T10:00:00+08:00' },
+            { url: 'relatedMedicationRequest', valueReference: { reference: 'MedicationRequest/med-1' } },
+            { url: 'relatedMedicationRequest', valueReference: { reference: 'MedicationRequest/med-1' } },
+            { url: 'anchorMedicationRequest', valueReference: { reference: 'MedicationRequest/med-1' } },
+            { url: 'sourceModule', valueCode: 'imue0120' },
+            { url: 'futureField', valueString: 'ignored' },
+          ],
+        }],
+      }
+
+      const result = FhirMapper.toMedicationRemainingSummary(basic)
+
+      expect(result).toEqual(expect.objectContaining({
+        id: 'summary-1',
+        groupIdentifier: 'group-thyroxine',
+        groupName: 'THYROXINE，一般錠劑膠囊劑',
+        atc5Name: 'THYROXINE',
+        adherenceExpectedRemainingDays: 0,
+        sameIngredientDosageFormEndDate: '2026-09-10',
+        calculatedAt: '2026-08-28T10:00:00+08:00',
+        relatedMedicationRequestReferences: ['MedicationRequest/med-1'],
+        anchorMedicationRequestReference: 'MedicationRequest/med-1',
+        sourceModule: 'imue0120',
+      }))
+    })
+
+    it('keeps a summary when optional fields and references are absent', () => {
+      const result = FhirMapper.toMedicationRemainingSummary({
+        resourceType: 'Basic',
+        id: 'summary-minimal',
+        code: { text: 'Minimal group' },
+      }, '2026-08-28T02:00:00Z')
+
+      expect(result.id).toBe('summary-minimal')
+      expect(result.groupName).toBe('Minimal group')
+      expect(result.calculatedAt).toBe('2026-08-28T02:00:00Z')
+      expect(result.relatedMedicationRequestReferences).toEqual([])
     })
   })
 

@@ -31,6 +31,7 @@ import { selectVitalSignObservations } from '@/src/infrastructure/fhir/repositor
 export type ClinicalResourceId =
   | 'conditions'
   | 'medications'
+  | 'medicationRemainingSummaries'
   | 'allergies'
   | 'observations'
   | 'diagnosticReports'
@@ -80,6 +81,11 @@ export const CLINICAL_RESOURCE_UNITS: readonly ClinicalResourceUnit[] = [
     // One fetcher, two searches: orders and statements are reported separately
     // so the banner can say which half a server refused.
     statusKeys: ['MedicationRequest', 'MedicationStatement'],
+  },
+  {
+    id: 'medicationRemainingSummaries',
+    method: 'fetchMedicationRemainingSummaries',
+    statusKeys: ['Basic'],
   },
   { id: 'allergies', method: 'fetchAllergies', statusKeys: ['AllergyIntolerance'] },
   {

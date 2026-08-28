@@ -2,6 +2,7 @@
 import type {
   ConditionEntity,
   MedicationEntity,
+  MedicationRemainingSummaryEntity,
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
@@ -26,6 +27,9 @@ export interface IClinicalDataRepository {
    * Fetch medications
    */
   fetchMedications(patientId: string): Promise<MedicationEntity[]>
+
+  /** Fetch MediCloud IMUE0120 patient-level Basic summaries. */
+  fetchMedicationRemainingSummaries(patientId: string): Promise<MedicationRemainingSummaryEntity[]>
   
   /**
    * Fetch allergies

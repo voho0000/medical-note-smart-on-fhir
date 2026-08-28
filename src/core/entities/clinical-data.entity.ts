@@ -84,8 +84,49 @@ export interface MedicationAtcClassification {
   atcHierarchySnapshotId: string
 }
 
+export interface ClinicalFhirExtension {
+  url?: string
+  extension?: ClinicalFhirExtension[]
+  valueQuantity?: {
+    value?: number
+    unit?: string
+    system?: string
+    code?: string
+  }
+  valueCoding?: {
+    system?: string
+    code?: string
+    display?: string
+  }
+  valueCodeableConcept?: {
+    text?: string
+    coding?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
+  valueReference?: {
+    reference?: string
+    display?: string
+  }
+  valueString?: string
+  valueCode?: string
+  valueInteger?: number
+  valueDate?: string
+  valueInstant?: string
+}
+
 export interface MedicationEntity {
   id: string
+  meta?: {
+    source?: string
+    tag?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   medicationCodeableConcept?: {
     text?: string
     coding?: Array<{
@@ -195,6 +236,11 @@ export interface MedicationEntity {
       system?: string
     }>
   }>
+  /** Source-specific structured context retained for non-prescription
+   * MedicationRequests such as MediCloud IMUE0120 remaining-supply snapshots. */
+  extension?: ClinicalFhirExtension[]
+  note?: Array<{ text?: string }>
+  reportedBoolean?: boolean
   /**
    * App-side terminology resolved from an exact NHI drug code plus authoredOn
    * date. These fields are derived from the pinned official drug-master
@@ -240,7 +286,34 @@ export interface MedicationEntity {
    * raw FHIR shape, hence the underscore prefix.
    */
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
+  /** Source capture instant from Bundle.timestamp; not the local import time. */
+  _sourceCapturedAt?: string
   // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
+/**
+ * MediCloud IMUE0120 patient-level summary. One entity represents one Basic
+ * resource and one same-ingredient/same-dosage-form group; it is deliberately
+ * not a MedicationEntity because it is not a prescription.
+ */
+export interface MedicationRemainingSummaryEntity {
+  id: string
+  groupIdentifier?: string
+  groupName?: string
+  atc5Name?: string
+  adherenceExpectedRemainingDays?: number
+  sameIngredientDosageFormEndDate?: string
+  sourceMedicationDate?: string
+  drugGroupCode?: string
+  drugType?: string
+  prescribedDays?: number
+  sourceDiagnosisCode?: string
+  calculatedAt?: string
+  relatedMedicationRequestReferences: string[]
+  anchorMedicationRequestReference?: string
+  sourceModule?: string
   sourceSystem?: string
   sourceId?: string
 }
@@ -981,6 +1054,7 @@ export type ClinicalDataQueryKey =
   | 'Condition'
   | 'MedicationRequest'
   | 'MedicationStatement'
+  | 'Basic'
   | 'AllergyIntolerance'
   | 'Observation'
   | 'Observation:vital-signs'
@@ -1063,6 +1137,8 @@ export interface ClinicalSourceMetadata {
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
+  /** IMUE0120 Basic summaries; never counted as prescriptions or reports. */
+  medicationRemainingSummaries: MedicationRemainingSummaryEntity[]
   allergies: AllergyEntity[]
   observations: ObservationEntity[]
   vitalSigns: ObservationEntity[]

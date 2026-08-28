@@ -40,9 +40,29 @@ export interface Identifier {
 export interface FhirExtension {
   url?: string
   extension?: FhirExtension[]
+  valueQuantity?: Quantity
+  valueCoding?: Coding
+  valueCodeableConcept?: CodeableConcept
+  valueReference?: Reference
   valueInteger?: number
   valueCode?: string
   valueString?: string
+  valueDate?: string
+  valueInstant?: string
+}
+
+export interface Basic {
+  id?: string
+  resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
+  identifier?: Identifier[]
+  code?: CodeableConcept
+  subject?: Reference
+  created?: string
+  extension?: FhirExtension[]
 }
 
 // Observation Types
@@ -217,6 +237,10 @@ export interface Duration {
 export interface MedicationRequest {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
   status?: string
   intent?: string
   medicationCodeableConcept?: CodeableConcept
@@ -227,6 +251,7 @@ export interface MedicationRequest {
   effectiveDateTime?: string
   dosageInstruction?: DosageInstruction[]
   dispenseRequest?: {
+    quantity?: Quantity
     validityPeriod?: Period
     expectedSupplyDuration?: Duration
   }
@@ -235,9 +260,14 @@ export interface MedicationRequest {
   reasonCode?: CodeableConcept[]
   courseOfTherapyType?: CodeableConcept
   supportingInformation?: Reference[]
+  extension?: FhirExtension[]
+  note?: Array<{ text?: string }>
+  reportedBoolean?: boolean
   // Marker stamped by LocalBundleService.parse (MedicationRequest vs
   // MedicationStatement); bridge data omits it
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
+  /** Bundle.timestamp propagated by the local import reader. */
+  _sourceCapturedAt?: string
 }
 
 export interface MedicationStatement {
