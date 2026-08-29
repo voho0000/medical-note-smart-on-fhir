@@ -297,11 +297,11 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
                   }}
                 >
                   {row.adultPreventiveGroup ? (
-                    <AdultPreventiveGroupCard row={row} defaultOpen={openIds} query={query} />
+                    <AdultPreventiveGroupCard row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
                   ) : row.group === 'cancer-screening' ? (
-                    <CancerScreeningRow row={row} defaultOpen={openIds} query={query} />
+                    <CancerScreeningRow row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
                   ) : (
-                    <ReportRow row={row} defaultOpen={openIds} query={query} />
+                    <ReportRow row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
                   )}
                 </div>
               )

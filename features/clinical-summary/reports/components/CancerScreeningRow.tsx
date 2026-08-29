@@ -9,11 +9,13 @@ import type { Observation, Row } from '../types'
 import { formatDate, getCodeableConceptText, getValueWithUnit } from '../utils/fhir-helpers'
 import { isCancerScreeningRecommendationTitle } from '../utils/cancer-screening-grouping'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
+import { ReportTypeBadge } from './ReportTypeBadge'
 
 interface CancerScreeningRowProps {
   row: Row
   defaultOpen?: readonly string[]
   query?: string
+  showTypeBadge?: boolean
 }
 
 function compactText(value?: string): string {
@@ -53,7 +55,7 @@ function removeRepeatedResultPrefix(text: string, latestValues: string[]): strin
   return text
 }
 
-function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreeningRowProps) {
+function CancerScreeningRowImpl({ row, defaultOpen = [], query, showTypeBadge }: CancerScreeningRowProps) {
   const { t } = useLanguage()
   const labels = t.reports.cancerScreeningRow
   const contentId = useId()
@@ -101,8 +103,11 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
         />
       )}
       <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 @min-[36rem]:grid-cols-[minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_minmax(0,1.1fr)_auto] @min-[36rem]:items-center">
-        <span className="min-w-0 truncate font-semibold text-foreground" title={row.title}>
-          <HighlightText text={row.title} query={query} />
+        <span className="flex min-w-0 items-center gap-1.5">
+          {showTypeBadge && <ReportTypeBadge group="cancer-screening" />}
+          <span className="min-w-0 truncate font-semibold text-foreground" title={row.title}>
+            <HighlightText text={row.title} query={query} />
+          </span>
         </span>
 
         <div className="col-start-1 row-start-2 flex min-w-0 items-baseline gap-1.5 @min-[36rem]:col-start-2 @min-[36rem]:row-start-1">

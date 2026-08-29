@@ -1109,6 +1109,15 @@ export const en = {
       vitals: 'Vitals',
       procedures: 'Procedures',
     },
+    typeBadges: {
+      lab: 'Lab',
+      imaging: 'Imaging',
+      pathology: 'Pathology',
+      cancerScreening: 'Screening',
+      vitals: 'Vitals',
+      procedures: 'Procedure',
+      other: 'Other',
+    },
     cancerScreeningRow: {
       result: 'Screening result',
       latest: 'Latest',

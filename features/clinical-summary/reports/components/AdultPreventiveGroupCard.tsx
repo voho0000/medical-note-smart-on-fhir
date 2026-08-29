@@ -9,16 +9,18 @@ import { isSystolicDiastolicBloodPressureRow } from '../utils/blood-pressure-pan
 import { formatDate } from '../utils/fhir-helpers'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { ReportRow } from './ReportRow'
+import { ReportTypeBadge } from './ReportTypeBadge'
 
 interface AdultPreventiveGroupCardProps {
   row: Row
   defaultOpen: string[]
   query?: string
+  showTypeBadge?: boolean
 }
 
 const EMPTY_MEMBERS: Row[] = []
 
-export function AdultPreventiveGroupCard({ row, defaultOpen, query }: AdultPreventiveGroupCardProps) {
+export function AdultPreventiveGroupCard({ row, defaultOpen, query, showTypeBadge }: AdultPreventiveGroupCardProps) {
   const { t } = useLanguage()
   const reports = t.reports as typeof t.reports & {
     adultPreventiveGroup?: {
@@ -67,8 +69,9 @@ export function AdultPreventiveGroupCard({ row, defaultOpen, query }: AdultPreve
             aria-hidden
           />
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 @min-[36rem]:grid-cols-[minmax(9rem,1fr)_minmax(0,1fr)_auto_auto] @min-[36rem]:items-center">
-            <span className="min-w-0 truncate font-semibold text-foreground" title={title}>
-              {title}
+            <span className="flex min-w-0 items-center gap-1.5">
+              {showTypeBadge && <ReportTypeBadge group="lab" />}
+              <span className="min-w-0 truncate font-semibold text-foreground" title={title}>{title}</span>
             </span>
             {row.institution && (
               <ReportInstitutionLabel

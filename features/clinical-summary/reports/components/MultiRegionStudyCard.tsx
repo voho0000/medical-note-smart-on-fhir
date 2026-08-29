@@ -35,9 +35,11 @@ import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { NhiViewerActions } from './NhiViewerActions'
+import { ReportTypeBadge } from './ReportTypeBadge'
 
 interface MultiRegionStudyCardProps {
   row: Row
+  showTypeBadge?: boolean
 }
 
 const CIRCLED_NUMBERS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
@@ -79,7 +81,7 @@ function formatBytes(size?: number): string {
   return `${Math.round(size / 1024)} KB`
 }
 
-export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
+export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCardProps) {
   // Collapsed by default — these cards are large (warning banner + N sub-
   // cards). On a busy day the user wants to scan the imaging tab quickly;
   // forcing them to scroll past several fully-expanded groups slows that
@@ -128,6 +130,7 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
+              {showTypeBadge && <ReportTypeBadge group="imaging" />}
               <span className="font-semibold text-sm">{row.title}</span>
               <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                 {sub.length} 項

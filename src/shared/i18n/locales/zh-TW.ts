@@ -1110,6 +1110,15 @@ export const zhTW = {
       vitals: '生命徵象',
       procedures: '處置',
     },
+    typeBadges: {
+      lab: '檢驗',
+      imaging: '影像',
+      pathology: '病理',
+      cancerScreening: '癌篩',
+      vitals: '生命徵象',
+      procedures: '處置',
+      other: '其他',
+    },
     cancerScreeningRow: {
       result: '篩檢結果',
       latest: '最新',

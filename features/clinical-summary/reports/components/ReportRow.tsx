@@ -42,6 +42,7 @@ import { NhiViewerActions } from './NhiViewerActions'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
+import { ReportTypeBadge } from './ReportTypeBadge'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
@@ -375,6 +376,8 @@ interface ReportRowProps {
    *  whose group header already states both, so nested members don't repeat
    *  the same date/hospital on every line of the "lab sheet". */
   hideMeta?: boolean
+  /** Show the row's report kind in mixed lists such as the All tab. */
+  showTypeBadge?: boolean
 }
 
 // Date and time both go through the shared, partial-date/timezone-faithful
@@ -427,7 +430,7 @@ function countAbnormal(obs: Observation[]): number {
   return count
 }
 
-function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
+function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: ReportRowProps) {
   const { t } = useLanguage()
   const sourceProgramLabel = (t.reports.sourcePrograms as { adultPreventive?: string } | undefined)
     ?.adultPreventive
@@ -675,6 +678,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               }}
             >
               <div className={cn('flex min-w-[8rem] flex-1 basis-0 items-center gap-1.5', hasText && 'w-full sm:w-auto sm:min-w-[12rem]')}>
+                {showTypeBadge && <ReportTypeBadge group={row.group} />}
                 <ReportTitle
                   title={row.title}
                   expanded={hasText && textExpanded}
@@ -864,6 +868,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             {hasImages && renderImageButton(rowOpensTrend)}
           </>
         )}
+        leadingTitleContent={showTypeBadge ? <ReportTypeBadge group={row.group} /> : undefined}
         trailingContent={(
           <>
             {hasViewerActions && <NhiViewerActions actions={viewerActions} />}
@@ -1004,6 +1009,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 row.group === 'procedures' ? 'min-w-0 flex-1 basis-0' : 'shrink-0 grow-0 basis-[45%]',
               )}
             >
+              {showTypeBadge && <ReportTypeBadge group={row.group} />}
               <ReportTitle
                 title={row.title}
                 expanded={panelExpanded}
@@ -1179,7 +1185,7 @@ export function ReportRow(props: ReportRowProps) {
     return <LabDayGroupCard row={row} defaultOpen={props.defaultOpen} query={props.query} />
   }
   if (row.groupedRows && row.groupedRows.length > 1) {
-    return <MultiRegionStudyCard row={row} />
+    return <MultiRegionStudyCard row={row} showTypeBadge={props.showTypeBadge} />
   }
   return <SingleReportRow {...props} />
 }

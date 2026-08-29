@@ -69,6 +69,25 @@ describe('ReportRow mobile actions', () => {
     Reflect.deleteProperty(window, 'matchMedia')
   })
 
+  it('labels a row with its report type when rendered in a mixed list', () => {
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow row={COMPACT_ROW} defaultOpen={[]} showTypeBadge />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('report-type-badge')).toHaveTextContent('檢驗')
+    expect(screen.getByTestId('report-type-badge')).toHaveClass(
+      'border-blue-300',
+      'bg-blue-50',
+      'text-blue-800',
+    )
+  })
+
   it('wraps narrative report actions without shrinking the AI button', () => {
     const row: Row = {
       id: 'report-1',
