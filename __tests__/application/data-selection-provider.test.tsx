@@ -6,7 +6,9 @@ import { renderHook, act } from '@testing-library/react'
 import { DataSelectionProvider, useDataSelection, coerceProfile } from '@/src/application/providers/data-selection.provider'
 import { IPS_DEFAULT_DATA_FILTERS } from '@/src/shared/constants/data-selection.constants'
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+})
 
 function setup() {
   return renderHook(() => useDataSelection(), { wrapper: DataSelectionProvider })
@@ -87,6 +89,20 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled exports', (
     expect(result.current.getProfile('aiExport').documentIds).toEqual(['document-1'])
     expect(result.current.getProfile('insights').selection.medications).toBe(true)
     expect(result.current.getProfile('ips').documentIds).toEqual([])
+  })
+
+  it('never persists patient-specific document IDs', () => {
+    const { result } = setup()
+
+    act(() => {
+      result.current.setDocumentModeFor('aiExport', 'custom')
+      result.current.setDocumentIdsFor('aiExport', ['patient-document-1'])
+    })
+
+    const stored = JSON.parse(localStorage.getItem('clinicalDataProfiles') ?? '{}')
+    expect(stored.aiExport.documentIds).toBeUndefined()
+    expect(stored.aiExport.documentMode).toBe('latestAdmission')
+    expect(result.current.getProfile('aiExport').documentIds).toEqual(['patient-document-1'])
   })
 
   it('defaults to 初診 and keeps the selected mode while the user tweaks it', () => {

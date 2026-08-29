@@ -178,8 +178,12 @@ export function coerceProfile(
     // highlight is derived live from selection/filters. Any such keys on an old
     // stored profile are simply ignored here. Legacy supplementaryNotes and
     // editedClinicalContext keys are also intentionally dropped.
-    documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
-    documentIds: Array.isArray(saved.documentIds) ? saved.documentIds.filter((x): x is string => typeof x === 'string') : [],
+    // A custom document selection is meaningful only together with patient-
+    // specific FHIR document IDs. Those IDs must never be restored from the
+    // origin-global preference record, so migrate custom mode to the safe
+    // admission default as well.
+    documentMode: mode === 'all' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
+    documentIds: [],
   }
 }
 
@@ -212,7 +216,15 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const [customTemplate, setCustomTemplate] = useState<DataSelectionTemplate>(getInitialCustomTemplate)
 
   useEffect(() => {
-    storage.set(STORAGE_KEYS.DATA_PROFILES, profiles)
+    // Persist only reusable workflow choices. FHIR document IDs are patient-
+    // scoped working state and must not survive a patient/account transition.
+    storage.set(STORAGE_KEYS.DATA_PROFILES, Object.fromEntries(
+      Object.entries(profiles).map(([consumer, profile]) => [consumer, {
+        selection: profile.selection,
+        filters: profile.filters,
+        documentMode: profile.documentMode === 'custom' ? 'latestAdmission' : profile.documentMode,
+      }]),
+    ))
   }, [profiles])
 
   useEffect(() => {

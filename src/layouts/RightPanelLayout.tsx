@@ -87,6 +87,7 @@ const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
 // ============================================================================
 import { DataSelectionProvider } from "@/src/application/providers/data-selection.provider"
 import { AdaptiveDataDefaultsRunner } from "@/features/data-selection/AdaptiveDataDefaultsRunner"
+import { DataSelectionScopeResetter } from "@/features/data-selection/DataSelectionScopeResetter"
 import { AsrProvider } from "@/src/application/providers/asr.provider"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
 import { ChatTemplatesProvider } from "@/src/application/providers/chat-templates.provider"
@@ -114,6 +115,7 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
   return (
     <DataSelectionProvider>
       <AdaptiveDataDefaultsRunner />
+      <DataSelectionScopeResetter />
       <AsrProvider>
         <ChatTemplatesProvider>
           <ClinicalInsightsConfigProvider>

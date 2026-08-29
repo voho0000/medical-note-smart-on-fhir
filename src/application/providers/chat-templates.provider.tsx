@@ -6,7 +6,6 @@ import { useAudience, type Audience } from "./audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
   subscribeToChatTemplates,
-  batchSaveChatTemplates,
   replaceAllChatTemplates,
 } from "@/src/infrastructure/firebase/template-sync"
 
@@ -331,16 +330,18 @@ function templatesEqualDefaults(templates: ChatTemplate[], language: 'en' | 'zh-
 export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const currentLang: 'en' | 'zh-TW' = locale === 'zh-TW' ? 'zh-TW' : 'en'
 
   const [allTemplates, setAllTemplates] = useState<ChatTemplate[]>(() => getAllDefaults('en'))
   const allTemplatesRef = useRef<ChatTemplate[]>(allTemplates)
-  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
+  const loadedOwnerRef = useRef<string | null | undefined>(undefined)
+  const [loadedOwner, setLoadedOwner] = useState<string | null | undefined>(undefined)
+  const [hasLoadedGuestStorage, setHasLoadedGuestStorage] = useState(false)
+  const [hasReceivedAccountSnapshot, setHasReceivedAccountSnapshot] = useState(false)
   const [customByAudience, setCustomByAudience] = useState<Record<Audience, boolean>>({ medical: false, patient: false })
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     allTemplatesRef.current = allTemplates
@@ -360,10 +361,31 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Initial load (Firestore subscription or localStorage)
+  // Treat the signed-out state and every account as separate owners. Clear the
+  // rendered library before the new owner loads so a shared workstation never
+  // paints or persists the previous account's templates.
+  useEffect(() => {
+    if (authLoading) return
+    const nextOwner = user?.uid ?? null
+    if (loadedOwnerRef.current === nextOwner) return
+
+    loadedOwnerRef.current = nextOwner
+    setLoadedOwner(nextOwner)
+    setHasLoadedGuestStorage(false)
+    setHasReceivedAccountSnapshot(false)
+    setIsSyncing(false)
+    setIsSaving(false)
+    const defaults = getAllDefaults(currentLang)
+    allTemplatesRef.current = defaults
+    setAllTemplates(defaults)
+    setCustomByAudience({ medical: false, patient: false })
+  }, [authLoading, currentLang, user?.uid])
+
+  // Guest templates remain browser-local. They are never promoted into an
+  // account automatically; a later explicit import flow can ask for consent.
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (hasLoadedFromStorage) return
+    if (authLoading || loadedOwner !== null || hasLoadedGuestStorage) return
 
     const loadFromLocalStorage = () => {
       try {
@@ -404,42 +426,21 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (user?.uid) {
-      // Logged in: subscription will populate; mark migration path
-      const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const sanitized = parsed
-              .map((e, i) => sanitizeTemplate(e, i))
-              .filter((t): t is ChatTemplate => t !== null)
-              .slice(0, MAX_TEMPLATES)
-            if (sanitized.length > 0) {
-              batchSaveChatTemplates(user.uid, sanitized).catch((err) => {
-                console.warn('[Chat Templates] Migration to Firestore failed', err)
-              })
-              window.localStorage.removeItem(STORAGE_KEY)
-            }
-          }
-        } catch (err) {
-          console.warn('[Chat Templates] Failed to parse localStorage for migration', err)
-        }
-      }
-    } else {
-      loadFromLocalStorage()
-    }
-
-    // Marks completion of the one-time browser/Firestore migration above.
+    loadFromLocalStorage()
+    // Initializing the active guest owner is intentionally effect-driven from
+    // browser storage after Firebase auth ownership has resolved.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHasLoadedFromStorage(true)
-  }, [hasLoadedFromStorage, user?.uid, currentLang])
+    setHasLoadedGuestStorage(true)
+  }, [authLoading, currentLang, hasLoadedGuestStorage, loadedOwner])
 
   // Firestore subscription for logged-in users
   useEffect(() => {
-    if (!user?.uid || !hasLoadedFromStorage) return
+    if (authLoading || !user?.uid || loadedOwner !== user.uid) return
 
-    const unsubscribe = subscribeToChatTemplates(user.uid, (updated: ChatTemplate[]) => {
+    const ownerId = user.uid
+
+    const unsubscribe = subscribeToChatTemplates(ownerId, (updated: ChatTemplate[]) => {
+      if (loadedOwnerRef.current !== ownerId) return
       if (isSyncing) return
       if (updated.length === 0) {
         setAllTemplates(getAllDefaults(currentLang))
@@ -458,15 +459,21 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
         setAllTemplates(merged)
         setCustomByAudience(customMap)
       }
-      setIsLoading(false)
+      setHasReceivedAccountSnapshot(true)
     })
 
     return () => unsubscribe()
-  }, [user?.uid, hasLoadedFromStorage, isSyncing, currentLang])
+  }, [authLoading, currentLang, isSyncing, loadedOwner, user?.uid])
+
+  const activeOwner = user?.uid ?? null
+  const ownerMatches = !authLoading && loadedOwner === activeOwner
+  const isLoading = authLoading
+    || !ownerMatches
+    || Boolean(user?.uid ? !hasReceivedAccountSnapshot : !hasLoadedGuestStorage)
 
   // When language changes, swap defaults for any audience that's not customized
   useEffect(() => {
-    if (!hasLoadedFromStorage) return
+    if (isLoading) return
     // Language is external preference state; replace only bundled defaults
     // while preserving each audience's customized templates.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -479,13 +486,12 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       })
       return next
     })
-  }, [currentLang, customByAudience, hasLoadedFromStorage])
+  }, [currentLang, customByAudience, isLoading])
 
   // Persist to localStorage for non-logged-in users
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (!hasLoadedFromStorage) return
-    if (user?.uid) return
+    if (isLoading || loadedOwner !== null || user?.uid) return
 
     try {
       const allDefault = (['medical', 'patient'] as Audience[]).every(
@@ -499,14 +505,17 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn("Failed to persist prompt templates", error)
     }
-  }, [allTemplates, customByAudience, hasLoadedFromStorage, currentLang, user?.uid])
+  }, [allTemplates, customByAudience, currentLang, isLoading, loadedOwner, user?.uid])
 
   const templates = useMemo(
-    () => allTemplates.filter((t) => t.audience === audience).sort((a, b) => a.order - b.order),
-    [allTemplates, audience],
+    () => isLoading
+      ? []
+      : allTemplates.filter((t) => t.audience === audience).sort((a, b) => a.order - b.order),
+    [allTemplates, audience, isLoading],
   )
 
   const addTemplate = () => {
+    if (isLoading) return null
     const audienceCount = allTemplates.filter((t) => t.audience === audience).length
     if (audienceCount >= MAX_TEMPLATES) return null
     const nextOrder = audienceCount
@@ -523,11 +532,13 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const updateTemplate = (id: string, patch: Partial<Omit<ChatTemplate, "id" | "audience">>) => {
+    if (isLoading) return
     setAllTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch, id, audience: t.audience } : t)))
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }
 
   const removeTemplate = (id: string) => {
+    if (isLoading) return
     setAllTemplates((prev) => {
       const targetAudience = prev.find((t) => t.id === id)?.audience
       if (!targetAudience) return prev
@@ -539,6 +550,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const moveTemplate = (fromIndex: number, toIndex: number) => {
+    if (isLoading) return
     setAllTemplates((prev) => {
       const filtered = prev.filter((t) => t.audience === audience).sort((a, b) => a.order - b.order)
       if (fromIndex < 0 || toIndex < 0 || fromIndex >= filtered.length || toIndex >= filtered.length) return prev
@@ -554,6 +566,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const resetTemplates = async () => {
+    if (isLoading) return
     const defaults = getDefaultsFor(currentLang, audience)
     setAllTemplates((prev) => [...prev.filter((t) => t.audience !== audience), ...defaults])
     setCustomByAudience((prev) => ({ ...prev, [audience]: false }))
@@ -574,7 +587,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const saveTemplates = async () => {
-    if (!user?.uid) return
+    if (!user?.uid || isLoading) return
     setIsSaving(true)
     setIsSyncing(true)
     try {
@@ -608,7 +621,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     saveTemplates,
     maxTemplates: MAX_TEMPLATES,
     isSaving,
-    isLoading: user?.uid ? isLoading : !hasLoadedFromStorage,
+    isLoading,
   }
 
   return <ChatTemplatesContext.Provider value={value}>{children}</ChatTemplatesContext.Provider>
