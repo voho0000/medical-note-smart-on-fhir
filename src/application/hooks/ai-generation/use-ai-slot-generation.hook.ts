@@ -64,6 +64,7 @@ import {
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
 import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
+import { providerClinicalContextSafetyFraction } from './context-window-retry'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
@@ -251,6 +252,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => modelContextLimit(resolvedModelId, openAiCompatible),
     [resolvedModelId, openAiCompatible],
   )
+  const clinicalContextSafetyFraction = useMemo(
+    () => providerClinicalContextSafetyFraction(resolvedModelName),
+    [resolvedModelName],
+  )
   const {
     patientId,
     piiLiterals = [],
@@ -260,7 +265,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     clinicalData: scopedClinicalData,
     catalog,
     contextAdaptation,
-  } = useClinicalAiInput(resolvedContextLimit)
+  } = useClinicalAiInput(
+    resolvedContextLimit,
+    'insights',
+    clinicalContextSafetyFraction,
+  )
 
   // A cache/result slot is reusable only for the exact selected clinical
   // input. While data is loading or background-fetching inputSignature is

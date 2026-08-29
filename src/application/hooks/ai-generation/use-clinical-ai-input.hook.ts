@@ -13,6 +13,7 @@ import {
   buildClinicalContextFitCandidate,
   clinicalContextTokenTarget,
   fitClinicalContextTextToTokenBudget,
+  nextClinicalContextFitTier,
   type ClinicalContextAdaptation,
   type ClinicalContextFitTier,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
@@ -28,6 +29,7 @@ import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.e
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { defaultLocale } from '@/src/shared/i18n/i18n.config'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
@@ -106,6 +108,7 @@ interface FitState {
 export function useClinicalAiInput(
   contextLimit?: number,
   consumer: DataConsumer = 'insights',
+  targetFraction = 1,
 ) {
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
@@ -137,8 +140,19 @@ export function useClinicalAiInput(
 
   // The demo chart is judged against its own as-of date, not the wall clock —
   // otherwise its medications age out of scope and the pre-generated citations
-  // stop resolving. Real patients always use the real clock.
-  const scopeNowMs = clinicalNowMs(isDemoDataActive())
+  // stop resolving. For real data, snapshot "now" for the currently loaded
+  // patient instead of calling Date.now() on every render: a millisecond-level
+  // dependency invalidated every clinical-data memo whenever unrelated UI
+  // state (notably the display language) changed.
+  const demoDataActive = isDemoDataActive()
+  const clinicalScopeClock = useMemo(
+    () => ({
+      patient,
+      nowMs: clinicalNowMs(demoDataActive),
+    }),
+    [demoDataActive, patient],
+  )
+  const scopeNowMs = clinicalScopeClock.nowMs
 
   const baseScopedClinicalData = useMemo(
     () => (rawDataReady && clinicalData
@@ -160,9 +174,16 @@ export function useClinicalAiInput(
     ],
   )
 
-  const baseCatalog = useMemo(
-    () => (baseScopedClinicalData ? getSourceCatalog(baseScopedClinicalData, locale) : []),
-    [baseScopedClinicalData, locale],
+  // The source signature identifies the selected clinical records, not their
+  // presentation language. Locale already has its own cache/result slot, so
+  // rebuilding and re-hashing the full source catalog on every language toggle
+  // only blocks the UI without adding cache isolation. Keep one canonical
+  // catalog for this identity; the outbound catalog below remains localized.
+  const sourceIdentityCatalog = useMemo(
+    () => (baseScopedClinicalData
+      ? getSourceCatalog(baseScopedClinicalData, defaultLocale)
+      : []),
+    [baseScopedClinicalData],
   )
 
   const sourceSignature = useMemo(
@@ -176,7 +197,7 @@ export function useClinicalAiInput(
             documentIds: activeProfile.documentIds ?? [],
           },
           baseScopedClinicalData,
-          baseCatalog,
+          sourceIdentityCatalog,
         )
       : ''),
     [
@@ -184,18 +205,25 @@ export function useClinicalAiInput(
       baseScopedClinicalData,
       patient,
       activeProfile,
-      baseCatalog,
+      sourceIdentityCatalog,
     ],
   )
 
   const targetTokens = useMemo(
-    () => (contextLimit && contextLimit > 0
-      ? clinicalContextTokenTarget(contextLimit)
-      : Number.POSITIVE_INFINITY),
-    [contextLimit],
+    () => {
+      if (!contextLimit || contextLimit <= 0) return Number.POSITIVE_INFINITY
+      const normalizedFraction = Number.isFinite(targetFraction)
+        ? Math.min(1, Math.max(0.01, targetFraction))
+        : 1
+      return Math.max(
+        1,
+        Math.floor(clinicalContextTokenTarget(contextLimit) * normalizedFraction),
+      )
+    },
+    [contextLimit, targetFraction],
   )
   const fitKey = sourceSignature && Number.isFinite(targetTokens)
-    ? `${sourceSignature}:${Math.round(contextLimit ?? 0)}`
+    ? `${sourceSignature}:${Math.round(contextLimit ?? 0)}:${targetTokens}`
     : ''
   const [fitState, setFitState] = useState<FitState>({
     key: '',
@@ -244,30 +272,38 @@ export function useClinicalAiInput(
     [candidateClinicalContext],
   )
   const needsSmallerTier = Boolean(fitKey) &&
-    activeTier === 'full' &&
+    activeTier !== 'prioritized' &&
     candidateTokens > targetTokens
 
   useEffect(() => {
     if (!fitKey || !rawDataReady) return
-    // First render measures the complete saved selection. Only an over-budget
-    // result activates record-level prioritization on the next render.
+    // Measure each transient view before advancing. The reduction order is
+    // full → 1 year / 8 labs → 6 months / 3 labs → 3 months / latest labs →
+    // record-level clinical prioritization. Only the final prioritized view
+    // may use bounded text fitting as a last resort.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFitState((current) => {
       if (current.key !== fitKey) {
         if (candidateTokens <= targetTokens) return current
         return {
           key: fitKey,
-          tier: 'prioritized',
+          tier: nextClinicalContextFitTier('full'),
           originalTokens: candidateTokens,
+        }
+      }
+      if (candidateTokens > targetTokens && current.tier !== 'prioritized') {
+        return {
+          ...current,
+          tier: nextClinicalContextFitTier(current.tier),
         }
       }
       return current
     })
-  }, [candidateTokens, fitKey, rawDataReady, targetTokens])
+  }, [activeTier, candidateTokens, fitKey, rawDataReady, targetTokens])
 
   const clinicalContext = useMemo(
     () => (
-      (activeTier === 'prioritized' || activeTier === 'trimmed' || activeTier === 'tight') &&
+      activeTier === 'prioritized' &&
       candidateTokens > targetTokens
         ? fitClinicalContextTextToTokenBudget(candidateClinicalContext, targetTokens)
         : candidateClinicalContext
@@ -276,7 +312,7 @@ export function useClinicalAiInput(
   )
   const formattedClinicalContext = useMemo(
     () => (
-      (activeTier === 'prioritized' || activeTier === 'trimmed' || activeTier === 'tight') &&
+      activeTier === 'prioritized' &&
       estimateTokens(candidateFormattedClinicalContext) > targetTokens
         ? fitClinicalContextTextToTokenBudget(
             candidateFormattedClinicalContext,

@@ -13,8 +13,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
-  ContextOverflowError,
-  createContextOverflowIssue,
+  isContextOverflowError,
   type ContextOverflowIssue,
 } from '@/src/shared/utils/context-budget'
 import {
@@ -54,7 +53,10 @@ import {
   type AiSlotDemoContext,
   type AiSlotRunContext,
 } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
-import { getUserErrorMessage } from '@/src/core/errors'
+import {
+  getUserErrorMessage,
+  isProviderContextWindowExceededError,
+} from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
@@ -70,6 +72,7 @@ import {
   MedicalSummaryCardProgressTimeoutError,
   streamWithCardProgressTimeout,
 } from './card-progress-timeout'
+import { runWithContextWindowRetry } from '@/src/application/hooks/ai-generation/context-window-retry'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -204,25 +207,59 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const targetCards = retryRequest
       ? retryRequest.cardIds.map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])
       : registeredMedicalSummaryCards(promptInput)
-    // A manual retry uses the same multi-card transport as automatic retry:
-    // all currently failed cards share one request and one copy of the context.
-    const initialBatchMessages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
-      promptInput,
-      targetCards.map((card) => card.buildBatchInstruction(promptInput)),
-    )
-    const messageSets = [initialBatchMessages]
-    const overflow = messageSets
-      .map((messages) => createContextOverflowIssue(
-        messages.map((message) => message.content).join('\n\n'),
-        ctx.modelId,
-        {
-          selectedContext: ctx.clinicalContext,
-          contextLimit: ctx.contextLimit,
+    // Keep a provider-confirmed reduction for every later parse retry in this
+    // generation. A LiteLLM context rejection is transport feedback, not six
+    // independent card failures, so context recovery happens around the shared
+    // batch request before any per-card error is recorded.
+    let transportClinicalContext = clinicalContext
+    const streamRegisteredCardBatch = async (
+      cards: MedicalSummaryCardDefinition[],
+      onChunk: (streamedText: string) => boolean,
+    ) => {
+      const outcome = await runWithContextWindowRetry({
+        clinicalContext: transportClinicalContext,
+        contextLimit: ctx.contextLimit,
+        modelId: ctx.modelId,
+        modelName: ctx.modelName,
+        locale: ctx.locale,
+        buildRequest: (fittedClinicalContext) => {
+          const fittedPromptInput = {
+            ...promptInput,
+            clinicalContext: fittedClinicalContext,
+          }
+          const messages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
+            fittedPromptInput,
+            cards.map((card) => card.buildBatchInstruction(fittedPromptInput)),
+          )
+          return {
+            request: messages,
+            requestText: messages.map((message) => message.content).join('\n\n'),
+          }
         },
-      ))
-      .filter((issue): issue is ContextOverflowIssue => issue !== null)
-      .sort((left, right) => right.overBy - left.overBy)[0] ?? null
-    if (overflow) throw new ContextOverflowError(overflow, ctx.locale)
+        execute: (messages) => streamWithCardProgressTimeout({
+          stream: (signal, streamChunk) => ctx.ai.stream(messages, {
+            modelId: ctx.modelId,
+            operationKey: ctx.operationKey,
+            diagnosticFeature: 'medical-summary',
+            throwOnAbort: true,
+            signal,
+            ...(isLocalModel
+              ? { temperature: 0, reasoningEffort: 'low' as const }
+              : {}),
+            onChunk: streamChunk,
+          }),
+          onChunk,
+          timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
+        }),
+        onRetry: (reason, retry) => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.info(`[medical-summary] context retry ${retry}: ${reason}`)
+          }
+        },
+      })
+      transportClinicalContext = outcome.clinicalContext
+      return outcome.value
+    }
 
     const markValidationError = (cardId: MedicalSummaryCardId) => {
       useAiExecutionDiagnosticsStore.getState().markLatestOperationFeatureError(
@@ -339,21 +376,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         })
         return madeProgress
       }
-      const { fullText: full, timedOut } = await streamWithCardProgressTimeout({
-        stream: (signal, onChunk) => ctx.ai.stream(initialBatchMessages, {
-          modelId: ctx.modelId,
-          operationKey: ctx.operationKey,
-          diagnosticFeature: 'medical-summary',
-          throwOnAbort: true,
-          signal,
-          ...(isLocalModel
-            ? { temperature: 0, reasoningEffort: 'low' as const }
-            : {}),
-          onChunk,
-        }),
-        onChunk: parseInitialChunk,
-        timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
-      })
+      const { fullText: full, timedOut } = await streamRegisteredCardBatch(
+        targetCards,
+        parseInitialChunk,
+      )
       if (timedOut && process.env.NODE_ENV !== 'production') {
         console.info('[medical-summary] batch attempt 1 aborted after 45s without a new valid card')
       }
@@ -386,6 +412,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error
+      if (
+        isContextOverflowError(error) ||
+        isProviderContextWindowExceededError(error)
+      ) throw error
       targetCards.forEach((card) => {
         const parsed = batchParseResults.get(card.id)
         settled.push(parsed
@@ -415,10 +445,6 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
 
       const retryBatchParseResults = new Map<MedicalSummaryCardId, unknown | null>()
-      const retryBatchMessages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
-        promptInput,
-        cardsToRetry.map((card) => card.buildBatchInstruction(promptInput)),
-      )
       try {
         const parseRetryChunk = (streamedText: string): boolean => {
           let madeProgress = false
@@ -438,21 +464,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           })
           return madeProgress
         }
-        const { fullText: full, timedOut } = await streamWithCardProgressTimeout({
-          stream: (signal, onChunk) => ctx.ai.stream(retryBatchMessages, {
-            modelId: ctx.modelId,
-            operationKey: ctx.operationKey,
-            diagnosticFeature: 'medical-summary',
-            throwOnAbort: true,
-            signal,
-            ...(isLocalModel
-              ? { temperature: 0, reasoningEffort: 'low' as const }
-              : {}),
-            onChunk,
-          }),
-          onChunk: parseRetryChunk,
-          timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
-        })
+        const { fullText: full, timedOut } = await streamRegisteredCardBatch(
+          cardsToRetry,
+          parseRetryChunk,
+        )
         if (timedOut && process.env.NODE_ENV !== 'production') {
           console.info(
             `[medical-summary] batch attempt ${attempt} aborted after 45s without a new valid card`,
@@ -488,6 +503,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         })
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error
+        if (
+          isContextOverflowError(error) ||
+          isProviderContextWindowExceededError(error)
+        ) throw error
         cardsToRetry.forEach((card) => {
           const parsed = retryBatchParseResults.get(card.id)
           settled[targetCards.indexOf(card)] = parsed

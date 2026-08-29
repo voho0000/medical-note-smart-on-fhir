@@ -1,4 +1,8 @@
-import { getUserErrorMessage, isQuotaExceededError } from '@/src/core/errors'
+import {
+  getUserErrorMessage,
+  isProviderContextWindowExceededError,
+  isQuotaExceededError,
+} from '@/src/core/errors'
 
 describe('AI retry error messages', () => {
   it('unwraps RetryError.lastError and explains daily free quota exhaustion', () => {
@@ -36,5 +40,23 @@ describe('AI retry error messages', () => {
     const error = new Error('Failed after 3 attempts. Last error: Unknown provider failure')
 
     expect(getUserErrorMessage(error)).toBe('AI 服務暂時無法完成請求，請稍後再試。')
+  })
+
+  it('recognizes and localizes a nested LiteLLM context-window rejection', () => {
+    const error = Object.assign(new Error('Failed after 3 attempts'), {
+      lastError: {
+        statusCode: 400,
+        responseBody: JSON.stringify({
+          error: {
+            message: "litellm.BadRequestError: ContextWindowExceededError: This model's maximum context length is 262144 tokens. However, your prompt contains at least 262145 input tokens.",
+          },
+        }),
+      },
+    })
+
+    expect(isProviderContextWindowExceededError(error)).toBe(true)
+    expect(getUserErrorMessage(error)).toBe(
+      '📚 病歷內容超過模型可處理的長度。系統已嘗試自動縮減；請再縮小「資料選擇」範圍，或改用內容視窗更大的模型。',
+    )
   })
 })

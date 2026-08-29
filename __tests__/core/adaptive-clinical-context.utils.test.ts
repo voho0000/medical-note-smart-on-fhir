@@ -2,6 +2,7 @@ import {
   buildClinicalContextFitCandidate,
   clinicalContextTokenTarget,
   fitClinicalContextTextToTokenBudget,
+  nextClinicalContextFitTier,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
 import {
   ALL_DATA_FILTERS,
@@ -49,6 +50,22 @@ describe('adaptive clinical context', () => {
     expect(fullProfile.documentMode).toBe('all')
   })
 
+  it('starts with a one-year / eight-result reduction before the six-month tier', () => {
+    const candidate = buildClinicalContextFitCandidate(
+      fullProfile,
+      'trimmed',
+      clinicalContextTokenTarget(262_144),
+    )
+
+    expect(candidate.profile.filters.encounterTimeRange).toBe('1y')
+    expect(candidate.profile.filters.medicationStatus).toBe('all')
+    expect(candidate.profile.filters.medicationTimeRange).toBe('1y')
+    expect(candidate.profile.filters.labReportTimeRange).toBe('1y')
+    expect(candidate.profile.filters.labDepth).toBe('8')
+    expect(candidate.profile.filters.imagingReportTimeRange).toBe('1y')
+    expect(candidate.profile.documentMode).toBe('latestAdmission')
+  })
+
   it('uses a tighter three-month/latest-only fallback and drops duplicate observations', () => {
     const candidate = buildClinicalContextFitCandidate(
       fullProfile,
@@ -57,10 +74,18 @@ describe('adaptive clinical context', () => {
     )
 
     expect(candidate.profile.filters.encounterTimeRange).toBe('3m')
-    expect(candidate.profile.filters.medicationTimeRange).toBe('3m')
+    expect(candidate.profile.filters.medicationStatus).toBe('active')
+    expect(candidate.profile.filters.medicationTimeRange).toBe('all')
     expect(candidate.profile.filters.labDepth).toBe('latest')
     expect(candidate.profile.filters.imagingReportTimeRange).toBe('3m')
     expect(candidate.profile.selection.observations).toBe(false)
+  })
+
+  it('advances through time/count reductions before record prioritization', () => {
+    expect(nextClinicalContextFitTier('full')).toBe('trimmed')
+    expect(nextClinicalContextFitTier('trimmed')).toBe('compact')
+    expect(nextClinicalContextFitTier('compact')).toBe('tight')
+    expect(nextClinicalContextFitTier('tight')).toBe('prioritized')
   })
 
   it('preserves a narrower saved range instead of widening it', () => {

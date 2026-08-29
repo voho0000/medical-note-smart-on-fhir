@@ -698,7 +698,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.result?.headline).toBe('local-model-a:32768')
   })
 
-  it('avoids a coarse semantic preset when it would leave most of a 32k window unused', async () => {
+  it('progressively reaches the six-month tier before any text fallback', async () => {
     mockPatientId = 'smart-patient-1'
     mockOpenAiCompatible = {
       enabled: true,
@@ -743,21 +743,23 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     expect(run).toHaveBeenCalledTimes(1)
     const context = run.mock.calls[0][0]
-    expect(context.clinicalContext.startsWith('full-')).toBe(true)
-    expect(context.contextAdaptation?.tier).toBe('prioritized')
+    expect(context.clinicalContext.startsWith('compact-')).toBe(true)
+    expect(context.clinicalContext).not.toContain('omitted to fit the selected model')
+    expect(context.contextAdaptation?.tier).toBe('compact')
     expect(context.contextAdaptation?.adaptedTokens)
       .toBeLessThan(context.contextAdaptation?.originalTokens ?? 0)
-    expect(context.contextAdaptation?.adaptedTokens).toBeGreaterThan(18_000)
-    expect(result.current.contextAdaptation?.tier).toBe('prioritized')
-    expect(result.current.result?.headline).toBe('prioritized:full-re')
+    expect(result.current.contextAdaptation?.tier).toBe('compact')
+    expect(result.current.result?.headline).toBe('compact:compact')
   })
 
   it('reduces a modest 105k overage toward the 98.6k target instead of collapsing it', async () => {
     mockPatientId = 'smart-patient-1'
     mockClinicalContextForProfile = (profile) => (
-      profile?.filters?.labDepth === '3'
-        ? `compact-${'record '.repeat(3_800)}`
-        : `full-${'record '.repeat(60_000)}`
+      profile?.filters?.labDepth === '8'
+        ? `trimmed-${'record '.repeat(56_000)}`
+        : profile?.filters?.labDepth === '3'
+          ? `compact-${'record '.repeat(3_800)}`
+          : `full-${'record '.repeat(60_000)}`
     )
     const store = createAiResultStore<{ headline: string }>()
     const run = jest.fn(async (ctx: {
@@ -786,12 +788,65 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await act(async () => result.current.generate())
 
     const adaptation = run.mock.calls[0][0].contextAdaptation
-    expect(adaptation?.tier).toBe('prioritized')
+    expect(adaptation?.tier).toBe('trimmed')
     expect(adaptation?.originalTokens).toBeGreaterThan(100_000)
     expect(adaptation?.targetTokens).toBe(98_600)
-    expect(adaptation?.adaptedTokens).toBeGreaterThan(98_000)
+    expect(adaptation?.adaptedTokens).toBeGreaterThan(97_000)
     expect(adaptation?.adaptedTokens).toBeLessThanOrEqual(98_600)
-    expect(result.current.result?.headline).toBe('prioritized')
+    expect(result.current.result?.headline).toBe('trimmed')
+  })
+
+  it('applies the TVGHBrain tokenizer reserve through structured reduction before generation', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockOpenAiCompatible = {
+      enabled: true,
+      baseUrl: 'https://hospital.example/v1',
+      modelId: 'tvghbrain3.5',
+      apiKey: null,
+      transport: 'direct',
+      contextWindowTokens: 262_144,
+      contextWindowSource: 'manual',
+    }
+    mockClinicalContextForProfile = (profile) => (
+      profile?.filters?.labDepth === '8'
+        ? `trimmed-${'病歷'.repeat(105_000)}`
+        : `full-${'病歷'.repeat(135_000)}`
+    )
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async (ctx: {
+      clinicalContext: string
+      contextAdaptation: {
+        tier: string
+        targetTokens: number
+        originalTokens: number
+        adaptedTokens: number
+      } | null
+    }) => ({ headline: ctx.contextAdaptation?.tier ?? 'full' }))
+
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: CUSTOM_OPENAI_MODEL_ID,
+      autoRunEnabled: false,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(result.current.dataReady).toBe(true))
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    await act(async () => result.current.generate())
+
+    const context = run.mock.calls[0][0]
+    expect(context.clinicalContext.startsWith('trimmed-')).toBe(true)
+    expect(context.clinicalContext).not.toContain('omitted to fit the selected model')
+    expect(context.contextAdaptation).toMatchObject({
+      tier: 'trimmed',
+      targetTokens: 146_993,
+    })
+    expect(context.contextAdaptation?.adaptedTokens)
+      .toBeLessThan(context.contextAdaptation?.originalTokens ?? 0)
   })
 
   it('keeps a 74k clinical input intact for a 120k model', async () => {

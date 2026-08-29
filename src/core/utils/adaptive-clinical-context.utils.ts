@@ -61,10 +61,11 @@ function capTimeRange(value: TimeRange, maximum: TimeRange): TimeRange {
 
 function capLabDepth(
   value: DataFilters['labDepth'],
-  maximum: 'latest' | '3',
+  maximum: 'latest' | '3' | '8',
 ): DataFilters['labDepth'] {
   if (maximum === 'latest') return 'latest'
-  return value === 'latest' || value === '3' ? value : '3'
+  const order: DataFilters['labDepth'][] = ['latest', '3', '8', '16', 'all']
+  return order.indexOf(value) <= order.indexOf(maximum) ? value : maximum
 }
 
 const MIN_REQUEST_OVERHEAD_RESERVE = 8_000
@@ -106,51 +107,69 @@ export function buildClinicalContextFitCandidate(
     documentMode: base.documentMode ?? 'latestAdmission',
     documentIds: [...(base.documentIds ?? [])],
   }
-  if (tier === 'full' || tier === 'prioritized' || tier === 'trimmed') {
+  if (tier === 'full' || tier === 'prioritized') {
     return { tier, profile: normalizedBase }
   }
 
+  const trimmed = tier === 'trimmed'
   const compact = tier === 'compact'
   const filters: DataFilters = {
     ...normalizedBase.filters,
-    problemListStatus: 'active',
+    // Keep the saved categories, but narrow their histories in visible,
+    // deterministic steps before considering record-by-record selection.
+    // Active problems remain available at every tier.
+    problemListStatus: trimmed
+      ? normalizedBase.filters.problemListStatus
+      : 'active',
     encounterTimeRange: capTimeRange(
       normalizedBase.filters.encounterTimeRange,
-      compact ? '6m' : '3m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
-    medicationStatus: 'active',
+    medicationStatus: trimmed || compact
+      ? normalizedBase.filters.medicationStatus
+      : 'active',
     medicationTimeRange: capTimeRange(
       normalizedBase.filters.medicationTimeRange,
-      compact ? '6m' : '3m',
+      // The tight tier keeps every currently active medication even when its
+      // original order is older than three months.
+      trimmed ? '1y' : compact ? '6m' : 'all',
     ),
     labDepth: capLabDepth(
       normalizedBase.filters.labDepth,
-      compact ? '3' : 'latest',
+      trimmed ? '8' : compact ? '3' : 'latest',
     ),
     labReportTimeRange: capTimeRange(
       normalizedBase.filters.labReportTimeRange,
-      compact ? '6m' : '3m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
-    imagingReportVersion: 'latest',
+    imagingReportVersion: trimmed
+      ? normalizedBase.filters.imagingReportVersion
+      : 'latest',
     imagingReportTimeRange: capTimeRange(
       normalizedBase.filters.imagingReportTimeRange,
-      compact ? '6m' : '3m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
-    vitalSignsVersion: 'latest',
+    vitalSignsVersion: trimmed
+      ? normalizedBase.filters.vitalSignsVersion
+      : 'latest',
     vitalSignsTimeRange: capTimeRange(
       normalizedBase.filters.vitalSignsTimeRange,
-      compact ? '1y' : '6m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
     procedureTimeRange: capTimeRange(
       normalizedBase.filters.procedureTimeRange,
-      compact ? '1y' : '6m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
-    observationVersion: 'latest',
+    observationVersion: trimmed
+      ? normalizedBase.filters.observationVersion
+      : 'latest',
     observationTimeRange: capTimeRange(
       normalizedBase.filters.observationTimeRange,
-      compact ? '6m' : '3m',
+      trimmed ? '1y' : compact ? '6m' : '3m',
     ),
-    carePlanStatus: 'active',
+    carePlanStatus: trimmed
+      ? normalizedBase.filters.carePlanStatus
+      : 'active',
   }
 
   return {
@@ -161,7 +180,9 @@ export function buildClinicalContextFitCandidate(
         // Standalone observations are the lowest-signal, highest-duplication
         // category once the tight tier is required. Labs, imaging and vitals
         // remain selected independently.
-        observations: compact ? normalizedBase.selection.observations : false,
+        observations: trimmed || compact
+          ? normalizedBase.selection.observations
+          : false,
       },
       filters,
       // A bounded context includes one clinically meaningful document rather
@@ -177,7 +198,7 @@ export function buildClinicalContextFitCandidate(
         targetTokens,
         Math.max(
           2_500,
-          Math.floor(targetTokens * (compact ? 0.45 : 0.35)),
+          Math.floor(targetTokens * (trimmed ? 0.6 : compact ? 0.45 : 0.35)),
         ),
       ),
     ),
@@ -188,9 +209,10 @@ export function nextClinicalContextFitTier(
   tier: ClinicalContextFitTier,
 ): ClinicalContextFitTier {
   if (tier === 'full') return 'trimmed'
-  if (tier === 'prioritized') return 'trimmed'
   if (tier === 'trimmed') return 'compact'
-  return 'tight'
+  if (tier === 'compact') return 'tight'
+  if (tier === 'tight') return 'prioritized'
+  return 'prioritized'
 }
 
 const CONTEXT_OMISSION_MARKER =
@@ -250,10 +272,9 @@ export function formatClinicalContextAdaptationNotice(
       : `For this model's ${contextLabel}-token context window, active problems, allergies, current medications, abnormal/latest tests, and recent important records were retained first; older low-priority records were then removed record by record to about ${adaptedLabel} tokens. The source index was rebuilt from the retained content, and your saved data scope was not changed.`
   }
   if (adaptation.tier === 'trimmed') {
-    const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
     return locale === 'zh-TW'
-      ? `已依模型 ${contextLabel} 內容視窗，保留原本資料類別與時間範圍，僅將超出預算的文字漸進縮減至約 ${adaptedLabel} tokens，並優先保留高優先段落與最新紀錄。你儲存的資料範圍沒有變更。`
-      : `For this model's ${contextLabel}-token context window, the original categories and time ranges were kept while excess text was progressively reduced to about ${adaptedLabel} tokens, prioritizing high-value sections and the newest records. Your saved data scope was not changed.`
+      ? `已依模型 ${contextLabel} 內容視窗，暫時使用最多最近 1 年的主要病歷、每項最多 8 筆檢驗，以及最近一次出院病摘。來源索引已依實際保留內容重建；你儲存的資料範圍沒有變更。`
+      : `For this model's ${contextLabel}-token context window, this run temporarily uses up to 1 year of key records, up to 8 results per lab, and the latest discharge summary. The source index was rebuilt from retained content, and your saved data scope was not changed.`
   }
   const scopeDescription = adaptation.tier === 'compact'
     ? locale === 'zh-TW'

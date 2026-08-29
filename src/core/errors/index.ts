@@ -28,7 +28,17 @@ interface ErrorMapping {
   message: string
 }
 
+const CONTEXT_WINDOW_EXCEEDED_PATTERN = /ContextWindowExceededError|maximum context length|context window.{0,40}(?:exceed|overflow)|prompt contains at least \d+ input tokens/i
+
 const ERROR_MAPPINGS: ErrorMapping[] = [
+  // OpenAI-compatible gateways (notably LiteLLM) wrap this under several
+  // nested error/cause shapes. Keep it ahead of generic 400/provider text so
+  // an exhausted automatic context retry never dumps the raw routing payload
+  // into every summary card.
+  {
+    pattern: CONTEXT_WINDOW_EXCEEDED_PATTERN,
+    message: '📚 病歷內容超過模型可處理的長度。系統已嘗試自動縮減；請再縮小「資料選擇」範圍，或改用內容視窗更大的模型。'
+  },
   // Guest/anonymous proxy session couldn't be obtained CLIENT-side (no Firebase
   // ID token) — most often iOS storage/ITP, private mode, or a stale cached
   // build. Distinct from the server "sign-in required" 401 below so the message
@@ -172,6 +182,15 @@ const QUOTA_EXCEEDED_PATTERN = /daily quota exceeded|daily.{0,30}free.{0,20}(?:q
 export function isQuotaExceededError(error: unknown): boolean {
   if (!error) return false
   return QUOTA_EXCEEDED_PATTERN.test(buildErrorHaystack(error))
+}
+
+/** Detect provider-side context rejection, including AI SDK RetryError and
+ * LiteLLM's nested Hosted_vllmException response body. This is intentionally
+ * distinct from our local ContextOverflowError: callers use it to reduce the
+ * prompt and retry before surfacing a final user-facing failure. */
+export function isProviderContextWindowExceededError(error: unknown): boolean {
+  if (!error) return false
+  return CONTEXT_WINDOW_EXCEEDED_PATTERN.test(buildErrorHaystack(error))
 }
 
 /**
