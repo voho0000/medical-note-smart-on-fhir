@@ -1,7 +1,7 @@
 // Language Provider
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useState, useEffect, type ReactNode } from 'react'
+import { createContext, startTransition, useCallback, useContext, useMemo, useState, useEffect, type ReactNode } from 'react'
 import { locales, defaultLocale, type Locale } from '@/src/shared/i18n/i18n.config'
 import type { Translation } from '@/src/shared/i18n/locales/en'
 
@@ -33,8 +33,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale)
+    // A locale change updates labels throughout every force-mounted clinical
+    // workspace. Treat that broad render as interruptible work so the language
+    // menu can close immediately instead of blocking the main thread until all
+    // hidden reports, summaries, and chat views have finished translating.
+    startTransition(() => {
+      setLocaleState(newLocale)
+    })
     localStorage.setItem(LOCALE_STORAGE_KEY, newLocale)
+    document.documentElement.lang = newLocale
   }, [])
 
   // Every consumer of this context re-renders whenever the value identity
