@@ -32,8 +32,24 @@ export function useVisualViewport(): void {
       // A pinch zoom also shrinks visualViewport. Reflowing the whole app in
       // that case makes zoom unusable, so only follow it at the normal scale.
       const isPinchZoomed = Math.abs(viewport.scale - 1) > 0.01
-      const viewportHeight = isPinchZoomed ? window.innerHeight : viewport.height
+      const activeElement = document.activeElement
+      const hasFocusedEditor = activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement instanceof HTMLElement && activeElement.isContentEditable)
       const viewportOffsetTop = isPinchZoomed ? 0 : Math.max(0, viewport.offsetTop)
+
+      // Some iOS in-app browsers keep visualViewport.height at the old
+      // toolbar-expanded value after their browser chrome moves. innerHeight
+      // has already caught up in that state, and using the stale smaller value
+      // leaves a large blank band below the workspace. Only trust the smaller
+      // visual viewport while an editor is focused (keyboard avoidance) or
+      // iOS has actually panned it; otherwise use the largest current layout
+      // measurement.
+      const viewportHeight = isPinchZoomed
+        ? window.innerHeight
+        : hasFocusedEditor || viewportOffsetTop > 0
+          ? viewport.height
+          : Math.max(viewport.height, window.innerHeight, root.clientHeight)
 
       root.style.setProperty("--app-viewport-height", `${Math.round(viewportHeight)}px`)
       root.style.setProperty(
@@ -47,13 +63,9 @@ export function useVisualViewport(): void {
         : window.innerHeight - viewport.height - viewportOffsetTop
       root.style.setProperty("--keyboard-inset", `${Math.max(0, Math.round(overlap))}px`)
 
-      const activeElement = document.activeElement
-      const hasFocusedEditor = activeElement instanceof HTMLInputElement ||
-        activeElement instanceof HTMLTextAreaElement ||
-        (activeElement instanceof HTMLElement && activeElement.isContentEditable)
       const viewportContracted = stableViewportHeight - viewport.height > 120
-      const keyboardOpen = !isPinchZoomed && (
-        overlap > 80 || (hasFocusedEditor && viewportContracted)
+      const keyboardOpen = !isPinchZoomed && hasFocusedEditor && (
+        overlap > 80 || viewportContracted
       )
       root.dataset.keyboardOpen = keyboardOpen ? "true" : "false"
 
@@ -74,10 +86,14 @@ export function useVisualViewport(): void {
     apply()
     viewport.addEventListener("resize", scheduleApply)
     viewport.addEventListener("scroll", scheduleApply)
+    // WebKit variants do not consistently mirror browser-toolbar changes to
+    // visualViewport events, but they do emit the window resize event.
+    window.addEventListener("resize", scheduleApply)
     return () => {
       if (frame) cancelAnimationFrame(frame)
       viewport.removeEventListener("resize", scheduleApply)
       viewport.removeEventListener("scroll", scheduleApply)
+      window.removeEventListener("resize", scheduleApply)
       root.style.removeProperty("--app-viewport-height")
       root.style.removeProperty("--app-viewport-offset-top")
       root.style.removeProperty("--keyboard-inset")

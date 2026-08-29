@@ -423,7 +423,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
       '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
       '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem]',
     )
-    expect(clinicalLane).toHaveClass('h-10', 'grid-rows-2')
+    expect(clinicalLane).toHaveClass('h-8', 'grid-rows-2')
     expect(category).toHaveClass('max-w-full')
     expect(category).not.toHaveClass('max-w-[10rem]')
     expect(contextLine).toContainElement(icd)

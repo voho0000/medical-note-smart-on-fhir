@@ -71,6 +71,9 @@ describe("useVisualViewport", () => {
       height: 420,
       offsetTop: 260,
     })
+    const editor = document.createElement("textarea")
+    document.body.appendChild(editor)
+    editor.focus()
 
     const { unmount } = renderHook(() => useVisualViewport())
 
@@ -88,6 +91,7 @@ describe("useVisualViewport", () => {
     expect(document.documentElement).toHaveAttribute("data-keyboard-open", "false")
 
     unmount()
+    editor.remove()
     expect(document.documentElement.style.getPropertyValue("--app-viewport-height")).toBe("")
     expect(document.documentElement.style.getPropertyValue("--app-viewport-offset-top")).toBe("")
   })
@@ -101,6 +105,31 @@ describe("useVisualViewport", () => {
     expect(document.documentElement.style.getPropertyValue("--app-viewport-offset-top")).toBe("0px")
     expect(document.documentElement.style.getPropertyValue("--keyboard-inset")).toBe("0px")
     expect(document.documentElement).toHaveAttribute("data-keyboard-open", "false")
+  })
+
+  it("fills the available height when an iOS browser leaves visualViewport stale", () => {
+    const { listeners } = installVisualViewport({
+      height: 680,
+      offsetTop: 0,
+    })
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    })
+
+    renderHook(() => useVisualViewport())
+
+    expect(document.documentElement.style.getPropertyValue("--app-viewport-height")).toBe("844px")
+    expect(document.documentElement).toHaveAttribute("data-keyboard-open", "false")
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 900,
+    })
+    act(() => window.dispatchEvent(new Event("resize")))
+
+    expect(document.documentElement.style.getPropertyValue("--app-viewport-height")).toBe("900px")
+    expect(listeners.has("resize")).toBe(true)
   })
 
   it("detects an Android keyboard when both viewport heights shrink together", () => {

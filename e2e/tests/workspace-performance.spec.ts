@@ -22,6 +22,18 @@ async function afterPaint(page: Page) {
   }))
 }
 
+async function clickAndMeasureTwoPaints(target: Locator) {
+  return target.evaluate(async (element) => {
+    const startedAt = performance.now()
+    const clickable = element as HTMLElement
+    clickable.click()
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+    return performance.now() - startedAt
+  })
+}
+
 async function switchLeftTab(page: Page, name: string) {
   const tab = page.getByRole('tab').filter({ hasText: name }).first()
   const startedAt = await page.evaluate(() => performance.now())
@@ -141,16 +153,11 @@ test.describe('clinical workspace performance contract', () => {
     for (const analyte of ['WBC', 'RBC', 'HB', 'PLT', 'NEU']) {
       const trendButton = page.getByRole('button', { name: `查看 ${analyte} 趨勢`, exact: true })
       await expect(trendButton).toBeVisible()
-      const startedAt = await page.evaluate(() => performance.now())
-      await trendButton.click()
+      trendOpenDurations.push(await clickAndMeasureTwoPaints(trendButton))
       await expect(page.getByTestId('cumulative-trend-detail')).toBeVisible()
-      await afterTwoPaints(page)
-      trendOpenDurations.push(await page.evaluate((start) => performance.now() - start, startedAt))
-      const closeStartedAt = await page.evaluate(() => performance.now())
-      await page.getByRole('button', { name: '關閉', exact: true }).click()
+      const closeButton = page.getByRole('button', { name: '關閉', exact: true })
+      trendCloseDurations.push(await clickAndMeasureTwoPaints(closeButton))
       await expect(page.getByTestId('cumulative-trend-detail')).toBeHidden()
-      await afterTwoPaints(page)
-      trendCloseDurations.push(await page.evaluate((start) => performance.now() - start, closeStartedAt))
     }
     const cumulativeTrendOpenP95Ms = percentile(trendOpenDurations, 0.95)
     expect(cumulativeTrendOpenP95Ms).toBeLessThan(500)

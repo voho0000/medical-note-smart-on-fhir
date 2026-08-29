@@ -351,7 +351,7 @@ export function MedicationItem({
         data-medication-cell="identity"
         className="min-w-0 overflow-hidden @max-[455px]:contents"
       >
-        <div className="col-start-1 row-start-1 flex h-5 min-w-0 items-center">
+        <div className="col-start-1 row-start-1 flex h-4 min-w-0 items-center">
           <MedicationTerminologyTooltip medication={medication} enabled>
             <span
               className={cn(
@@ -382,7 +382,7 @@ export function MedicationItem({
 
         <div
           data-medication-schedule
-          className="col-span-2 col-start-1 row-start-3 flex h-5 min-w-0 items-center overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-3 @min-[312px]:row-start-2"
+          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-3 @min-[312px]:row-start-2"
         >
           {scheduleParts.map((part, index) => (
             <span
@@ -419,12 +419,12 @@ export function MedicationItem({
           and prescription-state tags. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 grid h-10 min-w-0 grid-rows-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
+        className="col-span-2 row-start-2 grid h-8 min-w-0 grid-rows-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
       >
         <div
           data-medication-context
           data-medication-diagnosis
-          className="row-start-1 flex h-5 min-w-0 items-center overflow-hidden whitespace-nowrap"
+          className="row-start-1 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap"
         >
           {isMedical && medication.icdCode && (
             <Tooltip>
@@ -457,13 +457,13 @@ export function MedicationItem({
 
         <div
           data-medication-classification
-          className="row-start-2 flex h-5 min-w-0 items-center gap-1 overflow-hidden"
+          className="row-start-2 flex h-4 min-w-0 items-center gap-1 overflow-hidden"
         >
           {medication.pharmacy && (
             <span
               title={medication.pharmacy}
               className={cn(
-                "inline-flex h-5 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
+                "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
                 CLINICAL_SOURCE_TONE,
               )}
             >
@@ -522,11 +522,11 @@ export function MedicationItem({
         data-medication-cell="supply"
         className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[312px]:col-start-3"
       >
-        <div className="flex h-5 items-center">
+        <div className="flex h-4 items-center">
           <Badge
             variant={badge.variant}
             className={cn(
-              "h-5 w-full min-w-0 shrink-0 justify-center overflow-hidden px-1 py-0 text-[0.625rem]",
+              "h-4 w-full min-w-0 shrink-0 justify-center overflow-hidden px-1 py-0 text-[0.625rem]",
               showDaysLeftIndicator
                 ? getMedicationDaysLeftBadgeClass(displayedRemainingDays!)
                 : getMedicationStatusBadgeClass(
@@ -537,7 +537,7 @@ export function MedicationItem({
             <span className="truncate">{badge.label}</span>
           </Badge>
         </div>
-        <div className="flex h-5 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
+        <div className="flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
           {refillCompact && (
             <Tooltip>
               <TooltipTrigger asChild>

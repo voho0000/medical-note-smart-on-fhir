@@ -6,7 +6,11 @@ describe('isCoagulationOrSurgeryRelevant', () => {
     (atcCode) => {
       expect(isCoagulationOrSurgeryRelevant({
         category: '來源分類',
-        drugTerminology: { atcCode },
+        drugTerminology: {
+          source: 'nhi-official-drug-master',
+          snapshotId: 'test-snapshot',
+          atcCode,
+        },
       })).toBe(true)
     },
   )
@@ -14,7 +18,11 @@ describe('isCoagulationOrSurgeryRelevant', () => {
   it('does not elevate text when a governed non-coagulation ATC code contradicts it', () => {
     expect(isCoagulationOrSurgeryRelevant({
       category: '抗凝血相關文字',
-      drugTerminology: { atcCode: 'R05CB01' },
+      drugTerminology: {
+        source: 'nhi-official-drug-master',
+        snapshotId: 'test-snapshot',
+        atcCode: 'R05CB01',
+      },
     })).toBe(false)
   })
 
