@@ -34,6 +34,10 @@ import { MedicationList } from './components/MedicationList'
 import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
+import {
+  MedicationCategoryFilter,
+  UNCATEGORIZED_MEDICATION_KEY,
+} from './components/MedicationCategoryFilter'
 import { AllergyList } from '../allergies/components/AllergyList'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { MedicationNameMode } from './types'
@@ -42,6 +46,7 @@ import {
   relatedMedicationNavigationTarget,
 } from './utils/remaining-supply'
 import type { MedicationRemainingSummaryEntity } from '@/src/core/entities/clinical-data.entity'
+import { isCoagulationOrSurgeryRelevant } from './utils/medication-category-priority'
 
 type DataTab = 'medications' | 'allergies' | 'vaccines'
 type MedView = 'list' | 'timeline' | 'remaining'
@@ -77,6 +82,7 @@ export function MedListCard() {
   const [view, setView] = useState<MedView>('list')
   const [nameMode, setNameMode] = useState<MedicationNameMode>('ingredient')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(() => new Set())
   const tourActive = useLeftBrowserTourStore((state) => state.active)
   const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   const pendingNav = useResourceNavigationStore((s) => s.pending)
@@ -100,6 +106,7 @@ export function MedListCard() {
       )
       setView('list')
       setSearchQuery('')
+      setSelectedCategories(new Set())
     }, 0)
     return () => window.clearTimeout(timer)
   }, [pendingNav, navSeq])
@@ -108,15 +115,38 @@ export function MedListCard() {
   // 中/英, NHI code, drug class, indication ICD, 機構, date incl. 民國). Both
   // the list and the timeline view are filtered from the same query.
   const q = searchQuery.trim().toLowerCase()
-  const filteredRows = useMemo(
-    () => (q ? rows.filter((r) => r.searchHaystack.includes(q)) : rows),
-    [rows, q],
-  )
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number; priority: boolean }>()
+    for (const row of rows) {
+      const label = row.category?.trim() || (mt.categoryUnclassified ?? '未分類')
+      const value = row.category?.trim() || UNCATEGORIZED_MEDICATION_KEY
+      const current = counts.get(value)
+      counts.set(value, {
+        label,
+        count: (current?.count ?? 0) + 1,
+        priority: Boolean(current?.priority) || isCoagulationOrSurgeryRelevant(row),
+      })
+    }
+    return [...counts.entries()]
+      .map(([value, option]) => ({ value, ...option }))
+      .sort((a, b) => Number(b.priority) - Number(a.priority)
+        || a.label.localeCompare(b.label, locale))
+  }, [locale, mt.categoryUnclassified, rows])
+  const activeSelectedCategories = useMemo(() => {
+    const available = new Set(categoryOptions.map((option) => option.value))
+    return new Set([...selectedCategories].filter((value) => available.has(value)))
+  }, [categoryOptions, selectedCategories])
+  const filteredRows = useMemo(() => rows.filter((row) => {
+    if (q && !row.searchHaystack.includes(q)) return false
+    if (activeSelectedCategories.size === 0) return true
+    const categoryKey = row.category?.trim() || UNCATEGORIZED_MEDICATION_KEY
+    return activeSelectedCategories.has(categoryKey)
+  }), [activeSelectedCategories, q, rows])
   const filteredMedications = useMemo(() => {
-    if (!q) return prescriptionMedications
+    if (!q && activeSelectedCategories.size === 0) return prescriptionMedications
     const ids = new Set(filteredRows.map((r) => r.id))
     return prescriptionMedications.filter((m: any) => ids.has(m?.id))
-  }, [prescriptionMedications, filteredRows, q])
+  }, [activeSelectedCategories, prescriptionMedications, filteredRows, q])
   const filteredRemainingSupplySummaries = useMemo(() => {
     if (!q) return medicationRemainingSummaries
     return medicationRemainingSummaries.filter((summary) => [
@@ -137,6 +167,7 @@ export function MedListCard() {
   const timelineLabel = mt.viewTimeline ?? '時間軸'
   const remainingViewLabel = mt.remainingSupplyView ?? '健保署餘藥計算'
   const hasProductNames = rows.some((row) => Boolean(row.secondaryTitle))
+  const hasMedicationFilters = Boolean(q) || activeSelectedCategories.size > 0
 
   // 向右展開：push the timeline into the right pane so the list (left) and the
   // timeline (right) show side-by-side. Kept in sync with the search filter.
@@ -190,6 +221,7 @@ export function MedListCard() {
     const timer = window.setTimeout(() => {
       setTab('medications')
       setSearchQuery('')
+      setSelectedCategories(new Set())
       setView(tourStep === 'medication-timeline' ? 'timeline' : 'list')
 
       if (tourStep === 'right-pane' && rows.length > 0) {
@@ -345,6 +377,22 @@ export function MedListCard() {
                 </button>
               )}
             </div>
+            {view !== 'remaining' && categoryOptions.length > 0 && (
+              <MedicationCategoryFilter
+                label={mt.categoryFilterLabel ?? '藥理類別'}
+                clearLabel={mt.categoryFilterClear ?? '清除全部'}
+                selectedCountLabel={mt.categoryFilterSelected ?? '已選 {count}'}
+                priorityGroupLabel={mt.categoryFilterCoagulationPriority ?? '凝血／手術注意'}
+                otherGroupLabel={mt.categoryFilterOtherCategories ?? '其他類別'}
+                searchPlaceholder={mt.categoryFilterSearchPlaceholder ?? '搜尋類別…'}
+                searchClearLabel={mt.categoryFilterSearchClear ?? '清除類別搜尋'}
+                noMatchesLabel={mt.categoryFilterNoMatches ?? '找不到符合的類別'}
+                options={categoryOptions}
+                selected={activeSelectedCategories}
+                onSelectedChange={setSelectedCategories}
+                className="max-md:col-span-2 max-md:justify-self-end"
+              />
+            )}
           </div>
           {/* Card-level source hint: surfaces only when every row originated
               from a MedicationStatement (typical IPS dataset). Mixed lists
@@ -355,7 +403,7 @@ export function MedListCard() {
               <span>{sourceHintStatement}</span>
             </div>
           )}
-          {q && (
+          {hasMedicationFilters && (
             view === 'remaining'
               ? filteredRemainingSupplySummaries.length === 0
               : filteredRows.length === 0
