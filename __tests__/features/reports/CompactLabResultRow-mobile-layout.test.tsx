@@ -165,4 +165,33 @@ describe('CompactLabResultRow mobile layout', () => {
     expect(screen.getByTestId('reference-range-truncated')).toBeInTheDocument()
     expect(screen.getByLabelText(/參考範圍/)).toBeInTheDocument()
   })
+
+  it('shows an explicit high/low relationship only when a safe comparison exists', () => {
+    const { rerender } = render(
+      <CompactLabResultRow
+        title="HbA1c"
+        value="6.1 %"
+        abnormal
+        referenceText="[4.0–6.0]"
+        referenceComparison="high"
+        referenceComparisonLabel="高於參考"
+        referenceComparisonTooltip="依單一參考區間比對"
+      />,
+    )
+
+    expect(screen.getByLabelText('高於參考')).toHaveTextContent('高於參考')
+    expect(screen.queryByText('未判讀')).not.toBeInTheDocument()
+
+    rerender(
+      <CompactLabResultRow
+        title="eGFR"
+        value="81 mL/min/1.73m²"
+        referenceText="多組年齡區間"
+        rangeUnassessed
+      />,
+    )
+
+    expect(screen.getByLabelText('未判讀')).toBeInTheDocument()
+    expect(screen.queryByText('高於參考')).not.toBeInTheDocument()
+  })
 })

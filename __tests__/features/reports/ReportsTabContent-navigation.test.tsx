@@ -39,12 +39,25 @@ jest.mock('@tanstack/react-virtual', () => ({
 }))
 
 jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
-  ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="generic-report-row">{row.title}</div>,
+  ReportRow: ({ row, defaultOpen }: { row: { id: string; title: string }; defaultOpen: string[] }) => (
+    <div
+      data-testid="generic-report-row"
+      data-default-open={defaultOpen.includes(row.id) ? 'true' : 'false'}
+    >
+      {row.title}
+    </div>
+  ),
 }))
 
 jest.mock('@/features/clinical-summary/reports/components/CancerScreeningRow', () => ({
   CancerScreeningRow: ({ row }: { row: { title: string } }) => (
     <div data-testid="cancer-screening-row">{row.title}</div>
+  ),
+}))
+
+jest.mock('@/features/clinical-summary/reports/components/AdultPreventiveGroupCard', () => ({
+  AdultPreventiveGroupCard: ({ row }: { row: { title: string } }) => (
+    <div data-testid="adult-preventive-group-row">{row.title}</div>
   ),
 }))
 
@@ -161,6 +174,89 @@ describe('ReportsTabContent source navigation', () => {
 
     expect(await screen.findByTestId('cancer-screening-row')).toHaveTextContent('大腸癌篩檢')
     expect(screen.queryByTestId('generic-report-row')).not.toBeInTheDocument()
+  })
+
+  it('uses the dedicated row renderer for grouped adult health exams', async () => {
+    const row = {
+      id: 'adult-preventive:2024-06-28',
+      title: 'Adult health exam',
+      meta: 'Adult preventive',
+      obs: [],
+      group: 'other' as const,
+      sourceProgram: 'adult-preventive' as const,
+      adultPreventiveGroup: true,
+      groupedRows: [],
+    }
+
+    render(
+      <NestedScrollFixture>
+        <Tabs value="all">
+          <ReportsTabContent value="all" rows={[row]} isActive />
+        </Tabs>
+      </NestedScrollFixture>,
+    )
+
+    expect(await screen.findByTestId('adult-preventive-group-row'))
+      .toHaveTextContent('Adult health exam')
+    expect(screen.queryByTestId('generic-report-row')).not.toBeInTheDocument()
+  })
+
+  it('defaults complete blood-pressure panels open in the vitals tab', async () => {
+    const row = {
+      id: 'blood-pressure',
+      title: 'Blood Pressure',
+      meta: 'Vital signs',
+      group: 'vitals' as const,
+      obs: [{
+        component: [
+          {
+            code: { coding: [{ code: '8480-6' }] },
+            valueQuantity: { value: 130, unit: 'mmHg' },
+          },
+          {
+            code: { coding: [{ code: '8462-4' }] },
+            valueQuantity: { value: 90, unit: 'mmHg' },
+          },
+        ],
+      }],
+    }
+
+    render(
+      <NestedScrollFixture>
+        <Tabs value="vitals">
+          <ReportsTabContent value="vitals" rows={[row]} isActive />
+        </Tabs>
+      </NestedScrollFixture>,
+    )
+
+    expect(await screen.findByTestId('generic-report-row'))
+      .toHaveAttribute('data-default-open', 'true')
+  })
+
+  it('keeps unrelated composite results collapsed in the vitals tab', async () => {
+    const row = {
+      id: 'other-composite',
+      title: 'Other composite vital',
+      meta: 'Vital signs',
+      group: 'vitals' as const,
+      obs: [{
+        component: [
+          { code: { text: 'First component' }, valueQuantity: { value: 1 } },
+          { code: { text: 'Second component' }, valueQuantity: { value: 2 } },
+        ],
+      }],
+    }
+
+    render(
+      <NestedScrollFixture>
+        <Tabs value="vitals">
+          <ReportsTabContent value="vitals" rows={[row]} isActive />
+        </Tabs>
+      </NestedScrollFixture>,
+    )
+
+    expect(await screen.findByTestId('generic-report-row'))
+      .toHaveAttribute('data-default-open', 'false')
   })
 
   it('uses the tab-owned viewport instead of the shared outer panel', async () => {

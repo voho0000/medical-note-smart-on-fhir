@@ -14,6 +14,7 @@ export type {
 } from '@/src/shared/types/fhir.types'
 
 export type ReportGroup = "lab" | "imaging" | "pathology" | "cancer-screening" | "procedures" | "vitals" | "other"
+export type ReportSourceProgram = 'adult-preventive'
 
 /** Image attachment from DiagnosticReport.presentedForm (bridge v0.14.0+).
  *  Decoded to a Blob URL lazily by the viewer (ReportImageDialog), never
@@ -66,6 +67,9 @@ export type Row = {
   obs: Observation[]
   group: ReportGroup
   institution?: string
+  /** Explicit source-program provenance supplied by the source resource.
+   *  Never infer this from the analyte name or value. */
+  sourceProgram?: ReportSourceProgram
   effectiveDate?: string  // ISO date string for smart date display
   showTime?: boolean           // true when multiple same-name results share the same date
   isPossibleDuplicate?: boolean // true when same title+date+institution+value appears >1 time
@@ -100,6 +104,10 @@ export type Row = {
    *  but a chem card that absorbed plain glucose labels by actual contents:
    *  ['chem'] / ['glucose'] / ['chem','glucose']. See dayGroupLabelIds. */
   dayGroupLabelIds?: string[]
+  /** Display-only group used by the All tab: folds every adult preventive
+   *  health-exam row sharing one source date and institution into a single
+   *  expandable card. The original rows remain in `groupedRows`. */
+  adultPreventiveGroup?: boolean
   /** Number of DR duplicates bridge sent for this row that we collapsed
    *  via strict-prefix dedup. Drives the "bridge dup × N" badge on the
    *  row header so the bridge bug stays visible — silently merging would

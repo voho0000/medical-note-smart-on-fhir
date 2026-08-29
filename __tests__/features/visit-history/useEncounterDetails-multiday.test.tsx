@@ -70,10 +70,12 @@ describe('useEncounterDetails — multi-day rollups', () => {
       // Two HB values below the [13.5–17.5] range.
       obs('o1', 'HB', '2025-05-18T08:00:00Z', {
         value: 11.4,
+        unit: 'g/dL',
         referenceRange: [{ low: { value: 13.5, unit: 'g/dL' }, high: { value: 17.5, unit: 'g/dL' } }],
       }),
       obs('o2', 'HB', '2025-05-19T08:00:00Z', {
         value: 12.7,
+        unit: 'g/dL',
         referenceRange: [{ low: { value: 13.5, unit: 'g/dL' }, high: { value: 17.5, unit: 'g/dL' } }],
       }),
     ])

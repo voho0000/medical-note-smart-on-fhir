@@ -1057,12 +1057,29 @@ export const zhTW = {
     },
     labDayCount: '{n} 項檢驗',
     abnormalCount: '{n} 異常',
+    sourcePrograms: {
+      adultPreventive: '成人健檢',
+    },
+    adultPreventiveGroup: {
+      itemCount: '{n} 項',
+      expand: '展開成人健檢項目',
+      collapse: '收合成人健檢項目',
+    },
     latest: '僅最新版本',
     allVersions: '所有版本',
     timeRange: '時間範圍',
     noData: '在選定的時間範圍內未找到報告。',
     status: '狀態',
     category: '類別',
+    referenceComparison: {
+      above: '高於參考',
+      below: '低於參考',
+      tooltip:
+        '來源未提供異常標示；系統依單一、可解析且單位相容的參考區間比對。僅表示數值與該區間的關係，不代表臨床診斷。',
+      unassessed: '未判讀',
+      unassessedTooltip:
+        '來源未提供異常標示；參考區間包含多組條件、複雜文字、單位不一致或資料不完整，因此未自動比對。',
+    },
     image: {
       view: '查看影像',
       images: '張影像',

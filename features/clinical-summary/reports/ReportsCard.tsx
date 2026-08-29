@@ -37,8 +37,8 @@ import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { TrendWindow } from './utils/trend-time-scale'
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
-import { isCancerScreeningCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { groupCancerScreeningRows } from './utils/cancer-screening-grouping'
+import { groupAdultPreventiveRows } from './utils/adult-preventive-grouping'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -59,6 +59,7 @@ export function ReportsCard() {
     imagingStudies = [],
     observations = [],
     procedures = [],
+    compositions = [],
     resourceReady,
     error,
   } = useClinicalData()
@@ -309,6 +310,7 @@ export function ReportsCard() {
     rawReportsEnabled ? observations : EMPTY_RESOURCES,
     seenIds,
     effectiveNameMode,
+    rawReportsEnabled ? compositions : EMPTY_RESOURCES,
   )
 
   // ── Resource navigation (cited DiagnosticReport/Observation in the
@@ -399,9 +401,11 @@ export function ReportsCard() {
   }, [filteredRows, searchQuery])
 
   const groupedRows = useGroupedRows(filteredRows)
-  const hasCancerScreeningData = useMemo(
-    () => observations.some((observation) => isCancerScreeningCategory(observation?.category)),
-    [observations],
+  // The All tab reads one adult preventive-care encounter as one expandable
+  // source document. Category tabs keep their existing specialized grouping.
+  const allRows = useMemo(
+    () => groupAdultPreventiveRows(groupedRows.all),
+    [groupedRows.all],
   )
 
   const procedureCategoryCounts = useMemo(() => {
@@ -487,7 +491,8 @@ export function ReportsCard() {
   )
 
   // Lab tab: 健保存摺 ships one DR per analyte, so the default view folds
-  // same-(collection day, institution) reports into one LabDayGroupCard —
+  // same-(collection day, institution, source program) reports into one
+  // LabDayGroupCard —
   // the hospital's「一天一張檢驗單」reading unit. The flat single-item list
   // stays one toggle away. Grouping runs on the FILTERED rows so a search
   // shows day groups containing exactly the matching members.
@@ -501,7 +506,7 @@ export function ReportsCard() {
     const { tabs: reportTabs } = t.reports
     const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
     const exactCounts = {
-      all: groupedRows.all.length,
+      all: allRows.length,
       lab: labRows.length,
       imaging: imagingRows.length,
       pathology: groupedRows.pathology.length,
@@ -515,7 +520,7 @@ export function ReportsCard() {
     )
     const configs = [
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
-      { value: "all", label: withCount(reportTabs.all, displayCounts?.all), rows: groupedRows.all, isCumulative: false },
+      { value: "all", label: withCount(reportTabs.all, displayCounts?.all), rows: allRows, isCumulative: false },
       // Badge count follows the active view (day groups vs single items),
       // matching the imaging precedent: the number shown = cards clickable.
       { value: "lab", label: withCount(reportTabs.lab, displayCounts?.lab), rows: labRows, isCumulative: false },
@@ -528,20 +533,18 @@ export function ReportsCard() {
       { value: "vitals", label: withCount(reportTabs.vitals, displayCounts?.vitals), rows: groupedRows.vitals, isCumulative: false },
       { value: "procedures", label: withCount(reportTabs.procedures, displayCounts?.procedures), rows: filteredProcedureRows, isCumulative: false },
     ]
-    // Keep the frequent report views in a stable order, including an empty
-    // Pathology tab; only hide Procedures when that source type is absent.
+    // Keep the frequent report views in a stable order, including empty
+    // Pathology and Cancer screening tabs; only hide Procedures when that
+    // source type is absent.
     return configs.filter(
       // Use the underlying resources rather than lazy-built rows so users can
       // open Procedures directly from the default cumulative view.
-      (config) => (
-        (config.value !== "procedures" || procedures.length > 0)
-        && (config.value !== "cancer-screening" || hasCancerScreeningData)
-      ),
+      (config) => config.value !== "procedures" || procedures.length > 0,
     )
   }, [
+    allRows,
     filteredProcedureRows,
     groupedRows,
-    hasCancerScreeningData,
     imagingRows,
     initialTabCounts,
     labRows,
@@ -594,10 +597,13 @@ export function ReportsCard() {
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
     const preferredTabValue = hit.group === 'cancer-screening' ? 'cancer-screening' : undefined
+    const containsHit = (candidate: Row) => candidate.id === hit.id
+      || candidate.groupedRows?.some((member) => member.id === hit.id)
     const tab = tabConfigs.find((c) => (
-      c.value === preferredTabValue && c.rows.some((r) => r.id === hit.id)
-    )) || tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))
+      c.value === preferredTabValue && c.rows.some(containsHit)
+    )) || tabConfigs.find((c) => !c.isCumulative && c.rows.some(containsHit))
     if (!tab) return
+    const targetRow = tab.rows.find(containsHit)
     // Do not use handleTabChange: requestAnimationFrame is frozen in
     // backgrounded tabs. A timer preserves that behaviour while keeping the
     // external-store effect free of synchronous local-state cascades.
@@ -605,7 +611,7 @@ export function ReportsCard() {
       setSearchQuery('')
       setActiveTab(tab.value)
       setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
-      setNavTarget({ id: hit.id, tab: tab.value, nonce: navSeq })
+      setNavTarget({ id: targetRow?.id ?? hit.id, tab: tab.value, nonce: navSeq })
     }, 0)
   }, [navPending, navSeq, rows, tabConfigs, consumeNav])
 

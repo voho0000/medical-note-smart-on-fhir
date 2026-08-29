@@ -83,6 +83,32 @@ describe('groupLabReportsByDay', () => {
     expect(out[0].groupedRows).toHaveLength(2)
   })
 
+  it('keeps adult health-exam labs separate from ordinary same-day labs', () => {
+    const rows = [
+      labRow({
+        institution: '良安診所',
+        effectiveDate: '2024-06-28',
+        sourceProgram: 'adult-preventive',
+        obs: [obs('CHOL')],
+      }),
+      labRow({
+        institution: '良安診所',
+        effectiveDate: '2024-06-28',
+        obs: [obs('TG')],
+      }),
+    ]
+
+    const out = groupLabReportsByDay(rows)
+
+    expect(out).toHaveLength(2)
+    expect(out.map((row) => row.sourceProgram)).toEqual([
+      undefined,
+      'adult-preventive',
+    ])
+    expect(out.find((row) => row.sourceProgram === 'adult-preventive')?.groupedRows)
+      .toHaveLength(1)
+  })
+
   it('splits different days at the same institution, newest day first', () => {
     const rows = [
       labRow({ institution: 'A院', effectiveDate: '2026-01-14', obs: [obs('WBC')] }),

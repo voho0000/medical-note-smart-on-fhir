@@ -1056,12 +1056,29 @@ export const en = {
     },
     labDayCount: '{n} tests',
     abnormalCount: '{n} abnormal',
+    sourcePrograms: {
+      adultPreventive: 'Adult health exam',
+    },
+    adultPreventiveGroup: {
+      itemCount: '{n} items',
+      expand: 'Expand adult health exam items',
+      collapse: 'Collapse adult health exam items',
+    },
     latest: 'Latest Versions Only',
     allVersions: 'All Versions',
     timeRange: 'Time Range',
     noData: 'No reports found within the selected time range.',
     status: 'Status',
     category: 'Category',
+    referenceComparison: {
+      above: 'Above reference',
+      below: 'Below reference',
+      tooltip:
+        'The source did not provide an interpretation. The app compared this result with one parseable, unit-compatible reference range. This describes its relationship to that range and is not a clinical diagnosis.',
+      unassessed: 'Not assessed',
+      unassessedTooltip:
+        'The source did not provide an interpretation. The reference data contains multiple conditions, complex text, incompatible units, or incomplete information, so the app did not compare it automatically.',
+    },
     image: {
       view: 'View image',
       images: 'images',

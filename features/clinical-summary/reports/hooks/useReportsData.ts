@@ -31,6 +31,7 @@ import {
   getNhiViewerActions,
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
+import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -64,6 +65,11 @@ function getDrInstitution(dr: any): string | undefined {
 // issued, so a report grouped under 6/2 was displayed as 6/5.
 function getDrDate(dr: any): string | undefined {
   return dr?.effectiveDateTime || dr?.issued
+}
+
+function isAdultPreventiveReport(dr: DiagnosticReport): boolean {
+  return isAdultPreventiveHealthExamResource(dr)
+    || ((dr as any)._observations ?? []).some(isAdultPreventiveHealthExamResource)
 }
 
 function viewerActionIdentity(action: NhiViewerAction): string {
@@ -206,7 +212,8 @@ export function buildReportsData(
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
-      const key = `${text}|${date}|${inst}|${dr.id || `split-${splitGroupIndex++}`}`
+      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
+      const key = `${text}|${date}|${inst}|${sourceProgram}|${dr.id || `split-${splitGroupIndex++}`}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       viewerReportsByKey.set(key, [dr])
@@ -221,7 +228,8 @@ export function buildReportsData(
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
-      const key = `${text}|${date}|${inst}`
+      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
+      const key = `${text}|${date}|${inst}|${sourceProgram}`
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
         naturalOrder.push(key)
@@ -718,6 +726,9 @@ export function buildReportsData(
         obs: obsWithSummary,
         group: reportGroup,
         institution,
+        sourceProgram: grp.some(isAdultPreventiveReport)
+          ? 'adult-preventive'
+          : undefined,
         effectiveDate: rawDate,
         images: images.length > 0 ? images : undefined,
         viewerActions: viewerActions.length > 0 ? viewerActions : undefined,

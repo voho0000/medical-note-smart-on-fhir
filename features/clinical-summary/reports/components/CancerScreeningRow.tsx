@@ -94,18 +94,18 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
       {expandable && (
         <ChevronDown
           className={cn(
-            'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+            'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
             open && 'rotate-180',
           )}
           aria-hidden
         />
       )}
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 sm:grid-cols-[minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_minmax(0,1.1fr)_auto] sm:items-center">
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 @min-[36rem]:grid-cols-[minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_minmax(0,1.1fr)_auto] @min-[36rem]:items-center">
         <span className="min-w-0 truncate font-semibold text-foreground" title={row.title}>
           <HighlightText text={row.title} query={query} />
         </span>
 
-        <div className="col-start-1 row-start-2 flex min-w-0 items-baseline gap-1.5 sm:col-start-2 sm:row-start-1">
+        <div className="col-start-1 row-start-2 flex min-w-0 items-baseline gap-1.5 @min-[36rem]:col-start-2 @min-[36rem]:row-start-1">
           <span className="shrink-0 text-xs text-muted-foreground">{labels.latest}</span>
           <span className="truncate font-semibold text-foreground" title={latestDisplayValue}>
             <HighlightText text={latestDisplayValue} query={query} />
@@ -113,11 +113,11 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
         </div>
 
         {(latestResult?.institution || latestDate) && (
-          <div className="col-span-2 row-start-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground sm:col-span-1 sm:col-start-3 sm:row-start-1">
+          <div className="col-span-2 row-start-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground @min-[36rem]:col-span-1 @min-[36rem]:col-start-3 @min-[36rem]:row-start-1">
             {latestResult?.institution && (
               <ReportInstitutionLabel
                 institution={latestResult.institution}
-                className="max-w-[10rem] flex-1 sm:max-w-[12rem] sm:flex-none"
+                className="min-w-0 max-w-[10rem] flex-1 @min-[36rem]:max-w-[12rem]"
               />
             )}
             {latestDate && (
@@ -128,7 +128,7 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
           </div>
         )}
 
-        <span className="col-start-2 row-start-1 shrink-0 justify-self-end text-xs text-muted-foreground sm:col-start-4">
+        <span className="col-start-2 row-start-1 shrink-0 justify-self-end text-xs text-muted-foreground @min-[36rem]:col-start-4">
           {countLabel}
         </span>
       </div>
@@ -136,7 +136,7 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
   )
 
   return (
-    <div className="pb-2" data-cancer-screening-kind="group">
+    <div className="pb-1" data-cancer-screening-kind="group">
       <div className="overflow-hidden rounded-md border border-border/90 bg-muted/40">
         {expandable ? (
           <button
@@ -145,12 +145,12 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query }: CancerScreenin
             aria-expanded={open}
             aria-controls={contentId}
             aria-label={(open ? labels.collapse : labels.expand).replace('{name}', row.title)}
-            className="flex min-h-12 w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           >
             {header}
           </button>
         ) : (
-          <div className="flex min-h-12 w-full items-start gap-2 px-3 py-2.5">
+          <div className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5">
             {header}
           </div>
         )}

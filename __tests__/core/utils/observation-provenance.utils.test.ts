@@ -1,5 +1,8 @@
 import { formatValue } from '@/src/shared/utils/lab-pivot.utils'
-import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import {
+  isAdultPreventiveHealthExamResource,
+  isInferredObservationUnit,
+} from '@/src/shared/utils/observation-provenance.utils'
 
 describe('SDK Observation provenance', () => {
   const inferred = {
@@ -21,5 +24,28 @@ describe('SDK Observation provenance', () => {
 
   it('carries the inferred marker into cumulative-lab cells', () => {
     expect(formatValue(inferred).unitInferred).toBe(true)
+  })
+
+  it.each([
+    'http://nhi-fhir-bridge/source-program',
+    'https://cloud-wildcatch.invalid/fhir/source-program',
+  ])('detects adult health exams from the %s tag', (system) => {
+    expect(isAdultPreventiveHealthExamResource({
+      meta: {
+        tag: [{
+          system,
+          code: 'adult-preventive',
+        }],
+      },
+    })).toBe(true)
+  })
+
+  it('does not infer adult health exams from unrelated tags', () => {
+    expect(isAdultPreventiveHealthExamResource({
+      meta: { tag: [{ system: 'other', code: 'adult-preventive' }] },
+    })).toBe(false)
+    expect(isAdultPreventiveHealthExamResource({
+      meta: { tag: [{ system: 'http://nhi-fhir-bridge/source-program', code: 'other' }] },
+    })).toBe(false)
   })
 })

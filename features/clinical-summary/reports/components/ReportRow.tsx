@@ -15,7 +15,11 @@ import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate, formatSourceTime } from '../utils/fhir-helpers'
-import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
+import {
+  getReferenceRangeComparison,
+  isObservationAbnormal,
+  isReferenceRangeAssessmentUnavailable,
+} from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import {
   ObservationLongitudinalAction,
@@ -37,6 +41,7 @@ import { LabDayGroupCard } from './LabDayGroupCard'
 import { NhiViewerActions } from './NhiViewerActions'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
+import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
@@ -424,6 +429,8 @@ function countAbnormal(obs: Observation[]): number {
 
 function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   const { t } = useLanguage()
+  const sourceProgramLabel = (t.reports.sourcePrograms as { adultPreventive?: string } | undefined)
+    ?.adultPreventive
   // Image lightbox — only enter the tree (and decode the multi-MB base64) after
   // the user clicks the
   // indicator. Kept mounted afterwards; the dialog itself revokes its Blob URLs
@@ -552,6 +559,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     const obs = displayObs[0]
     const isAbnormal = isObservationAbnormal(obs)
     const refText = getReferenceRangeText(obs.referenceRange)
+    const referenceComparison = getReferenceRangeComparison(obs)
+    const referenceStrings = t.reports.referenceComparison
     // Synthetic narrative obs from text-based DiagnosticReports (imaging / ECG /
     // pathology) carry code.text === 'Report Summary'. These are ALWAYS routed to
     // the expandable long-text branch regardless of length — a short ECG
@@ -572,6 +581,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       <div className="flex min-w-0 flex-1 items-center gap-1 sm:flex-none sm:gap-2">
         {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
         {hasViewerActions && <NhiViewerActions actions={viewerActions} />}
+        {!hideMeta && (
+          <ReportSourceProgramBadge
+            sourceProgram={row.sourceProgram}
+            label={sourceProgramLabel}
+          />
+        )}
         {!hideMeta && row.institution && (
           <ReportInstitutionLabel institution={row.institution} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         )}
@@ -821,7 +836,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         value={value}
         abnormal={isAbnormal}
         referenceText={refText}
+        referenceComparison={referenceComparison ?? undefined}
+        referenceComparisonLabel={referenceComparison === 'high'
+          ? referenceStrings.above
+          : referenceStrings.below}
+        referenceComparisonTooltip={referenceStrings.tooltip}
         rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
+        rangeUnassessedLabel={referenceStrings.unassessed}
+        rangeUnassessedTooltip={referenceStrings.unassessedTooltip}
         adaptivePhoneLayout
         role={rowOpensTrend ? 'button' : undefined}
         tabIndex={rowOpensTrend ? 0 : undefined}
@@ -852,6 +874,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 already states both. */}
             {!hideMeta && (
               <div className="flex min-w-0 items-center justify-end gap-1 sm:shrink-0 sm:gap-2">
+                <ReportSourceProgramBadge
+                  sourceProgram={row.sourceProgram}
+                  label={sourceProgramLabel}
+                />
                 {row.institution && (
                   <ReportInstitutionLabel institution={row.institution} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                 )}
@@ -1032,6 +1058,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               )}
             >
               {hasViewerActions && <NhiViewerActions actions={viewerActions} nestedInButton />}
+              {!hideMeta && (
+                <ReportSourceProgramBadge
+                  sourceProgram={row.sourceProgram}
+                  label={sourceProgramLabel}
+                />
+              )}
               {!hideMeta && row.institution && (
                 <ReportInstitutionLabel institution={row.institution} className="max-w-[10rem]" />
               )}

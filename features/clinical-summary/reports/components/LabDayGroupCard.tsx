@@ -32,6 +32,7 @@ import { ReportRow } from './ReportRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE, REPORT_CATEGORY_TONE } from './report-color-roles'
+import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
 
 interface LabDayGroupCardProps {
   row: Row
@@ -141,7 +142,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         type="button"
         onClick={() => setManualOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/70"
+        className="relative flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg py-2.5 pl-3 pr-9 text-left transition-colors hover:bg-muted/70"
       >
         <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">
@@ -150,8 +151,15 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}>
           {categoryLabel}
         </span>
+        <ReportSourceProgramBadge
+          sourceProgram={row.sourceProgram}
+          label={(tr.sourcePrograms as { adultPreventive?: string } | undefined)?.adultPreventive}
+        />
         {row.institution && (
-          <ReportInstitutionLabel institution={row.institution} className="max-w-[14rem]" />
+          <ReportInstitutionLabel
+            institution={row.institution}
+            className="min-w-0 basis-28 flex-1 max-w-[14rem]"
+          />
         )}
         <span className="shrink-0 text-xs text-muted-foreground">
           {(tr.labDayCount as string).replace('{n}', String(itemCount))}
@@ -164,7 +172,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         )}
         <ChevronDown
           className={cn(
-            'ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+            'absolute right-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground transition-transform duration-200',
             open && 'rotate-180',
           )}
         />

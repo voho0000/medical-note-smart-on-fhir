@@ -8,6 +8,8 @@
 // 2026-07-07; a whole-day mega-sheet matched neither the NHI原樣 nor the
 // hospital's per-section report). Category vocabulary = the cumulative
 // report's LAB_CATEGORIES, so both views speak the same words.
+// Source-program provenance is also a group boundary: an adult preventive
+// exam must never lend its provenance label to an ordinary same-day lab.
 //
 // Pure DISPLAY-level aggregation (sibling of multi-region-grouping.ts):
 //   • every member Row keeps its own DR identity — source citations, trend
@@ -91,7 +93,7 @@ function rowCategoryId(row: Row): string {
 }
 
 function clusterKey(row: Row): string {
-  return `${dayKey(row.effectiveDate)}|${(row.institution ?? '').trim()}|${rowCategoryId(row)}`
+  return `${dayKey(row.effectiveDate)}|${(row.institution ?? '').trim()}|${rowCategoryId(row)}|${row.sourceProgram ?? ''}`
 }
 
 // Category rank lookup — index in LAB_CATEGORIES so members sort in the same
@@ -164,7 +166,7 @@ export function countAbnormalInRows(rows: Row[]): number {
 
 /**
  * Walk a flat list of lab report rows, cluster by (collection day,
- * institution, lab category), and replace every cluster — including
+ * institution, lab category, source program), and replace every cluster — including
  * single-report ones, for a uniform row shape — with one synthetic group
  * row whose `groupedRows` holds the originals (pre-sorted by
  * preferredOrder). Only undated rows pass through.
@@ -207,6 +209,9 @@ export function groupLabReportsByDay(rows: Row[]): Row[] {
     const ia = (a.institution ?? '').trim()
     const ib = (b.institution ?? '').trim()
     if (ia !== ib) return ia.localeCompare(ib)
+    const sa = a.sourceProgram ?? ''
+    const sb = b.sourceProgram ?? ''
+    if (sa !== sb) return sa.localeCompare(sb)
     return groupCategoryRank(a) - groupCategoryRank(b)
   })
   return out

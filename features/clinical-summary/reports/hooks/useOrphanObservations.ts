@@ -7,16 +7,52 @@ import { getAnalyteDisplayForMode, type AnalyteNameMode } from '@/src/shared/uti
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
+import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
+import { referenceId } from '@/src/core/utils/observation-selectors'
+import { isPreventiveMedicineComposition } from '@/features/clinical-summary/document-summary/utils/loinc-document-types'
+
+type CompositionSectionLike = {
+  entry?: Array<{ reference?: string }>
+  section?: CompositionSectionLike[]
+}
+
+function collectAdultPreventiveObservationIds(compositions: any[]): Set<string> {
+  const ids = new Set<string>()
+
+  const visitSection = (section: CompositionSectionLike) => {
+    for (const entry of section.entry ?? []) {
+      const id = referenceId(entry.reference)
+      if (id) ids.add(id)
+    }
+    for (const child of section.section ?? []) visitSection(child)
+  }
+
+  for (const composition of compositions) {
+    if (!isPreventiveMedicineComposition(composition)
+      && !isAdultPreventiveHealthExamResource(composition)) continue
+    for (const section of composition.section ?? []) visitSection(section)
+  }
+
+  return ids
+}
 
 export function useOrphanObservations(
   observations: any[],
   seenIds: Set<string>,
   nameMode: AnalyteNameMode = 'standardized',
+  compositions: any[] = [],
 ) {
   const { audience } = useAudience()
   const { locale, t } = useLanguage()
   return useMemo(() => {
     if (!Array.isArray(observations)) return []
+
+    const adultPreventiveObservationIds = collectAdultPreventiveObservationIds(
+      Array.isArray(compositions) ? compositions : [],
+    )
+    const isAdultPreventiveObservation = (observation: Observation) =>
+      isAdultPreventiveHealthExamResource(observation)
+      || (!!observation.id && adultPreventiveObservationIds.has(observation.id))
 
     const orphan = observations.filter((o) => (!o.id || !seenIds.has(o.id))) as Observation[]
 
@@ -40,7 +76,9 @@ export function useOrphanObservations(
       "|" +
       (o.effectiveDateTime ? new Date(o.effectiveDateTime).toISOString().slice(0, 10) : "unknown") +
       "|" +
-      (getCodeableConceptText(o.code) || "Observation")
+      (getCodeableConceptText(o.code) || "Observation") +
+      "|" +
+      (isAdultPreventiveObservation(o) ? 'adult-preventive' : '')
 
     const groups = new Map<string, Observation[]>()
     for (const o of panels) {
@@ -75,8 +113,11 @@ export function useOrphanObservations(
         obs: displayObservations,
         group,
         institution,
+        sourceProgram: lst.some(isAdultPreventiveObservation)
+          ? 'adult-preventive' as const
+          : undefined,
         effectiveDate: first.effectiveDateTime,
       }
     })
-  }, [observations, seenIds, audience, locale, nameMode, t])
+  }, [observations, seenIds, audience, locale, nameMode, compositions, t])
 }

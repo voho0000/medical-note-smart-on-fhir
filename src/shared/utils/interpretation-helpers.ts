@@ -36,6 +36,8 @@ function firstConcept(
 export interface ReferenceRangeBounds {
   low?: number
   high?: number
+  lowInclusive?: boolean
+  highInclusive?: boolean
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -51,7 +53,14 @@ function auditReferenceBounds(bounds: ReferenceRangeBounds | null): ReferenceRan
   // is invalid. Do NOT swap it; ignoring the range is safer than colouring
   // every row red.
   if (low !== undefined && high !== undefined && low > high) return null
-  return { ...(low !== undefined ? { low } : {}), ...(high !== undefined ? { high } : {}) }
+  return {
+    ...(low !== undefined
+      ? { low, lowInclusive: bounds.lowInclusive ?? true }
+      : {}),
+    ...(high !== undefined
+      ? { high, highInclusive: bounds.highInclusive ?? true }
+      : {}),
+  }
 }
 
 function normalizeRangeText(text: string): string {
@@ -106,7 +115,10 @@ export function parseSimpleReferenceRangeText(text?: string): ReferenceRangeBoun
   const cmp = unwrapped.match(new RegExp(`^(<=|=<|<|>=|=>|>)\\s*(${NUM})$`))
   if (cmp) {
     const n = Number(cmp[2])
-    return auditReferenceBounds(cmp[1].includes('<') ? { high: n } : { low: n })
+    const inclusive = cmp[1].includes('=')
+    return auditReferenceBounds(cmp[1].includes('<')
+      ? { high: n, highInclusive: inclusive }
+      : { low: n, lowInclusive: inclusive })
   }
 
   const range = unwrapped.match(new RegExp(`^(${NUM})\\s*(?:~|-|TO|to|至|到)\\s*(${NUM})$`))
@@ -118,6 +130,11 @@ export function parseSimpleReferenceRangeText(text?: string): ReferenceRangeBoun
 }
 
 export function getAuditedReferenceRangeBounds(referenceRange?: any[]): ReferenceRangeBounds | null {
+  // Multiple ranges commonly encode age-, sex-, specimen-, or population-
+  // specific bands. Selecting the first one would turn a display-order detail
+  // into a clinical judgement, so only a single supplied range is eligible for
+  // fallback comparison.
+  if (!Array.isArray(referenceRange) || referenceRange.length !== 1) return null
   const rr = referenceRange?.[0]
   if (!rr) return null
 
@@ -130,12 +147,76 @@ export function getAuditedReferenceRangeBounds(referenceRange?: any[]): Referenc
   return parseSimpleReferenceRangeText(rr.text)
 }
 
+function normalizeUnit(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/μ/g, 'µ')
+    .toLowerCase()
+  return normalized || undefined
+}
+
+function quantityUnit(quantity: any): string | undefined {
+  return normalizeUnit(quantity?.code || quantity?.unit)
+}
+
+function referenceRangeUnitsAreCompatible(obs: any, rr: any): boolean {
+  const resultUnit = quantityUnit(obs?.valueQuantity)
+  const rangeUnits = new Set(
+    [quantityUnit(rr?.low), quantityUnit(rr?.high)].filter(
+      (unit): unit is string => typeof unit === 'string',
+    ),
+  )
+
+  if (rangeUnits.size > 1) return false
+  if (rangeUnits.size === 0) return true
+  if (!resultUnit) return false
+  return rangeUnits.has(resultUnit)
+}
+
+export type ReferenceRangeComparison = 'high' | 'low' | 'normal'
+
+/**
+ * Conservatively compare a numeric result with one safe source range.
+ *
+ * Source interpretation remains authoritative. The fallback intentionally
+ * abstains for multiple ranges, incompatible units, and complex text rather
+ * than guessing which age/sex/specimen band applies.
+ */
+export function getReferenceRangeComparison(obs: any): ReferenceRangeComparison | null {
+  const value = finiteNumber(obs?.valueQuantity?.value)
+  if (value === undefined || getInterpretationCode(obs?.interpretation)) return null
+
+  const ranges = obs?.referenceRange
+  if (!Array.isArray(ranges) || ranges.length !== 1) return null
+  const range = ranges[0]
+  if (!referenceRangeUnitsAreCompatible(obs, range)) return null
+
+  const bounds = getAuditedReferenceRangeBounds(ranges)
+  if (!bounds) return null
+
+  if (
+    bounds.low !== undefined
+    && (value < bounds.low || (value === bounds.low && bounds.lowInclusive === false))
+  ) return 'low'
+  if (
+    bounds.high !== undefined
+    && (value > bounds.high || (value === bounds.high && bounds.highInclusive === false))
+  ) return 'high'
+  return 'normal'
+}
+
 export function isReferenceRangeAssessmentUnavailable(obs: any): boolean {
   if (finiteNumber(obs?.valueQuantity?.value) === undefined) return false
   if (getInterpretationCode(obs?.interpretation)) return false
-  const rr = obs?.referenceRange?.[0]
-  if (!referenceRangeHasPotentialBounds(rr)) return false
-  return !getAuditedReferenceRangeBounds(obs?.referenceRange)
+  const ranges = obs?.referenceRange
+  if (!Array.isArray(ranges) || ranges.length === 0) return false
+  if (!ranges.some(referenceRangeHasPotentialBounds)) return false
+  if (ranges.length !== 1) return true
+  if (!referenceRangeUnitsAreCompatible(obs, ranges[0])) return true
+  return !getAuditedReferenceRangeBounds(ranges)
 }
 
 /**
@@ -144,14 +225,8 @@ export function isReferenceRangeAssessmentUnavailable(obs: any): boolean {
  * interpretation at all.
  */
 export function checkReferenceRangeAbnormal(obs: any): boolean {
-  const numVal = finiteNumber(obs?.valueQuantity?.value)
-  if (numVal === undefined) return false
-  const bounds = getAuditedReferenceRangeBounds(obs?.referenceRange)
-  if (!bounds) return false
-
-  if (bounds.low !== undefined && numVal < bounds.low) return true
-  if (bounds.high !== undefined && numVal > bounds.high) return true
-  return false
+  const comparison = getReferenceRangeComparison(obs)
+  return comparison === 'high' || comparison === 'low'
 }
 
 export interface InterpretationTag {

@@ -5,7 +5,14 @@ import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, get
 import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
+import {
+  getInterpretationTag,
+  getReferenceRangeComparison,
+  checkReferenceRangeAbnormal,
+  isInterpretationAbnormal,
+  isReferenceRangeAssessmentUnavailable,
+  type ReferenceRangeComparison,
+} from '../utils/interpretation-helpers'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
@@ -24,13 +31,42 @@ interface ObservationBlockProps {
   nested?: boolean
 }
 
+const BLOOD_PRESSURE_PANEL_CODES = new Set(['85354-9', '55284-4'])
+
+function isBloodPressurePanel(observation: Observation): boolean {
+  const codings = observation.code?.coding ?? []
+  if (codings.some((coding) => BLOOD_PRESSURE_PANEL_CODES.has(coding.code ?? ''))) {
+    return true
+  }
+
+  const labels = [
+    observation.code?.text,
+    ...codings.map((coding) => coding.display),
+  ]
+    .filter((label): label is string => typeof label === 'string')
+    .map((label) => label.replace(/\s+/g, ' ').trim().toLowerCase())
+
+  return labels.some((label) =>
+    label === 'blood pressure'
+    || label === 'blood pressure panel'
+    || label === 'blood pressure systolic and diastolic'
+    || label === '血壓'
+    || label === '血壓面板',
+  )
+}
+
 function ObsRow({
   name,
   value,
   originalValue,
   interp,
   refText,
+  referenceComparison,
+  referenceComparisonLabel,
+  referenceComparisonTooltip,
   rangeUnassessed,
+  rangeUnassessedLabel,
+  rangeUnassessedTooltip,
   titleAction,
   isLongText,
   refRangeAbnormal,
@@ -42,7 +78,12 @@ function ObsRow({
   originalValue?: string
   interp: ReturnType<typeof getInterpretationTag>
   refText: string
+  referenceComparison?: ReferenceRangeComparison | null
+  referenceComparisonLabel?: string
+  referenceComparisonTooltip?: string
   rangeUnassessed?: boolean
+  rangeUnassessedLabel?: string
+  rangeUnassessedTooltip?: string
   titleAction?: ReactNode
   isLongText?: boolean
   refRangeAbnormal?: boolean
@@ -61,7 +102,12 @@ function ObsRow({
       value={value}
       abnormal={isAbnormal}
       referenceText={refText}
+      referenceComparison={referenceComparison ?? undefined}
+      referenceComparisonLabel={referenceComparisonLabel}
+      referenceComparisonTooltip={referenceComparisonTooltip}
       rangeUnassessed={rangeUnassessed}
+      rangeUnassessedLabel={rangeUnassessedLabel}
+      rangeUnassessedTooltip={rangeUnassessedTooltip}
       valueMaxWidthClassName={isLongText ? "max-w-[12rem]" : "max-w-[9rem]"}
       className={`rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60${rowAction ? ' cursor-pointer' : ''}`}
       titleColumnClassName={nested ? "pl-4" : undefined}
@@ -87,12 +133,14 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
   // Non-canonical rows (cultures, antibiotic susceptibilities, free-text
   // reports) keep their bridge-sent text unchanged.
   const { audience } = useAudience()
-  const { locale } = useLanguage()
+  const { locale, t } = useLanguage()
   const nameMode = useReportNameMode()
   const title = getAnalyteDisplayForMode(observation, audience, locale, nameMode)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
+  const referenceComparison = getReferenceRangeComparison(observation)
   const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
+  const flattenBloodPressureComponents = hasComponents && isBloodPressurePanel(observation)
   const isReportSummary = observation.code?.text === 'Report Summary'
   // Procedure detail container: the row header already shows the title + date,
   // so render only the attribute rows (no redundant title/value line, no trend).
@@ -235,44 +283,57 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
     )
   }
 
+  const referenceStrings = t.reports.referenceComparison
+
   return (
     <div>
         {/* Main observation row */}
-        <ObsRow
-          name={title || '—'}
-          value={`${primaryValue}${inferredUnitLabel}`}
-          originalValue={originalPrimaryValue}
-          interp={interp}
-          refText={ref}
-          titleAction={!hasComponents ? (
-            rowOpensTrend ? (
-              <ObservationLongitudinalAffordance
-                mode={longitudinal.mode}
-                isActive={longitudinal.isActive}
-              />
-            ) : (
-              <ObservationLongitudinalAction
-                observation={observation}
-                title={title || '檢驗項目'}
-                sourceId={detailSourceId}
-                className="shrink-0"
-              />
-            )
-          ) : undefined}
-          rowAction={rowOpensTrend ? {
-            ariaLabel: longitudinal.describe(`${title || '—'} ${primaryValue}${inferredUnitLabel}`),
-            onClick: rowHandlers.onClick,
-            onKeyDown: rowHandlers.onKeyDown,
-          } : undefined}
-          isLongText={isLongText}
-          refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
-          rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}
-          nested={nested}
-        />
+        {!flattenBloodPressureComponents && (
+          <ObsRow
+            name={title || '—'}
+            value={`${primaryValue}${inferredUnitLabel}`}
+            originalValue={originalPrimaryValue}
+            interp={interp}
+            refText={ref}
+            referenceComparison={referenceComparison}
+            referenceComparisonLabel={referenceComparison === 'high'
+              ? referenceStrings.above
+              : referenceStrings.below}
+            referenceComparisonTooltip={referenceStrings.tooltip}
+            titleAction={!hasComponents ? (
+              rowOpensTrend ? (
+                <ObservationLongitudinalAffordance
+                  mode={longitudinal.mode}
+                  isActive={longitudinal.isActive}
+                />
+              ) : (
+                <ObservationLongitudinalAction
+                  observation={observation}
+                  title={title || '檢驗項目'}
+                  sourceId={detailSourceId}
+                  className="shrink-0"
+                />
+              )
+            ) : undefined}
+            rowAction={rowOpensTrend ? {
+              ariaLabel: longitudinal.describe(`${title || '—'} ${primaryValue}${inferredUnitLabel}`),
+              onClick: rowHandlers.onClick,
+              onKeyDown: rowHandlers.onKeyDown,
+            } : undefined}
+            isLongText={isLongText}
+            refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
+            rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}
+            rangeUnassessedLabel={referenceStrings.unassessed}
+            rangeUnassessedTooltip={referenceStrings.unassessedTooltip}
+            nested={nested}
+          />
+        )}
 
         {/* Component sub-rows */}
         {hasComponents && (
-          <div className="ml-4 mt-0.5 space-y-0 border-l pl-1.5">
+          <div className={flattenBloodPressureComponents
+            ? 'space-y-0'
+            : 'ml-4 mt-0.5 space-y-0 border-l pl-1.5'}>
             {observation.component!.map((component, idx) => {
               const cName = getAnalyteDisplayForMode(component, audience, locale, nameMode)
               const cCoded = getCodeableConceptText(component.valueCodeableConcept)
@@ -284,6 +345,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
                 : component.valueString || cCoded || '—'
               const cInterp = getInterpretationTag(component.interpretation)
               const cRef = getReferenceRangeText(component.referenceRange)
+              const cReferenceComparison = getReferenceRangeComparison(component)
               return (
                 <ObsRow
                   key={idx}
@@ -292,8 +354,15 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
                   originalValue={cOriginal}
                   interp={cInterp}
                   refText={cRef}
+                  referenceComparison={cReferenceComparison}
+                  referenceComparisonLabel={cReferenceComparison === 'high'
+                    ? referenceStrings.above
+                    : referenceStrings.below}
+                  referenceComparisonTooltip={referenceStrings.tooltip}
                   refRangeAbnormal={checkReferenceRangeAbnormal(component)}
                   rangeUnassessed={isReferenceRangeAssessmentUnavailable(component)}
+                  rangeUnassessedLabel={referenceStrings.unassessed}
+                  rangeUnassessedTooltip={referenceStrings.unassessedTooltip}
                   nested={nested}
                 />
               )

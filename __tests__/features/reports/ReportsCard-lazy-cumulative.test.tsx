@@ -262,6 +262,15 @@ describe('ReportsCard lazy cumulative loading', () => {
 
   it('performance contract: selects a raw tab before any projection work is enabled', () => {
     jest.useFakeTimers()
+    mockUseReportTabCounts.mockReturnValue({
+      all: 1,
+      lab: 0,
+      imaging: 0,
+      pathology: 0,
+      cancerScreening: 0,
+      vitals: 0,
+      procedures: 1,
+    })
     const frameCallbacks: FrameRequestCallback[] = []
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       frameCallbacks.push(callback)
@@ -280,7 +289,7 @@ describe('ReportsCard lazy cumulative loading', () => {
 
     render(<ReportsCard />)
 
-    expect(screen.queryByRole('tab', { name: /癌篩/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '癌篩 (0)' })).toBeInTheDocument()
     fireEvent.mouseDown(screen.getByRole('tab', { name: /全部/ }), {
       button: 0,
       ctrlKey: false,

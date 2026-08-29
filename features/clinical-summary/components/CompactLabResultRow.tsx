@@ -11,6 +11,9 @@ type CompactLabResultRowProps = {
   value: string
   abnormal?: boolean
   referenceText?: string
+  referenceComparison?: 'high' | 'low' | 'normal'
+  referenceComparisonLabel?: string
+  referenceComparisonTooltip?: string
   rangeUnassessed?: boolean
   rangeUnassessedLabel?: string
   rangeUnassessedTooltip?: string
@@ -179,7 +182,7 @@ function CompactReferenceRange({
 
 function RangeUnassessedBadge({
   label = "未判讀",
-  tooltip = "此項沒有來源異常標示，參考範圍也太複雜或資料不一致，未自動判讀是否異常。",
+  tooltip = "此項沒有來源異常標示；參考範圍包含多組條件、複雜文字、單位不一致或資料不完整，因此未自動比對。",
 }: {
   label?: string
   tooltip?: string
@@ -199,12 +202,42 @@ function RangeUnassessedBadge({
   )
 }
 
+function ReferenceComparisonBadge({
+  comparison,
+  label,
+  tooltip = "來源未提供異常標示；系統依單一、可解析且單位相容的參考區間比對。僅表示數值與該區間的關係，不代表臨床診斷。",
+}: {
+  comparison: 'high' | 'low'
+  label?: string
+  tooltip?: string
+}) {
+  const visibleLabel = label ?? (comparison === 'high' ? '高於參考' : '低於參考')
+  return (
+    <TapTooltip
+      content={tooltip}
+      aria-label={visibleLabel}
+      contentClassName="max-w-[min(90vw,24rem)] whitespace-normal text-xs leading-relaxed"
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[0.625rem] font-medium',
+        comparison === 'high'
+          ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300'
+          : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300',
+      )}
+    >
+      {visibleLabel}
+    </TapTooltip>
+  )
+}
+
 export function CompactLabResultRow({
   title,
   titleNode,
   value,
   abnormal = false,
   referenceText,
+  referenceComparison,
+  referenceComparisonLabel,
+  referenceComparisonTooltip,
   rangeUnassessed = false,
   rangeUnassessedLabel,
   rangeUnassessedTooltip,
@@ -300,6 +333,13 @@ export function CompactLabResultRow({
         <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
         {afterValue}
         <CompactReferenceRange referenceText={referenceText} value={value} />
+        {(referenceComparison === 'high' || referenceComparison === 'low') && (
+          <ReferenceComparisonBadge
+            comparison={referenceComparison}
+            label={referenceComparisonLabel}
+            tooltip={referenceComparisonTooltip}
+          />
+        )}
         {rangeUnassessed && (
           <RangeUnassessedBadge
             label={rangeUnassessedLabel}

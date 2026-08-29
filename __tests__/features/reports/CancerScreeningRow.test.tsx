@@ -80,6 +80,21 @@ describe('CancerScreeningRow', () => {
     expect(screen.queryByText('建議每2年定期接受糞便潛血檢查。')).not.toBeInTheDocument()
   })
 
+  it('uses a compact 44px header while preserving the full-row toggle target', () => {
+    const { container } = render(<CancerScreeningRow row={groupedColorectalRow()} />)
+
+    const toggle = screen.getByRole('button', {
+      name: '展開 大腸癌篩檢 的歷次結果與篩檢建議',
+    })
+    expect(toggle).toHaveClass('min-h-11', 'items-center', 'py-1.5')
+    expect(container.querySelector('[data-cancer-screening-kind="group"]'))
+      .toHaveClass('pb-1')
+    expect(container.querySelector('.grid'))
+      .toHaveClass('@min-[36rem]:grid-cols-[minmax(10rem,0.8fr)_minmax(8rem,0.55fr)_minmax(0,1.1fr)_auto]')
+    expect(screen.getByLabelText('新北市聯合醫院'))
+      .toHaveClass('min-w-0', 'flex-1')
+  })
+
   it('opens result history and the programme-level recommendation together', () => {
     const { container } = render(<CancerScreeningRow row={groupedColorectalRow()} />)
 

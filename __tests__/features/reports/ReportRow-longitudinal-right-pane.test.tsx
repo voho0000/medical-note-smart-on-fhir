@@ -73,6 +73,75 @@ describe('ReportRow longitudinal right-pane behavior', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('labels a safely derived reference-range comparison without labelling normal rows', () => {
+    const row: Row = {
+      id: 'chol-report',
+      title: 'CHOL',
+      meta: 'Laboratory • final',
+      group: 'lab',
+      effectiveDate: '2026-06-08',
+      obs: [{
+        id: 'chol-observation',
+        code: { text: 'CHOL' },
+        valueQuantity: { value: 201, unit: 'mg/dL' },
+        referenceRange: [{ text: '<200' }],
+      }],
+    }
+
+    const { rerender } = renderRow(row)
+    expect(screen.getByLabelText('高於參考')).toBeInTheDocument()
+    expect(screen.queryByText('未判讀')).not.toBeInTheDocument()
+
+    rerender(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow
+              row={{
+                ...row,
+                id: 'ldl-report',
+                title: 'LDL',
+                obs: [{
+                  id: 'ldl-observation',
+                  code: { text: 'LDL' },
+                  valueQuantity: { value: 114, unit: 'mg/dL' },
+                  referenceRange: [{ text: '<130' }],
+                }],
+              }}
+              defaultOpen={[]}
+            />
+            <RightPaneProbe />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.queryByText('高於參考')).not.toBeInTheDocument()
+    expect(screen.queryByText('未判讀')).not.toBeInTheDocument()
+  })
+
+  it('shows explicit adult health-exam provenance without inventing a reference range', () => {
+    const row: Row = {
+      id: 'adult-health-exam-lipid',
+      title: 'CHOL',
+      meta: 'Observation Group',
+      group: 'lab',
+      institution: '良安診所',
+      sourceProgram: 'adult-preventive',
+      effectiveDate: '2024-06-28',
+      obs: [{
+        id: 'adult-health-exam-cholesterol',
+        code: { text: 'CHOL' },
+        valueQuantity: { value: 210, unit: 'mg/dL' },
+      }],
+    }
+
+    renderRow(row)
+
+    expect(screen.getByTestId('report-source-program')).toHaveTextContent('成人健檢')
+    expect(screen.queryByTestId('reference-range-inline')).not.toBeInTheDocument()
+  })
+
   it('opens a text report history in the same right pane without a legacy popup', () => {
     const row: Row = {
       id: 'culture-report',

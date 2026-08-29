@@ -11,15 +11,19 @@ export const formatReportInstitution = formatOrganizationDisplay
 
 /** Compact institution label that always exposes its complete source text.
  *  The label truncates, so "which hospital ran this?" lives ONLY in the bubble
- *  — TapTooltip keeps that answer reachable on a touch screen. It also stops
- *  the tap from propagating, so tapping the institution inside a report header
- *  reveals the name instead of toggling the row. */
+ *  — TapTooltip keeps that answer reachable on a touch screen. By default it
+ *  also stops the tap from propagating, so ordinary report rows reveal the
+ *  name instead of toggling the row. */
 export function ReportInstitutionLabel({
   institution,
   className,
+  stopPropagation = true,
 }: {
   institution: string
   className?: string
+  /** Keep the default tooltip-only tap in ordinary report rows. Group-header
+   *  buttons can opt out so the institution still toggles the whole row. */
+  stopPropagation?: boolean
 }) {
   const displayInstitution = formatReportInstitution(institution)
   return (
@@ -28,6 +32,7 @@ export function ReportInstitutionLabel({
       aria-label={displayInstitution}
       contentClassName="max-w-sm break-words text-left"
       content={displayInstitution}
+      stopPropagation={stopPropagation}
       className={cn(
         'inline-flex min-w-0 items-center gap-1 text-xs',
         REPORT_SOURCE_TONE,

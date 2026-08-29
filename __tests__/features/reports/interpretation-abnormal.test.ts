@@ -8,6 +8,7 @@
 // "[4180 ~ 9380][4180 ~ 9380]" referenceRange text.
 import {
   getInterpretationTag,
+  getReferenceRangeComparison,
   isInterpretationAbnormal,
   checkReferenceRangeAbnormal,
   isReferenceRangeAssessmentUnavailable,
@@ -75,6 +76,12 @@ describe('checkReferenceRangeAbnormal — audited source ranges', () => {
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 4 }, referenceRange: [{ text: '>5' }] })).toBe(true)
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 6 }, referenceRange: [{ text: '>5' }] })).toBe(false)
   })
+  it('preserves strict and inclusive comparator boundaries', () => {
+    expect(getReferenceRangeComparison({ valueQuantity: { value: 5 }, referenceRange: [{ text: '<5' }] })).toBe('high')
+    expect(getReferenceRangeComparison({ valueQuantity: { value: 5 }, referenceRange: [{ text: '≤5' }] })).toBe('normal')
+    expect(getReferenceRangeComparison({ valueQuantity: { value: 5 }, referenceRange: [{ text: '>5' }] })).toBe('low')
+    expect(getReferenceRangeComparison({ valueQuantity: { value: 5 }, referenceRange: [{ text: '≥5' }] })).toBe('normal')
+  })
   it('ignores reversed text ranges', () => {
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 20 }, referenceRange: [{ text: '41~0' }] })).toBe(false)
   })
@@ -103,6 +110,49 @@ describe('isReferenceRangeAssessmentUnavailable', () => {
       referenceRange: [{ text: complexAdultPedsRange }],
       interpretation: [{ coding: [{ code: 'N' }] }],
     })).toBe(false)
+  })
+
+  it('does not guess when multiple individually simple ranges are supplied', () => {
+    const obs = {
+      valueQuantity: { value: 6.1, unit: 'mg/dL' },
+      referenceRange: [
+        { low: { value: 4, unit: 'mg/dL' }, high: { value: 6, unit: 'mg/dL' } },
+        { low: { value: 5, unit: 'mg/dL' }, high: { value: 7, unit: 'mg/dL' } },
+      ],
+    }
+    expect(getReferenceRangeComparison(obs)).toBeNull()
+    expect(checkReferenceRangeAbnormal(obs)).toBe(false)
+    expect(isReferenceRangeAssessmentUnavailable(obs)).toBe(true)
+  })
+
+  it('does not compare incompatible result and reference-range units', () => {
+    const obs = {
+      valueQuantity: { value: 6.1, unit: 'mg/dL' },
+      referenceRange: [{ high: { value: 6, unit: 'mmol/L' } }],
+    }
+    expect(getReferenceRangeComparison(obs)).toBeNull()
+    expect(checkReferenceRangeAbnormal(obs)).toBe(false)
+    expect(isReferenceRangeAssessmentUnavailable(obs)).toBe(true)
+  })
+})
+
+describe('getReferenceRangeComparison — conservative display status', () => {
+  it.each([
+    [{ valueQuantity: { value: 6.1, unit: '%' }, referenceRange: [{ text: '[4.0 - 6.0]' }] }, 'high'],
+    [{ valueQuantity: { value: 201, unit: 'mg/dL' }, referenceRange: [{ text: '[<200]' }] }, 'high'],
+    [{ valueQuantity: { value: 179, unit: 'mg/dL' }, referenceRange: [{ text: '<150' }] }, 'high'],
+    [{ valueQuantity: { value: 114, unit: 'mg/dL' }, referenceRange: [{ text: '<130' }] }, 'normal'],
+    [{ valueQuantity: { value: 20, unit: 'U/L' }, referenceRange: [{ low: { value: 7, unit: 'U/L' }, high: { value: 52, unit: 'U/L' } }] }, 'normal'],
+  ] as const)('compares a simple screenshot-style range', (obs, expected) => {
+    expect(getReferenceRangeComparison(obs)).toBe(expected)
+  })
+
+  it('lets source interpretation override an otherwise comparable range', () => {
+    expect(getReferenceRangeComparison({
+      valueQuantity: { value: 201, unit: 'mg/dL' },
+      referenceRange: [{ text: '<200' }],
+      interpretation: [{ coding: [{ code: 'N' }] }],
+    })).toBeNull()
   })
 })
 

@@ -16,6 +16,8 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { Loader2 } from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Row } from '../types'
+import { isSystolicDiastolicBloodPressureRow } from '../utils/blood-pressure-panel'
+import { AdultPreventiveGroupCard } from './AdultPreventiveGroupCard'
 import { CancerScreeningRow } from './CancerScreeningRow'
 import { ReportRow } from './ReportRow'
 
@@ -96,12 +98,19 @@ function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
 
 function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading', emptyLabel = 'No reports available in this category.', noMatchesLabel = 'No matching reports.' }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
-  // this report, not to find its collapsed shell.
+  // this report, not to find its collapsed shell. The vitals tab also keeps
+  // complete systolic/diastolic BP panels immediately readable; other
+  // composite vital rows remain collapsed.
   const openIds = useMemo(() => {
     const base = defaultOpenIds ?? EMPTY_OPEN_IDS
-    if (!scrollToId) return base
-    return base.includes(scrollToId) ? base : [...base, scrollToId]
-  }, [defaultOpenIds, scrollToId])
+    const bloodPressureIds = value === 'vitals'
+      ? rows.filter(isSystolicDiastolicBloodPressureRow).map((row) => row.id)
+      : EMPTY_OPEN_IDS
+    const requestedIds = scrollToId ? [scrollToId] : EMPTY_OPEN_IDS
+    const additions = [...new Set([...bloodPressureIds, ...requestedIds])]
+      .filter((id) => !base.includes(id))
+    return additions.length > 0 ? [...base, ...additions] : base
+  }, [defaultOpenIds, rows, scrollToId, value])
   // Callback-ref-into-state pattern: when the scroll div attaches, React
   // calls setScrollEl with the element. That triggers a re-render whose
   // useVirtualizer call reads the now-non-null element and measures
@@ -287,7 +296,9 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
                     paddingBottom: 0,
                   }}
                 >
-                  {row.group === 'cancer-screening' ? (
+                  {row.adultPreventiveGroup ? (
+                    <AdultPreventiveGroupCard row={row} defaultOpen={openIds} query={query} />
+                  ) : row.group === 'cancer-screening' ? (
                     <CancerScreeningRow row={row} defaultOpen={openIds} query={query} />
                   ) : (
                     <ReportRow row={row} defaultOpen={openIds} query={query} />
