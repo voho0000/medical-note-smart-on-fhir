@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react"
 
 import { ChatInputArea } from "@/features/medical-chat/components/ChatInputArea"
 
+const mockUseSlashMenu = jest.fn()
+
 jest.mock("@/src/application/providers/language.provider", () => ({
   useLanguage: () => ({
     t: {
@@ -22,15 +24,7 @@ jest.mock("@/features/medical-chat/hooks/useSlashTemplates", () => ({
 }))
 
 jest.mock("@/features/medical-chat/hooks/useSlashMenu", () => ({
-  useSlashMenu: () => ({
-    open: false,
-    matches: [],
-    active: 0,
-    choose: jest.fn(),
-    setActive: jest.fn(),
-    syncCaret: jest.fn(),
-    onKeyDown: jest.fn(() => false),
-  }),
+  useSlashMenu: () => mockUseSlashMenu(),
 }))
 
 jest.mock("@/features/medical-chat/hooks/useMediaConsent", () => ({
@@ -50,7 +44,48 @@ jest.mock("@/features/medical-chat/components/VoiceRecorder", () => ({
   VoiceRecorder: () => null,
 }))
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+const baseProps = {
+  textareaRef: { current: null },
+  isLoading: false,
+  onSend: jest.fn(async () => undefined),
+  onStopGeneration: jest.fn(),
+  voice: {
+    isRecording: false,
+    isAsrLoading: false,
+    toggleRecording: jest.fn(),
+    onRecordingStart: jest.fn(),
+    onRecordingStop: jest.fn(async () => undefined),
+    startRecordingRef: { current: jest.fn() },
+    stopRecordingRef: { current: jest.fn() },
+  },
+}
+
 describe("ChatInputArea mobile visual viewport", () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      value: ResizeObserverMock,
+    })
+  })
+
+  beforeEach(() => {
+    mockUseSlashMenu.mockReturnValue({
+      open: false,
+      matches: [],
+      active: 0,
+      choose: jest.fn(),
+      setActive: jest.fn(),
+      syncCaret: jest.fn(),
+      onKeyDown: jest.fn(() => false),
+    })
+  })
+
   it("caps a long template by the keyboard-safe viewport while preserving its value", () => {
     const template = "A complete clinical summary template that must not be truncated in state"
     render(
@@ -60,19 +95,7 @@ describe("ChatInputArea mobile visual viewport", () => {
           setInput: jest.fn(),
           handleKeyDown: jest.fn(),
         }}
-        textareaRef={{ current: null }}
-        isLoading={false}
-        onSend={jest.fn(async () => undefined)}
-        onStopGeneration={jest.fn()}
-        voice={{
-          isRecording: false,
-          isAsrLoading: false,
-          toggleRecording: jest.fn(),
-          onRecordingStart: jest.fn(),
-          onRecordingStop: jest.fn(async () => undefined),
-          startRecordingRef: { current: jest.fn() },
-          stopRecordingRef: { current: jest.fn() },
-        }}
+        {...baseProps}
       />,
     )
 
@@ -84,5 +107,37 @@ describe("ChatInputArea mobile visual viewport", () => {
     expect(document.querySelector('[data-keyboard-collapsible="true"]')).toHaveClass(
       '[html[data-keyboard-open=true]_&]:hidden',
     )
+  })
+
+  it("portals the slash menu outside the clipping composer container", () => {
+    mockUseSlashMenu.mockReturnValue({
+      open: true,
+      matches: [{ id: 'safety', label: 'Safety check', body: 'Check safety', shortcut: 'safety' }],
+      active: 0,
+      choose: jest.fn(),
+      setActive: jest.fn(),
+      syncCaret: jest.fn(),
+      onKeyDown: jest.fn(() => false),
+    })
+
+    const { container } = render(
+      <ChatInputArea
+        input={{
+          input: "/",
+          setInput: jest.fn(),
+          handleKeyDown: jest.fn(),
+        }}
+        {...baseProps}
+      />,
+    )
+
+    const input = screen.getByPlaceholderText("Ask a clinical question")
+    const menu = screen.getByRole('listbox')
+
+    expect(document.body).toContainElement(menu)
+    expect(container).not.toContainElement(menu)
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+    expect(input).toHaveAttribute('aria-controls', menu.id)
+    expect(input).toHaveAttribute('aria-activedescendant', `${menu.id}-option-0`)
   })
 })

@@ -1,8 +1,9 @@
 // Chat Input Area Component
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Reply, Square, Zap, X } from "lucide-react"
+import { Popover, PopoverAnchor } from "@/components/ui/popover"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { AudioWaveform } from "./AudioWaveform"
@@ -73,6 +74,7 @@ export function ChatInputArea({
   // "/shortcut" template autocomplete (Epic SmartPhrase style).
   const slashTemplates = useSlashTemplates()
   const slash = useSlashMenu(input.input, input.setInput, textareaRef, slashTemplates)
+  const slashMenuId = useId()
   const hasImages = images?.images && images.images.length > 0
 
   // Handle paste event for images
@@ -166,59 +168,70 @@ export function ChatInputArea({
             multiple={true}
           />
         )}
-        <div className="relative flex-1 flex flex-col justify-end">
+        <Popover open={slash.open}>
+          <PopoverAnchor asChild>
+            <div className="relative flex flex-1 flex-col justify-end">
+              <textarea
+                ref={textareaRef}
+                value={input.input}
+                onChange={(event) => { input.setInput(event.target.value); slash.syncCaret() }}
+                onKeyDown={(e) => { if (slash.onKeyDown(e)) return; input.handleKeyDown(e, onSend, isLoading, disabled) }}
+                onSelect={() => slash.syncCaret()}
+                onPaste={handlePaste}
+                placeholder={t.chat.placeholder}
+                spellCheck={false}
+                rows={1}
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-autocomplete="list"
+                aria-expanded={slash.open}
+                aria-controls={slash.open ? slashMenuId : undefined}
+                aria-activedescendant={slash.open ? `${slashMenuId}-option-${slash.active}` : undefined}
+                className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm max-md:text-[16px] ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                style={{
+                  minHeight: '44px',
+                  // Keep a pasted clinical template from consuming the entire
+                  // keyboard-reduced viewport. The text remains intact and
+                  // scrollable; only the editor's visible height is capped.
+                  maxHeight: 'min(200px, calc(var(--app-viewport-height, 100svh) * 0.16))',
+                }}
+              />
+              {/* One-tap clear — handy on phones after accidentally tapping
+                  "insert clinical context", which dumps a large block into the box. */}
+              {input.input.length > 0 && !isLoading && !voice.isRecording && (
+                <button
+                  type="button"
+                  onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
+                  aria-label={t.chat.clearInput}
+                  title={t.chat.clearInput}
+                  className="absolute top-2 right-2 flex h-7 w-7 max-md:h-[44px] max-md:w-[44px] items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 touch-manipulation hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {/* While recording, overlay a live waveform over the textarea so the
+                  user gets real-time feedback that the mic is picking up sound. */}
+              {voice.isRecording && (
+                <div className="absolute inset-0 flex items-center gap-3 rounded-xl border-2 border-primary/50 bg-background px-4">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                  </span>
+                  <AudioWaveform stream={audioStream} className="min-w-0 flex-1" />
+                </div>
+              )}
+            </div>
+          </PopoverAnchor>
           {slash.open && (
             <SlashTemplateMenu
+              id={slashMenuId}
               items={slash.matches}
               active={slash.active}
               onSelect={slash.choose}
               onHover={slash.setActive}
             />
           )}
-          <textarea
-            ref={textareaRef}
-            value={input.input}
-            onChange={(event) => { input.setInput(event.target.value); slash.syncCaret() }}
-            onKeyDown={(e) => { if (slash.onKeyDown(e)) return; input.handleKeyDown(e, onSend, isLoading, disabled) }}
-            onSelect={() => slash.syncCaret()}
-            onPaste={handlePaste}
-            placeholder={t.chat.placeholder}
-            spellCheck={false}
-            rows={1}
-            className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm max-md:text-[16px] ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
-            style={{
-              minHeight: '44px',
-              // Keep a pasted clinical template from consuming the entire
-              // keyboard-reduced viewport. The text remains intact and
-              // scrollable; only the editor's visible height is capped.
-              maxHeight: 'min(200px, calc(var(--app-viewport-height, 100svh) * 0.16))',
-            }}
-          />
-          {/* One-tap clear — handy on phones after accidentally tapping
-              "insert clinical context", which dumps a large block into the box. */}
-          {input.input.length > 0 && !isLoading && !voice.isRecording && (
-            <button
-              type="button"
-              onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
-              aria-label={t.chat.clearInput}
-              title={t.chat.clearInput}
-              className="absolute top-2 right-2 flex h-7 w-7 max-md:h-[44px] max-md:w-[44px] items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 touch-manipulation hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-          {/* While recording, overlay a live waveform over the textarea so the
-              user gets real-time feedback that the mic is picking up sound. */}
-          {voice.isRecording && (
-            <div className="absolute inset-0 flex items-center gap-3 rounded-xl border-2 border-primary/50 bg-background px-4">
-              <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-              </span>
-              <AudioWaveform stream={audioStream} className="min-w-0 flex-1" />
-            </div>
-          )}
-        </div>
+        </Popover>
         <VoiceRecorder
           isRecording={voice.isRecording}
           isLoading={voice.isAsrLoading}

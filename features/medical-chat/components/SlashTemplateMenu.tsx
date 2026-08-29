@@ -1,26 +1,40 @@
 import { cn } from '@/src/shared/utils/cn.utils'
+import { PopoverContent } from '@/components/ui/popover'
 import type { SlashTemplate } from '../utils/slash-trigger'
 
 interface SlashTemplateMenuProps {
+  id: string
   items: SlashTemplate[]
   active: number
   onSelect: (item: SlashTemplate) => void
   onHover: (index: number) => void
 }
 
-/** Autocomplete list for the "/shortcut" template trigger. Positioned above the
- *  chat input (its container must be `relative`). Uses onMouseDown so picking an
- *  item doesn't blur the textarea before the selection is applied. */
-export function SlashTemplateMenu({ items, active, onSelect, onHover }: SlashTemplateMenuProps) {
+/** Autocomplete list for the "/shortcut" template trigger. The popover portal
+ *  keeps it outside the composer's scroll container so a tall list cannot be
+ *  clipped by the footer. Uses onMouseDown so selecting an item does not blur
+ *  the textarea before its contents are applied. */
+export function SlashTemplateMenu({ id, items, active, onSelect, onHover }: SlashTemplateMenuProps) {
   if (items.length === 0) return null
   return (
-    <div
-      className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg"
+    <PopoverContent
+      id={id}
+      side="top"
+      align="start"
+      sideOffset={8}
+      collisionPadding={8}
+      onOpenAutoFocus={(event) => event.preventDefault()}
+      onCloseAutoFocus={(event) => event.preventDefault()}
+      className="z-[70] w-80 min-w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl p-0 shadow-lg"
       role="listbox"
     >
-      <ul className="max-h-64 overflow-y-auto py-1 text-sm">
+      <ul
+        className="overflow-y-auto py-1 text-sm"
+        style={{ maxHeight: 'min(16rem, var(--radix-popover-content-available-height))' }}
+      >
         {items.map((item, i) => (
           <li
+            id={`${id}-option-${i}`}
             key={item.id}
             role="option"
             aria-selected={i === active}
@@ -43,6 +57,6 @@ export function SlashTemplateMenu({ items, active, onSelect, onHover }: SlashTem
           </li>
         ))}
       </ul>
-    </div>
+    </PopoverContent>
   )
 }
