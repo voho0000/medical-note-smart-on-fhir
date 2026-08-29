@@ -134,6 +134,13 @@ const ESTIMATED_DATE_ROW_HEIGHT = 28
 // overscan is enough and no scrollMargin correction is needed.
 const DATE_ROW_OVERSCAN = 8
 
+// `other` remains a valid catch-all in the shared lab categorisation model so
+// uncategorised source-labelled labs are not lost from visit details, exports,
+// or AI context. It is not a clinician-facing cumulative-report panel.
+const CUMULATIVE_REPORT_CATEGORIES = LAB_CATEGORIES.filter(
+  (category) => category.id !== 'other',
+)
+
 function formatDateLabel(d: string): string {
   return d.length >= 10 ? `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}` : d
 }
@@ -569,7 +576,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   // ensures key analytes still appear as empty column headers so users can see
   // what's expected to be there.
   const nonEmpty = useMemo(() => {
-    return LAB_CATEGORIES
+    return CUMULATIVE_REPORT_CATEGORIES
       .map((cat) => pivots[cat.id])
       .filter((p) => !!p)
   }, [pivots])

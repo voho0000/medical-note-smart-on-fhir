@@ -85,6 +85,7 @@ describe('CumulativeLabReport responsive category tabs', () => {
     render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
 
     await waitFor(() => expect(screen.getByRole('button', { name: '查看更多' })).toBeInTheDocument())
+    expect(screen.queryByRole('tab', { name: '其他 (0)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '血氣 (0)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '病毒抗原 (0)' })).not.toBeInTheDocument()
 
@@ -92,6 +93,7 @@ describe('CumulativeLabReport responsive category tabs', () => {
     act(() => window.dispatchEvent(new Event('resize')))
 
     await waitFor(() => expect(screen.queryByRole('button', { name: '查看更多' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('tab', { name: '其他 (0)' })).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '血氣 (0)' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '病毒抗原 (0)' })).toBeInTheDocument()
 
