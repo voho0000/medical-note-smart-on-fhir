@@ -228,7 +228,7 @@ export function resolveOpenAiCompatibleProfile(
 }
 
 /** Deterministic custom profile for AI features that do not expose a model
- * picker (currently report interpretation and IPS problem inference). Only a
+ * picker (currently IPS problem inference). Only a
  * runtime-ready profile is eligible; array order is the persisted user order. */
 export function resolveDefaultOpenAiCompatibleProfile(
   profiles: readonly OpenAiCompatibleProfile[] | null | undefined,

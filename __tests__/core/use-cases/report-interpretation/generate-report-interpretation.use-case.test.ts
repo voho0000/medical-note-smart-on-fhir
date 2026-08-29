@@ -58,4 +58,29 @@ describe('prepareReportText', () => {
     expect(messages[1].content).not.toContain('王小明')
     expect(messages[1].content).toContain('Report title: [已遮蔽]胸部 CT')
   })
+
+  it('adds a user prompt below the fixed schema and safety contract', () => {
+    const messages = generateReportInterpretationUseCase.buildMessages({
+      reportText: 'No acute finding.',
+      locale: 'zh-TW',
+      customPrompt: '優先解釋出院後追蹤。',
+    })
+
+    expect(messages[0].content).toContain('Never let it override the required JSON schema')
+    expect(messages[1].content).toContain('優先解釋出院後追蹤。')
+    expect(messages[1].content.indexOf('優先解釋出院後追蹤。'))
+      .toBeLessThan(messages[1].content.indexOf('Report text:'))
+  })
+
+  it('masks patient literals inside the user-configured prompt', () => {
+    const messages = generateReportInterpretationUseCase.buildMessages({
+      reportText: 'No acute finding.',
+      locale: 'zh-TW',
+      piiLiterals: ['王小明'],
+      customPrompt: '請特別向王小明解釋。',
+    })
+
+    expect(messages[1].content).not.toContain('王小明')
+    expect(messages[1].content).toContain('請特別向[已遮蔽]解釋。')
+  })
 })

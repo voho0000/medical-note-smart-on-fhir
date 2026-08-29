@@ -7,6 +7,11 @@ import {
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import type { SettingsNavigationTarget } from '@/src/application/providers/right-panel.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import {
+  REPORT_INTERPRETATION_DEFAULT_MODEL_ID,
+  defaultReportInterpretationPrompt,
+  useReportInterpretationPrefsStore,
+} from '@/src/application/stores/report-interpretation-prefs.store'
 import { DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW } from '@/src/shared/types/openai-compatible.types'
 
 jest.mock('@/src/application/composition.ai', () => ({
@@ -95,7 +100,65 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     sessionStorage.clear()
     mockTestOpenAiCompatibleConnection.mockReset()
     mockTestOpenAiCompatibleAgentCapability.mockReset()
+    useReportInterpretationPrefsStore.setState({
+      modelId: REPORT_INTERPRETATION_DEFAULT_MODEL_ID,
+      customPrompt: '',
+    })
     setConfiguredLocalEndpoint()
+  })
+
+  it('configures report interpretation with Gemini by default and the summary model list', async () => {
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: jest.fn(),
+    })
+
+    try {
+      renderSettings()
+
+      fireEvent.click(screen.getByRole('button', { name: /AI 翻譯解讀/ }))
+      const modelSelect = screen.getByRole('combobox', { name: '使用模型' })
+      expect(modelSelect).toHaveTextContent('Gemini 3.1 Flash-Lite')
+
+      fireEvent.click(modelSelect)
+      expect(await screen.findByRole('option', { name: 'Gemini 3.1 Flash-Lite' }))
+        .toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /qwen2\.5:7b/ })).toBeInTheDocument()
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+          configurable: true,
+          value: originalScrollIntoView,
+        })
+      } else {
+        delete HTMLElement.prototype.scrollIntoView
+      }
+    }
+  })
+
+  it('saves and restores report interpretation prompt preferences', () => {
+    renderSettings()
+
+    fireEvent.click(screen.getByRole('button', { name: /AI 翻譯解讀/ }))
+    const prompt = screen.getByRole('textbox', {
+      name: '目前使用的 Prompt（可編輯）',
+    })
+    expect(prompt).toHaveValue(defaultReportInterpretationPrompt('zh-TW'))
+    fireEvent.change(prompt, { target: { value: '優先解釋出院追蹤。' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存 Prompt' }))
+
+    expect(useReportInterpretationPrefsStore.getState().customPrompt)
+      .toBe('優先解釋出院追蹤。')
+
+    fireEvent.click(screen.getByRole('button', { name: '恢復預設' }))
+    expect(useReportInterpretationPrefsStore.getState()).toEqual(
+      expect.objectContaining({
+        modelId: REPORT_INTERPRETATION_DEFAULT_MODEL_ID,
+        customPrompt: '',
+      }),
+    )
+    expect(prompt).toHaveValue(defaultReportInterpretationPrompt('zh-TW'))
   })
 
   it('shows each hosted connection only once instead of repeating a status overview', () => {

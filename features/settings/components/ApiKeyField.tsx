@@ -1,6 +1,7 @@
-// AI connection settings. Models are selected where they are used; this page
-// progressively discloses the connection profiles, credentials and persistence
-// policy that make those models available.
+// AI connection settings. Most models are selected where they are used; this
+// page also owns the dedicated report-interpretation preference because that
+// action can originate from several document surfaces. Connections, credentials,
+// and persistence policy remain progressively disclosed below it.
 "use client"
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
@@ -9,6 +10,7 @@ import {
   ChevronDown,
   Cloud,
   KeyRound,
+  Languages,
   LockKeyhole,
   Server,
 } from "lucide-react"
@@ -19,13 +21,21 @@ import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { useModelPrefsStore } from "@/src/application/stores/model-prefs.store"
 import { useSummaryPrefsStore } from "@/src/application/hooks/medical-summary/use-medical-summary.hook"
 import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
+import {
+  resolveReportInterpretationModel,
+  useReportInterpretationPrefsStore,
+} from "@/src/application/stores/report-interpretation-prefs.store"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
-import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from "@/src/shared/utils/openai-compatible.utils"
 import {
   getModelDefinition,
   modelRequiresUserKey,
   type ModelProvider,
 } from "@/src/shared/constants/ai-models.constants"
+import { modelDisplayLabel } from "@/src/shared/utils/model-access.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
 import {
   Accordion,
@@ -44,6 +54,7 @@ import { Switch } from "@/components/ui/switch"
 import { ApiKeyInput } from "./ApiKeyInput"
 import { AuthStatus } from "@/features/auth"
 import { OpenAiCompatibleSettings } from "./OpenAiCompatibleSettings"
+import { ReportInterpretationSettings } from "./ReportInterpretationSettings"
 import {
   isOpenAiCompatibleAddProfileTarget,
   isOpenAiCompatibleContextWindowTarget,
@@ -169,6 +180,9 @@ export function ModelAndKeySettings({
   const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
   const storageTypeChanging = useAiConfigStore((state) => state.storageTypeChanging)
   const setStorageType = useAiConfigStore((state) => state.setStorageType)
+  const reportInterpretationModel = useReportInterpretationPrefsStore(
+    (state) => state.modelId,
+  )
   const credentialControlsDisabled = credentialsHydrating || storageTypeChanging
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
@@ -212,6 +226,22 @@ export function ModelAndKeySettings({
   const cloudKeyCount = [apiKey, geminiKey, claudeKey].filter((key) => Boolean(key?.trim())).length
   const cloudDetail = t.settings.cloudKeyCount.replace("{count}", String(cloudKeyCount))
   const toolsConfigured = Boolean(perplexityKey?.trim())
+  const effectiveReportInterpretationModel = resolveReportInterpretationModel(
+    reportInterpretationModel,
+    {
+      openAiKey: apiKey,
+      geminiKey,
+      claudeKey,
+    },
+  )
+  const reportInterpretationProfile = resolveOpenAiCompatibleProfile(
+    effectiveReportInterpretationModel,
+    openAiCompatibleProfiles,
+  )
+  const reportInterpretationModelLabel = modelDisplayLabel(
+    effectiveReportInterpretationModel,
+    reportInterpretationProfile,
+  )
   const sectionTouchedRef = useRef(false)
   const [openSection, setOpenSection] = useState(() => (
     useAiConfigStore.persist.hasHydrated() && localConfigured ? "" : "local"
@@ -261,6 +291,7 @@ export function ModelAndKeySettings({
       modelPrefs.insights,
       useSummaryPrefsStore.getState().modelId,
       useSafetyPrefsStore.getState().modelId,
+      useReportInterpretationPrefsStore.getState().modelId,
     ]
     const strandsAPick = prefsInUse.some((id) => {
       const def = getModelDefinition(id)
@@ -330,6 +361,21 @@ export function ModelAndKeySettings({
         }}
         className="overflow-hidden rounded-lg border bg-background"
       >
+        <AccordionItem value="report-interpretation" className="px-3">
+          <AccordionTrigger className="group py-3 hover:no-underline">
+            <SectionTriggerContent
+              icon={<Languages className="h-4 w-4" />}
+              title={t.settings.reportInterpretationSection}
+              description={t.settings.reportInterpretationDescription}
+              status={reportInterpretationModelLabel}
+              tone="muted"
+            />
+          </AccordionTrigger>
+          <AccordionContent className="pb-3">
+            <ReportInterpretationSettings />
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="local" className="px-2">
           <AccordionTrigger className="group py-2.5 hover:no-underline">
             <SectionTriggerContent

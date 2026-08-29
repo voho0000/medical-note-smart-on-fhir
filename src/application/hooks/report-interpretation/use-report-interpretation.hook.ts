@@ -1,5 +1,6 @@
 // Report Interpretation hook. Runs the pure-AI translate+interpret task for ONE
-// report on a FIXED fast model (Gemini Flash-Lite), parses the structured reply,
+// report on its dedicated cloud-model preference (Gemini Flash-Lite by default),
+// parses the structured reply,
 // and caches the result per report so re-expanding / switching tabs doesn't
 // re-run / re-bill. Purely ON-DEMAND — unlike the safety scan there is NO
 // auto-run: a patient may have dozens of reports, so we never spend quota until
@@ -19,7 +20,6 @@ import {
 import {
   generateReportInterpretationUseCase,
   prepareReportText,
-  REPORT_INTERPRETATION_MODEL_ID,
 } from '@/src/core/use-cases/report-interpretation/generate-report-interpretation.use-case'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
@@ -28,18 +28,36 @@ import type {
   ReportInterpretation,
   ReportInterpretationMode,
 } from '@/src/core/entities/report-interpretation.entity'
-import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
-import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
-import { resolveDefaultOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
-import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
+import {
+  useApiKey,
+  useClaudeKey,
+  useGeminiKey,
+  useOpenAiCompatibleProfiles,
+} from '@/src/application/stores/ai-config.store'
+import {
+  resolveReportInterpretationModel,
+  resolveReportInterpretationPrompt,
+  useReportInterpretationPrefsStore,
+} from '@/src/application/stores/report-interpretation-prefs.store'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
+import { resolveOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
+import { withReportInterpretationTimeout } from './report-interpretation-timeout'
 
 // Persist a completed interpretation so a page reload reuses it instead of
 // re-billing. Same lifecycle/key discipline as the safety scan cache.
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const cacheKey = (compositeKey: string) => aiResultCacheKey('report-interp', compositeKey)
+const REPORT_INTERPRETATION_AI_OPTIONS = Object.freeze({})
+
+// Bound output as well as wall-clock time. Standard reports need room for a
+// faithful translation; long documents ask for a digest and should stay much
+// shorter. Without a cap, a provider that ignores the concise-output request
+// can stream continuously for several minutes and never trip the idle timeout.
+const STANDARD_REPORT_MAX_OUTPUT_TOKENS = 8192
+const LONG_DOCUMENT_MAX_OUTPUT_TOKENS = 4096
 
 // Module-level cache (survives tab switches / accordion collapse within a
 // session; wiped when a new bundle is imported — the cache key already includes
@@ -67,6 +85,8 @@ export interface UseReportInterpretationReturn {
   result: ReportInterpretation | undefined
   isGenerating: boolean
   error: string | null
+  /** Exact model/audience/locale/content identity for one automatic attempt. */
+  generationKey: string
   /** False when there's no text worth interpreting (button should be hidden). */
   hasText: boolean
   /** True after the persisted cache has been checked for this report key. */
@@ -81,24 +101,38 @@ export function useReportInterpretation(
   args: UseReportInterpretationArgs,
 ): UseReportInterpretationReturn {
   const { reportText, reportTitle, mode = 'standard' } = args
-  const ai = useUnifiedAi()
+  // A stable options object keeps the stream callback stable across the
+  // running/error store updates produced by this same request.
+  const { stream: streamAi } = useUnifiedAi(REPORT_INTERPRETATION_AI_OPTIONS)
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
-  const openAiCompatibleProfiles = useAiConfigStore(
-    (state) => state.openAiCompatibleProfiles,
+  const preferredModelId = useReportInterpretationPrefsStore((state) => state.modelId)
+  const promptOverride = useReportInterpretationPrefsStore((state) => state.customPrompt)
+  const openAiKey = useApiKey()
+  const geminiKey = useGeminiKey()
+  const claudeKey = useClaudeKey()
+  const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
+  // Keep Gemini as the default while allowing the same explicit model choices
+  // as Medical Summary, including a specific configured custom endpoint.
+  const effectiveModelId = resolveReportInterpretationModel(preferredModelId, {
+    openAiKey,
+    geminiKey,
+    claudeKey,
+  })
+  const openAiCompatible = useMemo(
+    () => resolveOpenAiCompatibleProfile(effectiveModelId, openAiCompatibleProfiles),
+    [effectiveModelId, openAiCompatibleProfiles],
   )
-  const openAiCompatible = resolveDefaultOpenAiCompatibleProfile(
-    openAiCompatibleProfiles,
+  const runtimeModelId = useMemo(
+    () => modelRuntimeIdentity(effectiveModelId, openAiCompatible),
+    [effectiveModelId, openAiCompatible],
   )
-  const effectiveModelId = openAiCompatible
-    ? customOpenAiModelIdForProfile(openAiCompatible.profileId)
-    : REPORT_INTERPRETATION_MODEL_ID
-  const runtimeModelId = modelRuntimeIdentity(effectiveModelId, openAiCompatible)
 
   const targetLocale: 'en' | 'zh-TW' = locale === 'zh-TW' ? 'zh-TW' : 'en'
   const targetAudience: 'medical' | 'patient' = audience === 'patient' ? 'patient' : 'medical'
+  const customPrompt = resolveReportInterpretationPrompt(promptOverride, targetLocale)
 
   const clean = (reportText ?? '').trim()
   const hasText = clean.length > 0
@@ -113,9 +147,10 @@ export function useReportInterpretation(
       audience: targetAudience,
       locale: targetLocale,
       preparedText: text,
+      customPrompt,
     })
     return `${runtimeModelId}::${contentKey}`
-  }, [hasText, clean, mode, targetAudience, targetLocale, runtimeModelId, piiLiterals])
+  }, [hasText, clean, mode, targetAudience, targetLocale, runtimeModelId, piiLiterals, customPrompt])
 
   const result = useStore((s) => (compositeKey ? s.byKey[compositeKey] : undefined))
   const setResult = useStore((s) => s.setResult)
@@ -171,15 +206,24 @@ export function useReportInterpretation(
             audience: targetAudience,
             mode,
             piiLiterals,
+            customPrompt,
           })
-          let full = ''
-          await ai.stream(messages, {
-            modelId: effectiveModelId,
-            operationKey: myKey,
-            diagnosticFeature: 'report-interpretation',
-            onChunk: (chunk: string) => {
-              full = chunk
-            },
+          const full = await withReportInterpretationTimeout(async (signal) => {
+            let streamedText = ''
+            await streamAi(messages, {
+              modelId: effectiveModelId,
+              operationKey: myKey,
+              diagnosticFeature: 'report-interpretation',
+              signal,
+              throwOnAbort: true,
+              maxTokens: mode === 'long-document'
+                ? LONG_DOCUMENT_MAX_OUTPUT_TOKENS
+                : STANDARD_REPORT_MAX_OUTPUT_TOKENS,
+              onChunk: (chunk: string) => {
+                streamedText = chunk
+              },
+            })
+            return streamedText
           })
           return generateReportInterpretationUseCase.parseResult(full, {
             truncated: prepared.truncated,
@@ -189,7 +233,7 @@ export function useReportInterpretation(
         },
       })
     },
-    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot, effectiveModelId, piiLiterals],
+    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, streamAi, clearSlot, effectiveModelId, piiLiterals, customPrompt],
   )
 
   const generate = useCallback(() => run(false), [run])
@@ -199,6 +243,7 @@ export function useReportInterpretation(
     result,
     isGenerating,
     error,
+    generationKey: compositeKey,
     hasText,
     isHydrated,
     generate,

@@ -10,7 +10,7 @@
 // A fixed disclaimer sits at the foot and is never collapsible.
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Languages, Sparkles, Loader2, RotateCw, AlertTriangle, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -22,6 +22,7 @@ import {
   useReportInterpretation,
   type UseReportInterpretationArgs,
 } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
+import { REPORT_INTERPRETATION_TOTAL_TIMEOUT_MS } from '@/src/application/hooks/report-interpretation/report-interpretation-timeout'
 
 type Labels = ReturnType<typeof getLabels>
 function getLabels(locale: string) {
@@ -33,7 +34,13 @@ function getLabels(locale: string) {
     summaryLabel: zh ? '這份報告在檢查什麼' : 'What this report checks',
     findingsLabel: zh ? '主要發現' : 'Key findings',
     watchForLabel: zh ? '可以留意的地方' : 'Worth keeping an eye on',
-    generating: zh ? 'AI 翻譯與解讀中…' : 'Translating and explaining…',
+    generating: zh
+      ? 'AI 翻譯與解讀中，通常一分鐘內完成。'
+      : 'Translating and explaining; this usually finishes within a minute.',
+    generatingSlow: zh
+      ? '處理時間比平常久；若超過 1 分 30 秒，系統會自動停止並讓你重試。'
+      : 'This is taking longer than usual. The request will stop after 1 minute 30 seconds so you can retry.',
+    elapsed: zh ? '已等待 {elapsed}' : 'Elapsed {elapsed}',
     loadingCached: zh ? '讀取既有 AI 解讀…' : 'Loading saved AI explanation…',
     trigger: zh ? 'AI 翻譯解讀' : 'AI translate & explain',
     regenerate: zh ? '重新產生' : 'Regenerate',
@@ -88,15 +95,27 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
   const { className, autoGenerate = true, ...hookArgs } = props
   const { locale } = useLanguage()
   const labels = getLabels(locale)
-  const { result, isGenerating, error, isHydrated, generate, regenerate } =
+  const { result, isGenerating, error, generationKey, isHydrated, generate, regenerate } =
     useReportInterpretation(hookArgs)
   const errorView = error ? describeInterpretationError(error, labels) : null
+  const autoRequestedKeyRef = useRef<string | null>(null)
 
-  // Auto-generate on mount only in auto mode. generate() is a no-op if a cached
-  // result already exists for this key, so this never double-bills.
+  // Auto-generate once for this exact input. The generate callback can change
+  // identity when hook dependencies update; treating that as fresh intent made
+  // a failed request immediately auto-start again, hiding its error and
+  // resetting the elapsed timer in an endless loop. A real input change still
+  // gets one fresh automatic attempt; later retries are always explicit.
   useEffect(() => {
-    if (autoGenerate && isHydrated) void generate()
-  }, [autoGenerate, isHydrated, generate])
+    if (!autoGenerate) {
+      autoRequestedKeyRef.current = null
+      return
+    }
+    if (!isHydrated || !generationKey) return
+    if (autoRequestedKeyRef.current === generationKey) return
+
+    autoRequestedKeyRef.current = generationKey
+    void generate()
+  }, [autoGenerate, generate, generationKey, isHydrated])
 
   if (!isHydrated) {
     return (
@@ -134,10 +153,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
       )}
     >
       {isGenerating && !result && (
-        <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {labels.generating}
-        </div>
+        <ReportInterpretationGeneratingState labels={labels} />
       )}
 
       {/* Show the CAUSE the hook already mapped (quota exhausted, sign-in
@@ -215,6 +231,47 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
           {labels.disclaimer}
         </p>
       )}
+    </div>
+  )
+}
+
+function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+export function ReportInterpretationGeneratingState({ labels }: { labels: Labels }) {
+  const [startedAt] = useState(() => Date.now())
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - startedAt) / 1000))
+  const slowThresholdSeconds = Math.floor(
+    Math.min(60_000, REPORT_INTERPRETATION_TOTAL_TIMEOUT_MS * 2 / 3) / 1000,
+  )
+  const message = elapsedSeconds >= slowThresholdSeconds
+    ? labels.generatingSlow
+    : labels.generating
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-2 text-xs text-muted-foreground">
+      <div className="flex min-w-0 flex-1 items-start gap-2" role="status" aria-live="polite">
+        <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+        <span>{message}</span>
+      </div>
+      <span
+        className="shrink-0 tabular-nums"
+        role="timer"
+        aria-live="off"
+        data-testid="report-interpretation-elapsed"
+      >
+        {labels.elapsed.replace('{elapsed}', formatElapsed(elapsedSeconds))}
+      </span>
     </div>
   )
 }
