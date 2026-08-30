@@ -74,6 +74,7 @@ import {
 } from "@/src/shared/config/ui-theme.config"
 import { AnalyteSearchBox } from "./AnalyteSearchBox"
 import { ReportNameModeSwitch } from "./ReportNameModeSwitch"
+import { MicrobiologyCumulativeView } from "./MicrobiologyCumulativeView"
 import type { TrendWindow } from "../utils/trend-time-scale"
 
 interface OpenTrendRequest {
@@ -612,6 +613,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
     ? activeCategoryId
     : internalActiveId
+  const activeIsMicrobiology = activeId === 'microbio'
   // A category's table remains mounted after the first visit. New categories
   // select immediately and show a compact preparation state for one paint,
   // keeping a large table mount out of the pointer/keyboard event itself.
@@ -795,21 +797,35 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
           guidance centred, and naming mode right. Keep all three visible at
           zoomed desktop widths; only genuinely narrow panels drop the hint. */}
       <div className="mb-1 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 @min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto] @min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto] @min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]">
-        <AnalyteSearchBox
-          pivots={nonEmpty}
-          categoryLabels={categoryLabels}
-          nameMode={nameMode}
-          onPick={pickAnalyte}
-          className="w-full min-w-0 @min-[390px]:max-w-[160px] @min-[480px]:max-w-[220px] @min-[640px]:max-w-[260px]"
-        />
+        {activeIsMicrobiology ? (
+          <span className="min-w-0 truncate text-xs font-medium text-foreground">
+            {(t.reports as any).microbiologyCumulative?.toolbarLabel ?? '依檢體追蹤'}
+          </span>
+        ) : (
+          <AnalyteSearchBox
+            pivots={nonEmpty}
+            categoryLabels={categoryLabels}
+            nameMode={nameMode}
+            onPick={pickAnalyte}
+            className="w-full min-w-0 @min-[390px]:max-w-[160px] @min-[480px]:max-w-[220px] @min-[640px]:max-w-[260px]"
+          />
+        )}
         <span className="hidden min-w-0 max-w-full items-center justify-self-center gap-1 overflow-hidden text-[0.6875rem] text-muted-foreground @min-[390px]:inline-flex">
-          <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-          <span className="block min-w-0 truncate @min-[480px]:hidden">
-            {(t.reports as any).cumulativeTrend?.hintShort ?? '查看趨勢'}
-          </span>
-          <span className="hidden min-w-0 truncate @min-[480px]:block">
-            {(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}
-          </span>
+          {activeIsMicrobiology ? (
+            <span className="min-w-0 truncate">
+              {(t.reports as any).microbiologyCumulative?.hint ?? '選取結果查看完整原文'}
+            </span>
+          ) : (
+            <>
+              <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="block min-w-0 truncate @min-[480px]:hidden">
+                {(t.reports as any).cumulativeTrend?.hintShort ?? '查看趨勢'}
+              </span>
+              <span className="hidden min-w-0 truncate @min-[480px]:block">
+                {(t.reports as any).cumulativeTrend?.hint ?? '點檢驗名稱查看趨勢'}
+              </span>
+            </>
+          )}
         </span>
         <div className="col-start-2 justify-self-end @min-[390px]:col-start-3">
           {nameModeControl ?? <ReportNameModeSwitch responsiveLabels />}
@@ -898,15 +914,23 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
             className={fullHeight ? 'mt-1 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-1 min-w-0 w-full max-w-full overflow-hidden'}
           >
             {readyCategoryIds.has(p.category.id) ? (
-              <LabPivotTable
-                pivot={p}
-                fullHeight={fullHeight}
-                focusAnalyteKey={p.category.id === activeId ? focusRequest?.key : undefined}
-                focusNonce={focusRequest?.seq}
-                nameMode={nameMode}
-                activeTrendSourceId={activeTrendSourceId}
-                onOpenTrend={openTrend}
-              />
+              p.category.id === 'microbio' ? (
+                <MicrobiologyCumulativeView
+                  observations={observations}
+                  nameMode={nameMode}
+                  fullHeight={fullHeight}
+                />
+              ) : (
+                <LabPivotTable
+                  pivot={p}
+                  fullHeight={fullHeight}
+                  focusAnalyteKey={p.category.id === activeId ? focusRequest?.key : undefined}
+                  focusNonce={focusRequest?.seq}
+                  nameMode={nameMode}
+                  activeTrendSourceId={activeTrendSourceId}
+                  onOpenTrend={openTrend}
+                />
+              )
             ) : (
               <div
                 role="status"

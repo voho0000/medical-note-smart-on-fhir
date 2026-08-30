@@ -13,6 +13,7 @@ import {
   canonicalKeyFromLoinc,
   canonicalTestKeyFromString,
   getOriginalAnalyteDisplayForObs,
+  MYCOBACTERIAL_CULTURE_KEY,
   type AnalyteNameMode,
 } from '@/src/shared/utils/lab-normalize'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
@@ -132,6 +133,87 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
 // NHI system URI used by the 健康存摺 bridge
 const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
 
+// The current bridges emit the TW Core URI while older cached bundles use the
+// OID above. Match both without treating unrelated local codes as NHI orders.
+function getNhiLabCode(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
+    if (system !== NHI_LAB_SYSTEM && !system.includes('nhi-medical-order-code') && !system.includes('nhi-lab-code')) {
+      continue
+    }
+    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : ''
+    if (code) return code
+  }
+  return null
+}
+
+function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: string } | null {
+  const nhiCode = getNhiLabCode(obs)
+  if (!nhiCode) return null
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const labels = [
+    obs?.code?.text,
+    ...codings
+      .filter((coding) => !getNhiLabCode({ code: { coding: [coding] } }))
+      .flatMap((coding) => [coding?.display, coding?.code]),
+  ]
+    .filter((label): label is string => typeof label === 'string' && !!label.trim())
+    .join(' ')
+    .normalize('NFKC')
+    .toUpperCase()
+
+  const microscopyIdentities: Array<[RegExp, string, string]> = [
+    [/\bG\(\+\)\s*(?:BACILLUS|BACILLI)\b|格蘭氏陽性桿菌|革蘭氏陽性桿菌/, 'GRAM-POSITIVE-BACILLI', 'Gram-positive bacilli'],
+    [/\bG\(-\)\s*(?:BACILLUS|BACILLI)\b|格蘭氏陰性桿菌|革蘭氏陰性桿菌/, 'GRAM-NEGATIVE-BACILLI', 'Gram-negative bacilli'],
+    [/\bG\(\+\)\s*(?:COCCUS|COCCI)\b|格蘭氏陽性球菌|革蘭氏陽性球菌/, 'GRAM-POSITIVE-COCCI', 'Gram-positive cocci'],
+    [/\bG\(-\)\s*(?:COCCUS|COCCI)\b|格蘭氏陰性球菌|革蘭氏陰性球菌/, 'GRAM-NEGATIVE-COCCI', 'Gram-negative cocci'],
+    [/\bW\.?B\.?C\.?[- ]?SPUTUM\b/, 'MICROSCOPY-WBC', 'WBC (microscopy)'],
+    [/\bEP\.?\s*CELL[- ]?SPUTUM\b/, 'MICROSCOPY-EPITHELIAL-CELLS', 'Epithelial cells (microscopy)'],
+    [/^NEUTROPHILS?(?:\s|$)/, 'MICROSCOPY-NEUTROPHILS', 'Neutrophils (microscopy)'],
+  ]
+  if (nhiCode === '13006C') {
+    for (const [pattern, testKey, displayName] of microscopyIdentities) {
+      if (pattern.test(labels)) return { testKey, displayName }
+    }
+  }
+
+  if (nhiCode === '13007C' || nhiCode === '13008C') {
+    const cultureIdentities: Array<[RegExp, string, string]> = [
+      [/\bANAEROBIC\b/, 'ANAEROBIC-CULTURE', 'Anaerobic Culture'],
+      [/\bFUNGUS\b|\bFUNGAL\b|黴菌|真菌/, 'FUNGAL-CULTURE', 'Fungal Culture'],
+      [/\bID\s*\+\s*DS\s+COMMON\b/, 'CULTURE-ID-SUSCEPTIBILITY', 'Culture identification / susceptibility'],
+    ]
+    for (const [pattern, testKey, displayName] of cultureIdentities) {
+      if (pattern.test(labels)) return { testKey, displayName }
+    }
+  }
+  return null
+}
+
+// Legacy/code-only bundles can still safely join the mycobacterial culture
+// family when the official NHI culture order is paired with an explicit
+// culture label. Requiring both signals prevents cross-carried SMEAR rows under
+// 13026C from being mislabeled as cultures. New bundles normally take the
+// stronger LOINC 50941-4 path before this fallback is needed.
+const MYCOBACTERIAL_CULTURE_NHI_CODES = new Set(['13012C', '13026C'])
+
+function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
+  const nhiCode = getNhiLabCode(obs)
+  if (!nhiCode || !MYCOBACTERIAL_CULTURE_NHI_CODES.has(nhiCode)) return false
+
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const labels = [obs?.code?.text, ...codings.map((coding) => coding?.display)]
+    .filter((label): label is string => typeof label === 'string' && !!label.trim())
+    .join(' ')
+    .normalize('NFKC')
+    .toUpperCase()
+
+  const saysCulture = /CULTUR|培養/.test(labels)
+  const saysStain = /STAIN|SMEAR|染色|抹片/.test(labels)
+  return saysCulture && !saysStain
+}
+
 // testKeys where different NHI codes represent clinically distinct analytes that
 // must remain as separate pivot columns. All other tests merge by testKey so
 // cross-institution same-analyte rows collapse into one column.
@@ -186,6 +268,19 @@ export function getLabPivotTestIdentity(
 
   let testKey = canonicalTestKey(obs)
   let displayOverride: string | undefined
+
+  const microbiologyComponent = categoryId === 'microbio'
+    ? microbiologyLocalIdentity(obs)
+    : null
+  if (microbiologyComponent) {
+    testKey = microbiologyComponent.testKey
+    displayOverride = microbiologyComponent.displayName
+  }
+
+  if (categoryId === 'microbio' && !microbiologyComponent && hasNhiMycobacterialCultureEvidence(obs)) {
+    testKey = MYCOBACTERIAL_CULTURE_KEY
+    displayOverride = CANONICAL_DISPLAY[MYCOBACTERIAL_CULTURE_KEY]
+  }
 
   if (categoryId === 'glucose') {
     // (Previously: unit-based HbA1c reclassification removed 2026-05-29.)

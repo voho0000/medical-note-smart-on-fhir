@@ -405,10 +405,24 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // its own pass BEFORE specimen routing (which would otherwise file a urine
     // culture under 尿液 and drop a sputum one entirely).
     //
-    // Text-alias-only on purpose — no LOINC. 健保存摺 ships these without one,
-    // and an unverified LOINC table is worse than a name match here.
+    // Most microbiology rows still rely on text aliases because 健保存摺 often
+    // omits LOINC. The two verified mycobacterial members are the narrow
+    // exception listed below; unknown codes continue to fail closed.
     id: 'microbio',
-    preferredOrder: ['BLOOD CULTURE', 'URINE CULTURE', 'SPUTUM CULTURE', 'GRAM STAIN', 'ACID-FAST STAIN'],
+    // Within each family, follow the clinical result workflow: direct exam,
+    // specimen-specific cultures, generic culture, then susceptibility.
+    // Subgroups below keep the three organism families from interleaving.
+    preferredOrder: [
+      'GRAM STAIN',
+      'BLOOD-CULTURE', 'CSF CULTURE', 'SPUTUM CULTURE', 'URINE CULTURE',
+      'STOOL CULTURE', 'WOUND CULTURE', 'PUS CULTURE',
+      'AEROBIC-CULTURE', 'ANAEROBIC CULTURE', 'CULTURE',
+      'ANTIBIOTIC SUSCEPTIBILITY', '抗生素敏感性試驗', '藥物敏感試驗',
+      'ACID-FAST-STAIN', 'MYCOBACTERIAL-CULTURE', 'TB CULTURE',
+      'AFB CULTURE', '抗酸菌培養',
+      'KOH', 'INDIA INK', 'FUNGAL CULTURE', 'FUNGUS CULTURE',
+      '黴菌培養', '真菌培養',
+    ],
     codes: [
       'CULTURE', 'BLOOD CULTURE', 'URINE CULTURE', 'SPUTUM CULTURE', 'STOOL CULTURE',
       'WOUND CULTURE', 'PUS CULTURE', 'CSF CULTURE', 'FUNGUS CULTURE', 'FUNGAL CULTURE',
@@ -417,6 +431,37 @@ export const LAB_CATEGORIES: LabCategory[] = [
       '培養', '細菌培養', '血液培養', '細菌血液培養', '尿液培養', '痰液培養', '糞便培養',
       '傷口培養', '黴菌培養', '真菌培養', '結核菌培養', '分枝桿菌培養',
       '革蘭氏染色', '抗酸菌染色', '抗酸性染色', '藥物敏感試驗', '抗生素敏感性試驗',
+      '細菌最低抑制濃度快速試驗', 'MINIMUM INHIBITORY CONCENTRATION',
+    ],
+    // Pass 0 below checks these before specimen routing so a urine- or
+    // sputum-sourced culture cannot be misfiled as routine urinalysis/other.
+    loincCodes: ['600-7', '634-6', '664-3', '50941-4', '11545-1'],
+    subgroups: [
+      {
+        id: 'bacteriology',
+        members: [
+          'GRAM STAIN', 'BLOOD-CULTURE', 'CSF CULTURE', 'SPUTUM CULTURE',
+          'URINE CULTURE', 'STOOL CULTURE', 'WOUND CULTURE', 'PUS CULTURE',
+          'AEROBIC-CULTURE', 'ANAEROBIC CULTURE', 'CULTURE', '培養', '細菌培養',
+          'ANTIBIOTIC SUSCEPTIBILITY', 'SUSCEPTIBILITY', '藥物敏感試驗',
+          '抗生素敏感性試驗', '藥敏',
+        ],
+      },
+      {
+        id: 'mycobacteriology',
+        members: [
+          'ACID-FAST-STAIN', 'MYCOBACTERIAL-CULTURE', 'TB CULTURE',
+          'AFB CULTURE', '抗酸菌培養', '分枝桿菌培養', '結核菌培養',
+          '抗酸菌鑑定檢查', '分枝桿菌鑑定',
+        ],
+      },
+      {
+        id: 'mycology',
+        members: [
+          'KOH', 'INDIA INK', 'FUNGAL CULTURE', 'FUNGUS CULTURE',
+          '黴菌培養', '真菌培養',
+        ],
+      },
     ],
   },
   {
@@ -454,7 +499,24 @@ const MICROBIOLOGY_NAME_PATTERNS: RegExp[] = [
   /分枝桿菌|結核菌/,
   /黴菌|真菌/,
   /藥敏|抗生素敏感/,
+  /最低抑制濃度|MINIMUM INHIBITORY CONCENTRATION|\bMIC\b/,
 ]
+
+// Known NHI microbiology orders. Component rows flattened from these reports
+// may be named only "Neutrophil" or "W.B.C.-Sputum", so text matching alone
+// cannot identify them as microbiology. Keep this list narrow instead of
+// treating the entire 13xxx pathology section as culture data.
+const MICROBIOLOGY_NHI_ORDER_CODES = new Set([
+  '13006C', // bacterial microscopy / Gram-stain components
+  '13007C', // general culture and identification
+  '13008C', // combined aerobic/anaerobic culture add-on
+  '13012C', // legacy mycobacterial culture order
+  '13013C', // acid-fast organism identification
+  '13016B', // blood culture
+  '13023C', // rapid minimum inhibitory concentration
+  '13025C', // concentrated acid-fast smear
+  '13026C', // mycobacterial culture
+])
 
 function normalize(s: string): string {
   return s.normalize('NFKC').trim().toUpperCase()
@@ -581,8 +643,29 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // Runs first on purpose. A culture is microbiology whatever it was grown
   // from, so specimen routing below must not claim a urine culture for 尿液 or
   // drop a sputum one for being neither blood nor urine.
-  if (MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(textNorm))) {
-    return LAB_CATEGORIES.find((c) => c.id === 'microbio') || null
+  const microbiology = LAB_CATEGORIES.find((c) => c.id === 'microbio')
+  const isMicrobiologyLoinc = microbiology?.loincCodes?.some((code) =>
+    codeNorms.includes(normalize(code)),
+  ) ?? false
+  const hasKnownNonMicrobiologyLoinc = LAB_CATEGORIES.some((category) => (
+    category.id !== 'microbio'
+      && (category.loincCodes?.some((code) => codeNorms.includes(normalize(code))) ?? false)
+  ))
+  // Name-only matching is allowed for uncoded data and NHI section 13
+  // (microbiology). A known non-microbiology order must not be promoted merely
+  // because an allergen name contains 「黴菌」— e.g. 30022C Alternaria /
+  // Penicillium specific-IgE belongs outside the microbiology report.
+  const nhiCode = nhiOrderCode(obs)
+  const isMicrobiologyNhiOrder = !!nhiCode && MICROBIOLOGY_NHI_ORDER_CODES.has(nhiCode)
+  const allowsMicrobiologyNameMatch = !nhiCode || nhiCode.startsWith('13')
+  const isMicrobiologyName = allowsMicrobiologyNameMatch &&
+    MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(textNorm))
+  if (
+    isMicrobiologyLoinc
+    || (!hasKnownNonMicrobiologyLoinc && isMicrobiologyNhiOrder)
+    || isMicrobiologyName
+  ) {
+    return microbiology || null
   }
 
   // ── Pass 1: specimen-based routing ─────────────────────────────────────

@@ -267,8 +267,8 @@ describe('categorizeObservation — NHI section gate (name-collision guard)', ()
     return obs
   }
 
-  it('microbiology "Neutrophil" (NHI 13006C, no LOINC/specimen, "1+(>25/LPF)") is excluded — not cbc, not urine', () => {
-    expect(categorizeObservation(nhiObs('Neutrophil', '13006C', { valueString: '1+(>25/LPF)' }))).toBeNull()
+  it('keeps a flattened "Neutrophil" component under its NHI 13006C microscopy report', () => {
+    expect(categorizeObservation(nhiObs('Neutrophil', '13006C', { valueString: '1+(>25/LPF)' }))?.id).toBe('microbio')
   })
 
   it.each(['08013C', '08011C', '08002C', '08003C', '08006C'])(
@@ -294,8 +294,8 @@ describe('categorizeObservation — NHI section gate (name-collision guard)', ()
     expect(categorizeObservation(nhiObs('Bacteria', '06012C', { valueString: 'Few' }))?.id).toBe('urine')
   })
 
-  it('microbiology "Bacteria" (NHI 13016B blood culture) does NOT ride into urine — excluded', () => {
-    expect(categorizeObservation(nhiObs('Bacteria', '13016B', { valueString: 'Many' }))).toBeNull()
+  it('keeps a flattened "Bacteria" component under its NHI 13016B blood-culture report', () => {
+    expect(categorizeObservation(nhiObs('Bacteria', '13016B', { valueString: 'Many' }))?.id).toBe('microbio')
   })
 
   it('"Bacteria" with no NHI code still categorises as urine via the name fallback', () => {

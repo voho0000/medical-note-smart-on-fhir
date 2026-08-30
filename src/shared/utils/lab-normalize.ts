@@ -2,7 +2,51 @@
 // and the observation trend history so cross-institution name variants
 // (e.g. "S.G.O.T (AST)" vs "SGOT (AST)") resolve to the same canonical key.
 
+// Microbiology family keys are specimen-neutral on purpose. The source data
+// often lacks a reliable specimen, but these two tests are still distinguishable
+// by their organism-specific culture / stain method. Keep culture and stain as
+// separate families so an AFB smear can never overwrite a culture result.
+export const MYCOBACTERIAL_CULTURE_KEY = 'MYCOBACTERIAL-CULTURE'
+export const ACID_FAST_STAIN_KEY = 'ACID-FAST-STAIN'
+export const BLOOD_CULTURE_KEY = 'BLOOD-CULTURE'
+export const AEROBIC_CULTURE_KEY = 'AEROBIC-CULTURE'
+export const GRAM_STAIN_KEY = 'GRAM-STAIN'
+export const ANTIBIOTIC_SUSCEPTIBILITY_KEY = 'ANTIBIOTIC-SUSCEPTIBILITY'
+
 export const TEST_ALIASES: Record<string, string> = {
+  // Mycobacteriology. Only names that explicitly identify the organism family
+  // are aliases here. Local shorthand "TB Culture", bare "AFB culture" and
+  // 「抗酸菌培養」are deliberately excluded: those labels need corroborating
+  // NHI/LOINC evidence in the cumulative pivot.
+  'MYCOBACTERIAL CULTURE': MYCOBACTERIAL_CULTURE_KEY,
+  'MYCOBACTERIUM CULTURE': MYCOBACTERIAL_CULTURE_KEY,
+  '分枝桿菌培養': MYCOBACTERIAL_CULTURE_KEY,
+  '結核菌培養': MYCOBACTERIAL_CULTURE_KEY,
+  // A stain explicitly names its method, so its common cross-hospital labels
+  // can safely share one family without implying a culture or a species.
+  'ACID-FAST STAIN': ACID_FAST_STAIN_KEY,
+  'ACID FAST STAIN': ACID_FAST_STAIN_KEY,
+  'AFB STAIN': ACID_FAST_STAIN_KEY,
+  '抗酸菌染色': ACID_FAST_STAIN_KEY,
+  '抗酸性染色': ACID_FAST_STAIN_KEY,
+  // General bacteriology. These names carry their specimen/method explicitly,
+  // and the corresponding verified LOINCs below provide the primary route.
+  'BLOOD CULTURE': BLOOD_CULTURE_KEY,
+  'BACTERIAL BLOOD CULTURE': BLOOD_CULTURE_KEY,
+  '血液培養': BLOOD_CULTURE_KEY,
+  '細菌血液培養': BLOOD_CULTURE_KEY,
+  'AEROBIC CULTURE': AEROBIC_CULTURE_KEY,
+  '嗜氧培養': AEROBIC_CULTURE_KEY,
+  'GRAM STAIN': GRAM_STAIN_KEY,
+  "GRAM'S STAIN": GRAM_STAIN_KEY,
+  'GRAMS STAIN': GRAM_STAIN_KEY,
+  '革蘭氏染色': GRAM_STAIN_KEY,
+  '格蘭氏染色': GRAM_STAIN_KEY,
+  'ANTIBIOTIC SUSCEPTIBILITY': ANTIBIOTIC_SUSCEPTIBILITY_KEY,
+  'ANTIBIOTIC SUSCEPTIBILITY TEST': ANTIBIOTIC_SUSCEPTIBILITY_KEY,
+  '抗生素敏感性試驗': ANTIBIOTIC_SUSCEPTIBILITY_KEY,
+  '藥物敏感試驗': ANTIBIOTIC_SUSCEPTIBILITY_KEY,
+  '細菌最低抑制濃度快速試驗': ANTIBIOTIC_SUSCEPTIBILITY_KEY,
   // Viral antigen / serology (NHI 14065C/14066C/14084C 病毒抗原, 12020C 黴漿菌).
   // 健保存摺 ships these with NO LOINC and inconsistent text (English / Chinese /
   // double-spaced), so alias every observed form to a clean canonical key.
@@ -452,6 +496,18 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   // ── CBC (additional) ─────────────────────────────────────
   '14196-0': 'RETIC',         // Reticulocytes #/vol in Blood
 
+  // ── Mycobacteriology ───────────────────────────
+  // Both LOINCs are specimen-generic (System=Specimen), so missing specimen
+  // detail does not prevent the app from grouping equivalent results. They
+  // remain distinct because culture and microscopy answer different questions.
+  '50941-4': MYCOBACTERIAL_CULTURE_KEY, // Mycobacterium sp presence by organism-specific culture
+  '11545-1': ACID_FAST_STAIN_KEY,       // Mycobacterium sp presence by acid-fast stain
+
+  // ── General bacteriology ───────────────────────────
+  '600-7': BLOOD_CULTURE_KEY,    // Bacteria identified in Blood by culture
+  '634-6': AEROBIC_CULTURE_KEY,  // Bacteria identified in Specimen by aerobic culture
+  '664-3': GRAM_STAIN_KEY,       // Microscopic observation in Specimen by Gram stain
+
   // ── Urinalysis (NHI 06012C 尿一般檢查 / 06013C 尿生化檢查) ──────
   // Added 2026-06-14, each Long Common Name confirmed at loinc.org. The urine
   // dipstick/sediment LOINCs were previously absent from this map, so the only
@@ -599,6 +655,14 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // CANONICAL_KEYS is defined further down — after LOINC_TO_CANONICAL — so it
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
+  // Keep the official Taiwan clinical wording visible. The canonical key says
+  // what can be grouped; the UI does not silently rename it to a taxonomic term.
+  [MYCOBACTERIAL_CULTURE_KEY]: '抗酸菌培養',
+  [ACID_FAST_STAIN_KEY]: '抗酸菌染色',
+  [BLOOD_CULTURE_KEY]: 'Blood Culture',
+  [AEROBIC_CULTURE_KEY]: 'Aerobic Culture',
+  [GRAM_STAIN_KEY]: 'Gram Stain',
+  [ANTIBIOTIC_SUSCEPTIBILITY_KEY]: '抗生素藥敏試驗',
   // Viral antigen / serology column headers (compact, read the same in zh/en).
   'FLU-A-AG': 'Flu A Ag',
   'FLU-B-AG': 'Flu B Ag',
