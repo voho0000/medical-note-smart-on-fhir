@@ -293,7 +293,7 @@ export function MedListCard() {
         </TabsList>
 
         <TabsContent value="medications" className="mt-0 space-y-2 md:space-y-3">
-          <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
+          <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <div className="inline-flex h-[36px] min-w-0 rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
                 {([
@@ -348,7 +348,10 @@ export function MedListCard() {
             </div>
             {/* Bilingual search — matches drug name (中/英), NHI code, class,
                 indication, 機構 and date (西元/民國); filters both views. */}
-            <div className="relative min-w-0 md:min-w-[160px] md:flex-1">
+            <div className={cn(
+              "relative min-w-0 md:min-w-[160px] md:flex-1",
+              !(view !== 'remaining' && categoryOptions.length > 0) && "max-md:col-span-2",
+            )}>
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <input
                 type="search"
@@ -390,7 +393,8 @@ export function MedListCard() {
                 options={categoryOptions}
                 selected={activeSelectedCategories}
                 onSelectedChange={setSelectedCategories}
-                className="max-md:col-span-2 max-md:justify-self-end"
+                className="max-md:px-2"
+                compactLabel
               />
             )}
           </div>

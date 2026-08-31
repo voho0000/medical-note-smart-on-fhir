@@ -16,6 +16,9 @@ export interface MedicationCategoryOption {
 }
 
 interface MedicationCategoryFilterProps {
+  /** Phones hide the text label so the control fits beside the search box;
+   *  the icon keeps its accessible name and the selected-count badge. */
+  compactLabel?: boolean
   label: string
   clearLabel: string
   selectedCountLabel: string
@@ -32,6 +35,7 @@ interface MedicationCategoryFilterProps {
 
 export function MedicationCategoryFilter({
   label,
+  compactLabel = false,
   clearLabel,
   selectedCountLabel,
   priorityGroupLabel,
@@ -88,7 +92,7 @@ export function MedicationCategoryFilter({
           )}
         >
           <ListFilter className="h-3.5 w-3.5" aria-hidden />
-          <span>{label}</span>
+          <span className={cn(compactLabel && 'max-md:sr-only')}>{label}</span>
           {selected.size > 0 && (
             <span className="rounded-full bg-primary/10 px-1.5 py-0 text-[0.6875rem] tabular-nums">
               {selectedCountLabel.replace('{count}', String(selected.size))}
