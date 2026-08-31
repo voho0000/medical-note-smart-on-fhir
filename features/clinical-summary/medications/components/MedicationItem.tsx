@@ -18,6 +18,7 @@ import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/cli
 import { clinicalTooltipSurfaceClass } from "@/features/clinical-summary/components/clinical-metadata-styles"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { TruncatedRevealLabel } from "./TruncatedRevealLabel"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -470,15 +471,14 @@ export function MedicationItem({
           className="row-start-2 flex h-4 min-w-0 items-center gap-1 overflow-hidden"
         >
           {medication.pharmacy && (
-            <span
-              title={medication.pharmacy}
+            <TruncatedRevealLabel
+              data-testid="medication-institution"
+              text={medication.pharmacy}
               className={cn(
                 "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
                 CLINICAL_SOURCE_TONE,
               )}
-            >
-              <span className="truncate">{medication.pharmacy}</span>
-            </span>
+            />
           )}
           {medication.category && (
             <span
