@@ -561,14 +561,23 @@ export function ReportsCard() {
   const navSeq = useResourceNavigationStore((s) => s.seq)
   const consumeNav = useResourceNavigationStore((s) => s.consume)
   useEffect(() => {
-    if (!navPending || navPending.reportView === 'cumulative' || rawReportsEnabled) return
+    if (
+      !clinicalTabActive
+      || !navPending
+      || navPending.reportView === 'cumulative'
+      || rawReportsEnabled
+    ) return
     if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
     const timer = window.setTimeout(() => setRawPreparationPriority('after-paint'), 0)
     return () => window.clearTimeout(timer)
-  }, [navPending, rawReportsEnabled])
+  }, [clinicalTabActive, navPending, rawReportsEnabled])
 
   useEffect(() => {
-    if (!navPending) return
+    // ReportsCard is intentionally mounted in the background so opening the
+    // workspace stays responsive. Leave navigation pending while this shell is
+    // hidden: LeftPanelLayout owns the top-level tab switch, and only the
+    // visible destination may acknowledge and consume the request.
+    if (!clinicalTabActive || !navPending) return
     if (navPending.reportView === 'cumulative') {
       const categoryId = navPending.cumulativeCategoryId
       if (!categoryId || !CUMULATIVE_CATEGORY_IDS.has(categoryId)) return
@@ -613,7 +622,7 @@ export function ReportsCard() {
       setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
       setNavTarget({ id: targetRow?.id ?? hit.id, tab: tab.value, nonce: navSeq })
     }, 0)
-  }, [navPending, navSeq, rows, tabConfigs, consumeNav])
+  }, [clinicalTabActive, navPending, navSeq, rows, tabConfigs, consumeNav])
 
   if (isLoading) {
     return (

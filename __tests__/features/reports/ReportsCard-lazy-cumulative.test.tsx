@@ -260,6 +260,41 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.getByTestId('cumulative-report')).toBeInTheDocument()
   })
 
+  it('keeps cumulative navigation pending until the top-level Reports tab is active', () => {
+    jest.useFakeTimers()
+
+    const view = (active: boolean) => (
+      <ClinicalTabActivityProvider active={active}>
+        <ReportsCard />
+      </ClinicalTabActivityProvider>
+    )
+    const { rerender } = render(view(false))
+
+    act(() => {
+      jest.runOnlyPendingTimers()
+    })
+    expect(useResourceNavigationStore.getState()).toMatchObject({
+      pending: expect.objectContaining({
+        reportView: 'cumulative',
+        cumulativeCategoryId: 'chem',
+      }),
+      consumedSeq: 0,
+    })
+    expect(screen.queryByTestId('cumulative-report')).not.toBeInTheDocument()
+
+    rerender(view(true))
+    act(() => {
+      jest.runAllTimers()
+    })
+
+    expect(useResourceNavigationStore.getState()).toMatchObject({
+      pending: null,
+      consumedSeq: 1,
+    })
+    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('category: chem')
+    expect(screen.getByTestId('cumulative-report')).toHaveTextContent('focus: CRP')
+  })
+
   it('performance contract: selects a raw tab before any projection work is enabled', () => {
     jest.useFakeTimers()
     mockUseReportTabCounts.mockReturnValue({

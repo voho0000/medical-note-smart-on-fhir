@@ -1,12 +1,30 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ClinicalSummaryFeature from '@/src/layouts/LeftPanelLayout'
+import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 
 const mockClearDetail = jest.fn()
 
 jest.mock('@/src/shared/config/feature-registry', () => {
   const React = jest.requireActual<typeof import('react')>('react')
   const PatientFeature = () => React.createElement('div', { 'data-testid': 'patient-shell' })
-  const ReportsFeature = () => React.createElement('div', { 'data-testid': 'reports-shell' })
+  const { useClinicalTabActivity } = jest.requireActual<
+    typeof import('@/src/application/providers/clinical-tab-activity.provider')
+  >('@/src/application/providers/clinical-tab-activity.provider')
+  const { useResourceNavigationStore } = jest.requireActual<
+    typeof import('@/src/application/stores/resource-navigation.store')
+  >('@/src/application/stores/resource-navigation.store')
+  const ReportsFeature = () => {
+    const active = useClinicalTabActivity()
+    const pending = useResourceNavigationStore((state) => state.pending)
+    const consume = useResourceNavigationStore((state) => state.consume)
+    React.useEffect(() => {
+      if (active && pending?.reportView === 'cumulative') consume()
+    }, [active, consume, pending])
+    return React.createElement('div', {
+      'data-active': active ? 'true' : 'false',
+      'data-testid': 'reports-shell',
+    })
+  }
   const MedsFeature = () => React.createElement('div', { 'data-testid': 'meds-shell' })
   const tabs = [
     { id: 'patient', labelKey: 'patient', order: 0, enabled: true },
@@ -36,13 +54,6 @@ jest.mock('@/src/application/providers/right-detail.provider', () => ({
   useRightDetail: () => ({ clearDetail: mockClearDetail }),
 }))
 
-jest.mock('@/src/application/stores/resource-navigation.store', () => ({
-  useResourceNavigationStore: (selector: (state: { pending: null; seq: number }) => unknown) => (
-    selector({ pending: null, seq: 0 })
-  ),
-  leftTabForResourceType: () => null,
-}))
-
 jest.mock('@/features/left-browser-tour', () => ({
   useLeftBrowserTourStore: (selector: (state: { active: boolean; stepId: null }) => unknown) => (
     selector({ active: false, stepId: null })
@@ -69,6 +80,7 @@ describe('LeftPanelLayout tab responsiveness', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
     frameCallbacks = []
     idleCallbacks = []
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -131,6 +143,39 @@ describe('LeftPanelLayout tab responsiveness', () => {
     expect(screen.getByTestId('reports-shell').closest('[data-slot="tabs-content"]'))
       .toHaveAttribute('data-state', 'active')
     expect(mockClearDetail).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches to an idle-mounted Reports tab before cumulative navigation is consumed', async () => {
+    render(<ClinicalSummaryFeature />)
+
+    act(() => {
+      frameCallbacks.splice(0).forEach((callback) => callback(16))
+      idleCallbacks.shift()?.({
+        didTimeout: false,
+        timeRemaining: () => 50,
+      })
+    })
+    await waitFor(() => expect(screen.getByTestId('reports-shell')).toHaveAttribute(
+      'data-active',
+      'false',
+    ))
+
+    act(() => {
+      useResourceNavigationStore.getState().navigate({
+        resourceType: 'Observation',
+        resourceId: 'obs-1',
+        reportView: 'cumulative',
+        cumulativeCategoryId: 'chem',
+      })
+    })
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: '報告' }))
+      .toHaveAttribute('aria-selected', 'true'))
+    expect(screen.getByTestId('reports-shell')).toHaveAttribute('data-active', 'true')
+    expect(useResourceNavigationStore.getState()).toMatchObject({
+      pending: null,
+      consumedSeq: 1,
+    })
   })
 
   it('keeps each clinical tab on its own scroll viewport', () => {
