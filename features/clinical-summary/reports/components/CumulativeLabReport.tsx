@@ -799,7 +799,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       <div className="mb-1 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 @min-[390px]:grid-cols-[minmax(140px,160px)_minmax(0,1fr)_auto] @min-[480px]:grid-cols-[minmax(200px,220px)_minmax(0,1fr)_auto] @min-[640px]:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_auto]">
         {activeIsMicrobiology ? (
           <span className="min-w-0 truncate text-xs font-medium text-foreground">
-            {(t.reports as any).microbiologyCumulative?.toolbarLabel ?? '依檢體追蹤'}
+            {(t.reports as any).microbiologyCumulative?.toolbarLabel ?? '依採檢日追蹤'}
           </span>
         ) : (
           <AnalyteSearchBox
@@ -813,7 +813,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
         <span className="hidden min-w-0 max-w-full items-center justify-self-center gap-1 overflow-hidden text-[0.6875rem] text-muted-foreground @min-[390px]:inline-flex">
           {activeIsMicrobiology ? (
             <span className="min-w-0 truncate">
-              {(t.reports as any).microbiologyCumulative?.hint ?? '選取結果查看完整原文'}
+              {(t.reports as any).microbiologyCumulative?.hint ?? '點列查看完整原文'}
             </span>
           ) : (
             <>

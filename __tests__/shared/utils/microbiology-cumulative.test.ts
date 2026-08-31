@@ -1,4 +1,4 @@
-import { buildMicrobiologyCumulativeModel } from '@/src/shared/utils/microbiology-cumulative.utils'
+import { buildMicrobiologyCumulativeModel, parseSusceptibilityFreeText, splitSusceptibilityResult } from '@/src/shared/utils/microbiology-cumulative.utils'
 
 const NHI_SYSTEM = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code'
 const LOCAL_SYSTEM = 'https://nhi-fhir-bridge.local/CodeSystem/his-local-lab'
@@ -240,5 +240,146 @@ describe('buildMicrobiologyCumulativeModel', () => {
       'gram-without-specimen',
     ]))
     expect(unknownTrack?.results.map((result) => result.id)).toEqual(['culture-without-specimen'])
+  })
+})
+
+describe('parseSusceptibilityFreeText', () => {
+  it('splits an NHI flattened antibiogram into organism, quantity, and verbatim drug results', () => {
+    const parsed = parseSusceptibilityFreeText(
+      '菌名：Escherichia coli 菌量：Light AN:S CTX:I CXM:I CXM-O:I CZ-O:R ETP:S FEP:S GM:S LVX:I MEM:S SAM:I SXT:R TZP:D',
+    )
+
+    expect(parsed?.leftover).toBe('')
+    expect(parsed?.isolates).toHaveLength(1)
+    expect(parsed?.isolates[0]).toMatchObject({
+      organism: 'Escherichia coli',
+      quantity: 'Light',
+    })
+    expect(parsed?.isolates[0].entries).toHaveLength(13)
+    expect(parsed?.isolates[0].entries).toEqual(expect.arrayContaining([
+      { antibiotic: 'CZ-O', result: 'R' },
+      { antibiotic: 'SXT', result: 'R' },
+      // Non-standard letters stay verbatim; the parser never rewrites values.
+      { antibiotic: 'TZP', result: 'D' },
+    ]))
+  })
+
+  it('keeps parenthesized disk names and non-S/I/R letters verbatim', () => {
+    const parsed = parseSusceptibilityFreeText(
+      '菌名:Haemophilus influenzae Ampicillin:S Chloramphenicol(C-30):S Ciprofloxacin(CIP-5):N Ceftriaxone(CRO-30):S',
+    )
+
+    expect(parsed?.isolates[0].organism).toBe('Haemophilus influenzae')
+    expect(parsed?.isolates[0].entries).toEqual(expect.arrayContaining([
+      { antibiotic: 'Chloramphenicol(C-30)', result: 'S' },
+      { antibiotic: 'Ciprofloxacin(CIP-5)', result: 'N' },
+    ]))
+  })
+
+  it('separates numbered organism slots into isolates with their own panels', () => {
+    const parsed = parseSusceptibilityFreeText(
+      '菌名1：Escherichia coli 菌量1：Light AN:S CTX:I CZ-O:R 菌名2：Klebsiella pneumoniae AN:R CTX:S CZ-O:S',
+    )
+
+    expect(parsed?.isolates).toHaveLength(2)
+    expect(parsed?.isolates[0]).toMatchObject({ organism: 'Escherichia coli', quantity: 'Light' })
+    expect(parsed?.isolates[0].entries).toEqual([
+      { antibiotic: 'AN', result: 'S' },
+      { antibiotic: 'CTX', result: 'I' },
+      { antibiotic: 'CZ-O', result: 'R' },
+    ])
+    expect(parsed?.isolates[1]).toMatchObject({ organism: 'Klebsiella pneumoniae', quantity: null })
+    expect(parsed?.isolates[1].entries).toEqual([
+      { antibiotic: 'AN', result: 'R' },
+      { antibiotic: 'CTX', result: 'S' },
+      { antibiotic: 'CZ-O', result: 'S' },
+    ])
+  })
+
+  it('accepts letter-with-MIC and bare-MIC result tokens verbatim', () => {
+    const parsed = parseSusceptibilityFreeText(
+      '菌名:Staphylococcus aureus Tigecycline:S(≦0.12) Vancomycin:S(1) Oxacillin:<=0.25 Penicillin:>8',
+    )
+
+    expect(parsed?.isolates[0].entries).toEqual([
+      { antibiotic: 'Tigecycline', result: 'S(≦0.12)' },
+      { antibiotic: 'Vancomycin', result: 'S(1)' },
+      { antibiotic: 'Oxacillin', result: '<=0.25' },
+      { antibiotic: 'Penicillin', result: '>8' },
+    ])
+    expect(splitSusceptibilityResult('S(≦0.12)')).toEqual({ letter: 'S', detail: '≦0.12' })
+    expect(splitSusceptibilityResult('<=0.25')).toEqual({ letter: null, detail: '<=0.25' })
+    expect(splitSusceptibilityResult('R')).toEqual({ letter: 'R', detail: null })
+  })
+
+  it('refuses narratives, identifications, and serology titers', () => {
+    expect(parseSusceptibilityFreeText('No growth after 8 weeks')).toBeNull()
+    expect(parseSusceptibilityFreeText('菌名1：Escherichia coli 長菌量：Light')).toBeNull()
+    // Titer notation must never be mangled into a drug panel.
+    expect(parseSusceptibilityFreeText('Negative≦1:80X(-)')).toBeNull()
+    expect(parseSusceptibilityFreeText('Cryptococcus Ag titer 1:512 positive')).toBeNull()
+  })
+})
+
+describe('classifyResultState via model', () => {
+  it('reads real hospital contamination and organism-slot phrasings correctly', () => {
+    const model = buildMicrobiologyCumulativeModel([
+      microbiologyObservation({
+        id: 'urine-contamination-note',
+        date: '2026-02-01',
+        nhiCode: '13007C',
+        nhiDisplay: '細菌培養鑑定檢查',
+        name: 'Urine Culture',
+        value: 'Nonsignificant Bacteria>=3 kinds,maybe contamination',
+      }),
+      microbiologyObservation({
+        id: 'named-isolate',
+        date: '2026-02-02',
+        nhiCode: '13016B',
+        nhiDisplay: '血液培養',
+        name: '細菌血液培養',
+        value: '菌名：Escherichia coli AN:S CTX:I CZ-O:R',
+      }),
+    ])
+
+    const results = model.tracks.flatMap((track) => track.results)
+    expect(results.find((result) => result.id === 'urine-contamination-note')?.state).toBe('contaminated')
+    expect(results.find((result) => result.id === 'named-isolate')?.state).toBe('detected')
+  })
+})
+
+describe('NHI susceptibility order codes', () => {
+  it('routes 13009C and 13015C to the susceptibility stage by code, not by item text', () => {
+    const model = buildMicrobiologyCumulativeModel([
+      microbiologyObservation({
+        id: 'one-organism-susceptibility',
+        date: '2026-03-08',
+        nhiCode: '13009C',
+        nhiDisplay: '細菌藥物敏感性試驗－1菌種',
+        name: 'Aerobic Culture(Pus/Wound)',
+        value: '菌名：Escherichia coli 菌量：Light AN:S CTX:I CZ-O:R',
+      }),
+      microbiologyObservation({
+        id: 'afb-susceptibility-no-growth',
+        date: '2025-11-17',
+        nhiCode: '13015C',
+        nhiDisplay: '抗酸菌藥物敏感性試驗—四種藥物以上',
+        name: 'AFS+Culture #1',
+        value: 'No growth after 8 weeks',
+      }),
+    ])
+
+    const results = model.tracks.flatMap((track) => track.results)
+    expect(results.find((result) => result.sourceOrderCode === '13009C')).toMatchObject({
+      stage: 'susceptibility',
+      standardizedName: '抗生素藥敏試驗',
+      state: 'detected',
+    })
+    expect(results.find((result) => result.sourceOrderCode === '13015C')).toMatchObject({
+      stage: 'susceptibility',
+      standardizedName: '抗酸菌藥敏試驗',
+      family: 'mycobacteriology',
+      state: 'noGrowth',
+    })
   })
 })

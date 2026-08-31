@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
@@ -40,7 +40,7 @@ function observation({ id, code, name, specimen, date, value }: {
 }
 
 describe('MicrobiologyCumulativeView', () => {
-  it('renders a specimen-by-stage cumulative matrix and expands source detail', () => {
+  it('renders one collection event per row with dates descending and expands source detail', () => {
     render(
       <CumulativeLabReport
         activeCategoryId="microbio"
@@ -61,24 +61,49 @@ describe('MicrobiologyCumulativeView', () => {
             date: '2026-06-12',
             value: 'No Growth for Mycobacterium',
           }),
+          observation({
+            id: 'blood-culture',
+            code: '13016B',
+            name: 'Blood Culture',
+            specimen: 'Blood',
+            date: '2026-06-13',
+            value: 'No Growth For Aerobes And Anaerobes',
+          }),
         ]}
       />,
       { wrapper: TestProviders },
     )
 
     expect(screen.getByTestId('microbiology-cumulative-view')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Sputum 分枝桿菌' })).toBeInTheDocument()
-    expect(screen.getByText('直接鏡檢／染色')).toBeInTheDocument()
-    expect(screen.getByText('培養')).toBeInTheDocument()
-    expect(screen.getByText('26/06/12')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '微生物累積結果' })).toBeInTheDocument()
+
+    // Workflow columns, in clinical reading order.
+    expect(screen.getByText('鏡檢／染色')).toBeInTheDocument()
+    expect(screen.getByText('培養／鑑定')).toBeInTheDocument()
+    // This dataset has no susceptibility results, so the column stays hidden.
+    expect(screen.queryByText('藥敏')).not.toBeInTheDocument()
+
+    // One row per collection event, newest date first.
+    const rowButtons = screen.getAllByRole('button', { name: /完整報告/ })
+    expect(rowButtons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      '26/06/13 Blood 一般細菌 完整報告',
+      '26/06/12 Sputum 分枝桿菌 完整報告',
+      '26/05/22 Sputum 分枝桿菌 完整報告',
+    ])
+    // The stain value stays in the grid; specimen columns are merged rows, so
+    // the 13026C row reads 抗酸菌培養 with its verbatim value.
+    expect(screen.getByText(/No Growth for Mycobacterium/)).toBeInTheDocument()
     expect(screen.queryByText('點檢驗名稱查看趨勢')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /No Growth for Mycobacterium/ }))
-    expect(screen.getByRole('heading', { name: '26/06/12 · 培養' })).toBeInTheDocument()
-    expect(screen.getByText('示範醫院')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '26/06/12 Sputum 分枝桿菌 完整報告' }))
+    const detail = screen.getByText('來源名稱：TB Culture').closest('td') as HTMLElement
+    expect(within(detail).getByText('抗酸菌培養')).toBeInTheDocument()
+    expect(within(detail).getByText('No Growth for Mycobacterium')).toBeInTheDocument()
+    expect(within(detail).getByText('示範醫院')).toBeInTheDocument()
+    expect(within(detail).getByText('13026C')).toBeInTheDocument()
   })
 
-  it('warns that a missing specimen is not an infection episode', () => {
+  it('keeps a missing specimen low-confidence without inventing one', () => {
     render(
       <CumulativeLabReport
         activeCategoryId="microbio"
@@ -95,7 +120,7 @@ describe('MicrobiologyCumulativeView', () => {
       { wrapper: TestProviders },
     )
 
-    expect(screen.getByRole('heading', { name: '檢體未提供 一般細菌' })).toBeInTheDocument()
-    expect(screen.getByText('僅依檢驗階段與日期排列，不代表同一次感染事件。')).toBeInTheDocument()
+    expect(screen.getByText('未提供')).toBeInTheDocument()
+    expect(screen.getByText('健保資料常缺檢體來源；「未提供」各列僅依日期排列，可能來自不同檢體。')).toBeInTheDocument()
   })
 })
