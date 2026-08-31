@@ -20,20 +20,21 @@ export async function importBundle(
   page: Page,
   options: {
     bundlePath?: string
+    locale?: 'en' | 'zh-TW'
   } = {},
 ) {
   const bundlePath = options.bundlePath || LOCAL_BUNDLE || SYNTHETIC_BUNDLE
   // Preset prefs BEFORE the app boots so first-load is deterministic:
-  // - zh-TW locale (tests assert Chinese strings)
+  // - requested locale (zh-TW by default because most tests assert Chinese strings)
   // - medical audience, already "selected"
   // - first-run onboarding marked complete
-  await page.addInitScript(() => {
-    localStorage.setItem('medical-note-locale', 'zh-TW')
+  await page.addInitScript((locale) => {
+    localStorage.setItem('medical-note-locale', locale)
     localStorage.setItem('medical-note-audience', 'medical')
     localStorage.setItem('medical-note-audience-selected', '1')
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
-  })
+  }, options.locale ?? 'zh-TW')
   await page.goto('/')
   // Register before choosing the file so a fast import cannot settle between
   // setInputFiles resolving and the next Playwright command.
@@ -92,8 +93,8 @@ export async function enableSummaryAutoGenerate(page: Page) {
  * inactive tab (mounted-but-hidden) until this tab is selected.
  */
 export async function openChatInput(page: Page) {
-  await page.getByRole('tab', { name: '臨床對話' }).click()
-  const textarea = page.getByPlaceholder(/輸入/).first()
+  await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click()
+  const textarea = page.getByPlaceholder(/輸入|Type your/).first()
   await expect(textarea).toBeVisible()
   return textarea
 }
@@ -104,5 +105,5 @@ export async function openChatInput(page: Page) {
  * page.locator('.prose') no longer means "the chat reply".
  */
 export function chatPanel(page: Page) {
-  return page.getByRole('tabpanel', { name: '臨床對話' })
+  return page.getByRole('tabpanel', { name: /臨床對話|Clinical Chat/ })
 }

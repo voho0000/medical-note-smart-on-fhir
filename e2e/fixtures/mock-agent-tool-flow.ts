@@ -137,3 +137,9 @@ export async function agentToolRequestCount(page: Page): Promise<number> {
     window as unknown as { __agentToolRequestBodies?: string[] }
   ).__agentToolRequestBodies?.length ?? 0)
 }
+
+export async function agentToolRequestBodies(page: Page): Promise<string[]> {
+  return page.evaluate(() => (
+    window as unknown as { __agentToolRequestBodies?: string[] }
+  ).__agentToolRequestBodies ?? [])
+}

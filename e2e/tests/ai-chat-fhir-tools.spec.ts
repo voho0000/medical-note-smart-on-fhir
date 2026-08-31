@@ -2,6 +2,7 @@ import { test, expect } from '../fixtures/test'
 import { chatPanel, importBundle, openChatInput } from '../fixtures/import'
 import {
   AGENT_TOOL_E2E_MARKER,
+  agentToolRequestBodies,
   agentToolRequestCount,
   mockAgentToolFlow,
   wasAgentToolResultVerified,
@@ -55,5 +56,28 @@ test.describe('AI chat FHIR tool loop', () => {
     await expect(reply).toContainText('E2E_TUMOR_TOOL_OK', { timeout: 30_000 })
     await expect.poll(() => agentToolRequestCount(page)).toBeGreaterThanOrEqual(2)
     expect(await wasAgentToolResultVerified(page)).toBe(true)
+  })
+
+  test('sends an English output contract when the UI locale is English', async ({ page }) => {
+    await mockAgentToolFlow(page, {
+      toolName: 'queryImagingRecords',
+      input: { query: 'Chest X-ray' },
+      expectedResultIncludes: ['Chest X-ray', 'Mild cardiomegaly noted'],
+      finalMarkdown: 'E2E_ENGLISH_AGENT_OK: The chest X-ray report was retrieved.',
+    })
+    await importBundle(page, { locale: 'en' })
+
+    const textarea = await openChatInput(page)
+    await textarea.fill(`Does this patient have a Chest X-ray report? ${AGENT_TOOL_E2E_MARKER}`)
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+
+    const reply = chatPanel(page).locator('.prose').last()
+    await expect(reply).toContainText('E2E_ENGLISH_AGENT_OK', { timeout: 30_000 })
+    const requestBodies = await agentToolRequestBodies(page)
+    expect(requestBodies[0]).toContain(
+      'all explanatory prose, headings, table labels, and safety wording in English',
+    )
+    expect(requestBodies[0]).not.toContain('Taiwanese Traditional Chinese')
+    expect(requestBodies[0]).not.toContain('資料未提供正常／異常判定')
   })
 })

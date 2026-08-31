@@ -60,6 +60,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: false,
         translations: mockTranslations
       }
@@ -77,6 +78,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: 'Patient has diabetes',
+        locale: 'en',
         hasPerplexityKey: false,
         translations: mockTranslations
       }
@@ -90,6 +92,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: 'Clinical data',
+        locale: 'en',
         hasPatient: true,
         hasPerplexityKey: false,
         translations: mockTranslations
@@ -109,6 +112,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: true,
         translations: mockTranslations
       }
@@ -122,6 +126,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: false,
         translations: mockTranslations
       }
@@ -135,6 +140,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: false,
         translations: mockTranslations
       }
@@ -150,6 +156,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute({
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: false,
         availableToolNames: ['queryAllergies'],
         translations: mockTranslations,
@@ -160,15 +167,36 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).not.toContain('Query reports')
       expect(result).toContain('use the fewest relevant tools')
       expect(result.startsWith('# NON-NEGOTIABLE CLINICAL OUTPUT CONTRACT')).toBe(true)
-      expect(result).toContain('Taiwanese Traditional Chinese')
+      expect(result).toContain('all explanatory prose, headings, table labels, and safety wording in English')
+      expect(result).toContain('"Not provided"')
+      expect(result).toContain('"Normal/abnormal assessment not provided"')
+      expect(result).not.toContain('Taiwanese Traditional Chinese')
+      expect(result).not.toContain('資料未提供')
       expect(result).toContain('Never infer a medication')
       expect(result).toContain('use only tool-provided normalityStatus')
+    })
+
+    it('uses Taiwanese Traditional Chinese safety wording for the zh-TW UI locale', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: '基礎提示',
+        clinicalContext: '',
+        locale: 'zh-TW',
+        hasPerplexityKey: false,
+        availableToolNames: [],
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('Taiwanese Traditional Chinese (zh-TW)')
+      expect(result).toContain('「資料未提供」')
+      expect(result).toContain('「資料未提供正常／異常判定」')
+      expect(result).not.toContain('safety wording in English')
     })
 
     it('should handle empty clinical context', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '   ',
+        locale: 'en',
         hasPerplexityKey: false,
         translations: mockTranslations
       }
@@ -183,6 +211,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: 'Clinical data',
+        locale: 'en',
         hasPatient: true,
         hasPerplexityKey: false,
         translations: mockTranslations
@@ -198,6 +227,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute({
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPatient: true,
         hasPerplexityKey: false,
         availableToolNames: [],
@@ -215,6 +245,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute({
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPerplexityKey: false,
         currentEvidenceUnavailable: true,
         translations: mockTranslations,
@@ -229,6 +260,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute({
         baseSystemPrompt: 'Base prompt',
         clinicalContext: '',
+        locale: 'en',
         hasPatient: true,
         hasPerplexityKey: true,
         turnDataScope: 'auto',

@@ -559,6 +559,7 @@ export function useAgentChat(
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
           clinicalContext: '',
+          locale,
           hasPatient: !!patient?.id,
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,

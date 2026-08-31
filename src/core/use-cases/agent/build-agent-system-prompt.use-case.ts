@@ -4,10 +4,13 @@
  */
 
 import type { ChatDataScope } from '@/src/core/entities/chat-message.entity'
+import type { Locale } from '@/src/shared/i18n/i18n.config'
 
 export interface BuildAgentSystemPromptInput {
   baseSystemPrompt: string
   clinicalContext: string
+  /** The UI locale is the authoritative language for the complete answer. */
+  locale: Locale
   /**
    * Whether a patient context is loaded. The actual FHIR ID is deliberately
    * NOT included in the prompt — it would be sent to cloud LLM providers on
@@ -158,14 +161,22 @@ ${clinicalContext}
 - ${t.useToolsWhenNeeded}`
       : `- ${t.useToolsDirectly}`
 
+    const outputLanguageRule = input.locale === 'zh-TW'
+      ? 'Write all explanatory prose, headings, table labels, and safety wording in Taiwanese Traditional Chinese (zh-TW). Never use Simplified Chinese or Mainland-China medical wording. For example, write「突變、四環素、腸、門」, never「突变、四环素、肠、门」. Preserve source fields exactly only where the grounding rules below require verbatim copying.'
+      : 'Write all explanatory prose, headings, table labels, and safety wording in English. Do not switch to Chinese merely because clinical records or tool results contain Chinese text. Preserve source fields exactly only where the grounding rules below require verbatim copying.'
+    const missingValueText = input.locale === 'zh-TW' ? '「資料未提供」' : '"Not provided"'
+    const missingNormalityText = input.locale === 'zh-TW'
+      ? '「資料未提供正常／異常判定」'
+      : '"Normal/abnormal assessment not provided"'
+
     const safetyContract = `# NON-NEGOTIABLE CLINICAL OUTPUT CONTRACT
 These rules override every later style instruction. An answer that violates any rule is invalid and must be rewritten before returning.
-1. Write only Taiwanese Traditional Chinese (zh-TW). Never use Simplified Chinese or Mainland-China medical wording. For example, write「突變、四環素、腸、門」, never「突变、四环素、肠、门」.
+1. ${outputLanguageRule}
 2. Copy medication names, dose text, and frequency exactly from tool output. Do not translate, expand, normalize, or guess them. Unless the user explicitly asks for a drug explanation, list only the medication fields returned by tools and omit any ingredient / purpose / drug-class column.
-3. Never infer a medication ingredient, drug class, indication, formulation, or treatment target from a brand name. If the tool did not provide a field, write「資料未提供」.
-4. For laboratory results, use only tool-provided normalityStatus and referenceRange. Never add customary ranges, diagnose conditions such as anemia, infer a cause, or call an unassessed value stable/normal. If normalityStatus is "Not provided", write「資料未提供正常／異常判定」.
+3. Never infer a medication ingredient, drug class, indication, formulation, or treatment target from a brand name. If the tool did not provide a field, write ${missingValueText}.
+4. For laboratory results, use only tool-provided normalityStatus and referenceRange. Never add customary ranges, diagnose conditions such as anemia, infer a cause, or call an unassessed value stable/normal. If normalityStatus is "Not provided", write ${missingNormalityText}.
 5. Every diagnosis, medication, laboratory value, status, range, and date must be grounded in tool output. Do not recommend treatment changes. Ask the user to discuss clinically important findings with their physician.
-Before returning, scan the complete answer once for unsupported medication explanations, invented ranges or diagnoses, internal contradictions, and Simplified Chinese; rewrite any violation.`
+Before returning, scan the complete answer once for the wrong output language, unsupported medication explanations, invented ranges or diagnoses, and internal contradictions; rewrite any violation.`
 
     const currentEvidenceContract = input.currentEvidenceUnavailable
       ? `# CURRENT-EVIDENCE LIMITATION

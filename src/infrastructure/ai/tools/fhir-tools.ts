@@ -802,7 +802,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: {
             medicationFieldsOnly: true,
             normalityStatusIsAuthoritative: true,
-            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. For medications, name is the canonical coded label and recordedName is the literal source label when different; repeat both exactly and do not infer a translation, ingredient, purpose, or drug class. Do not add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Answer in Taiwan Traditional Chinese with sections for recent condition/chronic disease, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
+            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. For medications, name is the canonical coded label and recordedName is the literal source label when different; repeat both exactly and do not infer a translation, ingredient, purpose, or drug class. Do not add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Follow the system prompt language for the entire answer, including headings and table labels. Use sections for recent conditions/chronic diseases, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
           },
           data: {
             conditions,

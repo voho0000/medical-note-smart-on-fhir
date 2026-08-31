@@ -861,6 +861,8 @@ describe('createFhirTools (unified)', () => {
         medicationFieldsOnly: true,
         normalityStatusIsAuthoritative: true,
       })
+      expect(r.groundingRules.instruction).toContain('Follow the system prompt language')
+      expect(r.groundingRules.instruction).not.toContain('Taiwan Traditional Chinese')
     })
 
     it('does not expose patient identifiers in the snapshot', async () => {
