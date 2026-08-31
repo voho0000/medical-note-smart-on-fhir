@@ -591,7 +591,7 @@ export function MicrobiologyCumulativeView({
                         <span className="sr-only">{formatDate(event.date)}</span>
                       )}
                     </td>
-                    <th scope="row" className="px-0 py-0 text-left align-top font-normal">
+                    <th scope="row" className="overflow-hidden px-0 py-0 text-left align-top font-normal">
                       <button
                         type="button"
                         aria-expanded={isExpanded}
@@ -602,10 +602,10 @@ export function MicrobiologyCumulativeView({
                         }}
                         className="flex min-h-full w-full flex-col items-start px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       >
-                        <span className={`font-medium ${event.specimenConfidence === 'missing' ? 'text-muted-foreground' : 'text-foreground'}`}>
+                        <span className={`w-full break-words font-medium ${event.specimenConfidence === 'missing' ? 'text-muted-foreground' : 'text-foreground'}`}>
                           {specimenCellLabel(event)}
                         </span>
-                        <span className="text-[0.6875rem] text-muted-foreground">
+                        <span className="w-full break-words text-[0.6875rem] text-muted-foreground">
                           {familyLabel(event.family)}
                           {event.specimenConfidence === 'inferred' && (
                             <> · {strings.specimenInferredShort ?? '推定'}</>
