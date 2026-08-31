@@ -238,11 +238,13 @@ export function MedicationItem({
             {/* Narrow rows show the start date only. The end date is
                 recoverable from start + supply days, so dropping it there
                 buys the width this lane needs instead of truncating the
-                supply window away. The title and the expanded detail keep
-                the full range. */}
+                supply window away. The threshold is measured, not guessed: a
+                430pt phone renders this row 384px wide, so it has to sit
+                ABOVE that. The title and the expanded detail keep the full
+                range. */}
             {startShort || endShort}
             {startShort && endShort && (
-              <span data-medication-schedule-end className="hidden @min-[384px]:inline">
+              <span data-medication-schedule-end className="hidden @min-[456px]:inline">
                 {` → ${endShort}`}
               </span>
             )}
