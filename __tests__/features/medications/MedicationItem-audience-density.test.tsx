@@ -142,7 +142,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const supplyLane = container.querySelector('[data-medication-cell="supply"]')
     expect(scheduleLine).not.toHaveTextContent('R05CB01')
     expect(scheduleLine).toHaveTextContent('2026/7/22 → 2026/8/12（21 天）')
-    expect(scheduleLine).not.toHaveTextContent('長庚嘉義')
+    expect(scheduleLine).toHaveTextContent('長庚嘉義')
     expect(contextLine).not.toHaveTextContent('長庚嘉義')
     expect(classificationLine).toHaveTextContent('長庚嘉義')
     expect(clinicalLane).not.toHaveTextContent('R05CB01')
@@ -338,7 +338,9 @@ describe('MedicationItem audience-aware compact terminology', () => {
       )
       expect(container.querySelector('[data-medication-frequency]')).toHaveTextContent('QOD')
       expect(container.querySelector('[data-medication-route]')).toHaveTextContent('PO')
-      expect(schedule?.textContent).toBe(
+      // The classification chips share this lane now; assert the regimen
+      // prefix rather than the whole line.
+      expect(schedule?.textContent).toContain(
         '2026/8/5 → 2026/9/4（30 天） 1 錠 QOD  總量 15',
       )
       expect(
@@ -351,23 +353,32 @@ describe('MedicationItem audience-aware compact terminology', () => {
         .not.toHaveClass('font-semibold', 'text-foreground/80')
       expect(context).not.toHaveTextContent('新北市聯合醫院')
       expect(classification).toHaveTextContent('新北市聯合醫院')
-      expect(schedule).not.toHaveTextContent('新北市聯合醫院')
+      // Institution shares the schedule lane now (row is two lines), but it
+      // must still be its own classification element, not regimen text.
+      expect(schedule).toContainElement(classification)
       expect(container.querySelector('[data-medication-total-quantity]'))
         .toHaveTextContent('總量 15')
       expect(container.querySelector('[data-medication-supply-days]'))
         .toHaveTextContent('（30 天）')
       expect(dateText()).toHaveAttribute('title', '2026/8/5 → 2026/9/4（30 天）')
-      expect(dateText().parentElement).toHaveClass('shrink')
+      // The window no longer shrinks: it shares the line with the chips and
+      // must stay readable, so they truncate instead.
+      expect(dateText().parentElement).toHaveClass('shrink-0')
       expect(screen.getByText('1 錠').parentElement).toHaveClass('shrink-0')
+      // The identity wrapper dissolves at every width now, so the regimen line
+      // spans columns 1-2 instead of being trapped beside the clinical lane.
       expect(container.querySelector('[data-medication-cell="identity"]'))
-        .toHaveClass('@max-[455px]:contents')
+        .toHaveClass('contents')
       expect(schedule).toHaveClass(
         'col-span-2',
         'row-start-3',
-        '@min-[312px]:col-span-3',
+        // Leaves column 3 to the supply lane, which now spans both lines.
+        '@min-[312px]:col-span-2',
         '@min-[312px]:row-start-2',
       )
-      expect(context).toHaveClass('row-start-1')
+      // The clinical lane is a single flex line now, so the ICD fills it
+      // instead of occupying the first of two stacked sub-rows.
+      expect(context).toHaveClass('flex-1')
     })
 
     it('omits missing supply facts without leaving empty labels', () => {
@@ -409,7 +420,9 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
     const contextLine = container.querySelector('[data-medication-context]')
     const classificationLine = container.querySelector('[data-medication-classification]')
-    const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑')
+    // The chip clips on its box and ellipses on an inner span, so the text
+    // node's parent is the chip itself.
+    const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑').parentElement!
     const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
 
     // Thresholds are px, not rem: the root font-size is 12px here, so a rem
@@ -423,7 +436,10 @@ describe('MedicationItem audience-aware compact terminology', () => {
       '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
       '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem]',
     )
-    expect(clinicalLane).toHaveClass('h-8', 'grid-rows-2')
+    // One line high: the clinical lane carries the ICD alone, and the
+    // institution/class moved down beside the regimen so the row is 2 lines.
+    expect(clinicalLane).toHaveClass('h-4')
+    expect(clinicalLane).not.toHaveClass('grid-rows-2')
     expect(category).toHaveClass('max-w-full')
     expect(category).not.toHaveClass('max-w-[10rem]')
     expect(contextLine).toContainElement(icd)

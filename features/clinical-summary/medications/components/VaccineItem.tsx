@@ -87,7 +87,7 @@ export function VaccineItem({ vaccine }: VaccineItemProps) {
               title={vaccine.category}
               className={medicationCategoryChipClass}
             >
-              {vaccine.category}
+              <span className="truncate">{vaccine.category}</span>
             </span>
           )}
         </div>

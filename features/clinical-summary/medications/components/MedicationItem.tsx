@@ -228,7 +228,10 @@ export function MedicationItem({
 
       scheduleParts.push({
         key: 'date',
-        fixed: false,
+        // The coverage window shares its line with the institution and class
+        // chips now, and it is the part a clinician reads first — keep it
+        // whole and let those chips absorb the squeeze instead.
+        fixed: true,
         node: (
           <span
             data-testid="medication-schedule-date"
@@ -359,10 +362,15 @@ export function MedicationItem({
           {leadingControl}
         </div>
       )}
-      {/* Medication/prescription lane: drug + route, then the full regimen. */}
+      {/* Medication/prescription lane: drug + route, then the full regimen.
+          The wrapper always dissolves into the row grid. It used to stay a
+          block on wide rows so name and regimen could stack beside a two-line
+          clinical lane; that lane is one line now, so keeping the block would
+          trap the regimen in column 1 and truncate the institution even on a
+          1440px screen. */}
       <div
         data-medication-cell="identity"
-        className="min-w-0 overflow-hidden @max-[455px]:contents"
+        className="contents"
       >
         <div className="col-start-1 row-start-1 flex h-4 min-w-0 items-center">
           <MedicationTerminologyTooltip medication={medication} enabled>
@@ -395,7 +403,7 @@ export function MedicationItem({
 
         <div
           data-medication-schedule
-          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-3 @min-[312px]:row-start-2"
+          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-2 @min-[312px]:row-start-2"
         >
           {scheduleParts.map((part, index) => (
             <span
@@ -425,6 +433,67 @@ export function MedicationItem({
               {part.node}
             </span>
           ))}
+        <div
+            data-medication-classification
+            className="flex h-4 min-w-0 shrink items-center gap-1 overflow-hidden"
+          >
+            {medication.pharmacy && (
+              <TruncatedRevealLabel
+                data-testid="medication-institution"
+                text={medication.pharmacy}
+                className={cn(
+                  "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
+                  CLINICAL_SOURCE_TONE,
+                )}
+              />
+            )}
+            {/* A clinician reading TAMSULOSIN does not need "未分類治療藥物"
+                beside it; the class is the most derivable of the four facts on
+                this line, so narrow rows spend that width on the institution
+                instead and keep the class in the expanded detail. */}
+            {medication.category && (
+              <span
+                title={medication.category}
+                className={cn(medicationCategoryChipClass, "hidden shrink @min-[456px]:inline-flex")}
+              >
+                <span className="truncate">{medication.category}</span>
+              </span>
+            )}
+            {medication.isChronic && (
+              <span
+                data-medication-chronic-slot
+                data-visible="true"
+                title={mt.chronicTooltip ?? 'Continuous long term therapy'}
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[0.625rem] font-medium",
+                  medicationChronicBadgeClass,
+                )}
+              >
+                {chronicLabel}
+              </span>
+            )}
+            {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
+                the SAME institution is still inside its window and was folded
+                into this row (one continuing prescription). Cross-institution
+                same-drug rows are never merged — that would mask a potential
+                duplicate-therapy signal. */}
+            {(medication.overlapCount ?? 0) > 0 && (
+              <span
+                title={mt.renewedTooltip ?? 'Previous fill from the same institution still in window; showing the latest fill of one continuing prescription.'}
+                className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/50 px-1.5 py-0 text-[0.625rem] font-medium text-muted-foreground"
+              >
+                {mt.renewed ?? '已續領'}
+              </span>
+            )}
+            {showStatementChip && (
+              <span
+                title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
+                className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
+              >
+                {sourceChipStatementLabel ?? '目前服用'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -432,12 +501,12 @@ export function MedicationItem({
           and prescription-state tags. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 grid h-8 min-w-0 grid-rows-2 overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
+        className="col-span-2 row-start-2 flex h-4 min-w-0 items-center overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
       >
         <div
           data-medication-context
           data-medication-diagnosis
-          className="row-start-1 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap"
+          className="flex h-4 min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         >
           {isMedical && medication.icdCode && (
             <Tooltip>
@@ -468,63 +537,6 @@ export function MedicationItem({
           )}
         </div>
 
-        <div
-          data-medication-classification
-          className="row-start-2 flex h-4 min-w-0 items-center gap-1 overflow-hidden"
-        >
-          {medication.pharmacy && (
-            <TruncatedRevealLabel
-              data-testid="medication-institution"
-              text={medication.pharmacy}
-              className={cn(
-                "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
-                CLINICAL_SOURCE_TONE,
-              )}
-            />
-          )}
-          {medication.category && (
-            <span
-              title={medication.category}
-              className={cn(medicationCategoryChipClass, "shrink")}
-            >
-              {medication.category}
-            </span>
-          )}
-          {medication.isChronic && (
-            <span
-              data-medication-chronic-slot
-              data-visible="true"
-              title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className={cn(
-                "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[0.625rem] font-medium",
-                medicationChronicBadgeClass,
-              )}
-            >
-              {chronicLabel}
-            </span>
-          )}
-          {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
-              the SAME institution is still inside its window and was folded
-              into this row (one continuing prescription). Cross-institution
-              same-drug rows are never merged — that would mask a potential
-              duplicate-therapy signal. */}
-          {(medication.overlapCount ?? 0) > 0 && (
-            <span
-              title={mt.renewedTooltip ?? 'Previous fill from the same institution still in window; showing the latest fill of one continuing prescription.'}
-              className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/50 px-1.5 py-0 text-[0.625rem] font-medium text-muted-foreground"
-            >
-              {mt.renewed ?? '已續領'}
-            </span>
-          )}
-          {showStatementChip && (
-            <span
-              title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
-              className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
-            >
-              {sourceChipStatementLabel ?? '目前服用'}
-            </span>
-          )}
-        </div>
       </div>
 
       {/* Supply lane: a fixed-width status/readout pair. Keeping both values
@@ -532,7 +544,7 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[312px]:col-start-3"
+        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[312px]:col-start-3 @min-[312px]:row-span-2"
       >
         <div className="flex h-4 items-center">
           <Badge

@@ -5,7 +5,7 @@ import {
 } from '@/features/clinical-summary/components/clinical-metadata-styles'
 
 const MEDICATION_CATEGORY_CHIP_BASE =
-  "inline-flex h-5 min-w-0 items-center truncate rounded-sm bg-secondary/65 px-1.5 py-0 text-[0.6875rem] font-medium text-secondary-foreground/75 dark:bg-secondary/55 dark:text-secondary-foreground/80"
+  "inline-flex h-5 min-w-0 items-center overflow-hidden rounded-sm bg-secondary/65 px-1.5 py-0 text-[0.6875rem] font-medium text-secondary-foreground/75 dark:bg-secondary/55 dark:text-secondary-foreground/80"
 
 export const medicationCategoryChipClass =
   `${MEDICATION_CATEGORY_CHIP_BASE} max-w-full`
