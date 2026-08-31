@@ -338,8 +338,9 @@ describe('MedicationItem audience-aware compact terminology', () => {
       )
       expect(container.querySelector('[data-medication-frequency]')).toHaveTextContent('QOD')
       expect(container.querySelector('[data-medication-route]')).toHaveTextContent('PO')
-      // The classification chips share this lane now; assert the regimen
-      // prefix rather than the whole line.
+      // The shared wrapper still exposes all prescription metadata in DOM
+      // order; on wide containers CSS places regimen and classification in
+      // separate, vertically aligned grid columns.
       expect(schedule?.textContent).toContain(
         '2026/8/5 → 2026/9/4（30 天） 1 錠 QOD  總量 15',
       )
@@ -353,9 +354,19 @@ describe('MedicationItem audience-aware compact terminology', () => {
         .not.toHaveClass('font-semibold', 'text-foreground/80')
       expect(context).not.toHaveTextContent('新北市聯合醫院')
       expect(classification).toHaveTextContent('新北市聯合醫院')
-      // Institution shares the schedule lane now (row is two lines), but it
-      // must still be its own classification element, not regimen text.
+      // Institution remains its own classification element. On phone-sized
+      // containers it stays inline; at 456px+ it becomes the second-column
+      // row directly below ICD without a JavaScript resize path.
       expect(schedule).toContainElement(classification)
+      expect(schedule).toHaveClass('@min-[456px]:contents')
+      expect(container.querySelector('[data-medication-regimen]')).toHaveClass(
+        '@min-[456px]:col-start-1',
+        '@min-[456px]:row-start-2',
+      )
+      expect(classification).toHaveClass(
+        '@min-[456px]:col-start-2',
+        '@min-[456px]:row-start-2',
+      )
       expect(container.querySelector('[data-medication-total-quantity]'))
         .toHaveTextContent('總量 15')
       expect(container.querySelector('[data-medication-supply-days]'))
@@ -376,8 +387,8 @@ describe('MedicationItem audience-aware compact terminology', () => {
         '@min-[312px]:col-span-2',
         '@min-[312px]:row-start-2',
       )
-      // The clinical lane is a single flex line now, so the ICD fills it
-      // instead of occupying the first of two stacked sub-rows.
+      // ICD remains a single flex line while classification independently
+      // occupies the same column's second grid row on wide containers.
       expect(context).toHaveClass('flex-1')
     })
 
@@ -436,8 +447,9 @@ describe('MedicationItem audience-aware compact terminology', () => {
       '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
       '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem]',
     )
-    // One line high: the clinical lane carries the ICD alone, and the
-    // institution/class moved down beside the regimen so the row is 2 lines.
+    // The clinical lane carries ICD alone. At wide widths classification is a
+    // separate grid item immediately below it; on phones it stays inline with
+    // the regimen, preserving the compact mobile row.
     expect(clinicalLane).toHaveClass('h-4')
     expect(clinicalLane).not.toHaveClass('grid-rows-2')
     expect(category).toHaveClass('max-w-full')
@@ -448,6 +460,10 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(contextLine).not.toHaveTextContent('長庚嘉義')
     expect(classificationLine).toHaveTextContent('長庚嘉義')
     expect(classificationLine).toContainElement(category)
+    expect(classificationLine).toHaveClass(
+      '@min-[456px]:col-start-2',
+      '@min-[456px]:row-start-2',
+    )
     expect(clinicalLane).toContainElement(icd)
     const icdTooltip = screen.getByTestId('medication-icd-tooltip')
     expect(icdTooltip).toHaveClass(

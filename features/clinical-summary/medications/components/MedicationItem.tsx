@@ -363,11 +363,7 @@ export function MedicationItem({
         </div>
       )}
       {/* Medication/prescription lane: drug + route, then the full regimen.
-          The wrapper always dissolves into the row grid. It used to stay a
-          block on wide rows so name and regimen could stack beside a two-line
-          clinical lane; that lane is one line now, so keeping the block would
-          trap the regimen in column 1 and truncate the institution even on a
-          1440px screen. */}
+          The identity wrapper dissolves into the row grid at every width. */}
       <div
         data-medication-cell="identity"
         className="contents"
@@ -403,39 +399,44 @@ export function MedicationItem({
 
         <div
           data-medication-schedule
-          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-2 @min-[312px]:row-start-2"
+          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-2 @min-[312px]:row-start-2 @min-[456px]:contents"
         >
-          {scheduleParts.map((part, index) => (
-            <span
-              key={part.key}
-              className={cn(
-                "inline-flex min-w-0 items-center",
-                part.fixed ? "shrink-0" : "shrink",
-              )}
-            >
-              {index > 0 && (
-                <span
-                  aria-hidden
-                  data-medication-frequency-total-gap={
-                    part.key === 'total-quantity'
-                    && scheduleParts[index - 1]?.key === 'frequency'
-                      ? 'true'
-                      : undefined
-                  }
-                  className="whitespace-pre"
-                >
-                  {part.key === 'total-quantity'
-                    && scheduleParts[index - 1]?.key === 'frequency'
-                    ? '  '
-                    : ' '}
-                </span>
-              )}
-              {part.node}
-            </span>
-          ))}
-        <div
+          <div
+            data-medication-regimen
+            className="flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap @min-[456px]:col-start-1 @min-[456px]:row-start-2"
+          >
+            {scheduleParts.map((part, index) => (
+              <span
+                key={part.key}
+                className={cn(
+                  "inline-flex min-w-0 items-center",
+                  part.fixed ? "shrink-0" : "shrink",
+                )}
+              >
+                {index > 0 && (
+                  <span
+                    aria-hidden
+                    data-medication-frequency-total-gap={
+                      part.key === 'total-quantity'
+                      && scheduleParts[index - 1]?.key === 'frequency'
+                        ? 'true'
+                        : undefined
+                    }
+                    className="whitespace-pre"
+                  >
+                    {part.key === 'total-quantity'
+                      && scheduleParts[index - 1]?.key === 'frequency'
+                      ? '  '
+                      : ' '}
+                  </span>
+                )}
+                {part.node}
+              </span>
+            ))}
+          </div>
+          <div
             data-medication-classification
-            className="flex h-4 min-w-0 shrink items-center gap-1 overflow-hidden"
+            className="flex h-4 min-w-0 shrink items-center gap-1 overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-2"
           >
             {medication.pharmacy && (
               <TruncatedRevealLabel
@@ -497,8 +498,9 @@ export function MedicationItem({
         </div>
       </div>
 
-      {/* Diagnosis/classification lane: ICD above institution, source ATC3,
-          and prescription-state tags. */}
+      {/* Diagnosis lane: on wide rows the institution/classification grid item
+          above lands in this same column on row 2, directly below the ICD.
+          Narrow rows keep it inline with the regimen to preserve phone density. */}
       <div
         data-medication-cell="clinical"
         className="col-span-2 row-start-2 flex h-4 min-w-0 items-center overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
