@@ -29,6 +29,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 |---|---|
 | `smoke.spec.ts` | Import Bundle and render patient |
 | `demo-data.spec.ts` | Load／identify／exit built-in demo |
+| `medical-summary-cumulative-navigation.spec.ts` | AI summary → cumulative report navigation from every non-report clinical tab after Reports background pre-mount |
 | `problem-list.spec.ts` | Encounter diagnoses and resolved-status filter |
 | `reports-search.spec.ts` | Search report content, institution and numeric result; highlight and empty state |
 | `trend-charts.spec.ts` | BP SBP／DBP and single-analyte labels／normal band |
