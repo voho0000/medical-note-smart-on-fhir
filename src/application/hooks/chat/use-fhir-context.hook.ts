@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { fhirClient, LocalBundleModeError, shouldUseLocalBundle, hasSmartContext } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { useLanguage } from '@/src/application/providers/language.provider'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 
 /**
@@ -31,6 +32,7 @@ interface FhirContext {
 
 export function useFhirContext(): FhirContext {
   const { patient, loading: patientLoading } = usePatient()
+  const { locale } = useLanguage()
   const [fhirServerUrl, setFhirServerUrl] = useState<string | null>(null)
   const [isLoadingServer, setIsLoadingServer] = useState(true)
 
@@ -100,7 +102,7 @@ export function useFhirContext(): FhirContext {
 
   return useMemo(() => {
     const patientId = patient?.id || null
-    const patientName = patient ? getPatientDisplayName(patient) : null
+    const patientName = patient ? getPatientDisplayName(patient, locale) : null
     
     return {
       patientId,
@@ -108,5 +110,5 @@ export function useFhirContext(): FhirContext {
       fhirServerUrl,
       isLoading: patientLoading || isLoadingServer,
     }
-  }, [patient, fhirServerUrl, patientLoading, isLoadingServer])
+  }, [patient, locale, fhirServerUrl, patientLoading, isLoadingServer])
 }

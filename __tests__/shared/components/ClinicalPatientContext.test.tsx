@@ -9,12 +9,20 @@ import { ClinicalPatientContext } from '@/src/shared/components/clinical-workspa
 const patient = {
   resourceType: 'Patient' as const,
   id: 'internal-patient-123',
-  name: [{ text: '王小明' }],
+  name: [{ text: '王小明', given: ['Xiaoming'], family: 'Wang' }],
   age: 42,
   gender: 'male' as const,
 }
 
 describe('ClinicalPatientContext', () => {
+  beforeEach(() => {
+    localStorage.setItem('medical-note-locale', 'zh-TW')
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+  })
+
   it.each(['header', 'mobile'] as const)(
     'shows only name, age, and gender in the %s context',
     (variant) => {
@@ -33,4 +41,20 @@ describe('ClinicalPatientContext', () => {
       }
     },
   )
+
+  it('shows the supplied Romanized name in the English context', async () => {
+    localStorage.setItem('medical-note-locale', 'en')
+
+    render(
+      <LanguageProvider>
+        <ClinicalPatientContext patient={patient} variant="header" />
+      </LanguageProvider>,
+    )
+
+    const context = await screen.findByLabelText(
+      'Patient Information · Xiaoming Wang · 42 years · Male',
+    )
+    expect(context).toHaveTextContent('Xiaoming Wang·42 years·Male')
+    expect(context).not.toHaveTextContent('王小明')
+  })
 })

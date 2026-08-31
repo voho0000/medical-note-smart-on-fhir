@@ -14,10 +14,10 @@ import {
 import { useLanguage } from '@/src/application/providers/language.provider'
 
 export function usePatientInfo(patient: any) {
-  const { t } = useLanguage()
+  const { locale, t } = useLanguage()
   return useMemo<PatientInfo | null>(() => {
     if (!patient) return null
-    const rawName = formatName(patient)
+    const rawName = formatName(patient, locale)
     const missingName = ['n/a', 'unknown', 'unknown patient'].includes(
       rawName.trim().toLowerCase(),
     )
@@ -43,5 +43,5 @@ export function usePatientInfo(patient: any) {
       contacts: formatContacts(patient, t.patient),
       userEnteredFields: patient.userEnteredDemographicFields,
     }
-  }, [patient, t])
+  }, [locale, patient, t])
 }

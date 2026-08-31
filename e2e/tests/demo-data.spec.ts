@@ -59,4 +59,38 @@ test.describe('demo data (試用資料)', () => {
     )
     await expect(meta.locator('time')).toHaveCount(0)
   })
+
+  test('seeds the English medical summary immediately after switching locale', async ({ page }) => {
+    await page.getByTestId('welcome-demo-card').click()
+    await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+
+    await page.getByRole('button', { name: '繁體中文' }).click()
+    await page.getByRole('menuitem', { name: 'English' }).click()
+
+    await expect(page.getByText('○-Ming Chen').first()).toBeVisible()
+
+    const summaryPanel = page.getByRole('tabpanel', { name: 'Summary', exact: true })
+    await expect(summaryPanel.getByText(
+      '94-year-old man with stage 3b chronic kidney disease and anemia; recent claims repeatedly include pneumonia and hematologic-disease diagnosis codes.',
+      { exact: true },
+    )).toBeVisible({ timeout: 20_000 })
+
+    const meta = summaryPanel.getByTestId('medical-summary-generation-meta')
+    await expect(meta).toHaveText('Pre-generated·Gemini 3.1 Flash-Lite')
+    await expect(meta).toHaveAttribute(
+      'aria-label',
+      'Pre-generated summary created with Gemini 3.1 Flash-Lite',
+    )
+
+    await summaryPanel.getByRole('tab', { name: 'Custom summaries' }).click()
+    const customModule = summaryPanel.locator('article').filter({
+      has: page.getByRole('heading', { name: "What's Changed" }),
+    })
+    await expect(customModule).toContainText('Recent important changes', { timeout: 20_000 })
+    await expect(customModule.getByTestId('custom-insight-generation-meta'))
+      .toHaveAttribute(
+        'aria-label',
+        'Pre-generated summary created with Gemini 3.1 Flash-Lite',
+      )
+  })
 })

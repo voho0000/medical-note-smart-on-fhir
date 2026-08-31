@@ -15,6 +15,7 @@ import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clini
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
+import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
 import {
@@ -97,6 +98,7 @@ function panelCacheKey(patientId: string, panelId: string): string {
 export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactNode }) {
   const { panels } = useClinicalInsightsConfig()
   const { audience } = useAudience()
+  const { locale } = useLanguage()
   const {
     apiKey: openAiKey,
     geminiKey,
@@ -265,9 +267,16 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         panelCacheKey(patientId, panel.id),
         INSIGHTS_CACHE_MAX_AGE_MS,
       )
-      const demo = getDemoClinicalInsightSnapshot(patientId, audience, panel.id)
+      const demo = getDemoClinicalInsightSnapshot(patientId, audience, locale, panel.id)
       const matchingDemo = demo && contentSignature(demo.prompt) === panel.promptSig
         ? demo
+        : undefined
+      const bundledDemoEntry = matchingDemo
+        ? {
+            text: matchingDemo.text,
+            isEdited: false,
+            metadata: { ...DEMO_CLINICAL_INSIGHT_GENERATION },
+          }
         : undefined
       if (!cached) {
         // The demo bundle is frozen and its bundled insight snapshots are
@@ -275,12 +284,8 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         // retained from the user's own data; otherwise the hidden custom-
         // insight runtime can silently start cloud AI while the standard demo
         // summary is loading. A deliberate regenerate still uses `model`.
-        if (matchingDemo) {
-          return [panel.id, {
-            text: matchingDemo.text,
-            isEdited: false,
-            metadata: { ...DEMO_CLINICAL_INSIGHT_GENERATION },
-          }] as const
+        if (bundledDemoEntry) {
+          return [panel.id, bundledDemoEntry] as const
         }
         return null
       }
@@ -304,7 +309,13 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         cached.promptSig !== panel.promptSig ||
         !sourceMatches ||
         cached.pipelineVersion !== INSIGHTS_PIPELINE_VERSION
-      ) return null
+      ) {
+        // Locale changes intentionally replace bundled default prompts. The
+        // cache key is panel-scoped, so a valid zh-TW demo entry can still be
+        // present while the English panel hydrates (and vice versa). Fall back
+        // to the locale-matched bundled snapshot instead of rendering blank.
+        return bundledDemoEntry ? [panel.id, bundledDemoEntry] as const : null
+      }
       return [panel.id, cached.entry] as const
     })).then((entries) => {
       if (cancelled) return
@@ -314,7 +325,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     })
 
     return () => { cancelled = true }
-  }, [audience, cacheIdentity, contextSig, fittedClinicalInput.inputSignature, hydratedCacheIdentity, panelPromptIdentity, patientId, resultScopeIdentity, setResponses])
+  }, [audience, cacheIdentity, contextSig, fittedClinicalInput.inputSignature, hydratedCacheIdentity, locale, panelPromptIdentity, patientId, resultScopeIdentity, setResponses])
 
   // Persist each completed card separately; one slow or failed module never
   // blocks another module from becoming reusable on refresh.

@@ -26,7 +26,7 @@ export function ClinicalPatientContext({
 
   if (!patient) return null
 
-  const name = getPatientDisplayName(patient)
+  const name = getPatientDisplayName(patient, locale)
   const age = patient.age ?? calculateAge(patient.birthDate)
   const ageText =
     age === null

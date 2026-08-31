@@ -571,14 +571,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   // reply, so citations verify against the real catalog.
   const demoSeed = useCallback((ctx: AiSlotDemoContext): MedicalSummaryResult | null => {
     const demoAudience = ctx.audience === 'patient' ? 'patient' : 'medical'
+    const demoLocale = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const snapshot = remapDemoSnapshotSourceKeys(
-      demoMedicalSummarySnapshots[demoAudience],
+      demoMedicalSummarySnapshots[demoLocale][demoAudience],
       ctx.catalog,
     )
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return null
     const safetySnapshot = remapDemoSnapshotSourceKeys(
-      demoSafetyScanSnapshots[demoAudience],
+      demoSafetyScanSnapshots[demoLocale][demoAudience],
       ctx.catalog,
     )
     const safety = MEDICAL_SUMMARY_CARD_REGISTRY.safety.parseRetry(
@@ -588,7 +589,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData,
       audience: demoAudience,
-      locale: 'zh-TW',
+      locale: demoLocale,
     })
     return {
       ...finalized,

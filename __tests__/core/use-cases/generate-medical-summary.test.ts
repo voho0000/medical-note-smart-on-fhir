@@ -1903,7 +1903,7 @@ describe('finalizeResult', () => {
     const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { demoMedicalSummarySnapshots } = require('../../../src/infrastructure/demo/demo-ai-snapshots')
-    const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots.medical))
+    const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots['zh-TW'].medical))
     expect(parsed).not.toBeNull()
 
     const result = useCase.finalizeResult(parsed!, demoCatalog, {

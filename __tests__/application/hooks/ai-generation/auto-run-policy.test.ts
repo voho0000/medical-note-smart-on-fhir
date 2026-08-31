@@ -54,6 +54,19 @@ describe('demo snapshot policy', () => {
     })).toBe(true)
   })
 
+  it('allows the locale-matched bundled fallback in English', () => {
+    expect(shouldSeedDemoSlot({
+      hasDemoSeed: true,
+      slotKey: 'demo-patient-1::medical::en::gemini-3.1-flash-lite',
+      hasResult: false,
+      hydratedSlotKey: 'demo-patient-1::medical::en::gemini-3.1-flash-lite',
+      patientId: 'demo-patient-1',
+      demoPatientId: 'demo-patient-1',
+      locale: 'en',
+      hasCatalog: true,
+    })).toBe(true)
+  })
+
   it('does not seed a real patient or overwrite an existing result', () => {
     const ready = {
       hasDemoSeed: true,

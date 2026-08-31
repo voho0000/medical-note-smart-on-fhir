@@ -223,6 +223,34 @@ describe('Patient Entity Helper Functions', () => {
       expect(getPatientDisplayName(patient)).toBe('楊雅霖')
     })
 
+    it('uses an explicitly supplied Romanized name in the English locale', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ text: '楊雅霖', given: ['Yalin'], family: 'Yang' }]
+      }
+      expect(getPatientDisplayName(patient, 'en')).toBe('Yalin Yang')
+      expect(getPatientDisplayName(patient, 'zh-TW')).toBe('楊雅霖')
+    })
+
+    it('keeps the original name when no English representation was supplied', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ text: '楊雅霖', given: ['雅霖'], family: '楊' }]
+      }
+      expect(getPatientDisplayName(patient, 'en')).toBe('楊雅霖')
+    })
+
+    it('finds a dedicated Latin text entry in the English locale', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ text: '楊雅霖' }, { text: 'Yalin Yang' }]
+      }
+      expect(getPatientDisplayName(patient, 'en')).toBe('Yalin Yang')
+    })
+
     it('finds a text entry even when it is not the first name entry', () => {
       const patient: PatientEntity = {
         id: 'patient-1',

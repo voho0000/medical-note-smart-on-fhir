@@ -58,6 +58,8 @@ const TARGET = {
 const FAKE = {
   patientFamily: '陳',
   patientGivenLast: '明', // → 陳{mask}明
+  patientFamilyLatin: 'Chen',
+  patientGivenLatin: '○-Ming',
   nationalId: 'A123456789',
   mrn: 'M00000001',
   birthDay: '15',
@@ -511,7 +513,7 @@ for (const r of out) {
   walk(r)
   // hard-set patient demographics (don't rely on token replace alone)
   if (r.resourceType === 'Patient') {
-    r.name = [{ use: 'official', text: FAKE.patientFamily + '○' + FAKE.patientGivenLast, family: FAKE.patientFamily, given: ['○' + FAKE.patientGivenLast] }]
+    r.name = [{ use: 'official', text: FAKE.patientFamily + '○' + FAKE.patientGivenLast, family: FAKE.patientFamilyLatin, given: [FAKE.patientGivenLatin] }]
     ;(r.identifier || []).forEach((i) => { if (i.value) i.value = FAKE.nationalId })
   }
   // discharge HTML: token-scrub the decoded body, re-encode

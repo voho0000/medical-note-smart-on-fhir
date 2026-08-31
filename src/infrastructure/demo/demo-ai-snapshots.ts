@@ -25,8 +25,8 @@
 // amber "unverified" pills — the visible signal to regenerate this file (run
 // scripts/validate-demo-snapshots.ts, or just re-author).
 //
-// Scope guards (enforced by the hooks): demo patient + zh-TW locale + no cached
-// result. A retained model preference never causes an automatic live call;
+// Scope guards (enforced by the hooks): demo patient + supported locale + no
+// cached result. A retained model preference never causes an automatic live call;
 // pressing 重新產生 explicitly still runs the selected model.
 import type {
   MedicalSummaryAiResult,
@@ -60,6 +60,7 @@ export const DEMO_CLINICAL_INSIGHT_GENERATION = {
 } as const
 
 type Audience = 'medical' | 'patient'
+type SnapshotLocale = 'en' | 'zh-TW'
 
 // Snapshot citations are authored against the default demo catalog, whose
 // short keys are deterministic only while the selected AI scope is unchanged.
@@ -156,7 +157,7 @@ export function remapDemoSnapshotSourceKeys<T>(
 // Free-form custom-module snapshots are intentionally separate from the
 // structured medical-summary snapshots. They preload only while the matching
 // default prompt and default Insights model are still selected.
-export const demoClinicalInsightSnapshots: Record<Audience, Record<string, { prompt: string; text: string }>> = {
+const demoClinicalInsightSnapshotsZhTw: Record<Audience, Record<string, { prompt: string; text: string }>> = {
   medical: {
     changes: {
       prompt: '比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。',
@@ -187,6 +188,42 @@ export const demoClinicalInsightSnapshots: Record<Audience, Record<string, { pro
   },
 }
 
+const demoClinicalInsightSnapshotsEn: Record<Audience, Record<string, { prompt: string; text: string }>> = {
+  medical: {
+    changes: {
+      prompt: "Compare the patient's recent clinical data to prior information and list the most important changes in status, therapy, or results. Emphasize deltas that require attention.",
+      text: [
+        '### Recent important changes',
+        '- **Encounter and medication records now extend through 2026-08-12**: the latest outpatient claim includes pneumonia, blood-disorder, and anemia codes, plus a 21-day ACTEIN prescription. Claims diagnoses still require confirmation in the source medical record.',
+        '- **Several medications were dispensed in July and August**: recent records span cognition/mood, prostate/bladder, glaucoma, renal/metabolic, and gastrointestinal treatment areas. Reconcile the current regimen against the patient’s actual medication packages.',
+        '- **Renal indices declined slightly**: from 2026-05-25 to 06-02, creatinine changed from 1.88 to 1.93 mg/dL and eGFR from 33 to 32 mL/min/1.73m².',
+        '- **Anemia indices improved but did not normalize**: hemoglobin increased from 11.2 to 12.1 g/dL and remained below the reported reference interval.',
+        '- **Chest imaging still requires clinical correlation**: the 06-02 radiograph described peribronchial infiltration, patchy bilateral lower-lung opacities, bilateral pleural effusions, and borderline cardiomegaly.',
+      ].join('\n'),
+    },
+  },
+  patient: {
+    'health-overview': {
+      prompt: 'Using the imported personal health records, write a friendly plain-language overview of my current health: ongoing conditions, current medications, and any recent results that stand out. Define medical terms briefly when needed. End with a reminder that I should discuss specifics with my doctor.',
+      text: [
+        '### Recent health changes worth noting',
+        '- Your encounter and medication records now extend through 2026-08-12. Recent prescriptions include medicines related to the prostate/bladder, eyes, kidneys/blood glucose, thyroid, uric acid, and digestive system.',
+        '- Kidney-function values changed slightly between May 25 and June 2 (eGFR 33→32). Continue follow-up as arranged by your care team.',
+        '- Hemoglobin increased from 11.2 to 12.1 g/dL but remained below the laboratory report’s reference value. Ask your clinician about the follow-up plan.',
+        '- Claims from June through August repeatedly include codes for pneumonia, multiple myeloma, and anemia. Claims codes are not complete diagnostic reports, so ask the treating clinician which diagnoses are confirmed.',
+        '- A June 2 chest radiograph described lung findings and fluid around both lungs. Seek timely care for fever, shortness of breath, or other acute symptoms.',
+        '',
+        'This overview is based on the demo personal health records. Discuss your actual condition and any medication changes with your care team, and do not stop medication on your own.',
+      ].join('\n'),
+    },
+  },
+}
+
+export const demoClinicalInsightSnapshots: Record<SnapshotLocale, Record<Audience, Record<string, { prompt: string; text: string }>>> = {
+  'zh-TW': demoClinicalInsightSnapshotsZhTw,
+  en: demoClinicalInsightSnapshotsEn,
+}
+
 /**
  * Return a bundled custom-insight snapshot solely from demo identity and panel
  * identity. Model preference is intentionally absent: retaining a model from a
@@ -196,14 +233,15 @@ export const demoClinicalInsightSnapshots: Record<Audience, Record<string, { pro
 export function getDemoClinicalInsightSnapshot(
   patientId: string,
   audience: Audience,
+  locale: SnapshotLocale,
   panelId: string,
 ) {
   return patientId === DEMO_PATIENT_ID
-    ? demoClinicalInsightSnapshots[audience][panelId]
+    ? demoClinicalInsightSnapshots[locale][audience][panelId]
     : undefined
 }
 
-export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResult> = {
+const demoMedicalSummarySnapshotsZhTw: Record<Audience, MedicalSummaryAiResult> = {
   medical: {
     headline: '94歲男性，慢性腎臟病第3b期合併貧血；近期申報紀錄反覆出現肺炎與血液疾病診斷碼。',
     summary: [
@@ -455,7 +493,214 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
   },
 }
 
-export const demoSafetyScanSnapshots: Record<Audience, SafetyScanResultInput> = {
+const demoMedicalSummarySnapshotsEn: Record<Audience, MedicalSummaryAiResult> = {
+  medical: {
+    headline: '94-year-old man with stage 3b chronic kidney disease and anemia; recent claims repeatedly include pneumonia and hematologic-disease diagnosis codes.',
+    summary: [
+      { text: 'This 94-year-old man is enrolled in a ', emphasis: false, sources: [] },
+      { text: 'chronic kidney disease care plan', emphasis: true, sources: ['K1', 'K2'] },
+      { text: '. From 2026-05-25 to 06-02, renal indices changed from ', emphasis: false, sources: [] },
+      { text: 'creatinine 1.88→1.93 mg/dL and eGFR 33→32 mL/min/1.73m²', emphasis: true, sources: ['O6', 'O7', 'O17', 'O18'] },
+      { text: '. Multiple outpatient claims from June through August 2026 listed ', emphasis: false, sources: [] },
+      { text: 'pneumonia, multiple myeloma, and anemia', emphasis: true, sources: ['E1', 'E6', 'E13', 'E19'] },
+      { text: '; these are claims diagnoses, so the source records should be reviewed to confirm the diagnoses, stage, and treatment status. ', emphasis: false, sources: ['E1', 'E6', 'E13', 'E19'] },
+      { text: 'A 2026-06-02 chest radiograph also described peribronchial infiltration, patchy bilateral lower-lung opacities, bilateral pleural changes with effusions, and borderline cardiomegaly.', emphasis: false, sources: ['L15'] },
+    ],
+    investigations: [
+      {
+        label: 'Renal function (creatinine/eGFR)',
+        kind: 'lab',
+        direction: 'worsening',
+        trend: 'Creatinine 1.88→1.93 mg/dL; eGFR 33→32 mL/min/1.73m²',
+        interpretation: 'Renal indices declined slightly over eight days; the established stage 3b chronic kidney disease should continue to be followed longitudinally.',
+        sources: ['O6', 'O7', 'O17', 'O18'],
+      },
+      {
+        label: 'Anemia indices (Hb/HCT)',
+        kind: 'lab',
+        direction: 'improving',
+        trend: 'Hb 11.2→12.1 g/dL; HCT 35.8→37.2%',
+        interpretation: 'Both values improved, but hemoglobin remains below the reported reference interval of 13.5–17.5 g/dL.',
+        sources: ['O8', 'O9', 'O19', 'O20'],
+      },
+      {
+        label: 'Glycemic indices (HbA1c/postprandial glucose)',
+        kind: 'lab',
+        direction: 'stable',
+        trend: 'HbA1c 6.6%; postprandial glucose 126→124 mg/dL',
+        interpretation: 'The two postprandial glucose values are similar. Only one HbA1c result is available, so it should be interpreted against an individualized target.',
+        sources: ['O10', 'O14', 'O23'],
+      },
+      {
+        label: 'Chest imaging',
+        kind: 'imaging',
+        direction: 'single',
+        trend: 'Peribronchial infiltration, patchy bilateral lower-lung opacities, and bilateral pleural effusions',
+        interpretation: 'This reflects the most recent imaging report only; no cause or longitudinal change is inferred from this single study.',
+        sources: ['L15'],
+      },
+    ],
+    medicationEducation: [],
+    medicationReview: {
+      overview: 'Records from July and August 2026 include respiratory, cognitive/mood, urinary, ophthalmic, renal/metabolic, thyroid/urate, and gastrointestinal medications. Reconcile the active list against the patient’s actual medication packages across facilities.',
+      regimen: [
+        { group: 'Respiratory', name: 'ACTEIN 600mg', sources: ['M1'] },
+        { group: 'Cognition/mood and sedation', name: 'Aricept, Imimine, Rivotril', sources: ['M2', 'M3', 'M21'] },
+        { group: 'Urinary medication', name: 'Harnalidge', sources: ['M4'] },
+        { group: 'Urinary medication', name: 'Oxbu', sources: ['M5'] },
+        { group: 'Urinary medication', name: 'Betmiga', sources: ['M6'] },
+        { group: 'Ophthalmic', name: 'PATEAR, Brimonin, Xalatan, Cosopt', sources: ['M7', 'M8', 'M9', 'M10'] },
+        { group: 'Glucose/renal', name: 'Forxiga 10mg', sources: ['M15'] },
+        { group: 'Thyroid/urate/folate', name: 'Eltroxin, Feburic, Folacin', sources: ['M12', 'M13', 'M14'] },
+        { group: 'Gastrointestinal', name: 'Kascoal, Domperidone, Famotidine, Mosapride', sources: ['M16', 'M18', 'M19', 'M20'] },
+        { group: 'Bowel regimen', name: 'Sennosides', sources: ['M11', 'M17'] },
+      ],
+      changes: [],
+      reconciliation: [
+        {
+          reason: 'multi-facility',
+          text: 'Sennosides appears in records from Demo Grace Hospital on 2026-07-20 and Demo Sunny Pharmacy on 2026-07-21. This may reflect prescribing and dispensing, or concurrent supplies; verify the actual source and directions from the medication packages.',
+          sources: ['M11', 'M17'],
+        },
+      ],
+    },
+    problems: [
+      { label: 'Stage 3b chronic kidney disease', basis: 'Care plans and eGFR 32–33 mL/min/1.73m²', kind: 'careplan', sources: ['K1', 'K2', 'O7', 'O18'] },
+      { label: 'Multiple myeloma (claims diagnosis)', basis: 'Repeated outpatient claims from June through August 2026; confirm in the source record', kind: 'diagnosis', sources: ['E1', 'E6', 'E13', 'E19'] },
+      { label: 'Pneumonia (claims diagnosis)', basis: 'Repeated outpatient claims from June through August 2026', kind: 'diagnosis', sources: ['E1', 'E6', 'E13', 'E19'] },
+      { label: 'Anemia', basis: 'Hb 11.2→12.1 g/dL, still below the reported reference interval', kind: 'lab', sources: ['O9', 'O20'] },
+      { label: 'Benign prostatic hyperplasia', basis: 'Recent encounters, dispensing records, and urinary medication', kind: 'diagnosis', sources: ['E3', 'E4', 'E10', 'E16', 'E22', 'M4'] },
+      { label: 'Primary open-angle glaucoma, right eye', basis: 'Repeated claims and ophthalmic medication dispensing', kind: 'diagnosis', sources: ['E5', 'E12', 'E17', 'E23', 'M8', 'M9'] },
+      { label: 'Type 2 diabetes mellitus', basis: 'Discharge summary, HbA1c, and medication records', kind: 'discharge', sources: ['D1', 'O10', 'M15'], documentEvidence: [{ source: 'D1', quote: 'Diebetes mellitus' }] },
+      { label: 'Gastroesophageal reflux disease', basis: 'Discharge summary and famotidine record', kind: 'discharge', sources: ['D1', 'M19'], documentEvidence: [{ source: 'D1', quote: 'Reflux esophagitis, L.A. grade A; Erythematous gastritis' }] },
+      { label: 'Hypothyroidism', basis: 'Discharge summary and Eltroxin record', kind: 'discharge', sources: ['D1', 'M13'], documentEvidence: [{ source: 'D1', quote: 'Hypothyrodism, under Levothyroxine' }] },
+      { label: 'Hyperlipidemia', basis: 'Past history in the discharge summary', kind: 'discharge', sources: ['D1'], documentEvidence: [{ source: 'D1', quote: 'Hyperlipidemia' }] },
+      { label: 'Hyperuricemia/gout under treatment (inferred)', basis: 'Ongoing Feburic dispensing; no uric-acid value is included', kind: 'medication', sources: ['M14'] },
+      { label: 'Fatty liver, gallbladder sludge, and renal stones', basis: 'Abdominal ultrasound on 2026-02-05', kind: 'other', sources: ['L27'] },
+      { label: 'Delirium (claims diagnosis)', basis: 'Claims from July and August 2026', kind: 'diagnosis', sources: ['E2', 'E9'] },
+    ],
+    decisions: [],
+    timeline: [
+      { ref: 'K1', label: 'Pre-ESRD care plan initiated', category: 'followup' },
+      { ref: 'D1', label: 'Hospital evaluation for bloody emesis/possible upper gastrointestinal bleeding', category: 'encounter', documentEvidence: [{ source: 'D1', quote: 'vomiting with some blood today' }] },
+      { ref: 'L28', label: 'Non-contrast brain CT', category: 'procedure' },
+      { ref: 'L27', label: 'Abdominal ultrasound: fatty liver, gallbladder sludge, and renal stones', category: 'procedure' },
+      { ref: 'L26', label: 'Electrocardiogram', category: 'lab' },
+      { ref: 'L15', label: 'Chest radiograph: bilateral lower-lung findings and bilateral pleural effusions', category: 'lab' },
+      { ref: 'E1', label: 'Latest outpatient claim includes pneumonia, hematologic-disease, and anemia codes', category: 'encounter' },
+    ],
+  },
+  patient: {
+    headline: 'Your kidney function needs continued follow-up. Recent outpatient claims also repeatedly include pneumonia and blood-disorder codes that should be confirmed with the treating clinician.',
+    summary: [
+      { text: 'Your health records show ongoing follow-up for ', emphasis: false, sources: [] },
+      { text: 'chronic kidney disease and prostate-related urinary problems', emphasis: true, sources: ['K1', 'K2', 'E3', 'E4'] },
+      { text: '. From 2026-05-25 to 06-02, ', emphasis: false, sources: [] },
+      { text: 'eGFR decreased from 33 to 32', emphasis: true, sources: ['O7', 'O18'] },
+      { text: ', while hemoglobin increased from 11.2 to 12.1 g/dL but remained below the report’s reference range. ', emphasis: false, sources: ['O9', 'O20'] },
+      { text: 'Outpatient claims from June through August 2026 repeatedly listed ', emphasis: false, sources: [] },
+      { text: 'pneumonia, multiple myeloma, and anemia', emphasis: true, sources: ['E1', 'E6', 'E13', 'E19'] },
+      { text: '. Claims codes are not complete diagnostic reports; ask the treating clinician which diagnoses are confirmed and what follow-up is currently needed.', emphasis: false, sources: ['E1', 'E6', 'E13', 'E19'] },
+    ],
+    investigations: [
+      {
+        label: 'Kidney function (creatinine/eGFR)',
+        kind: 'lab',
+        direction: 'worsening',
+        trend: 'Creatinine 1.88→1.93 mg/dL; eGFR 33→32 mL/min/1.73m²',
+        interpretation: 'The values changed slightly over eight days. Continue follow-up as arranged by your care team and do not change medications on your own.',
+        sources: ['O6', 'O7', 'O17', 'O18'],
+      },
+      {
+        label: 'Anemia-related values',
+        kind: 'lab',
+        direction: 'improving',
+        trend: 'Hemoglobin 11.2→12.1 g/dL; hematocrit 35.8→37.2%',
+        interpretation: 'The values improved, but hemoglobin remains below the laboratory report’s reference range. Ask your clinician about the cause and follow-up plan.',
+        sources: ['O8', 'O9', 'O19', 'O20'],
+      },
+      {
+        label: 'Blood glucose-related values',
+        kind: 'lab',
+        direction: 'stable',
+        trend: 'HbA1c 6.6%; postprandial glucose 126→124 mg/dL',
+        interpretation: 'The two postprandial glucose values are similar. Only one HbA1c result is available, so your clinician should set a target based on your age and overall health.',
+        sources: ['O10', 'O14', 'O23'],
+      },
+      {
+        label: 'Chest imaging',
+        kind: 'imaging',
+        direction: 'single',
+        trend: 'Peribronchial infiltration, patchy bilateral lower-lung opacities, and bilateral pleural effusions',
+        interpretation: 'This is the wording from the latest imaging report. Your clinician needs to interpret the cause together with symptoms and other tests from that visit.',
+        sources: ['L15'],
+      },
+    ],
+    medicationEducation: [
+      {
+        name: 'Forxiga (dapagliflozin)',
+        benefit: 'This prescription was recorded for stage 3b chronic kidney disease. This medication is also commonly used in glucose and kidney care.',
+        attention: 'Use it as prescribed. Contact your care team first if you have significant dehydration, cannot eat, have planned surgery, or develop urinary/genital symptoms.',
+        sources: ['M15'],
+      },
+      {
+        name: 'Harnalidge (tamsulosin)',
+        benefit: 'The record identifies this as a urinary medication used to help prostate-related urinary symptoms.',
+        attention: 'If you feel markedly dizzy when standing, rise slowly and tell your clinician. Do not stop it on your own.',
+        sources: ['M4'],
+      },
+      {
+        name: 'Oxbu (oxybutynin)',
+        benefit: 'The record identifies this as a urinary medication used to help bladder-related urinary symptoms.',
+        attention: 'Tell your clinician about marked dry mouth, constipation, difficulty urinating, or confusion. Do not stop it on your own.',
+        sources: ['M5'],
+      },
+      {
+        name: 'Betmiga (mirabegron)',
+        benefit: 'The record identifies this as a urinary medication used to help bladder-related urinary symptoms; it is not an anticholinergic medication.',
+        attention: 'Use it as prescribed. Ask your clinician or pharmacist to confirm its purpose and individualized precautions.',
+        sources: ['M6'],
+      },
+      {
+        name: 'Glaucoma eye drops (Brimonin, Xalatan, Cosopt)',
+        benefit: 'These eye drops are used to help control eye pressure.',
+        attention: 'Use them as directed by ophthalmology. If you are unsure about the order or spacing of several drops, ask a clinician or pharmacist to demonstrate.',
+        sources: ['M8', 'M9', 'M10'],
+      },
+    ],
+    medicationReview: { regimen: [], changes: [], reconciliation: [] },
+    problems: [
+      { label: 'Stage 3b chronic kidney disease', basis: 'Care plans and kidney-function tests', kind: 'careplan', sources: ['K1', 'K2', 'O7', 'O18'] },
+      { label: 'Multiple myeloma (claims record)', basis: 'Repeated outpatient claims from June through August 2026; confirm with the treating clinician', kind: 'diagnosis', sources: ['E1', 'E6', 'E13', 'E19'] },
+      { label: 'Pneumonia (claims record)', basis: 'Repeated outpatient claims from June through August 2026', kind: 'diagnosis', sources: ['E1', 'E6', 'E13', 'E19'] },
+      { label: 'Anemia', basis: 'Hemoglobin remains below the laboratory report’s reference range', kind: 'lab', sources: ['O9', 'O20'] },
+      { label: 'Benign prostatic hyperplasia', basis: 'Recent encounters, dispensing records, and urinary medication', kind: 'diagnosis', sources: ['E3', 'E4', 'E10', 'E16', 'E22', 'M4'] },
+      { label: 'Primary open-angle glaucoma, right eye', basis: 'Repeated claims and eye-drop dispensing', kind: 'diagnosis', sources: ['E5', 'E12', 'E17', 'E23', 'M8', 'M9'] },
+      { label: 'Type 2 diabetes mellitus', basis: 'Discharge summary and glucose-related tests', kind: 'discharge', sources: ['D1', 'O10'], documentEvidence: [{ source: 'D1', quote: 'Diebetes mellitus' }] },
+      { label: 'Gastroesophageal reflux disease', basis: 'Discharge summary', kind: 'discharge', sources: ['D1'], documentEvidence: [{ source: 'D1', quote: 'Reflux esophagitis, L.A. grade A; Erythematous gastritis' }] },
+      { label: 'Hypothyroidism', basis: 'Discharge summary and thyroid-hormone prescription', kind: 'discharge', sources: ['D1', 'M13'], documentEvidence: [{ source: 'D1', quote: 'Hypothyrodism, under Levothyroxine' }] },
+      { label: 'Fatty liver, gallbladder sludge, and renal stones', basis: 'Abdominal ultrasound record', kind: 'other', sources: ['L27'] },
+      { label: 'Delirium (claims record)', basis: 'Claims from July and August 2026', kind: 'diagnosis', sources: ['E2', 'E9'] },
+    ],
+    decisions: [],
+    timeline: [
+      { ref: 'K1', label: 'Kidney care plan initiated', category: 'followup' },
+      { ref: 'D1', label: 'Hospital evaluation for bloody vomit', category: 'encounter', documentEvidence: [{ source: 'D1', quote: 'vomiting with some blood today' }] },
+      { ref: 'L28', label: 'Brain CT performed', category: 'procedure' },
+      { ref: 'L27', label: 'Abdominal ultrasound performed', category: 'procedure' },
+      { ref: 'L26', label: 'Electrocardiogram performed', category: 'lab' },
+      { ref: 'L15', label: 'Chest radiograph performed', category: 'lab' },
+      { ref: 'E1', label: 'Latest outpatient claim on August 12', category: 'encounter' },
+    ],
+  },
+}
+
+export const demoMedicalSummarySnapshots: Record<SnapshotLocale, Record<Audience, MedicalSummaryAiResult>> = {
+  'zh-TW': demoMedicalSummarySnapshotsZhTw,
+  en: demoMedicalSummarySnapshotsEn,
+}
+
+const demoSafetyScanSnapshotsZhTw: Record<Audience, SafetyScanResultInput> = {
   medical: {
     scannedCount: 97,
     alerts: [
@@ -531,4 +776,87 @@ export const demoSafetyScanSnapshots: Record<Audience, SafetyScanResultInput> = 
       },
     ],
   },
+}
+
+const demoSafetyScanSnapshotsEn: Record<Audience, SafetyScanResultInput> = {
+  medical: {
+    scannedCount: 97,
+    alerts: [
+      {
+        severity: 'medium',
+        title: 'Review combined anticholinergic and cognitive risk',
+        detail: 'Recent records include Aricept, Imimine, and Oxbu in this 94-year-old patient. Imipramine and oxybutynin have anticholinergic effects, and Oxbu warrants particular caution in a patient with dementia who is receiving a cholinesterase inhibitor. Betmiga is a beta-3 adrenergic agonist and is not classified as an anticholinergic medication.',
+        evidence: [
+          'ARICEPT F.C. TABLETS 5MG',
+          'IMIMINE S.C. TABLETS 25MG',
+          'Oxbu Extended-release Tablets 5mg',
+        ],
+        sources: ['M2', 'M3', 'M5'],
+        category: 'other',
+        recommendation: 'Reconcile actual use and indications, and assess cognition, delirium, dry mouth, constipation, and urinary retention. Medication changes should be made by a clinician or pharmacist.',
+      },
+      {
+        severity: 'medium',
+        title: 'Follow the renal trend alongside the current medication list',
+        detail: 'From 2026-05-25 to 06-02, creatinine increased from 1.88 to 1.93 mg/dL and eGFR decreased from 33 to 32 mL/min/1.73m². Forxiga and Feburic are present in the medication records. Review them periodically against the actual indications, volume status, and subsequent laboratory values; eGFR 32 alone is not enough to conclude that either medication must be stopped or dose-adjusted.',
+        evidence: [
+          'Creatinine 1.88→1.93 mg/dL',
+          'eGFR 33→32 mL/min/1.73m²',
+          'Forxiga 10mg; Feburic 80mg',
+        ],
+        sources: ['O6', 'O7', 'O17', 'O18', 'M14', 'M15'],
+        category: 'renal',
+        recommendation: 'Continue to monitor renal function, volume status, and relevant laboratory values, and confirm each medication’s indication and dose during medication reconciliation.',
+      },
+      {
+        severity: 'medium',
+        title: 'Confirm major claims diagnoses in the source medical record',
+        detail: 'Multiple outpatient claims from June through August 2026 include diagnosis codes for pneumonia, multiple myeloma not in remission, and anemia. The selected data do not provide pathology, staging, or treatment details, so disease status cannot be established from claims codes alone.',
+        evidence: ['Repeated claims on 2026-06-03, 07-01, 07-22, and 08-12'],
+        sources: ['E1', 'E6', 'E13', 'E19'],
+        category: 'monitoring',
+        recommendation: 'Verify the diagnostic basis, current stage/remission status, and follow-up plan with the treating facility before placing these diagnoses on the confirmed problem list.',
+      },
+    ],
+  },
+  patient: {
+    scannedCount: 97,
+    alerts: [
+      {
+        severity: 'medium',
+        title: 'Your kidney function needs continued follow-up',
+        detail: 'From 2026-05-25 to 06-02, creatinine increased from 1.88 to 1.93 mg/dL and eGFR decreased from 33 to 32 mL/min/1.73m², showing a small change in kidney-function values during that period.',
+        evidence: [
+          'Creatinine 1.88→1.93 mg/dL',
+          'eGFR 33→32 mL/min/1.73m²',
+        ],
+        sources: ['O6', 'O7', 'O17', 'O18'],
+        category: 'renal',
+        recommendation: 'Attend follow-up visits and blood tests as arranged, and bring all medication packages. Do not stop or change a dose based on a single value without speaking with your care team.',
+      },
+      {
+        severity: 'medium',
+        title: 'Some medications may affect alertness and bowel function',
+        detail: 'Recent records include Imimine and Oxbu, both of which may have anticholinergic effects. In an older adult, marked confusion, drowsiness, dry mouth, constipation, or difficulty urinating should be reported to the care team. Betmiga is not an anticholinergic medication.',
+        evidence: ['IMIMINE S.C. TABLETS 25MG', 'Oxbu Extended-release Tablets 5mg'],
+        sources: ['M3', 'M5'],
+        category: 'other',
+        recommendation: 'Bring all medication packages to the next visit and explain how you actually take each medicine. Contact the care team promptly for confusion, drowsiness, dry mouth, constipation, or difficulty urinating; do not stop medication on your own.',
+      },
+      {
+        severity: 'medium',
+        title: 'Confirm the major diagnoses listed in claims records',
+        detail: 'Outpatient claims from June through August 2026 repeatedly include codes for pneumonia, multiple myeloma, and anemia. Claims codes are not complete diagnostic reports, and these data do not include pathology, staging, or treatment details.',
+        evidence: ['Repeated claims on 2026-06-03, 07-01, 07-22, and 08-12'],
+        sources: ['E1', 'E6', 'E13', 'E19'],
+        category: 'monitoring',
+        recommendation: 'Ask the treating clinician which diagnoses are confirmed, their current status, and the next follow-up step. Seek timely care for fever, shortness of breath, or other acute symptoms.',
+      },
+    ],
+  },
+}
+
+export const demoSafetyScanSnapshots: Record<SnapshotLocale, Record<Audience, SafetyScanResultInput>> = {
+  'zh-TW': demoSafetyScanSnapshotsZhTw,
+  en: demoSafetyScanSnapshotsEn,
 }

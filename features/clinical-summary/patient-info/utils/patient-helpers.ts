@@ -1,3 +1,9 @@
+import {
+  getPatientDisplayName,
+  type PatientEntity,
+  type PatientNameLocale,
+} from '@/src/core/entities/patient.entity'
+
 export { calculateAge, formatGender, formatError } from '@/src/shared/utils/fhir-helpers'
 
 // Translation type — narrowed to the keys these helpers read so we don't
@@ -31,19 +37,12 @@ export type PatientI18n = {
   relationshipEmergency: string
 }
 
-export function formatName(patient: any): string {
-  if (!patient?.name?.[0]) return "N/A"
-  // Prefer the official local-script name first (TW Core IG fills
-  // `text` with the Chinese name and given/family with Pinyin).
-  const cn = patient.name.find((n: any) => n.text)?.text?.trim()
-  if (cn) return cn
-  const name = patient.name[0]
-  const givenName = name.given?.join(" ")
-  const familyName = name.family
-  const parts: string[] = []
-  if (givenName) parts.push(givenName.trim())
-  if (familyName) parts.push(familyName.trim())
-  return parts.length > 0 ? parts.join(" ") : "N/A"
+export function formatName(
+  patient: PatientEntity | null,
+  locale: PatientNameLocale = 'zh-TW',
+): string {
+  const name = getPatientDisplayName(patient, locale)
+  return name === 'Unknown Patient' ? 'N/A' : name
 }
 
 // ---------------------------------------------------------------------------

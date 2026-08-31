@@ -46,6 +46,6 @@ export function shouldSeedDemoSlot(input: {
     !input.hasResult &&
     input.hydratedSlotKey === input.slotKey &&
     input.patientId === input.demoPatientId &&
-    input.locale === 'zh-TW' &&
+    (input.locale === 'zh-TW' || input.locale === 'en') &&
     input.hasCatalog
 }

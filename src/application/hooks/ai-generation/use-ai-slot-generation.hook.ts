@@ -91,6 +91,7 @@ export interface AiSlotRunContext {
 
 export interface AiSlotDemoContext {
   audience: Audience
+  locale: Locale
   catalog: SummarySourceCatalogEntry[]
   clinicalData: ClinicalAiDataInput
 }
@@ -119,10 +120,11 @@ export interface AiSlotGenerationConfig<T> {
   /** Streams + parses one generation; null = parse failed → 'PARSE_FAILED'.
    *  Any feature-specific modularization or retry policy lives in here. */
   run: (ctx: AiSlotRunContext) => Promise<T | null>
-  /** Demo bundle seeding: build the pre-generated snapshot result (through the
-   *  same parse/validate pipeline as a live reply) instead of burning an AI
-   *  call. Only consulted for the demo patient + zh-TW + an empty, hydrated
-   *  slot. The user's selected model does not affect snapshot eligibility. */
+  /** Demo bundle seeding: build the locale-matched pre-generated snapshot
+   *  result (through the same parse/validate pipeline as a live reply) instead
+   *  of burning an AI call. Only consulted for the demo patient + supported
+   *  locale + an empty, hydrated slot. The user's selected model does not
+   *  affect snapshot eligibility. */
   demoSeed?: (ctx: AiSlotDemoContext) => T | null
   /** Read immutable provenance from a result. When supplied, a legacy result
    *  filed under the wrong model slot is presentation fallback only; it never
@@ -611,7 +613,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       hasCatalog: catalog.length > 0,
     })) return
     if (!scopedClinicalData) return
-    const seeded = demoSeed({ audience, catalog, clinicalData: scopedClinicalData })
+    const seeded = demoSeed({ audience, locale, catalog, clinicalData: scopedClinicalData })
     if (!seeded) return
     autoTriggeredRef.current = autoRunIdentity
     if (selectedOwnsSnapshot) {

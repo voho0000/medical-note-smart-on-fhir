@@ -212,16 +212,50 @@ export function calculateAge(birthDate?: string | null): number | null {
   return age >= 0 ? age : null
 }
 
-export function getPatientDisplayName(patient: PatientEntity | null): string {
+export type PatientNameLocale = 'zh-TW' | 'en'
+
+function formatStructuredPatientName(
+  name: NonNullable<PatientEntity['name']>[number],
+): string {
+  const given = name.given
+    ?.map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ')
+  const family = name.family?.trim()
+  return [given, family].filter(Boolean).join(' ')
+}
+
+function isRomanizedPatientName(value: string): boolean {
+  return /\p{Script=Latin}/u.test(value) && !/\p{Script=Han}/u.test(value)
+}
+
+export function getPatientDisplayName(
+  patient: PatientEntity | null,
+  locale: PatientNameLocale = 'zh-TW',
+): string {
   if (!patient?.name?.[0]) return 'Unknown Patient'
+
+  // TW Core commonly stores the official local-script name in `text`, while
+  // `given` / `family` contain an explicit Romanization. In English, use only
+  // a supplied Latin-script representation; never invent a transliteration
+  // for a real patient whose resource contains Chinese alone.
+  if (locale === 'en') {
+    const structured = patient.name
+      .map(formatStructuredPatientName)
+      .find((name) => name && isRomanizedPatientName(name))
+    if (structured) return structured
+
+    const latinText = patient.name
+      .map((name) => name.text?.trim() ?? '')
+      .find((name) => name && isRomanizedPatientName(name))
+    if (latinText) return latinText
+  }
+
   // Prefer the official local-script name in `text` (TW Core / IPS put the
   // Chinese name there; given/family hold Pinyin). Mirrors patient-info's
   // formatName so a text-only name — legal FHIR, and exactly what our own IPS
   // export emits — never collapses to "Unknown Patient" on a round-trip.
   const text = patient.name.find((n) => n.text)?.text?.trim()
   if (text) return text
-  const nameEntry = patient.name[0]
-  const given = nameEntry.given?.join(' ')?.trim()
-  const family = nameEntry.family?.trim()
-  return [given, family].filter(Boolean).join(' ') || 'Unknown Patient'
+  return formatStructuredPatientName(patient.name[0]) || 'Unknown Patient'
 }

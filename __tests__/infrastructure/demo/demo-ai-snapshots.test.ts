@@ -24,6 +24,11 @@ import {
   DEFAULT_DATA_SELECTION,
 } from '@/src/shared/constants/data-selection.constants'
 import { DEMO_DATA_AS_OF_MS } from '@/src/shared/constants/demo-data.constants'
+import {
+  auditSafetyGrounding,
+  auditSummaryGrounding,
+  buildGroundingAuditInput,
+} from '../../../scripts/lib/grounding-audit'
 
 describe('demo clinical-insight snapshots', () => {
   it('declares honest pre-generated model provenance without a fabricated time', () => {
@@ -40,6 +45,7 @@ describe('demo clinical-insight snapshots', () => {
     expect(getDemoClinicalInsightSnapshot(
       'demo-patient-1',
       'patient',
+      'zh-TW',
       'health-overview',
     )?.text).toContain('最近值得注意的健康變化')
   })
@@ -48,8 +54,18 @@ describe('demo clinical-insight snapshots', () => {
     expect(getDemoClinicalInsightSnapshot(
       'real-patient',
       'patient',
+      'zh-TW',
       'health-overview',
     )).toBeUndefined()
+  })
+
+  it('selects the locale-matched English custom insight snapshot', () => {
+    expect(getDemoClinicalInsightSnapshot(
+      'demo-patient-1',
+      'medical',
+      'en',
+      'changes',
+    )?.text).toContain('Recent important changes')
   })
 })
 
@@ -64,14 +80,28 @@ describe('demo medical-summary snapshots', () => {
     expect(DEMO_SAFETY_SCAN_GENERATION).toEqual(DEMO_MEDICAL_SUMMARY_GENERATION)
   })
 
-  it.each(['medical', 'patient'] as const)('passes the current %s summary schema', (audience) => {
+  it.each([
+    ['zh-TW', 'medical'],
+    ['zh-TW', 'patient'],
+    ['en', 'medical'],
+    ['en', 'patient'],
+  ] as const)('passes the current %s/%s summary schema', (locale, audience) => {
     expect(generateMedicalSummaryUseCase.parseResult(
-      JSON.stringify(demoMedicalSummarySnapshots[audience]),
+      JSON.stringify(demoMedicalSummarySnapshots[locale][audience]),
     )).not.toBeNull()
   })
 
-  it.each(['medical', 'patient'] as const)('does not restore the retired %s decisions card', (audience) => {
-    expect(demoMedicalSummarySnapshots[audience].decisions).toEqual([])
+  it.each(['zh-TW', 'en'] as const)('does not restore retired decisions cards in %s', (locale) => {
+    expect(demoMedicalSummarySnapshots[locale].medical.decisions).toEqual([])
+    expect(demoMedicalSummarySnapshots[locale].patient.decisions).toEqual([])
+  })
+
+  it.each(['medical', 'patient'] as const)('ships non-empty English narrative for %s audience', (audience) => {
+    const snapshot = demoMedicalSummarySnapshots.en[audience]
+    expect(snapshot.headline).toMatch(/[A-Za-z]/)
+    expect(snapshot.summary.map((segment) => segment.text).join('')).toMatch(/[A-Za-z]/)
+    expect(snapshot.investigations.length).toBeGreaterThan(0)
+    expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
   })
 
   it('resolves every bundled summary and safety citation against the enriched default demo AI scope', async () => {
@@ -97,36 +127,42 @@ describe('demo medical-summary snapshots', () => {
       includedDocumentIds,
       DEMO_DATA_AS_OF_MS,
     )
-    const catalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
-    const catalogKeys = new Set(catalog.map((source) => source.key))
+    for (const locale of ['zh-TW', 'en'] as const) {
+      const catalog = getSourceCatalog(scopedClinicalData, locale)
+      const catalogKeys = new Set(catalog.map((source) => source.key))
+      const grounding = buildGroundingAuditInput(scopedClinicalData, catalog)
+      for (const audience of ['medical', 'patient'] as const) {
+        const snapshot = demoMedicalSummarySnapshots[locale][audience]
+        const parsedSummary = generateMedicalSummaryUseCase.parseResult(
+          JSON.stringify(snapshot),
+        )
+        expect(parsedSummary).not.toBeNull()
+        const finalized = generateMedicalSummaryUseCase.finalizeResult(parsedSummary!, catalog, {
+          clinicalData: scopedClinicalData,
+          audience,
+          locale,
+        })
+        expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
+        expect(finalized.droppedTimelineCount).toBe(0)
+        expect(finalized.problems.find((problem) => problem.sourceKeys.includes('D1')))
+          .toEqual(expect.objectContaining({
+            documentEvidence: expect.arrayContaining([
+              expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
+            ]),
+          }))
+        expect(finalized.timeline.find((event) => event.key === 'D1'))
+          .toEqual(expect.objectContaining({
+            documentEvidence: expect.arrayContaining([
+              expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
+            ]),
+          }))
+        expect(auditSummaryGrounding(snapshot, grounding)).toEqual([])
 
-    for (const audience of ['medical', 'patient'] as const) {
-      const parsedSummary = generateMedicalSummaryUseCase.parseResult(
-        JSON.stringify(demoMedicalSummarySnapshots[audience]),
-      )
-      expect(parsedSummary).not.toBeNull()
-      const finalized = generateMedicalSummaryUseCase.finalizeResult(parsedSummary!, catalog, {
-        clinicalData: scopedClinicalData,
-        audience,
-        locale: 'zh-TW',
-      })
-      expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-      expect(finalized.droppedTimelineCount).toBe(0)
-      expect(finalized.problems.find((problem) => problem.sourceKeys.includes('D1')))
-        .toEqual(expect.objectContaining({
-          documentEvidence: expect.arrayContaining([
-            expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
-          ]),
-        }))
-      expect(finalized.timeline.find((event) => event.key === 'D1'))
-        .toEqual(expect.objectContaining({
-          documentEvidence: expect.arrayContaining([
-            expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
-          ]),
-        }))
-
-      for (const alert of demoSafetyScanSnapshots[audience].alerts) {
-        expect((alert.sources ?? []).filter((key) => !catalogKeys.has(key))).toEqual([])
+        const safetySnapshot = demoSafetyScanSnapshots[locale][audience]
+        for (const alert of safetySnapshot.alerts) {
+          expect((alert.sources ?? []).filter((key) => !catalogKeys.has(key))).toEqual([])
+        }
+        expect(auditSafetyGrounding(safetySnapshot, grounding)).toEqual([])
       }
     }
   })
@@ -191,10 +227,12 @@ describe('demo medical-summary snapshots', () => {
       }
       if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
     }
-    walk(demoMedicalSummarySnapshots.medical)
-    walk(demoMedicalSummarySnapshots.patient)
-    walk(demoSafetyScanSnapshots.medical)
-    walk(demoSafetyScanSnapshots.patient)
+    for (const locale of ['zh-TW', 'en'] as const) {
+      walk(demoMedicalSummarySnapshots[locale].medical)
+      walk(demoMedicalSummarySnapshots[locale].patient)
+      walk(demoSafetyScanSnapshots[locale].medical)
+      walk(demoSafetyScanSnapshots[locale].patient)
+    }
 
     const unresolvable = [...cited]
       .filter((key) => /^[A-Z]+\d+$/.test(key) && !catalogKeys.has(key))
@@ -203,7 +241,7 @@ describe('demo medical-summary snapshots', () => {
   })
 
   it('keeps exact NHI terminology from crossing between urinary medicine education items', () => {
-    const education = demoMedicalSummarySnapshots.patient.medicationEducation
+    const education = demoMedicalSummarySnapshots['zh-TW'].patient.medicationEducation
     const harnalidge = education.find((item) => item.name.includes('Harnalidge'))
     const oxbu = education.find((item) => item.name.includes('Oxbu'))
     const betmiga = education.find((item) => item.name.includes('Betmiga'))
@@ -215,7 +253,7 @@ describe('demo medical-summary snapshots', () => {
     expect(betmiga?.benefit).toContain('不是抗膽鹼藥')
     expect(betmiga?.attention).not.toMatch(/口乾|便祕|姿勢.*頭暈/)
 
-    expect(demoMedicalSummarySnapshots.medical.medicationReview.regimen)
+    expect(demoMedicalSummarySnapshots['zh-TW'].medical.medicationReview.regimen)
       .toEqual(expect.arrayContaining([
         expect.objectContaining({ name: 'Harnalidge', sources: ['M4'] }),
         expect.objectContaining({ name: 'Oxbu', sources: ['M5'] }),
@@ -235,7 +273,7 @@ describe('demo medical-summary snapshots', () => {
       expect(parsedData).not.toBeNull()
       const alternateCatalog = buildSourceCatalog(parsedData!.collection)
       const remappedSummary = remapDemoSnapshotSourceKeys(
-        demoMedicalSummarySnapshots[audience],
+        demoMedicalSummarySnapshots['zh-TW'][audience],
         alternateCatalog,
       )
       const parsedSummary = generateMedicalSummaryUseCase.parseResult(
