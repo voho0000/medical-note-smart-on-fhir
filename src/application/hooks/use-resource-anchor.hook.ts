@@ -12,6 +12,7 @@ import {
   useResourceNavigationStore,
   type ResourceNavTarget,
 } from '@/src/application/stores/resource-navigation.store'
+import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 
 export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
   resourceType: string | string[],
@@ -19,6 +20,7 @@ export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
   onMatch?: (sequence: number, target: ResourceNavTarget) => void,
 ) {
   const ref = useRef<T | null>(null)
+  const clinicalTabActive = useClinicalTabActivity()
   const pending = useResourceNavigationStore((s) => s.pending)
   const seq = useResourceNavigationStore((s) => s.seq)
   const consume = useResourceNavigationStore((s) => s.consume)
@@ -31,7 +33,11 @@ export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
   const idsKey = Array.isArray(resourceId) ? resourceId.join('|') : resourceId
 
   useEffect(() => {
-    if (!pending || !idsKey || !ref.current) return
+    // Left-panel tabs stay mounted after their first visit. A matching anchor
+    // inside an inactive tab must not consume the request before the owning tab
+    // becomes visible; otherwise the user sees neither the tab switch nor the
+    // flash even though navigation was technically acknowledged.
+    if (!clinicalTabActive || !pending || !idsKey || !ref.current) return
     if (!typesKey.split('|').includes(pending.resourceType) || !idsKey.split('|').includes(pending.resourceId))
       return
     const el = ref.current
@@ -50,7 +56,7 @@ export function useResourceAnchor<T extends HTMLElement = HTMLDivElement>(
       el.classList.add('resource-flash')
       setTimeout(() => el.classList.remove('resource-flash'), 2000)
     }, 50)
-  }, [pending, seq, typesKey, idsKey, consume, onMatch])
+  }, [clinicalTabActive, pending, seq, typesKey, idsKey, consume, onMatch])
 
   return ref
 }

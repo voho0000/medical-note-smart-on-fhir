@@ -4,6 +4,11 @@ import { useResourceNavigationStore } from '@/src/application/stores/resource-na
 
 const mockClearDetail = jest.fn()
 
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: jest.fn(),
+})
+
 jest.mock('@/src/shared/config/feature-registry', () => {
   const React = jest.requireActual<typeof import('react')>('react')
   const PatientFeature = () => React.createElement('div', { 'data-testid': 'patient-shell' })
@@ -13,14 +18,19 @@ jest.mock('@/src/shared/config/feature-registry', () => {
   const { useResourceNavigationStore } = jest.requireActual<
     typeof import('@/src/application/stores/resource-navigation.store')
   >('@/src/application/stores/resource-navigation.store')
+  const { useResourceAnchor } = jest.requireActual<
+    typeof import('@/src/application/hooks/use-resource-anchor.hook')
+  >('@/src/application/hooks/use-resource-anchor.hook')
   const ReportsFeature = () => {
     const active = useClinicalTabActivity()
+    const anchorRef = useResourceAnchor('Observation', 'observation-anchor')
     const pending = useResourceNavigationStore((state) => state.pending)
     const consume = useResourceNavigationStore((state) => state.consume)
     React.useEffect(() => {
       if (active && pending?.reportView === 'cumulative') consume()
     }, [active, consume, pending])
     return React.createElement('div', {
+      ref: anchorRef,
       'data-active': active ? 'true' : 'false',
       'data-testid': 'reports-shell',
     })
@@ -166,6 +176,37 @@ describe('LeftPanelLayout tab responsiveness', () => {
         resourceId: 'obs-1',
         reportView: 'cumulative',
         cumulativeCategoryId: 'chem',
+      })
+    })
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: '報告' }))
+      .toHaveAttribute('aria-selected', 'true'))
+    expect(screen.getByTestId('reports-shell')).toHaveAttribute('data-active', 'true')
+    expect(useResourceNavigationStore.getState()).toMatchObject({
+      pending: null,
+      consumedSeq: 1,
+    })
+  })
+
+  it('does not let an anchor in an idle-mounted hidden tab consume raw navigation early', async () => {
+    render(<ClinicalSummaryFeature />)
+
+    act(() => {
+      frameCallbacks.splice(0).forEach((callback) => callback(16))
+      idleCallbacks.shift()?.({
+        didTimeout: false,
+        timeRemaining: () => 50,
+      })
+    })
+    await waitFor(() => expect(screen.getByTestId('reports-shell')).toHaveAttribute(
+      'data-active',
+      'false',
+    ))
+
+    act(() => {
+      useResourceNavigationStore.getState().navigate({
+        resourceType: 'Observation',
+        resourceId: 'observation-anchor',
       })
     })
 
