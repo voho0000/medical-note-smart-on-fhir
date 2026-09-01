@@ -204,17 +204,17 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
         type="button"
         onClick={copy}
         className="sticky top-0 z-10 float-right ml-2 inline-flex items-center gap-1 rounded-md border bg-card/95 px-1.5 py-0.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:text-primary"
-        aria-label="複製報告全文"
+        aria-label={t.reports.copyFullReport}
       >
         {copied ? (
           <>
             <Check className="h-3 w-3" />
-            已複製
+            {t.common.copied}
           </>
         ) : (
           <>
             <Copy className="h-3 w-3" />
-            複製全文
+            {t.common.copy}
           </>
         )}
       </button>
@@ -253,7 +253,7 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
             <button
               type="button"
               onClick={openLightbox}
-              title={tt?.view ?? '放大檢視'}
+              title={tt?.view ?? t.common.maximize}
               className="block w-full"
             >
               <img
@@ -266,7 +266,7 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
             </button>
           ) : (
             <div className="flex h-40 items-center justify-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
-              {tt?.loading ?? '載入影像…'}
+              {tt?.loading ?? t.common.loading}
             </div>
           )}
           {(img.title || img.size) && (
@@ -303,7 +303,7 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
         <div
           role="separator"
           aria-orientation="horizontal"
-          aria-label="拖移以調整文字與影像的高度比例"
+          aria-label={t.reports.resizeTextAndImages}
           aria-valuenow={topPct === null ? undefined : Math.round(topPct)}
           aria-valuemin={15}
           aria-valuemax={80}
@@ -431,7 +431,9 @@ function countAbnormal(obs: Observation[]): number {
 }
 
 function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: ReportRowProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const rightPaneLabels = t.reports.rightPane
+  const imageViewLabel = t.reports.image.view
   const sourceProgramLabel = (t.reports.sourcePrograms as { adultPreventive?: string } | undefined)
     ?.adultPreventive
   // Image lightbox — only enter the tree (and decode the multi-MB base64) after
@@ -497,7 +499,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
       className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center gap-0.5 text-muted-foreground transition-colors cursor-pointer shrink-0 touch-manipulation hover:text-primary max-md:-my-[11px] md:min-h-0 md:min-w-0"
       role="button"
       tabIndex={0}
-      aria-label="查看影像"
+      aria-label={imageViewLabel}
+      data-report-image-action="true"
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -591,7 +594,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           />
         )}
         {!hideMeta && row.institution && (
-          <ReportInstitutionLabel institution={row.institution} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
+          <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         )}
         {!hideMeta && (
           <Tooltip>
@@ -666,7 +669,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               onClick={(e) => {
                 if (!hasText) return
                 if ((e.target as HTMLElement).closest('[data-report-history-action]')) return
-                if ((e.target as HTMLElement).closest('[aria-label="查看影像"]')) return
+                if ((e.target as HTMLElement).closest('[data-report-image-action]')) return
                 setTextExpanded(!textExpanded)
               }}
               onKeyDown={(e) => {
@@ -700,7 +703,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               >
                 {headerRight}
                 {row.isPossibleDuplicate && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ {t.reports.possibleDuplicate}</span>
                 )}
                 {/* 「AI 翻譯解讀」— only when there's narrative text to work on.
                     Hidden while this report is docked to the right pane, which
@@ -729,7 +732,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                         type="button"
                         data-tour="report-open-right"
                         onClick={openReportRight}
-                        aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
+                        aria-label={hasImages ? rightPaneLabels.openTextAndImages : rightPaneLabels.openText}
                         className={cn(
                           RIGHT_PANE_ACTION_CLASSES,
                           'gap-1 px-2 py-1 text-xs font-medium',
@@ -743,10 +746,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                         button explains itself on hover, quickly and styled. */}
                     <TooltipContent>
                       {isReportRightActive
-                        ? '已在右側面板展開'
+                        ? rightPaneLabels.active
                         : hasImages
-                          ? '在右側面板展開報告與影像'
-                          : '在右側面板展開全文'}
+                          ? rightPaneLabels.openTextAndImages
+                          : rightPaneLabels.openText}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -794,17 +797,17 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     handleCopy(fullText)
                   }}
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                  aria-label="複製報告全文"
+                  aria-label={t.reports.copyFullReport}
                 >
                   {copied ? (
                     <>
                       <Check className="h-3 w-3" />
-                      已複製
+                      {t.common.copied}
                     </>
                   ) : (
                     <>
                       <Copy className="h-3 w-3" />
-                      複製全文
+                      {t.common.copy}
                     </>
                   )}
                 </button>
@@ -884,7 +887,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   label={sourceProgramLabel}
                 />
                 {row.institution && (
-                  <ReportInstitutionLabel institution={row.institution} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                  <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                 )}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1071,7 +1074,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 />
               )}
               {!hideMeta && row.institution && (
-                <ReportInstitutionLabel institution={row.institution} className="max-w-[10rem]" />
+                <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
               )}
               {!hideMeta && (
                 <Tooltip>
@@ -1119,8 +1122,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                       openPanelRight(e)
                     }
                   }}
-                  title={isPanelRightActive ? '已在右側面板展開' : '在右側面板展開細項'}
-                  aria-label="在右側面板展開細項"
+                  title={isPanelRightActive ? rightPaneLabels.active : rightPaneLabels.openDetails}
+                  aria-label={rightPaneLabels.openDetails}
                   className={cn(
                     RIGHT_PANE_ACTION_CLASSES,
                     'px-1 py-0.5',

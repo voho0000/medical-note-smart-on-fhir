@@ -18,14 +18,16 @@ export function ReportInstitutionLabel({
   institution,
   className,
   stopPropagation = true,
+  locale = 'zh-TW',
 }: {
   institution: string
   className?: string
   /** Keep the default tooltip-only tap in ordinary report rows. Group-header
    *  buttons can opt out so the institution still toggles the whole row. */
   stopPropagation?: boolean
+  locale?: string
 }) {
-  const displayInstitution = formatReportInstitution(institution)
+  const displayInstitution = formatReportInstitution(institution, locale)
   return (
     <TapTooltip
       side="top"

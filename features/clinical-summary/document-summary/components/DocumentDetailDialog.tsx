@@ -23,6 +23,7 @@ import type { DocumentEntry } from "../types"
 
 interface DocumentDetailDialogProps {
   entry: DocumentEntry
+  locale?: string
   /** Localised strings forwarded to the inner renderers. The parent already
    *  resolves these from i18n, so we accept them as-is to avoid coupling
    *  this dialog to the language provider. */
@@ -69,6 +70,7 @@ function formatPeriod(period?: { start?: string; end?: string }): string {
 
 export function DocumentDetailDialog({
   entry,
+  locale = 'zh-TW',
   strings,
   resolveSectionLabel,
   interpretation,
@@ -196,6 +198,7 @@ export function DocumentDetailDialog({
           {entry.sourceKind === 'composition' && entry.composition ? (
             <CompositionRenderer
               composition={entry.composition}
+              locale={locale}
               defaultExpandFirst={true}
               resolveSectionLabel={resolveSectionLabel}
               labels={{

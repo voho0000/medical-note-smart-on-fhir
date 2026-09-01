@@ -250,9 +250,10 @@ function primaryCategoryOf(
 function organizationOf(
   medication: any,
   fallbackOrganizationLabel: string,
+  locale: string,
 ): { key: string; label: string } {
   const label = typeof medication?.requester?.display === 'string'
-    ? formatOrganizationDisplay(medication.requester.display).replace(/\s+/g, ' ').trim()
+    ? formatOrganizationDisplay(medication.requester.display, locale).replace(/\s+/g, ' ').trim()
     : ''
   if (!label) {
     return { key: FALLBACK_ORGANIZATION_KEY, label: fallbackOrganizationLabel }
@@ -444,7 +445,7 @@ export function useMedicationTimeline(
       )
       const atcLevel2 = governedAtcClassification(med, 2, locale)
       const atcLevel4 = governedAtcClassification(med, 4, locale)
-      const organization = organizationOf(med, fallbackOrganizationLabel)
+      const organization = organizationOf(med, fallbackOrganizationLabel, locale)
       const rowKey = groupingMode === 'organization'
         ? `${organization.key}::${clinicalDrugKey}`
         : clinicalDrugKey
@@ -458,7 +459,7 @@ export function useMedicationTimeline(
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const frequency = displayDosageInstruction(dosage)
       const requesterDisplay = med.requester?.display
-        ? formatOrganizationDisplay(med.requester.display)
+        ? formatOrganizationDisplay(med.requester.display, locale)
         : ''
 
       const bar: RefillBar = {

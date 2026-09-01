@@ -33,6 +33,8 @@ export interface DocSummaryStrings {
   htmlExternalUrl: string
   primaryDiagnosisTooltip: string
   openInDialog: string
+  openInRightPane: string
+  openInRightPaneActive: string
   docTypes: Record<string, string>
   sections: Record<string, string>
 }
@@ -61,6 +63,8 @@ export const FALLBACK_DOC_STRINGS: DocSummaryStrings = {
   htmlExternalUrl: '開啟外部文件',
   primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',
   openInDialog: '彈出全文檢視',
+  openInRightPane: '在右側面板展開文件',
+  openInRightPaneActive: '已在右側面板展開',
   docTypes: {},
   sections: {},
 }

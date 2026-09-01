@@ -8,7 +8,8 @@ interface PatientInfoDisplayProps {
 }
 
 export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const separator = locale === 'en' ? ':' : '：'
   const [showMore, setShowMore] = useState(false)
 
   const hasExtended =
@@ -25,21 +26,21 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
   return (
     <div className="text-sm space-y-2">
       <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 sm:grid-cols-3 sm:gap-2">
-        <span className="font-medium text-muted-foreground">{t.patient.name}：</span>
+        <span className="font-medium text-muted-foreground">{t.patient.name}{separator}</span>
         <ValueWithSource
           value={patientInfo.name}
           userEntered={isUserEntered('name')}
           label={t.patient.userEntered}
         />
 
-        <span className="font-medium text-muted-foreground">{t.patient.gender}：</span>
+        <span className="font-medium text-muted-foreground">{t.patient.gender}{separator}</span>
         <ValueWithSource
           value={patientInfo.gender}
           userEntered={isUserEntered('gender')}
           label={t.patient.userEntered}
         />
 
-        <span className="font-medium text-muted-foreground">{t.patient.age}：</span>
+        <span className="font-medium text-muted-foreground">{t.patient.age}{separator}</span>
         <ValueWithSource
           value={patientInfo.age}
           userEntered={isUserEntered('birthDate')}
@@ -48,7 +49,7 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
 
         {patientInfo.id && (
           <>
-            <span className="font-medium text-muted-foreground">ID：</span>
+            <span className="font-medium text-muted-foreground">ID{separator}</span>
             <span className="min-w-0 break-all text-muted-foreground sm:col-span-2">{patientInfo.id}</span>
           </>
         )}
@@ -93,7 +94,9 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
             {(patientInfo.contacts ?? []).map((c, i) => (
               <FieldRow
                 key={`con-${i}`}
-                label={`${t.patient.contact}（${c.relationship}）`}
+                label={locale === 'en'
+                  ? `${t.patient.contact} (${c.relationship})`
+                  : `${t.patient.contact}（${c.relationship}）`}
                 value={c.phone ? `${c.name} · ${c.phone}` : c.name}
               />
             ))}
@@ -140,9 +143,10 @@ function FieldRow({
   userEntered?: boolean
   userEnteredLabel?: string
 }) {
+  const { locale } = useLanguage()
   return (
     <>
-      <span className="font-medium text-muted-foreground break-words min-w-0">{label}：</span>
+      <span className="font-medium text-muted-foreground break-words min-w-0">{label}{locale === 'en' ? ':' : '：'}</span>
       <span className="sm:col-span-2 flex min-w-0 flex-wrap items-center gap-1.5">
         <span className="break-words">{value}</span>
         {userEntered && <UserEnteredBadge label={userEnteredLabel} />}

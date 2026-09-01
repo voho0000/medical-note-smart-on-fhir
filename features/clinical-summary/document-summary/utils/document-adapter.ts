@@ -19,6 +19,8 @@ import {
   isPreventiveMedicineComposition,
 } from './loinc-document-types'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { localizeDemoDisplayText } from '@/src/shared/utils/demo-display'
 
 const DISCHARGE_SUMMARY_LOINC = '18842-5'
 
@@ -164,19 +166,23 @@ export function documentReferenceToEntry(
   const codings = Array.isArray(docRef.type?.coding) ? docRef.type!.coding! : []
   const typeCode = codings.find((c) => c?.code)?.code ?? null
   const loincLabel = pickLoincTypeLabel(typeCode, docTypeStrings)
+  const attachmentTitle = localizeDemoDisplayText(att.title?.trim() || '', locale)
   const typeLabel =
     loincLabel ||
-    docRef.type?.text?.trim() ||
-    att.title?.trim() ||
+    localizeDemoDisplayText(docRef.type?.text?.trim() || '', locale) ||
+    attachmentTitle ||
     '—'
 
   const period = docRef.context?.period
   const encounterRef = docRef.context?.encounter?.[0]?.reference
   const encounterId = encounterRef ? encounterRef.replace(/^Encounter\//, '') : undefined
   const encounter = encounterId ? encounterMap?.get(encounterId) : undefined
-  const institution =
+  const institutionSource =
     encounter?.serviceProvider?.display?.trim() ||
     extractInstitutionFromDocumentTitle(att.title)
+  const institution = institutionSource
+    ? formatOrganizationDisplay(institutionSource, locale)
+    : undefined
   const primaryDiagnosis = extractPrimaryDiagnosis(encounter, locale)
 
   return {
@@ -193,7 +199,7 @@ export function documentReferenceToEntry(
     isDischargeSummary: typeCode === DISCHARGE_SUMMARY_LOINC,
     institution,
     period: period ? { start: period.start, end: period.end } : undefined,
-    subtitle: att.title?.trim(),
+    subtitle: attachmentTitle || undefined,
     attachment: att,
     encounterRef,
     primaryDiagnosis,

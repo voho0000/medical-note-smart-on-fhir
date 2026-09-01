@@ -1,3 +1,5 @@
+import { localizeDemoOrganizationDisplay } from './demo-display'
+
 /**
  * Return the human-readable institution name from a legacy source display.
  *
@@ -8,7 +10,10 @@
  * deliberately omits care setting and code; presentation code can add the
  * setting separately without changing organization grouping keys.
  */
-export function formatOrganizationDisplay(organization: string): string {
+export function formatOrganizationDisplay(
+  organization: string,
+  locale: string = 'zh-TW',
+): string {
   const trimmed = organization.trim()
   const [firstSegment] = trimmed.split(/\s*[;；]\s*/, 1)
   const name = firstSegment
@@ -18,7 +23,7 @@ export function formatOrganizationDisplay(organization: string): string {
   // A code-only fallback is not a human-readable institution name. Leave the
   // label empty instead of exposing the identifier in the clinical row.
   if (!name || /^\d{6,}$/.test(name)) return ''
-  return name
+  return localizeDemoOrganizationDisplay(name, locale)
 }
 
 const CARE_SETTING_LABELS: Record<string, { zh: string; en: string }> = {
@@ -50,7 +55,7 @@ export function formatOrganizationContextDisplay(
   explicitSetting?: string,
   locale: string = 'zh-TW',
 ): string {
-  const name = formatOrganizationDisplay(organization)
+  const name = formatOrganizationDisplay(organization, locale)
   if (!name) return ''
 
   const legacySetting = organization

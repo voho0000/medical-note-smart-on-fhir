@@ -10,6 +10,7 @@ import { ArrowUpRight, CircleAlert } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
+import { useOptionalLanguage } from "@/src/application/providers/language.provider"
 import type { ResolvedSourceRef } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 
@@ -30,6 +31,7 @@ interface SourceSupProps {
 }
 
 export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, className, suspectKeys, suspectLabel }: SourceSupProps) {
+  const locale = useOptionalLanguage()?.locale ?? 'zh-TW'
   const [open, setOpen] = useState(false)
   // Hover uses a small close delay so the pointer can travel into the bubble.
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -162,7 +164,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
               )}>{s.num}</b>
               <span className="min-w-0 flex-1">
                 {typeLabel(s.resourceType)}
-                {s.organization ? <> · {formatOrganizationDisplay(s.organization)}</> : null}
+                {s.organization ? <> · {formatOrganizationDisplay(s.organization, locale)}</> : null}
                 {s.date ? <> · {s.date}</> : null}
                 {s.display ? <span className="block text-foreground/80">{s.display}</span> : null}
                 {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
@@ -186,7 +188,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                 {s.verified ? (
                   <>
                     {typeLabel(s.resourceType)}
-                    {s.organization ? <> · {formatOrganizationDisplay(s.organization)}</> : null}
+                    {s.organization ? <> · {formatOrganizationDisplay(s.organization, locale)}</> : null}
                     {s.date ? <> · {s.date}</> : null}
                     {s.display ? (
                       <span className="block text-foreground/80">{s.display}</span>

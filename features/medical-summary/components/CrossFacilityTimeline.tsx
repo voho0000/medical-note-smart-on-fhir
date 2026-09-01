@@ -14,6 +14,8 @@ import type {
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 
 const CATEGORY_STYLES: Record<TimelineCategory, { pill: string; dot: string }> = {
   diagnosis: {
@@ -86,6 +88,7 @@ export function CrossFacilityTimeline({
   collapseLabel,
   droppedNote,
 }: CrossFacilityTimelineProps) {
+  const { locale } = useLanguage()
   const [showAll, setShowAll] = useState(false)
   if (result.timeline.length === 0) return null
 
@@ -121,7 +124,7 @@ export function CrossFacilityTimeline({
                   </span>
                   {event.organization ? (
                     <span className="rounded border border-border bg-muted/40 px-1.5 py-px text-[0.625rem] text-muted-foreground">
-                      {event.organization}
+                      {formatOrganizationDisplay(event.organization, locale)}
                     </span>
                   ) : null}
                   {onNavigate ? (

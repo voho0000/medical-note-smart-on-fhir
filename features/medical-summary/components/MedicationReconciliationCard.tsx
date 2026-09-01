@@ -15,6 +15,8 @@ import type {
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
 import { resolveClaimSources } from "../utils/resolve-claim-sources"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 
 interface MedicationReconciliationCardProps {
   result: MedicalSummaryResult
@@ -50,8 +52,11 @@ function latestSource(sources: ResolvedSourceRef[]) {
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0]
 }
 
-function sourceMeta(source?: ResolvedSourceRef) {
-  return [source?.date, source?.organization].filter(Boolean).join(" · ")
+function sourceMeta(source: ResolvedSourceRef | undefined, locale: string) {
+  const organization = source?.organization
+    ? formatOrganizationDisplay(source.organization, locale)
+    : undefined
+  return [source?.date, organization].filter(Boolean).join(" · ")
 }
 
 export function MedicationReconciliationCard({
@@ -68,6 +73,7 @@ export function MedicationReconciliationCard({
   showLessLabel,
   onNavigate,
 }: MedicationReconciliationCardProps) {
+  const { locale } = useLanguage()
   const [showAll, setShowAll] = useState(false)
   const review = result.medicationReview
   if (!review) return null
@@ -104,7 +110,7 @@ export function MedicationReconciliationCard({
           <div className="divide-y divide-border/70 rounded-md border border-border/80">
             {regimen.map((item, index) => {
               const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
-              const meta = sourceMeta(latestSource(sources))
+              const meta = sourceMeta(latestSource(sources), locale)
               return (
                 <div key={`${item.name}-${index}`} className="flex min-w-0 items-start gap-2 px-2.5 py-1.5">
                   <span className="mt-px shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-slate-700 dark:bg-muted/70 dark:text-muted-foreground">
@@ -134,7 +140,7 @@ export function MedicationReconciliationCard({
           <div className="space-y-1">
             {changes.map((item, index) => {
               const sources = sourcesFor(item.sourceKeys, item.documentEvidence)
-              const meta = sourceMeta(latestSource(sources))
+              const meta = sourceMeta(latestSource(sources), locale)
               return (
                 <div key={`${item.medication}-${index}`} className="rounded-md bg-muted/45 px-2.5 py-1.5">
                   <div className="flex min-w-0 items-start gap-1.5">

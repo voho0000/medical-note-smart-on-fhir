@@ -21,7 +21,7 @@ interface AdultPreventiveGroupCardProps {
 const EMPTY_MEMBERS: Row[] = []
 
 export function AdultPreventiveGroupCard({ row, defaultOpen, query, showTypeBadge }: AdultPreventiveGroupCardProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const reports = t.reports as typeof t.reports & {
     adultPreventiveGroup?: {
       itemCount: string
@@ -76,6 +76,7 @@ export function AdultPreventiveGroupCard({ row, defaultOpen, query, showTypeBadg
             {row.institution && (
               <ReportInstitutionLabel
                 institution={row.institution}
+                locale={locale}
                 stopPropagation={false}
                 className="col-span-2 row-start-2 min-w-0 max-w-[12rem] @min-[36rem]:col-span-1 @min-[36rem]:col-start-2 @min-[36rem]:row-start-1"
               />

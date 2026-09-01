@@ -20,9 +20,11 @@ import {
   getSectionCode,
   isPreventiveMedicineComposition,
 } from '../utils/loinc-document-types'
+import { localizeDemoDisplayText } from '@/src/shared/utils/demo-display'
 
 interface CompositionRendererProps {
   composition: CompositionEntity
+  locale?: string
   /** When true, the first renderable section is expanded by default. Used
    *  by DocumentSummaryCard when the list has exactly one Composition. */
   defaultExpandFirst?: boolean
@@ -58,10 +60,10 @@ function formatDate(iso?: string): string {
   return iso.slice(0, 10)
 }
 
-function getAuthorNames(comp: CompositionEntity): string {
+function getAuthorNames(comp: CompositionEntity, locale: string): string {
   const authors = Array.isArray(comp.author) ? comp.author : []
   return authors
-    .map((a) => a?.display?.trim())
+    .map((a) => localizeDemoDisplayText(a?.display?.trim() || '', locale))
     .filter((s): s is string => !!s)
     .join(', ')
 }
@@ -90,6 +92,7 @@ function getSectionTitle(
 
 export function CompositionRenderer({
   composition,
+  locale = 'zh-TW',
   defaultExpandFirst = false,
   forceExpandKey,
   resolveSectionLabel,
@@ -106,7 +109,8 @@ export function CompositionRenderer({
     : ''
 
   const documentDate = formatDate(composition.date)
-  const authorNames = getAuthorNames(composition)
+  const authorNames = getAuthorNames(composition, locale)
+  const metadataSeparator = locale === 'en' ? ': ' : '：'
   // The IPS spec calls this `custodian`, but R4 Composition stores it on the
   // top-level `custodian` field which our entity doesn't expose. Authors are
   // a reasonable proxy for now; revisit if/when CompositionEntity adds it.
@@ -144,13 +148,13 @@ export function CompositionRenderer({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.6875rem] text-muted-foreground">
           {documentDate && (
             <span>
-              <span className="font-medium">{labels.documentDate}：</span>
+              <span className="font-medium">{labels.documentDate}{metadataSeparator}</span>
               {documentDate}
             </span>
           )}
           {authorNames && (
             <span>
-              <span className="font-medium">{labels.author}：</span>
+              <span className="font-medium">{labels.author}{metadataSeparator}</span>
               {authorNames}
             </span>
           )}

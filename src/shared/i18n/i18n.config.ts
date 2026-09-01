@@ -15,3 +15,8 @@ export const localeNames: Record<Locale, string> = {
   'en': 'English',
   'zh-TW': '繁體中文',
 }
+
+export function getLocaleDisplayName(target: Locale, displayLocale: Locale): string {
+  if (target === 'en') return 'English'
+  return displayLocale === 'en' ? 'Traditional Chinese' : '繁體中文'
+}

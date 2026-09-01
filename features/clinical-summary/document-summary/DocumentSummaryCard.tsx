@@ -38,6 +38,7 @@ import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStri
 import { getDocumentPlainText } from './utils/document-text'
 import { isPreventiveMedicineComposition } from './utils/loinc-document-types'
 import type { DocumentEntry } from './types'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 
 function formatDate(iso?: string): string {
@@ -58,6 +59,7 @@ function formatPeriod(period?: { start?: string; end?: string }): string {
 }
 
 export function DocumentSummaryCard() {
+  const { locale } = useLanguage()
   const strings = useDocumentSummaryStrings()
   const { entries, isLoading, error } = useDocumentSummaries(strings.docTypes)
   const resolveSectionLabel = makeResolveSectionLabel(strings)
@@ -102,6 +104,7 @@ export function DocumentSummaryCard() {
             autoExpand={autoExpand}
             strings={strings}
             resolveSectionLabel={resolveSectionLabel}
+            locale={locale}
           />
         ))}
       </ul>
@@ -118,6 +121,7 @@ interface DocumentEntryCardProps {
   autoExpand: boolean
   strings: DocSummaryStrings
   resolveSectionLabel: (i18nKey: string) => string | null
+  locale: string
 }
 
 function DocumentEntryCard({
@@ -125,6 +129,7 @@ function DocumentEntryCard({
   autoExpand,
   strings,
   resolveSectionLabel,
+  locale,
 }: DocumentEntryCardProps) {
   const dateStr = formatDate(entry.date)
   const periodStr = formatPeriod(entry.period)
@@ -186,6 +191,7 @@ function DocumentEntryCard({
           {entry.sourceKind === 'composition' && entry.composition ? (
             <CompositionRenderer
               composition={entry.composition}
+              locale={locale}
               defaultExpandFirst
               forceExpandKey={0}
               resolveSectionLabel={resolveSectionLabel}
@@ -226,8 +232,8 @@ function DocumentEntryCard({
           openRight(e)
         }
       }}
-      title={isRightActive ? '已在右側面板展開' : '在右側面板展開文件'}
-      aria-label="在右側面板展開文件"
+      title={isRightActive ? strings.openInRightPaneActive : strings.openInRightPane}
+      aria-label={strings.openInRightPane}
       className={cn(
         RIGHT_PANE_ACTION_CLASSES,
         'px-1 py-0.5',
@@ -301,6 +307,7 @@ function DocumentEntryCard({
               accordion below still works for quick previews. */}
           <DocumentDetailDialog
             entry={entry}
+            locale={locale}
             strings={strings}
             resolveSectionLabel={resolveSectionLabel}
             interpretation={
@@ -373,6 +380,7 @@ function DocumentEntryCard({
       {entry.sourceKind === 'composition' && entry.composition ? (
         <CompositionRenderer
           composition={entry.composition}
+          locale={locale}
           defaultExpandFirst={autoExpand}
           forceExpandKey={forceExpandKey}
           resolveSectionLabel={resolveSectionLabel}

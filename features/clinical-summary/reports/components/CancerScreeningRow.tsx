@@ -56,7 +56,7 @@ function removeRepeatedResultPrefix(text: string, latestValues: string[]): strin
 }
 
 function CancerScreeningRowImpl({ row, defaultOpen = [], query, showTypeBadge }: CancerScreeningRowProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const labels = t.reports.cancerScreeningRow
   const contentId = useId()
   const members = useMemo(
@@ -122,6 +122,7 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query, showTypeBadge }:
             {latestResult?.institution && (
               <ReportInstitutionLabel
                 institution={latestResult.institution}
+                locale={locale}
                 className="min-w-0 max-w-[10rem] flex-1 @min-[36rem]:max-w-[12rem]"
               />
             )}
@@ -182,6 +183,7 @@ function CancerScreeningRowImpl({ row, defaultOpen = [], query, showTypeBadge }:
                         {resultRow.institution && (
                           <ReportInstitutionLabel
                             institution={resultRow.institution}
+                            locale={locale}
                             className="max-w-[12rem] min-w-0 flex-1"
                           />
                         )}

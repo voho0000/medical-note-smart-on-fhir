@@ -9,7 +9,7 @@ import {
 } from '../utils/observation-helpers'
 import { formatQuantity, formatDate } from '../utils/fhir-helpers'
 
-export function useVitalsView(vitalSigns: any[]) {
+export function useVitalsView(vitalSigns: any[], locale: string = 'zh-TW') {
   const vitalObservations = useMemo(() => filterVitalSigns(vitalSigns), [vitalSigns])
 
   return useMemo<VitalsView>(() => {
@@ -54,7 +54,7 @@ export function useVitalsView(vitalSigns: any[]) {
       rr: rr?.valueQuantity ? `${Math.round(Number(rr.valueQuantity.value))} /min` : "—",
       temp: temp?.valueQuantity ? formatQuantity(temp.valueQuantity) : "—",
       spo2: spo2?.valueQuantity ? `${Math.round(Number(spo2.valueQuantity.value))}%` : "—",
-      time: lastTime ? formatDate(new Date(lastTime).toISOString()) : "",
+      time: lastTime ? formatDate(new Date(lastTime).toISOString(), locale) : "",
     }
-  }, [vitalObservations])
+  }, [vitalObservations, locale])
 }

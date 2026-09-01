@@ -94,10 +94,10 @@ export function formatSourceTime(d?: string): string {
 /**
  * Format a date string to locale date and time string
  */
-export function formatDateTime(d?: string): string {
+export function formatDateTime(d?: string, locale?: string): string {
   if (!d) return ""
   try {
-    return new Date(d).toLocaleString()
+    return new Date(d).toLocaleString(locale)
   } catch {
     return d
   }

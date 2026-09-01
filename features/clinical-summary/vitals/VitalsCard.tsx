@@ -8,9 +8,9 @@ import { useVitalsView } from './hooks/useVitalsView'
 import { VitalsGrid } from './components/VitalsGrid'
 
 export function VitalsCard() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { vitalSigns, isLoading, error } = useVitals()
-  const vitals = useVitalsView(vitalSigns)
+  const vitals = useVitalsView(vitalSigns, locale)
 
   return (
     <FeatureCard 

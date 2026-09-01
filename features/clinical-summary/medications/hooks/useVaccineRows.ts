@@ -7,6 +7,8 @@ import { useMemo } from 'react'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import { pickByLocale, pickLocalizedText } from '../utils/fhir-helpers'
 import type { ImmunizationEntity } from '@/src/core/entities/clinical-data.entity'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { localizeDemoDisplayText } from '@/src/shared/utils/demo-display'
 
 export interface VaccineDoseEvent {
   id: string
@@ -71,7 +73,10 @@ export function useVaccineRows(
 
       const dateIso = imm.occurrenceDateTime
       const dateLabel = formatDate(dateIso) || undefined
-      const provider = imm.performer?.[0]?.actor?.display?.trim() || undefined
+      const providerDisplay = imm.performer?.[0]?.actor?.display?.trim()
+      const provider = providerDisplay
+        ? formatOrganizationDisplay(providerDisplay, locale)
+        : undefined
 
       const dose: VaccineDoseEvent = {
         id: imm.id || `${key}-${dateIso ?? `idx-${index}`}`,
@@ -80,7 +85,7 @@ export function useVaccineRows(
         provider,
         lotNumber: imm.lotNumber,
         manufacturer: imm.manufacturer?.display,
-        source: noteToSource(imm.note),
+        source: localizeDemoDisplayText(noteToSource(imm.note) || '', locale) || undefined,
       }
 
       const existing = byKey.get(key)
@@ -89,10 +94,12 @@ export function useVaccineRows(
       } else {
         byKey.set(key, {
           id: key,
-          name:
+          name: localizeDemoDisplayText(
             pickLocalizedText(imm.vaccineCode, audience, locale) ||
             imm.vaccineCode?.text ||
             'Unknown Vaccine',
+            locale,
+          ),
           // Immunization doesn't usually carry a CodeableConcept "category" the way
           // MedicationRequest does. If a future bridge release adds one, surface it.
           category: pickByLocale((imm as any).category?.[0], locale) || undefined,

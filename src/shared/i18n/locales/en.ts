@@ -981,6 +981,8 @@ export const en = {
     htmlExternalUrl: 'Open external document',
     primaryDiagnosisTooltip: 'ICD-10 principal discharge diagnosis coded by the medical institution for NHI billing (aggregated and synced to the NHI health record). Not a clinician\'s narrative diagnosis — see the document content for clinical details.',
     openInDialog: 'Open full view',
+    openInRightPane: 'Open document in the right panel',
+    openInRightPaneActive: 'Document is open in the right panel',
     docTypes: {
       ipsPatientSummary: 'International Patient Summary (IPS)',
       dischargeSummary: 'Discharge summary',
@@ -1045,6 +1047,16 @@ export const en = {
   reports: {
     title: 'Diagnostic Reports',
     otherSubgroup: 'Other',
+    historyEmpty: 'No history available.',
+    possibleDuplicate: 'Possible duplicate',
+    copyFullReport: 'Copy full report',
+    resizeTextAndImages: 'Resize the text and image areas',
+    rightPane: {
+      openText: 'Open the full report in the right panel',
+      openTextAndImages: 'Open the report and images in the right panel',
+      openDetails: 'Open report details in the right panel',
+      active: 'Report is open in the right panel',
+    },
     // Clinician-only badge on a merged duplicate report ({count} = total copies
     // the bridge sent). Hidden for the patient audience.
     bridgeDup: {
@@ -1093,7 +1105,7 @@ export const en = {
       images: 'images',
       loading: 'Loading image…',
       previewLimitNotice:
-        'NHI 健康存摺 carries at most 10 preview thumbnails per imaging exam and does not transmit the full DICOM study. For complete medical imaging, request the DICOM disc from the imaging hospital or download the DCM file via the NHI health record.',
+        'NHI My Health Bank carries at most 10 preview thumbnails per imaging exam and does not transmit the full DICOM study. For complete medical imaging, request the DICOM disc from the imaging hospital or download the DCM file via NHI My Health Bank.',
     },
     multiRegion: {
       title: 'Same-day same-code imaging studies',
@@ -1107,6 +1119,10 @@ export const en = {
       viewImages: 'View images',
       imagesCount: 'images',
       firstFrame: 'first frame',
+      itemCount: '{count} items',
+      sharedCode: 'Shared NHI code',
+      openText: 'Open the full report in the right panel',
+      openTextActive: 'Report is open in the right panel',
     },
     tabs: {
       cumulative: 'Cumulative',
@@ -1476,7 +1492,7 @@ export const en = {
     medicationStatus: 'Medication Status:',
     medicationChronic: 'Chronic / Acute:',
     medicationChronicAll: 'All',
-    medicationChronicOnly: 'Chronic (慢箋) Only',
+    medicationChronicOnly: 'Chronic refill prescriptions only',
     medicationAcuteOnly: 'Acute Only',
     activeOnly: 'Active Only',
     allMedications: 'All Medications',
@@ -1991,7 +2007,7 @@ export const en = {
         listAvailableObservationCodes: 'List distinct lab/observation names the patient has, with counts. Useful before searchObservationByName when you\'re unsure what\'s available',
         queryProcedures: 'Query procedures (surgeries, interventions). Supports status and date range',
         queryMedications: 'Query medication prescriptions with full detail. Supports status / chronic / date range. For "what is the patient on now" prefer getActiveMedicationList (it dedups refill cycles)',
-        getActiveMedicationList: '**Shortcut for "what is the patient currently on?"** — deduplicated list of active prescriptions (NHI refill cycles collapsed). Set chronicOnly=true to filter to 慢箋',
+        getActiveMedicationList: '**Shortcut for "what is the patient currently on?"** — deduplicated list of active prescriptions (NHI refill cycles collapsed). Set chronicOnly=true to include only chronic refill prescriptions.',
         queryAllergies: 'Query allergies and intolerances. Filter by `severity` (high/moderate/low)',
         queryImmunizations: 'Query preventive vaccinations (FHIR Immunization). Supports date range',
         searchMedicalLiterature: 'Search medical literature and clinical guidelines (use for research, treatment guidelines, drug information — NOT for patient-specific data). Results include source URLs — always cite these source links in your answer.',
@@ -2087,9 +2103,9 @@ export const en = {
     dragHint: 'Tip: you can also drag a .json / .txt file anywhere on this screen to import.',
     dropHere: 'Release to import',
     localTitle: 'Import from your device',
-    localDesc: 'Download your health data (.json / .txt file) from 健保存摺 or another source — once imported, it stays on this device only.',
+    localDesc: 'Download your health data (.json / .txt file) from NHI My Health Bank or another source — once imported, it stays on this device only.',
     demoTitle: 'Try demo data',
-    demoDesc: 'Load a de-identified sample patient (adapted from a real 健保存摺 export, with a discharge summary and images) — explore without importing anything.',
+    demoDesc: 'Load a de-identified sample patient (adapted from a real NHI My Health Bank export, with a discharge summary and images) — explore without importing anything.',
     smartTitle: 'Hospital launch (SMART-on-FHIR)',
     smartDesc: 'If you opened this app from a hospital\'s electronic health record via SMART-on-FHIR, patient data loads automatically — no manual import needed.',
     privacyNote: 'Your health data stays in your browser on this device.',

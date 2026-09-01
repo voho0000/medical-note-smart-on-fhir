@@ -29,6 +29,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { RIGHT_PANE_ACTION_CLASSES } from '@/src/shared/config/ui-theme.config'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import type { Row } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
@@ -105,6 +106,10 @@ export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCar
     viewImages: 'View images',
     imagesCount: 'images',
     firstFrame: 'first frame',
+    itemCount: '{count} items',
+    sharedCode: 'Shared NHI code',
+    openText: 'Open the full report in the right panel',
+    openTextActive: 'Report is open in the right panel',
   }
 
   const sub = row.groupedRows ?? []
@@ -133,7 +138,7 @@ export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCar
               {showTypeBadge && <ReportTypeBadge group="imaging" />}
               <span className="font-semibold text-sm">{row.title}</span>
               <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                {sub.length} 項
+                {tm.itemCount.replace('{count}', String(sub.length))}
               </span>
               {row.hasAmbiguity && (
                 <span
@@ -141,7 +146,7 @@ export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCar
                   className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-                  健保碼共用
+                  {tm.sharedCode}
                 </span>
               )}
             </div>
@@ -150,7 +155,7 @@ export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCar
               {row.institution && (
                 <span className="inline-flex items-center gap-1">
                   <Building2 className="h-3 w-3 shrink-0" aria-hidden />
-                  {row.institution}
+                  {formatOrganizationDisplay(row.institution, locale)}
                 </span>
               )}
               {narratives.length > 0 && (
@@ -298,6 +303,8 @@ function NarrativeSubCard({
   index: number
   reportLabel: string
 }) {
+  const { t } = useLanguage()
+  const rightLabels = (t as any).reports?.multiRegion
   const [expanded, setExpanded] = useState(false)
   // 「AI 翻譯解讀」opens independently of the text expander — a 民眾 can read the
   // AI result without first expanding the English narrative.
@@ -398,7 +405,7 @@ function NarrativeSubCard({
               <button
                 type="button"
                 onClick={openRight}
-                aria-label="在右側面板展開全文"
+                aria-label={rightLabels.openText}
                 className={cn(
                   RIGHT_PANE_ACTION_CLASSES,
                   'px-2 py-1 text-xs font-medium',
@@ -408,7 +415,7 @@ function NarrativeSubCard({
                 <PanelRight className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{isRightActive ? '已在右側面板展開' : '在右側面板展開全文'}</TooltipContent>
+            <TooltipContent>{isRightActive ? rightLabels.openTextActive : rightLabels.openText}</TooltipContent>
           </Tooltip>
         )}
         <span className={cn('text-xs text-muted-foreground shrink-0 select-none mt-0.5', expanded && 'rotate-180')}>

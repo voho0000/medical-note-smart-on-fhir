@@ -6,6 +6,7 @@ import {
   getEncounterKindText,
 } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
@@ -73,10 +74,9 @@ function isTwCoreDepartmentSystem(system: string): boolean {
  * "臺北榮總;門診;0601160016". Visit history labels and filters only need the
  * human-readable institution name.
  */
-function getInstitutionName(display: unknown): string {
+function getInstitutionName(display: unknown, locale: string): string {
   if (typeof display !== 'string') return ''
-  const name = display.split(/[;；]/, 1)[0].trim()
-  return name || display.trim()
+  return formatOrganizationDisplay(display, locale)
 }
 
 function getServiceTypeConcepts(serviceType: any): any[] {
@@ -241,8 +241,8 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         
         const isUuid = (s: string) =>
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
-        const providerDisplay = getInstitutionName(encounter.serviceProvider?.display)
-        const locationDisplay = getInstitutionName(encounter.location?.[0]?.location?.display)
+        const providerDisplay = getInstitutionName(encounter.serviceProvider?.display, locale)
+        const locationDisplay = getInstitutionName(encounter.location?.[0]?.location?.display, locale)
         // Institution: prefer the service provider (hospital). Falls back to
         // location if the provider is missing or a raw UUID.
         const institution = (providerDisplay && !isUuid(providerDisplay))

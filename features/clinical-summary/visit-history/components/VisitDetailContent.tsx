@@ -55,7 +55,7 @@ export function VisitDetailContent({
   abnormalCount = 0,
   showMedicationExecutionPeriods = false,
 }: VisitDetailContentProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
   const resolveDocSectionLabel = makeResolveSectionLabel(docStrings)
   const categoryLabel = (id: string): string =>
@@ -84,6 +84,7 @@ export function VisitDetailContent({
                 doc={doc}
                 docStrings={docStrings}
                 resolveSectionLabel={resolveDocSectionLabel}
+                locale={locale}
               />
             ))}
           </div>
@@ -217,12 +218,14 @@ interface VisitLinkedDocumentRowProps {
   doc: DocumentEntry
   docStrings: DocSummaryStrings
   resolveSectionLabel: (i18nKey: string) => string | null
+  locale: string
 }
 
 function VisitLinkedDocumentRow({
   doc,
   docStrings,
   resolveSectionLabel,
+  locale,
 }: VisitLinkedDocumentRowProps) {
   const docPlainText = useMemo(() => getDocumentPlainText(doc), [doc])
   const canInterpret = docPlainText.trim().length > 0
@@ -240,6 +243,7 @@ function VisitLinkedDocumentRow({
       </div>
       <DocumentDetailDialog
         entry={doc}
+        locale={locale}
         strings={docStrings}
         resolveSectionLabel={resolveSectionLabel}
         interpretation={

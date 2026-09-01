@@ -980,6 +980,8 @@ export const zhTW = {
     htmlExternalUrl: '開啟外部文件',
     primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',
     openInDialog: '彈出全文檢視',
+    openInRightPane: '在右側面板展開文件',
+    openInRightPaneActive: '已在右側面板展開',
     // LOINC 文件型別 → 顯示名
     docTypes: {
       ipsPatientSummary: '國際病人摘要 (IPS)',
@@ -1046,6 +1048,16 @@ export const zhTW = {
   reports: {
     title: '診斷報告',
     otherSubgroup: '其他',
+    historyEmpty: '無歷史記錄。',
+    possibleDuplicate: '可能重複',
+    copyFullReport: '複製報告全文',
+    resizeTextAndImages: '拖移以調整文字與影像的高度比例',
+    rightPane: {
+      openText: '在右側面板展開全文',
+      openTextAndImages: '在右側面板展開報告與影像',
+      openDetails: '在右側面板展開細項',
+      active: '已在右側面板展開',
+    },
     // Clinician-only badge on a merged duplicate report ({count} = total copies
     // the bridge sent). Hidden for 民眾. Tooltip keeps the file-a-report hint.
     bridgeDup: {
@@ -1108,6 +1120,10 @@ export const zhTW = {
       viewImages: '查看影像',
       imagesCount: '張',
       firstFrame: '首幅',
+      itemCount: '共 {count} 項',
+      sharedCode: '健保碼共用',
+      openText: '在右側面板展開全文',
+      openTextActive: '已在右側面板展開',
     },
     tabs: {
       cumulative: '累積報告',

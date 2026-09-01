@@ -1,4 +1,9 @@
-import { locales, defaultLocale, localeNames } from '@/src/shared/i18n/i18n.config'
+import {
+  locales,
+  defaultLocale,
+  getLocaleDisplayName,
+  localeNames,
+} from '@/src/shared/i18n/i18n.config'
 
 describe('i18n.config', () => {
   describe('locales', () => {
@@ -15,6 +20,10 @@ describe('i18n.config', () => {
       const zhKeys = Object.keys(locales['zh-TW'])
       expect(enKeys.length).toBeGreaterThan(0)
       expect(zhKeys.length).toBeGreaterThan(0)
+    })
+
+    it('does not ship Chinese characters in runtime English translations', () => {
+      expect(JSON.stringify(locales.en)).not.toMatch(/\p{Script=Han}/u)
     })
 
     it('describes patient summary reruns as regeneration, not refresh', () => {
@@ -58,5 +67,11 @@ describe('i18n.config', () => {
     it('should have Chinese name', () => {
       expect(localeNames['zh-TW']).toBe('繁體中文')
     })
+
+    it('localizes language choices to the active interface language', () => {
+      expect(getLocaleDisplayName('zh-TW', 'en')).toBe('Traditional Chinese')
+      expect(getLocaleDisplayName('zh-TW', 'zh-TW')).toBe('繁體中文')
+    })
+
   })
 })

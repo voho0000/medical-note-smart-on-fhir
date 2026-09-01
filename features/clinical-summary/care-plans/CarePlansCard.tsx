@@ -18,6 +18,8 @@ import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clini
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { getCodeableConceptText, formatDate } from "@/src/shared/utils/fhir-helpers"
 import type { CarePlanEntity } from "@/src/core/entities/clinical-data.entity"
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { localizeDemoDisplayText } from '@/src/shared/utils/demo-display'
 
 interface CarePlanItem {
   id: string
@@ -30,23 +32,23 @@ interface CarePlanItem {
   activities: string[]
 }
 
-function getCarePlanTitle(cp: CarePlanEntity): string {
-  if (cp.title && cp.title.trim()) return cp.title.trim()
+function getCarePlanTitle(cp: CarePlanEntity, locale: string): string {
+  if (cp.title && cp.title.trim()) return localizeDemoDisplayText(cp.title.trim(), locale)
   const cat = Array.isArray(cp.category) ? cp.category[0] : undefined
   const catText = getCodeableConceptText(cat)
-  if (catText && catText !== '—') return catText
-  return cp.description?.trim() || '—'
+  if (catText && catText !== '—') return localizeDemoDisplayText(catText, locale)
+  return localizeDemoDisplayText(cp.description?.trim() || '', locale) || '—'
 }
 
-function getActivities(cp: CarePlanEntity): string[] {
+function getActivities(cp: CarePlanEntity, locale: string): string[] {
   if (!Array.isArray(cp.activity)) return []
   return cp.activity
     .map((a) => {
       const detail = a?.detail
       if (!detail) return ''
-      if (detail.description?.trim()) return detail.description.trim()
+      if (detail.description?.trim()) return localizeDemoDisplayText(detail.description.trim(), locale)
       const codeText = getCodeableConceptText(detail.code)
-      return codeText && codeText !== '—' ? codeText : ''
+      return codeText && codeText !== '—' ? localizeDemoDisplayText(codeText, locale) : ''
     })
     .filter(Boolean)
 }
@@ -71,7 +73,7 @@ function getStatusLabel(status: string | undefined, tt: Record<string, string>):
 }
 
 export function CarePlansCard() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   // Single-type card: gate on CarePlan alone (per-type queries).
   const { carePlans, resourceReady, error } = useClinicalData()
   const isLoading = !resourceReady.carePlans
@@ -94,8 +96,8 @@ export function CarePlansCard() {
       const start = cp.period?.start ? formatDate(cp.period.start) : ''
       const end = cp.period?.end ? formatDate(cp.period.end) : ''
       const range = start || end ? `${start}${start || end ? ' – ' : ''}${end}` : ''
-      const title = getCarePlanTitle(cp)
-      const description = cp.description?.trim() || ''
+      const title = getCarePlanTitle(cp, locale)
+      const description = localizeDemoDisplayText(cp.description?.trim() || '', locale)
       return {
         // Stable fallback (created date, else list index) — never Math.random,
         // which would remount the row every render.
@@ -107,14 +109,16 @@ export function CarePlansCard() {
         // print the same sentence twice.
         description: description && description !== title ? description : '',
         // 收案醫療機構 — CarePlan.author.display (e.g. "中國北港醫").
-        institution: cp.author?.display?.trim() || '',
+        institution: cp.author?.display
+          ? formatOrganizationDisplay(cp.author.display, locale)
+          : '',
         status: cp.status,
         statusText: getStatusLabel(cp.status, tt),
         range,
-        activities: getActivities(cp),
+        activities: getActivities(cp, locale),
       }
     })
-  }, [carePlans, tt])
+  }, [carePlans, locale, tt])
 
   return (
     <FeatureCard

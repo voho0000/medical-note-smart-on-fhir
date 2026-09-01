@@ -66,3 +66,10 @@ export function useLanguage() {
   }
   return context
 }
+
+/** Locale-only presentation helpers may also render in isolated previews and
+ * unit tests that intentionally omit the app provider. They can use this
+ * optional hook and retain the product's default Traditional Chinese locale. */
+export function useOptionalLanguage() {
+  return useContext(LanguageContext)
+}

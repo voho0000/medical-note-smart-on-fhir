@@ -17,6 +17,8 @@ import {
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
 import { BundleFileInput, type BundleFileInputHandle } from '@/features/import-bundle/components/BundleFileInput'
+import { Button } from '@/components/ui/button'
+import { getLocaleDisplayName, type Locale } from '@/src/shared/i18n/i18n.config'
 import { cn } from '@/src/shared/utils/cn.utils'
 
 interface WelcomeSourceOptionProps {
@@ -64,7 +66,7 @@ function WelcomeSourceOption({
       {interactive && (
         <ChevronRight
           className={cn(
-            'h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:mt-auto sm:self-end sm:pt-4',
+            'h-4 w-4 shrink-0 self-center text-muted-foreground sm:mt-auto sm:self-end sm:pt-4',
             tone === 'featured'
               ? 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
               : 'group-hover:text-primary',
@@ -106,9 +108,10 @@ function WelcomeSourceOption({
 }
 
 export function WelcomeOnboarding() {
-  const { t } = useLanguage()
+  const { t, locale, setLocale } = useLanguage()
   const w = (t as any).welcome ?? {}
   const i18n = t.importBundle
+  const languageLabel = locale === 'en' ? 'Language' : 'Language / 語言'
 
   const { importFile, loadDemo, loading, error } = useImportBundle()
   const [isDragging, setIsDragging] = useState(false)
@@ -174,7 +177,7 @@ export function WelcomeOnboarding() {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={cn(
-        'relative flex min-h-full w-full items-start justify-center bg-muted/35 px-4 py-8 transition-colors dark:bg-background sm:items-center sm:px-6 lg:py-12',
+        'relative flex min-h-full w-full items-start justify-center bg-muted/35 px-4 py-8 transition-colors dark:bg-background sm:px-6 lg:py-12',
         isDragging && 'bg-primary/[0.09] dark:bg-primary/[0.08]',
       )}
     >
@@ -191,7 +194,7 @@ export function WelcomeOnboarding() {
         </div>
       )}
 
-      <div className="w-full max-w-5xl text-center">
+      <div className="my-auto w-full max-w-5xl text-center">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center overflow-hidden">
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`}
@@ -206,6 +209,31 @@ export function WelcomeOnboarding() {
         <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           {w.description ?? 'Import a FHIR Bundle or launch from your EHR to get started.'}
         </p>
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">
+            {languageLabel}
+          </span>
+          <div
+            role="group"
+            aria-label={languageLabel}
+            className="inline-flex items-center rounded-lg border border-border bg-background p-1"
+          >
+            {(['zh-TW', 'en'] as Locale[]).map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={locale === value ? 'secondary' : 'ghost'}
+                aria-pressed={locale === value}
+                onClick={() => setLocale(value)}
+                className="h-11 px-3 shadow-none sm:h-8"
+              >
+                {getLocaleDisplayName(value, locale)}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         {loading && (
           <p className="mt-4 text-sm text-primary" role="status" aria-live="polite">

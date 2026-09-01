@@ -57,7 +57,7 @@ function formatDayLabel(iso?: string): string {
 }
 
 export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const tr = (t as any).reports
   const members = row.groupedRows ?? EMPTY_GROUPED_ROWS
 
@@ -72,7 +72,6 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
   // the (former) nested panel — audience-aware canonical short codes for
   // clinicians, lay names for patients.
   const { audience } = useAudience()
-  const { locale } = useLanguage()
   const nameMode = useReportNameMode()
 
   // FLATTEN multi-analyte panels: a hospital lab report is a flat list of
@@ -158,6 +157,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         {row.institution && (
           <ReportInstitutionLabel
             institution={row.institution}
+            locale={locale}
             className="min-w-0 basis-28 flex-1 max-w-[14rem]"
           />
         )}

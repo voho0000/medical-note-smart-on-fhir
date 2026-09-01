@@ -53,6 +53,12 @@ describe('formatOrganizationDisplay', () => {
       .toBe('New Taipei Hospital Outpatient')
   })
 
+  it('uses anonymous English aliases for demo institutions only in English', () => {
+    expect(formatOrganizationDisplay('示範長青醫院', 'en')).toBe('A Hospital')
+    expect(formatOrganizationDisplay('示範向陽藥局', 'en')).toBe('A Pharmacy')
+    expect(formatOrganizationDisplay('示範長青醫院', 'zh-TW')).toBe('示範長青醫院')
+  })
+
   it('still hides a code-only display even when a setting exists', () => {
     expect(formatOrganizationContextDisplay('0131020016', '門診')).toBe('')
   })

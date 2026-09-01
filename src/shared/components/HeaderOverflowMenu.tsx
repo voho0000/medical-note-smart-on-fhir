@@ -1,6 +1,6 @@
 // Mobile-only header overflow menu.
 //
-// On desktop (≥640px) Audience + Language live as visible chips in the
+// On desktop (≥1024px) Audience + Language live as visible controls in the
 // header, so there's nothing left to collapse — this component renders
 // nothing. On mobile the chips would clip, so we collapse them into a
 // kebab `⋯` menu alongside a link into Settings → 顯示與關於 (which
@@ -25,6 +25,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -34,7 +36,7 @@ import {
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience, type Audience } from '@/src/application/providers/audience.provider'
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
-import { localeNames, type Locale } from '@/src/shared/i18n/i18n.config'
+import { getLocaleDisplayName, locales, type Locale } from '@/src/shared/i18n/i18n.config'
 
 const AUDIENCE_ORDER: Audience[] = ['medical', 'patient']
 
@@ -90,18 +92,16 @@ export function HeaderOverflowMenu({
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="gap-2">
               <Languages className="h-4 w-4" />
-              {localeNames[locale]}
+              {t.header.language}: {getLocaleDisplayName(locale, locale)}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              {(Object.keys(localeNames) as Locale[]).map((loc) => (
-                <DropdownMenuItem
-                  key={loc}
-                  onClick={() => setLocale(loc)}
-                  className={locale === loc ? 'bg-accent' : ''}
-                >
-                  {localeNames[loc]}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuRadioGroup value={locale} onValueChange={(value) => setLocale(value as Locale)}>
+                {(Object.keys(locales) as Locale[]).map((loc) => (
+                  <DropdownMenuRadioItem key={loc} value={loc}>
+                    {getLocaleDisplayName(loc, locale)}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 
