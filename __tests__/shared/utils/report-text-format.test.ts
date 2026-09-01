@@ -1,4 +1,8 @@
-import { formatReportText, type ReportLine } from '@/src/shared/utils/report-text-format'
+import {
+  formatReportText,
+  formatReportTextForClipboard,
+  type ReportLine,
+} from '@/src/shared/utils/report-text-format'
 
 // Realistic colonoscopy blob shaped like what the NHI-FHIR bridge emits:
 // section headings glued onto neighbouring text, verbose blank padding,
@@ -161,6 +165,29 @@ describe('formatReportText', () => {
       { text: 'Peribronchial infiltration over lung field.', level: 1 },
       { text: 'Bilateral pleural change with effusion.', level: 1 },
     ])
+  })
+
+  it('serializes radiology findings with the same line breaks and indentation for copying', () => {
+    const raw =
+      'Radiography of Chest A-P View(Supine) Show:Tortuosity thoracic aorta. ' +
+      'Borderline cardiomegaly . Peribronchial infiltration over lung field. ' +
+      'Bilateral pleural change with effusion.'
+
+    expect(formatReportTextForClipboard(raw)).toBe([
+      'Radiography of Chest A-P View(Supine) Show:',
+      '  Tortuosity thoracic aorta.',
+      '  Borderline cardiomegaly.',
+      '  Peribronchial infiltration over lung field.',
+      '  Bilateral pleural change with effusion.',
+    ].join('\n'))
+  })
+
+  it('restores list markers and nested indentation in copied text', () => {
+    expect(formatReportTextForClipboard('Findings:1. A 0.5 cm polyp.2. Normal mucosa.')).toBe([
+      'Findings:',
+      '  1. A 0.5 cm polyp.',
+      '  2. Normal mucosa.',
+    ].join('\n'))
   })
 
   it('breaks apart findings the bridge glued at the period boundary', () => {

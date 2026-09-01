@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ReportRow } from '@/features/clinical-summary/reports/components/ReportRow'
 import type { Row } from '@/features/clinical-summary/reports/types'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -134,6 +134,48 @@ describe('ReportRow mobile actions', () => {
 
     fireEvent.click(rightPaneButton)
     expect(rightPaneButton).toHaveClass('border-border', 'bg-background')
+  })
+
+  it('copies narrative reports with the formatted on-screen line breaks', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+    const row: Row = {
+      id: 'formatted-copy-report',
+      title: 'Chest X-ray',
+      meta: 'Radiology • final',
+      group: 'imaging',
+      institution: 'A Hospital',
+      effectiveDate: '2026-06-02',
+      obs: [{
+        id: 'formatted-copy-observation',
+        code: { text: 'Report Summary' },
+        valueString:
+          'Radiography of Chest A-P View(Supine) Show:Tortuosity thoracic aorta. ' +
+          'Borderline cardiomegaly. Bilateral pleural change with effusion.',
+      }],
+    }
+
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow row={row} defaultOpen={[row.id]} />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '複製報告全文' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith([
+      'Radiography of Chest A-P View(Supine) Show:',
+      '  Tortuosity thoracic aorta.',
+      '  Borderline cardiomegaly.',
+      '  Bilateral pleural change with effusion.',
+    ].join('\n')))
   })
 
   it('keeps the standalone trend button on desktop', () => {

@@ -43,6 +43,7 @@ import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
 import { ReportTypeBadge } from './ReportTypeBadge'
+import { formatReportTextForClipboard } from '@/src/shared/utils/report-text-format'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
@@ -192,7 +193,9 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
   }
 
   const copy = async () => {
-    if (!await copyToClipboard(text)) toast.error(t.common.copyFailed)
+    if (!await copyToClipboard(formatReportTextForClipboard(text))) {
+      toast.error(t.common.copyFailed)
+    }
   }
 
   const textBlock = hasText ? (
@@ -464,7 +467,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
   const { detail: rightDetail, toggleDetail } = useRightDetail()
 
   const handleCopy = async (text: string) => {
-    if (!await copyToClipboard(text)) toast.error(t.common.copyFailed)
+    if (!await copyToClipboard(formatReportTextForClipboard(text))) {
+      toast.error(t.common.copyFailed)
+    }
   }
 
   // A procedure's details (status, date, performer, NHI/PCS codes, reason) live

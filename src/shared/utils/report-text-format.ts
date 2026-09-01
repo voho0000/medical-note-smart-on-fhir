@@ -231,3 +231,19 @@ export function formatReportText(raw: string): ReportLine[] {
 
   return lines
 }
+
+/**
+ * Serialize a report with the same hierarchy used by `FormattedReportText`.
+ * Clipboard text cannot carry the component's visual padding, so two spaces
+ * per level preserve the heading/item relationship without changing any
+ * clinical wording. List markers stripped by the parser are restored here.
+ */
+export function formatReportTextForClipboard(raw: string): string {
+  return formatReportText(raw)
+    .map((line) => {
+      const indent = '  '.repeat(line.level)
+      const marker = line.marker ? `${line.marker} ` : ''
+      return `${indent}${marker}${line.text}`
+    })
+    .join('\n')
+}
