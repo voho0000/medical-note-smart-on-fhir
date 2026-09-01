@@ -65,13 +65,22 @@ describe('ClinicalInsightsConfigProvider account sync', () => {
     await waitFor(() => expect(mockSubscribe).toHaveBeenCalledWith('account-1', expect.any(Function)))
     act(() => accountListener?.(accountDefaults()))
 
-    act(() => result.current.updatePanel('changes', { title: 'My cross-device summary' }))
+    act(() => result.current.updatePanel('changes', {
+      title: 'My cross-device summary',
+      outputFormat: 'plain-text',
+      languagePolicy: 'follow-template',
+    }))
 
     await waitFor(() => expect(mockApplyChanges).toHaveBeenCalled(), { timeout: 2000 })
     expect(mockApplyChanges).toHaveBeenLastCalledWith(
       'account-1',
       expect.arrayContaining([
-        expect.objectContaining({ id: 'changes', title: 'My cross-device summary' }),
+        expect.objectContaining({
+          id: 'changes',
+          title: 'My cross-device summary',
+          outputFormat: 'plain-text',
+          languagePolicy: 'follow-template',
+        }),
       ]),
       [],
     )
@@ -88,6 +97,32 @@ describe('ClinicalInsightsConfigProvider account sync', () => {
 
     expect(result.current.panels.find((panel) => panel.id === 'changes')?.title)
       .toBe('Synced on my laptop')
+  })
+
+  it('defaults new templates to exact plain text and the language written in the prompt', async () => {
+    const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
+    await waitFor(() => expect(accountListener).not.toBeNull())
+    act(() => accountListener?.(accountDefaults()))
+
+    let panelId: string | null = null
+    act(() => { panelId = result.current.addPanel() })
+
+    expect(result.current.panels.find((panel) => panel.id === panelId)).toMatchObject({
+      outputFormat: 'plain-text',
+      languagePolicy: 'follow-template',
+    })
+  })
+
+  it('migrates legacy account templates to the backward-compatible Markdown contract', async () => {
+    const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
+    await waitFor(() => expect(accountListener).not.toBeNull())
+    const legacy = accountDefaults().map(({ outputFormat: _format, languagePolicy: _language, ...panel }) => panel)
+    act(() => accountListener?.(legacy as InsightPanelConfig[]))
+
+    expect(result.current.panels[0]).toMatchObject({
+      outputFormat: 'markdown',
+      languagePolicy: 'interface-language',
+    })
   })
 
   it('keeps guest edits in memory and never promotes them into the next login', async () => {
@@ -157,6 +192,8 @@ describe('ClinicalInsightsConfigProvider account sync', () => {
       order: 3,
       audience: 'medical',
       templateLibraryRevision: 1,
+      outputFormat: 'plain-text',
+      languagePolicy: 'follow-template',
     }
     const remotePanels = [...accountDefaults(), customPanel]
     const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
@@ -186,6 +223,8 @@ describe('ClinicalInsightsConfigProvider account sync', () => {
       order: 3,
       audience: 'medical',
       templateLibraryRevision: 1,
+      outputFormat: 'plain-text',
+      languagePolicy: 'follow-template',
     }
     const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
     await waitFor(() => expect(accountListener).not.toBeNull())

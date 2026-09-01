@@ -1,19 +1,34 @@
 "use client"
 
 import { useState } from "react"
-import { AlertCircle, ChevronDown, ChevronUp, Pencil, Sparkles, Square } from "lucide-react"
+import { AlertCircle, Check, ChevronDown, ChevronUp, Copy, Pencil, Sparkles, Square } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
+import {
+  MAX_SUMMARY_INSIGHT_MODULES,
+  type InsightOutputFormat,
+} from "@/src/shared/constants/clinical-insights.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
+import { InsightContentRenderer } from "@/features/clinical-insights/components/InsightContentRenderer"
+import {
+  insightContentToPlainText,
+  sanitizeInsightHtml,
+} from "@/features/clinical-insights/utils/insight-content"
 import { CustomInsightGenerationMeta } from "./CustomInsightGenerationMeta"
 
 interface CustomInsightModulesSectionProps {
@@ -24,6 +39,12 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
   const { t } = useLanguage()
   const labels = t.medicalSummary
   const [collapsedPanelIds, setCollapsedPanelIds] = useState<Set<string>>(() => new Set())
+  const [viewFormatsByPanel, setViewFormatsByPanel] = useState<Record<
+    string,
+    { format: InsightOutputFormat; resultIdentity: string }
+  >>({})
+  const [copyTarget, setCopyTarget] = useState<string | null>(null)
+  const { copied, copy } = useCopyToClipboard()
   const {
     panels,
     canGenerate,
@@ -38,6 +59,15 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
     .filter((panel) => panel.showInSummary)
     .slice(0, MAX_SUMMARY_INSIGHT_MODULES)
 
+  const handleCopy = async (panelId: string, text: string, target: "text" | "source") => {
+    const nextTarget = `${panelId}:${target}`
+    setCopyTarget(nextTarget)
+    if (!await copy(text)) {
+      setCopyTarget(null)
+      toast.error(t.common.copyFailed)
+    }
+  }
+
   return (
     <section className="space-y-2" aria-label={labels.customSummaryTab}>
       {visiblePanels.length === 0 ? (
@@ -49,11 +79,18 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
           {visiblePanels.map((panel) => {
             const response = responses[panel.id]
             const status = panelStatus[panel.id] ?? { isLoading: false, error: null }
-            const hasResponse = Boolean(response?.text?.trim())
+            const responseText = response?.text ?? ""
+            const hasResponse = Boolean(responseText.trim())
             const isCollapsed = collapsedPanelIds.has(panel.id)
             const canToggleResult = hasResponse && !status.error
+            const generatedFormat = response?.metadata?.outputFormat ?? panel.outputFormat ?? "markdown"
+            const resultIdentity = `${response?.metadata?.generatedAt ?? `legacy-${responseText.length}`}:${generatedFormat}`
+            const viewOverride = viewFormatsByPanel[panel.id]
+            const viewFormat = viewOverride?.resultIdentity === resultIdentity
+              ? viewOverride.format
+              : generatedFormat
             const collapsedPreview = isCollapsed && hasResponse
-              ? markdownToPlainText(response?.text ?? "").replace(/\s+/g, " ")
+              ? insightContentToPlainText(responseText, viewFormat).replace(/\s+/g, " ")
               : null
             const toggleResultLabel = (
               isCollapsed ? labels.customExpandResult : labels.customCollapseResult
@@ -165,7 +202,87 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                         </div>
                       </div>
                     </div>
-                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">{labels.customNoCitations}</p>
+                    <div
+                      className={cn(
+                        "mt-1 flex flex-wrap items-center gap-1.5",
+                        hasResponse && !isCollapsed && !status.error && "border-b border-border/60 pb-2",
+                      )}
+                    >
+                      {hasResponse && !isCollapsed && !status.error ? (
+                        <div className="mr-auto flex min-w-0 flex-wrap items-center gap-1.5">
+                          <label
+                            htmlFor={`custom-insight-format-${panel.id}`}
+                            className="text-[0.6875rem] font-medium text-muted-foreground"
+                          >
+                            {labels.customDisplayAs}
+                          </label>
+                          <Select
+                            value={viewFormat}
+                            onValueChange={(value) => setViewFormatsByPanel((current) => ({
+                              ...current,
+                              [panel.id]: {
+                                format: value as InsightOutputFormat,
+                                resultIdentity,
+                              },
+                            }))}
+                          >
+                            <SelectTrigger
+                              id={`custom-insight-format-${panel.id}`}
+                              className="h-11 w-[8.5rem] text-xs sm:h-8"
+                              aria-label={`${labels.customDisplayAs}: ${panel.title}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="plain-text">{t.settings.outputFormatPlain}</SelectItem>
+                              <SelectItem value="markdown">{t.settings.outputFormatMarkdown}</SelectItem>
+                              <SelectItem value="html">{t.settings.outputFormatHtml}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-11 gap-1.5 px-2 text-xs sm:h-8"
+                            onClick={() => void handleCopy(
+                              panel.id,
+                              insightContentToPlainText(responseText, viewFormat),
+                              "text",
+                            )}
+                          >
+                            {copied && copyTarget === `${panel.id}:text`
+                              ? <Check className="h-3.5 w-3.5" />
+                              : <Copy className="h-3.5 w-3.5" />}
+                            {copied && copyTarget === `${panel.id}:text`
+                              ? t.common.copied
+                              : labels.customCopyText}
+                          </Button>
+                          {viewFormat !== "plain-text" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-11 gap-1.5 px-2 text-xs sm:h-8"
+                              onClick={() => void handleCopy(
+                                panel.id,
+                                viewFormat === "html" ? sanitizeInsightHtml(responseText) : responseText,
+                                "source",
+                              )}
+                            >
+                              {copied && copyTarget === `${panel.id}:source`
+                                ? <Check className="h-3.5 w-3.5" />
+                                : <Copy className="h-3.5 w-3.5" />}
+                              {copied && copyTarget === `${panel.id}:source`
+                                ? t.common.copied
+                                : labels.customCopySource}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <p className="ml-auto min-w-0 text-right text-xs text-amber-700 dark:text-amber-400">
+                        {labels.customNoCitations}
+                      </p>
+                    </div>
                   </div>
 
                   {status.error ? (
@@ -193,7 +310,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                       ) : null}
                       <CollapsibleContent id={`custom-insight-result-${panel.id}`}>
                         <div className="text-[0.8125rem] leading-snug text-foreground">
-                          <MarkdownRenderer content={response.text} />
+                          <InsightContentRenderer content={responseText} format={viewFormat} />
                         </div>
                       </CollapsibleContent>
                     </>

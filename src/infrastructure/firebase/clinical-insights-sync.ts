@@ -1,6 +1,12 @@
 // Clinical Insights Panel Sync with Firestore
 import { Timestamp, type Unsubscribe } from 'firebase/firestore'
-import { coerceShowInSummary } from '@/src/shared/constants/clinical-insights.constants'
+import {
+  coerceInsightLanguagePolicy,
+  coerceInsightOutputFormat,
+  coerceShowInSummary,
+  type InsightLanguagePolicy,
+  type InsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
 import { createUserCollectionSync } from './user-collection-sync'
 
 export type PanelAudience = 'medical' | 'patient'
@@ -13,6 +19,8 @@ export interface ClinicalInsightPanel {
   autoGenerate: boolean
   order: number
   audience: PanelAudience
+  outputFormat: InsightOutputFormat
+  languagePolicy: InsightLanguagePolicy
   templateLibraryRevision?: number
   createdAt?: Date
   updatedAt?: Date
@@ -26,6 +34,8 @@ interface FirestoreClinicalInsightPanel {
   autoGenerate: boolean
   order: number
   audience?: PanelAudience
+  outputFormat?: InsightOutputFormat
+  languagePolicy?: InsightLanguagePolicy
   templateLibraryRevision?: number
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -45,6 +55,8 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
     autoGenerate: data.autoGenerate || false,
     order: data.order || 0,
     audience: data.audience ?? 'medical',
+    outputFormat: coerceInsightOutputFormat(data.outputFormat),
+    languagePolicy: coerceInsightLanguagePolicy(data.languagePolicy),
     templateLibraryRevision: typeof data.templateLibraryRevision === 'number'
       ? data.templateLibraryRevision
       : undefined,
@@ -59,6 +71,8 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
     autoGenerate: panel.autoGenerate,
     order: panel.order,
     audience: panel.audience ?? 'medical',
+    outputFormat: coerceInsightOutputFormat(panel.outputFormat),
+    languagePolicy: coerceInsightLanguagePolicy(panel.languagePolicy),
     ...(typeof panel.templateLibraryRevision === 'number'
       ? { templateLibraryRevision: panel.templateLibraryRevision }
       : {}),

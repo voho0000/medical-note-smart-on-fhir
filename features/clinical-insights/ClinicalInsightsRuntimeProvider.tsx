@@ -53,7 +53,7 @@ import { useAiDataSource } from '@/src/application/hooks/ai-generation/ai-data-s
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
-const INSIGHTS_PIPELINE_VERSION = "custom-summary-modules-v1"
+const INSIGHTS_PIPELINE_VERSION = "custom-summary-modules-v2"
 
 interface CachedInsightEntry {
   entry: ResponseEntry
@@ -243,8 +243,13 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   }, [resultScopeIdentity, setPanelStatus, setResponses, stopAll])
 
   const promptSig = useCallback((panelId: string) => {
-    const prompt = prompts[panelId] ?? panels.find((panel) => panel.id === panelId)?.prompt ?? ""
-    return contentSignature(prompt)
+    const panel = panels.find((item) => item.id === panelId)
+    const prompt = prompts[panelId] ?? panel?.prompt ?? ""
+    return contentSignature(JSON.stringify({
+      prompt,
+      outputFormat: panel?.outputFormat ?? "markdown",
+      languagePolicy: panel?.languagePolicy ?? "interface-language",
+    }))
   }, [panels, prompts])
 
   const panelPromptIdentity = useMemo(
@@ -268,14 +273,23 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         INSIGHTS_CACHE_MAX_AGE_MS,
       )
       const demo = getDemoClinicalInsightSnapshot(patientId, audience, locale, panel.id)
-      const matchingDemo = demo && contentSignature(demo.prompt) === panel.promptSig
+      const demoPromptSig = demo ? contentSignature(JSON.stringify({
+        prompt: demo.prompt,
+        outputFormat: "markdown",
+        languagePolicy: "interface-language",
+      })) : null
+      const matchingDemo = demo && demoPromptSig === panel.promptSig
         ? demo
         : undefined
       const bundledDemoEntry = matchingDemo
         ? {
             text: matchingDemo.text,
             isEdited: false,
-            metadata: { ...DEMO_CLINICAL_INSIGHT_GENERATION },
+            metadata: {
+              ...DEMO_CLINICAL_INSIGHT_GENERATION,
+              outputFormat: "markdown" as const,
+              languagePolicy: "interface-language" as const,
+            },
           }
         : undefined
       if (!cached) {

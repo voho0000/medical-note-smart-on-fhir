@@ -87,7 +87,10 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
   const [showTemplatePersistencePrompt, setShowTemplatePersistencePrompt] = useState(false)
-  const [promptToShare, setPromptToShare] = useState<{ title: string; prompt: string } | null>(null)
+  const [promptToShare, setPromptToShare] = useState<Pick<
+    InsightPanelConfig,
+    "title" | "prompt" | "outputFormat" | "languagePolicy"
+  > | null>(null)
   const [lastDeletedPanel, setLastDeletedPanel] = useState<InsightPanelConfig | null>(null)
   const pendingCustomizationRef = useRef<(() => void | Promise<void>) | null>(null)
   const resumeAfterLoginRef = useRef(false)
@@ -151,6 +154,8 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
         prompt: prompt.prompt,
         showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES,
         autoGenerate: false,
+        outputFormat: prompt.outputFormat ?? "markdown",
+        languagePolicy: prompt.languagePolicy ?? "interface-language",
       })
       if (!newPanelId) return
       setActiveId(newPanelId)
@@ -347,7 +352,12 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
               onRemove={handleRemovePanel}
               onMove={handleMove}
               onShare={(panel) => {
-                setPromptToShare({ title: panel.title, prompt: panel.prompt })
+                setPromptToShare({
+                  title: panel.title,
+                  prompt: panel.prompt,
+                  outputFormat: panel.outputFormat,
+                  languagePolicy: panel.languagePolicy,
+                })
                 setShowShareDialog(true)
               }}
             />
@@ -377,6 +387,8 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
         initialTitle={promptToShare?.title || ""}
         initialPrompt={promptToShare?.prompt || ""}
         initialType="summary"
+        initialOutputFormat={promptToShare?.outputFormat}
+        initialLanguagePolicy={promptToShare?.languagePolicy}
       />
 
       <PromptGalleryDialog

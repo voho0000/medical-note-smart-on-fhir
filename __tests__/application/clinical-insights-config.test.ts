@@ -79,6 +79,8 @@ describe('custom summary module defaults', () => {
       title: '標準醫療摘要（文字版）',
       showInSummary: false,
       autoGenerate: false,
+      outputFormat: 'markdown',
+      languagePolicy: 'interface-language',
     })
     expect(medical?.prompt).toContain('不要輸出 JSON')
     expect(medical?.prompt).toContain('## 主要健康問題')
@@ -91,6 +93,8 @@ describe('custom summary module defaults', () => {
       title: 'My Health Summary (Free Text)',
       showInSummary: false,
       autoGenerate: false,
+      outputFormat: 'markdown',
+      languagePolicy: 'interface-language',
     })
     expect(patient?.prompt).toContain('Markdown text only')
     expect(patient?.prompt).toContain('Never tell the patient to start, stop, skip, or change a dose')

@@ -3,6 +3,11 @@
  * Unified data structure for Chat templates and custom Summary modules.
  */
 
+import type {
+  InsightLanguagePolicy,
+  InsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
+
 export type PromptType = 'chat' | 'summary'
 
 /**
@@ -95,6 +100,10 @@ export interface SharedPrompt {
   specialty: PromptSpecialty[]
   audience: PromptAudience[]  // Audiences this prompt is suitable for. Empty array treated as ['medical'] for backward compatibility.
   tags: string[]
+  /** Summary-module rendering contract. Missing on legacy/chat-only records. */
+  outputFormat?: InsightOutputFormat
+  /** Summary-module language contract. Missing on legacy/chat-only records. */
+  languagePolicy?: InsightLanguagePolicy
   
   // Metadata
   createdAt: Date

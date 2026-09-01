@@ -15,11 +15,17 @@ import {
 } from '@/src/core/utils/adaptive-clinical-context.utils'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import type {
+  InsightLanguagePolicy,
+  InsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
 
 interface Panel {
   id: string
   title: string
   prompt: string
+  outputFormat: InsightOutputFormat
+  languagePolicy: InsightLanguagePolicy
 }
 
 interface UseInsightGenerationProps {
@@ -88,6 +94,8 @@ export function useInsightGeneration({
           piiLiterals,
           modelId: model,
           locale: locale === 'zh-TW' ? 'zh-TW' as const : 'en' as const,
+          outputFormat: panel.outputFormat,
+          languagePolicy: panel.languagePolicy,
         }
         const validation = generateInsight.validate(input)
         if (!validation.valid) {
@@ -189,6 +197,8 @@ export function useInsightGeneration({
               modelName,
               generatedAt,
               durationMs: Math.max(0, generatedAt - startedAt),
+              outputFormat: panel.outputFormat,
+              languagePolicy: panel.languagePolicy,
             },
           }
         } catch (error) {

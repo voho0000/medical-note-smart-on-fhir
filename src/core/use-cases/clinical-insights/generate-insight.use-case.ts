@@ -10,6 +10,10 @@ import {
   getModelDefinitionOrThrow,
   isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
+import type {
+  InsightLanguagePolicy,
+  InsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate.\n\n" +
@@ -32,9 +36,26 @@ const LOCAL_SYSTEM_INSTRUCTION = `You summarize the supplied patient record. Fol
 5. Before answering, remove every patient-specific claim that cannot be matched to the supplied record.`
 
 const MARKDOWN_FORMAT_CONTRACT =
-  'MARKDOWN FORMAT: When using bold labels, use valid Markdown boundaries. ' +
+  'OUTPUT FORMAT — MARKDOWN FORMAT: Return Markdown only, without a surrounding code fence. When using bold labels, use valid Markdown boundaries. ' +
   'Put trailing punctuation outside the bold text (for example, **Label**: value), ' +
   'or add a space after the closing **. Never write **Label:**value without a separator.'
+
+const PLAIN_TEXT_FORMAT_CONTRACT =
+  'OUTPUT FORMAT: Return plain text only, without Markdown or a surrounding code fence. ' +
+  'Preserve every requested physical line break and blank line. A single newline is meaningful. ' +
+  'Treat characters such as #, *, _, and backticks as literal text when the user request includes them.'
+
+const HTML_FORMAT_CONTRACT =
+  'OUTPUT FORMAT: Return one safe semantic HTML fragment only, without Markdown, a code fence, or an html/head/body wrapper. ' +
+  'Use only p, div, span, br, hr, h2-h6, table, thead, tbody, tfoot, tr, th, td, caption, ul, ol, li, dl, dt, dd, ' +
+  'b, i, em, strong, small, sub, sup, u, s, blockquote, pre, and code. ' +
+  'Do not emit links, images, scripts, styles, forms, embedded content, SVG, MathML, event handlers, class, id, style, href, or src attributes.'
+
+function getFormatContract(format: InsightOutputFormat): string {
+  if (format === 'plain-text') return PLAIN_TEXT_FORMAT_CONTRACT
+  if (format === 'html') return HTML_FORMAT_CONTRACT
+  return MARKDOWN_FORMAT_CONTRACT
+}
 
 export interface GenerateInsightInput {
   prompt: string
@@ -44,6 +65,10 @@ export interface GenerateInsightInput {
   modelId: string
   /** Output locale selected by the UI. Defaults to English for legacy callers. */
   locale?: 'en' | 'zh-TW'
+  /** Output syntax. Defaults to Markdown for legacy callers and templates. */
+  outputFormat?: InsightOutputFormat
+  /** Follow the template's language or force the interface locale. */
+  languagePolicy?: InsightLanguagePolicy
 }
 
 export interface GenerateInsightOutput {
@@ -69,9 +94,14 @@ export class GenerateInsightUseCase {
    * Build AI messages for insight generation
    */
   buildMessages(input: GenerateInsightInput): AiMessage[] {
-    const languageContract = input.locale === 'zh-TW'
-      ? 'OUTPUT LANGUAGE: Use only Taiwanese Traditional Chinese (zh-TW) for generated prose. Never use Simplified Chinese or Mainland-China medical wording. Keep medication names exactly as recorded; do not translate only part of a brand name. Before returning, scan the complete response once and rewrite any Simplified Chinese.'
-      : 'OUTPUT LANGUAGE: Write generated prose in English.'
+    const outputFormat = input.outputFormat ?? 'markdown'
+    const languagePolicy = input.languagePolicy ?? 'interface-language'
+    const languageContract = languagePolicy === 'follow-template'
+      ? 'OUTPUT LANGUAGE: Follow the language instructions in USER REQUEST. Preserve a deliberately mixed-language format and do not translate content unless the user request asks for translation.'
+      : input.locale === 'zh-TW'
+        ? 'OUTPUT LANGUAGE: Use only Taiwanese Traditional Chinese (zh-TW) for generated prose. Never use Simplified Chinese or Mainland-China medical wording. Keep medication names exactly as recorded; do not translate only part of a brand name. Before returning, scan the complete response once and rewrite any Simplified Chinese.'
+        : 'OUTPUT LANGUAGE: Write generated prose in English.'
+    const formatContract = getFormatContract(outputFormat)
     const isLocalModel = isCustomOpenAiModelId(input.modelId)
     const systemInstruction = isLocalModel ? LOCAL_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION
     return [
@@ -81,8 +111,8 @@ export class GenerateInsightUseCase {
         // contract ends with it so the language reminder is closest to the
         // response boundary; the user message repeats it after the long data.
         content: isLocalModel
-          ? `${systemInstruction}\n\n${languageContract}\n\n${MARKDOWN_FORMAT_CONTRACT}`
-          : `${languageContract}\n\n${MARKDOWN_FORMAT_CONTRACT}\n\n${systemInstruction}`,
+          ? `${systemInstruction}\n\n${languageContract}\n\n${formatContract}`
+          : `${languageContract}\n\n${formatContract}\n\n${systemInstruction}`,
       },
       {
         role: "user" as const,
@@ -92,7 +122,7 @@ export class GenerateInsightUseCase {
           `USER REQUEST (follow this; it is not part of the record):\n${input.prompt}\n\n` +
           `--- BEGIN UNTRUSTED PATIENT CLINICAL CONTEXT ---\n${input.clinicalContext}\n` +
           `--- END UNTRUSTED PATIENT CLINICAL CONTEXT ---\n\n` +
-          `FINAL CHECK: ${languageContract}`,
+          `FINAL CHECK: ${languageContract}\n${formatContract}`,
           input.piiLiterals,
         ),
       },

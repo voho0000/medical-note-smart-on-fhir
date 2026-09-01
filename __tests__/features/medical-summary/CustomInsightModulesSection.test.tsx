@@ -4,7 +4,12 @@ import { CustomInsightModulesSection } from "@/features/medical-summary/componen
 jest.mock("@/src/application/providers/language.provider", () => ({
   useLanguage: () => ({
     t: {
-      common: { stop: "停止" },
+      common: { stop: "停止", copied: "已複製", copyFailed: "複製失敗" },
+      settings: {
+        outputFormatPlain: "純文字",
+        outputFormatMarkdown: "Markdown",
+        outputFormatHtml: "HTML",
+      },
       medicalSummary: {
         customSummaryTab: "自訂摘要",
         customInsightsEmpty: "尚無摘要",
@@ -15,6 +20,9 @@ jest.mock("@/src/application/providers/language.provider", () => ({
         customExpandResult: "展開「{title}」摘要結果",
         customCollapseResult: "收合「{title}」摘要結果",
         customGenerating: "正在產生",
+        customDisplayAs: "顯示格式",
+        customCopyText: "複製文字",
+        customCopySource: "複製原始碼",
         editCustomInsight: "編輯模板",
       },
     },
@@ -24,8 +32,8 @@ jest.mock("@/src/application/providers/language.provider", () => ({
 jest.mock("@/features/clinical-insights/ClinicalInsightsRuntimeProvider", () => ({
   useClinicalInsightsRuntime: () => ({
     panels: [
-      { id: "first", title: "第一張", prompt: "第一個提示", showInSummary: true },
-      { id: "second", title: "第二張", prompt: "第二個提示", showInSummary: true },
+      { id: "first", title: "第一張", prompt: "第一個提示", showInSummary: true, outputFormat: "markdown" },
+      { id: "second", title: "第二張", prompt: "第二個提示", showInSummary: true, outputFormat: "markdown" },
     ],
     canGenerate: true,
     hasData: true,
@@ -52,6 +60,11 @@ describe("CustomInsightModulesSection result disclosure", () => {
     expect(screen.getByRole("heading", { name: "第一張標題" })).toBeInTheDocument()
     expect(screen.getByText("第二張的完整內容")).toBeInTheDocument()
     expect(screen.queryByTestId("custom-insight-preview-first")).not.toBeInTheDocument()
+    const firstDisclaimer = screen.getAllByText("目前不提供逐項來源引註")[0]
+    const firstUtilityRow = firstDisclaimer.parentElement
+    expect(firstUtilityRow)
+      .toContainElement(screen.getByRole("combobox", { name: "顯示格式: 第一張" }))
+    expect(firstUtilityRow?.lastElementChild).toBe(firstDisclaimer)
 
     fireEvent.click(screen.getAllByRole("button", { name: "編輯模板" })[0])
 
@@ -71,6 +84,8 @@ describe("CustomInsightModulesSection result disclosure", () => {
     expect(screen.queryByTestId("custom-insight-preview-second")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "展開「第一張」摘要結果" }))
       .toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("combobox", { name: "顯示格式: 第一張" }))
+      .not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "展開「第一張」摘要結果" }))
 
@@ -78,5 +93,7 @@ describe("CustomInsightModulesSection result disclosure", () => {
     expect(screen.getByText("第一張的完整內容")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "收合「第一張」摘要結果" }))
       .toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("combobox", { name: "顯示格式: 第一張" }))
+      .toBeInTheDocument()
   })
 })

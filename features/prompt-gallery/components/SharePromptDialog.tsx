@@ -53,6 +53,10 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { createSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { PromptCategory, PromptSpecialty, PromptType } from '../types/prompt.types'
+import type {
+  InsightLanguagePolicy,
+  InsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
 
 const TITLE_MAX_LENGTH = 100
 const DESCRIPTION_MAX_LENGTH = 180
@@ -67,6 +71,8 @@ interface SharePromptDialogProps {
   initialDescription?: string
   initialPrompt?: string
   initialType?: PromptType
+  initialOutputFormat?: InsightOutputFormat
+  initialLanguagePolicy?: InsightLanguagePolicy
   onSuccess?: () => void
 }
 
@@ -83,6 +89,8 @@ function SharePromptDialogForm({
   initialDescription,
   initialPrompt,
   initialType = 'chat',
+  initialOutputFormat,
+  initialLanguagePolicy,
   onSuccess,
 }: SharePromptDialogProps) {
   const { t } = useLanguage()
@@ -195,6 +203,8 @@ function SharePromptDialogForm({
         authorId: user.uid,
         authorName: isAnonymous ? undefined : user.displayName || user.email || undefined,
         isAnonymous,
+        outputFormat: initialOutputFormat,
+        languagePolicy: initialLanguagePolicy,
       })
 
       setSuccess(true)

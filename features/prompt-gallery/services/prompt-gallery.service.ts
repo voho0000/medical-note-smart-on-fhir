@@ -26,6 +26,10 @@ import {
   type PromptGalleryFilter,
   type PromptGallerySort,
 } from '../types/prompt.types'
+import {
+  coerceInsightLanguagePolicy,
+  coerceInsightOutputFormat,
+} from '@/src/shared/constants/clinical-insights.constants'
 
 const COLLECTION_NAME = 'sharedPrompts'
 
@@ -47,6 +51,12 @@ function convertToSharedPrompt(id: string, data: any): SharedPrompt {
     specialty: data.specialty || [],
     audience,
     tags: data.tags || [],
+    outputFormat: data.outputFormat === undefined
+      ? undefined
+      : coerceInsightOutputFormat(data.outputFormat),
+    languagePolicy: data.languagePolicy === undefined
+      ? undefined
+      : coerceInsightLanguagePolicy(data.languagePolicy),
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
     authorId: data.authorId,
@@ -203,6 +213,12 @@ export async function createSharedPrompt(
     }
     if (prompt.isAnonymous !== undefined) {
       data.isAnonymous = prompt.isAnonymous
+    }
+    if (prompt.outputFormat !== undefined) {
+      data.outputFormat = prompt.outputFormat
+    }
+    if (prompt.languagePolicy !== undefined) {
+      data.languagePolicy = prompt.languagePolicy
     }
     
     const docRef = await addDoc(collection(db, COLLECTION_NAME), data)

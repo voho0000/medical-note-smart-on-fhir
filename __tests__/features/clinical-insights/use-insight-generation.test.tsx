@@ -51,7 +51,13 @@ describe("useInsightGeneration provenance", () => {
     }))
 
     const { result } = renderHook(() => useInsightGeneration({
-      panels: [{ id: "changes", title: "變化摘要", prompt: "比較近期變化" }],
+      panels: [{
+        id: "changes",
+        title: "變化摘要",
+        prompt: "比較近期變化",
+        outputFormat: "plain-text",
+        languagePolicy: "follow-template",
+      }],
       prompts: { changes: "比較近期變化" },
       context: "clinical context",
       piiLiterals: [],
@@ -92,6 +98,8 @@ describe("useInsightGeneration provenance", () => {
         modelName: "GPT-5.6 Luna",
         generatedAt: new Date("2026-08-27T06:32:18.400Z").getTime(),
         durationMs: 18_400,
+        outputFormat: "plain-text",
+        languagePolicy: "follow-template",
       },
     })
     expect(useInsightResponsesStore.getState().panelStatus.changes).toEqual({
