@@ -65,7 +65,7 @@ test.describe('demo data (試用資料)', () => {
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
 
     await page.getByRole('button', { name: '繁體中文' }).click()
-    await page.getByRole('menuitem', { name: 'English' }).click()
+    await page.getByRole('menuitemradio', { name: 'English' }).click()
 
     await expect(page.getByText('○-Ming Chen').first()).toBeVisible()
 

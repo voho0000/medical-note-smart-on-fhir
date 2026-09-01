@@ -32,6 +32,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Keep the document language synchronized for both an explicit switch and
+  // the locale restored from storage after hydration. The latter updates
+  // React state without calling setLocale, so doing this only in setLocale
+  // leaves assistive technology seeing the server default (zh-TW).
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
+
   const setLocale = useCallback((newLocale: Locale) => {
     // A locale change updates labels throughout every force-mounted clinical
     // workspace. Treat that broad render as interruptible work so the language
@@ -41,7 +49,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       setLocaleState(newLocale)
     })
     localStorage.setItem(LOCALE_STORAGE_KEY, newLocale)
-    document.documentElement.lang = newLocale
   }, [])
 
   // Every consumer of this context re-renders whenever the value identity

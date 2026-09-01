@@ -10,12 +10,6 @@ declare global {
 const LEFT_TABS = ['病人資訊', '就診紀錄', '報告', '用藥', '文件'] as const
 const LEFT_TAB_CONTENT_IDS = ['patient', 'visits', 'reports', 'meds', 'documents'] as const
 
-async function afterTwoPaints(page: Page) {
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  }))
-}
-
 async function afterPaint(page: Page) {
   await page.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve())
@@ -34,13 +28,26 @@ async function clickAndMeasureTwoPaints(target: Locator) {
   })
 }
 
+async function mouseDownAndMeasureTwoPaints(target: Locator) {
+  return target.evaluate(async (element) => {
+    const startedAt = performance.now()
+    element.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      button: 0,
+      ctrlKey: false,
+    }))
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+    return performance.now() - startedAt
+  })
+}
+
 async function switchLeftTab(page: Page, name: string) {
   const tab = page.getByRole('tab').filter({ hasText: name }).first()
-  const startedAt = await page.evaluate(() => performance.now())
-  await tab.click()
+  const duration = await mouseDownAndMeasureTwoPaints(tab)
   await expect(tab).toHaveAttribute('data-state', 'active')
-  await afterTwoPaints(page)
-  return page.evaluate((start) => performance.now() - start, startedAt)
+  return duration
 }
 
 async function activeLeftViewport(page: Page): Promise<Locator> {
@@ -49,6 +56,32 @@ async function activeLeftViewport(page: Page): Promise<Locator> {
     .first()
   await expect(viewport).toBeVisible()
   return viewport
+}
+
+async function waitForDomQuiescence(page: Page) {
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    let quietTimer = 0
+    let hardTimeout = 0
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
+      window.clearTimeout(quietTimer)
+      window.clearTimeout(hardTimeout)
+      observer.disconnect()
+      resolve()
+    }
+    const scheduleQuietCheck = () => {
+      window.clearTimeout(quietTimer)
+      quietTimer = window.setTimeout(finish, 500)
+    }
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => record.type === 'childList')) scheduleQuietCheck()
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    scheduleQuietCheck()
+    hardTimeout = window.setTimeout(finish, 5_000)
+  }))
 }
 
 function percentile(values: number[], fraction: number) {
@@ -107,6 +140,11 @@ test.describe('clinical workspace performance contract', () => {
         .toBeAttached()
     }
     await expect(page.getByText('完整文件', { exact: true }).first()).toBeVisible()
+    // Hidden workspaces and the summary panel hydrate independently. Establish
+    // the retained-DOM baseline only after legitimate async child mounts have
+    // stopped, so the assertion detects duplicate retention rather than late
+    // completion of the first mount.
+    await waitForDomQuiescence(page)
 
     const nodeCountAfterWarmup = await page.locator('*').count()
     await page.evaluate(() => { window.__mediprismaLongTasks = [] })
@@ -142,6 +180,7 @@ test.describe('clinical workspace performance contract', () => {
     const longestSameDayResumeTaskMs = Math.max(0, ...sameDayResumeLongTasks)
     expect(longestSameDayResumeTaskMs).toBeLessThan(300)
 
+    await waitForDomQuiescence(page)
     const nodeCountAfterCycles = await page.locator('*').count()
     // First visit may retain a tab, but repeated switching must not append a
     // fresh copy of its clinical DOM on every cycle.

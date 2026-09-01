@@ -54,6 +54,7 @@ describe('ClinicalPatientContext', () => {
     const context = await screen.findByLabelText(
       'Patient Information · Xiaoming Wang · 42 years · Male',
     )
+    expect(document.documentElement).toHaveAttribute('lang', 'en')
     expect(context).toHaveTextContent('Xiaoming Wang·42 years·Male')
     expect(context).not.toHaveTextContent('王小明')
   })
