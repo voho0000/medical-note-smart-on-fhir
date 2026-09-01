@@ -115,6 +115,9 @@ export function CrossFacilityTimeline({
             const displayedDate = event.endDate && event.endDate !== event.date
               ? `${event.date}–${event.endDate}`
               : event.date
+            const organizationLabel = event.organization
+              ? formatOrganizationDisplay(event.organization, locale)
+              : ""
             const inner = (
               <div className="@min-[30rem]:flex @min-[30rem]:items-baseline @min-[30rem]:gap-2">
                 <div className="flex flex-wrap items-center gap-1.5 @min-[30rem]:w-[16rem] @min-[30rem]:shrink-0">
@@ -122,9 +125,9 @@ export function CrossFacilityTimeline({
                   <span className={cn("rounded px-1.5 py-px text-[0.65rem] font-semibold", style.pill)}>
                     {pillLabel}
                   </span>
-                  {event.organization ? (
+                  {organizationLabel ? (
                     <span className="rounded border border-border bg-muted/40 px-1.5 py-px text-[0.625rem] text-muted-foreground">
-                      {formatOrganizationDisplay(event.organization, locale)}
+                      {organizationLabel}
                     </span>
                   ) : null}
                   {onNavigate ? (

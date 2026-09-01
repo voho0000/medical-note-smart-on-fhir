@@ -91,6 +91,17 @@ describe('demo medical-summary snapshots', () => {
     )).not.toBeNull()
   })
 
+  it('keeps the former audience-first exports as zh-TW compatibility aliases', () => {
+    expect(demoMedicalSummarySnapshots.medical)
+      .toBe(demoMedicalSummarySnapshots['zh-TW'].medical)
+    expect(demoMedicalSummarySnapshots.patient)
+      .toBe(demoMedicalSummarySnapshots['zh-TW'].patient)
+    expect(demoSafetyScanSnapshots.medical)
+      .toBe(demoSafetyScanSnapshots['zh-TW'].medical)
+    expect(demoSafetyScanSnapshots.patient)
+      .toBe(demoSafetyScanSnapshots['zh-TW'].patient)
+  })
+
   it.each(['zh-TW', 'en'] as const)('does not restore retired decisions cards in %s', (locale) => {
     expect(demoMedicalSummarySnapshots[locale].medical.decisions).toEqual([])
     expect(demoMedicalSummarySnapshots[locale].patient.decisions).toEqual([])
@@ -102,6 +113,14 @@ describe('demo medical-summary snapshots', () => {
     expect(snapshot.summary.map((segment) => segment.text).join('')).toMatch(/[A-Za-z]/)
     expect(snapshot.investigations.length).toBeGreaterThan(0)
     expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
+  })
+
+  it('uses the same de-identified facility aliases as the English demo UI', () => {
+    const reconciliation = demoMedicalSummarySnapshots.en.medical
+      .medicationReview.reconciliation.map((item) => item.text).join(' ')
+    expect(reconciliation).toContain('B Hospital')
+    expect(reconciliation).toContain('A Pharmacy')
+    expect(reconciliation).not.toMatch(/Demo (Grace|Sunny)/)
   })
 
   it('resolves every bundled summary and safety citation against the enriched default demo AI scope', async () => {

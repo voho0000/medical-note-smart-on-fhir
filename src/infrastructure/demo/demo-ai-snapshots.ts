@@ -61,6 +61,9 @@ export const DEMO_CLINICAL_INSIGHT_GENERATION = {
 
 type Audience = 'medical' | 'patient'
 type SnapshotLocale = 'en' | 'zh-TW'
+type LocalizedAudienceSnapshots<T> =
+  Record<SnapshotLocale, Record<Audience, T>> &
+  Record<Audience, T>
 
 // Snapshot citations are authored against the default demo catalog, whose
 // short keys are deterministic only while the selected AI scope is unchanged.
@@ -219,9 +222,13 @@ const demoClinicalInsightSnapshotsEn: Record<Audience, Record<string, { prompt: 
   },
 }
 
-export const demoClinicalInsightSnapshots: Record<SnapshotLocale, Record<Audience, Record<string, { prompt: string; text: string }>>> = {
+export const demoClinicalInsightSnapshots: LocalizedAudienceSnapshots<Record<string, { prompt: string; text: string }>> = {
   'zh-TW': demoClinicalInsightSnapshotsZhTw,
   en: demoClinicalInsightSnapshotsEn,
+  // Keep the former audience-first API as a zh-TW compatibility view for
+  // local experiments and downstream consumers that predate locale support.
+  medical: demoClinicalInsightSnapshotsZhTw.medical,
+  patient: demoClinicalInsightSnapshotsZhTw.patient,
 }
 
 /**
@@ -559,7 +566,7 @@ const demoMedicalSummarySnapshotsEn: Record<Audience, MedicalSummaryAiResult> = 
       reconciliation: [
         {
           reason: 'multi-facility',
-          text: 'Sennosides appears in records from Demo Grace Hospital on 2026-07-20 and Demo Sunny Pharmacy on 2026-07-21. This may reflect prescribing and dispensing, or concurrent supplies; verify the actual source and directions from the medication packages.',
+          text: 'Sennosides appears in records from B Hospital on 2026-07-20 and A Pharmacy on 2026-07-21. This may reflect prescribing and dispensing, or concurrent supplies; verify the actual source and directions from the medication packages.',
           sources: ['M11', 'M17'],
         },
       ],
@@ -695,9 +702,11 @@ const demoMedicalSummarySnapshotsEn: Record<Audience, MedicalSummaryAiResult> = 
   },
 }
 
-export const demoMedicalSummarySnapshots: Record<SnapshotLocale, Record<Audience, MedicalSummaryAiResult>> = {
+export const demoMedicalSummarySnapshots: LocalizedAudienceSnapshots<MedicalSummaryAiResult> = {
   'zh-TW': demoMedicalSummarySnapshotsZhTw,
   en: demoMedicalSummarySnapshotsEn,
+  medical: demoMedicalSummarySnapshotsZhTw.medical,
+  patient: demoMedicalSummarySnapshotsZhTw.patient,
 }
 
 const demoSafetyScanSnapshotsZhTw: Record<Audience, SafetyScanResultInput> = {
@@ -856,7 +865,9 @@ const demoSafetyScanSnapshotsEn: Record<Audience, SafetyScanResultInput> = {
   },
 }
 
-export const demoSafetyScanSnapshots: Record<SnapshotLocale, Record<Audience, SafetyScanResultInput>> = {
+export const demoSafetyScanSnapshots: LocalizedAudienceSnapshots<SafetyScanResultInput> = {
   'zh-TW': demoSafetyScanSnapshotsZhTw,
   en: demoSafetyScanSnapshotsEn,
+  medical: demoSafetyScanSnapshotsZhTw.medical,
+  patient: demoSafetyScanSnapshotsZhTw.patient,
 }

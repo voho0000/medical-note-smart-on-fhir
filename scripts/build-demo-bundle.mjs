@@ -601,6 +601,20 @@ let finalEntries = out.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resou
 if (LATEST_ONLY) {
   const recentTypes = new Set(['Encounter', 'MedicationRequest'])
   const baseResources = baseBundle.entry.map((e) => e?.resource).filter(Boolean)
+  // Keep fixed demo demographics in sync when rebuilding from the committed
+  // bundle instead of from the private source export.
+  for (const resource of baseResources) {
+    if (resource.resourceType !== 'Patient') continue
+    resource.name = [{
+      use: 'official',
+      text: FAKE.patientFamily + '○' + FAKE.patientGivenLast,
+      family: FAKE.patientFamilyLatin,
+      given: [FAKE.patientGivenLatin],
+    }]
+    ;(resource.identifier || []).forEach((identifier) => {
+      if (identifier.value) identifier.value = FAKE.nationalId
+    })
+  }
   const cutoffs = new Map()
   for (const type of recentTypes) {
     const dates = baseResources
