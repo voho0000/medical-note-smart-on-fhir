@@ -9,6 +9,7 @@ import { useRef, useState } from "react"
 import { ArrowUpRight, CircleAlert } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { localizeDemoDisplayText } from "@/src/shared/utils/demo-display"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 import { useOptionalLanguage } from "@/src/application/providers/language.provider"
 import type { ResolvedSourceRef } from "@/src/core/entities/medical-summary.entity"
@@ -129,8 +130,14 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
         sideOffset={6}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
-        // Sized to its lines, not the default w-72; keep it a compact bubble.
-        className="w-auto max-w-[280px] space-y-1 px-3 py-2"
+        // Keep short traces compact, but long demo-summary traces must remain
+        // inside the viewport so every source stays reachable by mouse, touch,
+        // and keyboard. Radix supplies the actual available height after it
+        // positions the popover above or below the citation.
+        className="w-auto max-w-[min(280px,calc(100vw-1rem))] space-y-1 overflow-y-auto overscroll-contain px-3 py-2"
+        style={{
+          maxHeight: "min(20rem, calc(var(--radix-popover-content-available-height) - 0.5rem))",
+        }}
       >
         {sources.map((s) =>
           // Any resolved row navigates to the raw resource. Claim-level
@@ -166,7 +173,11 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                 {typeLabel(s.resourceType)}
                 {s.organization ? <> · {formatOrganizationDisplay(s.organization, locale)}</> : null}
                 {s.date ? <> · {s.date}</> : null}
-                {s.display ? <span className="block text-foreground/80">{s.display}</span> : null}
+                {s.display ? (
+                  <span className="block text-foreground/80">
+                    {localizeDemoDisplayText(s.display, locale)}
+                  </span>
+                ) : null}
                 {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
                 {isSuspect(s) && suspectLabel ? <span className="block font-medium">{suspectLabel}</span> : null}
               </span>
@@ -191,7 +202,9 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                     {s.organization ? <> · {formatOrganizationDisplay(s.organization, locale)}</> : null}
                     {s.date ? <> · {s.date}</> : null}
                     {s.display ? (
-                      <span className="block text-foreground/80">{s.display}</span>
+                      <span className="block text-foreground/80">
+                        {localizeDemoDisplayText(s.display, locale)}
+                      </span>
                     ) : null}
                     {isSuspect(s) && suspectLabel ? (
                       <span className="block font-medium">{suspectLabel}</span>
