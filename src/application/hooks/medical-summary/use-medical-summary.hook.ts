@@ -48,6 +48,7 @@ import {
   SUMMARY_CACHE_MAX_AGE_MS,
 } from './medical-summary-store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import {
   useAiSlotGeneration,
   type AiSlotDemoContext,
@@ -157,7 +158,9 @@ export interface UseMedicalSummaryReturn {
 export function useMedicalSummary(): UseMedicalSummaryReturn {
   const autoGenerate = useSummaryPrefsStore((s) => s.autoGenerate)
   const setAutoGenerate = useSummaryPrefsStore((s) => s.setAutoGenerate)
-  const modelId = useSummaryPrefsStore((s) => s.modelId)
+  const persistedModelId = useSummaryPrefsStore((s) => s.modelId)
+  const runtimeModelId = useMedcloudLaunchStore((s) => s.runtimeModelId)
+  const modelId = runtimeModelId ?? persistedModelId
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
   const { demographicsReadyForAi } = useAiDemographicsGate()
