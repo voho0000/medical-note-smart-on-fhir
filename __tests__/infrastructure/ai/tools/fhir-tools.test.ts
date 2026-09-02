@@ -387,7 +387,7 @@ describe('createFhirTools (unified)', () => {
       expect(result.success).toBe(true)
       expect(result.analyteCount).toBe(4)
       expect(result.observationCount).toBe(5)
-      expect(result.availableAnalytes).toEqual(['AFP', 'CEA', 'CA-125', 'CA-199'])
+      expect(result.availableAnalytes).toEqual(['AFP', 'CEA', 'CA-125', 'CA 19-9'])
       expect(result.data.map((group: any) => group.analyte)).not.toContain('Creatinine')
       expect(result.data.find((group: any) => group.analyte === 'CA-125').results).toHaveLength(1)
       expect(result.data.find((group: any) => group.analyte === 'CA-125').results[0].value).toBe(12)

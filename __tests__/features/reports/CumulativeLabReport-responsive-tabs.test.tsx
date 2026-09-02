@@ -81,6 +81,36 @@ describe('CumulativeLabReport responsive category tabs', () => {
     expect(container.querySelector('.\\@container')).toBeInTheDocument()
   })
 
+  it('uses clinician-facing labels instead of internal canonical keys', () => {
+    const observations = [
+      {
+        id: 'calcium',
+        status: 'final',
+        code: { coding: [{ system: 'http://loinc.org', code: '17861-6' }] },
+        effectiveDateTime: '2026-06-02',
+        valueQuantity: { value: 8.5, unit: 'mg/dL' },
+      },
+      {
+        id: 'egfr',
+        status: 'final',
+        code: {
+          text: 'eGFR(M)',
+          coding: [{ system: 'http://loinc.org', code: '77147-7' }],
+        },
+        effectiveDateTime: '2026-06-02',
+        valueQuantity: { value: 32, unit: 'mL/min/1.73m2' },
+      },
+    ]
+    const { container } = render(
+      <CumulativeLabReport observations={observations} activeCategoryId="chem" />,
+      { wrapper: TestProviders },
+    )
+
+    expect(container.querySelector('[data-lab-test-key="CA"]')).toHaveTextContent('Ca')
+    expect(container.querySelector('[data-lab-test-key="EGFR(M)"]')).toHaveTextContent('eGFR')
+    expect(container.querySelector('[data-lab-test-key="EGFR(M)"]')).not.toHaveTextContent('EGFR(M)')
+  })
+
   it('shows all categories when they fit and restores More when space shrinks', async () => {
     render(<CumulativeLabReport observations={[]} />, { wrapper: TestProviders })
 

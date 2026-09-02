@@ -72,7 +72,7 @@ describe('getAnalyteDisplayLabel', () => {
     it.each([
       ['WBC', 'zh-TW', 'WBC'],
       ['WBC', 'en', 'WBC'],
-      ['NA', 'zh-TW', 'NA'],
+      ['NA', 'zh-TW', 'Na'],
       ['ALT', 'en', 'ALT'],
     ] as const)('%s + %s → %s', (canonical, lang, expected) => {
       expect(getAnalyteDisplayLabel(canonical, 'medical', lang)).toBe(expected)
@@ -83,7 +83,17 @@ describe('getAnalyteDisplayLabel', () => {
       // should pick those up rather than the all-uppercase canonical key.
       expect(getAnalyteDisplayLabel('HBA1C', 'medical', 'zh-TW')).toBe('HbA1c')
       expect(getAnalyteDisplayLabel('IGG', 'medical', 'en')).toBe('IgG')
-      expect(getAnalyteDisplayLabel('APTT-RATIO', 'medical', 'zh-TW')).toBe('APTT-ratio')
+      expect(getAnalyteDisplayLabel('APTT-RATIO', 'medical', 'zh-TW')).toBe('aPTT ratio')
+    })
+
+    it('uses conventional chemistry, serology, and full-name typography', () => {
+      expect(getAnalyteDisplayLabel('CA', 'medical', 'zh-TW')).toBe('Ca')
+      expect(getAnalyteDisplayLabel('CO2', 'medical', 'zh-TW')).toBe('CO₂')
+      expect(getAnalyteDisplayLabel('HBSAG', 'medical', 'zh-TW')).toBe('HBsAg')
+      expect(getAnalyteDisplayLabel('ANTI-HBS', 'medical', 'zh-TW')).toBe('anti-HBs')
+      expect(getAnalyteDisplayLabel('CA-199', 'medical', 'zh-TW')).toBe('CA 19-9')
+      expect(getAnalyteDisplayLabel('GLUCOSE', 'medical', 'zh-TW')).toBe('Glucose')
+      expect(getAnalyteDisplayLabel('FREE T4', 'medical', 'zh-TW')).toBe('Free T4')
     })
   })
 
@@ -94,11 +104,11 @@ describe('getAnalyteDisplayLabel', () => {
     it.each([
       ['WBC', 'zh-TW', '白血球計數 (WBC)'],
       ['WBC', 'en', 'White blood cell count'],
-      ['NA', 'zh-TW', '鈉 (NA)'],
+      ['NA', 'zh-TW', '鈉 (Na)'],
       ['NA', 'en', 'Sodium'],
       ['ALT', 'zh-TW', '麩丙轉胺脢 (ALT)'],
       ['ALT', 'en', 'Alanine aminotransferase'],
-      ['HBSAG', 'zh-TW', 'B 型肝炎表面抗原 (HBSAG)'],
+      ['HBSAG', 'zh-TW', 'B 型肝炎表面抗原 (HBsAg)'],
       ['ANTI-HCV', 'en', 'Hepatitis C antibody'],
     ] as const)('%s + %s → %s', (canonical, lang, expected) => {
       expect(getAnalyteDisplayLabel(canonical, 'patient', lang)).toBe(expected)
@@ -106,8 +116,8 @@ describe('getAnalyteDisplayLabel', () => {
 
     it('does not double-append when lay name already bakes in the code', () => {
       // CA-199 / EGFR(EPI) / FIB-4 already carry a parenthetical code in
-      // their lay-zh string — the guard must not produce "(CA-199) (CA-199)".
-      expect(getAnalyteDisplayLabel('CA-199', 'patient', 'zh-TW')).toBe('醣蛋白 199 (CA-199)')
+      // their lay-zh string — the guard must not append it a second time.
+      expect(getAnalyteDisplayLabel('CA-199', 'patient', 'zh-TW')).toBe('醣蛋白 19-9 (CA 19-9)')
       expect(getAnalyteDisplayLabel('EGFR(EPI)', 'patient', 'zh-TW')).toBe('腎絲球過濾率 (CKD-EPI)')
       expect(getAnalyteDisplayLabel('FIB-4', 'patient', 'zh-TW')).toBe('肝纖維化指數 (FIB-4)')
     })
@@ -171,13 +181,13 @@ describe('getAnalyteDisplayParts', () => {
   // cumulative-report headers can render them on two lines. Joining the parts
   // as `${name} (${abbr})` must reproduce getAnalyteDisplayLabel exactly.
   it('medical: name = short code, no abbr', () => {
-    expect(getAnalyteDisplayParts('HB', 'medical', 'zh-TW')).toEqual({ name: 'HB', abbr: null })
+    expect(getAnalyteDisplayParts('HB', 'medical', 'zh-TW')).toEqual({ name: 'Hb', abbr: null })
     expect(getAnalyteDisplayParts('HBA1C', 'medical', 'zh-TW')).toEqual({ name: 'HbA1c', abbr: null })
   })
 
   it('patient zh-TW: Chinese name + English short code as abbr', () => {
     expect(getAnalyteDisplayParts('WBC', 'patient', 'zh-TW')).toEqual({ name: '白血球計數', abbr: 'WBC' })
-    expect(getAnalyteDisplayParts('HB', 'patient', 'zh-TW')).toEqual({ name: '血色素', abbr: 'HB' })
+    expect(getAnalyteDisplayParts('HB', 'patient', 'zh-TW')).toEqual({ name: '血色素', abbr: 'Hb' })
     expect(getAnalyteDisplayParts('HBA1C', 'patient', 'zh-TW')).toEqual({ name: '糖化血色素', abbr: 'HbA1c' })
   })
 

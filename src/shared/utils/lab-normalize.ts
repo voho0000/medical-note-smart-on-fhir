@@ -647,10 +647,9 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
   return { stripped, collapsed }
 }
 
-// Pretty display overrides for canonical keys whose default uppercase form
-// is visually loud. Add sparingly; most canonical keys (WBC, NEU, APTT, …)
-// display fine as-is. Currently only used for the seconds/ratio split where
-// "APTT-RATIO" reads better lowercased.
+// Clinician-facing display overrides for canonical keys whose internal
+// uppercase form is not the conventional written form. Canonical keys stay
+// unchanged for grouping, sorting and search; only rendered labels change.
 //
 // CANONICAL_KEYS is defined further down — after LOINC_TO_CANONICAL — so it
 // can spread that map's values too.
@@ -668,7 +667,18 @@ export const CANONICAL_DISPLAY: Record<string, string> = {
   'FLU-B-AG': 'Flu B Ag',
   'COVID-AG': 'COVID Ag',
   'MYCOPLASMA-IGM': 'Myco IgM',
-  'APTT-RATIO': 'APTT-ratio',
+  // Common chemistry notation: element symbols are case-sensitive, and
+  // molecular formulae use subscripts. K remains unchanged (one letter).
+  'NA': 'Na',
+  'CL': 'Cl',
+  'CA': 'Ca',
+  'MG': 'Mg',
+  'CO2': 'CO₂',
+  // Haematology / coagulation conventions.
+  'HB': 'Hb',
+  'APTT': 'aPTT',
+  'APTT-RATIO': 'aPTT ratio',
+  'D-DIMER': 'D-dimer',
   // CBC differential / smear rows: keep the source's familiar compact labels.
   'BLAST': 'Blast',
   'PROMYELOCYTE': 'Promyl.',
@@ -679,6 +689,31 @@ export const CANONICAL_DISPLAY: Record<string, string> = {
   // CK-MB is universally hyphenated clinically; the canonical key stays 'CKMB'
   // (sort/match/search) but the column header reads 'CK-MB'.
   'CKMB': 'CK-MB',
+  // Serology and tumour-marker typography. These labels intentionally differ
+  // from their stable compact canonical keys (HBSAG / CA-153 / CA-199).
+  'HBSAG': 'HBsAg',
+  'HBEAG': 'HBeAg',
+  'HBCAG': 'HBcAg',
+  'ANTI-HBS': 'anti-HBs',
+  'ANTI-HBC': 'anti-HBc',
+  'ANTI-HBE': 'anti-HBe',
+  'ANTI-HCV': 'anti-HCV',
+  'HCG': 'hCG',
+  'CA-153': 'CA 15-3',
+  'CA-199': 'CA 19-9',
+  // Full analyte names use normal title casing rather than looking like
+  // leaked internal constants.
+  'GLUCOSE': 'Glucose',
+  'GLUCOSE-AC': 'Glu-AC',
+  'GLUCOSE-FS': 'Finger sugar',
+  'FERRITIN': 'Ferritin',
+  'CORTISOL': 'Cortisol',
+  'LACTATE': 'Lactate',
+  'LIPASE': 'Lipase',
+  'TESTOSTERONE': 'Testosterone',
+  'F-TESTOSTERONE': 'Free testosterone',
+  'FREE T3': 'Free T3',
+  'FREE T4': 'Free T4',
   // Mixed-case clinical conventions — these analytes are universally
   // written in mixed case in clinical reading, so the all-uppercase
   // canonical key would look like a typo to clinicians.
@@ -975,8 +1010,8 @@ export const CANONICAL_TO_LAY_ZH: Record<string, string> = {
   'PSA': '攝護腺特異抗原',
   'F-PSA': '游離攝護腺特異抗原',
   'CA-125': '醣蛋白 125 (CA-125)',
-  'CA-153': '醣蛋白 153 (CA-153)',
-  'CA-199': '醣蛋白 199 (CA-199)',
+  'CA-153': '醣蛋白 15-3 (CA 15-3)',
+  'CA-199': '醣蛋白 19-9 (CA 19-9)',
   'HCG': '人類絨毛膜促性腺激素',
   // ── Hepatitis ─────────────────────────────────────────────
   'HBSAG': 'B 型肝炎表面抗原',

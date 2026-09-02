@@ -177,8 +177,11 @@ describe('CANONICAL_DISPLAY — pretty column headers', () => {
     typeof import('@/src/shared/utils/lab-normalize')
   >('@/src/shared/utils/lab-normalize')
 
-  it('APTT-RATIO displays as "APTT-ratio"', () => {
-    expect(CANONICAL_DISPLAY['APTT-RATIO']).toBe('APTT-ratio')
+  it('uses conventional mixed-case clinical display labels', () => {
+    expect(CANONICAL_DISPLAY['APTT-RATIO']).toBe('aPTT ratio')
+    expect(CANONICAL_DISPLAY['NA']).toBe('Na')
+    expect(CANONICAL_DISPLAY['CA']).toBe('Ca')
+    expect(CANONICAL_DISPLAY['HBSAG']).toBe('HBsAg')
   })
 
   it('CBC immature/smear rows keep compact source-like headers', () => {
@@ -210,9 +213,9 @@ describe('getAnalyteLabel', () => {
   describe('LOINC-canonical analytes show English short code', () => {
     it.each([
       // Bridge sends Chinese text + correct LOINC — most common case
-      ['鈉', '2951-2', 'NA'],
+      ['鈉', '2951-2', 'Na'],
       ['鉀', '2823-3', 'K'],
-      ['鈣', '17861-6', 'CA'],
+      ['鈣', '17861-6', 'Ca'],
       ['磷', '2777-1', 'IP'],
       ['白蛋白', '1751-7', 'ALB'],
       ['血中尿素氮', '3094-0', 'BUN'],
@@ -237,14 +240,14 @@ describe('getAnalyteLabel', () => {
       ['RDW', '788-0', 'RDW'],
       ['紅血球分佈變異數', '788-0', 'RDW'],
       // Chem additional
-      ['CO2', '2028-9', 'CO2'],
-      ['二氧化碳', '2028-9', 'CO2'],
+      ['CO2', '2028-9', 'CO₂'],
+      ['二氧化碳', '2028-9', 'CO₂'],
       ['eGFR', '33914-3', 'EGFR(M)'],
       ['Estimated GFR', '33914-3', 'EGFR(M)'],
-      ['Mg', '19123-9', 'MG'],
-      ['鎂', '19123-9', 'MG'],
-      ['Lipase', '3040-3', 'LIPASE'],
-      ['解脂脢', '3040-3', 'LIPASE'],
+      ['Mg', '19123-9', 'Mg'],
+      ['鎂', '19123-9', 'Mg'],
+      ['Lipase', '3040-3', 'Lipase'],
+      ['解脂脢', '3040-3', 'Lipase'],
       // Immunoglobulins — display override gives mixed case
       ['IgG', '2465-3', 'IgG'],
       ['免疫球蛋白G—免疫比濁法', '2465-3', 'IgG'],
@@ -272,8 +275,8 @@ describe('getAnalyteLabel', () => {
   })
 
   describe('CANONICAL_DISPLAY prettifies mixed-case clinical names', () => {
-    it('keeps all-caps for analytes universally written that way', () => {
-      expect(getAnalyteLabel(obs('鈉', '2951-2'))).toBe('NA')
+    it('keeps acronyms uppercase and uses conventional element-symbol casing', () => {
+      expect(getAnalyteLabel(obs('鈉', '2951-2'))).toBe('Na')
       expect(getAnalyteLabel(obs('血中尿素氮', '3094-0'))).toBe('BUN')
     })
     it('uses mixed case for IgG / IgA / IgM / NT-proBNP / HbA1c', () => {
@@ -289,7 +292,7 @@ describe('getAnalyteLabel', () => {
     it.each([
       // Chinese-name alias (Lactate LOINC 14118-4 not in LOINC_TO_CANONICAL —
       // text alias '乳酸' → LACTATE fills the gap)
-      ['乳酸', '14118-4', 'LACTATE'],
+      ['乳酸', '14118-4', 'Lactate'],
       // CBC differentials via Chinese text aliases (no LOINC needed in map)
       ['嗜中性白血球', undefined, 'NEU'],
       ['淋巴球', undefined, 'LYM'],

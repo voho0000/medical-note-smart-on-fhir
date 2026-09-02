@@ -132,7 +132,7 @@ describe('buildIpsMarkdown', () => {
       generatedAt: new Date('2026-06-24T00:00:00Z'),
     })
 
-    expect(md).toContain('| Date | HB |')
+    expect(md).toContain('| Date | Hb |')
     expect(md).toContain('| 2026-01-02 | 13.2 g/dL |')
     expect(md).toContain('| 2026-01-01 | 132 g/L |')
   })

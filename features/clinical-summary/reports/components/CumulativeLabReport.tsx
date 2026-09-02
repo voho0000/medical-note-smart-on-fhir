@@ -20,7 +20,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categories"
-import { getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
+import { CANONICAL_KEYS, getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
 import type { AnalyteNameMode } from "@/src/shared/utils/lab-normalize"
 import { useReportNameMode } from "../context/report-name-mode.context"
 import { useOptionalRightDetail } from "@/src/application/providers/right-detail.provider"
@@ -194,15 +194,12 @@ const LabPivotTable = memo(function LabPivotTable({
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
   const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
   const missingValueLabel = locale.startsWith('zh') ? '無資料' : 'No data'
-  // Column header parts: medical audience keeps useLabPivot's displayName
-  // (preserves glucose-subtype labels like "Glu-AC" / "Finger Sugar" that the
-  // pivot derives from GLUCOSE_SUBTYPE_LABEL). Patient audience splits the
-  // long-form translation into a primary NAME plus a parenthetical English
-  // abbreviation, so the header can render them on two lines (name above,
-  // "(WBC) unit" below) instead of one wide string. Sort order is unaffected —
-  // testKey-driven sorting upstream uses canonical keys.
+  // Recognized analytes use the same audience-aware display map as report
+  // cards, so internal keys such as CA / EGFR(M) never leak into this surface.
+  // Unknown tests keep useLabPivot's source-derived displayName. Patient mode
+  // can split a long name and its abbreviation across two header lines.
   const columnParts = (testKey: string, displayName: string): { name: string; abbr: string | null } =>
-    nameMode === 'original' || audience === 'medical'
+    nameMode === 'original' || !CANONICAL_KEYS.has(testKey)
       ? { name: displayName, abbr: null }
       : getAnalyteDisplayParts(testKey, audience, locale)
 

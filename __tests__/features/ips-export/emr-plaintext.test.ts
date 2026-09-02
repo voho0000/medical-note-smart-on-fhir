@@ -126,8 +126,8 @@ describe('buildEmrLabText', () => {
     // K has two draws → its own trend line; HB has one → folded into a day line
     // carrying the panel name, exactly as 最近一次 would print it.
     expect(text).toContain('K 07/02 5 → 08/18 5.2(H)')
-    expect(text).toContain('2026/08/18 血液 HB 10.4(L)')
-    expect(text).not.toContain('HB 08/18 10.4(L)')
+    expect(text).toContain('2026/08/18 血液 Hb 10.4(L)')
+    expect(text).not.toContain('Hb 08/18 10.4(L)')
   })
 
   it('prints no flag for a source code that means "not abnormal"', () => {
