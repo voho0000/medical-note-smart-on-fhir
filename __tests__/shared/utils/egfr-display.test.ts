@@ -87,6 +87,28 @@ describe('eGFR name modes', () => {
   it('keeps the hospital source name in original mode', () => {
     expect(getAnalyteDisplayForMode(observation, 'medical', 'zh-TW', 'original')).toBe(sourceName)
   })
+
+  it('expands an explicit source eGFR(M) to the standardized MDRD name', () => {
+    const mdrd = textObs('eGFR(M)')
+    expect(getAnalyteDisplayForMode(mdrd, 'medical', 'zh-TW', 'standardized')).toBe('eGFR (MDRD)')
+    expect(getAnalyteDisplayForMode(mdrd, 'patient', 'zh-TW', 'standardized')).toBe('腎絲球過濾率 (MDRD)')
+    expect(getAnalyteDisplayForMode(mdrd, 'medical', 'zh-TW', 'original')).toBe('eGFR(M)')
+  })
+
+  it('uses the method-specific MDRD LOINC even when the source name is bare', () => {
+    const mdrd = loincObs('eGFR', '77147-7')
+    expect(getAnalyteDisplayForMode(mdrd, 'medical', 'en', 'standardized')).toBe('eGFR (MDRD)')
+  })
+
+  it('does not infer MDRD from a bare name or legacy 33914-3 alone', () => {
+    expect(getAnalyteDisplayForMode(textObs('eGFR'), 'medical', 'en', 'standardized')).toBe('eGFR')
+    expect(getAnalyteDisplayForMode(
+      loincObs('eGFR', '33914-3'),
+      'medical',
+      'en',
+      'standardized',
+    )).toBe('eGFR')
+  })
 })
 
 describe('cumulative-report column label (key-based, getAnalyteDisplayLabel)', () => {

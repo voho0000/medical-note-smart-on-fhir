@@ -1382,8 +1382,9 @@ export function getOriginalAnalyteDisplayForObs(
   return '—'
 }
 
-/** UI-only name selector. Standardized mode always renders the canonical
- * audience-aware name; original mode preserves the hospital source label. */
+/** UI-only name selector. Standardized mode renders the canonical
+ * audience-aware name while retaining an explicitly stated eGFR formula;
+ * original mode preserves the hospital source label. */
 export function getAnalyteDisplayForMode(
   obsOrComponent: { code?: any } | null | undefined,
   audience: AudienceMode,
@@ -1392,6 +1393,15 @@ export function getAnalyteDisplayForMode(
 ): string {
   if (mode === 'original') return getOriginalAnalyteDisplayForObs(obsOrComponent)
   const key = getAnalyteCanonicalKey(obsOrComponent)
+  // EGFR(M) is also the compatibility bucket for formula-unspecified legacy
+  // eGFR, so the canonical key alone is not enough evidence to print MDRD.
+  // Expand the method only when the source name or a method-specific LOINC
+  // confirms it; bare eGFR remains bare.
+  if (key === 'EGFR(M)' && hasExplicitMdrdEvidence(obsOrComponent)) {
+    if (audience === 'medical') return 'eGFR (MDRD)'
+    const { name } = getAnalyteDisplayParts('EGFR', audience, language)
+    return `${name} (MDRD)`
+  }
   return key
     ? getAnalyteDisplayLabel(key, audience, language)
     : pickFallbackDisplayForObs(obsOrComponent, language)
@@ -1410,6 +1420,28 @@ function sourceEgfrName(obsOrComponent: { code?: any } | null | undefined): stri
     if (typeof c?.display === 'string' && c.display.trim()) return c.display.trim()
   }
   return ''
+}
+
+/** True only when the record itself identifies MDRD. LOINC 33914-3 is not
+ * sufficient here because older bridge bundles used it for multiple formulas. */
+function hasExplicitMdrdEvidence(
+  obsOrComponent: { code?: any } | null | undefined,
+): boolean {
+  const code = obsOrComponent?.code
+  const codings: any[] = Array.isArray(code?.coding) ? code.coding : []
+  if (codings.some((coding: any) => {
+    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
+    return system.includes('loinc') && coding?.code === '77147-7'
+  })) return true
+
+  const sourceNames = [
+    typeof code?.text === 'string' ? code.text : '',
+    ...codings.map((coding: any) => typeof coding?.display === 'string' ? coding.display : ''),
+  ]
+  return sourceNames.some((sourceName) =>
+    /\bMDRD\b/i.test(sourceName)
+    || /\b(?:e\s*GFR|estimated\s+GFR)\s*[（(]\s*M\s*[)）]/i.test(sourceName),
+  )
 }
 
 function egfrDisplayForObs(
