@@ -93,10 +93,9 @@ export function hasAnyDataSource(): boolean {
  * `SMART_KEY` pointer *and* the entry it points at, which holds the access
  * token) plus the in-memory client instance.
  *
- * Logout has to do this, not just clear the doctor's API keys. On a shared
- * workstation the access token stays valid for its full lifetime, so a tab
- * left open after "logout" would otherwise keep rendering — and keep making
- * authenticated requests for — the previous patient's chart.
+ * Call this only when the user explicitly exits or replaces the clinical
+ * session. MediPrisma account sign-out is independent and deliberately keeps
+ * the current SMART patient available while the user changes accounts.
  *
  * Safe to call in local-bundle mode and when sessionStorage is unavailable.
  */

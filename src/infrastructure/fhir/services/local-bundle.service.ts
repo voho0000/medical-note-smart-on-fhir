@@ -75,7 +75,7 @@ const MARKER = LOCAL_BUNDLE_MARKER
 const IMPORT_MARKER_PREFIX = LOCAL_BUNDLE_IMPORT_MARKER_PREFIX
 
 // Set while the loaded bundle is the bundled demo patient (試用資料). Owned
-// here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
+// here so every explicit bundle replacement or clear removes it
 // from one place.
 export const DEMO_FLAG_KEY = LOCAL_BUNDLE_DEMO_FLAG_KEY
 

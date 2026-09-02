@@ -13,7 +13,7 @@ export function resetOnBundleChange(reset: () => void): void {
   window.addEventListener(BUNDLE_CHANGED_EVENT, reset)
 }
 
-/** Dispatch the bundle-changed signal (import / demo load / clear / logout wipe). */
+/** Dispatch the bundle-changed signal (import / demo load / explicit clear). */
 export function notifyBundleChanged(): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))

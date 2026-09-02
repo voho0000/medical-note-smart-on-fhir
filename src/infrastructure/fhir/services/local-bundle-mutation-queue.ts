@@ -5,7 +5,7 @@
 let mutationTail: Promise<void> = Promise.resolve()
 
 /** Run mutations in call order. A failed operation does not poison the queue;
- * later clear/import/logout work still gets a turn. */
+ * later clear/import work still gets a turn. */
 export function serializeLocalBundleMutation<T>(
   mutation: () => Promise<T>,
 ): Promise<T> {
