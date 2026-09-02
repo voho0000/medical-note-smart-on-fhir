@@ -3,7 +3,13 @@
 
 import { Component, ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AlertCircle, RefreshCw } from "lucide-react"
+import { useOptionalLanguage } from "@/src/application/providers/language.provider"
+import {
+  isChunkLoadError,
+  recoverFromChunkLoadError,
+} from "@/src/shared/utils/chunk-load-recovery"
 
 interface Props {
   children: ReactNode
@@ -14,6 +20,44 @@ interface Props {
 interface State {
   hasError: boolean
   error: Error | null
+}
+
+function DefaultErrorFallback({ error }: { error: Error | null }) {
+  const language = useOptionalLanguage()
+  const chunkLoadFailed = isChunkLoadError(error)
+  const title = chunkLoadFailed
+    ? language?.t.errors.chunkLoadTitle ?? '網站已更新，需要重新載入'
+    : language?.t.errors.unexpectedTitle ?? '畫面暫時無法顯示'
+  const description = chunkLoadFailed
+    ? language?.t.errors.chunkLoadDescription
+      ?? '頁面使用的舊版程式已失效。重新載入後會保留已儲存的設定與資料。'
+    : error?.message || language?.t.errors.unknown || '發生未知錯誤'
+  const reloadLabel = language?.t.errors.reloadPage ?? '重新載入頁面'
+
+  return (
+    <Card role="alert" className="border-destructive/40 bg-destructive/5 shadow-none">
+      <CardHeader className="space-y-0 p-4 pb-2">
+        <CardTitle className="flex items-start gap-2 text-base text-destructive">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <span>{title}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 pt-0">
+        <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
+        {chunkLoadFailed ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 gap-2 sm:h-8"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {reloadLabel}
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -29,6 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
     this.props.onError?.(error, errorInfo)
+    recoverFromChunkLoadError(error)
   }
 
   render() {
@@ -37,21 +82,7 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback
       }
 
-      return (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              Something went wrong
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {this.state.error?.message || 'An unexpected error occurred'}
-            </p>
-          </CardContent>
-        </Card>
-      )
+      return <DefaultErrorFallback error={this.state.error} />
     }
 
     return this.props.children

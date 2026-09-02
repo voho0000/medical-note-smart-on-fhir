@@ -1947,6 +1947,10 @@ export const zhTW = {
     fhirServerRetry: '請稍後再試，或使用其他 FHIR 伺服器',
     errorLoadingContext: '載入{context}時發生錯誤',
     retry: '重試',
+    unexpectedTitle: '畫面暫時無法顯示',
+    chunkLoadTitle: '網站已更新，需要重新載入',
+    chunkLoadDescription: '頁面使用的舊版程式已失效。重新載入後會保留已儲存的設定與資料。',
+    reloadPage: '重新載入頁面',
     // AppError codes
     NETWORK_ERROR: '網路連線錯誤，請檢查您的網路連線',
     TIMEOUT_ERROR: '請求逾時，請稍後再試',

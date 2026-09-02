@@ -1946,6 +1946,10 @@ export const en = {
     fhirServerRetry: 'Please try again later, or use a different FHIR server',
     errorLoadingContext: 'Error loading {context}',
     retry: 'Retry',
+    unexpectedTitle: 'This view is temporarily unavailable',
+    chunkLoadTitle: 'The site was updated and needs to reload',
+    chunkLoadDescription: 'This page is using an outdated application file. Reloading will keep your saved settings and data.',
+    reloadPage: 'Reload page',
     // AppError codes
     NETWORK_ERROR: 'Network connection error, please check your internet connection',
     TIMEOUT_ERROR: 'Request timeout, please try again later',
