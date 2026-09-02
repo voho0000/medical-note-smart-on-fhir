@@ -143,13 +143,20 @@ const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
 /** Max analytes in the key-trends appendix. */
 const MAX_KEY_TRENDS = 8
+const UNREMARKABLE_LAB_STATUSES = new Set(['final', 'amended', 'corrected', 'unknown'])
+const UNKNOWN_FINALITY_NOTE =
+  'Note: laboratory report finality status is unavailable in the source cloud record.'
+
+function labStatusSuffix(status?: string): string {
+  return status && !UNREMARKABLE_LAB_STATUSES.has(status)
+    ? ` {status:${status}}`
+    : ''
+}
 
 function pivotCellText(row: LabRow, date: string): string {
   const cell = row.values.get(date)
   if (!cell) return '-'
-  const status = cell.status && !['final', 'amended', 'corrected'].includes(cell.status)
-    ? ` {status:${cell.status}}`
-    : ''
+  const status = labStatusSuffix(cell.status)
   if (!cell.isAbnormal) return `${cell.value}${status}`
   return `${cell.value} ${cell.interpretationCode || '*'}${status}`
 }
@@ -363,9 +370,7 @@ export const labReportsCategory: DataCategory<LabData> = {
         const head = `${name}${unit ? ` (${unit})` : ''}`
         const last = series[series.length - 1]
         const flag = last.interp ? ` [${last.interp}]` : ''
-        const status = last.status && !['final', 'amended', 'corrected'].includes(last.status)
-          ? ` {status:${last.status}}`
-          : ''
+        const status = labStatusSuffix(last.status)
         const date = last.date ? ` (${shortDate(last.date)})` : ''
         items.push(`${head}: ${last.value}${flag}${status}${date}`)
       }
@@ -398,7 +403,7 @@ export const labReportsCategory: DataCategory<LabData> = {
           const recent = series.slice(-maxTrendPoints)
           const omitted = series.length - recent.length
           const trend = recent
-            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${p.status && !['final', 'amended', 'corrected'].includes(p.status) ? `{status:${p.status}}` : ''}${p.date ? ` (${shortDate(p.date)})` : ''}`)
+            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${labStatusSuffix(p.status)}${p.date ? ` (${shortDate(p.date)})` : ''}`)
             .join(' → ')
           items.push(`${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`)
         }
@@ -415,14 +420,18 @@ export const labReportsCategory: DataCategory<LabData> = {
       inRangeConclusions
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
         .forEach((c) => {
-          const status = c.status && !['final', 'amended', 'corrected'].includes(c.status)
-            ? ` {status:${c.status}}`
-            : ''
+          const status = labStatusSuffix(c.status)
           items.push(`${c.text}${status}${c.date ? ` (${shortDate(c.date)})` : ''}`)
         })
     }
 
     if (items.length === 0) return null
+
+    const hasUnknownFinality = inRange.some((point) => point.status === 'unknown')
+      || inRangeConclusions.some((conclusion) => conclusion.status === 'unknown')
+    if (hasUnknownFinality) {
+      items.unshift(UNKNOWN_FINALITY_NOTE, '')
+    }
 
     if (windowed.fallbackDays > 0) {
       items.unshift(

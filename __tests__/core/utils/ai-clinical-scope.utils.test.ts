@@ -70,6 +70,50 @@ describe('scopeClinicalDataForAi', () => {
     expect(scoped.medications?.map((medication) => medication.id)).toEqual(['active-med'])
   })
 
+  it('keeps excluded clinical domains out of structured AI and citation scope', () => {
+    const domainInput = {
+      encounters: [
+        {
+          id: 'dental-visit',
+          period: { start: '2026-07-01' },
+          serviceType: { coding: [{
+            system: 'http://terminology.hl7.org/CodeSystem/service-type',
+            code: '88',
+          }] },
+        },
+        { id: 'rehab-visit', period: { start: '2026-07-01' } },
+        { id: 'ordinary-visit', period: { start: '2026-07-01' } },
+      ],
+      procedures: [
+        {
+          id: 'physical-therapy',
+          status: 'completed',
+          performedDateTime: '2026-07-01',
+          code: { text: '物理治療' },
+          encounter: { reference: 'Encounter/rehab-visit' },
+        },
+        {
+          id: 'ordinary-procedure',
+          status: 'completed',
+          performedDateTime: '2026-07-01',
+          code: { text: 'Appendectomy' },
+          encounter: { reference: 'Encounter/ordinary-visit' },
+        },
+      ],
+    } as any
+
+    const scoped = scopeClinicalDataForAi(
+      domainInput,
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      [],
+      NOW,
+    )
+
+    expect(scoped.encounters?.map((record) => record.id)).toEqual(['ordinary-visit'])
+    expect(scoped.procedures?.map((record) => record.id)).toEqual(['ordinary-procedure'])
+  })
+
   it('keeps report-member observations when the lab section uses its empty-window fallback', () => {
     const labInput = {
       observations: [{

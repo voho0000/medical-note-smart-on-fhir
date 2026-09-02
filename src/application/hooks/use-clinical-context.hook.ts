@@ -25,6 +25,7 @@ import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { buildClinicalContextCoverageSection } from "@/src/core/utils/clinical-context-coverage.utils"
 import { useNow } from "@/src/shared/hooks/use-now.hook"
+import { filterAiExcludedClinicalDomains } from "@/src/core/utils/ai-clinical-domain-filter.utils"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -63,9 +64,15 @@ export function useClinicalContext(
   const nowMs = useNow()
 
   const queriedClinicalData = (useClinicalData() as ClinicalData | null) ?? null
-  const clinicalData = options.clinicalDataOverride === undefined
+  const sourceClinicalData = options.clinicalDataOverride === undefined
     ? queriedClinicalData
     : options.clinicalDataOverride
+  const clinicalData = useMemo(
+    () => sourceClinicalData
+      ? filterAiExcludedClinicalDomains(sourceClinicalData as any) as ClinicalData
+      : null,
+    [sourceClinicalData],
+  )
 
   // Hook-driven sections (richer formatting than registry can provide)
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
