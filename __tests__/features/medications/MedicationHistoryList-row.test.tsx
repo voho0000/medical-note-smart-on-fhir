@@ -102,11 +102,14 @@ describe('MedicationHistoryList row parity', () => {
     expect(screen.getByText('QOD')).toBeInTheDocument()
     expect(screen.getByText('總量 15')).toBeInTheDocument()
     expect(container.querySelector('[data-medication-schedule]')).toHaveTextContent(
-      '2026/8/5 → 2026/9/4（30 天） QOD 總量 15',
+      '26/08/05 → 26/09/04（30 天）QOD 總量 15',
     )
     expect(
+      container.querySelector('[data-medication-date-frequency-join]')?.textContent,
+    ).toBe('')
+    expect(
       container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
-    ).toBe('  ')
+    ).toBe(' ')
     expect(container.querySelector('[data-medication-diagnosis]')).toHaveTextContent(
       'E07.9甲狀腺疾患',
     )
@@ -129,10 +132,10 @@ describe('MedicationHistoryList row parity', () => {
     const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
     expect(details).toBeInTheDocument()
     expect(details).toHaveTextContent(
-      '2026/8/5 → 2026/9/4（30 天） · QOD · 總量 15 · 新北市聯合醫院',
+      '26/08/05 → 26/09/04（30 天）QOD 總量 15 · 新北市聯合醫院',
     )
     expect(details).toHaveTextContent(
-      '2026/7/6 → 2026/8/5（30 天） · QOD · 總量 15 · 新北市聯合醫院',
+      '26/07/06 → 26/08/05（30 天）QOD 總量 15 · 新北市聯合醫院',
     )
   })
 
@@ -265,6 +268,6 @@ describe('MedicationHistoryList row parity', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(document.getElementById(toggle.getAttribute('aria-controls') ?? ''))
-      .toHaveTextContent('2026/8/5 → 2026/9/4（30 天） · QOD · 總量 15')
+      .toHaveTextContent('26/08/05 → 26/09/04（30 天）QOD 總量 15')
   })
 })

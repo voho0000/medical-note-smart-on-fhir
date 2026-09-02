@@ -141,7 +141,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const clinicalLane = container.querySelector('[data-medication-cell="clinical"]')
     const supplyLane = container.querySelector('[data-medication-cell="supply"]')
     expect(scheduleLine).not.toHaveTextContent('R05CB01')
-    expect(scheduleLine).toHaveTextContent('2026/7/22 → 2026/8/12（21 天）')
+    expect(scheduleLine).toHaveTextContent('26/07/22 → 26/08/12（21 天）')
     expect(scheduleLine).toHaveTextContent('長庚嘉義')
     expect(contextLine).not.toHaveTextContent('長庚嘉義')
     expect(classificationLine).toHaveTextContent('長庚嘉義')
@@ -342,11 +342,11 @@ describe('MedicationItem audience-aware compact terminology', () => {
       // order; on wide containers CSS places regimen and classification in
       // separate, vertically aligned grid columns.
       expect(schedule?.textContent).toContain(
-        '2026/8/5 → 2026/9/4（30 天） 1 錠 QOD  總量 15',
+        '26/08/05 → 26/09/04（30 天） 1 錠 QOD 總量 15',
       )
       expect(
         container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
-      ).toBe('  ')
+      ).toBe(' ')
       expect(container.querySelector('[data-medication-total-separator]')).toBeNull()
       expect(container.querySelector('[data-medication-frequency]'))
         .toHaveClass('font-normal', 'text-muted-foreground')
@@ -371,10 +371,12 @@ describe('MedicationItem audience-aware compact terminology', () => {
         .toHaveTextContent('總量 15')
       expect(container.querySelector('[data-medication-supply-days]'))
         .toHaveTextContent('（30 天）')
-      expect(dateText()).toHaveAttribute('title', '2026/8/5 → 2026/9/4（30 天）')
-      // The window no longer shrinks: it shares the line with the chips and
-      // must stay readable, so they truncate instead.
-      expect(dateText().parentElement).toHaveClass('shrink-0')
+      expect(dateText()).toHaveAttribute('title', '2026/08/05 → 2026/09/04（30 天）')
+      expect(dateText()).toHaveClass('overflow-hidden', 'whitespace-nowrap')
+      expect(dateText()).not.toHaveClass('truncate')
+      // The date yields first on constrained rows so frequency and total
+      // quantity remain visible; the full range stays in the title.
+      expect(dateText().parentElement).toHaveClass('shrink')
       expect(screen.getByText('1 錠').parentElement).toHaveClass('shrink-0')
       // The identity wrapper dissolves at every width now, so the regimen line
       // spans columns 1-2 instead of being trapped beside the clinical lane.
@@ -403,7 +405,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
 
       expect(container.querySelector('[data-medication-total-quantity]')).toBeNull()
       expect(container.querySelector('[data-medication-supply-days]')).toBeNull()
-      expect(dateText()).toHaveTextContent('2026/7/22 → 2026/8/12')
+      expect(dateText()).toHaveTextContent('26/07/22 → 26/08/12')
     })
 
     it('keeps the complete coverage range for a stopped medication', () => {
@@ -411,7 +413,26 @@ describe('MedicationItem audience-aware compact terminology', () => {
       const medication = { ...medicationRow('AMOXICILLIN 500 MG'), isInactive: true }
       render(<MedicationItem medication={medication} />)
 
-      expect(dateText()).toHaveTextContent('2026/7/22 → 2026/8/12（21 天）')
+      expect(dateText()).toHaveTextContent('26/07/22 → 26/08/12（21 天）')
+    })
+
+    it('keeps both years when a medication range crosses New Year', () => {
+      mockAudience = 'medical'
+      const medication = {
+        ...medicationRow('AMOXICILLIN 500 MG'),
+        startedOn: '2025/12/24',
+        endDate: '2026/1/23',
+        durationDays: 30,
+      }
+      render(<MedicationItem medication={medication} />)
+
+      expect(dateText()).toHaveTextContent(
+        '25/12/24 → 26/01/23（30 天）',
+      )
+      expect(dateText()).toHaveAttribute(
+        'title',
+        '2025/12/24 → 2026/01/23（30 天）',
+      )
     })
   })
 
@@ -445,7 +466,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
       '@min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem]',
       '@min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem]',
       '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
-      '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem]',
+      '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.1fr)_4.75rem]',
     )
     // The clinical lane carries ICD alone. At wide widths classification is a
     // separate grid item immediately below it; on phones it stays inline with

@@ -25,6 +25,10 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDate as formatCalendarDate } from "@/src/shared/utils/date.utils"
 import type { MedicationExecutionPeriod, MedicationNameMode, MedicationRow } from '../types'
 import {
+  compactMedicationDate,
+  fullMedicationDate,
+} from '../utils/medication-date-display'
+import {
   medicationCategoryChipClass,
   medicationChronicBadgeClass,
   medicationIcdChipClass,
@@ -218,24 +222,26 @@ export function MedicationItem({
     // Generic medication list: keep supply days attached to the coverage
     // window. Inpatient execution dates use the branch above because they are
     // administration windows, not supply coverage.
-    const startShort = shortDate(medication.startedOn)
-    const endShort = shortDate(medication.endDate)
-    if (startShort || endShort) {
-      const dateLabel = startShort && endShort
-        ? `${startShort} → ${endShort}`
-        : (startShort || endShort)
-      const dateTitle = `${dateLabel}${durationSuffix}`
+    const displayStart = compactMedicationDate(medication.startedOn, locale)
+    const displayEnd = compactMedicationDate(medication.endDate, locale)
+    const titleStart = fullMedicationDate(medication.startedOn, locale)
+    const titleEnd = fullMedicationDate(medication.endDate, locale)
+    if (displayStart || displayEnd) {
+      const fullDateLabel = titleStart && titleEnd
+        ? `${titleStart} → ${titleEnd}`
+        : (titleStart || titleEnd)
+      const dateTitle = `${fullDateLabel}${durationSuffix}`
 
       scheduleParts.push({
         key: 'date',
-        // The coverage window shares its line with the institution and class
-        // chips now, and it is the part a clinician reads first — keep it
-        // whole and let those chips absorb the squeeze instead.
-        fixed: true,
+        // Frequency and dispensed quantity are short, high-value facts that
+        // must remain visible. Let the coverage window yield first when this
+        // lane is narrow; its title and expanded history retain the full range.
+        fixed: false,
         node: (
           <span
             data-testid="medication-schedule-date"
-            className="block min-w-0 truncate tabular-nums"
+            className="block min-w-0 overflow-hidden whitespace-nowrap tabular-nums"
             title={dateTitle}
           >
             {/* Narrow rows show the start date only. The end date is
@@ -245,10 +251,10 @@ export function MedicationItem({
                 430pt phone renders this row 384px wide, so it has to sit
                 ABOVE that. The title and the expanded detail keep the full
                 range. */}
-            {startShort || endShort}
-            {startShort && endShort && (
+            {displayStart || displayEnd}
+            {displayStart && displayEnd && (
               <span data-medication-schedule-end className="hidden @min-[456px]:inline">
-                {` → ${endShort}`}
+                {` → ${displayEnd}`}
               </span>
             )}
             {durationSuffix && (
@@ -349,7 +355,7 @@ export function MedicationItem({
         onRowToggle()
       } : undefined}
       className={cn(
-        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.15fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.1fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
         onRowToggle && "cursor-pointer",
         grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
@@ -403,7 +409,7 @@ export function MedicationItem({
         >
           <div
             data-medication-regimen
-            className="flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap @min-[456px]:col-start-1 @min-[456px]:row-start-2"
+            className="flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-start-1 @min-[456px]:row-start-2"
           >
             {scheduleParts.map((part, index) => (
               <span
@@ -422,11 +428,21 @@ export function MedicationItem({
                         ? 'true'
                         : undefined
                     }
+                    data-medication-date-frequency-join={
+                      part.key === 'frequency'
+                      && ['date', 'duration', 'execution-period'].includes(
+                        scheduleParts[index - 1]?.key ?? '',
+                      )
+                        ? 'true'
+                        : undefined
+                    }
                     className="whitespace-pre"
                   >
-                    {part.key === 'total-quantity'
-                      && scheduleParts[index - 1]?.key === 'frequency'
-                      ? '  '
+                    {part.key === 'frequency'
+                      && ['date', 'duration', 'execution-period'].includes(
+                        scheduleParts[index - 1]?.key ?? '',
+                      )
+                      ? ''
                       : ' '}
                   </span>
                 )}
