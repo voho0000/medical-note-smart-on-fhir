@@ -36,6 +36,17 @@ describe('procedure source navigation', () => {
     )).toBe('visit-1')
   })
 
+  it('uses the pre-resolved parent encounter while visit data is still mounting', () => {
+    expect(navigationEncounterId(
+      {
+        resourceType: 'Procedure',
+        resourceId: 'procedure-1',
+        encounterId: 'visit-1',
+      },
+      [],
+    )).toBe('visit-1')
+  })
+
   it('expands progressive rendering far enough to mount an old visit', () => {
     const visits = Array.from({ length: 163 }, (_, index) => ({
       id: `visit-${index}`,

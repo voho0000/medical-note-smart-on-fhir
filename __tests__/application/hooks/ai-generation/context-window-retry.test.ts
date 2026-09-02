@@ -94,4 +94,75 @@ describe('context-window provider retry', () => {
       estimateTokens(clinicalContext),
     )
   })
+
+  it('removes optional source-index overhead before dropping clinical records', async () => {
+    const clinicalContext = `BEGIN-${'record '.repeat(10_000)}-END`
+    const originalTokens = estimateTokens(clinicalContext)
+    let includeSourceIndex = true
+    const execute = jest.fn(async () => 'completed summary')
+    const recoverBeforeContextReduction = jest.fn(() => {
+      includeSourceIndex = false
+      return true
+    })
+    const onRetry = jest.fn()
+
+    const result = await runWithContextWindowRetry({
+      clinicalContext,
+      contextLimit: 40_000,
+      modelId: 'custom-openai:hospital-model',
+      modelName: 'hospital-model',
+      locale: 'zh-TW',
+      buildRequest: (fitted) => ({
+        request: fitted,
+        requestText: includeSourceIndex
+          ? `${fitted}\n${'source-index '.repeat(20_000)}`
+          : fitted,
+      }),
+      execute,
+      recoverBeforeContextReduction,
+      onRetry,
+    })
+
+    expect(result.value).toBe('completed summary')
+    expect(result.retryCount).toBe(0)
+    expect(estimateTokens(result.clinicalContext)).toBe(originalTokens)
+    expect(recoverBeforeContextReduction).toHaveBeenCalledWith('local-preflight')
+    expect(onRetry).toHaveBeenCalledWith('optional-overhead-removed', 0)
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries without optional source navigation before shrinking after a provider overflow', async () => {
+    const clinicalContext = `BEGIN-${'record '.repeat(10_000)}-END`
+    let sourceNavigation = true
+    const requests: string[] = []
+    const execute = jest.fn(async (request: string) => {
+      requests.push(request)
+      if (requests.length === 1) throw liteLlmContextError()
+      return 'completed summary'
+    })
+    const recoverBeforeContextReduction = jest.fn(() => {
+      sourceNavigation = false
+      return true
+    })
+
+    const result = await runWithContextWindowRetry({
+      clinicalContext,
+      contextLimit: 262_144,
+      modelId: 'custom-openai:openrouter-qwen',
+      modelName: 'qwen/qwen3.5-35b-a3b',
+      locale: 'zh-TW',
+      buildRequest: (fitted) => ({
+        request: `${sourceNavigation ? 'with-index' : 'without-index'}:${fitted}`,
+        requestText: fitted,
+      }),
+      execute,
+      recoverBeforeContextReduction,
+    })
+
+    expect(result.retryCount).toBe(0)
+    expect(result.clinicalContext).toBe(clinicalContext)
+    expect(requests[0]).toMatch(/^with-index:/)
+    expect(requests[1]).toMatch(/^without-index:/)
+    expect(recoverBeforeContextReduction).toHaveBeenCalledWith('provider-overflow')
+  })
 })

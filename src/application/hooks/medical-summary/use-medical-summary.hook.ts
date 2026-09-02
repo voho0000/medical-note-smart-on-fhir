@@ -10,7 +10,7 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
   isContextOverflowError,
@@ -74,6 +74,11 @@ import {
   streamWithCardProgressTimeout,
 } from './card-progress-timeout'
 import { runWithContextWindowRetry } from '@/src/application/hooks/ai-generation/context-window-retry'
+import {
+  resolveSummarySourceNavigationMode,
+  summarySourceNavigationEnabled,
+  type SummarySourceNavigationMode,
+} from '@/src/core/utils/summary-source-navigation.utils'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -134,6 +139,10 @@ export interface UseMedicalSummaryReturn {
   isHydrated: boolean
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
+  sourceNavigationEnabled: boolean
+  setSourceNavigationEnabled: (value: boolean) => void
+  sourceNavigationMode: SummarySourceNavigationMode
+  sourceNavigationSourceCount: number
   model: string
   /** Effective user-facing model name for the next run, captured by the
    * orchestrator when a generation batch begins. */
@@ -159,6 +168,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const autoGenerate = useSummaryPrefsStore((s) => s.autoGenerate)
   const setAutoGenerate = useSummaryPrefsStore((s) => s.setAutoGenerate)
   const persistedModelId = useSummaryPrefsStore((s) => s.modelId)
+  const sourceNavigationEnabled = useSummaryPrefsStore((s) => s.sourceNavigationEnabled)
+  const setPersistedSourceNavigationEnabled = useSummaryPrefsStore(
+    (s) => s.setSourceNavigationEnabled,
+  )
+  const [sourceNavigationOverflowSlotKey, setSourceNavigationOverflowSlotKey] = useState<
+    string | null
+  >(null)
   const runtimeModelId = useMedcloudLaunchStore((s) => s.runtimeModelId)
   const modelId = runtimeModelId ?? persistedModelId
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
@@ -199,6 +215,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
     const isLocalModel = isCustomOpenAiModelId(ctx.modelId)
+    const sourceNavigationMode = resolveSummarySourceNavigationMode(
+      sourceNavigationEnabled,
+      sourceNavigationOverflowSlotKey === ctx.operationKey,
+    )
+    let sourceNavigationActive = summarySourceNavigationEnabled(sourceNavigationMode)
     const promptInput = {
       clinicalContext,
       piiLiterals: ctx.piiLiterals,
@@ -206,6 +227,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
       harnessProfile: isLocalModel ? 'local-small' as const : 'frontier' as const,
+      sourceNavigation: sourceNavigationActive,
     }
     const targetCards = retryRequest
       ? retryRequest.cardIds.map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])
@@ -229,6 +251,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           const fittedPromptInput = {
             ...promptInput,
             clinicalContext: fittedClinicalContext,
+            sourceNavigation: sourceNavigationActive,
           }
           const messages = generateMedicalSummaryUseCase.buildRegisteredCardBatchMessages(
             fittedPromptInput,
@@ -254,6 +277,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           onChunk,
           timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
         }),
+        recoverBeforeContextReduction: () => {
+          if (!sourceNavigationActive) return false
+          sourceNavigationActive = false
+          setSourceNavigationOverflowSlotKey(ctx.operationKey)
+          return true
+        },
         onRetry: (reason, retry) => {
           if (process.env.NODE_ENV !== 'production') {
             console.info(`[medical-summary] context retry ${retry}: ${reason}`)
@@ -275,6 +304,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       card: MedicalSummaryCardDefinition,
       parsed: unknown | null,
     ) => {
+      if (!sourceNavigationActive) return
       const unknownSourceKeys = parsed && card.findUnknownSourceKeys
         ? card.findUnknownSourceKeys(parsed, ctx.catalog)
         : []
@@ -336,6 +366,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           audience: ctx.audience === 'patient' ? 'patient' : 'medical',
           locale: outputLocale,
           strictGrounding: isLocalModel,
+          sourceNavigation: sourceNavigationActive,
         },
       )
       state.setResult(ctx.operationKey, {
@@ -369,7 +400,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             batchParseResults.has(card.id) ||
             !card.hasCompleteBatchBlock(streamedText)
           ) return
-          const parsed = card.parseBatch(streamedText, ctx.catalog)
+          const parsed = card.parseBatch(streamedText, ctx.catalog, sourceNavigationActive)
           batchParseResults.set(card.id, parsed)
           warnUnknownSourceKeys(card, parsed)
           if (parsed) {
@@ -390,7 +421,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         const hadStreamParse = batchParseResults.has(card.id)
         const parsed = hadStreamParse
           ? batchParseResults.get(card.id) ?? null
-          : card.parseBatch(full, ctx.catalog)
+          : card.parseBatch(full, ctx.catalog, sourceNavigationActive)
         if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
         if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
         if (parsed) {
@@ -457,7 +488,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               retryBatchParseResults.has(card.id) ||
               !card.hasCompleteBatchBlock(streamedText)
             ) return
-            const parsed = card.parseBatch(streamedText, ctx.catalog)
+            const parsed = card.parseBatch(streamedText, ctx.catalog, sourceNavigationActive)
             retryBatchParseResults.set(card.id, parsed)
             warnUnknownSourceKeys(card, parsed)
             if (parsed) {
@@ -481,7 +512,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           const hadStreamParse = retryBatchParseResults.has(card.id)
           const parsed = hadStreamParse
             ? retryBatchParseResults.get(card.id) ?? null
-            : card.parseBatch(full, ctx.catalog)
+            : card.parseBatch(full, ctx.catalog, sourceNavigationActive)
           if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
           if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
           if (parsed) {
@@ -556,6 +587,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         audience: ctx.audience === 'patient' ? 'patient' : 'medical',
         locale: outputLocale,
         strictGrounding: isLocalModel,
+        sourceNavigation: sourceNavigationActive,
       },
     )
     const generatedAt = Date.now()
@@ -568,13 +600,16 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       completedCardIds: [...completedCardIds],
       generation: generation(generatedAt),
     }
-  }, [])
+  }, [sourceNavigationEnabled, sourceNavigationOverflowSlotKey])
 
   // Demo bundle: runs through the SAME parse → finalize pipeline as a live
   // reply, so citations verify against the real catalog.
   const demoSeed = useCallback((ctx: AiSlotDemoContext): MedicalSummaryResult | null => {
     const demoAudience = ctx.audience === 'patient' ? 'patient' : 'medical'
     const demoLocale = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
+    const sourceNavigationActive = summarySourceNavigationEnabled(
+      resolveSummarySourceNavigationMode(sourceNavigationEnabled),
+    )
     const snapshot = remapDemoSnapshotSourceKeys(
       demoMedicalSummarySnapshots[demoLocale][demoAudience],
       ctx.catalog,
@@ -588,11 +623,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const safety = MEDICAL_SUMMARY_CARD_REGISTRY.safety.parseRetry(
       JSON.stringify(safetySnapshot),
       ctx.catalog,
+      sourceNavigationActive,
     )
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData,
       audience: demoAudience,
       locale: demoLocale,
+      sourceNavigation: sourceNavigationActive,
     })
     return {
       ...finalized,
@@ -606,7 +643,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       completedCardIds: [...MEDICAL_SUMMARY_CARD_IDS],
       generation: DEMO_MEDICAL_SUMMARY_GENERATION,
     }
-  }, [])
+  }, [sourceNavigationEnabled])
 
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
     defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
@@ -624,7 +661,19 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     demoSeed,
     resultModelId: medicalSummaryResultModelId,
     retainResultOnModelChange: true,
+    inputVariant: sourceNavigationEnabled ? 'source-navigation-auto' : 'source-navigation-off',
   })
+
+  const sourceNavigationMode = resolveSummarySourceNavigationMode(
+    sourceNavigationEnabled,
+    sourceNavigationOverflowSlotKey === slot.slotKey,
+  )
+  const setSourceNavigationEnabled = useCallback((enabled: boolean) => {
+    // A manual choice always overrides the transient context-overflow fallback.
+    // If the same request still does not fit, generation will turn it off again.
+    setSourceNavigationOverflowSlotKey(null)
+    setPersistedSourceNavigationEnabled(enabled)
+  }, [setPersistedSourceNavigationEnabled])
 
   // Deterministic coverage stats for the coverage card — recomputes only when
   // the bundle changes.
@@ -749,6 +798,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     isHydrated: slot.isHydrated,
     autoGenerate,
     setAutoGenerate,
+    sourceNavigationEnabled,
+    setSourceNavigationEnabled,
+    sourceNavigationMode,
+    sourceNavigationSourceCount: slot.catalog.length,
     model: modelId,
     resolvedModelName: slot.resolvedModelName,
     setModel,

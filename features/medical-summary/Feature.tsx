@@ -66,6 +66,7 @@ import {
 } from "./components/SummaryGenerationButton"
 import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
 import { SourceSup } from "./components/SourceSup"
+import { resolveProcedureNavigationTarget } from "./utils/procedure-navigation-target"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
 import { DataSelectionDrawer } from "@/features/data-selection"
@@ -127,7 +128,7 @@ export default function MedicalSummaryFeature() {
   const { loading: authLoading } = useAuth()
   const { audience } = useAudience()
   const { setActiveTab } = useRightPanel()
-  const { diagnosticReports, observations } = useClinicalData()
+  const { diagnosticReports, observations, procedures } = useClinicalData()
   const base = t.medicalSummary
   const isPatient = audience === "patient"
   // Patient keys override the clinician base set (same pattern as safety).
@@ -195,6 +196,10 @@ export default function MedicalSummaryFeature() {
     dataReady,
     model,
     autoGenerate,
+    sourceNavigationEnabled,
+    setSourceNavigationEnabled,
+    sourceNavigationMode,
+    sourceNavigationSourceCount,
     setModel,
     setAutoGenerate,
     generate,
@@ -356,21 +361,22 @@ export default function MedicalSummaryFeature() {
   const navFallbackMsg = ms.navFallback
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
+      const resolvedTarget = resolveProcedureNavigationTarget(target, procedures)
       const store = useResourceNavigationStore.getState()
-      store.navigate(target)
+      store.navigate(resolvedTarget)
       const mySeq = useResourceNavigationStore.getState().seq
       setTimeout(() => {
         const s = useResourceNavigationStore.getState()
         if (s.pending && s.seq === mySeq) {
           s.consume()
-          const what = [target.date, target.display].filter(Boolean).join(" ")
-          toast.warning(navFallbackMsg.replace("{label}", what || target.resourceType), {
+          const what = [resolvedTarget.date, resolvedTarget.display].filter(Boolean).join(" ")
+          toast.warning(navFallbackMsg.replace("{label}", what || resolvedTarget.resourceType), {
             duration: 6000,
           })
         }
       }, NAV_CLAIM_TIMEOUT_MS)
     },
-    [navFallbackMsg],
+    [navFallbackMsg, procedures],
   )
 
   const investigationCumulativeTargets = useMemo(
@@ -892,6 +898,23 @@ export default function MedicalSummaryFeature() {
               {formatClinicalContextAdaptationNotice(contextAdaptation, locale)}
             </InfoHint>
           ) : null}
+          {activeView === "standard" && sourceNavigationMode !== "enabled" ? (
+            <InfoHint
+              aria-label={ms.sourceNavigationOffLabel}
+              side="bottom"
+              className="h-7 shrink-0 gap-1 rounded-md border border-border bg-muted/40 px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              contentClassName="max-w-[min(90vw,24rem)] text-left leading-relaxed"
+              label={(
+                <span className="hidden text-[0.6875rem] font-medium @min-[44rem]:inline">
+                  {ms.sourceNavigationOffLabel}
+                </span>
+              )}
+            >
+              {sourceNavigationMode === "disabled-auto"
+                ? ms.sourceNavigationAutoDisabled.replace("{count}", String(sourceNavigationSourceCount))
+                : ms.sourceNavigationDisabled}
+            </InfoHint>
+          ) : null}
           {activeView === "standard" ? (
             hasPatient && dataReady ? (
               <SummaryGenerationButton
@@ -940,7 +963,7 @@ export default function MedicalSummaryFeature() {
                 <span className="@max-[36rem]:hidden">{t.tabs.settings}</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-1 p-2">
+            <PopoverContent align="end" className="w-72 space-y-1 p-2">
               {activeView === "standard" ? (
                 <label
                   className="flex min-h-[44px] cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
@@ -955,6 +978,30 @@ export default function MedicalSummaryFeature() {
                     onCheckedChange={setAutoGenerate}
                     aria-label={ms.autoGenerate}
                     className="scale-90"
+                  />
+                </label>
+              ) : null}
+              {activeView === "standard" ? (
+                <label
+                  className="flex min-h-[56px] cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                  title={ms.sourceNavigationDescription}
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium text-foreground">{ms.sourceNavigation}</span>
+                    <span className="mt-0.5 block text-[0.6875rem] leading-snug text-muted-foreground">
+                      {sourceNavigationMode === "disabled-auto"
+                        ? ms.sourceNavigationAutoDisabled.replace("{count}", String(sourceNavigationSourceCount))
+                        : sourceNavigationEnabled
+                          ? ms.sourceNavigationActive
+                          : ms.sourceNavigationDisabled}
+                    </span>
+                  </span>
+                  <Switch
+                    checked={sourceNavigationMode === "enabled"}
+                    onCheckedChange={setSourceNavigationEnabled}
+                    disabled={isBusy}
+                    aria-label={ms.sourceNavigation}
+                    className="shrink-0 scale-90"
                   />
                 </label>
               ) : null}

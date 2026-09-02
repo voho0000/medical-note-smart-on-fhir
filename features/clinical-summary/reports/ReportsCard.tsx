@@ -46,6 +46,12 @@ import { groupAdultPreventiveRows } from './utils/adult-preventive-grouping'
 const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
+const RAW_REPORT_NAV_RESOURCE_TYPES = new Set([
+  'DiagnosticReport',
+  'ImagingStudy',
+  'Observation',
+  'Procedure',
+])
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'pathology', 'vitals'])
 type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 type RawPreparationPriority = 'idle' | 'after-paint'
@@ -567,7 +573,7 @@ export function ReportsCard() {
       || navPending.reportView === 'cumulative'
       || rawReportsEnabled
     ) return
-    if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
+    if (!RAW_REPORT_NAV_RESOURCE_TYPES.has(navPending.resourceType)) return
     const timer = window.setTimeout(() => setRawPreparationPriority('after-paint'), 0)
     return () => window.clearTimeout(timer)
   }, [clinicalTabActive, navPending, rawReportsEnabled])
@@ -597,20 +603,30 @@ export function ReportsCard() {
       }, 0)
       return
     }
-    if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
+    if (!RAW_REPORT_NAV_RESOURCE_TYPES.has(navPending.resourceType)) return
     const hit = rows.find(
       (r) => r.id === navPending.resourceId
         || r.diagnosticReportIds?.includes(navPending.resourceId)
         || r.imagingStudyIds?.includes(navPending.resourceId)
+        || r.procedureIds?.includes(navPending.resourceId)
         || r.obs.some((o) => o?.id === navPending.resourceId),
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
-    const preferredTabValue = hit.group === 'cancer-screening' ? 'cancer-screening' : undefined
+    const preferredTabValue = navPending.resourceType === 'Procedure'
+      ? 'procedures'
+      : hit.group === 'cancer-screening'
+        ? 'cancer-screening'
+        : undefined
     const containsHit = (candidate: Row) => candidate.id === hit.id
       || candidate.groupedRows?.some((member) => member.id === hit.id)
-    const tab = tabConfigs.find((c) => (
-      c.value === preferredTabValue && c.rows.some(containsHit)
-    )) || tabConfigs.find((c) => !c.isCumulative && c.rows.some(containsHit))
+    // A previous category filter may hide the cited procedure. Resolve against
+    // the complete Procedures row set, then clear that filter before mounting
+    // and pinpointing the row.
+    const tab = navPending.resourceType === 'Procedure'
+      ? { value: 'procedures', rows: groupedRows.procedures, isCumulative: false }
+      : tabConfigs.find((c) => (
+          c.value === preferredTabValue && c.rows.some(containsHit)
+        )) || tabConfigs.find((c) => !c.isCumulative && c.rows.some(containsHit))
     if (!tab) return
     const targetRow = tab.rows.find(containsHit)
     // Do not use handleTabChange: requestAnimationFrame is frozen in
@@ -618,11 +634,12 @@ export function ReportsCard() {
     // external-store effect free of synchronous local-state cascades.
     setTimeout(() => {
       setSearchQuery('')
+      if (navPending.resourceType === 'Procedure') setProcedureCategoryFilter('all')
       setActiveTab(tab.value)
       setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
       setNavTarget({ id: targetRow?.id ?? hit.id, tab: tab.value, nonce: navSeq })
     }, 0)
-  }, [clinicalTabActive, navPending, navSeq, rows, tabConfigs, consumeNav])
+  }, [clinicalTabActive, navPending, navSeq, rows, groupedRows.procedures, tabConfigs, consumeNav])
 
   if (isLoading) {
     return (

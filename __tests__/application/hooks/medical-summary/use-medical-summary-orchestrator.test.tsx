@@ -141,6 +141,10 @@ function arrange({
     isHydrated: summaryHydrated,
     autoGenerate: summaryAuto,
     setAutoGenerate: setSummaryAuto,
+    sourceNavigationEnabled: true,
+    setSourceNavigationEnabled: jest.fn(),
+    sourceNavigationMode: 'enabled',
+    sourceNavigationSourceCount: 10,
     model: summaryModel,
     resolvedModelName: summaryResolvedModelName,
     setModel: setSummaryModel,
@@ -1447,6 +1451,56 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(summaryRetryFailedModules).toHaveBeenCalledTimes(1)
     expect(summaryGenerate).not.toHaveBeenCalled()
     expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
+  it('keeps failed-card details visible after falling back to the last coherent model pair', async () => {
+    let finishGeneration!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finishGeneration = resolve
+    }))
+    const previousSummary = { headline: 'previous Gemini summary' }
+    const previousSafety = { alerts: [] }
+    arrange({
+      summaryResult: previousSummary,
+      safetyResult: previousSafety,
+      summaryResultOwnerRuntimeId: 'gemini-runtime',
+      safetyResultOwnerRuntimeId: 'gemini-runtime',
+      summaryModel: CUSTOM_OPENAI_MODEL_ID,
+      safetyModel: CUSTOM_OPENAI_MODEL_ID,
+      summaryResolvedModelName: 'Gemma',
+    })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    let generation!: Promise<void>
+    act(() => {
+      generation = result.current.generate()
+    })
+    await act(async () => undefined)
+
+    const failedGemmaSummary = {
+      headline: '',
+      cardErrors: { priorities: 'PARSE_FAILED' },
+    }
+    arrange({
+      summaryResult: failedGemmaSummary,
+      safetyResult: previousSafety,
+      summaryResultOwnerRuntimeId: 'gemma-runtime',
+      safetyResultOwnerRuntimeId: 'gemini-runtime',
+      summaryModel: CUSTOM_OPENAI_MODEL_ID,
+      safetyModel: CUSTOM_OPENAI_MODEL_ID,
+      summaryResolvedModelName: 'Gemma',
+    })
+    rerender()
+    expect(result.current.cardErrors).toEqual({ priorities: 'PARSE_FAILED' })
+
+    await act(async () => {
+      finishGeneration()
+      await generation
+    })
+    await waitFor(() => expect(result.current.activeGeneration).toBeNull())
+
+    expect(result.current.result).toBe(previousSummary)
+    expect(result.current.cardErrors).toEqual({ priorities: 'PARSE_FAILED' })
   })
 
   it('waits for both audience cache slots before presenting the summary', () => {

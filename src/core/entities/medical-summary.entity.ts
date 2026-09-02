@@ -349,10 +349,10 @@ export interface SummaryTimelineEvent {
   label: string
   category: TimelineCategory
   organization?: string
-  resourceType: string
+  resourceType?: string
   /** Bundle id of the underlying resource — lets the timeline row navigate
    *  the left panel to the raw resource (second evidence layer). */
-  resourceId: string
+  resourceId?: string
   /** For category 'encounter': 住院/急診/門診, derived from Encounter.class. */
   encounterClass?: EncounterClass
   documentEvidence?: DocumentEvidence[]

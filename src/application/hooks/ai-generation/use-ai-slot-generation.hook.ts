@@ -136,6 +136,9 @@ export interface AiSlotGenerationConfig<T> {
    *  retained result is presentation-only while that target slot is empty or
    *  its encrypted cache is still being restored. */
   retainResultOnModelChange?: boolean
+  /** Feature-specific output variant that must own a distinct result/cache
+   * slot even when the selected clinical records are otherwise identical. */
+  inputVariant?: string
 }
 
 export interface AiSlotGenerationReturn<T> {
@@ -199,6 +202,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     demoSeed,
     resultModelId,
     retainResultOnModelChange = false,
+    inputVariant,
   } = config
 
   const ai = useUnifiedAi()
@@ -278,12 +282,15 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // empty, so neither hydration nor generation can start from the patient card
   // alone. Locale is explicit because the requested output language can change
   // even when the FHIR input does not.
+  const variantInputSignature = inputSignature && inputVariant
+    ? `${inputSignature}::${inputVariant}`
+    : inputSignature
   const slotKey = patientAiSlotKey({
     patientId,
     audience,
     locale,
     modelId: runtimeModelId,
-    inputSignature,
+    inputSignature: variantInputSignature,
   })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
@@ -309,7 +316,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // the persisted slot key: importing a different Bundle with the same
   // patient id/content must still invalidate an in-flight visible batch.
   const resultScope = slotKey
-    ? [bundleRevision, patientId, audience, locale, inputSignature].join('::')
+    ? [bundleRevision, patientId, audience, locale, variantInputSignature].join('::')
     : ''
   // The frozen zh-TW demo has a bundled result even when a model preference
   // from real data is still selected. Treat it as a presentation fallback,
@@ -329,7 +336,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const scopeSlotPrefix = slotKey
     ? [patientId, audience, locale].join('::') + '::'
     : ''
-  const scopeSlotSuffix = slotKey ? `::ctx-${inputSignature}` : ''
+  const scopeSlotSuffix = slotKey ? `::ctx-${variantInputSignature}` : ''
   const cancellationEpochsRef = useRef<Map<string, number>>(new Map())
   const autoTriggeredRef = useRef<string | null>(null)
   // An automatic Medcloud launch has its own credential-gated, message-id-scoped

@@ -4,6 +4,8 @@ import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/g
 interface SummaryPrefsStore {
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
+  sourceNavigationEnabled: boolean
+  setSourceNavigationEnabled: (value: boolean) => void
   modelId: string
   setModelId: (id: string) => void
 }
@@ -15,6 +17,8 @@ export const useSummaryPrefsStore = createModelPrefsStore<SummaryPrefsStore>({
     // Real-patient auto-run remains opt-in and separately consent-gated.
     autoGenerate: false,
     setAutoGenerate: (value) => set({ autoGenerate: value }),
+    sourceNavigationEnabled: true,
+    setSourceNavigationEnabled: (value) => set({ sourceNavigationEnabled: value }),
     modelId: MEDICAL_SUMMARY_MODEL_ID,
     setModelId: (id) => set({ modelId: id }),
   }),

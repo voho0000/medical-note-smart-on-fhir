@@ -109,6 +109,7 @@ export function CrossFacilityTimeline({
       <div className="@container">
         <ul className="ml-1 space-y-0 border-l-2 border-border pl-3.5">
           {visible.map((event) => {
+            const canNavigate = Boolean(onNavigate && event.resourceType && event.resourceId)
             const encClass = event.category === "encounter" ? event.encounterClass : undefined
             const style = encClass ? ENCOUNTER_CLASS_STYLES[encClass] : CATEGORY_STYLES[event.category]
             const pillLabel = encClass ? encounterClassLabel(encClass) : categoryLabel(event.category)
@@ -130,7 +131,7 @@ export function CrossFacilityTimeline({
                       {organizationLabel}
                     </span>
                   ) : null}
-                  {onNavigate ? (
+                  {canNavigate ? (
                     <ArrowUpRight className="h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-60" />
                   ) : null}
                 </div>
@@ -150,15 +151,15 @@ export function CrossFacilityTimeline({
                     style.dot,
                   )}
                 />
-                {onNavigate ? (
+                {canNavigate ? (
                   // The whole event row links to its raw resource in the left
                   // panel — same second-evidence-layer pipeline as SourceSup.
                   <button
                     type="button"
                     onClick={() =>
-                      onNavigate({
-                        resourceType: event.resourceType,
-                        resourceId: event.resourceId,
+                      onNavigate!({
+                        resourceType: event.resourceType!,
+                        resourceId: event.resourceId!,
                         display: event.label,
                         date: event.date,
                         evidenceQuote: event.documentEvidence?.find(

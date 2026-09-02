@@ -815,8 +815,8 @@ describe('modular summary generation contract', () => {
       ],
     }, 'medications')
 
-    expect(messages[1].content).toContain('[M1] Metformin 500 mg BID')
-    expect(messages[1].content).not.toContain('[L1] HbA1c 8.2%')
+    expect(messages[1].content).toContain('[M1] MedicationRequest | ? | Metformin 500 mg BID')
+    expect(messages[1].content).not.toContain('[L1] DiagnosticReport | ? | HbA1c 8.2%')
     expect(messages[0].content).toContain('MEDICATIONS:')
     expect(messages[0].content).not.toContain('INVESTIGATIONS:')
   })
@@ -998,6 +998,54 @@ describe('medication education prompt contract', () => {
     locale: 'en' as const,
   }
 
+  it('uses the original centralized source list without inline clinical keys', () => {
+    const catalog = [
+      { key: 'O1', resourceType: 'Observation', resourceId: 'obs-1', display: 'Creatinine', date: '2026-07-01' },
+      { key: 'O2', resourceType: 'Observation', resourceId: 'obs-2', display: 'HbA1c', date: '2026-06-01' },
+      { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin', date: '2026-07-02' },
+      { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'report-1', display: 'Chest CT', date: '2026-06-30' },
+      { key: 'E1', resourceType: 'Encounter', resourceId: 'enc-1', display: 'Outpatient visit', date: '2026-07-02', organization: 'Clinic A' },
+    ]
+    const messages = useCase.buildMessages({
+      clinicalContext: 'CREA 1.2 [O1]\nMetformin [M1]\nChest CT [L1]',
+      catalog,
+      locale: 'en',
+      audience: 'medical',
+    })
+    const userPrompt = messages[1].content
+
+    expect(userPrompt).not.toContain('CITATION KEY GUIDE')
+    expect(userPrompt).not.toContain('SUPPLEMENTAL SOURCE LIST')
+    expect(userPrompt).toContain('CREA 1.2\nMetformin\nChest CT')
+    expect(userPrompt).toContain('SOURCE LIST (cite these keys')
+    expect(userPrompt).toContain('[O1] Observation | 2026-07-01 | Creatinine')
+    expect(userPrompt).toContain('[O2] Observation | 2026-06-01 | HbA1c')
+    expect(userPrompt).toContain('[M1] MedicationRequest | 2026-07-02 | Metformin')
+    expect(userPrompt).toContain('[L1] DiagnosticReport | 2026-06-30 | Chest CT')
+    expect(userPrompt).toContain('[E1] Encounter | 2026-07-02 | Clinic A | Outpatient visit')
+    expect(catalog).toHaveLength(5)
+  })
+
+  it('omits the source list and citation fields when navigation is disabled', () => {
+    const messages = useCase.buildBatchModuleMessages({
+      clinicalContext: 'CREA 1.2 [O1]\nMetformin [M1]',
+      catalog: [
+        { key: 'O1', resourceType: 'Observation', resourceId: 'obs-1', display: 'Creatinine' },
+        { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin' },
+      ],
+      locale: 'en',
+      audience: 'medical',
+      sourceNavigation: false,
+    }, ['priorities', 'timeline'])
+
+    expect(messages[1].content).not.toContain('SOURCE LIST')
+    expect(messages[1].content).not.toContain('[O1]')
+    expect(messages[1].content).not.toContain('[M1]')
+    expect(messages[0].content).toContain('SOURCE NAVIGATION IS DISABLED')
+    expect(messages[0].content).toContain('"date": "YYYY-MM-DD"')
+    expect(messages[0].content).not.toContain('"ref": "<catalog key>"')
+  })
+
   it('asks the patient summary for benefit-first, non-alarming education', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'patient' })
     expect(messages[0].content).toContain('Populate "medicationEducation" as benefit-first')
@@ -1032,12 +1080,13 @@ describe('medication education prompt contract', () => {
     expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
   })
 
-  it('uses exact same-row NHI terminology ahead of administrative categories', () => {
+  it('uses the exact linked NHI terminology dictionary ahead of administrative categories', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'medical' })
     const prompt = messages[0].content
 
-    expect(prompt).toContain('NHI terminology matched to this exact medication record')
-    expect(prompt).toContain('never transfer terminology between medication rows')
+    expect(prompt).toContain('NHI medication terminology')
+    expect(prompt).toContain('NHI term T#')
+    expect(prompt).toContain('never transfer terminology between products')
     expect(prompt).toContain('take precedence over MedicationRequest.category')
     expect(prompt).toContain('source/administrative metadata')
     expect(prompt).toContain('does NOT establish this patient\'s indication')
@@ -1049,9 +1098,9 @@ describe('medication education prompt contract', () => {
       audience: 'medical',
       harnessProfile: 'local-small',
     }, 'medications')[0].content
-    expect(localPrompt).toContain('same-row NHI terminology block')
+    expect(localPrompt).toContain('NHI term T#')
     expect(localPrompt).toContain('overrides a conflicting administrative MedicationRequest.category')
-    expect(localPrompt).toContain('Never transfer terminology across rows')
+    expect(localPrompt).toContain('Never transfer terminology across products')
     expect(localPrompt).toContain('one medicine cannot inherit another medicine\'s mechanism or adverse effects')
   })
 
@@ -1120,6 +1169,43 @@ describe('medical summary output-language contract', () => {
 
 describe('finalizeResult', () => {
   const catalog = buildSourceCatalog(CATALOG_INPUT)
+
+  it('keeps source-free card content and renders a non-clickable dated timeline', () => {
+    const priorities = useCase.parseModuleResult('priorities', JSON.stringify({
+      headline: 'Cross-facility overview',
+      summary: [
+        { text: 'Kidney function has serial records.', emphasis: true },
+        { text: 'Medication history should be reconciled.', emphasis: false },
+      ],
+    }), false)
+    const problems = useCase.parseModuleResult('problems', JSON.stringify({
+      problems: [{ label: 'Chronic kidney disease', kind: 'diagnosis' }],
+    }), false)
+    const timeline = useCase.parseModuleResult('timeline', JSON.stringify({
+      timeline: [{ date: '2026-06-12', label: 'Outpatient follow-up', category: 'encounter' }],
+    }), false)
+    expect(priorities).not.toBeNull()
+    expect(problems).not.toBeNull()
+    expect(timeline).not.toBeNull()
+
+    let aggregate = useCase.createEmptyAiResult()
+    aggregate = useCase.mergeModuleResult(aggregate, 'priorities', priorities!)
+    aggregate = useCase.mergeModuleResult(aggregate, 'problems', problems!)
+    aggregate = useCase.mergeModuleResult(aggregate, 'timeline', timeline!)
+    const result = useCase.finalizeResult(aggregate, catalog, { sourceNavigation: false })
+
+    expect(result.summary).toHaveLength(2)
+    expect(result.summary.every((item) => item.sourceKeys.length === 0)).toBe(true)
+    expect(result.problems).toHaveLength(1)
+    expect(result.problems[0].sourceKeys).toEqual([])
+    expect(result.timeline).toEqual([expect.objectContaining({
+      date: '2026-06-12',
+      label: 'Outpatient follow-up',
+      resourceType: undefined,
+      resourceId: undefined,
+    })])
+    expect(result.sourceIndex).toEqual([])
+  })
 
   it('verifies known keys, flags unknown keys, drops+counts bad timeline refs', () => {
     const ai = {

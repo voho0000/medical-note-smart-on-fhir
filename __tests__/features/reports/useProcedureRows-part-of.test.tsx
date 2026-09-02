@@ -121,7 +121,9 @@ describe('useProcedureRows Procedure.partOf grouping', () => {
     const mainRow = result.current.find((row) => row.id === 'procedure:main')
     const standaloneRow = result.current.find((row) => row.id === 'procedure:standalone')
     expect(mainRow?.relatedCount).toBe(2)
+    expect(mainRow?.procedureIds).toEqual(['main', 'nhi-child', 'secondary-child'])
     expect(mainRow?.institution).toBe('嘉基醫院')
+    expect(standaloneRow?.procedureIds).toEqual(['standalone'])
     expect(standaloneRow).toBeDefined()
 
     const components = (mainRow?.obs[0]?.component ?? []) as Array<{

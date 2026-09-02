@@ -9,6 +9,7 @@ export function navigationEncounterId(
   if (!target) return undefined
   if (target.resourceType === 'Encounter') return target.resourceId
   if (target.resourceType !== 'Procedure') return undefined
+  if (target.encounterId) return target.encounterId
 
   const procedure = procedures.find((item) => item.id === target.resourceId)
   return referenceId(procedure?.encounter?.reference)

@@ -128,4 +128,7 @@ export type Row = {
    * merge same-code/same-day records into one row, so `id` alone is not enough
    * to resolve source citations back to every original report. */
   diagnosticReportIds?: string[]
+  /** Procedure resources represented by a Procedures-tab row. A parent and
+   *  its partOf children share one rendered operative-session row. */
+  procedureIds?: string[]
 }

@@ -30,6 +30,15 @@ const SCHEMA_HINT =
   '"category": "renal|bleeding|critical-lab|duplicate|allergy|monitoring|other", ' +
   '"recommendation": "<optional next step>"}]}'
 
+const SOURCE_FREE_SCHEMA_HINT =
+  '{"scannedCount": <number of records scanned>, "alerts": [{' +
+  '"severity": "high|medium|low", ' +
+  '"title": "<short title>", ' +
+  '"detail": "<one sentence, MUST cite the actual value>", ' +
+  '"evidence": ["<triggering data item>"], ' +
+  '"category": "renal|bleeding|critical-lab|duplicate|allergy|monitoring|other", ' +
+  '"recommendation": "<optional next step>"}]}'
+
 const SAFETY_BATCH_BLOCK_START = '<<<MEDIPRISMA_MODULE:safety>>>'
 const SAFETY_BATCH_BLOCK_END = '<<<END_MEDIPRISMA_MODULE:safety>>>'
 
@@ -196,6 +205,7 @@ export interface GenerateSafetyAlertsInput {
   /** Citable bundle records; appended as a SOURCE LIST the model cites in
    *  each alert's "sources". Omit/empty → no source citation (evidence only). */
   catalog?: SummarySourceCatalogEntry[]
+  sourceNavigation?: boolean
 }
 
 const DOCUMENT_PROCEDURE_CLAIMS = [
@@ -277,17 +287,24 @@ export class GenerateSafetyAlertsUseCase {
    * evidence/language/output rules come from that outer prompt; this fragment
    * contains only Safety-specific decisions and its schema. */
   buildBatchModuleInstruction(
-    input: Pick<GenerateSafetyAlertsInput, 'audience' | 'locale'>,
+    input: Pick<GenerateSafetyAlertsInput, 'audience' | 'locale' | 'sourceNavigation'>,
   ): string {
+    const sourceNavigation = input.sourceNavigation !== false
+    const coreRules = sourceNavigation
+      ? BATCH_SAFETY_CORE_RULES
+      : BATCH_SAFETY_CORE_RULES.replace(
+          '; cite only direct SOURCE LIST keys in "sources".',
+          '; do not output source keys or a "sources" field.',
+        )
     return [
       'SAFETY MODULE RULES:',
       input.audience === 'patient'
         ? BATCH_SAFETY_PATIENT_RULES
         : BATCH_SAFETY_MEDICAL_RULES,
-      BATCH_SAFETY_CORE_RULES,
+      coreRules,
       'Return this module with the exact markers and no prose inside the block:',
       SAFETY_BATCH_BLOCK_START,
-      SCHEMA_HINT,
+      sourceNavigation ? SCHEMA_HINT : SOURCE_FREE_SCHEMA_HINT,
       SAFETY_BATCH_BLOCK_END,
     ].join('\n\n')
   }
@@ -300,13 +317,14 @@ export class GenerateSafetyAlertsUseCase {
   parseBatchModuleResult(
     text: string,
     catalog?: SummarySourceCatalogEntry[],
+    sourceNavigation = true,
   ): SafetyScanResult | null {
     const startIndex = text.indexOf(SAFETY_BATCH_BLOCK_START)
     if (startIndex < 0) return null
     const contentStart = startIndex + SAFETY_BATCH_BLOCK_START.length
     const endIndex = text.indexOf(SAFETY_BATCH_BLOCK_END, contentStart)
     if (endIndex < 0) return null
-    return this.parseScanResult(text.slice(contentStart, endIndex), catalog)
+    return this.parseScanResult(text.slice(contentStart, endIndex), catalog, sourceNavigation)
   }
 
   /**
@@ -314,7 +332,11 @@ export class GenerateSafetyAlertsUseCase {
    * isn't usable JSON / fails schema validation. Strips ```json fences and any
    * prose around the outermost JSON object.
    */
-  parseScanResult(text: string, catalog?: SummarySourceCatalogEntry[]): SafetyScanResult | null {
+  parseScanResult(
+    text: string,
+    catalog?: SummarySourceCatalogEntry[],
+    sourceNavigation = true,
+  ): SafetyScanResult | null {
     const raw = tryExtractJsonValue(text)
     if (raw === null) return null
     const parsed = SafetyScanResultSchema.safeParse(raw)
@@ -324,9 +346,12 @@ export class GenerateSafetyAlertsUseCase {
       scannedCount: parsed.data.scannedCount,
       alerts: parsed.data.alerts.map((a, i) => ({
         ...a,
+        sources: sourceNavigation ? a.sources : [],
         id: `sa-${i}`,
         category: normaliseCategory(a.category),
-        unsupportedSourceKeys: findUnsupportedDocumentProcedureSources(a, catalog),
+        unsupportedSourceKeys: sourceNavigation
+          ? findUnsupportedDocumentProcedureSources(a, catalog)
+          : [],
       })),
     }
     return enforceSeverityFloor(filterDuplicateFalsePositives(result, catalog))

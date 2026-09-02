@@ -25,7 +25,16 @@ export interface ContextWindowRetryRequest<TRequest, TResult> {
     requestText: string
   }
   execute: (request: TRequest) => Promise<TResult>
-  onRetry?: (reason: 'local-preflight' | 'provider-overflow', retry: number) => void
+  /** One non-destructive recovery step to try before clinical records are
+   * removed. Return true only when the next build will be smaller (for example,
+   * after disabling an optional source index). It is attempted at most once. */
+  recoverBeforeContextReduction?: (
+    reason: 'local-preflight' | 'provider-overflow',
+  ) => boolean
+  onRetry?: (
+    reason: 'local-preflight' | 'provider-overflow' | 'optional-overhead-removed',
+    retry: number,
+  ) => void
 }
 
 export interface ContextWindowRetryResult<TResult> {
@@ -62,6 +71,17 @@ export async function runWithContextWindowRetry<TRequest, TResult>(
     : options.clinicalContext
   let fallbackIndex = 0
   let retryCount = 0
+  let optionalRecoveryAttempted = false
+
+  const recoverOptionalOverhead = (
+    reason: 'local-preflight' | 'provider-overflow',
+  ): boolean => {
+    if (optionalRecoveryAttempted || !options.recoverBeforeContextReduction) return false
+    optionalRecoveryAttempted = true
+    if (!options.recoverBeforeContextReduction(reason)) return false
+    options.onRetry?.('optional-overhead-removed', retryCount)
+    return true
+  }
 
   const reduceClinicalContext = (): boolean => {
     const currentTokens = estimateTokens(clinicalContext)
@@ -90,6 +110,7 @@ export async function runWithContextWindowRetry<TRequest, TResult>(
       },
     )
     if (localOverflow) {
+      if (recoverOptionalOverhead('local-preflight')) continue
       if (reduceClinicalContext()) {
         options.onRetry?.('local-preflight', retryCount)
         continue
@@ -104,10 +125,9 @@ export async function runWithContextWindowRetry<TRequest, TResult>(
         retryCount,
       }
     } catch (error) {
-      if (
-        isProviderContextWindowExceededError(error) &&
-        reduceClinicalContext()
-      ) {
+      if (!isProviderContextWindowExceededError(error)) throw error
+      if (recoverOptionalOverhead('provider-overflow')) continue
+      if (reduceClinicalContext()) {
         options.onRetry?.('provider-overflow', retryCount)
         continue
       }

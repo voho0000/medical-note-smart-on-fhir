@@ -245,6 +245,8 @@ export function useProcedureRows(procedures: any[]) {
         institution: f.performer,
         effectiveDate: f.performed,
         procedureCategory: f.procedureCategory,
+        procedureIds: [procedure?.id, ...children.map((child) => child?.id)]
+          .filter((id): id is string => Boolean(id)),
         // Number of sub-procedures grouped under this session (0 = standalone).
         relatedCount: children.length,
       }

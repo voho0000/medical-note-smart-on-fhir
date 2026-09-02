@@ -1,5 +1,6 @@
 import {
   leftTabForResourceType,
+  leftTabForResourceTarget,
   useResourceNavigationStore,
 } from '@/src/application/stores/resource-navigation.store'
 
@@ -21,6 +22,18 @@ describe('leftTabForResourceType', () => {
 
   it('returns null for an unknown type (caller falls back to a toast)', () => {
     expect(leftTabForResourceType('Practitioner')).toBeNull()
+  })
+
+  it('routes linked procedures to visits and standalone procedures to reports', () => {
+    expect(leftTabForResourceTarget({
+      resourceType: 'Procedure',
+      resourceId: 'linked-procedure',
+      encounterId: 'encounter-1',
+    })).toBe('visits')
+    expect(leftTabForResourceTarget({
+      resourceType: 'Procedure',
+      resourceId: 'standalone-procedure',
+    })).toBe('reports')
   })
 
   it('records which navigation request the destination consumed', () => {

@@ -13,6 +13,9 @@ import { create } from 'zustand'
 export interface ResourceNavTarget {
   resourceType: string
   resourceId: string
+  /** Parent visit for an encounter-linked Procedure. If absent, a Procedure
+   *  is standalone and navigates to Reports > Procedures instead. */
+  encounterId?: string
   /** For the fallback toast ("2026-06-02 胸腔檢查"). */
   display?: string
   date?: string
@@ -59,6 +62,14 @@ export function leftTabForResourceType(resourceType: string): string | null {
     default:
       return null
   }
+}
+
+/** Resource-aware routing for cases where one FHIR type has two UI owners. */
+export function leftTabForResourceTarget(target: ResourceNavTarget): string | null {
+  if (target.resourceType === 'Procedure') {
+    return target.encounterId ? 'visits' : 'reports'
+  }
+  return leftTabForResourceType(target.resourceType)
 }
 
 // Raw reports are built lazily and then mounted through a virtualized list.

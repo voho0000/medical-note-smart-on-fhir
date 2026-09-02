@@ -7,7 +7,10 @@ import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
-import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import type {
+  MedicalSummaryCardErrors,
+  MedicalSummaryResult,
+} from '@/src/core/entities/medical-summary.entity'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
@@ -76,6 +79,7 @@ interface CompletedBatchStatus {
   summarySlotKey: string
   safetySlotKey: string
   summaryError: string | null
+  summaryCardErrors: MedicalSummaryCardErrors
   safetyError: string | null
   summaryIssue: ContextOverflowIssue | null
   safetyIssue: ContextOverflowIssue | null
@@ -124,6 +128,10 @@ export function useMedicalSummaryOrchestrator() {
     isHydrated: isSummaryHydrated,
     autoGenerate,
     setAutoGenerate: setSummaryAutoGenerate,
+    sourceNavigationEnabled,
+    setSourceNavigationEnabled,
+    sourceNavigationMode,
+    sourceNavigationSourceCount,
     model,
     resolvedModelName,
     setModel: setSummaryModel,
@@ -865,6 +873,13 @@ export function useMedicalSummaryOrchestrator() {
       summaryError: summaryFailed
         ? completedBatch.summaryOutcomeError ?? 'PARSE_FAILED'
         : null,
+      // A failed model can publish valid cards plus per-card errors, then the
+      // presentation layer may return to the last coherent model pair. Capture
+      // those errors with the completed batch so that fallback content cannot
+      // make its failure banner disappear on the next render.
+      summaryCardErrors: {
+        ...(completedSummarySlot?.result?.cardErrors ?? {}),
+      },
       safetyError: safetyFailed
         ? completedBatch.safetyOutcomeError ?? 'PARSE_FAILED'
         : null,
@@ -1059,6 +1074,10 @@ export function useMedicalSummaryOrchestrator() {
     dataReady,
     model,
     autoGenerate: effectiveAutoGenerate,
+    sourceNavigationEnabled,
+    setSourceNavigationEnabled,
+    sourceNavigationMode,
+    sourceNavigationSourceCount,
     setModel,
     setAutoGenerate,
     generate,
@@ -1070,7 +1089,9 @@ export function useMedicalSummaryOrchestrator() {
     isSafetyGenerating: presentedSafetyGenerating,
     isRestoring,
     summaryError: presentedSummaryError,
-    cardErrors: presentedResult?.cardErrors ?? {},
+    cardErrors: scopedBatchStatus
+      ? scopedBatchStatus.summaryCardErrors
+      : presentedResult?.cardErrors ?? {},
     safetyError: presentedSafetyError,
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,

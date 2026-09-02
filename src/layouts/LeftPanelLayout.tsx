@@ -10,7 +10,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import {
   useResourceNavigationStore,
-  leftTabForResourceType,
+  leftTabForResourceTarget,
 } from "@/src/application/stores/resource-navigation.store"
 import { LEFT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
 import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
@@ -103,7 +103,7 @@ export default function ClinicalSummaryFeature() {
 
   useEffect(() => {
     if (!pending) return
-    const target = leftTabForResourceType(pending.resourceType)
+    const target = leftTabForResourceTarget(pending)
     if (target && tabs.some((tab) => tab.id === target)) {
       const timer = window.setTimeout(() => {
         setMountedTabs((previous) => previous.has(target)

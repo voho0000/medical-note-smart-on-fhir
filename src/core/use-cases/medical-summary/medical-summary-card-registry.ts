@@ -22,8 +22,8 @@ export interface MedicalSummaryCardDefinition {
   id: MedicalSummaryCardId
   buildBatchInstruction: (input: GenerateMedicalSummaryInput) => string
   hasCompleteBatchBlock: (text: string) => boolean
-  parseBatch: (text: string, catalog: SummarySourceCatalogEntry[]) => unknown | null
-  parseRetry: (text: string, catalog: SummarySourceCatalogEntry[]) => unknown | null
+  parseBatch: (text: string, catalog: SummarySourceCatalogEntry[], sourceNavigation?: boolean) => unknown | null
+  parseRetry: (text: string, catalog: SummarySourceCatalogEntry[], sourceNavigation?: boolean) => unknown | null
   apply: (
     aggregate: MedicalSummaryCardAggregate,
     value: unknown,
@@ -44,10 +44,10 @@ function createSummaryCardDefinition<T extends MedicalSummaryModuleId>(
       generateMedicalSummaryUseCase.buildBatchCardInstruction(input, moduleId),
     hasCompleteBatchBlock: (text) =>
       generateMedicalSummaryUseCase.hasCompleteBatchModuleBlock(moduleId, text),
-    parseBatch: (text) =>
-      generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, text),
-    parseRetry: (text) =>
-      generateMedicalSummaryUseCase.parseModuleResult(moduleId, text),
+    parseBatch: (text, _catalog, sourceNavigation = true) =>
+      generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, text, sourceNavigation),
+    parseRetry: (text, _catalog, sourceNavigation = true) =>
+      generateMedicalSummaryUseCase.parseModuleResult(moduleId, text, sourceNavigation),
     apply: (aggregate, value) => ({
       ...aggregate,
       summary: generateMedicalSummaryUseCase.mergeModuleResult(
@@ -74,10 +74,10 @@ const SAFETY_CARD_DEFINITION: MedicalSummaryCardDefinition = {
     generateSafetyAlertsUseCase.buildBatchModuleInstruction(input),
   hasCompleteBatchBlock: (text) =>
     generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(text),
-  parseBatch: (text, catalog) =>
-    generateSafetyAlertsUseCase.parseBatchModuleResult(text, catalog),
-  parseRetry: (text, catalog) =>
-    generateSafetyAlertsUseCase.parseScanResult(text, catalog),
+  parseBatch: (text, catalog, sourceNavigation = true) =>
+    generateSafetyAlertsUseCase.parseBatchModuleResult(text, catalog, sourceNavigation),
+  parseRetry: (text, catalog, sourceNavigation = true) =>
+    generateSafetyAlertsUseCase.parseScanResult(text, catalog, sourceNavigation),
   apply: (aggregate, value, catalog) => ({
     ...aggregate,
     safety: {
