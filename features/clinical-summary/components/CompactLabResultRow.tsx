@@ -35,6 +35,10 @@ type CompactLabResultRowProps = {
    *  cost more height than the glyph. Text-bearing trailing must NOT set this;
    *  it is what the second row is for. */
   trailingInline?: boolean
+  /** Align title, clinical value, and metadata as stable scan columns once the
+   *  containing report surface is wide enough. Narrow panels keep the existing
+   *  adaptive flex/wrap behaviour. */
+  alignedDesktopColumns?: boolean
   role?: "button"
   tabIndex?: number
   /** Accessible name for a row that IS the control. Without it the row's whole
@@ -251,6 +255,7 @@ export function CompactLabResultRow({
   valueMaxWidthClassName,
   adaptivePhoneLayout = false,
   trailingInline = false,
+  alignedDesktopColumns = false,
   role,
   tabIndex,
   ariaLabel,
@@ -283,6 +288,7 @@ export function CompactLabResultRow({
         // the column count is irrelevant there and md+ is untouched).
         trailingInline && "max-sm:grid-cols-[minmax(0,1fr)_auto_auto]",
         adaptivePhoneLayout && "min-[380px]:flex min-[380px]:flex-wrap min-[380px]:gap-x-1 min-[380px]:px-2.5 min-[380px]:py-1.5",
+        alignedDesktopColumns && "@min-[800px]:!grid @min-[800px]:grid-cols-[minmax(12rem,1fr)_auto_auto] @min-[800px]:items-center",
         abnormal && "border-red-200 bg-red-50/30 dark:border-rose-500/25 dark:bg-rose-500/[0.06]",
         className,
       )}
@@ -290,6 +296,7 @@ export function CompactLabResultRow({
       <div className={cn(
         "flex min-w-0 basis-[45%] shrink-0 grow-0 items-center gap-1.5",
         adaptivePhoneLayout && "min-[380px]:min-w-[3.75rem] min-[380px]:basis-auto min-[380px]:flex-1 min-[380px]:shrink",
+        alignedDesktopColumns && "@min-[800px]:basis-auto @min-[800px]:grow-0 @min-[800px]:shrink",
         titleColumnClassName,
       )} data-testid="compact-lab-title">
         {leadingTitleContent}
@@ -329,6 +336,7 @@ export function CompactLabResultRow({
           // over. `flex-none` restores the wrap and leaves `ml-auto` working.
           ? "min-[380px]:flex-none min-[380px]:justify-start"
           : "sm:flex-1 sm:justify-start",
+        alignedDesktopColumns && "@min-[800px]:!justify-end",
       )} data-testid="compact-lab-value">
         <CompactValue value={value} abnormal={abnormal} maxWidthClassName={valueMaxWidthClassName} />
         {afterValue}
@@ -361,6 +369,7 @@ export function CompactLabResultRow({
           // source/date cluster from squeezing the clinical name.
           trailingInline ? "col-start-3 row-start-1 shrink-0" : "col-span-2 row-start-2",
           adaptivePhoneLayout && "min-[380px]:col-auto min-[380px]:row-auto min-[380px]:ml-auto min-[380px]:shrink-0",
+          alignedDesktopColumns && "@min-[800px]:!ml-0",
         )} data-testid="compact-lab-meta">
           {trailingContent}
         </div>

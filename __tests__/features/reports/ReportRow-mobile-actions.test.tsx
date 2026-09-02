@@ -216,6 +216,34 @@ describe('ReportRow mobile actions', () => {
     expect(screen.queryByText('1 項')).not.toBeInTheDocument()
   })
 
+  it('keeps vital metadata aligned with the reserved accordion-control column', () => {
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow
+              row={{
+                ...COMPACT_ROW,
+                id: 'vital-height',
+                title: 'Body height',
+                group: 'vitals',
+                sourceProgram: 'adult-preventive',
+              }}
+              defaultOpen={[]}
+            />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('compact-lab-result-row'))
+      .toHaveClass('@min-[800px]:!grid')
+    expect(screen.getByTestId('vital-report-meta'))
+      .toHaveClass('@min-[800px]:grid-cols-[152px_168px_auto]')
+    expect(screen.getByTestId('vital-toggle-slot'))
+      .toHaveClass('@min-[800px]:block', 'h-4', 'w-4')
+  })
+
   it('keeps the standalone trend button on desktop', () => {
     // Desktop interaction is unchanged: a real icon button with its own label,
     // and a row that is NOT a control (hover + click the icon, as before).

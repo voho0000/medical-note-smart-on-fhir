@@ -143,33 +143,46 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         aria-expanded={open}
         className="relative flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg py-2.5 pl-3 pr-9 text-left transition-colors hover:bg-muted/70"
       >
-        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-semibold tabular-nums text-foreground whitespace-nowrap">
-          {dayLabel}
-        </span>
-        <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}>
-          {categoryLabel}
-        </span>
-        <ReportSourceProgramBadge
-          sourceProgram={row.sourceProgram}
-          label={(tr.sourcePrograms as { adultPreventive?: string } | undefined)?.adultPreventive}
-        />
-        {row.institution && (
-          <ReportInstitutionLabel
-            institution={row.institution}
-            locale={locale}
-            className="min-w-0 basis-28 flex-1 max-w-[14rem]"
-          />
-        )}
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {(tr.labDayCount as string).replace('{n}', String(itemCount))}
-        </span>
-        {abnormalCount > 0 && (
-          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', REPORT_ABNORMAL_TONE)}>
-            <AlertCircle className="h-3 w-3" />
-            {(tr.abnormalCount as string).replace('{n}', String(abnormalCount))}
+        <span className="flex min-w-0 flex-1 basis-[20rem] flex-wrap items-center gap-x-2 gap-y-1">
+          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
+            {dayLabel}
           </span>
-        )}
+          <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}>
+            {categoryLabel}
+          </span>
+          <ReportSourceProgramBadge
+            sourceProgram={row.sourceProgram}
+            label={(tr.sourcePrograms as { adultPreventive?: string } | undefined)?.adultPreventive}
+          />
+          {row.institution && (
+            <ReportInstitutionLabel
+              institution={row.institution}
+              locale={locale}
+              className="min-w-0 basis-28 flex-1 max-w-[14rem]"
+            />
+          )}
+        </span>
+        <span
+          data-testid="lab-day-metrics"
+          className="ml-auto grid shrink-0 grid-cols-[5.5rem_6.5rem] items-center gap-2 tabular-nums"
+        >
+          <span
+            data-testid="lab-day-item-count"
+            className="justify-self-end whitespace-nowrap text-xs text-muted-foreground"
+          >
+            {(tr.labDayCount as string).replace('{n}', String(itemCount))}
+          </span>
+          {abnormalCount > 0 && (
+            <span
+              data-testid="lab-day-abnormal-count"
+              className={cn('inline-flex shrink-0 justify-self-start items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', REPORT_ABNORMAL_TONE)}
+            >
+              <AlertCircle className="h-3 w-3" aria-hidden />
+              {(tr.abnormalCount as string).replace('{n}', String(abnormalCount))}
+            </span>
+          )}
+        </span>
         <ChevronDown
           className={cn(
             'absolute right-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground transition-transform duration-200',

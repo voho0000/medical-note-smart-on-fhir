@@ -409,6 +409,61 @@ function formatTimeOnly(date?: string): string {
   return formatSourceTime(date)
 }
 
+/** Stable provenance columns for the vital-sign scan list. A missing source
+ * program keeps its slot on wide report surfaces so institution and date do
+ * not jump sideways between otherwise comparable rows. Narrow panels retain
+ * the existing compact flex layout and natural wrapping. */
+function VitalReportMetadata({
+  row,
+  dateLabel,
+  metaLabel,
+  sourceProgramLabel,
+  locale,
+}: {
+  row: Row
+  dateLabel: string
+  metaLabel: string
+  sourceProgramLabel?: string
+  locale: string
+}) {
+  return (
+    <div
+      data-testid="vital-report-meta"
+      className="flex min-w-0 items-center justify-end gap-1 sm:gap-2 @min-[800px]:!grid @min-[800px]:grid-cols-[152px_168px_auto]"
+    >
+      <span
+        data-testid="vital-source-program-slot"
+        className="contents @min-[800px]:flex @min-[800px]:w-[152px] @min-[800px]:justify-end"
+      >
+        <ReportSourceProgramBadge
+          sourceProgram={row.sourceProgram}
+          label={sourceProgramLabel}
+        />
+      </span>
+      <span
+        data-testid="vital-institution-slot"
+        className="contents @min-[800px]:flex @min-[800px]:w-[168px] @min-[800px]:min-w-0"
+      >
+        {row.institution && (
+          <ReportInstitutionLabel
+            institution={row.institution}
+            locale={locale}
+            className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none @min-[800px]:w-full @min-[800px]:max-w-full"
+          />
+        )}
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="outline" className="px-1.5 py-0 text-xs font-normal whitespace-nowrap">
+            {dateLabel || metaLabel}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>{metaLabel}</TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 // Collapse repeated blank lines so verbose hospital-report text doesn't waste
 // vertical space when expanded inline. Keeps single line breaks intact.
 function compactBlankLines(s: string): string {
@@ -858,6 +913,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
         rangeUnassessedLabel={referenceStrings.unassessed}
         rangeUnassessedTooltip={referenceStrings.unassessedTooltip}
         adaptivePhoneLayout
+        alignedDesktopColumns={row.group === 'vitals'}
         role={rowOpensTrend ? 'button' : undefined}
         tabIndex={rowOpensTrend ? 0 : undefined}
         ariaLabel={rowOpensTrend ? longitudinal.describe(`${row.title} ${value}`) : undefined}
@@ -887,21 +943,38 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 Hidden inside a LabDayGroupCard (hideMeta) — the group header
                 already states both. */}
             {!hideMeta && (
-              <div className="flex min-w-0 items-center justify-end gap-1 sm:shrink-0 sm:gap-2">
-                <ReportSourceProgramBadge
-                  sourceProgram={row.sourceProgram}
-                  label={sourceProgramLabel}
+              row.group === 'vitals' ? (
+                <VitalReportMetadata
+                  row={row}
+                  dateLabel={dateLabel}
+                  metaLabel={metaWithDate}
+                  sourceProgramLabel={sourceProgramLabel}
+                  locale={locale}
                 />
-                {row.institution && (
-                  <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="px-1.5 py-0 text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>{metaWithDate}</TooltipContent>
-                </Tooltip>
-              </div>
+              ) : (
+                <div className="flex min-w-0 items-center justify-end gap-1 sm:shrink-0 sm:gap-2">
+                  <ReportSourceProgramBadge
+                    sourceProgram={row.sourceProgram}
+                    label={sourceProgramLabel}
+                  />
+                  {row.institution && (
+                    <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="px-1.5 py-0 text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>{metaWithDate}</TooltipContent>
+                  </Tooltip>
+                </div>
+              )
+            )}
+            {row.group === 'vitals' && !hideMeta && (
+              <span
+                data-testid="vital-toggle-slot"
+                aria-hidden="true"
+                className="ml-1.5 hidden h-4 w-4 shrink-0 @min-[800px]:block"
+              />
             )}
             {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
               <Badge variant="outline" className="shrink-0 text-xs font-normal tabular-nums whitespace-nowrap">
@@ -1005,6 +1078,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               'min-w-0 items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_auto] max-sm:gap-y-1 max-sm:[&>svg]:col-start-3 max-sm:[&>svg]:row-start-1',
               panelHasNarrative && 'flex-wrap gap-y-1 sm:flex-nowrap',
               row.group === 'procedures' && 'flex-wrap gap-y-1 sm:flex-nowrap',
+              row.group === 'vitals' && '@max-[799px]:!grid @max-[799px]:grid-cols-[minmax(0,1fr)_auto_auto] @max-[799px]:gap-y-1 @max-[799px]:[&>svg]:col-start-3 @max-[799px]:[&>svg]:row-start-1',
+              row.group === 'vitals' && '@min-[800px]:!grid @min-[800px]:grid-cols-[minmax(12rem,1fr)_auto_auto_auto] @min-[800px]:items-center',
             )}
           >
             <div
@@ -1019,6 +1094,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 // already truncates with a hover tooltip; it just needed a
                 // container that could give ground.
                 row.group === 'procedures' ? 'min-w-0 flex-1 basis-0' : 'shrink-0 grow-0 basis-[45%]',
+                row.group === 'vitals' && '@max-[799px]:col-start-1 @max-[799px]:row-start-1 @max-[799px]:basis-auto @max-[799px]:shrink',
+                row.group === 'vitals' && '@min-[800px]:basis-auto @min-[800px]:shrink @min-[800px]:grow-0',
               )}
             >
               {showTypeBadge && <ReportTypeBadge group={row.group} />}
@@ -1040,7 +1117,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             </div>
             <div
               data-testid="report-panel-summary"
-              className="flex shrink-0 items-center gap-1.5 max-sm:col-start-2 max-sm:row-start-1"
+              className={cn(
+                'flex shrink-0 items-center gap-1.5 max-sm:col-start-2 max-sm:row-start-1',
+                row.group === 'vitals' && '@max-[799px]:col-start-2 @max-[799px]:row-start-1',
+                row.group === 'vitals' && '@min-[800px]:w-full @min-[800px]:justify-end',
+              )}
             >
               {/* "N 項" = sub-item count for a lab panel; meaningless for a
                   single procedure event, so hide it there. */}
@@ -1073,25 +1154,37 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 'ml-auto flex shrink-0 items-center gap-2 max-sm:col-span-3 max-sm:col-start-1 max-sm:row-start-2 max-sm:ml-0 max-sm:w-full max-sm:min-w-0 max-sm:justify-start',
                 panelHasNarrative && 'order-last w-full min-w-0 flex-wrap justify-start gap-1.5 sm:order-none sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2',
                 row.group === 'procedures' && 'max-sm:order-last max-sm:w-full max-sm:flex-wrap max-sm:justify-start max-sm:gap-1.5',
+                row.group === 'vitals' && '@max-[799px]:col-span-3 @max-[799px]:col-start-1 @max-[799px]:row-start-2 @max-[799px]:!ml-0 @max-[799px]:w-full @max-[799px]:min-w-0 @max-[799px]:justify-start',
+                row.group === 'vitals' && '@min-[800px]:!ml-0',
               )}
             >
               {hasViewerActions && <NhiViewerActions actions={viewerActions} nestedInButton />}
               {!hideMeta && (
-                <ReportSourceProgramBadge
-                  sourceProgram={row.sourceProgram}
-                  label={sourceProgramLabel}
-                />
-              )}
-              {!hideMeta && row.institution && (
-                <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
-              )}
-              {!hideMeta && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>{accordionMeta}</TooltipContent>
-                </Tooltip>
+                row.group === 'vitals' ? (
+                  <VitalReportMetadata
+                    row={row}
+                    dateLabel={accordionDateLabel}
+                    metaLabel={accordionMeta}
+                    sourceProgramLabel={sourceProgramLabel}
+                    locale={locale}
+                  />
+                ) : (
+                  <>
+                    <ReportSourceProgramBadge
+                      sourceProgram={row.sourceProgram}
+                      label={sourceProgramLabel}
+                    />
+                    {row.institution && (
+                      <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>{accordionMeta}</TooltipContent>
+                    </Tooltip>
+                  </>
+                )
               )}
               {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
                 <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
