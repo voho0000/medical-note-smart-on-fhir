@@ -178,6 +178,44 @@ describe('ReportRow mobile actions', () => {
     ].join('\n')))
   })
 
+  it('shows the blood-pressure reading instead of a one-item count', () => {
+    const bloodPressure: Row = {
+      id: 'vital-blood-pressure',
+      title: 'Blood pressure',
+      meta: 'Vital signs • final',
+      group: 'vitals',
+      institution: '示範康德診所',
+      effectiveDate: '2026-07-15',
+      obs: [{
+        id: 'blood-pressure-observation',
+        code: { text: 'Blood pressure panel' },
+        component: [
+          {
+            code: { coding: [{ system: 'http://loinc.org', code: '8480-6' }] },
+            valueQuantity: { value: 128, unit: 'mmHg' },
+          },
+          {
+            code: { coding: [{ system: 'http://loinc.org', code: '8462-4' }] },
+            valueQuantity: { value: 76, unit: 'mmHg' },
+          },
+        ],
+      }],
+    }
+
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <RightDetailProvider>
+            <ReportRow row={bloodPressure} defaultOpen={[]} />
+          </RightDetailProvider>
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('report-panel-summary')).toHaveTextContent('128/76 mmHg')
+    expect(screen.queryByText('1 項')).not.toBeInTheDocument()
+  })
+
   it('keeps the standalone trend button on desktop', () => {
     // Desktop interaction is unchanged: a real icon button with its own label,
     // and a row that is NOT a control (hover + click the icon, as before).

@@ -43,6 +43,7 @@ import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
 import { ReportTypeBadge } from './ReportTypeBadge'
+import { getSystolicDiastolicBloodPressureSummary } from '../utils/blood-pressure-panel'
 import { formatReportTextForClipboard } from '@/src/shared/utils/report-text-format'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
@@ -927,6 +928,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
   const abnormalCount = countAbnormal(displayObs)
   const accordionDateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
   const accordionMeta = row.meta + (accordionDateLabel ? ` • ${accordionDateLabel}` : '')
+  const bloodPressureSummary = row.group === 'vitals' && displayObs.length === 1
+    ? getSystolicDiastolicBloodPressureSummary(row)
+    : null
 
   // A panel report can ALSO carry a narrative (e.g. a pathology report whose
   // presentedForm text rides as a "Report Summary" obs alongside structured
@@ -1042,7 +1046,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   single procedure event, so hide it there. */}
               {row.group !== "procedures" && (
                 <span className="shrink-0 text-[0.8125rem] font-bold tabular-nums text-foreground">
-                  {displayObs.length} 項
+                  {bloodPressureSummary ?? `${displayObs.length} 項`}
                 </span>
               )}
               {abnormalCount > 0 && (
