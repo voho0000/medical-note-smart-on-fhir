@@ -80,7 +80,7 @@ describe('eGFR name modes', () => {
   const observation = textObs(sourceName)
 
   it('shows the canonical CKD-EPI name in standardized mode', () => {
-    expect(getAnalyteDisplayForMode(observation, 'medical', 'zh-TW', 'standardized')).toBe('EGFR(EPI)')
+    expect(getAnalyteDisplayForMode(observation, 'medical', 'zh-TW', 'standardized')).toBe('eGFR (CKD-EPI)')
     expect(getAnalyteDisplayForMode(observation, 'patient', 'zh-TW', 'standardized')).toBe('腎絲球過濾率 (CKD-EPI)')
   })
 
@@ -103,6 +103,6 @@ describe('cumulative-report column label (key-based, getAnalyteDisplayLabel)', (
   it('medical MDRD column reads the clean clinical "eGFR", not the internal "EGFR(M)" key', () => {
     expect(getAnalyteDisplayLabel('EGFR(M)', 'medical', 'en')).toBe('eGFR')
     // CKD-EPI stays explicit so the two formulas remain distinguishable.
-    expect(getAnalyteDisplayLabel('EGFR(EPI)', 'medical', 'en')).toBe('EGFR(EPI)')
+    expect(getAnalyteDisplayLabel('EGFR(EPI)', 'medical', 'en')).toBe('eGFR (CKD-EPI)')
   })
 })

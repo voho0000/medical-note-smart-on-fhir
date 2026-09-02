@@ -1182,9 +1182,11 @@ export function getAnalyteDisplayLabel(
 // key. getAnalyteLabel (sort / search / AI) still returns the canonical form via
 // CANONICAL_DISPLAY, so the two stay separated. eGFR: canonical stays 'EGFR(M)'
 // (internal MDRD/bare disambiguator) but clinicians expect a clean 'eGFR' header;
-// CKD-EPI keeps its explicit 'EGFR(EPI)' so both formulas stay distinguishable.
+// CKD-EPI keeps its explicit method name so both formulas stay distinguishable,
+// while using the conventional mixed-case "eGFR" clinical spelling.
 const MEDICAL_HEADER_OVERRIDE: Record<string, string> = {
   'EGFR(M)': 'eGFR',
+  'EGFR(EPI)': 'eGFR (CKD-EPI)',
 }
 
 export function getAnalyteDisplayParts(
