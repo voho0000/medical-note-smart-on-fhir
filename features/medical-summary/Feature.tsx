@@ -106,6 +106,7 @@ import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-exec
 import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
 import { AiExecutionDiagnosticsDialog } from "@/src/shared/components/AiExecutionDiagnosticsDialog"
 import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
+import { useAuth } from "@/src/application/providers/auth.provider"
 
 type SummaryView = "standard" | "custom"
 
@@ -123,6 +124,7 @@ function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
 
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
+  const { loading: authLoading } = useAuth()
   const { audience } = useAudience()
   const { setActiveTab } = useRightPanel()
   const { diagnosticReports, observations } = useClinicalData()
@@ -214,6 +216,7 @@ export default function MedicalSummaryFeature() {
     safetyGenerationSlotKey,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
+    authLoading,
     hasPatient,
     // `result` is already scoped to the current patient, FHIR input signature,
     // locale, audience, and selected model cache slot. Matching provenance
