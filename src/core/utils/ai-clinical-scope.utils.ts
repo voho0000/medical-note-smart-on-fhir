@@ -18,6 +18,7 @@ import {
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
+import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
 
 const LAB_FALLBACK_SAMPLING_DAYS = 3
 const NHI_VIEWER_REQUEST_EXTENSION_URL =
@@ -223,6 +224,11 @@ export function scopeClinicalDataForAi(
   includedDocumentIds: string[],
   nowMs = Date.now(),
 ): Partial<ClinicalDataCollection> {
+  // Apply the product-level domain exclusions before any time-window or
+  // category scoping. This also keeps excluded records out of citations and
+  // structured source catalogs, not only the human-readable prompt text.
+  input = filterAiExcludedClinicalDomains(input)
+
   const encounters = selection.encounters
     ? filterEncounterRecords(input.encounters ?? [], filters.encounterTimeRange, input)
     : []

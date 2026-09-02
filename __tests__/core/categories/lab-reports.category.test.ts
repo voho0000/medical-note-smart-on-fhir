@@ -108,6 +108,42 @@ describe('labReportsCategory — per-analyte trend', () => {
   })
 })
 
+describe('labReportsCategory — source finality status', () => {
+  const render = (status: string, depth: 'latest' | '8') => {
+    const statusData = [{
+      resourceType: 'Observation',
+      status,
+      code: { text: 'Creatinine' },
+      valueQuantity: { value: 0.8, unit: 'mg/dL' },
+      effectiveDateTime: '2026-06-08',
+    }] as any
+    const section = labReportsCategory.getContextSection(
+      statusData,
+      { labDepth: depth, labReportTimeRange: 'all' } as any,
+      { observations: [] },
+    )
+    return (Array.isArray(section) ? [] : section?.items ?? []).join('\n')
+  }
+
+  it.each(['latest', '8'] as const)(
+    'suppresses repeated unknown markers and emits one section-level note in %s mode',
+    (depth) => {
+      const output = render('unknown', depth)
+
+      expect(output).toContain('0.8')
+      expect(output).not.toContain('{status:unknown}')
+      expect(output.match(/laboratory report finality status is unavailable/g)).toHaveLength(1)
+    },
+  )
+
+  it('continues to flag actionable non-final statuses per result', () => {
+    const output = render('preliminary', '8')
+
+    expect(output).toContain('{status:preliminary}')
+    expect(output).not.toContain('finality status is unavailable')
+  })
+})
+
 describe('labReportsCategory — pivot rendering (full-history mode)', () => {
   // Properly-coded analytes (WBC/CREA hit the canonical alias maps) so they
   // land in pivot tables; WBC has abnormal cells so it also drives Key trends.
