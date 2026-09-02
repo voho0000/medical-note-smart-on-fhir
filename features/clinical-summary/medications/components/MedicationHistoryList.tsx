@@ -18,6 +18,7 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+import { compactMedicationDate } from '../utils/medication-date-display'
 import { MedicationItem } from './MedicationItem'
 
 export type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
@@ -52,10 +53,15 @@ function latestDateOf(m?: MedicationRow): string {
   return m?.endDate || m?.stoppedOn || m?.startedOn || ''
 }
 
-/** "start → end" when both known, else whichever single date exists. */
-function dateRangeOf(m: MedicationRow): string {
-  if (m.startedOn && m.endDate) return `${m.startedOn} → ${m.endDate}`
-  return m.endDate || m.stoppedOn || m.startedOn || ''
+/** Compact "start → end" shared with the collapsed medication row. */
+function dateRangeOf(m: MedicationRow, locale: string): string {
+  if (m.startedOn && m.endDate) {
+    return `${compactMedicationDate(m.startedOn, locale)} → ${compactMedicationDate(m.endDate, locale)}`
+  }
+  return compactMedicationDate(
+    m.endDate || m.stoppedOn || m.startedOn,
+    locale,
+  )
 }
 
 interface MedicationHistoryListProps {
@@ -300,8 +306,9 @@ export function MedicationHistoryDetails({
   return (
     <div id={id} className={cn('space-y-1', className)}>
       {medications.map((medication, index) => {
-        const parts: string[] = []
-        const range = dateRangeOf(medication)
+        const scheduleParts: Array<{ key: string; text: string }> = []
+        const metadataParts: string[] = []
+        const range = dateRangeOf(medication, locale)
         const durationLabel = medication.durationDays !== undefined
           ? (mt.durationCompact ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d'))
             .replace('{n}', formatCompactNumber(medication.durationDays))
@@ -309,28 +316,41 @@ export function MedicationHistoryDetails({
         const durationSuffix = durationLabel
           ? (locale.startsWith('zh') ? `（${durationLabel}）` : ` (${durationLabel})`)
           : ''
-        if (range) parts.push(`${range}${durationSuffix}`)
-        else if (durationLabel) parts.push(durationLabel)
-        if (medication.dose) parts.push(medication.dose)
-        if (medication.route) parts.push(medication.route)
-        if (medication.frequency) parts.push(medication.frequency)
+        if (range) scheduleParts.push({ key: 'date', text: `${range}${durationSuffix}` })
+        else if (durationLabel) scheduleParts.push({ key: 'duration', text: durationLabel })
+        if (medication.dose) scheduleParts.push({ key: 'dose', text: medication.dose })
+        if (medication.route) scheduleParts.push({ key: 'route', text: medication.route })
+        if (medication.frequency) {
+          scheduleParts.push({ key: 'frequency', text: medication.frequency })
+        }
         if (medication.totalQuantity !== undefined) {
-          parts.push(
-            (mt.totalQuantityCompact
+          scheduleParts.push({
+            key: 'total-quantity',
+            text: (mt.totalQuantityCompact
               ?? (locale.startsWith('zh') ? '總量 {n}' : 'Total {n}'))
               .replace('{n}', formatCompactNumber(medication.totalQuantity)),
-          )
+          })
         }
-        if (medication.pharmacy) parts.push(medication.pharmacy)
+        if (medication.pharmacy) metadataParts.push(medication.pharmacy)
         if (isMedical && medication.icdCode) {
-          parts.push(
+          metadataParts.push(
             `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`,
           )
         }
+        const scheduleText = scheduleParts.reduce((text, part, partIndex) => {
+          if (partIndex === 0) return part.text
+          const previousKey = scheduleParts[partIndex - 1]?.key
+          const separator = part.key === 'frequency'
+            && (previousKey === 'date' || previousKey === 'duration')
+            ? ''
+            : ' '
+          return `${text}${separator}${part.text}`
+        }, '')
+        const text = [scheduleText, ...metadataParts].filter(Boolean).join(' · ')
         return (
           <MedicationHistoryDetail
             key={medication.id || index}
-            text={parts.length > 0 ? parts.join('  ·  ') : (mt.noDetail ?? '')}
+            text={text || (mt.noDetail ?? '')}
           />
         )
       })}
