@@ -143,25 +143,44 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         aria-expanded={open}
         className="relative flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg py-2.5 pl-3 pr-9 text-left transition-colors hover:bg-muted/70"
       >
-        <span className="flex min-w-0 flex-1 basis-[20rem] flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          data-testid="lab-day-identity-columns"
+          className="grid min-w-0 flex-1 basis-[20rem] grid-cols-[1rem_4.5rem_minmax(0,1fr)] items-center gap-x-1 gap-y-1 @min-[300px]:grid-cols-[1rem_4.5rem_4.5rem_minmax(0,1fr)] @min-[560px]:grid-cols-[1rem_6rem_10rem_minmax(0,1fr)] @min-[560px]:gap-x-2"
+        >
           <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
+          <span
+            data-testid="lab-day-date"
+            className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground"
+          >
             {dayLabel}
           </span>
-          <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}>
-            {categoryLabel}
-          </span>
-          <ReportSourceProgramBadge
-            sourceProgram={row.sourceProgram}
-            label={(tr.sourcePrograms as { adultPreventive?: string } | undefined)?.adultPreventive}
-          />
-          {row.institution && (
-            <ReportInstitutionLabel
-              institution={row.institution}
-              locale={locale}
-              className="min-w-0 basis-28 flex-1 max-w-[14rem]"
+          <span
+            data-testid="lab-day-classification"
+            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+          >
+            <span
+              data-testid="lab-day-category"
+              className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', REPORT_CATEGORY_TONE)}
+            >
+              {categoryLabel}
+            </span>
+            <ReportSourceProgramBadge
+              sourceProgram={row.sourceProgram}
+              label={(tr.sourcePrograms as { adultPreventive?: string } | undefined)?.adultPreventive}
             />
-          )}
+          </span>
+          <span
+            data-testid="lab-day-institution-slot"
+            className="col-span-2 col-start-2 row-start-2 flex min-w-0 w-full @min-[300px]:col-span-1 @min-[300px]:col-start-4 @min-[300px]:row-start-1"
+          >
+            {row.institution && (
+              <ReportInstitutionLabel
+                institution={row.institution}
+                locale={locale}
+                className="min-w-0 flex-1 max-w-full"
+              />
+            )}
+          </span>
         </span>
         <span
           data-testid="lab-day-metrics"

@@ -82,4 +82,51 @@ describe('LabDayGroupCard source-program provenance', () => {
     expect(screen.getByTestId('lab-day-abnormal-count'))
       .toHaveClass('justify-self-start')
   })
+
+  it('keeps date, category, source, and institution in stable scan columns', () => {
+    const member: Row = {
+      id: 'adult-preventive-creatinine',
+      title: 'CREA',
+      meta: 'Observation Group',
+      group: 'lab',
+      institution: '示範長青醫院',
+      effectiveDate: '2026-06-02T00:00:00+08:00',
+      sourceProgram: 'adult-preventive',
+      obs: [{
+        id: 'adult-preventive-creatinine-observation',
+        code: { text: 'CREA' },
+        valueQuantity: { value: 1.9, unit: 'mg/dL' },
+      }],
+    }
+    const row: Row = {
+      ...member,
+      id: 'labday:adult-preventive-creatinine',
+      obs: [],
+      dayGroup: true,
+      dayGroupCategoryId: 'chem',
+      dayGroupLabelIds: ['chem'],
+      groupedRows: [member],
+    }
+
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <LabDayGroupCard row={row} defaultOpen={[]} />
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('lab-day-identity-columns'))
+      .toHaveClass(
+        'grid-cols-[1rem_4.5rem_minmax(0,1fr)]',
+        '@min-[300px]:grid-cols-[1rem_4.5rem_4.5rem_minmax(0,1fr)]',
+        '@min-[560px]:grid-cols-[1rem_6rem_10rem_minmax(0,1fr)]',
+      )
+    expect(screen.getByTestId('lab-day-institution-slot'))
+      .toHaveClass('row-start-2', '@min-[300px]:row-start-1')
+    expect(screen.getByTestId('lab-day-classification'))
+      .toContainElement(screen.getByTestId('report-source-program'))
+    expect(screen.getByTestId('lab-day-category')).toHaveTextContent('生化')
+    expect(screen.getByTestId('lab-day-institution-slot')).toHaveTextContent('示範長青醫院')
+  })
 })
