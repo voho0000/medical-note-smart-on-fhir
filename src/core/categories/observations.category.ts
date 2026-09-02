@@ -7,7 +7,6 @@ import type { Observation } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { selectOtherObservations } from '../utils/observation-selectors'
 import { expandObservationValues, observationDisplayValue } from '../utils/observation-value.utils'
-import { normalizeClinicalStatus } from '../utils/clinical-context-selection.utils'
 
 export const observationsCategory: DataCategory<Observation> = {
   id: 'observations',
@@ -100,11 +99,9 @@ export const observationsCategory: DataCategory<Observation> = {
       expandObservationValues(obs).flatMap((valueObservation) => {
         const display = observationDisplayValue(valueObservation)
         if (!display) return []
-        const status = normalizeClinicalStatus((obs as any).status) || 'unknown'
-        const invalid = status === 'entered-in-error' ? '; INVALIDATED—do not use as a clinical fact' : ''
         const unit = display.unit ? ` ${display.unit}` : ''
         const date = (obs as any).effectiveDateTime ? ` (${String((obs as any).effectiveDateTime).slice(0, 10)})` : ''
-        return [`${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Observation'}: ${display.value}${unit}${date} [status: ${status}${invalid}]`]
+        return [`${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Observation'}: ${display.value}${unit}${date}`]
       }),
     )
 

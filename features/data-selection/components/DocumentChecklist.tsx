@@ -1,7 +1,8 @@
 "use client"
 
-// Per-document picker for the 文件 category. Default mode is 最近一次住院 (latest
-// discharge summary); ticking any document switches to a custom set. Uses the
+// Per-document picker for the 文件 category. Default mode keeps the latest
+// discharge summary per institution + first ICD; ticking any document switches
+// to a custom set. Uses the
 // shared core helper so the ticked ids match exactly what the AI-context builder
 // includes.
 import { useMemo } from "react"
@@ -13,6 +14,7 @@ import {
   type DocumentMode,
 } from "@/src/core/utils/clinical-documents.utils"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
+import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 
 interface DocumentChecklistProps {
   clinicalData: ClinicalDataCollection
@@ -30,7 +32,7 @@ export function DocumentChecklist({
   displayedDocumentMode,
   displayedDocumentIds,
 }: DocumentChecklistProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const dataSelection = useDataSelection()
   const profile = dataSelection.getProfile(consumer)
   const savedDocumentMode = consumer === 'insights' ? dataSelection.documentMode : profile.documentMode
@@ -64,6 +66,7 @@ export function DocumentChecklist({
   }
 
   const MODES: Array<{ id: DocumentMode; label: string }> = [
+    { id: 'deduplicatedAdmissions', label: ds.docModeDeduplicatedAdmissions ?? '自動' },
     { id: 'latestAdmission', label: ds.docModeLatestAdmission ?? '最近一次住院' },
     { id: 'recentAdmissions', label: ds.docModeRecentAdmissions ?? '最近三次住院' },
     { id: 'all', label: ds.docModeAll ?? '全部' },
@@ -72,7 +75,7 @@ export function DocumentChecklist({
 
   return (
     <div className="space-y-2">
-      <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+      <div className="inline-flex flex-wrap rounded-md border bg-muted/40 p-0.5">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -86,10 +89,23 @@ export function DocumentChecklist({
           </button>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground">
+        {ds.docModeDeduplicatedAdmissionsHint
+          ?? '自動：每個機構＋第一個 ICD 只保留最新一份；其他選項依選擇原樣納入。'}
+      </p>
       <div className="space-y-0.5">
         {docs.map((d) => {
           const checked = selectedIds.has(d.id)
-          const date = d.date ? new Date(d.date).toLocaleDateString() : ''
+          const date = d.date ? new Date(d.date).toLocaleDateString(locale) : ''
+          const organization = d.organization
+            ? formatOrganizationDisplay(d.organization, locale)
+            : ''
+          const metadata = [date, organization].filter(Boolean)
+          const repeatsDischargeTitle = d.isDischargeSummary
+            && /(?:出院病摘|discharge\s+summary)/i.test(d.title)
+          const primaryIcdDescription = locale === 'en'
+            ? (d.primaryIcdDescriptionEn || d.primaryIcdDescription)
+            : (d.primaryIcdDescription || d.primaryIcdDescriptionEn)
           return (
             <label
               key={d.id}
@@ -104,13 +120,21 @@ export function DocumentChecklist({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className={`truncate ${checked ? '' : 'text-muted-foreground'}`}>{d.title}</span>
-                  {d.isDischargeSummary && (
+                  {d.isDischargeSummary && !repeatsDischargeTitle && (
                     <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[0.625rem] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                       {ds.dischargeBadge ?? '出院病摘'}
                     </span>
                   )}
                 </span>
-                {date && <span className="block text-[0.625rem] text-muted-foreground">{date}</span>}
+                {metadata.length > 0 && (
+                  <span className="block text-xs text-muted-foreground">{metadata.join(' · ')}</span>
+                )}
+                {d.primaryIcdCode && (
+                  <span className="block text-xs text-muted-foreground">
+                    ICD <span className="font-semibold text-foreground">{d.primaryIcdCode}</span>
+                    {primaryIcdDescription ? ` ${primaryIcdDescription}` : ''}
+                  </span>
+                )}
               </span>
             </label>
           )

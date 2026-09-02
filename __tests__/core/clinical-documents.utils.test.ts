@@ -101,6 +101,82 @@ describe('clinical-documents.utils', () => {
       expect(resolveSelectedDocuments(docs, 'latestAdmission', []).map((d) => d.id)).toEqual(['dc1'])
     })
 
+    it('keeps only the newest discharge summary for each institution and first ICD code', () => {
+      const grouped = listClinicalDocuments({
+        encounters: [
+          {
+            id: 'same-new',
+            serviceProvider: { reference: 'Organization/a', display: '甲醫院' },
+            reasonCode: [
+              {
+                coding: [{ code: 'N39.0', display: 'Urinary tract infection, site not specified' }],
+                text: 'N39.0 未明示部位之泌尿道感染症',
+              },
+              { coding: [{ code: 'E11.9' }] },
+            ],
+          },
+          {
+            id: 'same-old',
+            serviceProvider: { reference: 'Organization/a', display: '甲醫院' },
+            reasonCode: [{ coding: [{ code: 'N39.0' }] }],
+          },
+          {
+            id: 'different-icd',
+            serviceProvider: { reference: 'Organization/a', display: '甲醫院' },
+            reasonCode: [{ coding: [{ code: 'N70.93' }] }],
+          },
+          {
+            id: 'different-org',
+            serviceProvider: { reference: 'Organization/b', display: '乙醫院' },
+            reasonCode: [{ coding: [{ code: 'N39.0' }] }],
+          },
+        ],
+        documentReferences: [
+          ['new', '2026-03-01', 'same-new'],
+          ['old', '2025-03-01', 'same-old'],
+          ['other-icd', '2025-02-01', 'different-icd'],
+          ['other-org', '2025-01-01', 'different-org'],
+        ].map(([id, date, encounterId]) => ({
+          id,
+          date,
+          type: { coding: [{ code: '18842-5' }] },
+          context: { encounter: [{ reference: `Encounter/${encounterId}` }] },
+          content: [{ attachment: { contentType: 'text/plain', data: btoa(id) } }],
+        })),
+      } as any)
+
+      expect(resolveSelectedDocuments(grouped, 'deduplicatedAdmissions', []).map((d) => d.id))
+        .toEqual(['new', 'other-icd', 'other-org'])
+      expect(resolveSelectedDocuments(grouped, 'custom', ['new', 'old']).map((d) => d.id))
+        .toEqual(['new', 'old'])
+      expect(grouped.find((d) => d.id === 'new')).toMatchObject({
+        organization: '甲醫院',
+        primaryIcdCode: 'N39.0',
+        primaryIcdDescription: '未明示部位之泌尿道感染症',
+        primaryIcdDescriptionEn: 'Urinary tract infection, site not specified',
+      })
+    })
+
+    it('does not merge discharge summaries when institution or ICD evidence is missing', () => {
+      const incomplete = listClinicalDocuments({
+        documentReferences: [
+          {
+            id: 'new',
+            date: '2026-03-01',
+            type: { coding: [{ code: '18842-5' }] },
+          },
+          {
+            id: 'old',
+            date: '2025-03-01',
+            type: { coding: [{ code: '18842-5' }] },
+          },
+        ],
+      } as any)
+
+      expect(resolveSelectedDocuments(incomplete, 'deduplicatedAdmissions', []).map((d) => d.id))
+        .toEqual(['new', 'old'])
+    })
+
     it('all returns every document', () => {
       expect(resolveSelectedDocuments(docs, 'all', []).length).toBe(3)
     })

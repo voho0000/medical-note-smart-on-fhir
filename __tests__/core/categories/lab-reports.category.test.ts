@@ -11,14 +11,17 @@ const observations = [
 ]
 
 const data = [
-  { resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-01-10', result: [{ reference: 'Observation/cr1' }] },
-  { resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-03-10', result: [{ reference: 'Observation/cr2' }] },
-  { resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-05-10', result: [{ reference: 'Observation/cr3' }, { reference: 'Observation/hb1' }] },
-  { resourceType: 'Observation', code: { text: 'CRP' }, valueQuantity: { value: 5, unit: 'mg/L' }, effectiveDateTime: '2026-05-12' },
-  { resourceType: 'DiagnosticReport', code: { text: 'Blood Culture' }, conclusion: 'No growth', effectiveDateTime: '2026-05-11', result: [] },
+  { id: 'cmp-jan', resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-01-10', result: [{ reference: 'Observation/cr1' }] },
+  { id: 'cmp-mar', resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-03-10', result: [{ reference: 'Observation/cr2' }] },
+  { id: 'cmp-may', resourceType: 'DiagnosticReport', code: { text: 'CMP' }, effectiveDateTime: '2026-05-10', result: [{ reference: 'Observation/cr3' }, { reference: 'Observation/hb1' }] },
+  { id: 'crp1', resourceType: 'Observation', code: { text: 'CRP' }, valueQuantity: { value: 5, unit: 'mg/L' }, effectiveDateTime: '2026-05-12' },
+  { id: 'culture1', resourceType: 'DiagnosticReport', code: { text: 'Blood Culture' }, conclusion: 'No growth', effectiveDateTime: '2026-05-11', result: [] },
 ] as any
 
-const all = { observations }
+const all = {
+  observations: [...observations, data[3]],
+  diagnosticReports: data.filter((item: any) => item.resourceType === 'DiagnosticReport'),
+}
 const section = (depth: 'latest' | '3' | '8' | '16' | 'all') =>
   labReportsCategory.getContextSection(data, { labDepth: depth, labReportTimeRange: 'all' } as any, all)
 
@@ -45,6 +48,7 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(cr).toContain('[H]') // the 2.1 reading is flagged high
     expect(cr.indexOf('1.2')).toBeLessThan(cr.indexOf('2.1')) // oldest first
     expect(cr).toContain('(mg/dL)') // unit in the header
+    expect(cr).not.toMatch(/\[O\d+\]/)
   })
 
   it('latest → only the most recent value per analyte', () => {
@@ -56,6 +60,7 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(cr).toContain('2.1')
     expect(cr).not.toContain('1.2') // older readings dropped
     expect(cr).not.toContain('→')
+    expect(cr).not.toMatch(/\[O\d+\]/)
   })
 
   it("depth='all' renders every reading uncapped (no …earlier elision)", () => {
@@ -86,7 +91,8 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(chemTable).toBeTruthy()
     expect(chemTable).toContain('CRP')
     expect(chemTable).toContain('\n| 2026-05-12 |')
-    expect(items.some((i) => i.includes('No growth'))).toBe(true)
+    expect(chemTable).not.toMatch(/\[O\d+\]/)
+    expect(items.find((i) => i.includes('No growth'))).not.toMatch(/\[L\d+\]/)
   })
 
   it('keeps non-lab standalone observations out of Lab Reports and in Other Observations', () => {
@@ -108,7 +114,7 @@ describe('labReportsCategory — per-analyte trend', () => {
   })
 })
 
-describe('labReportsCategory — source finality status', () => {
+describe('labReportsCategory — source status omission', () => {
   const render = (status: string, depth: 'latest' | '8') => {
     const statusData = [{
       resourceType: 'Observation',
@@ -126,21 +132,22 @@ describe('labReportsCategory — source finality status', () => {
   }
 
   it.each(['latest', '8'] as const)(
-    'suppresses repeated unknown markers and emits one section-level note in %s mode',
+    'omits unknown status and finality commentary in %s mode',
     (depth) => {
       const output = render('unknown', depth)
 
       expect(output).toContain('0.8')
       expect(output).not.toContain('{status:unknown}')
-      expect(output.match(/laboratory report finality status is unavailable/g)).toHaveLength(1)
+      expect(output).not.toContain('finality status')
     },
   )
 
-  it('continues to flag actionable non-final statuses per result', () => {
+  it('also omits non-final source statuses', () => {
     const output = render('preliminary', '8')
 
-    expect(output).toContain('{status:preliminary}')
-    expect(output).not.toContain('finality status is unavailable')
+    expect(output).toContain('0.8')
+    expect(output).not.toContain('{status:preliminary}')
+    expect(output).not.toContain('status')
   })
 })
 

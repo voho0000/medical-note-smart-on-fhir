@@ -14,13 +14,14 @@ describe('immunizationsCategory', () => {
     expect(section?.items[1]).toContain('lot=A')
   })
 
-  it('labels entered-in-error records as invalid rather than administered', () => {
+  it('does not send source status semantics to the AI context', () => {
     const section = immunizationsCategory.getContextSection([{
       id: 'error',
       status: 'entered-in-error',
       vaccineCode: { text: 'Incorrect vaccine record' },
     }] as any, { immunizationTimeRange: 'all' }) as any
 
-    expect(section?.items[0]).toContain('INVALIDATED—do not treat as administered')
+    expect(section?.items[0]).toBe('Incorrect vaccine record')
+    expect(section?.items[0]).not.toContain('entered-in-error')
   })
 })

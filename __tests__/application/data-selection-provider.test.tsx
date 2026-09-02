@@ -101,7 +101,7 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled exports', (
 
     const stored = JSON.parse(localStorage.getItem('clinicalDataProfiles') ?? '{}')
     expect(stored.aiExport.documentIds).toBeUndefined()
-    expect(stored.aiExport.documentMode).toBe('latestAdmission')
+    expect(stored.aiExport.documentMode).toBe('deduplicatedAdmissions')
     expect(result.current.getProfile('aiExport').documentIds).toEqual(['patient-document-1'])
   })
 

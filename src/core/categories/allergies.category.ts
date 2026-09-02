@@ -18,15 +18,8 @@ export const allergiesCategory: DataCategory<AllergyIntolerance> = {
   getContextSection: (data): ClinicalContextSection | null => {
     if (data.length === 0) return null
     
-    const statusCode = (status: any): string =>
-      typeof status === 'string' ? status : status?.coding?.[0]?.code || 'unknown'
     const items = data
       .map((allergy: any) => {
-        const clinical = statusCode(allergy.clinicalStatus)
-        const verification = statusCode(allergy.verificationStatus)
-        const invalid = ['refuted', 'entered-in-error'].includes(verification.toLowerCase())
-          ? ' — NOT a verified active allergy'
-          : ''
         const reactions = (allergy.reaction ?? []).flatMap((reaction: any) => {
           const manifestations = (reaction.manifestation ?? [])
             .map((item: any) => item?.text || item?.coding?.[0]?.display)
@@ -34,7 +27,8 @@ export const allergiesCategory: DataCategory<AllergyIntolerance> = {
           const text = reaction.description || manifestations.join(', ')
           return text ? [`reaction=${text}${reaction.severity ? `; severity=${reaction.severity}` : ''}`] : []
         })
-        return `${allergy.code?.text || allergy.code?.coding?.[0]?.display || 'Unknown allergy'} [clinical=${clinical}; verification=${verification}; criticality=${allergy.criticality || 'unknown'}]${invalid}${reactions.length ? `; ${reactions.join('; ')}` : ''}`
+        const criticality = allergy.criticality ? ` [criticality=${allergy.criticality}]` : ''
+        return `${allergy.code?.text || allergy.code?.coding?.[0]?.display || 'Unknown allergy'}${criticality}${reactions.length ? `; ${reactions.join('; ')}` : ''}`
       })
       .filter(Boolean)
     

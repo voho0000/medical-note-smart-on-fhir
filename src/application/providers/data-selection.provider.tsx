@@ -109,7 +109,7 @@ function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS):
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
     filters: { ...defaultFilters },
-    documentMode: 'latestAdmission',
+    documentMode: 'deduplicatedAdmissions',
     documentIds: [],
   }
 }
@@ -182,7 +182,9 @@ export function coerceProfile(
     // specific FHIR document IDs. Those IDs must never be restored from the
     // origin-global preference record, so migrate custom mode to the safe
     // admission default as well.
-    documentMode: mode === 'all' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
+    documentMode: mode === 'all' || mode === 'recentAdmissions' || mode === 'deduplicatedAdmissions'
+      ? mode
+      : 'deduplicatedAdmissions',
     documentIds: [],
   }
 }
@@ -222,7 +224,7 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       Object.entries(profiles).map(([consumer, profile]) => [consumer, {
         selection: profile.selection,
         filters: profile.filters,
-        documentMode: profile.documentMode === 'custom' ? 'latestAdmission' : profile.documentMode,
+        documentMode: profile.documentMode === 'custom' ? 'deduplicatedAdmissions' : profile.documentMode,
       }]),
     ))
   }, [profiles])

@@ -15,11 +15,6 @@ export function useAllergiesContext(
   return useMemo(() => {
     if (!includeAllergies || !clinicalData?.allergies?.length) return null
 
-    const statusCode = (status: any): string | undefined =>
-      typeof status === 'string'
-        ? status
-        : status?.coding?.[0]?.code || status?.text
-
     const conceptText = (concept: any): string | undefined =>
       pickLocalizedText(concept, audience, locale)
       || concept?.text
@@ -28,14 +23,7 @@ export function useAllergiesContext(
 
     const items = clinicalData.allergies.map((allergy: any) => {
       const name = conceptText(allergy.code) || 'Unknown allergy'
-      const clinical = statusCode(allergy.clinicalStatus) || 'unknown'
-      const verification = statusCode(allergy.verificationStatus) || 'unknown'
-      const invalid = ['refuted', 'entered-in-error'].includes(verification.toLowerCase())
-        ? ' — NOT a verified active allergy'
-        : ''
       const meta = [
-        `clinical=${clinical}`,
-        `verification=${verification}`,
         allergy.criticality ? `criticality=${allergy.criticality}` : null,
         allergy.type ? `type=${allergy.type}` : null,
         allergy.category?.length ? `category=${allergy.category.join(',')}` : null,
@@ -50,7 +38,7 @@ export function useAllergiesContext(
         ].filter(Boolean).join('; ')
         return [`reaction: ${description}${reactionMeta ? ` (${reactionMeta})` : ''}`]
       })
-      return `${name} [${meta}]${invalid}${reactions.length ? `; ${reactions.join('; ')}` : ''}`
+      return `${name}${meta ? ` [${meta}]` : ''}${reactions.length ? `; ${reactions.join('; ')}` : ''}`
     })
 
     if (items.length === 0) return null

@@ -9,7 +9,7 @@ describe('coerceProfile — schema migration preserves user choices', () => {
     const p = coerceProfile(undefined)
     expect(p.selection).toEqual(DEFAULT_DATA_SELECTION)
     expect(p.filters).toEqual(DEFAULT_DATA_FILTERS)
-    expect(p.documentMode).toBe('latestAdmission')
+    expect(p.documentMode).toBe('deduplicatedAdmissions')
   })
 
   it('preserves the user toggles even when the stored profile predates new keys', () => {
@@ -42,7 +42,7 @@ describe('coerceProfile — schema migration preserves user choices', () => {
 
   it('drops patient-specific document picks from persistent profiles', () => {
     const p = coerceProfile({ documentMode: 'custom', documentIds: ['a', 'b'] })
-    expect(p.documentMode).toBe('latestAdmission')
+    expect(p.documentMode).toBe('deduplicatedAdmissions')
     expect(p.documentIds).toEqual([])
   })
 

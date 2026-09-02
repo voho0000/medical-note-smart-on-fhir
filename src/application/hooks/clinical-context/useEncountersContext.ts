@@ -18,9 +18,15 @@ import {
   filterEncounterRecords,
   filterMedicationRecords,
   filterProcedureRecords,
-  normalizeClinicalStatus,
 } from "@/src/core/utils/clinical-context-selection.utils"
 import { referenceId } from "@/src/core/utils/observation-selectors"
+import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
+import {
+  getEncounterKindCode,
+  getEncounterKindText,
+} from "@/src/shared/utils/encounter-type.utils"
+
+const MAX_INPATIENT_FRAGMENT_GAP_MS = 7 * 24 * 60 * 60 * 1000
 
 function refId(ref: any): string | undefined {
   return referenceId(ref?.reference)
@@ -47,15 +53,7 @@ function summarizeMedLine(
   const days = durationToDays(m.dispenseRequest?.expectedSupplyDuration)
   const dosing = [dose, freq, route].filter(Boolean).join(', ')
   const dur = days ? ` × ${days}d` : ''
-  const status = normalizeClinicalStatus(m.status) || 'unknown'
-  const semantics = status === 'entered-in-error'
-    ? '; INVALIDATED—do not treat as a medication'
-    : status === 'draft'
-      ? '; DRAFT—not an active order'
-      : status === 'on-hold'
-        ? '; ON HOLD—not currently in use'
-        : ''
-  return `${name}${dosing ? ` (${dosing})` : ''}${dur} [status: ${status}${semantics}]`
+  return `${name}${dosing ? ` (${dosing})` : ''}${dur}`
 }
 
 function summarizeProcLine(
@@ -67,21 +65,77 @@ function summarizeProcLine(
     || p.code?.text
     || p.code?.coding?.[0]?.display
     || 'Procedure'
-  const status = normalizeClinicalStatus(p.status) || 'unknown'
-  const semantics = status === 'not-done'
-    ? '; NOT PERFORMED'
-    : status === 'entered-in-error'
-      ? '; INVALIDATED—do not use as a clinical fact'
-      : ''
-  return `${title} [status: ${status}${semantics}]`
+  return title
 }
 
-function diagnosesFromEncounter(enc: any, dict: Map<string, string>, locale: string): string[] {
+function diagnosesFromEncounter(
+  enc: any,
+  dict: Map<string, string>,
+  locale: string,
+): { labels: string[]; key: string; primaryKey: string } {
   // Handles both new (one entry per diagnosis with English coding[].display)
   // and old (comma-separated codes in reasonCode[0].text) bridge formats.
-  return extractEncounterIcds(enc, dict, locale).map((rc) =>
-    rc.description ? `${rc.code} - ${rc.description}` : rc.code
-  )
+  const diagnoses = extractEncounterIcds(enc, dict, locale)
+  return {
+    labels: diagnoses.map((rc) => rc.description ? `${rc.code} - ${rc.description}` : rc.code),
+    key: [...new Set(diagnoses.map((rc) => rc.code.trim().toUpperCase()).filter(Boolean))]
+      .sort()
+      .join('|'),
+    primaryKey: diagnoses[0]?.code.trim().toUpperCase() ?? '',
+  }
+}
+
+function encounterInterval(encounter: any): { start: number; end: number } | null {
+  const start = Date.parse(encounter?.period?.start ?? '')
+  if (!Number.isFinite(start)) return null
+  const parsedEnd = Date.parse(encounter?.period?.end ?? '')
+  const end = Number.isFinite(parsedEnd) ? Math.max(start, parsedEnd) : start
+  return { start, end }
+}
+
+function intervalsBelongToSameInpatientEpisode(
+  left: { start: number; end: number },
+  right: { start: number; end: number },
+): boolean {
+  return left.start <= right.end + MAX_INPATIENT_FRAGMENT_GAP_MS
+    && right.start <= left.end + MAX_INPATIENT_FRAGMENT_GAP_MS
+}
+
+function inpatientEpisodeRange(visits: any[]): string {
+  const starts = visits.map((visit) => dateOnly(visit?.period?.start)).filter(Boolean) as string[]
+  const ends = visits.map((visit) =>
+    dateOnly(visit?.period?.end) ?? dateOnly(visit?.period?.start),
+  ).filter(Boolean) as string[]
+  const start = starts.sort()[0]
+  const end = ends.sort().at(-1)
+  if (!start) return 'Unknown date'
+  return end && end !== start ? `${start}–${end}` : start
+}
+
+function encounterCareType(encounter: any): 'outpatient' | 'inpatient' | 'emergency' | 'other' {
+  const kind = String(getEncounterKindCode(encounter) ?? '').toLowerCase()
+  const classCode = String(encounter?.class?.code ?? '').toLowerCase()
+  if (['inpatient', 'imp', 'acute', 'ss', 'obsenc', 'prenc'].includes(kind)
+      || ['imp', 'inpatient', 'acute', 'ss', 'obsenc', 'prenc'].includes(classCode)) {
+    return 'inpatient'
+  }
+  if (['emergency', 'emer', 'ed'].includes(kind)
+      || ['emer', 'emergency', 'ed'].includes(classCode)) {
+    return 'emergency'
+  }
+  if (['outpatient', 'outpatient-or-emergency', 'amb', 'ambulatory', 'op'].includes(kind)
+      || ['amb', 'ambulatory', 'outpatient', 'op'].includes(classCode)) {
+    return 'outpatient'
+  }
+  return 'other'
+}
+
+function institutionIdentity(encounter: any, locale: string): { key: string; label: string } {
+  const reference = String(encounter?.serviceProvider?.reference ?? '').trim()
+  const rawDisplay = String(encounter?.serviceProvider?.display ?? '').trim()
+  const label = rawDisplay ? formatOrganizationDisplay(rawDisplay, locale) : ''
+  const fallbackKey = label.normalize('NFKC').toLowerCase()
+  return { key: reference || fallbackKey, label }
 }
 
 export function useEncountersContext(
@@ -134,12 +188,21 @@ export function useEncountersContext(
     // so the time-series isn't fragmented across visits and isn't duplicated.
     const encMap = new Map<string, {
       diagnoses: string[]
+      diagnosisKey: string
+      primaryDiagnosisKey: string
       meds: any[]
       procs: any[]
     }>()
 
     for (const enc of encounters) {
-      encMap.set(enc.id, { diagnoses: diagnosesFromEncounter(enc, icdDict, locale), meds: [], procs: [] })
+      const diagnoses = diagnosesFromEncounter(enc, icdDict, locale)
+      encMap.set(enc.id, {
+        diagnoses: diagnoses.labels,
+        diagnosisKey: diagnoses.key,
+        primaryDiagnosisKey: diagnoses.primaryKey,
+        meds: [],
+        procs: [],
+      })
     }
 
     const push = (encId: string | undefined, key: 'meds' | 'procs', item: any) => {
@@ -160,37 +223,173 @@ export function useEncountersContext(
       clinicalData as { encounters?: any[] },
     )
 
-    const items: string[] = []
+    const orderedVisits = [...visitsToShow].sort((a, b) =>
+      String(b?.period?.start ?? '').localeCompare(String(a?.period?.start ?? '')),
+    )
+    type EncounterGroup = {
+      visits: any[]
+      kind: 'single' | 'outpatient' | 'inpatient-episode'
+      interval?: { start: number; end: number }
+    }
+    const groups: EncounterGroup[] = []
+    const outpatientGroups = new Map<string, EncounterGroup>()
+    const inpatientGroups = new Map<string, EncounterGroup[]>()
+    for (const encounter of orderedVisits) {
+      const entry = encMap.get(encounter.id)
+      const institution = institutionIdentity(encounter, locale)
+      const careType = encounterCareType(encounter)
+      const outpatientGroupable = careType === 'outpatient'
+        && !!institution.key
+        && !!entry?.diagnosisKey
+      const typeKey = String(
+        getEncounterKindCode(encounter) ?? encounter?.class?.code ?? 'outpatient',
+      ).toLowerCase()
+      const outpatientKey = outpatientGroupable
+        ? `${institution.key}\u0000${typeKey}\u0000${entry!.diagnosisKey}`
+        : ''
+      const existingOutpatient = outpatientKey
+        ? outpatientGroups.get(outpatientKey)
+        : undefined
+      if (existingOutpatient) {
+        existingOutpatient.visits.push(encounter)
+        continue
+      }
+      if (outpatientKey) {
+        const group: EncounterGroup = { visits: [encounter], kind: 'outpatient' }
+        groups.push(group)
+        outpatientGroups.set(outpatientKey, group)
+        continue
+      }
 
-    // Per-visit details
-    items.push(`Recent visits (showing ${visitsToShow.length} of ${encounters.length}):`)
-    items.push("Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Problem List' for clinically confirmed diagnoses. 'Patient\'s Medications' is the authoritative regimen list; visit-linked medication rows below are chronology only. Medication/procedure records may be repeated in their standalone sections; do not double-count them.")
-    items.push('')
+      // Older MediCloud imports could materialize one hospitalization as many
+      // Encounter records (often one per claim/report date). Merge only records
+      // with the same institution and primary ICD when the claim fragments
+      // overlap or fall within the same short admission window. A seven-day
+      // bridge covers sparse daily claim rows such as 12/19, 12/24, and 12/29,
+      // while recurring treatment stays several weeks apart remain distinct.
+      const interval = encounterInterval(encounter)
+      const inpatientKey = careType === 'inpatient'
+        && !!institution.key
+        && !!entry?.primaryDiagnosisKey
+        && interval
+        ? `${institution.key}\u0000${entry.primaryDiagnosisKey}`
+        : ''
+      const episode = inpatientKey
+        ? (inpatientGroups.get(inpatientKey) ?? []).find((candidate) =>
+            !!candidate.interval
+              && intervalsBelongToSameInpatientEpisode(candidate.interval, interval!),
+          )
+        : undefined
+      if (episode && interval) {
+        episode.visits.push(encounter)
+        episode.interval = {
+          start: Math.min(episode.interval!.start, interval.start),
+          end: Math.max(episode.interval!.end, interval.end),
+        }
+        continue
+      }
+      const group: EncounterGroup = {
+        visits: [encounter],
+        kind: inpatientKey ? 'inpatient-episode' : 'single',
+        ...(interval ? { interval } : {}),
+      }
+      groups.push(group)
+      if (inpatientKey) {
+        const episodes = inpatientGroups.get(inpatientKey)
+        if (episodes) episodes.push(group)
+        else inpatientGroups.set(inpatientKey, [group])
+      }
+    }
 
-    for (const enc of visitsToShow) {
-      const date = dateOnly(enc.period?.start) || 'Unknown date'
-      const dept = enc.type?.[0]?.coding?.[0]?.display || enc.type?.[0]?.text || enc.serviceType?.text || ''
-      const physician = enc.participant?.[0]?.individual?.display || enc.participant?.[0]?.actor?.display || ''
-      const classText = enc.class?.display || enc.class?.code || ''
-
-      const header = [date, dept, physician ? `Dr. ${physician}` : '', classText]
-        .filter(Boolean)
-        .join(' · ')
-      items.push(`▶ ${header}`)
-
-      const entry = encMap.get(enc.id)
-      if (entry?.diagnoses.length) {
-        items.push(`    ICD codes on visit record (billing, not confirmed diagnoses): ${entry.diagnoses.join('; ')}`)
+    const encounterLines = (encounter: any, includeHeader: boolean): string[] => {
+      const date = dateOnly(encounter.period?.start) || 'Unknown date'
+      const endDate = dateOnly(encounter.period?.end)
+      const dateLabel = encounterCareType(encounter) === 'inpatient'
+        && endDate
+        && endDate !== date
+        ? `${date}–${endDate}`
+        : date
+      const dept = getEncounterKindText(encounter)
+        || encounter.type?.[0]?.coding?.[0]?.display
+        || encounter.type?.[0]?.text
+        || encounter.serviceType?.text
+        || ''
+      const physician = encounter.participant?.[0]?.individual?.display
+        || encounter.participant?.[0]?.actor?.display
+        || ''
+      const classText = encounter.class?.display || encounter.class?.code || ''
+      const lines: string[] = []
+      if (includeHeader) {
+        const institution = institutionIdentity(encounter, locale).label
+        const header = [dateLabel, institution, dept, physician ? `Dr. ${physician}` : '', classText]
+          .filter(Boolean)
+          .join(' · ')
+        lines.push(`▶ ${header}`)
+      }
+      const entry = encMap.get(encounter.id)
+      if (entry?.diagnoses.length && includeHeader) {
+        lines.push(`  ICD: ${entry.diagnoses.join('; ')}`)
+      }
+      if (physician && !includeHeader) {
+        lines.push(`  Physician: Dr. ${physician}`)
       }
       if (entry?.meds.length) {
-        items.push(`    Medications:`)
-        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        lines.push('  Medications:')
+        entry.meds.forEach((medication) => lines.push(`  • ${summarizeMedLine(medication)}`))
       }
       if (entry?.procs.length) {
-        items.push(`    Procedures:`)
-        entry.procs.forEach((p) => items.push(`      • ${summarizeProcLine(p, audience, locale)}`))
+        lines.push('  Procedures:')
+        entry.procs.forEach((procedure) => lines.push(`  • ${summarizeProcLine(procedure, audience, locale)}`))
       }
-      items.push('')
+      return lines
+    }
+
+    const items: string[] = []
+    items.push(`Recent visits (showing ${visitsToShow.length} of ${encounters.length}):`)
+    items.push("Note: ICD codes are billing codes recorded for visits, not confirmed diagnoses. See 'Problem List' for clinically confirmed diagnoses. 'Patient's Medications' is the authoritative regimen list; visit-linked medications and procedures are chronology only and may repeat standalone sections; do not double-count them.")
+
+    for (const group of groups) {
+      if (group.visits.length === 1) {
+        items.push(encounterLines(group.visits[0], true).join('\n'))
+        continue
+      }
+
+      const representative = group.visits[0]
+      const institution = institutionIdentity(representative, locale).label
+      const dept = getEncounterKindText(representative)
+        || representative.type?.[0]?.coding?.[0]?.display
+        || representative.type?.[0]?.text
+        || representative.serviceType?.text
+        || 'outpatient'
+      const classText = representative.class?.display || representative.class?.code || ''
+      const isInpatientEpisode = group.kind === 'inpatient-episode'
+      const header = [
+        ...(isInpatientEpisode ? [inpatientEpisodeRange(group.visits)] : []),
+        institution,
+        dept,
+        classText,
+      ].filter(Boolean).join(' · ')
+      const diagnoses = [...new Set(group.visits.flatMap((visit) =>
+        encMap.get(visit.id)?.diagnoses ?? [],
+      ))]
+      const lines = [`▶ ${header}`, `  ICD: ${diagnoses.join('; ')}`]
+      if (isInpatientEpisode) {
+        lines.push(`  Source records: ${group.visits.length} (merged as one inpatient episode)`)
+      } else {
+        const dates = group.visits.map((encounter) =>
+          dateOnly(encounter.period?.start) || 'Unknown date',
+        )
+        lines.push(`  Dates: ${dates.join(', ')}`, `  Total: ${group.visits.length} visits`)
+      }
+      const visitDetails = group.visits.flatMap((encounter) => {
+        const details = encounterLines(encounter, false)
+        if (details.length === 0) return []
+        return [`  ${dateOnly(encounter.period?.start) || 'Unknown date'}:`, ...details.map((line) => `  ${line}`)]
+      })
+      if (visitDetails.length > 0) {
+        lines.push('  Visit-specific details:', ...visitDetails)
+      }
+      items.push(lines.join('\n'))
     }
 
     return { title: 'Visits & Treatment History', items }

@@ -131,8 +131,7 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
         const date = m.authoredOn
           ? ` (${new Date(m.authoredOn).toLocaleDateString()})`
           : ''
-        const status = m.status ? ` [${m.status}]` : ''
-        items.push(`  • ${name}${chronicBadge}${date}${status}`)
+        items.push(`  • ${name}${chronicBadge}${date}`)
       })
     }
 

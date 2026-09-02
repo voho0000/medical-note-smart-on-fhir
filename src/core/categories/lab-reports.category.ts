@@ -63,7 +63,16 @@ function obsToLabPoint(o: any): LabPoint | null {
   const interp = o?.interpretation?.coding?.[0]?.code || o?.interpretation?.text || undefined
   const panel = categorizeObservation(o)?.id ?? ''
   const status = normalizeClinicalStatus(o?.status) || undefined
-  return { name, unit, value, date, interp, status, panel, obs: o }
+  return {
+    name,
+    unit,
+    value,
+    date,
+    interp,
+    status,
+    panel,
+    obs: o,
+  }
 }
 
 /** Parse the labPanelIds CSV filter into a Set; empty Set = no restriction. */
@@ -143,22 +152,14 @@ const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
 /** Max analytes in the key-trends appendix. */
 const MAX_KEY_TRENDS = 8
-const UNREMARKABLE_LAB_STATUSES = new Set(['final', 'amended', 'corrected', 'unknown'])
-const UNKNOWN_FINALITY_NOTE =
-  'Note: laboratory report finality status is unavailable in the source cloud record.'
-
-function labStatusSuffix(status?: string): string {
-  return status && !UNREMARKABLE_LAB_STATUSES.has(status)
-    ? ` {status:${status}}`
-    : ''
-}
 
 function pivotCellText(row: LabRow, date: string): string {
   const cell = row.values.get(date)
   if (!cell) return '-'
-  const status = labStatusSuffix(cell.status)
-  if (!cell.isAbnormal) return `${cell.value}${status}`
-  return `${cell.value} ${cell.interpretationCode || '*'}${status}`
+  const value = cell.isAbnormal
+    ? `${cell.value} ${cell.interpretationCode || '*'}`
+    : cell.value
+  return value
 }
 
 function capPointsPerAnalyte(points: LabPoint[], maxPoints: number): LabPoint[] {
@@ -193,7 +194,10 @@ function renderPivotTable(pivot: LabPivot): string[] {
 
 /** Trend lines for analytes with ≥1 abnormal value — covers the one task the
  *  pivot lost in the experiment (following a single analyte over time). */
-function renderKeyTrends(pivots: Record<string, LabPivot>, maxTrendPoints: number): string[] {
+function renderKeyTrends(
+  pivots: Record<string, LabPivot>,
+  maxTrendPoints: number,
+): string[] {
   const candidates: { row: LabRow; abnormalCount: number }[] = []
   for (const pivot of Object.values(pivots)) {
     for (const row of pivot.rows) {
@@ -370,9 +374,8 @@ export const labReportsCategory: DataCategory<LabData> = {
         const head = `${name}${unit ? ` (${unit})` : ''}`
         const last = series[series.length - 1]
         const flag = last.interp ? ` [${last.interp}]` : ''
-        const status = labStatusSuffix(last.status)
         const date = last.date ? ` (${shortDate(last.date)})` : ''
-        items.push(`${head}: ${last.value}${flag}${status}${date}`)
+        items.push(`${head}: ${last.value}${flag}${date}`)
       }
     } else {
       // Full-history mode: date × test pivot tables (per lab panel) + key-trend
@@ -403,7 +406,7 @@ export const labReportsCategory: DataCategory<LabData> = {
           const recent = series.slice(-maxTrendPoints)
           const omitted = series.length - recent.length
           const trend = recent
-            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${labStatusSuffix(p.status)}${p.date ? ` (${shortDate(p.date)})` : ''}`)
+            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${p.date ? ` (${shortDate(p.date)})` : ''}`)
             .join(' → ')
           items.push(`${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`)
         }
@@ -420,18 +423,11 @@ export const labReportsCategory: DataCategory<LabData> = {
       inRangeConclusions
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
         .forEach((c) => {
-          const status = labStatusSuffix(c.status)
-          items.push(`${c.text}${status}${c.date ? ` (${shortDate(c.date)})` : ''}`)
+          items.push(`${c.text}${c.date ? ` (${shortDate(c.date)})` : ''}`)
         })
     }
 
     if (items.length === 0) return null
-
-    const hasUnknownFinality = inRange.some((point) => point.status === 'unknown')
-      || inRangeConclusions.some((conclusion) => conclusion.status === 'unknown')
-    if (hasUnknownFinality) {
-      items.unshift(UNKNOWN_FINALITY_NOTE, '')
-    }
 
     if (windowed.fallbackDays > 0) {
       items.unshift(

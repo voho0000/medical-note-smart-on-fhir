@@ -22,6 +22,6 @@ describe('problemListCategory', () => {
     expect(problemListCategory.getCount(data, { problemListStatus: 'active', problemListTimeRange: 'all' })).toBe(1)
     const section = problemListCategory.getContextSection(data, { problemListStatus: 'active', problemListTimeRange: 'all' }) as any
     expect(section?.items)
-      .toEqual(['Diabetes [verification: confirmed]'])
+      .toEqual(['Diabetes'])
   })
 })

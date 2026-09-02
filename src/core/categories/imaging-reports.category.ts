@@ -200,16 +200,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
         : ''
       
-      const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
-      const statusPart = ` [status: ${reportStatus}]`
       const attachmentText = presentedFormText(report)
       if (reportObs.length > 0) {
-        items.push(`${report.code?.text || 'Imaging Study'}${datePart}${statusPart}`)
+        items.push(`${report.code?.text || 'Imaging Study'}${datePart}`)
         reportObs.forEach(obs => {
           expandObservationValues(obs).forEach((valueObservation) => {
             const display = observationDisplayValue(valueObservation)
             if (display) {
-              items.push(`  • ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''} [status: ${normalizeClinicalStatus((obs as any).status) || 'unknown'}]`)
+              items.push(`  • ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''}`)
             }
           })
         })
@@ -228,7 +226,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           ...attachmentText,
         ].filter((text): text is string => !!text?.trim()).join('\n')
         if (narrative) {
-          items.push(`${report.code?.text || 'Study'}${datePart}${statusPart}: ${narrative}`)
+          items.push(`${report.code?.text || 'Study'}${datePart}: ${narrative}`)
         }
       }
     })

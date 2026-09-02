@@ -84,9 +84,11 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(imagingReportsCategory.getCount(data, filters, clinicalData)).toBe(1)
 
     const section = imagingReportsCategory.getContextSection(data, filters, clinicalData)
-    expect(section && !Array.isArray(section) ? section.items.join('\n') : '').toContain('Persistent cough')
-    expect(section && !Array.isArray(section) ? section.items.join('\n') : '').toContain('Axial lung series')
-    expect(section && !Array.isArray(section) ? section.items.join('\n') : '').toContain('Scout view')
+    const context = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(context).toContain('Persistent cough')
+    expect(context).toContain('Axial lung series')
+    expect(context).toContain('Scout view')
+    expect(context).not.toContain('[L1]')
   })
 
   it('includes standalone ImagingStudy resources', () => {
@@ -101,6 +103,8 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(data).toHaveLength(1)
     expect(data[0].resourceType).toBe('ImagingStudy')
     expect(imagingReportsCategory.getCount(data, filters, clinicalData)).toBe(1)
+    const section = imagingReportsCategory.getContextSection(data, filters, clinicalData)
+    expect(section && !Array.isArray(section) ? section.items.join('\n') : '').not.toContain('[X1]')
   })
 
   it('includes every report when the user selects All Reports', () => {

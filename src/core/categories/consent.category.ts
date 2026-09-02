@@ -29,10 +29,8 @@ export const advanceDirectivesCategory: DataCategory<ConsentEntity> = {
     const items = data.map((c) => {
       const label = directiveLabel(c)
       const date = c.dateTime ? new Date(c.dateTime).toLocaleDateString() : undefined
-      const status = c.status || 'unknown'
-      const invalid = status === 'entered-in-error' ? 'INVALIDATED—do not use clinically' : undefined
       const provision = c.provision?.type ? `provision=${c.provision.type} (applies to the coded action; not a generic yes/no)` : undefined
-      const meta = [`status=${status}`, invalid, provision, date].filter(Boolean).join(', ')
+      const meta = [provision, date].filter(Boolean).join(', ')
       return meta ? `${label} (${meta})` : label
     })
     return { title: 'Advance Directives', items }

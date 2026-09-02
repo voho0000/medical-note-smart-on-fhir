@@ -88,8 +88,7 @@ export const proceduresCategory: DataCategory<Procedure> = {
       const name = procedure.code?.text || procedure.code?.coding?.[0]?.display || 'Procedure'
       const performed = getPerformedDate(procedure)
       const datePart = performed ? ` (${new Date(performed).toLocaleDateString()})` : ''
-      const status = procedure.status ? ` – ${procedure.status}` : ''
-      return `${name}${datePart}${status}`.trim()
+      return `${name}${datePart}`.trim()
     })
     
     if (items.length === 0) return null

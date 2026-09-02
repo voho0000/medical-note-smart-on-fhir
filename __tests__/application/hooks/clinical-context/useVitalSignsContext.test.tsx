@@ -37,4 +37,36 @@ describe('useVitalSignsContext record fidelity', () => {
 
     expect(result.current[0]?.items).toEqual(['No vital signs found within the selected time range.'])
   })
+
+  it('omits source status semantics from every vital sign', () => {
+    const clinicalData = {
+      vitalSigns: [
+        {
+          id: 'unknown',
+          code: { text: 'Body Weight' },
+          effectiveDateTime: '2026-07-01',
+          valueQuantity: { value: 53, unit: 'kg' },
+          status: 'unknown',
+        },
+        {
+          id: 'preliminary',
+          code: { text: 'Body Height' },
+          effectiveDateTime: '2026-07-01',
+          valueQuantity: { value: 156, unit: 'cm' },
+          status: 'preliminary',
+        },
+      ],
+    }
+    const { result } = renderHook(() => useVitalSignsContext(true, clinicalData as any, {
+      vitalSignsTimeRange: 'all',
+      vitalSignsVersion: 'all',
+    } as any))
+    const context = result.current.flatMap((section) => section.items).join('\n')
+
+    expect(context).toContain('53 kg')
+    expect(context).not.toContain('[status: unknown]')
+    expect(context).toContain('156 cm')
+    expect(context).not.toContain('[status: preliminary]')
+    expect(context).not.toContain('status:')
+  })
 })

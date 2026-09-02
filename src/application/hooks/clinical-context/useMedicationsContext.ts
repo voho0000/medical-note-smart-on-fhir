@@ -151,10 +151,45 @@ function formatNhiTerminology(m: MedSummary): string | undefined {
     `source=${terminology.source}@${terminology.snapshotId}`,
   ].filter((value): value is string => Boolean(value))
 
-  return `[NHI terminology matched to this exact medication record: ${fields.join('; ')}]`
+  return fields.join('; ')
 }
 
-function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string {
+function terminologyIdentity(m: MedSummary): string | undefined {
+  const terminology = formatNhiTerminology(m)
+  if (!terminology) return undefined
+  return m.drugCode
+    ? `code:${m.drugCode.trim().toLowerCase()}|${terminology}`
+    : `name:${m.name.trim().toLowerCase()}|${terminology}`
+}
+
+interface MedicationTerminologyEntry {
+  key: string
+  name: string
+  fields: string
+}
+
+function buildMedicationTerminologyCatalog(summaries: MedSummary[]): {
+  keyByIdentity: Map<string, string>
+  entries: MedicationTerminologyEntry[]
+} {
+  const keyByIdentity = new Map<string, string>()
+  const entries: MedicationTerminologyEntry[] = []
+  for (const summary of summaries) {
+    const identity = terminologyIdentity(summary)
+    const fields = formatNhiTerminology(summary)
+    if (!identity || !fields || keyByIdentity.has(identity)) continue
+    const key = `T${entries.length + 1}`
+    keyByIdentity.set(identity, key)
+    entries.push({ key, name: summary.name, fields })
+  }
+  return { keyByIdentity, entries }
+}
+
+function formatLine(
+  m: MedSummary,
+  mode: 'active' | 'recent' | 'other',
+  terminologyKeyByIdentity: Map<string, string>,
+): string {
   const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
@@ -174,16 +209,11 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string 
   if (m.refillCount && m.refillCount > 1) {
     parts.push(`(${m.refillCount} refills)`)
   }
-  const terminology = formatNhiTerminology(m)
-  if (terminology) parts.push(terminology)
-  const statusSemantics = m.status === 'entered-in-error'
-    ? '; INVALIDATED—do not treat as a medication'
-    : m.status === 'draft'
-      ? '; DRAFT—not an active order'
-      : m.status === 'on-hold'
-        ? '; ON HOLD—not currently in use'
-        : ''
-  parts.push(`[status: ${m.status}${statusSemantics}]`)
+  const terminologyId = terminologyIdentity(m)
+  const terminologyKey = terminologyId
+    ? terminologyKeyByIdentity.get(terminologyId)
+    : undefined
+  if (terminologyKey) parts.push(`[NHI term ${terminologyKey}]`)
   // Mark the source so the model can apply the duplicate rule: a pharmacy row
   // is a DISPENSING of an existing script, NOT a separate prescription.
   if (m.org) {
@@ -259,9 +289,19 @@ export function useMedicationsContext(
       clinicalData as { encounters?: any[] },
       nowMs,
     )
-    if (meds.length === 0) return null
+    if (meds.length === 0) {
+      return {
+        title: "Patient's Medications",
+        items: [
+          'Currently evidenced: none.',
+          '',
+          'Medication-status note: this means no current supply is evidenced within the selected claims scope; it does not prove that the patient takes no medication.',
+        ],
+      }
+    }
 
     const summaries = meds.map((m: any) => summarize(m, nowMs))
+    const terminologyCatalog = buildMedicationTerminologyCatalog(summaries)
 
     const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -299,38 +339,49 @@ export function useMedicationsContext(
     const items: string[] = []
 
     if (active.length > 0) {
-      items.push(`Currently in use (${active.length}):`)
+      items.push(`Currently evidenced (${active.length}):`)
       active.sort((a, b) => (a.daysRemaining ?? Infinity) - (b.daysRemaining ?? Infinity))
-      active.forEach((m) => items.push(`  • ${formatLine(m, 'active')}`))
+      active.forEach((m) => items.push(`  • ${formatLine(m, 'active', terminologyCatalog.keyByIdentity)}`))
+    } else {
+      items.push('Currently evidenced: none.')
     }
 
     if (recent.length > 0) {
       if (items.length > 0) items.push('')
       items.push(`Recently ended (last ${RECENTLY_ENDED_WINDOW_DAYS} days, ${recent.length}):`)
       recent.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))
-      recent.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
+      recent.forEach((m) => items.push(`  • ${formatLine(m, 'recent', terminologyCatalog.keyByIdentity)}`))
     }
 
     if (pastUnique.length > 0) {
       if (items.length > 0) items.push('')
       items.push(`Past medications (older than ${RECENTLY_ENDED_WINDOW_DAYS} days, ${pastUnique.length}):`)
       pastUnique.sort((a, b) => (b.endDate || b.startedOn || '').localeCompare(a.endDate || a.startedOn || ''))
-      pastUnique.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
+      pastUnique.forEach((m) => items.push(`  • ${formatLine(m, 'recent', terminologyCatalog.keyByIdentity)}`))
     }
 
     if (other.length > 0) {
       if (items.length > 0) items.push('')
-      items.push(`Other medication records — not active (${other.length}):`)
+      items.push(`Other medication records (${other.length}):`)
       other
         .sort((a, b) => (b.startedOn || '').localeCompare(a.startedOn || ''))
-        .forEach((m) => items.push(`  • ${formatLine(m, 'other')}`))
+        .forEach((m) => items.push(`  • ${formatLine(m, 'other', terminologyCatalog.keyByIdentity)}`))
+    }
+
+    if (terminologyCatalog.entries.length > 0) {
+      if (items.length > 0) items.push('')
+      items.push('NHI medication terminology (one entry per exact product):')
+      terminologyCatalog.entries.forEach((entry) => {
+        items.push(`  ${entry.key} — ${entry.name}: ${entry.fields}`)
+      })
     }
 
     if (items.length === 0) return null
     items.push(
       '',
+      'Medication-status note: current, recently ended, and historical groups are calculated against the Clinical reference date above from claim dates and recorded days supply; they do not confirm actual medication use or non-use.',
       'Record-fidelity note: visit-linked medication records may also appear under their visit; do not count repeated records as separate prescriptions.',
-      'Terminology note: each NHI terminology block belongs only to the medication row that contains it. It can establish that product\'s ingredient/strength, dose form, and ATC classification, but it does not establish why this patient received it, actual use/adherence, or clinical outcome.',
+      'Terminology note: each T key applies only to medication rows marked with that same NHI term key. It can establish that exact product\'s ingredient/strength, dose form, and ATC classification, but it does not establish why this patient received it, actual use/adherence, or clinical outcome.',
     )
     return { title: "Patient's Medications", items }
   }, [includeMedications, clinicalData, filters, nowMs])

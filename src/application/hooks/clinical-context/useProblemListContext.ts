@@ -71,15 +71,7 @@ export function useProblemListContext(
       const date = c.recordedDate
         ? ` (recorded: ${new Date(c.recordedDate).toLocaleDateString()})`
         : ''
-      const status = typeof c.clinicalStatus === 'string'
-        ? c.clinicalStatus
-        : c.clinicalStatus?.coding?.[0]?.code || c.clinicalStatus?.text
-      const statusLabel = status && !isActiveCondition(c) ? ` [${status}]` : ''
-      const verification = typeof c.verificationStatus === 'string'
-        ? c.verificationStatus
-        : c.verificationStatus?.coding?.[0]?.code || c.verificationStatus?.text
-      const verificationLabel = verification ? ` [verification: ${verification}]` : ''
-      return `${name}${date}${statusLabel}${verificationLabel}`
+      return `${name}${date}`
     })
 
     if (items.length === 0) return null

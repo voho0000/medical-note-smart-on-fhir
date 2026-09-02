@@ -48,7 +48,7 @@ export function DataSelectionScopeResetter() {
       const profile = getProfile(consumer)
       if (profile.documentIds.length > 0) setDocumentIdsFor(consumer, [])
       if (profile.documentMode === 'custom') {
-        setDocumentModeFor(consumer, 'latestAdmission')
+        setDocumentModeFor(consumer, 'deduplicatedAdmissions')
       }
     })
   }, [clinicalScope, getProfile, setDocumentIdsFor, setDocumentModeFor])

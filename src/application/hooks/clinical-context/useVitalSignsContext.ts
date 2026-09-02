@@ -93,8 +93,6 @@ export function useVitalSignsContext(
             })
           : ''
         
-        const status = normalizeClinicalStatus((obs as any).status) || 'unknown'
-        const statusPart = !['final', 'amended', 'corrected'].includes(status) ? ` [status: ${status}]` : ''
         const values = expandObservationValues(obs).flatMap((valueObservation) => {
           const display = observationDisplayValue(valueObservation)
           if (!display) return []
@@ -103,7 +101,7 @@ export function useVitalSignsContext(
             : `${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Component'}: `
           return [`${label}${display.value}${display.unit ? ` ${display.unit}` : ''}`]
         })
-        if (values.length > 0) items.push(`${values.join(', ')}${date ? ` (${date})` : ''}${statusPart}`)
+        if (values.length > 0) items.push(`${values.join(', ')}${date ? ` (${date})` : ''}`)
       })
       
       if (items.length > 0) {

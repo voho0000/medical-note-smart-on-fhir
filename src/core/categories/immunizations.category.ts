@@ -67,14 +67,11 @@ export const immunizationsCategory: DataCategory<ImmunizationEntity> = {
         const datePart = imm.occurrenceDateTime
           ? ` (${new Date(imm.occurrenceDateTime).toLocaleDateString()})`
           : ''
-        const status = imm.status || 'unknown'
-        const invalid = status === 'entered-in-error' ? '; INVALIDATED—do not treat as administered' : ''
         const meta = [
-          `status=${status}${invalid}`,
           imm.lotNumber ? `lot=${imm.lotNumber}` : null,
           imm.manufacturer?.display ? `manufacturer=${imm.manufacturer.display}` : null,
         ].filter(Boolean).join('; ')
-        return `${vaccineName(imm)}${datePart} [${meta}]`
+        return `${vaccineName(imm)}${datePart}${meta ? ` [${meta}]` : ''}`
       })
 
     return { title: 'Immunizations', items }

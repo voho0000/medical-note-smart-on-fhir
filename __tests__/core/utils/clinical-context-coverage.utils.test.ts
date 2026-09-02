@@ -7,6 +7,15 @@ import {
 const NOW = Date.parse('2026-07-13T12:00:00+08:00')
 
 describe('buildClinicalContextCoverageSection', () => {
+  beforeAll(() => {
+    jest.useFakeTimers()
+    jest.setSystemTime(NOW)
+  })
+
+  afterAll(() => {
+    jest.useRealTimers()
+  })
+
   it('distinguishes a successful empty query from a failed query', () => {
     const section = buildClinicalContextCoverageSection(
       {
@@ -36,8 +45,10 @@ describe('buildClinicalContextCoverageSection', () => {
       NOW,
     )
 
-    expect(section?.items).toContain('Problem List: status=unavailable; source_records=0; included_records=0; query=Condition=error')
-    expect(section?.items[0]).toContain('generated_at=2026-07-13')
+    expect(section?.items).toContain('Data unavailable because its query did not complete successfully: Problem List.')
+    expect(section?.items).toContain('Missing source data does not confirm clinical absence.')
+    expect(section?.items.join('\n')).not.toContain('generated_at')
+    expect(section?.items.join('\n')).not.toContain('query=')
     expect(section?.items.join('\n')).not.toContain('FHIR unavailable')
   })
 
@@ -50,12 +61,13 @@ describe('buildClinicalContextCoverageSection', () => {
       NOW,
     )
 
-    expect(section?.items).toContain('Medications: status=excluded')
+    expect(section?.items).toContain('Excluded by user selection: Medications.')
     expect(section?.items.join('\n')).not.toContain('secret-med')
-    expect(section?.items.join('\n')).not.toContain('Medications: status=excluded; source_records=1')
+    expect(section?.items.join('\n')).not.toContain('secret-med')
+    expect(section?.items.join('\n')).not.toContain('source_records')
   })
 
-  it('adds SDK source limitations and conversion audit counts to AI context', () => {
+  it('adds a compact SDK source limitation without engineering audit telemetry', () => {
     const section = buildClinicalContextCoverageSection(
       ALL_DATA_SELECTION,
       ALL_DATA_FILTERS,
@@ -86,14 +98,12 @@ describe('buildClinicalContextCoverageSection', () => {
     )
 
     const context = section?.items.join('\n')
-    expect(context).toContain('converted locally from Health Bank SDK JSON')
-    expect(context).toContain('no reliably mappable structured patient name, birth date, sex, or age fields')
-    expect(context).toContain('full-text imaging/pathology reports may contain this personal information')
-    expect(context).toContain('does not infer Patient demographics from report text')
-    expect(context).toContain('Do not infer absent structured fields or treat report-text demographics as verified Patient fields')
-    expect(context).toContain('evidence_qualified_lab_duplicates_merged=2')
-    expect(context).toContain('same_day_distinct_value_groups_preserved=1')
-    expect(context).toContain('inferred_lab_units=4')
+    expect(context).toContain('Health Bank SDK conversion limitation')
+    expect(context).toContain('structured demographics, medication dosage, and some laboratory metadata may be unavailable')
+    expect(context).toContain('report-text demographics are not verified Patient fields')
+    expect(context).not.toContain('converter_version=')
+    expect(context).not.toContain('evidence_qualified_lab_duplicates_merged=')
+    expect(context).not.toContain('inferred_lab_units=')
   })
 
   it('warns AI context that legacy SDK conversions may have dropped distinct values', () => {
@@ -126,9 +136,33 @@ describe('buildClinicalContextCoverageSection', () => {
     )
 
     const context = section?.items.join('\n')
-    expect(context).toContain('legacy_same_day_lab_rows_merged=3')
-    expect(context).toContain('distinct_value_groups_potentially_dropped=2')
+    expect(context).toContain('Legacy SDK converter 0.1.2 may have dropped distinct same-day laboratory values')
     expect(context).toContain('re-import the original SDK JSON with converter 0.1.3 or later')
-    expect(context).not.toContain('same_day_distinct_value_groups_preserved=')
+    expect(context).not.toContain('legacy_same_day_lab_rows_merged=')
+  })
+
+  it('collapses normal counts, absent categories, and filter reductions into compact lines', () => {
+    const section = buildClinicalContextCoverageSection(
+      ALL_DATA_SELECTION,
+      { ...ALL_DATA_FILTERS, encounterTimeRange: '1m' },
+      {
+        encounters: [
+          { id: 'recent', period: { start: '2026-07-01' } },
+          { id: 'old', period: { start: '2020-01-01' } },
+        ],
+        medications: [{ id: 'med', status: 'active', authoredOn: '2026-07-01' }],
+      } as any,
+      [],
+      NOW,
+    )
+
+    expect(section?.title).toBe('Data Scope')
+    expect(section?.items[0]).toContain('Patient Information 1')
+    expect(section?.items[0]).toContain('Visits 1 (grouped for display)')
+    expect(section?.items[0]).toContain('Medications 1')
+    expect(section?.items).toContain('Filtered by selected scope: Visits 2→1.')
+    expect(section?.items.join('\n')).toContain('Not present in supplied data:')
+    expect(section?.items.join('\n')).not.toContain('status=')
+    expect(section?.items.join('\n')).not.toContain('source_records=')
   })
 })

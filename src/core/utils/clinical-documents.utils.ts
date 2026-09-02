@@ -12,11 +12,17 @@ import type {
   DocumentReferenceEntity,
 } from '../entities/clinical-data.entity'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { extractEncounterIcds } from '@/src/shared/utils/icd-lookup'
 
 /** LOINC 18842-5 = 出院病摘 (discharge summary). */
 export const DISCHARGE_SUMMARY_LOINC = '18842-5'
 
-export type DocumentMode = 'latestAdmission' | 'recentAdmissions' | 'all' | 'custom'
+export type DocumentMode =
+  | 'deduplicatedAdmissions'
+  | 'latestAdmission'
+  | 'recentAdmissions'
+  | 'all'
+  | 'custom'
 
 /** How many admissions 'recentAdmissions' mode includes. */
 export const RECENT_ADMISSIONS_COUNT = 3
@@ -26,6 +32,13 @@ export interface ClinicalDocumentRef {
   date?: string
   title: string
   isDischargeSummary: boolean
+  /** Source encounter metadata shown in the document picker. */
+  organization?: string
+  primaryIcdCode?: string
+  primaryIcdDescription?: string
+  primaryIcdDescriptionEn?: string
+  /** Internal grouping identity; never rendered or sent to the model. */
+  dischargeDeduplicationKey?: string
   /** Plain-text body for the AI context (HTML/XHTML stripped). */
   text: string
 }
@@ -33,6 +46,38 @@ export interface ClinicalDocumentRef {
 interface DocumentSource {
   compositions?: CompositionEntity[]
   documentReferences?: DocumentReferenceEntity[]
+  encounters?: any[]
+}
+
+function referenceId(reference: string | undefined): string | undefined {
+  return reference?.split('/').filter(Boolean).at(-1)
+}
+
+function encounterDocumentMetadata(encounter: any): Pick<
+  ClinicalDocumentRef,
+  | 'organization'
+  | 'primaryIcdCode'
+  | 'primaryIcdDescription'
+  | 'primaryIcdDescriptionEn'
+  | 'dischargeDeduplicationKey'
+> {
+  if (!encounter) return {}
+  const organization = String(encounter?.serviceProvider?.display || '').trim()
+  const organizationIdentity = String(
+    encounter?.serviceProvider?.reference || organization,
+  ).trim().normalize('NFKC').toLowerCase()
+  const primaryIcd = extractEncounterIcds(encounter, undefined, 'zh-TW')[0]
+  const primaryIcdEn = extractEncounterIcds(encounter, undefined, 'en')[0]
+  const primaryIcdCode = primaryIcd?.code.trim().toUpperCase()
+  return {
+    ...(organization ? { organization } : {}),
+    ...(primaryIcdCode ? { primaryIcdCode } : {}),
+    ...(primaryIcd?.description ? { primaryIcdDescription: primaryIcd.description } : {}),
+    ...(primaryIcdEn?.description ? { primaryIcdDescriptionEn: primaryIcdEn.description } : {}),
+    ...(organizationIdentity && primaryIcdCode
+      ? { dischargeDeduplicationKey: `${organizationIdentity}\u0000${primaryIcdCode}` }
+      : {}),
+  }
 }
 
 export function stripHtmlToText(html: string): string {
@@ -142,13 +187,21 @@ function documentReferenceText(d: DocumentReferenceEntity): string {
 export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDocumentRef[] {
   if (!data) return []
   const out: ClinicalDocumentRef[] = []
+  const encountersById = new Map(
+    (data.encounters ?? [])
+      .filter((encounter) => encounter?.id)
+      .map((encounter) => [encounter.id, encounter]),
+  )
   for (const c of data.compositions ?? []) {
     let textCache: string | undefined
+    const encounter = encountersById.get(referenceId(c.encounter?.reference))
+    const encounterMetadata = encounterDocumentMetadata(encounter)
     out.push({
       id: c.id,
       date: c.date,
       title: c.title || c.type?.text || c.type?.coding?.[0]?.display || 'Document',
       isDischargeSummary: hasDischargeLoinc(c.type?.coding),
+      ...encounterMetadata,
       // Lazy: decode/HTML-strip is heavy and ONLY the AI-context formatter reads
       // it (for SELECTED docs). The checklist + count badges must not trigger it,
       // or every render re-decodes all documents — the data-selection lag.
@@ -158,6 +211,8 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
   for (const d of data.documentReferences ?? []) {
     const att = d.content?.[0]?.attachment
     let textCache: string | undefined
+    const encounter = encountersById.get(referenceId(d.context?.encounter?.[0]?.reference))
+    const encounterMetadata = encounterDocumentMetadata(encounter)
     out.push({
       id: d.id,
       // Prefer the encounter period start (admission date) over
@@ -169,6 +224,7 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
       date: d.context?.period?.start ?? d.date,
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
+      ...encounterMetadata,
       get text() { return (textCache ??= documentReferenceText(d)) },
     })
   }
@@ -177,6 +233,8 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
 
 /**
  * The documents to actually include, given the user's mode + custom id list.
+ * - deduplicatedAdmissions → newest discharge summary per institution + first
+ *                            ICD code; missing grouping evidence stays distinct
  * - latestAdmission  → the single most recent 出院病摘 (fallback: latest doc)
  * - recentAdmissions → the most recent N 出院病摘 (fallback: N latest docs) —
  *                      covers a multi-admission treatment course without dumping
@@ -198,6 +256,20 @@ export function resolveSelectedDocuments(
     const discharges = docs.filter((d) => d.isDischargeSummary)
     const pool = discharges.length ? discharges : docs
     return pool.slice(0, RECENT_ADMISSIONS_COUNT)
+  }
+  if (mode === 'deduplicatedAdmissions') {
+    const discharges = docs.filter((d) => d.isDischargeSummary)
+    if (discharges.length === 0) return docs.length ? [docs[0]] : []
+    const seen = new Set<string>()
+    return discharges.filter((document) => {
+      // Without both institution and ICD evidence, do not risk merging two
+      // clinically different admissions merely because metadata is incomplete.
+      const key = document.dischargeDeduplicationKey
+      if (!key) return true
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }
   // latestAdmission
   const discharge = docs.find((d) => d.isDischargeSummary)

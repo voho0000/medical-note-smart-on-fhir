@@ -133,7 +133,7 @@ export function useClinicalAiInput(
     )
     return resolveSelectedDocuments(
       documents,
-      activeProfile.documentMode ?? 'latestAdmission',
+      activeProfile.documentMode ?? 'deduplicatedAdmissions',
       activeProfile.documentIds ?? [],
     ).map((document) => document.id)
   }, [rawDataReady, clinicalData, activeProfile])
@@ -193,7 +193,7 @@ export function useClinicalAiInput(
           {
             selection: activeProfile.selection,
             filters: activeProfile.filters,
-            documentMode: activeProfile.documentMode ?? 'latestAdmission',
+            documentMode: activeProfile.documentMode ?? 'deduplicatedAdmissions',
             documentIds: activeProfile.documentIds ?? [],
           },
           baseScopedClinicalData,

@@ -33,8 +33,8 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   immunizations: true,
 
   // Documents group
-  documents: true,         // On by default; documentMode 'latestAdmission' keeps
-                           // it to just the most recent 出院病摘 (bounded).
+  documents: true,         // On by default; documentMode deduplicates discharge
+                           // summaries by institution + first ICD code.
 }
 
 export const DEFAULT_DATA_FILTERS: DataFilters = {

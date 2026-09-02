@@ -44,14 +44,7 @@ export function useProceduresContext(
       const name = procedureName(procedure)
       const performed = procedureDate(procedure)
       const datePart = performed ? ` (${new Date(performed).toLocaleDateString()})` : ""
-      const statusCode = procedure.status || 'unknown'
-      const semantics = statusCode === 'not-done'
-        ? ' (NOT PERFORMED)'
-        : statusCode === 'entered-in-error'
-          ? ' (INVALIDATED—do not use as a clinical fact)'
-          : ''
-      const status = ` – status: ${statusCode}${semantics}`
-      return `${name}${datePart}${status}`.trim()
+      return `${name}${datePart}`.trim()
     })
 
     if (items.length === 0) return null

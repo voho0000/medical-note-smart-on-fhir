@@ -26,6 +26,9 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { buildClinicalContextCoverageSection } from "@/src/core/utils/clinical-context-coverage.utils"
 import { useNow } from "@/src/shared/hooks/use-now.hook"
 import { filterAiExcludedClinicalDomains } from "@/src/core/utils/ai-clinical-domain-filter.utils"
+import { buildClinicalTemporalReferenceSection } from "@/src/core/utils/clinical-temporal-reference.utils"
+import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
+import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -61,7 +64,8 @@ export function useClinicalContext(
   const selectedData = profile.selection
   const filters = profile.filters
   const { patient } = usePatient()
-  const nowMs = useNow()
+  const sharedNowMs = useNow()
+  const nowMs = isDemoDataActive() ? clinicalNowMs(true) : sharedNowMs
 
   const queriedClinicalData = (useClinicalData() as ClinicalData | null) ?? null
   const sourceClinicalData = options.clinicalDataOverride === undefined
@@ -72,6 +76,12 @@ export function useClinicalContext(
       ? filterAiExcludedClinicalDomains(sourceClinicalData as any) as ClinicalData
       : null,
     [sourceClinicalData],
+  )
+  const temporalReferenceSection = useMemo(
+    () => clinicalData
+      ? buildClinicalTemporalReferenceSection(clinicalData, nowMs)
+      : null,
+    [clinicalData, nowMs],
   )
 
   // Hook-driven sections (richer formatting than registry can provide)
@@ -161,7 +171,11 @@ export function useClinicalContext(
 
   const selectedDocuments = useMemo(() => {
     if (!selectedData.documents || !clinicalData) return null
-    return resolveSelectedDocuments(allDocuments, profile.documentMode, profile.documentIds)
+    return resolveSelectedDocuments(
+      allDocuments,
+      profile.documentMode ?? 'deduplicatedAdmissions',
+      profile.documentIds,
+    )
   }, [selectedData.documents, clinicalData, allDocuments, profile.documentMode, profile.documentIds])
   const documentsSection = useMemo(
     () => formatDocumentsSection(selectedDocuments ?? [], options.documentTokenBudget),
@@ -197,6 +211,8 @@ export function useClinicalContext(
   const getClinicalContext = useCallback((): ClinicalContextSection[] => {
     const sections: ClinicalContextSection[] = []
 
+    if (temporalReferenceSection) sections.push(temporalReferenceSection)
+
     // Patient group
     if (patientSection) sections.push(patientSection)
     sections.push(...vitalSignsSections)
@@ -228,6 +244,7 @@ export function useClinicalContext(
 
     return sections
   }, [
+    temporalReferenceSection,
     patientSection,
     vitalSignsSections,
     problemListSection,

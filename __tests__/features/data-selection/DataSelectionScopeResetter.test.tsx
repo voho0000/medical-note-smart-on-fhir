@@ -51,7 +51,7 @@ describe('DataSelectionScopeResetter', () => {
     mockPatientState = { patient: { id: 'patient-2' } }
     rerender()
     await waitFor(() => expect(result.current.getProfile('aiExport').documentIds).toEqual([]))
-    expect(result.current.getProfile('aiExport').documentMode).toBe('latestAdmission')
+    expect(result.current.getProfile('aiExport').documentMode).toBe('deduplicatedAdmissions')
 
     act(() => {
       result.current.setDocumentModeFor('ips', 'custom')
@@ -60,7 +60,7 @@ describe('DataSelectionScopeResetter', () => {
     mockAuthState = { user: { uid: 'account-2' }, loading: false }
     rerender()
     await waitFor(() => expect(result.current.getProfile('ips').documentIds).toEqual([]))
-    expect(result.current.getProfile('ips').documentMode).toBe('latestAdmission')
+    expect(result.current.getProfile('ips').documentMode).toBe('deduplicatedAdmissions')
   })
 
   it('treats each local import as a separate clinical scope', async () => {

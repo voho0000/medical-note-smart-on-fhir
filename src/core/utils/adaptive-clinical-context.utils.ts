@@ -104,7 +104,7 @@ export function buildClinicalContextFitCandidate(
   const normalizedBase: ClinicalContextProfile = {
     selection: { ...base.selection },
     filters: { ...base.filters },
-    documentMode: base.documentMode ?? 'latestAdmission',
+    documentMode: base.documentMode ?? 'deduplicatedAdmissions',
     documentIds: [...(base.documentIds ?? [])],
   }
   if (tier === 'full' || tier === 'prioritized') {

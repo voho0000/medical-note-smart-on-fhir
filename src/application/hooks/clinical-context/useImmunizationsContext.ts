@@ -37,15 +37,12 @@ export function useImmunizationsContext(
         const datePart = imm.occurrenceDateTime
           ? ` (${new Date(imm.occurrenceDateTime).toLocaleDateString()})`
           : ''
-        const status = imm.status || 'unknown'
-        const invalid = status === 'entered-in-error' ? '; INVALIDATED—do not treat as administered' : ''
         const meta = [
-          `status=${status}${invalid}`,
           imm.lotNumber ? `lot=${imm.lotNumber}` : null,
           imm.manufacturer?.display ? `manufacturer=${imm.manufacturer.display}` : null,
           imm.performer?.[0]?.actor?.display ? `performer=${imm.performer[0].actor.display}` : null,
         ].filter(Boolean).join('; ')
-        return `${name}${datePart} [${meta}]`
+        return `${name}${datePart}${meta ? ` [${meta}]` : ''}`
       })
 
     if (items.length === 0) return null

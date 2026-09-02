@@ -29,17 +29,6 @@ interface CoverageRow {
   queryKeys: ClinicalDataQueryKey[]
 }
 
-function stateText(
-  keys: ClinicalDataQueryKey[],
-  statuses: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>>,
-): string {
-  if (keys.length === 0) return 'patient-context'
-  const found = keys
-    .map((key) => statuses[key] ? `${key}=${statuses[key]!.state}` : null)
-    .filter((value): value is string => !!value)
-  return found.length > 0 ? found.join(',') : 'local/imported-or-not-reported'
-}
-
 function hasQueryIssue(
   keys: ClinicalDataQueryKey[],
   statuses: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>>,
@@ -58,20 +47,10 @@ function reportCount(source: CoverageSource, group: 'lab' | 'imaging'): number {
   }).length
 }
 
-function localIsoDay(nowMs: number): string {
-  const date = new Date(nowMs)
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-')
-}
-
 /**
- * Deterministic retrieval/selection manifest. Every category is named, but an
- * excluded category reveals no record count. Selected rows distinguish source
- * absence, filter-empty, query failure and included data; this is the semantic
- * information that a heading-only Markdown rewrite cannot provide.
+ * Compact retrieval/selection scope for the LLM. Detailed rows stay local in
+ * this deterministic calculation, while the prompt receives only useful
+ * counts and exceptions instead of engineering telemetry for every category.
  */
 export function buildClinicalContextCoverageSection(
   selection: DataSelection,
@@ -117,37 +96,54 @@ export function buildClinicalContextCoverageSection(
   const sdkMetadata = data.sourceMetadata?.source === 'health-bank-sdk-json'
     ? data.sourceMetadata
     : null
-  const sdkAudit = sdkMetadata
-    ? sdkPreservesDistinctSameDayLabResults(sdkMetadata.converterVersion)
-      ? `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; evidence_qualified_lab_duplicates_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; same_day_distinct_value_groups_preserved=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}.`
-      : `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; legacy_same_day_lab_rows_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; distinct_value_groups_potentially_dropped=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}. This legacy conversion predates fail-closed preservation of distinct same-day results; re-import the original SDK JSON with converter 0.1.3 or later before relying on laboratory completeness.`
-    : ''
+  const included = rows.filter((row) => row.selected && row.includedCount > 0)
+  const absent = rows.filter((row) =>
+    row.selected
+    && row.sourceCount === 0
+    && !hasQueryIssue(row.queryKeys, statuses),
+  )
+  const excluded = rows.filter((row) => !row.selected)
+  const filtered = rows.filter((row) =>
+    row.selected
+    && row.sourceCount > row.includedCount
+    && !hasQueryIssue(row.queryKeys, statuses),
+  )
+  const unavailable = rows.filter((row) =>
+    row.selected && hasQueryIssue(row.queryKeys, statuses),
+  )
+
+  const items: string[] = []
+  if (included.length > 0) {
+    items.push(`Included source records: ${included.map((row) =>
+      `${row.label} ${row.includedCount}${row.label === 'Visits' ? ' (grouped for display)' : ''}`
+    ).join('; ')}.`)
+  }
+  if (absent.length > 0) {
+    items.push(`Not present in supplied data: ${absent.map((row) => row.label).join(', ')}.`)
+  }
+  if (excluded.length > 0) {
+    items.push(`Excluded by user selection: ${excluded.map((row) => row.label).join(', ')}.`)
+  }
+  if (filtered.length > 0) {
+    items.push(`Filtered by selected scope: ${filtered.map((row) =>
+      `${row.label} ${row.sourceCount}→${row.includedCount}`
+    ).join('; ')}.`)
+  }
+  if (unavailable.length > 0) {
+    items.push(`Data unavailable because its query did not complete successfully: ${unavailable.map((row) => row.label).join(', ')}.`)
+  }
+  if (absent.length > 0 || unavailable.length > 0) {
+    items.push('Missing source data does not confirm clinical absence.')
+  }
+  if (sdkMetadata) {
+    items.push('Health Bank SDK conversion limitation: structured demographics, medication dosage, and some laboratory metadata may be unavailable; report-text demographics are not verified Patient fields.')
+    if (!sdkPreservesDistinctSameDayLabResults(sdkMetadata.converterVersion)) {
+      items.push(`Legacy SDK converter ${sdkMetadata.converterVersion} may have dropped distinct same-day laboratory values; re-import the original SDK JSON with converter 0.1.3 or later before relying on laboratory completeness.`)
+    }
+  }
 
   return {
-    title: 'Data Coverage Manifest',
-    items: [
-      // Day precision is deliberate: relative medication counts are day-level,
-      // and useNow refreshes on focus. Embedding the live clock would change the
-      // prompt signature and invalidate cached AI results on every tab focus.
-      `Export metadata: generated_at=${localIsoDay(nowMs)}; contains_phi=possible; deidentified=false. Direct-identifier masking is not guaranteed full de-identification.`,
-      'Counts are FHIR source records before display grouping; status distinguishes exclusion, source absence, filtered-empty data, included data, and unavailable queries.',
-      ...(sdkMetadata ? [
-        'Source boundary: converted locally from Health Bank SDK JSON. The SDK provides no reliably mappable structured patient name, birth date, sex, or age fields, but full-text imaging/pathology reports may contain this personal information. The converter does not infer Patient demographics from report text. Medication dosage, laboratory source units, laboratory abnormal flags, and complete diagnostic-report categories are not provided; outpatient and emergency claims are not distinguishable. Do not infer absent structured fields or treat report-text demographics as verified Patient fields.',
-        sdkAudit,
-      ] : []),
-      ...rows.map((row) => {
-        if (!row.selected) return `${row.label}: status=excluded`
-        const query = stateText(row.queryKeys, statuses)
-        if (hasQueryIssue(row.queryKeys, statuses)) {
-          return `${row.label}: status=unavailable; source_records=${row.sourceCount}; included_records=${row.includedCount}; query=${query}`
-        }
-        const status = row.sourceCount === 0
-          ? 'no-source-records'
-          : row.includedCount === 0
-            ? 'filtered-empty'
-            : 'included'
-        return `${row.label}: status=${status}; source_records=${row.sourceCount}; included_records=${row.includedCount}; query=${query}`
-      }),
-    ],
+    title: 'Data Scope',
+    items,
   }
 }

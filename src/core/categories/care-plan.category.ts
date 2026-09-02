@@ -50,7 +50,6 @@ export const carePlansCategory: DataCategory<CarePlanEntity> = {
     if (filtered.length === 0) return null
 
     const items = filtered.map((cp) => {
-      const status = cp.status ? ` – ${cp.status}` : ''
       const period = [cp.period?.start, cp.period?.end]
         .filter(Boolean)
         .map((d) => new Date(d as string).toLocaleDateString())
@@ -60,7 +59,7 @@ export const carePlansCategory: DataCategory<CarePlanEntity> = {
         .map((a) => a.detail?.description || getCodeableConceptText(a.detail?.code, ''))
         .filter(Boolean)
       const activityPart = activities.length ? `: ${activities.join('、')}` : ''
-      return `${planTitle(cp)}${status}${periodPart}${activityPart}`.trim()
+      return `${planTitle(cp)}${periodPart}${activityPart}`.trim()
     })
     return { title: 'Care Plans', items }
   },

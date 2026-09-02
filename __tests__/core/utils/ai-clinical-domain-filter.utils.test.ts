@@ -84,7 +84,7 @@ describe('filterAiExcludedClinicalDomains', () => {
     expect(filterAiExcludedClinicalDomains(input)).toBe(input)
   })
 
-  it('removes standalone dental and rehabilitation procedures', () => {
+  it('removes standalone dental, rehabilitation, and non-surgical procedures', () => {
     const input = {
       encounters: [],
       procedures: [
@@ -96,6 +96,63 @@ describe('filterAiExcludedClinicalDomains', () => {
 
     const filtered = filterAiExcludedClinicalDomains(input)
 
-    expect(filtered.procedures?.map((record: any) => record.id)).toEqual(['ordinary'])
+    expect(filtered.procedures).toEqual([])
+  })
+
+  it('keeps only explicitly surgical procedures for outpatient encounters', () => {
+    const input = {
+      encounters: [encounter('outpatient-visit')],
+      procedures: [
+        procedure('wound-care', 'Change dressing- wound care', 'outpatient-visit'),
+        procedure('tube-irrigation', 'Tube irrigation', 'outpatient-visit'),
+        procedure('ultrasound', 'Abdominal ultrasound', 'outpatient-visit'),
+        procedure('appendectomy', 'Appendectomy', 'outpatient-visit'),
+        {
+          ...procedure(
+            'misclassified-dressing',
+            '手術、創傷處置及換藥－傷口處置',
+            'outpatient-visit',
+          ),
+          category: {
+            coding: [{ system: 'http://snomed.info/sct', code: '387713003' }],
+          },
+        },
+        {
+          ...procedure('coded-surgery', 'Untranslated claim item', 'outpatient-visit'),
+          category: {
+            coding: [{ system: 'http://snomed.info/sct', code: '387713003' }],
+          },
+        },
+      ],
+    } as any
+
+    const filtered = filterAiExcludedClinicalDomains(input)
+
+    expect(filtered.procedures?.map((record: any) => record.id)).toEqual([
+      'appendectomy',
+      'coded-surgery',
+    ])
+    expect(filtered.encounters?.map((record: any) => record.id)).toEqual(['outpatient-visit'])
+  })
+
+  it('removes routine aftercare but retains substantive inpatient and emergency procedures', () => {
+    const input = {
+      encounters: [
+        encounter('inpatient-visit', 'inpatient'),
+        encounter('emergency-visit', 'emergency'),
+      ],
+      procedures: [
+        procedure('inpatient-wound-care', 'Change dressing- wound care', 'inpatient-visit'),
+        procedure('inpatient-drainage', 'CT-guided drainage of pelvic abscess', 'inpatient-visit'),
+        procedure('emergency-treatment', 'Emergency treatment', 'emergency-visit'),
+      ],
+    } as any
+
+    const filtered = filterAiExcludedClinicalDomains(input)
+
+    expect(filtered.procedures?.map((record: any) => record.id)).toEqual([
+      'inpatient-drainage',
+      'emergency-treatment',
+    ])
   })
 })
