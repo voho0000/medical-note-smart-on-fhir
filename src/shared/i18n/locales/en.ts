@@ -2174,6 +2174,7 @@ export const en = {
     signUpError: 'Sign up failed. Please try again.',
     termsNotice: 'By continuing, you agree to our Terms of Service and Privacy Policy',
     signedInAs: 'Signed in as',
+    restoringSession: 'Restoring sign-in',
     usageToday: 'Free usage today',
     usageChat: 'AI chat (GPT/Gemini)',
     usagePerplexity: 'Literature search (Perplexity)',

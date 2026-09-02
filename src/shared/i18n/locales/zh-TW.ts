@@ -2175,6 +2175,7 @@ export const zhTW = {
     signUpError: '註冊失敗，請重試。',
     termsNotice: '繼續即表示您同意我們的服務條款和隱私政策',
     signedInAs: '登入身分',
+    restoringSession: '正在恢復登入',
     usageToday: '今日免費使用量',
     usageChat: 'AI 對話 (GPT/Gemini)',
     usagePerplexity: '文獻搜尋 (Perplexity)',
