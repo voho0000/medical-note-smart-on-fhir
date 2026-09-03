@@ -295,7 +295,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const generation = (generatedAt: number) => ({
       source: 'live' as const,
       modelId: ctx.modelId,
-      modelName: modelExecutionLabel(modelExecution, ctx.locale),
+      modelName: modelExecutionLabel(modelExecution),
       modelExecution,
       generatedAt,
     })

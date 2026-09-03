@@ -197,7 +197,7 @@ export function useInsightGeneration({
             metadata: {
               source: 'live',
               ...generateInsight.buildMetadata(model),
-              modelName: modelExecutionLabel(modelExecution, locale),
+              modelName: modelExecutionLabel(modelExecution),
               modelExecution,
               generatedAt,
               durationMs: Math.max(0, generatedAt - startedAt),

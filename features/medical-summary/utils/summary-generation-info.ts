@@ -1,4 +1,5 @@
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import { modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
 
 export interface MedicalSummaryGenerationInfo {
@@ -68,7 +69,7 @@ export function buildSummaryGenerationInfo({
     minute: "2-digit",
     hour12: false,
   }).format(generatedAt)
-  const modelName = generation.modelName
+  const modelName = generation.modelExecution ? modelExecutionLabel(generation.modelExecution) : generation.modelName
   const durationText = generation.durationMs === undefined
     ? undefined
     : formatGenerationDuration(generation.durationMs)

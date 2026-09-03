@@ -15,7 +15,7 @@ import type { ChatDataScope, ChatMessage, ChatReplyReference } from "@/src/appli
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
-import { ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { ModelExecutionInfo, ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
 import { modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { AlertTriangle, Check, Copy, Reply, RotateCcw, Sparkles } from "lucide-react"
 
@@ -185,6 +185,7 @@ const MessageItem = memo(function MessageItem({
             ? t.chat.you
             : t.chat.system}
         </span>
+        {message.role === "assistant" && <ModelExecutionInfo execution={message.modelExecution} />}
         {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
           <>
             <span>•</span>
@@ -365,7 +366,7 @@ export function ChatMessageList({
   customModelDisplayNames,
   onRetry,
 }: ChatMessageListProps) {
-  const { t, locale } = useLanguage()
+  const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -428,7 +429,7 @@ export function ChatMessageList({
         ) : (
           messages.map((message) => {
             const modelDisplayName = message.modelExecution
-              ? modelExecutionLabel(message.modelExecution, locale)
+              ? modelExecutionLabel(message.modelExecution)
               : getModelDisplayName(message.modelId, customModelDisplayNames)
             return (
               <MessageItem

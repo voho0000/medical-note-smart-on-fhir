@@ -95,7 +95,7 @@ describe("useInsightGeneration provenance", () => {
         source: "live",
         modelId: "gpt-5.6-luna",
         provider: "openai",
-        modelName: "實際模型未回報",
+        modelName: "GPT-5.6 Luna",
         modelExecution: { requestedModelId: "gpt-5.6-luna", routedModelId: "gpt-5.6-luna", actualModelId: null, actualModelIds: [] },
         generatedAt: new Date("2026-08-27T06:32:18.400Z").getTime(),
         durationMs: 18_400,

@@ -33,18 +33,24 @@ export function modelExecutionFallback(execution: AiModelExecution): boolean {
   )
 }
 
-export function modelExecutionLabel(execution: AiModelExecution, locale = 'en'): string {
-  return execution.actualModelId
-    ? modelDisplayLabel(execution.actualModelId)
-    : locale === 'zh-TW' ? '實際模型未回報' : 'Actual model not reported'
+export function modelExecutionLabel(execution: AiModelExecution): string {
+  // This is a display fallback only; actualModelId stays null until confirmed.
+  return modelDisplayLabel(execution.actualModelId ?? execution.routedModelId)
 }
 
 export function modelExecutionNotice(execution: AiModelExecution, locale: string): string | null {
   const selected = modelDisplayLabel(execution.requestedModelId)
   if (!execution.actualModelId) {
+    if (modelExecutionFallback(execution)) {
+      const routed = modelDisplayLabel(execution.routedModelId)
+      const reported = execution.actualModelIds.map((id) => modelDisplayLabel(id)).join('、')
+      return locale === 'zh-TW'
+        ? `本次未能全程依選擇的 ${selected} 完成；已請求 ${routed}${reported ? `，先前步驟實際使用 ${reported}` : ''}。API 未回報最後步驟的實際模型，無法確認。`
+        : `This request did not use the selected ${selected} throughout; requested ${routed}${reported ? `, earlier steps used ${reported}` : ''}. The API did not report the final step's actual model.`
+    }
     return locale === 'zh-TW'
-      ? `原先選擇 ${selected}；服務未回報實際模型，無法確認本次使用的模型。`
-      : `Selected ${selected}; the service did not report which model actually ran.`
+      ? `目前顯示所選模型 ${selected}。API 未回報實際模型，無法確認本次使用的模型。`
+      : `Showing the selected model, ${selected}. The API did not report which model actually ran, so it cannot be confirmed.`
   }
   if (!modelExecutionFallback(execution)) return null
   const actual = execution.actualModelIds.map((id) => modelDisplayLabel(id)).join('、')

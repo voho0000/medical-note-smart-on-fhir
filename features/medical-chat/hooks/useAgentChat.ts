@@ -283,7 +283,7 @@ export function useAgentChat(
         setLatestExecution({
           version: 1,
           feature: 'medical-chat',
-          modelName: modelExecutionLabel(modelExecution, locale),
+          modelName: modelExecutionLabel(modelExecution),
           modelId: modelExecution.actualModelId ?? 'unreported',
           modelExecution,
           timestamp: requestTimestamp,

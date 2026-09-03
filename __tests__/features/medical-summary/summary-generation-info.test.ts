@@ -2,6 +2,7 @@ import {
   buildSummaryGenerationInfo,
   formatGenerationDuration,
 } from "@/features/medical-summary/utils/summary-generation-info"
+import { createModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 const labels = {
   labelTemplate: "由 {model} 於 {time} 產生",
@@ -13,6 +14,16 @@ const labels = {
 }
 
 describe("buildSummaryGenerationInfo", () => {
+  it('refreshes a stored unreported display name without changing its provenance', () => {
+    const execution = createModelExecution('gemini-3.8-flash')
+    const info = buildSummaryGenerationInfo({
+      generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: '實際模型未回報',
+        generatedAt: Date.now(), modelExecution: execution }, locale: 'zh-TW', ...labels,
+    })
+    expect(info?.modelName).toBe('Gemini 3.8 Flash')
+    expect(info?.ariaLabel).toContain('Gemini 3.8 Flash')
+    expect(info?.modelExecution?.actualModelId).toBeNull()
+  })
   it("uses the configured upstream model name for a custom endpoint", () => {
     const generatedAt = new Date(2026, 6, 19, 14, 32).getTime()
     const completedAt = generatedAt + 83_000

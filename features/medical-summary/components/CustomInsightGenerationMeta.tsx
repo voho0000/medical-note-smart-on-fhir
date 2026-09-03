@@ -1,6 +1,7 @@
 "use client"
 
-import { ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { ModelExecutionInfo, ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { modelExecutionFallback, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import {
@@ -113,9 +114,9 @@ export function CustomInsightGenerationMeta({
 
   const completed = useMemo(() => {
     if (!metadata) return null
-    const modelName = metadata.modelName
-      ?? getModelDefinition(metadata.modelId)?.label
-      ?? metadata.modelId
+    const modelName = metadata.modelExecution ? modelExecutionLabel(metadata.modelExecution) : (
+      metadata.modelName ?? getModelDefinition(metadata.modelId)?.label ?? metadata.modelId
+    )
     if (metadata.source === "pre-generated") {
       return {
         ariaLabel: labels.summaryPreGeneratedProvenance.replace("{model}", modelName),
@@ -183,9 +184,10 @@ export function CustomInsightGenerationMeta({
           <span aria-hidden="true" className="shrink-0">·</span>
         </>
       ) : null}
-      <ModelName className={completed.preGenerated ? undefined : "max-[340px]:max-w-full max-[340px]:basis-full"}>
-        {completed.modelName}
-      </ModelName>
+      <span className={cn("inline-flex min-w-0 items-center gap-1", !completed.preGenerated && "max-[340px]:max-w-full max-[340px]:basis-full")}>
+        <ModelName>{completed.modelName}</ModelName>
+        <ModelExecutionInfo execution={metadata?.modelExecution} />
+      </span>
       {!completed.preGenerated ? (
         <>
           <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
@@ -204,7 +206,9 @@ export function CustomInsightGenerationMeta({
           ) : null}
         </>
       ) : null}
-      <div className="basis-full"><ModelExecutionNotice execution={metadata?.modelExecution} /></div>
+      {metadata?.modelExecution && modelExecutionFallback(metadata.modelExecution) && (
+        <div className="basis-full"><ModelExecutionNotice execution={metadata.modelExecution} /></div>
+      )}
     </div>
   )
 }

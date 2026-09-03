@@ -1,6 +1,7 @@
 "use client"
 
 import { ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { modelExecutionFallback } from '@/src/shared/utils/ai-model-execution'
 import { useEffect, useRef } from "react"
 import {
   ChartNoAxesCombined,
@@ -157,7 +158,7 @@ export function MedicalSummaryCardNav({
           className="ml-auto min-w-0 max-w-[min(48%,24rem)] flex-1 justify-end text-xs"
         />
       </div>
-      {!activeGeneration && generationInfo?.modelExecution && (
+      {!activeGeneration && generationInfo?.modelExecution && modelExecutionFallback(generationInfo.modelExecution) && (
         <div className="px-3 pb-2"><ModelExecutionNotice execution={generationInfo.modelExecution} /></div>
       )}
     </nav>
