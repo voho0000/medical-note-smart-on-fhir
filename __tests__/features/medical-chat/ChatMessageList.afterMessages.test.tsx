@@ -96,7 +96,8 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
       role: 'assistant',
       content: 'LOCAL_ANSWER',
       timestamp: 0,
-      modelId: customModelId,
+      modelId: 'qwen2.5vl:7b',
+      modelExecution: reportModelExecution(createModelExecution(customModelId), 'qwen2.5vl:7b'),
     }] as any[]
 
     render(
@@ -110,6 +111,7 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
     )
 
     expect(screen.getByText('qwen2.5vl:7b')).toHaveAttribute('title', 'qwen2.5vl:7b')
+    expect(screen.getByText('qwen2.5vl:7b')).not.toHaveClass('uppercase')
     expect(screen.queryByText('OpenAI-compatible')).not.toBeInTheDocument()
   })
 })

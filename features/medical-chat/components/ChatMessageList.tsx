@@ -177,7 +177,7 @@ const MessageItem = memo(function MessageItem({
       <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground px-1">
         <span className={cn(
           "min-w-0 max-w-[60vw] truncate font-medium tracking-wide sm:max-w-96",
-          !isCustomOpenAiModelId(message.modelId ?? '') && "uppercase",
+          !isCustomOpenAiModelId(message.modelExecution?.routedModelId ?? message.modelId ?? '') && "uppercase",
         )} title={message.role === 'assistant' ? modelDisplayName : undefined}>
           {message.role === "assistant" 
             ? modelDisplayName
