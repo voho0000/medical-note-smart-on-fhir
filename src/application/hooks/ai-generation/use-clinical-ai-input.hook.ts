@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
@@ -13,6 +13,7 @@ import {
   buildClinicalContextFitCandidate,
   clinicalContextTokenTarget,
   fitClinicalContextTextToTokenBudget,
+  hasManualDocumentSelection,
   nextClinicalContextFitTier,
   type ClinicalContextAdaptation,
   type ClinicalContextFitTier,
@@ -93,7 +94,7 @@ export function clinicalAiSourceSignature(
 }
 
 interface FitState {
-  key: string
+  key: string | object
   tier: ClinicalContextFitTier
   originalTokens: number
 }
@@ -106,16 +107,43 @@ interface FitState {
  * user's saved Data Selection profile.
  */
 export function useClinicalAiInput(
-  contextLimit?: number,
+  requestedContextLimit?: number,
   consumer: DataConsumer = 'insights',
-  targetFraction = 1,
+  requestedTargetFraction = 1,
+  requestedAllowTextTruncation = true,
+  requestedMaxClinicalTokens?: number,
+  options: { includeSources?: boolean } = {},
 ) {
+  // Scope controls need the same fitting policy, not a generation-ready source
+  // catalog or persistent signature. Preview-only callers expose neither.
+  const includeSources = options.includeSources !== false
+  const [fitState, setFitState] = useState<FitState>({ key: '', tier: 'full', originalTokens: 0 })
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const { locale } = useLanguage()
   const clinicalData = useClinicalData() as unknown as ClinicalAiDataInput | null
   const dataSelection = useDataSelection()
-  const activeProfile = dataSelection.getProfile(consumer)
+  const savedProfile = dataSelection.getProfile(consumer)
+  const requestedProfile = useMemo(() => ({
+    selection: savedProfile.selection, filters: savedProfile.filters,
+    documentMode: savedProfile.documentMode, documentIds: savedProfile.documentIds,
+  }), [savedProfile.selection, savedProfile.filters, savedProfile.documentMode, savedProfile.documentIds])
+  const patientScope = JSON.stringify(patient ?? null)
+  // Commit the user's controls before rebuilding a large chart. Never reuse a
+  // deferred selection across a patient/data replacement, or expose a stale
+  // input as generation-ready while its replacement is being calculated.
+  const requestedInput = useMemo(() => ({
+    patientScope, clinicalData, profile: requestedProfile,
+    contextLimit: requestedContextLimit, targetFraction: requestedTargetFraction,
+    allowTextTruncation: requestedAllowTextTruncation, maxClinicalTokens: requestedMaxClinicalTokens,
+  }), [patientScope, clinicalData, requestedProfile, requestedContextLimit, requestedTargetFraction, requestedAllowTextTruncation, requestedMaxClinicalTokens])
+  const deferredInput = useDeferredValue(requestedInput)
+  const input = deferredInput.patientScope === patientScope && deferredInput.clinicalData === clinicalData
+    ? deferredInput : requestedInput
+  const inputPending = input !== requestedInput
+  const { profile: activeProfile, contextLimit, targetFraction, maxClinicalTokens } = input
+  const preserveManualDocuments = hasManualDocumentSelection(activeProfile)
+  const allowTextTruncation = input.allowTextTruncation && !preserveManualDocuments
 
   const rawDataReady = !!clinicalData
     && !clinicalData.isLoading
@@ -153,9 +181,10 @@ export function useClinicalAiInput(
     [demoDataActive, patient],
   )
   const scopeNowMs = clinicalScopeClock.nowMs
+  const needsBaseScope = includeSources || fitState.tier === 'prioritized'
 
   const baseScopedClinicalData = useMemo(
-    () => (rawDataReady && clinicalData
+    () => (rawDataReady && clinicalData && needsBaseScope
       ? scopeClinicalDataForAi(
           clinicalData as unknown as Partial<ClinicalDataCollection>,
           activeProfile.selection,
@@ -171,6 +200,7 @@ export function useClinicalAiInput(
       activeProfile.filters,
       baseDocumentIds,
       scopeNowMs,
+      needsBaseScope,
     ],
   )
 
@@ -180,14 +210,14 @@ export function useClinicalAiInput(
   // only blocks the UI without adding cache isolation. Keep one canonical
   // catalog for this identity; the outbound catalog below remains localized.
   const sourceIdentityCatalog = useMemo(
-    () => (baseScopedClinicalData
+    () => (includeSources && baseScopedClinicalData
       ? getSourceCatalog(baseScopedClinicalData, defaultLocale)
       : []),
-    [baseScopedClinicalData],
+    [includeSources, baseScopedClinicalData],
   )
 
   const sourceSignature = useMemo(
-    () => (rawDataReady && baseScopedClinicalData
+    () => (includeSources && rawDataReady && baseScopedClinicalData
       ? clinicalAiSourceSignature(
           patient,
           {
@@ -195,6 +225,9 @@ export function useClinicalAiInput(
             filters: activeProfile.filters,
             documentMode: activeProfile.documentMode ?? 'deduplicatedAdmissions',
             documentIds: activeProfile.documentIds ?? [],
+            // Earlier custom scopes could silently omit selected documents.
+            // Do not hydrate those cached outputs under the new policy.
+            ...(preserveManualDocuments ? { manualDocumentPolicy: 'complete-v1' } : {}),
           },
           baseScopedClinicalData,
           sourceIdentityCatalog,
@@ -206,6 +239,8 @@ export function useClinicalAiInput(
       patient,
       activeProfile,
       sourceIdentityCatalog,
+      includeSources,
+      preserveManualDocuments,
     ],
   )
 
@@ -217,19 +252,26 @@ export function useClinicalAiInput(
         : 1
       return Math.max(
         1,
-        Math.floor(clinicalContextTokenTarget(contextLimit) * normalizedFraction),
+        Math.min(
+          Math.floor(clinicalContextTokenTarget(contextLimit) * normalizedFraction),
+          maxClinicalTokens ?? Number.POSITIVE_INFINITY,
+        ),
       )
     },
-    [contextLimit, targetFraction],
+    [contextLimit, targetFraction, maxClinicalTokens],
   )
-  const fitKey = sourceSignature && Number.isFinite(targetTokens)
-    ? `${sourceSignature}:${Math.round(contextLimit ?? 0)}:${targetTokens}`
-    : ''
-  const [fitState, setFitState] = useState<FitState>({
-    key: '',
-    tier: 'full',
-    originalTokens: 0,
-  })
+  // Reference identity is sufficient for transient UI fitting, and avoids
+  // serializing/hashing an entire million-token chart merely to open a drawer.
+  // All these provider snapshots are immutable and change on patient/scope
+  // changes; this key is local to this hook and is never a persisted cache key.
+  const previewFitIdentity = useMemo(
+    () => ({ patient, clinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit }),
+    [patient, clinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit],
+  )
+  const fitKey = !Number.isFinite(targetTokens) ? ''
+    : includeSources
+      ? sourceSignature ? `${sourceSignature}:${Math.round(contextLimit ?? 0)}:${targetTokens}` : ''
+      : rawDataReady ? previewFitIdentity : ''
   const activeTier: ClinicalContextFitTier =
     fitKey && fitState.key === fitKey ? fitState.tier : 'full'
   const fitCandidate = useMemo(
@@ -243,21 +285,23 @@ export function useClinicalAiInput(
             baseScopedClinicalData as Partial<ClinicalDataCollection>,
             targetTokens,
             fitState.originalTokens,
+            scopeNowMs,
+            { preserveDocuments: preserveManualDocuments },
           )
         : null
     ),
-    [activeTier, baseScopedClinicalData, fitState.originalTokens, targetTokens],
+    [activeTier, baseScopedClinicalData, fitState.originalTokens, targetTokens, scopeNowMs, preserveManualDocuments],
   )
-  const {
-    getFormattedClinicalContext,
-    getFullClinicalContext,
-    includedDocumentIds,
-  } = useClinicalContext(consumer, {
+  const contextView = useClinicalContext(consumer, {
     profile: fitCandidate.profile,
     clinicalDataOverride: prioritizedResult?.data as ClinicalData | undefined,
-    documentTokenBudget:
-      prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
+    // VGHBrain selects whole records/documents only. An oversized retained
+    // document must reach preflight intact rather than lose its middle.
+    documentTokenBudget: allowTextTruncation
+      ? prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget
+      : undefined,
   })
+  const { getFormattedClinicalContext, getFullClinicalContext, includedDocumentIds } = contextView
 
   const candidateClinicalContext = useMemo(
     () => (rawDataReady ? getFullClinicalContext() : ''),
@@ -276,13 +320,14 @@ export function useClinicalAiInput(
     candidateTokens > targetTokens
 
   useEffect(() => {
-    if (!fitKey || !rawDataReady) return
+    if (inputPending || !fitKey || !rawDataReady) return
     // Measure each transient view before advancing. The reduction order is
     // full → 1 year / 8 labs → 6 months / 3 labs → 3 months / latest labs →
     // record-level clinical prioritization. Only the final prioritized view
     // may use bounded text fitting as a last resort.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFitState((current) => {
+    // Tier advancement is background work too, so another control change can
+    // interrupt it instead of queuing behind every mounted AI consumer.
+    startTransition(() => setFitState((current) => {
       if (current.key !== fitKey) {
         if (candidateTokens <= targetTokens) return current
         return {
@@ -298,21 +343,21 @@ export function useClinicalAiInput(
         }
       }
       return current
-    })
-  }, [activeTier, candidateTokens, fitKey, rawDataReady, targetTokens])
+    }))
+  }, [activeTier, candidateTokens, fitKey, inputPending, rawDataReady, targetTokens])
 
   const clinicalContext = useMemo(
     () => (
-      activeTier === 'prioritized' &&
+      allowTextTruncation && activeTier === 'prioritized' &&
       candidateTokens > targetTokens
         ? fitClinicalContextTextToTokenBudget(candidateClinicalContext, targetTokens)
         : candidateClinicalContext
     ),
-    [activeTier, candidateClinicalContext, candidateTokens, targetTokens],
+    [allowTextTruncation, activeTier, candidateClinicalContext, candidateTokens, targetTokens],
   )
   const formattedClinicalContext = useMemo(
     () => (
-      activeTier === 'prioritized' &&
+      allowTextTruncation && activeTier === 'prioritized' &&
       estimateTokens(candidateFormattedClinicalContext) > targetTokens
         ? fitClinicalContextTextToTokenBudget(
             candidateFormattedClinicalContext,
@@ -320,11 +365,14 @@ export function useClinicalAiInput(
           )
         : candidateFormattedClinicalContext
     ),
-    [activeTier, candidateFormattedClinicalContext, targetTokens],
+    [allowTextTruncation, activeTier, candidateFormattedClinicalContext, targetTokens],
   )
 
   const scopedClinicalData = useMemo(
-    () => (prioritizedResult
+    // Intermediate tiers cannot be sent or cached. Building their outbound
+    // records/catalog only repeats expensive report extraction before the next
+    // tier replaces them; the final settled tier still uses the same builder.
+    () => (!includeSources || needsSmallerTier ? null : prioritizedResult
       ? prioritizedResult.data as ClinicalAiDataInput
       : rawDataReady && clinicalData
         ? scopeClinicalDataForAi(
@@ -343,13 +391,16 @@ export function useClinicalAiInput(
       fitCandidate.profile.filters,
       includedDocumentIds,
       scopeNowMs,
+      includeSources,
+      needsSmallerTier,
     ],
   )
   const catalog = useMemo(
     () => (scopedClinicalData ? getSourceCatalog(scopedClinicalData, locale) : []),
     [scopedClinicalData, locale],
   )
-  const dataReady = rawDataReady && !needsSmallerTier
+  const isCalculating = inputPending || needsSmallerTier
+  const dataReady = rawDataReady && !isCalculating
   // Do not hydrate or expose a generation slot for an intermediate fitting
   // tier. The signature itself is model-independent once the adapted context
   // has settled.
@@ -366,18 +417,25 @@ export function useClinicalAiInput(
             ? fitState.originalTokens
             : candidateTokens,
           adaptedTokens,
+          protectedDocumentCount: preserveManualDocuments ? baseDocumentIds.length : undefined,
         }
 
   return {
     patientId: patient?.id ?? '',
     piiLiterals,
     dataReady,
-    clinicalContext,
-    formattedClinicalContext,
+    clinicalContext: isCalculating ? '' : clinicalContext,
+    formattedClinicalContext: isCalculating ? '' : formattedClinicalContext,
     effectiveProfile: fitCandidate.profile,
     inputSignature,
-    clinicalData: scopedClinicalData,
-    catalog,
+    // Read-only result ownership may survive a model-capacity recalculation.
+    // This must NEVER be used as a generation-ready slot/signature.
+    sourceScopeSignature: inputPending && activeProfile !== requestedProfile ? '' : sourceSignature,
+    clinicalData: isCalculating ? null : scopedClinicalData,
+    catalog: isCalculating ? [] : catalog,
     contextAdaptation,
+    contextView,
+    isCalculating,
+    preserveManualDocuments,
   }
 }

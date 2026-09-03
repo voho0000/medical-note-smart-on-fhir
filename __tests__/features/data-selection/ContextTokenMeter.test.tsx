@@ -1,6 +1,10 @@
 import { act, render, screen } from '@testing-library/react'
 import { ContextTokenMeter } from '@/features/data-selection/components/ContextTokenMeter'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
+
+let mockProfiles: OpenAiCompatibleProfile[] = []
 
 const getClinicalContext = jest.fn(() => [{ title: '病歷', items: ['內容'] }])
 const formatClinicalContext = jest.fn(() => '病'.repeat(3_000))
@@ -53,7 +57,7 @@ jest.mock('@/src/application/stores/ai-config.store', () => ({
     geminiKey: '',
     claudeKey: '',
     openAiCompatible: null,
-    openAiCompatibleProfiles: [],
+    openAiCompatibleProfiles: mockProfiles,
   }),
 }))
 jest.mock('@/src/application/stores/model-prefs.store', () => ({
@@ -64,6 +68,7 @@ describe('ContextTokenMeter overflow guidance', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     jest.clearAllMocks()
+    mockProfiles = []
     fittedClinicalInput = {
       dataReady: true,
       clinicalContext: '病'.repeat(3_000),
@@ -73,6 +78,47 @@ describe('ContextTokenMeter overflow guidance', () => {
   })
 
   afterEach(() => jest.useRealTimers())
+
+  it('warns immediately when intact manual documents still exceed the VGH patient cap', () => {
+    mockProfiles = [{
+      profileId: 'vgh-test', enabled: true, baseUrl: 'https://hospital.example/v1',
+      modelId: 'tvghbrain3.5', apiKey: null, contextWindowTokens: 262_144,
+    }]
+    Object.assign(fittedClinicalInput, {
+      clinicalContext: 'a'.repeat(110_000 * 4), preserveManualDocuments: true,
+      contextAdaptation: {
+        tier: 'prioritized', contextLimit: 154_000, targetTokens: 100_000,
+        originalTokens: 150_000, adaptedTokens: 110_000, protectedDocumentCount: 3,
+      },
+    })
+    render(<ContextTokenMeter modelId={customOpenAiModelIdForProfile('vgh-test')} />)
+    act(() => jest.advanceTimersByTime(400))
+    expect(screen.getByRole('alert')).toHaveTextContent('自選文件已完整保留，但病歷仍超過容量')
+    expect(screen.getByRole('alert')).toHaveTextContent('不會自動截短文件')
+    expect(screen.getByTestId('model-fitted-scope')).toHaveTextContent('完整保留 3 份自選文件')
+    expect(screen.getByTestId('model-fitted-scope')).not.toHaveTextContent('最近一次出院病摘')
+  })
+
+  it('distinguishes the VGH patient cap from the complete input cap', () => {
+    mockProfiles = [{
+      profileId: 'vgh-test', enabled: true, baseUrl: 'https://hospital.example/v1',
+      modelId: 'tvghbrain3.5', apiKey: null, contextWindowTokens: 262_144,
+    }]
+    render(<ContextTokenMeter
+      modelId={customOpenAiModelIdForProfile('vgh-test')}
+      overflowIssue={{
+        kind: 'context-overflow', requestTokens: 120_000, selectedTokens: 110_000,
+        selectedLimit: 100_000, usable: 150_000, limit: 154_000, reserve: 4_000,
+        overBy: 10_000, suggestedSelectedMax: 100_000,
+      }}
+    />)
+    act(() => jest.advanceTimersByTime(400))
+
+    expect(screen.getByText(/病人 context 上限 100k tokens/)).toHaveTextContent('完整輸入上限 150k tokens')
+    expect(screen.getByText(/病人 context 上限 100k tokens/)).toHaveTextContent('不截短文字')
+    expect(screen.getByRole('status')).toHaveTextContent('病人 context 約 110k tokens，超過 100k tokens 上限')
+    expect(screen.getByRole('status')).not.toHaveTextContent('超過可用的 150k')
+  })
 
   it('shows the complete-request reduction target inside Data Selection', () => {
     const overflowIssue: ContextOverflowIssue = {

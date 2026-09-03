@@ -2,9 +2,8 @@
 
 // Per-document picker for the 文件 category. Default mode keeps the latest
 // discharge summary per institution + first ICD; ticking any document switches
-// to a custom set. Uses the
-// shared core helper so the ticked ids match exactly what the AI-context builder
-// includes.
+// to a custom set. Ticks represent the saved selection, while a separate label
+// identifies selected documents excluded by the model's fitted context.
 import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
@@ -19,18 +18,16 @@ import { formatOrganizationDisplay } from "@/src/shared/utils/organization-displ
 interface DocumentChecklistProps {
   clinicalData: ClinicalDataCollection
   consumer?: DataConsumer
-  /** Transient values actually used by a context-limited model. The provider
-   * remains the persistence target, so removing these props restores the
-   * original saved document settings immediately. */
-  displayedDocumentMode?: DocumentMode
-  displayedDocumentIds?: string[]
+  /** Exact document ids in the settled model-fit view, not the saved picks. */
+  includedDocumentIds?: string[]
+  scopePending?: boolean
 }
 
 export function DocumentChecklist({
   clinicalData,
   consumer = 'insights',
-  displayedDocumentMode,
-  displayedDocumentIds,
+  includedDocumentIds,
+  scopePending = false,
 }: DocumentChecklistProps) {
   const { t, locale } = useLanguage()
   const dataSelection = useDataSelection()
@@ -44,8 +41,9 @@ export function DocumentChecklist({
     ? dataSelection.setDocumentIds(ids)
     : dataSelection.setDocumentIdsFor(consumer, ids)
   const ds = t.dataSelection as unknown as Record<string, string>
-  const documentMode = displayedDocumentMode ?? savedDocumentMode
-  const documentIds = displayedDocumentIds ?? savedDocumentIds
+  const documentMode = savedDocumentMode
+  const documentIds = savedDocumentIds
+  const includedIds = useMemo(() => includedDocumentIds === undefined ? null : new Set(includedDocumentIds), [includedDocumentIds])
 
   const docs = useMemo(() => listClinicalDocuments(clinicalData), [clinicalData])
   const selectedIds = useMemo(
@@ -91,8 +89,13 @@ export function DocumentChecklist({
       </div>
       <p className="text-xs text-muted-foreground">
         {ds.docModeDeduplicatedAdmissionsHint
-          ?? '自動：每個機構＋第一個 ICD 只保留最新一份；其他選項依選擇原樣納入。'}
+          ?? '自動：每個機構＋第一個 ICD 只選最新一份；其他選項設定你希望納入的文件。'}
       </p>
+      {includedIds && <p className="text-xs text-muted-foreground">
+        {documentMode === 'custom'
+          ? ds.docManualSelectionScopeHint
+          : ds.docSelectionScopeHint ?? '勾選代表你的選擇；實際納入範圍仍受模型容量限制。未納入的文件會另行標示，不會取消你的勾選。'}
+      </p>}
       <div className="space-y-0.5">
         {docs.map((d) => {
           const checked = selectedIds.has(d.id)
@@ -113,6 +116,7 @@ export function DocumentChecklist({
             >
               <input
                 type="checkbox"
+                data-document-id={d.id}
                 checked={checked}
                 onChange={() => toggle(d.id)}
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
@@ -133,6 +137,11 @@ export function DocumentChecklist({
                   <span className="block text-xs text-muted-foreground">
                     ICD <span className="font-semibold text-foreground">{d.primaryIcdCode}</span>
                     {primaryIcdDescription ? ` ${primaryIcdDescription}` : ''}
+                  </span>
+                )}
+                {checked && includedIds && !scopePending && !includedIds.has(d.id) && (
+                  <span className="block text-xs text-amber-700 dark:text-amber-300">
+                    {ds.docExcludedFromScope ?? '已選取；未納入本次模型範圍'}
                   </span>
                 )}
               </span>

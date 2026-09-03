@@ -6,6 +6,25 @@ function dateAt(dayOffset: number): string {
 }
 
 describe('prioritized clinical context', () => {
+  it('reserves full custom documents without sacrificing required safety records when they overflow', () => {
+    const compositions = [1, 2, 3].map(id => ({
+      id: `manual-${id}`, title: 'Discharge summary', date: dateAt(id),
+      section: [{ text: { div: `<div>BEGIN-${id} ${'clinical detail '.repeat(2000)} END-${id}</div>` } }],
+    }))
+    const input = {
+      compositions,
+      allergies: [{ id: 'required-allergy', code: { text: 'Synthetic allergy' } }],
+      procedures: [{ id: 'optional-old', code: { text: 'Historical procedure' } }],
+    }
+    const result = prioritizeClinicalDataForTokenBudget(input, 700, 100_000, Date.UTC(2026, 8, 3), { preserveDocuments: true })
+    expect(result.data.compositions).toEqual(compositions)
+    expect(result.documentTokenBudget).toBeUndefined()
+    expect(result.data.allergies).toEqual(input.allergies)
+    expect(result.data.procedures).toEqual([])
+    expect(result.retainedEstimatedTokens).toBeGreaterThan(700)
+    expect(prioritizeClinicalDataForTokenBudget(input, 700, 100_000).data.compositions).toHaveLength(1)
+  })
+
   it('reduces a 75k selection toward 50k by retaining newer records first', () => {
     const observations = Array.from({ length: 60 }, (_, index) => ({
       id: `normal-${index}`,

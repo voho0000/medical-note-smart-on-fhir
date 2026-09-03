@@ -4,6 +4,7 @@ import {
   isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { capVghBrainContextLimit, isVghBrainModel } from '@/src/shared/utils/vghbrain-context-policy'
 import { normalizeOpenAiCompatibleContextWindow } from '@/src/shared/types/openai-compatible.types'
 import {
   isOpenAiCompatibleRuntimeReady,
@@ -49,9 +50,13 @@ export function modelRuntimeIdentity(
   modelId: string,
   customConfig?: OpenAiCompatibleConfig | null,
 ): string {
-  return isCustomOpenAiModelId(modelId)
+  const identity = isCustomOpenAiModelId(modelId)
     ? `${modelId}:${openAiCompatibleCacheIdentity(customConfig)}`
     : modelId
+  // Do not restore summaries generated with the older, text-truncating policy.
+  return isCustomOpenAiModelId(modelId) && isVghBrainModel(customConfig?.modelId ?? modelId)
+    ? `${identity}:vghbrain-100k-clinical-150k-input-v2`
+    : identity
 }
 
 export function modelDisplayLabel(
@@ -73,9 +78,12 @@ export function modelContextLimit(
   customConfig?: OpenAiCompatibleConfig | null,
 ): number {
   if (isCustomOpenAiModelId(modelId)) {
-    return normalizeOpenAiCompatibleContextWindow(
-      customConfig?.contextWindowTokens,
-      customConfig?.modelId,
+    return capVghBrainContextLimit(
+      normalizeOpenAiCompatibleContextWindow(
+        customConfig?.contextWindowTokens,
+        customConfig?.modelId,
+      ),
+      customConfig?.modelId ?? modelId,
     )
   }
   return getModelDefinition(modelId)?.contextLimit ?? 15000

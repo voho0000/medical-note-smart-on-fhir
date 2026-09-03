@@ -243,6 +243,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     ) => {
       const outcome = await runWithContextWindowRetry({
         clinicalContext: transportClinicalContext,
+        preserveClinicalContext: ctx.preserveManualDocuments,
         contextLimit: ctx.contextLimit,
         modelId: ctx.modelId,
         modelName: ctx.modelName,

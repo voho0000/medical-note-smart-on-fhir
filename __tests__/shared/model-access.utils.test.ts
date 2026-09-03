@@ -37,4 +37,19 @@ describe('dynamic custom model access', () => {
       ),
     )
   })
+
+  it('caps VGHBrain at 150K input plus 4K output even for a larger manual setting', () => {
+    expect(modelRuntimeIdentity(dynamicModelId, {
+      ...profile, modelId: 'tvghbrain3.5',
+    })).toContain(':vghbrain-100k-clinical-150k-input-v2')
+    expect(modelContextLimit(dynamicModelId, {
+      ...profile, modelId: 'tvghbrain3.5', contextWindowTokens: 262144,
+    })).toBe(154000)
+    expect(modelContextLimit(dynamicModelId, {
+      ...profile, modelId: 'tvghbrain3.5', contextWindowTokens: 32768,
+    })).toBe(32768)
+    expect(modelContextLimit(dynamicModelId, {
+      ...profile, contextWindowTokens: 262144,
+    })).toBe(262144)
+  })
 })

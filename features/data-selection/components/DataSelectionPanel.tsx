@@ -7,8 +7,9 @@ import {
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
+import { providerClinicalContextSafetyFraction } from "@/src/application/hooks/ai-generation/context-window-retry"
+import { isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT } from "@/src/shared/utils/vghbrain-context-policy"
 import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
 import { useDataFiltering } from "../hooks/useDataFiltering"
 import { useDataCategories } from "../hooks/useDataCategories"
@@ -20,6 +21,7 @@ import {
 } from "../model-fitted-profile"
 import { DataSelectionTab } from "./DataSelectionTab"
 import { PreviewTab } from "./PreviewTab"
+import { ContextTokenMeter } from "./ContextTokenMeter"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
@@ -53,12 +55,16 @@ export function DataSelectionPanel({
   showTemplates = true,
 }: DataSelectionPanelProps) {
   const { t, locale } = useLanguage()
-  // Preview the same summary/insights scope that this panel edits.
-  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext(consumer)
+  // One fitted view drives controls, preview and meter. Opening the editor
+  // must not also format several unused copies of the original full chart.
   const resolvedModel = useResolvedDataSelectionModel(modelId, fallbackModelId)
   const fittedClinicalInput = useClinicalAiInput(
     consumer === 'insights' ? resolvedModel.contextLimit : undefined,
     consumer,
+    isVghBrainModel(resolvedModel.modelLabel) ? providerClinicalContextSafetyFraction(resolvedModel.modelLabel) : 1,
+    !isVghBrainModel(resolvedModel.modelLabel),
+    isVghBrainModel(resolvedModel.modelLabel) ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
+    { includeSources: false },
   )
   const [activeTab, setActiveTab] = useState('selection')
   const displayedProfile = fittedClinicalInput.contextAdaptation
@@ -131,12 +137,26 @@ export function DataSelectionPanel({
         </TabsList>
         <TabsContent value="selection" className="mt-4">
           <DataSelectionTab
+            tokenMeter={fittedClinicalInput.isCalculating ? (
+              <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-muted-foreground">
+                {t.dataSelection.scopeCalculating}
+              </p>
+            ) : <ContextTokenMeter
+              consumer={consumer}
+              overflowIssue={overflowIssue}
+              snapshot={{
+                rawContext: fittedClinicalInput.contextView,
+                originalTokens: fittedClinicalInput.contextAdaptation?.originalTokens,
+                model: resolvedModel,
+                fittedClinicalInput,
+              }}
+            />}
             clinicalData={clinicalData}
             dataCategories={dataCategories}
             selectedData={displayedSelection}
             filters={displayedFilters}
-            displayedDocumentMode={displayedProfile?.documentMode}
-            displayedDocumentIds={displayedProfile?.documentIds}
+            includedDocumentIds={fittedClinicalInput.contextView?.includedDocumentIds}
+            scopePending={fittedClinicalInput.isCalculating}
             onToggle={handleToggle}
             onToggleAll={handleToggleAll}
             onFilterChange={handleFilterChange}
@@ -150,16 +170,16 @@ export function DataSelectionPanel({
           />
         </TabsContent>
         <TabsContent value="preview" className="mt-4">
-          <PreviewTab
+          {fittedClinicalInput.isCalculating ? (
+            <p role="status" aria-live="polite" aria-busy="true" className="text-sm text-muted-foreground">
+              {t.dataSelection.scopeCalculating}
+            </p>
+          ) : <PreviewTab
             formattedClinicalContext={activeTab === 'preview'
-              ? fittedClinicalInput.contextAdaptation
-                ? fittedClinicalInput.formattedClinicalContext
-                : getFormattedClinicalContext()
+              ? fittedClinicalInput.formattedClinicalContext
               : ''}
             maskedClinicalContext={activeTab === 'preview'
-              ? fittedClinicalInput.contextAdaptation
-                ? fittedClinicalInput.clinicalContext
-                : getFullClinicalContext()
+              ? fittedClinicalInput.clinicalContext
               : ''}
             scopeNotice={fittedClinicalInput.contextAdaptation
               ? formatClinicalContextAdaptationNotice(
@@ -167,7 +187,7 @@ export function DataSelectionPanel({
                   locale,
                 )
               : undefined}
-          />
+          />}
         </TabsContent>
       </Tabs>
     </div>

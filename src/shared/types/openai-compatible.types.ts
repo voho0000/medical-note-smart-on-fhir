@@ -1,3 +1,5 @@
+import { isVghBrainModel, VGHBRAIN_CONTEXT_LIMIT } from '@/src/shared/utils/vghbrain-context-policy'
+
 /**
  * Browser-owned connection profile for an OpenAI Chat Completions compatible
  * endpoint. `modelId` is the actual upstream model name sent to the
@@ -70,6 +72,7 @@ export const MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 2_000_000
  *  available. The user can always override them in Settings. */
 export function suggestedOpenAiCompatibleContextWindow(modelId: string): number {
   const id = modelId.trim().toLowerCase()
+  if (isVghBrainModel(id)) return VGHBRAIN_CONTEXT_LIMIT
   // Nemotron Ultra can be configured for ~1M, but NVIDIA NIM's default runtime
   // window is 262,144. Endpoint-reported max_model_len takes precedence in UI.
   if (/nemotron-3-ultra-550b-a55b/.test(id)) return 262144

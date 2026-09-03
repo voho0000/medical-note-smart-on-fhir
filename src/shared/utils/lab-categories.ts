@@ -522,6 +522,22 @@ function normalize(s: string): string {
   return s.normalize('NFKC').trim().toUpperCase()
 }
 
+// Compile the fixed vocabulary once, not once per observation per matching
+// pass. A document toggle can re-scope thousands of labs in several consumers;
+// rebuilding these sets dominated that interaction's CPU time. Only static
+// terminology is cached here — never patient observations or their results.
+// Keep category order intact because the first matching category still wins.
+const CATEGORY_MATCHERS = LAB_CATEGORIES.map((category) => ({
+  category,
+  loincCodes: new Set((category.loincCodes ?? []).map(normalize)),
+  codes: new Set(category.codes.map(normalize)),
+  canonicalKeys: new Set([...(category.preferredOrder ?? []), ...category.codes].map(normalize)),
+}))
+const MICROBIOLOGY_MATCHER = CATEGORY_MATCHERS.find(({ category }) => category.id === 'microbio')
+const NON_MICROBIOLOGY_LOINCS = new Set(CATEGORY_MATCHERS
+  .filter(({ category }) => category.id !== 'microbio')
+  .flatMap(({ loincCodes }) => [...loincCodes]))
+
 /**
  * Determine which category a lab observation belongs to.
  * Returns null if it doesn't match any defined category.
@@ -643,14 +659,9 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // Runs first on purpose. A culture is microbiology whatever it was grown
   // from, so specimen routing below must not claim a urine culture for 尿液 or
   // drop a sputum one for being neither blood nor urine.
-  const microbiology = LAB_CATEGORIES.find((c) => c.id === 'microbio')
-  const isMicrobiologyLoinc = microbiology?.loincCodes?.some((code) =>
-    codeNorms.includes(normalize(code)),
-  ) ?? false
-  const hasKnownNonMicrobiologyLoinc = LAB_CATEGORIES.some((category) => (
-    category.id !== 'microbio'
-      && (category.loincCodes?.some((code) => codeNorms.includes(normalize(code))) ?? false)
-  ))
+  const microbiology = MICROBIOLOGY_MATCHER?.category
+  const isMicrobiologyLoinc = codeNorms.some((code) => MICROBIOLOGY_MATCHER?.loincCodes.has(code))
+  const hasKnownNonMicrobiologyLoinc = codeNorms.some((code) => NON_MICROBIOLOGY_LOINCS.has(code))
   // Name-only matching is allowed for uncoded data and NHI section 13
   // (microbiology). A known non-microbiology order must not be promoted merely
   // because an allergen name contains 「黴菌」— e.g. 30022C Alternaria /
@@ -688,17 +699,14 @@ export function categorizeObservation(obs: any): LabCategory | null {
   if (specimenBlocksPanels) return fallbackCategory(obs)
 
   // ── Pass 2: LOINC against cat.loincCodes (authoritative) ───────────────
-  for (const cat of LAB_CATEGORIES) {
-    if (!cat.loincCodes) continue
-    const loincSet = new Set(cat.loincCodes.map(normalize))
+  for (const { category: cat, loincCodes: loincSet } of CATEGORY_MATCHERS) {
     for (const cand of codeNorms) {
       if (loincSet.has(cand)) return cat
     }
   }
 
   // ── Pass 3: exact short-code match against cat.codes ───────────────────
-  for (const cat of LAB_CATEGORIES) {
-    const codeSet = new Set(cat.codes.map(normalize))
+  for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of exactCandidates) {
       if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
     }
@@ -715,8 +723,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
        .trim()
     )
     .filter(Boolean)
-  for (const cat of LAB_CATEGORIES) {
-    const codeSet = new Set(cat.codes.map(normalize))
+  for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of strippedDisplays) {
       if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
     }
@@ -737,11 +744,10 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const canonicalKeys = [
     canonicalKeyFromLoinc(obs),
     ...exactCandidates.map((candidate) => canonicalTestKeyFromString(candidate)),
-  ].filter((key): key is string => !!key && key !== 'UNKNOWN')
-  for (const cat of LAB_CATEGORIES) {
-    const keySet = new Set([...(cat.preferredOrder ?? []), ...cat.codes].map(normalize))
+  ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
+  for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
     for (const key of canonicalKeys) {
-      if (keySet.has(normalize(key)) && nameMatchAllowedForCategory(cat, obs)) return cat
+      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs)) return cat
     }
   }
 

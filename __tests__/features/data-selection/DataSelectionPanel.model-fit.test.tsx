@@ -6,6 +6,7 @@ import {
 } from '@/src/shared/constants/data-selection.constants'
 
 const mockClinicalAiInput = jest.fn()
+let mockModelLabel = 'small-model'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
@@ -31,7 +32,8 @@ jest.mock('@/src/application/hooks/ai-generation/use-clinical-ai-input.hook', ()
 jest.mock('@/features/data-selection/hooks/useResolvedDataSelectionModel', () => ({
   useResolvedDataSelectionModel: () => ({
     modelId: 'small-model',
-    contextLimit: 32_768,
+    contextLimit: mockModelLabel === 'tvghbrain3.5' ? 154_000 : 32_768,
+    modelLabel: mockModelLabel,
   }),
 }))
 jest.mock('@/features/data-selection/hooks/useDataCategories', () => ({
@@ -41,14 +43,14 @@ jest.mock('@/features/data-selection/components/DataSelectionTab', () => ({
   DataSelectionTab: (props: {
     selectedData: { observations: boolean }
     filters: { encounterTimeRange: string; labDepth: string }
-    displayedDocumentMode?: string
+    includedDocumentIds?: string[]
   }) => (
     <div data-testid="selection-values">
       {JSON.stringify({
         observations: props.selectedData.observations,
         encounterTimeRange: props.filters.encounterTimeRange,
         labDepth: props.filters.labDepth,
-        documentMode: props.displayedDocumentMode ?? 'saved',
+        includedDocumentIds: props.includedDocumentIds ?? [],
       })}
     </div>
   ),
@@ -73,6 +75,7 @@ function fittedInput(adapted: boolean) {
     dataReady: true,
     clinicalContext: 'context',
     formattedClinicalContext: 'formatted',
+    contextView: { includedDocumentIds: adapted ? ['latest-discharge'] : ['latest-discharge', 'older-discharge'] },
     effectiveProfile: adapted
       ? effectiveProfile
       : {
@@ -95,6 +98,8 @@ function fittedInput(adapted: boolean) {
 
 describe('DataSelectionPanel model-fitted controls', () => {
   beforeEach(() => {
+    jest.clearAllMocks()
+    mockModelLabel = 'small-model'
     mockClinicalAiInput.mockReturnValue(fittedInput(true))
   })
 
@@ -118,7 +123,7 @@ describe('DataSelectionPanel model-fitted controls', () => {
       '"labDepth":"latest"',
     )
     expect(screen.getByTestId('selection-values')).toHaveTextContent(
-      '"documentMode":"latestAdmission"',
+      '"includedDocumentIds":["latest-discharge"]',
     )
 
     mockClinicalAiInput.mockReturnValue(fittedInput(false))
@@ -134,7 +139,7 @@ describe('DataSelectionPanel model-fitted controls', () => {
       '"labDepth":"all"',
     )
     expect(screen.getByTestId('selection-values')).toHaveTextContent(
-      '"documentMode":"saved"',
+      '"includedDocumentIds":["latest-discharge","older-discharge"]',
     )
   })
 
@@ -151,9 +156,21 @@ describe('DataSelectionPanel model-fitted controls', () => {
       />,
     )
 
-    expect(mockClinicalAiInput).toHaveBeenCalledWith(undefined, 'aiExport')
+    expect(mockClinicalAiInput).toHaveBeenCalledWith(undefined, 'aiExport', 1, true, undefined, { includeSources: false })
     expect(screen.getByTestId('selection-values')).toHaveTextContent(
       '"observations":true',
     )
+  })
+
+  it('previews VGHBrain with the same reserve and whole-text policy as generation', () => {
+    mockModelLabel = 'tvghbrain3.5'
+    render(<DataSelectionPanel
+      clinicalData={{} as never}
+      selectedData={{ ...ALL_DATA_SELECTION }}
+      filters={{ ...ALL_DATA_FILTERS }}
+      onSelectionChange={jest.fn()}
+      onFiltersChange={jest.fn()}
+    />)
+    expect(mockClinicalAiInput).toHaveBeenCalledWith(154_000, 'insights', 1, false, 100_000, { includeSources: false })
   })
 })

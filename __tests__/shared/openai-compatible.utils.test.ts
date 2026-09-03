@@ -26,6 +26,7 @@ describe('OpenAI-compatible context-window suggestions', () => {
   })
 
   it.each([
+    ['tvghbrain3.5', 154000],
     ['qwen2.5:7b', 32768],
     ['qwen2.5vl:7b', 128000],
     ['Qwen/Qwen2.5-VL-7B-Instruct', 128000],

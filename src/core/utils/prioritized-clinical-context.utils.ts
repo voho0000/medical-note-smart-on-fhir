@@ -208,6 +208,7 @@ export function prioritizeClinicalDataForTokenBudget(
   targetTokens: number,
   originalFormattedTokens: number,
   nowMs = Date.now(),
+  options: { preserveDocuments?: boolean } = {},
 ): PrioritizedClinicalDataResult {
   const observations = input.observations ?? []
   const abnormalObservationIds = new Set(
@@ -288,7 +289,14 @@ export function prioritizeClinicalDataForTokenBudget(
   const documentShare = documents.length === 0
     ? 0
     : Math.min(MAX_DOCUMENT_SHARE, rawDocumentShare)
-  const nonDocumentBudget = Math.max(1, Math.floor(estimatedBudget * (1 - documentShare)))
+  // Explicit selections reserve their full text first. Required safety records
+  // remain mandatory even if the result overflows; preflight must report that
+  // conflict instead of silently dropping documents or clinical safety facts.
+  const nonDocumentBudget = options.preserveDocuments
+    ? Math.floor(recordCostTotal * Math.min(1,
+        Math.max(0, targetTokens - documentCostTotal) /
+        Math.max(1, originalFormattedTokens - documentCostTotal)))
+    : Math.max(1, Math.floor(estimatedBudget * (1 - documentShare)))
 
   const required = candidates.filter((candidate) => candidate.required)
   const optional = candidates
@@ -310,12 +318,12 @@ export function prioritizeClinicalDataForTokenBudget(
   const documentCostBudget = Math.max(1, Math.floor(estimatedBudget * documentShare))
   let usedDocumentCost = 0
   for (const document of documentCosts) {
-    if (selectedDocumentIds.size === 0 || usedDocumentCost + document.cost <= documentCostBudget) {
+    if (options.preserveDocuments || selectedDocumentIds.size === 0 || usedDocumentCost + document.cost <= documentCostBudget) {
       selectedDocumentIds.add(document.id)
       usedDocumentCost += document.cost
     }
   }
-  const documentTokenBudget = documents.length === 0
+  const documentTokenBudget = options.preserveDocuments || documents.length === 0
     ? undefined
     : Math.min(
         documentCostTotal,
@@ -374,7 +382,7 @@ export function prioritizeClinicalDataForTokenBudget(
   const retainedEstimatedTokens = collections.reduce(
     (sum, collection) => sum + ((data[collection] ?? []) as any[])
       .reduce((collectionSum, value) => collectionSum + recordCost(value), 0),
-    Math.min(documentCostTotal, documentTokenBudget ?? 0),
+    options.preserveDocuments ? documentCostTotal : Math.min(documentCostTotal, documentTokenBudget ?? 0),
   )
 
   return {

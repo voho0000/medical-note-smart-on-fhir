@@ -8,6 +8,7 @@ import {
   createContextOverflowIssue,
 } from '@/src/shared/utils/context-budget'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { capVghBrainContextLimit, isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT } from '@/src/shared/utils/vghbrain-context-policy'
 
 const PROVIDER_RETRY_TARGET_FRACTIONS = [0.7, 0.5, 0.35] as const
 const TVGH_GEMMA_SAFETY_FRACTION = 0.65
@@ -18,6 +19,8 @@ export interface ContextWindowRetryRequest<TRequest, TResult> {
   modelId: string
   modelName: string
   locale: string
+  /** Custom document selections must survive provider/preflight recovery intact. */
+  preserveClinicalContext?: boolean
   buildRequest: (clinicalContext: string) => {
     request: TRequest
     /** Complete serialized prompt text, including fixed instructions and
@@ -43,12 +46,11 @@ export interface ContextWindowRetryResult<TResult> {
   retryCount: number
 }
 
-/** TVGHBrain currently routes to Gemma-family backends. Their tokenizer can
- * count Traditional Chinese considerably more densely than our provider-
- * neutral browser estimate, so leave deterministic headroom before the first
- * request. The provider-overflow retry below remains the final authority. */
+/** VGHBrain uses explicit 100K clinical / 150K input caps instead of a percentage.
+ * Other Gemma endpoints retain their existing tokenizer headroom. */
 export function providerClinicalContextSafetyFraction(modelName: string): number {
-  return /(?:tvghbrain|gemma)/i.test(modelName)
+  if (isVghBrainModel(modelName)) return 1
+  return /gemma/i.test(modelName)
     ? TVGH_GEMMA_SAFETY_FRACTION
     : 1
 }
@@ -61,6 +63,42 @@ export function providerClinicalContextSafetyFraction(modelName: string): number
 export async function runWithContextWindowRetry<TRequest, TResult>(
   options: ContextWindowRetryRequest<TRequest, TResult>,
 ): Promise<ContextWindowRetryResult<TResult>> {
+  // VGHBrain's hook already reduces whole records. Never slice the assembled
+  // clinical text. Only optional source-navigation overhead can be removed.
+  const isVgh = isVghBrainModel(options.modelName)
+  if (isVgh || options.preserveClinicalContext) {
+    for (let attempt = 0; ; attempt += 1) {
+      const built = options.buildRequest(options.clinicalContext)
+      const overflow = createContextOverflowIssue(built.requestText, options.modelId, {
+        selectedContext: options.clinicalContext,
+        selectedContextLimit: isVgh ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
+        allowExactFit: isVgh,
+        contextLimit: capVghBrainContextLimit(options.contextLimit, options.modelName),
+      })
+      if (overflow) {
+        if ((!isVgh || overflow.selectedTokens! <= VGHBRAIN_CLINICAL_TOKEN_LIMIT) && attempt === 0
+            && options.recoverBeforeContextReduction?.('local-preflight')) {
+          options.onRetry?.('optional-overhead-removed', 0)
+          continue
+        }
+        throw new ContextOverflowError(overflow, options.locale)
+      }
+      try {
+        return {
+          value: await options.execute(built.request),
+          clinicalContext: options.clinicalContext,
+          retryCount: 0,
+        }
+      } catch (error) {
+        if (isProviderContextWindowExceededError(error) && attempt === 0
+            && options.recoverBeforeContextReduction?.('provider-overflow')) {
+          options.onRetry?.('optional-overhead-removed', 0)
+          continue
+        }
+        throw error
+      }
+    }
+  }
   const baseTarget = clinicalContextTokenTarget(options.contextLimit)
   const initialSafetyFraction = providerClinicalContextSafetyFraction(options.modelName)
   let clinicalContext = initialSafetyFraction < 1

@@ -18,6 +18,33 @@ const fullProfile = {
 }
 
 describe('adaptive clinical context', () => {
+  it.each(['full', 'trimmed', 'compact', 'tight', 'prioritized'] as const)('keeps custom documents complete in %s, including an empty selection', (tier) => {
+    for (const documentIds of [['old', 'new'], []]) {
+      const candidate = buildClinicalContextFitCandidate({ ...fullProfile, documentMode: 'custom', documentIds }, tier, 700)
+      expect(candidate.profile.documentMode).toBe('custom')
+      expect(candidate.profile.documentIds).toEqual(documentIds)
+      if (documentIds.length) expect(candidate.documentTokenBudget).toBeUndefined()
+    }
+  })
+
+  it.each(['full', 'prioritized'] as const)('preserves immutable profile field identities in the %s tier', (tier) => {
+    const base = {
+      ...fullProfile,
+      selection: Object.freeze({ ...fullProfile.selection }),
+      filters: Object.freeze({ ...fullProfile.filters }),
+      documentIds: [...fullProfile.documentIds],
+    }
+    const candidate = buildClinicalContextFitCandidate(base, tier, 100_000)
+    expect(candidate.profile.selection).toBe(base.selection)
+    expect(candidate.profile.filters).toBe(base.filters)
+    expect(candidate.profile.documentIds).toBe(base.documentIds)
+    // Reduced tiers still create independent objects before changing fields.
+    const compact = buildClinicalContextFitCandidate(base, 'compact', 100_000)
+    expect(compact.profile.filters).not.toBe(base.filters)
+    expect(compact.profile.selection).not.toBe(base.selection)
+    expect(base.filters.labDepth).toBe('all')
+  })
+
   it('uses bounded dynamic headroom instead of discarding a fixed window percentage', () => {
     expect(clinicalContextTokenTarget(32_768)).toBe(20_768)
     expect(clinicalContextTokenTarget(120_000)).toBe(98_600)

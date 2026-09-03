@@ -32,6 +32,10 @@ export interface PreflightContextWarningOptions {
   selectedContext?: string
   /** Dynamic override for a browser-configured OpenAI-compatible model. */
   contextLimit?: number
+  /** Independent cap on clinical data, before instructions/source navigation. */
+  selectedContextLimit?: number
+  /** Explicit input caps permit exactly the stated maximum. Legacy guards do not. */
+  allowExactFit?: boolean
 }
 
 /** Stable, machine-readable details for a request that cannot fit the model. */
@@ -41,13 +45,14 @@ export interface ContextOverflowIssue {
   requestTokens: number
   /** Estimated tokens from Data Selection, when the caller supplied them. */
   selectedTokens: number | null
+  selectedLimit?: number
   /** Maximum tokens available to the complete outbound request. */
   usable: number
   /** Model's total context window. */
   limit: number
   /** Tokens held back for the model's response. */
   reserve: number
-  /** Number of request tokens over the usable input budget. */
+  /** Largest excess over either the complete-input or clinical-data budget. */
   overBy: number
   /** Concrete Data Selection target, after accounting for fixed prompt cost. */
   suggestedSelectedMax: number | null
@@ -80,6 +85,7 @@ export function evaluateContextBudget(
   modelId: string,
   responseReserve: number = DEFAULT_RESPONSE_RESERVE,
   contextLimitOverride?: number,
+  allowExactFit = false,
 ): ContextBudget {
   const limit = contextLimitOverride && contextLimitOverride > 0
     ? Math.round(contextLimitOverride)
@@ -87,7 +93,7 @@ export function evaluateContextBudget(
   const usable = Math.max(1, limit - responseReserve)
   const fraction = tokens / usable
   const level: ContextBudgetLevel =
-    fraction >= 1 ? 'over' : fraction >= WARN_FRACTION ? 'warn' : 'ok'
+    (allowExactFit ? fraction > 1 : fraction >= 1) ? 'over' : fraction >= WARN_FRACTION ? 'warn' : 'ok'
   return { tokens, limit, usable, fraction, level }
 }
 
@@ -122,23 +128,34 @@ export function createContextOverflowIssue(
     DEFAULT_RESPONSE_RESERVE,
     options.contextLimit,
   )
-  if (budget.level !== 'over') return null
-
   const selectedTokens = options.selectedContext === undefined
     ? null
     : estimateTokens(options.selectedContext)
+  const selectedLimit = options.selectedContextLimit
+  const selectedOver = selectedTokens !== null && selectedLimit !== undefined
+    && selectedTokens > selectedLimit
+  const requestOver = options.allowExactFit
+    ? budget.tokens > budget.usable
+    : budget.level === 'over'
+  if (!requestOver && !selectedOver) return null
   const reserve = Math.max(0, budget.limit - budget.usable)
-  const overBy = Math.max(0, budget.tokens - budget.usable)
+  const overBy = Math.max(0, budget.tokens - budget.usable,
+    selectedTokens !== null && selectedLimit !== undefined ? selectedTokens - selectedLimit : 0)
   const suggestedSelectedMax = selectedTokens === null
     ? null
     // `evaluateContextBudget` treats exactly-full as over: keep the suggested
     // target at least one estimated token below that hard boundary.
-    : Math.max(0, Math.min(selectedTokens, selectedTokens - overBy - 1))
+    : Math.max(0, Math.min(
+        selectedTokens,
+        selectedLimit ?? Number.POSITIVE_INFINITY,
+        selectedTokens - overBy - (options.allowExactFit ? 0 : 1),
+      ))
 
   return {
     kind: 'context-overflow',
     requestTokens: budget.tokens,
     selectedTokens,
+    ...(selectedLimit === undefined ? {} : { selectedLimit }),
     usable: budget.usable,
     limit: budget.limit,
     reserve,
@@ -152,6 +169,12 @@ export function formatContextOverflowIssue(
   issue: ContextOverflowIssue,
   locale: string,
 ): string {
+  if (issue.selectedLimit !== undefined && issue.selectedTokens !== null
+      && issue.selectedTokens > issue.selectedLimit) {
+    return locale === 'zh-TW'
+      ? `病人 context 約 ${formatApproxTokenCount(issue.selectedTokens)} tokens，超過 ${formatApproxTokenCount(issue.selectedLimit)} tokens 上限。本次未送出，也未截短文字；請縮小「資料選擇」範圍。加入導引等內容後，完整輸入也必須在 ${formatApproxTokenCount(issue.usable)} tokens 以內。`
+      : `Patient context is about ${formatApproxTokenCount(issue.selectedTokens)} tokens, above its ${formatApproxTokenCount(issue.selectedLimit)}-token cap. Nothing was sent or text-truncated; narrow Data Selection. The complete input including guidance must also fit within ${formatApproxTokenCount(issue.usable)} tokens.`
+  }
   const requestTokens = formatApproxTokenCount(issue.requestTokens)
   const usableTokens = formatApproxTokenCount(issue.usable)
   const limitTokens = formatApproxTokenCount(issue.limit)

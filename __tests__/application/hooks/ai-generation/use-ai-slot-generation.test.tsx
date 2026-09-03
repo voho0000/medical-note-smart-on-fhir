@@ -36,6 +36,7 @@ let mockOpenAiCompatibleProfiles: OpenAiCompatibleProfile[] | null = null
 let mockLocale: 'zh-TW' | 'en' = 'zh-TW'
 let mockAudience: 'medical' | 'patient' = 'patient'
 const mockStopAi = jest.fn()
+const mockContextOptions = jest.fn()
 
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: { id: mockPatientId } }),
@@ -43,8 +44,10 @@ jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
 jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
   useClinicalContext: (
     _consumer: unknown,
-    options?: { profile?: { filters?: { labDepth?: string } } },
-  ) => ({
+    options?: { profile?: { filters?: { labDepth?: string } }; documentTokenBudget?: number },
+  ) => {
+    mockContextOptions(options)
+    return {
     getFullClinicalContext: () => (
       mockClinicalContextForProfile
         ? mockClinicalContextForProfile(options?.profile)
@@ -56,7 +59,8 @@ jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
         : mockClinicalContext
     ),
     includedDocumentIds: [],
-  }),
+    }
+  },
 }))
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => mockClinicalData,
@@ -796,7 +800,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.result?.headline).toBe('trimmed')
   })
 
-  it('applies the TVGHBrain tokenizer reserve through structured reduction before generation', async () => {
+  it('reduces VGHBrain records to the independent 100K clinical target', async () => {
     mockPatientId = 'smart-patient-1'
     mockOpenAiCompatible = {
       enabled: true,
@@ -809,7 +813,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     }
     mockClinicalContextForProfile = (profile) => (
       profile?.filters?.labDepth === '8'
-        ? `trimmed-${'病歷'.repeat(105_000)}`
+        ? `trimmed-${'病歷'.repeat(35_000)}`
         : `full-${'病歷'.repeat(135_000)}`
     )
     const store = createAiResultStore<{ headline: string }>()
@@ -843,10 +847,47 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(context.clinicalContext).not.toContain('omitted to fit the selected model')
     expect(context.contextAdaptation).toMatchObject({
       tier: 'trimmed',
-      targetTokens: 146_993,
+      targetTokens: 100_000,
     })
     expect(context.contextAdaptation?.adaptedTokens)
       .toBeLessThan(context.contextAdaptation?.originalTokens ?? 0)
+  })
+
+  it('never supplies a document truncation budget or slices an oversized VGHBrain context', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockClinicalContext = `BEGIN-${'病歷'.repeat(90_000)}-END`
+    mockOpenAiCompatible = {
+      enabled: true,
+      baseUrl: 'https://hospital.example/v1',
+      modelId: 'tvghbrain3.5',
+      apiKey: null,
+      contextWindowTokens: 262_144,
+      contextWindowSource: 'manual',
+    }
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async (ctx: { clinicalContext: string; contextLimit: number }) => {
+      // The production request builder owns preflight. Verify that it receives
+      // the complete text, so it can reject it rather than send a sliced note.
+      expect(ctx.clinicalContext).toBe(mockClinicalContext)
+      expect(ctx.contextLimit).toBe(154_000)
+      return { headline: 'intact input reached preflight' }
+    })
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: CUSTOM_OPENAI_MODEL_ID,
+      autoRunEnabled: false,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+    await waitFor(() => expect(result.current.dataReady).toBe(true))
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    expect(result.current.contextAdaptation?.tier).toBe('prioritized')
+    expect(mockContextOptions.mock.calls.every(([options]) => options.documentTokenBudget === undefined)).toBe(true)
+    await act(async () => result.current.generate())
+    expect(run).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a 74k clinical input intact for a 120k model', async () => {

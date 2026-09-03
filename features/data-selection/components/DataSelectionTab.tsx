@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useSyncExternalStore } from "react"
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -15,17 +15,17 @@ import { ContextTokenMeter } from "./ContextTokenMeter"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
-import type { DocumentMode } from "@/src/core/utils/clinical-documents.utils"
 import type { FilterValue } from "@/src/core/interfaces/data-category.interface"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
 interface DataSelectionTabProps {
+  tokenMeter?: ReactNode
   clinicalData: ClinicalDataCollection
   dataCategories: DataItem[]
   selectedData: DataSelection
   filters: DataFilters
-  displayedDocumentMode?: DocumentMode
-  displayedDocumentIds?: string[]
+  includedDocumentIds?: string[]
+  scopePending?: boolean
   onToggle: (id: DataType, checked: boolean) => void
   onToggleAll: (checked: boolean) => void
   onFilterChange: (key: keyof DataFilters, value: FilterValue) => void
@@ -57,12 +57,13 @@ const getServerHydrationSnapshot = () => false
 const ACTIVE_SEGMENT = 'bg-primary/10 text-primary shadow-sm'
 
 export function DataSelectionTab({
+  tokenMeter,
   clinicalData,
   dataCategories,
   selectedData,
   filters,
-  displayedDocumentMode,
-  displayedDocumentIds,
+  includedDocumentIds,
+  scopePending,
   onToggle,
   onToggleAll,
   onFilterChange,
@@ -106,12 +107,12 @@ export function DataSelectionTab({
     <div className="space-y-3">
       {/* Live token meter — surfaces under/over-selection against the active summary model's
           context window (the two previously-invisible failure modes). */}
-      <ContextTokenMeter
+      {tokenMeter ?? <ContextTokenMeter
         modelId={modelId}
         fallbackModelId={fallbackModelId}
         overflowIssue={overflowIssue}
         consumer={consumer}
-      />
+      />}
 
       {/* Templates — one-tap fill, then tweak the single selection freely. */}
       {showTemplates && <div>
@@ -250,8 +251,8 @@ export function DataSelectionTab({
                           <DocumentChecklist
                             clinicalData={clinicalData}
                             consumer={consumer}
-                            displayedDocumentMode={displayedDocumentMode}
-                            displayedDocumentIds={displayedDocumentIds}
+                            includedDocumentIds={includedDocumentIds}
+                            scopePending={scopePending}
                           />
                         </div>
                       )}

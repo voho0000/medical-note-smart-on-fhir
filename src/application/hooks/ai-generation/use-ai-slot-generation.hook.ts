@@ -65,9 +65,11 @@ import {
 } from '@/src/shared/utils/model-access.utils'
 import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
 import { providerClinicalContextSafetyFraction } from './context-window-retry'
+import { isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT } from '@/src/shared/utils/vghbrain-context-policy'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
+  preserveManualDocuments?: boolean
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -268,6 +270,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     dataReady,
     clinicalContext,
     inputSignature,
+    sourceScopeSignature = '',
+    preserveManualDocuments = false,
     clinicalData: scopedClinicalData,
     catalog,
     contextAdaptation,
@@ -275,6 +279,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resolvedContextLimit,
     'insights',
     clinicalContextSafetyFraction,
+    !isVghBrainModel(resolvedModelName),
+    isVghBrainModel(resolvedModelName) ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
   )
 
   // A cache/result slot is reusable only for the exact selected clinical
@@ -315,8 +321,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // scope. Keep the Bundle revision in the identity even though it is not in
   // the persisted slot key: importing a different Bundle with the same
   // patient id/content must still invalidate an in-flight visible batch.
-  const resultScope = slotKey
-    ? [bundleRevision, patientId, audience, locale, variantInputSignature].join('::')
+  const ownershipSignature = variantInputSignature || (sourceScopeSignature && inputVariant
+    ? `${sourceScopeSignature}::${inputVariant}` : sourceScopeSignature)
+  const resultScope = ownershipSignature
+    ? [bundleRevision, patientId, audience, locale, ownershipSignature].join('::')
     : ''
   // The frozen zh-TW demo has a bundled result even when a model preference
   // from real data is still selected. Treat it as a presentation fallback,
@@ -490,6 +498,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           operationKey: slotKey,
           contextLimit: resolvedContextLimit,
           contextAdaptation,
+          preserveManualDocuments,
         }),
     })
     if (
@@ -504,7 +513,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, preserveManualDocuments, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

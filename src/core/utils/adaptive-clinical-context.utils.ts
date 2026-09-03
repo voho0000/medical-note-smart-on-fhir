@@ -35,6 +35,12 @@ export interface ClinicalContextAdaptation {
   targetTokens: number
   originalTokens: number
   adaptedTokens: number
+  protectedDocumentCount?: number
+}
+
+export function hasManualDocumentSelection(profile: ClinicalContextProfile): boolean {
+  return profile.selection.documents && profile.documentMode === 'custom' &&
+    (profile.documentIds?.length ?? 0) > 0
 }
 
 const TIME_RANGE_ORDER: TimeRange[] = [
@@ -102,10 +108,13 @@ export function buildClinicalContextFitCandidate(
   targetTokens: number,
 ): ClinicalContextFitCandidate {
   const normalizedBase: ClinicalContextProfile = {
-    selection: { ...base.selection },
-    filters: { ...base.filters },
+    // These are immutable provider values. Preserve their identity: copying
+    // filters when only the document mode changes invalidates every lab,
+    // encounter and medication memo in each mounted AI consumer.
+    selection: base.selection,
+    filters: base.filters,
     documentMode: base.documentMode ?? 'deduplicatedAdmissions',
-    documentIds: [...(base.documentIds ?? [])],
+    documentIds: base.documentIds ?? [],
   }
   if (tier === 'full' || tier === 'prioritized') {
     return { tier, profile: normalizedBase }
@@ -187,12 +196,12 @@ export function buildClinicalContextFitCandidate(
       filters,
       // A bounded context includes one clinically meaningful document rather
       // than silently dropping all discharge evidence.
-      documentMode: 'latestAdmission',
-      documentIds: [],
+      documentMode: normalizedBase.documentMode === 'custom' ? 'custom' : 'latestAdmission',
+      documentIds: normalizedBase.documentMode === 'custom' ? normalizedBase.documentIds : [],
     },
     // Full discharge summaries can dominate a 32k window. Keep their beginning
     // and end under a shared sub-budget; shorter notes remain untouched.
-    documentTokenBudget: Math.max(
+    documentTokenBudget: hasManualDocumentSelection(normalizedBase) ? undefined : Math.max(
       1,
       Math.min(
         targetTokens,
@@ -265,6 +274,12 @@ export function formatClinicalContextAdaptationNotice(
   locale: string,
 ): string {
   const contextLabel = formatApproxTokenCount(adaptation.contextLimit)
+  if (adaptation.protectedDocumentCount) {
+    const count = adaptation.protectedDocumentCount
+    return locale === 'zh-TW'
+      ? `完整保留 ${count} 份自選文件，依模型 ${contextLabel} 內容視窗縮減其他資料。若仍超過容量，送出前會提示調整，不會自動排除或截短自選文件。來源索引已依保留內容重建；你儲存的資料範圍沒有變更。`
+      : `Kept all ${count} manually selected documents in full and reduced other records for this model's ${contextLabel}-token window. If the input still exceeds capacity, you will be asked to adjust it before sending; selected documents will not be silently excluded or truncated. Sources reflect the retained content; your saved scope is unchanged.`
+  }
   if (adaptation.tier === 'prioritized') {
     const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
     return locale === 'zh-TW'

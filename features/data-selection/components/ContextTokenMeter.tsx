@@ -12,11 +12,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
+import { providerClinicalContextSafetyFraction } from "@/src/application/hooks/ai-generation/context-window-retry"
+import { isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT, VGHBRAIN_INPUT_TOKEN_LIMIT } from "@/src/shared/utils/vghbrain-context-policy"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import {
   DEFAULT_RESPONSE_RESERVE,
   evaluateContextBudget,
   formatApproxTokenCount,
+  formatContextOverflowIssue,
   type ContextOverflowIssue,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
@@ -53,29 +56,53 @@ interface ContextTokenMeterProps {
   fallbackModelId?: string
   overflowIssue?: ContextOverflowIssue | null
   consumer?: DataConsumer
+  /** Share the panel's calculation; never mount a second fitting pipeline. */
+  snapshot?: ContextTokenMeterSnapshot
 }
 
-export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps) {
+export interface ContextTokenMeterSnapshot {
+  /** For a fitted snapshot this can be the effective, not original, view. */
+  rawContext: ReturnType<typeof useClinicalContext>
+  originalTokens?: number
+  model: ReturnType<typeof useResolvedDataSelectionModel>
+  fittedClinicalInput: ReturnType<typeof useClinicalAiInput>
+}
+
+export function ContextTokenMeter(props: ContextTokenMeterProps) {
+  return props.snapshot
+    ? <ContextTokenMeterView {...props} snapshot={props.snapshot} />
+    : <StandaloneContextTokenMeter {...props} />
+}
+
+function StandaloneContextTokenMeter({ modelId, fallbackModelId, consumer = 'insights', ...props }: ContextTokenMeterProps) {
+  // The main Data Selection drawer edits the summary/insights profile. Read
+  // that exact consumer here too so a stale legacy chat profile cannot make
+  // the meter disagree with the subsequent summary request.
+  const rawContext = useClinicalContext(consumer)
+  const model = useResolvedDataSelectionModel(
+    modelId,
+    fallbackModelId,
+  )
+  const { contextLimit, modelLabel } = model
+  const fittedClinicalInput = useClinicalAiInput(
+    consumer === 'insights' ? contextLimit : undefined,
+    consumer,
+    isVghBrainModel(modelLabel) ? providerClinicalContextSafetyFraction(modelLabel) : 1,
+    !isVghBrainModel(modelLabel),
+    isVghBrainModel(modelLabel) ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
+  )
+
+  return <ContextTokenMeterView {...props} consumer={consumer} snapshot={{ rawContext, model, fittedClinicalInput }} />
+}
+
+function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps & { snapshot: ContextTokenMeterSnapshot }) {
   const { t, locale } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   const isExternalExport = consumer === 'aiExport'
   const externalCopy = t.ipsExport.aiHandoff
-  // The main Data Selection drawer edits the summary/insights profile. Read
-  // that exact consumer here too so a stale legacy chat profile cannot make
-  // the meter disagree with the subsequent summary request.
-  const { getClinicalContext, formatClinicalContext } = useClinicalContext(consumer)
-  const {
-    modelId: effectiveModelId,
-    contextLimit,
-    modelLabel,
-  } = useResolvedDataSelectionModel(
-    modelId,
-    fallbackModelId,
-  )
-  const fittedClinicalInput = useClinicalAiInput(
-    consumer === 'insights' ? contextLimit : undefined,
-    consumer,
-  )
+  const { rawContext, model, fittedClinicalInput } = snapshot
+  const { getClinicalContext, formatClinicalContext } = rawContext
+  const { modelId: effectiveModelId, contextLimit, modelLabel } = model
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
@@ -113,11 +140,14 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
     fittedClinicalInput.contextAdaptation,
   )
   const displayedTotal = showsAdaptedScope ? fittedTotal : total
+  const originalTotal = snapshot.originalTokens ?? total
+  const isVghSummary = consumer === 'insights' && isVghBrainModel(modelLabel)
   const budget = evaluateContextBudget(
     displayedTotal,
     effectiveModelId,
     DEFAULT_RESPONSE_RESERVE,
-    contextLimit,
+    isVghSummary ? Math.min(contextLimit, VGHBRAIN_CLINICAL_TOKEN_LIMIT + DEFAULT_RESPONSE_RESERVE) : contextLimit,
+    isVghSummary,
   )
   const topSections = useMemo(
     () => [...sections].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((s) => s.tokens > 0),
@@ -213,6 +243,10 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
       <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
         {isExternalExport
           ? externalCopy.externalTokenHint
+          : isVghSummary
+          ? locale === 'zh-TW'
+            ? `病人 context 上限 ${fmt(budget.usable)} tokens；加入導引、指令與來源索引後，完整輸入上限 ${fmt(Math.min(VGHBRAIN_INPUT_TOKEN_LIMIT, contextLimit - DEFAULT_RESPONSE_RESERVE))} tokens，另預留 ${fmt(DEFAULT_RESPONSE_RESERVE)} 供回覆。不截短文字。`
+            : `Patient context: up to ${fmt(budget.usable)} tokens. Complete input including guidance, instructions and sources: up to ${fmt(Math.min(VGHBRAIN_INPUT_TOKEN_LIMIT, contextLimit - DEFAULT_RESPONSE_RESERVE))}, plus ${fmt(DEFAULT_RESPONSE_RESERVE)} reserved for the response. No text truncation.`
           : ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
       </p>
       {showsAdaptedScope && fittedClinicalInput.contextAdaptation ? (
@@ -223,8 +257,8 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         >
           <p className="font-medium">
             {locale === 'zh-TW'
-              ? `原始選擇約 ${formatApproxTokenCount(total)} tokens → 本次實際送出約 ${formatApproxTokenCount(fittedTotal)} tokens`
-              : `Saved selection: about ${formatApproxTokenCount(total)} tokens → actual content for this run: about ${formatApproxTokenCount(fittedTotal)} tokens`}
+              ? `原始選擇約 ${formatApproxTokenCount(originalTotal)} tokens → 本次實際送出約 ${formatApproxTokenCount(fittedTotal)} tokens`
+              : `Saved selection: about ${formatApproxTokenCount(originalTotal)} tokens → actual content for this run: about ${formatApproxTokenCount(fittedTotal)} tokens`}
           </p>
           <p>
             {formatClinicalContextAdaptationNotice(
@@ -250,7 +284,9 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
           className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
         >
           <p className="font-medium">
-            {(ds.tokenMeterOverflowGuidance ?? "上次完整摘要輸入約 {request} tokens，超過可用的 {usable} tokens。")
+            {overflowIssue.selectedLimit !== undefined && overflowIssue.selectedTokens !== null && overflowIssue.selectedTokens > overflowIssue.selectedLimit
+              ? formatContextOverflowIssue(overflowIssue, locale)
+              : (ds.tokenMeterOverflowGuidance ?? "上次完整摘要輸入約 {request} tokens，超過可用的 {usable} tokens。")
               .replace("{request}", formatApproxTokenCount(overflowIssue.requestTokens))
               .replace("{usable}", formatApproxTokenCount(overflowIssue.usable))}
           </p>
@@ -269,8 +305,12 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         </div>
       ) : null}
       {!isExternalExport && budget.level === "over" && (
-        <p className="mt-1 text-[0.625rem] text-red-600 dark:text-rose-300">
-          {ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}
+        <p role="alert" className="mt-1 text-[0.625rem] text-red-600 dark:text-rose-300">
+          {fittedClinicalInput.preserveManualDocuments
+            ? locale === 'zh-TW'
+              ? '自選文件已完整保留，但病歷仍超過容量，無法直接送出。請取消部分文件、縮小其他資料範圍，或改用容量較大的模型；不會自動截短文件。'
+              : 'Selected documents are intact, but the clinical input still exceeds capacity and cannot be sent as-is. Deselect some documents, narrow other records, or choose a larger model. Documents will not be automatically truncated.'
+            : ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}
         </p>
       )}
     </div>
