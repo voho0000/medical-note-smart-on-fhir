@@ -3,7 +3,7 @@
  * Main dialog for browsing and selecting prompts
  */
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, X, Library, Share2, User } from 'lucide-react'
 import {
   Dialog,
@@ -37,8 +37,12 @@ import type { SharedPrompt, PromptType } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
+import { cn } from '@/src/shared/utils/cn.utils'
+import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
 
 interface PromptGalleryDialogProps {
+  guidedPreview?: boolean
+  previewFirstTemplate?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   mode?: 'chat' | 'summary' | 'all'
@@ -50,17 +54,21 @@ export function PromptGalleryDialog({
   onOpenChange,
   mode = 'all',
   onSelectPrompt,
+  guidedPreview = false,
+  previewFirstTemplate = false,
 }: PromptGalleryDialogProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState<'all' | 'my'>('all')
+  const [selectedTab, setActiveTab] = useState<'all' | 'my'>('all')
+  const activeTab = guidedPreview ? 'all' : selectedTab
   const [previewPrompt, setPreviewPrompt] = useState<SharedPrompt | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [sharePrompt, setSharePrompt] = useState<SharedPrompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest')
+  const previewTrigger = useRef<HTMLElement | null>(null)
   const itemsPerPage = 8
 
   // Initialize filter based on mode + current audience
@@ -72,12 +80,13 @@ export function PromptGalleryDialog({
   }, [mode, audience])
 
   // Hook for "All Templates"
-  const allPromptsHook = usePromptGallery({ initialFilter })
+  const allPromptsHook = usePromptGallery({ initialFilter, enabled: open && activeTab === 'all' })
   
   // Hook for "My Templates" (only if user is logged in)
   const myPromptsHook = usePromptGallery({ 
     initialFilter,
-    userId: user?.uid 
+    userId: user?.uid,
+    enabled: open && activeTab === 'my' && !!user,
   })
 
   // Select the appropriate hook based on active tab
@@ -91,13 +100,6 @@ export function PromptGalleryDialog({
     trackUsage,
     fetchPrompts,
   } = activeTab === 'my' ? myPromptsHook : allPromptsHook
-
-  // Refresh prompts when dialog opens or tab changes
-  useEffect(() => {
-    if (open) {
-      fetchPrompts()
-    }
-  }, [open, activeTab, fetchPrompts])
 
   // Sync filter.audience when the global audience switches.
   // For patient audience, also clear category/specialty filters (they don't apply to citizen-facing prompts).
@@ -120,11 +122,13 @@ export function PromptGalleryDialog({
   }
 
   const handlePreview = (prompt: SharedPrompt) => {
+    previewTrigger.current = document.activeElement as HTMLElement
     setPreviewPrompt(prompt)
     setPreviewOpen(true)
   }
 
   const handleUse = (prompt: SharedPrompt, useAs?: PromptType) => {
+    if (guidedPreview) return
     onSelectPrompt(prompt, useAs)
     trackUsage(prompt.id)
   }
@@ -165,8 +169,12 @@ export function PromptGalleryDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl h-[85vh]! w-[85vw] flex! flex-col!">
+      <Dialog open={open} onOpenChange={(next) => { if (!guidedPreview) onOpenChange(next) }} modal={!guidedPreview}>
+        <DialogContent
+          data-tour="custom-summary-gallery"
+          className={cn("flex h-[85vh] w-[calc(100vw-2rem)] max-w-5xl flex-col", guidedPreview && GUIDED_PREVIEW_DIALOG_CLASSES)}
+          {...guidedPreviewEvents(guidedPreview)}
+        >
           <DialogHeader className="pr-10">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
@@ -177,6 +185,7 @@ export function PromptGalleryDialog({
                 <Button
                   size="sm"
                   className="shrink-0"
+                  disabled={guidedPreview}
                   onClick={() => {
                     setSharePrompt(null)
                     setShareOpen(true)
@@ -190,7 +199,7 @@ export function PromptGalleryDialog({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-1 flex-col gap-0 overflow-hidden">
-            <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
+            <TabsList data-tour="gallery-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
               <TabsTrigger 
                 value="all" 
                 className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
@@ -213,8 +222,9 @@ export function PromptGalleryDialog({
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={activeTab} className="flex-1 flex flex-col gap-3 overflow-hidden mt-3">
+            <TabsContent value={activeTab} className="flex-1 flex flex-col gap-3 overflow-hidden mt-3 [@media(max-height:500px)]:overflow-y-auto">
             {/* Filters */}
+            <div data-tour="gallery-filters" className="shrink-0">
             <PromptFilters
               searchQuery={filter.searchQuery || ''}
               onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
@@ -225,12 +235,13 @@ export function PromptGalleryDialog({
               selectedSpecialty={filter.specialty}
               onSpecialtyChange={(specialty) => handleFilterChange({ specialty })}
             />
+            </div>
 
             {/* Active Filters & Results Count */}
-            <div className="flex items-center justify-between gap-2 px-1 min-h-[32px]">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 min-h-[32px]">
               {(hasActiveFilters || prompts.length > 0) && !loading && (
                 <>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex min-w-0 items-center gap-2 flex-wrap">
                   {prompts.length > 0 && (
                     <span className="text-sm text-muted-foreground">
                       {t.promptGallery.promptsCount.replace('{count}', prompts.length.toString())}
@@ -239,38 +250,29 @@ export function PromptGalleryDialog({
                   {filter.type && (
                     <Badge variant="secondary" className="text-xs">
                       {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}
-                      <X
-                        className="ml-1 h-3 w-3 cursor-pointer"
-                        onClick={() => handleFilterChange({ type: undefined })}
-                      />
+                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ type: undefined })}><X className="h-3 w-3" /></button>
                     </Badge>
                   )}
                   {filter.category && (
                     <Badge variant="secondary" className="text-xs">
                       {t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}
-                      <X
-                        className="ml-1 h-3 w-3 cursor-pointer"
-                        onClick={() => handleFilterChange({ category: undefined })}
-                      />
+                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ category: undefined })}><X className="h-3 w-3" /></button>
                     </Badge>
                   )}
                   {filter.specialty && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="max-w-full whitespace-normal text-xs">
                       {t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}
-                      <X
-                        className="ml-1 h-3 w-3 cursor-pointer"
-                        onClick={() => handleFilterChange({ specialty: undefined })}
-                      />
+                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ specialty: undefined })}><X className="h-3 w-3" /></button>
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto">
                   {hasActiveFilters && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => { clearFilter(); setCurrentPage(1); }}
-                      className="h-7 text-xs"
+                      className="h-7 text-xs max-md:min-h-11"
                     >
                       <X className="h-3 w-3 mr-1" />
                       {t.promptGallery.clearFilters}
@@ -280,7 +282,7 @@ export function PromptGalleryDialog({
                     value={sortBy}
                     onValueChange={(value) => { setSortBy(value as 'latest' | 'popular'); setCurrentPage(1); }}
                   >
-                    <SelectTrigger className="w-[130px] h-7">
+                    <SelectTrigger aria-label={t.promptGallery.sortBy} className="w-[130px] h-7 max-md:min-h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -294,7 +296,7 @@ export function PromptGalleryDialog({
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto [@media(max-height:500px)]:min-h-32 [@media(max-height:500px)]:flex-none [@media(max-height:500px)]:overflow-visible">
               {/* Loading */}
               {loading && (
                 <div className="flex items-center justify-center h-full">
@@ -341,7 +343,7 @@ export function PromptGalleryDialog({
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-4 gap-3 p-1">
+                    <div className={cn("grid grid-cols-1 gap-3 p-1 sm:grid-cols-2", !guidedPreview && "lg:grid-cols-4")}>
                       {currentPrompts.map((prompt) => (
                         <PromptCard
                           key={prompt.id}
@@ -359,6 +361,7 @@ export function PromptGalleryDialog({
                           variant="outline"
                           size="sm"
                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          aria-label={t.promptGallery.previousPage}
                           disabled={currentPage === 1}
                         >
                           <ChevronLeft className="h-4 w-4" />
@@ -373,6 +376,7 @@ export function PromptGalleryDialog({
                           variant="outline"
                           size="sm"
                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          aria-label={t.promptGallery.nextPage}
                           disabled={currentPage === totalPages}
                         >
                           <ChevronRight className="h-4 w-4" />
@@ -391,23 +395,27 @@ export function PromptGalleryDialog({
 
       {/* Preview Dialog */}
       <PromptPreviewDialog
-        prompt={previewPrompt}
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
+        prompt={guidedPreview ? (previewFirstTemplate && !loading && !error ? currentPrompts[0] ?? null : null) : previewPrompt}
+        open={guidedPreview ? open && previewFirstTemplate && !loading && !error && !!currentPrompts[0] : previewOpen}
+        onOpenChange={(next) => { if (!guidedPreview) setPreviewOpen(next) }}
         onUse={handleUse}
         useMode={mode}
         onShare={handleShare}
         onDelete={fetchPrompts}
+        onRestoreFocus={() => previewTrigger.current?.focus()}
+        guidedPreview={guidedPreview}
       />
 
       {/* Share Dialog */}
       <SharePromptDialog
-        open={shareOpen}
+        open={!guidedPreview && shareOpen}
         onOpenChange={setShareOpen}
         initialTitle={sharePrompt?.title}
         initialDescription={sharePrompt?.description}
         initialPrompt={sharePrompt?.prompt}
-        initialType={sharePrompt?.types[0] || 'chat'}
+        initialType={sharePrompt?.types[0] || (mode === 'summary' ? 'summary' : 'chat')}
+        initialOutputFormat={sharePrompt?.outputFormat}
+        initialLanguagePolicy={sharePrompt?.languagePolicy}
         onSuccess={fetchPrompts}
       />
     </>

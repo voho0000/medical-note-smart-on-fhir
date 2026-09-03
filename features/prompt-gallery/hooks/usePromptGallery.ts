@@ -3,7 +3,7 @@
  * Manages prompt gallery state and operations
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SharedPrompt, PromptGalleryFilter, PromptGallerySort } from '../types/prompt.types'
 import {
   getSharedPrompts,
@@ -14,13 +14,14 @@ import {
 interface UsePromptGalleryOptions {
   initialFilter?: PromptGalleryFilter
   userId?: string // If provided, fetch only user's prompts
+  enabled?: boolean
 }
 
 export function usePromptGallery(options?: UsePromptGalleryOptions | PromptGalleryFilter) {
   // Support both old API (initialFilter) and new API (options object)
-  const { initialFilter, userId } = typeof options === 'object' && 'userId' in options
+  const { initialFilter, userId, enabled = true } = options && ('userId' in options || 'initialFilter' in options || 'enabled' in options)
     ? options
-    : { initialFilter: options, userId: undefined }
+    : { initialFilter: options, userId: undefined, enabled: true }
 
   const [prompts, setPrompts] = useState<SharedPrompt[]>([])
   const [loading, setLoading] = useState(false)
@@ -30,9 +31,12 @@ export function usePromptGallery(options?: UsePromptGalleryOptions | PromptGalle
     field: 'createdAt',
     direction: 'desc',
   })
+  const requestId = useRef(0)
 
   // Fetch prompts
   const fetchPrompts = useCallback(async () => {
+    if (!enabled) return
+    const id = ++requestId.current
     setLoading(true)
     setError(null)
     try {
@@ -44,35 +48,41 @@ export function usePromptGallery(options?: UsePromptGalleryOptions | PromptGalle
         // Fetch all prompts
         fetchedPrompts = await getSharedPrompts(filter, sort)
       }
-      setPrompts(fetchedPrompts)
+      if (id === requestId.current) setPrompts(fetchedPrompts)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch prompts')
-      console.error('Error fetching prompts:', err)
+      if (id === requestId.current) setError(err instanceof Error ? err.message : 'Failed to fetch prompts')
     } finally {
-      setLoading(false)
+      if (id === requestId.current) setLoading(false)
     }
-  }, [filter, sort, userId])
+  }, [filter, sort, userId, enabled])
 
   // Fetch on mount and when filter/sort changes
   useEffect(() => {
-    // This effect deliberately starts synchronization with the remote gallery;
-    // loading/result state is updated by that request lifecycle.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchPrompts()
-  }, [fetchPrompts])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    if (enabled) {
+      // Remote synchronization owns the loading state, including debounce time.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(true)
+      timer = setTimeout(() => void fetchPrompts(), filter.searchQuery ? 250 : 0)
+    }
+    return () => { clearTimeout(timer); requestId.current += 1 }
+  }, [fetchPrompts, enabled, filter.searchQuery])
 
   // Update filter
   const updateFilter = useCallback((newFilter: Partial<PromptGalleryFilter>) => {
+    requestId.current += 1
     setFilter((prev) => ({ ...prev, ...newFilter }))
   }, [])
 
   // Clear filter
   const clearFilter = useCallback(() => {
-    setFilter({})
-  }, [])
+    requestId.current += 1
+    setFilter((initialFilter as PromptGalleryFilter) || {})
+  }, [initialFilter])
 
   // Update sort
   const updateSort = useCallback((newSort: PromptGallerySort) => {
+    requestId.current += 1
     setSort(newSort)
   }, [])
 

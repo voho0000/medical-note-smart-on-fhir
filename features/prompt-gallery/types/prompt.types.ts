@@ -7,6 +7,7 @@ import type {
   InsightLanguagePolicy,
   InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
+import type { TemplateTextReference } from '@/src/application/composition.template-text'
 
 export type PromptType = 'chat' | 'summary'
 
@@ -67,9 +68,21 @@ export type PromptCategory =
 export type PromptSpecialty = 
   | 'general'        // 一般科
   | 'internal'       // 內科
+  | 'cardiology'     // 心臟內科
+  | 'gastroenterology' // 胃腸肝膽科
+  | 'pulmonology'    // 胸腔內科
+  | 'nephrology'     // 腎臟內科
+  | 'rheumatology'   // 風濕科
+  | 'immunology'     // 過敏免疫科
+  | 'hematology'     // 血液科
+  | 'medical_oncology' // 腫瘤內科
+  | 'endocrinology'  // 內分泌暨新陳代謝科
+  | 'infectious_diseases' // 感染科
   | 'surgery'        // 外科
-  | 'emergency'      // 急診
-  | 'pediatrics'     // 小兒科
+  | 'neurosurgery'   // 神經外科
+  | 'emergency'      // 急診醫學科
+  | 'critical_care'  // 重症醫學科
+  | 'pediatrics'     // 兒科
   | 'obstetrics'     // 婦產科
   | 'psychiatry'     // 精神科
   | 'neurology'      // 神經科
@@ -79,13 +92,16 @@ export type PromptSpecialty =
   | 'dermatology'    // 皮膚科
   | 'urology'        // 泌尿科
   | 'orthopedics'    // 骨科
-  | 'ent'            // 耳鼻喉科
+  | 'ent'            // 耳鼻喉頭頸外科
   | 'radiology'      // 放射診斷科
   | 'radiation_oncology' // 放射腫瘤科
   | 'pathology'      // 病理科
+  | 'anatomic_pathology' // 解剖病理科
+  | 'clinical_pathology' // 臨床病理科
   | 'nuclear_medicine' // 核子醫學科
   | 'plastic_surgery' // 整形外科
   | 'family_medicine' // 家庭醫學科
+  | 'occupational_medicine' // 職業醫學科
   | 'other'          // 其他
 
 export interface SharedPrompt {
@@ -93,6 +109,8 @@ export interface SharedPrompt {
   title: string
   description?: string
   prompt: string
+  /** When present, prompt is a list excerpt. Resolve before preview/use/share. */
+  body?: TemplateTextReference
   
   // Classification
   types: PromptType[]
