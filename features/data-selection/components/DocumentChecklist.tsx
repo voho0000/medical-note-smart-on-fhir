@@ -2,8 +2,8 @@
 
 // Per-document picker for the 文件 category. Default mode is 最近一次住院 (latest
 // discharge summary); ticking any document switches to a custom set. Uses the
-// shared core helper so the ticked ids match exactly what the AI-context builder
-// includes.
+// shared core helper for saved choices. Exclusions from the fitted model
+// scope are labeled separately and never clear the saved checks.
 import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
@@ -17,18 +17,16 @@ import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.e
 interface DocumentChecklistProps {
   clinicalData: ClinicalDataCollection
   consumer?: DataConsumer
-  /** Transient values actually used by a context-limited model. The provider
-   * remains the persistence target, so removing these props restores the
-   * original saved document settings immediately. */
-  displayedDocumentMode?: DocumentMode
-  displayedDocumentIds?: string[]
+  /** Exact ids in the settled model-fit view, not the saved picks. */
+  includedDocumentIds?: string[]
+  scopePending?: boolean
 }
 
 export function DocumentChecklist({
   clinicalData,
   consumer = 'insights',
-  displayedDocumentMode,
-  displayedDocumentIds,
+  includedDocumentIds,
+  scopePending = false,
 }: DocumentChecklistProps) {
   const { t } = useLanguage()
   const dataSelection = useDataSelection()
@@ -42,8 +40,9 @@ export function DocumentChecklist({
     ? dataSelection.setDocumentIds(ids)
     : dataSelection.setDocumentIdsFor(consumer, ids)
   const ds = t.dataSelection as unknown as Record<string, string>
-  const documentMode = displayedDocumentMode ?? savedDocumentMode
-  const documentIds = displayedDocumentIds ?? savedDocumentIds
+  const documentMode = savedDocumentMode
+  const documentIds = savedDocumentIds
+  const includedIds = useMemo(() => includedDocumentIds === undefined ? null : new Set(includedDocumentIds), [includedDocumentIds])
 
   const docs = useMemo(() => listClinicalDocuments(clinicalData), [clinicalData])
   const selectedIds = useMemo(
@@ -86,6 +85,9 @@ export function DocumentChecklist({
           </button>
         ))}
       </div>
+      {includedIds && <p className="text-xs text-muted-foreground">
+        {ds.docSelectionScopeHint}
+      </p>}
       <div className="space-y-0.5">
         {docs.map((d) => {
           const checked = selectedIds.has(d.id)
@@ -97,6 +99,7 @@ export function DocumentChecklist({
             >
               <input
                 type="checkbox"
+                data-document-id={d.id}
                 checked={checked}
                 onChange={() => toggle(d.id)}
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
@@ -111,6 +114,11 @@ export function DocumentChecklist({
                   )}
                 </span>
                 {date && <span className="block text-[0.625rem] text-muted-foreground">{date}</span>}
+                {checked && includedIds && !scopePending && !includedIds.has(d.id) && (
+                  <span className="block text-xs text-amber-700 dark:text-amber-300">
+                    {ds.docExcludedFromScope}
+                  </span>
+                )}
               </span>
             </label>
           )

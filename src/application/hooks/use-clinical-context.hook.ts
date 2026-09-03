@@ -27,6 +27,9 @@ import { buildClinicalContextCoverageSection } from "@/src/core/utils/clinical-c
 import { useNow } from "@/src/shared/hooks/use-now.hook"
 import { filterAiExcludedClinicalDomains } from "@/src/core/utils/ai-clinical-domain-filter.utils"
 
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRegistryContextCache } from "./clinical-context/use-registry-context-cache"
+
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
   formatClinicalContext: (sections: ClinicalContextSection[]) => string
@@ -62,6 +65,7 @@ export function useClinicalContext(
   const filters = profile.filters
   const { patient } = usePatient()
   const nowMs = useNow()
+  const { locale } = useLanguage()
 
   const queriedClinicalData = (useClinicalData() as ClinicalData | null) ?? null
   const sourceClinicalData = options.clinicalDataOverride === undefined
@@ -114,16 +118,17 @@ export function useClinicalContext(
   )
 
   // Registry-driven sections (extensible via dataCategoryRegistry)
+  const cachedRegistryContext = useRegistryContextCache(clinicalData, nowMs, locale)
 
   const labReportsSection = useMemo(() => {
     if (!selectedData.labReports || !clinicalData) return null
-    return dataCategoryRegistry.getCategoryContext('labReports', clinicalData, filters)
-  }, [selectedData.labReports, clinicalData, filters])
+    return cachedRegistryContext('labReports', filters)
+  }, [selectedData.labReports, clinicalData, filters, cachedRegistryContext])
 
   const imagingReportsSection = useMemo(() => {
     if (!selectedData.imagingReports || !clinicalData) return null
-    return dataCategoryRegistry.getCategoryContext('imagingReports', clinicalData, filters)
-  }, [selectedData.imagingReports, clinicalData, filters])
+    return cachedRegistryContext('imagingReports', filters)
+  }, [selectedData.imagingReports, clinicalData, filters, cachedRegistryContext])
 
   const observationsSection = useMemo(() => {
     if (!selectedData.observations || !clinicalData) return null
@@ -247,19 +252,19 @@ export function useClinicalContext(
     pushRegistrySection,
   ])
 
-  const getFormattedClinicalContext = useCallback(
-    (): string => formatClinicalContext(getClinicalContext()),
-    [getClinicalContext]
-  )
+  const getFormattedClinicalContext = useMemo(() => {
+    let formatted: string | undefined
+    return () => (formatted ??= formatClinicalContext(getClinicalContext()))
+  }, [getClinicalContext])
 
-  const getFullClinicalContext = useCallback((): string => {
-    const full = formatClinicalContext(getClinicalContext())
+  const getFullClinicalContext = useMemo(() => {
+    let masked: string | undefined
     // Outbound-only PII mask (身分證字號, labeled 病歷號/姓名 values): this
     // string goes to cloud LLMs (summary / safety / insights context) —
     // discharge-summary bodies included via 文件 selection are the main carrier.
     // Internal formatted-context consumers stay unmasked.
-    return scrubFreeText(full, buildPatientTextLiterals(patient))
-  }, [getClinicalContext, patient])
+    return () => (masked ??= scrubFreeText(getFormattedClinicalContext(), buildPatientTextLiterals(patient)))
+  }, [getFormattedClinicalContext, patient])
 
   return {
     getClinicalContext,

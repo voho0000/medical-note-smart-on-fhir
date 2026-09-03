@@ -264,6 +264,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     dataReady,
     clinicalContext,
     inputSignature,
+    sourceScopeSignature = '',
     clinicalData: scopedClinicalData,
     catalog,
     contextAdaptation,
@@ -308,8 +309,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // scope. Keep the Bundle revision in the identity even though it is not in
   // the persisted slot key: importing a different Bundle with the same
   // patient id/content must still invalidate an in-flight visible batch.
-  const resultScope = slotKey
-    ? [bundleRevision, patientId, audience, locale, inputSignature].join('::')
+  // Read-only result ownership survives model fitting; generation still
+  // requires the settled inputSignature and dataReady flag.
+  const ownershipSignature = inputSignature || sourceScopeSignature
+  const resultScope = ownershipSignature
+    ? [bundleRevision, patientId, audience, locale, ownershipSignature].join('::')
     : ''
   // The frozen zh-TW demo has a bundled result even when a model preference
   // from real data is still selected. Treat it as a presentation fallback,

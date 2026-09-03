@@ -53,29 +53,50 @@ interface ContextTokenMeterProps {
   fallbackModelId?: string
   overflowIssue?: ContextOverflowIssue | null
   consumer?: DataConsumer
+  /** Share the panel's calculation; never mount a second fitting pipeline. */
+  snapshot?: ContextTokenMeterSnapshot
 }
 
-export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps) {
-  const { t, locale } = useLanguage()
-  const ds = t.dataSelection as unknown as Record<string, string>
-  const isExternalExport = consumer === 'aiExport'
-  const externalCopy = t.ipsExport.aiHandoff
+export interface ContextTokenMeterSnapshot {
+  /** For a fitted snapshot this can be the effective, not original, view. */
+  rawContext: ReturnType<typeof useClinicalContext>
+  originalTokens?: number
+  model: ReturnType<typeof useResolvedDataSelectionModel>
+  fittedClinicalInput: ReturnType<typeof useClinicalAiInput>
+}
+
+export function ContextTokenMeter(props: ContextTokenMeterProps) {
+  return props.snapshot
+    ? <ContextTokenMeterView {...props} snapshot={props.snapshot} />
+    : <StandaloneContextTokenMeter {...props} />
+}
+
+function StandaloneContextTokenMeter({ modelId, fallbackModelId, consumer = 'insights', ...props }: ContextTokenMeterProps) {
   // The main Data Selection drawer edits the summary/insights profile. Read
   // that exact consumer here too so a stale legacy chat profile cannot make
   // the meter disagree with the subsequent summary request.
-  const { getClinicalContext, formatClinicalContext } = useClinicalContext(consumer)
-  const {
-    modelId: effectiveModelId,
-    contextLimit,
-    modelLabel,
-  } = useResolvedDataSelectionModel(
+  const rawContext = useClinicalContext(consumer)
+  const model = useResolvedDataSelectionModel(
     modelId,
     fallbackModelId,
   )
+  const { contextLimit } = model
   const fittedClinicalInput = useClinicalAiInput(
     consumer === 'insights' ? contextLimit : undefined,
     consumer,
   )
+
+  return <ContextTokenMeterView {...props} consumer={consumer} snapshot={{ rawContext, model, fittedClinicalInput }} />
+}
+
+function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps & { snapshot: ContextTokenMeterSnapshot }) {
+  const { t, locale } = useLanguage()
+  const ds = t.dataSelection as unknown as Record<string, string>
+  const isExternalExport = consumer === 'aiExport'
+  const externalCopy = t.ipsExport.aiHandoff
+  const { rawContext, model, fittedClinicalInput } = snapshot
+  const { getClinicalContext, formatClinicalContext } = rawContext
+  const { modelId: effectiveModelId, contextLimit, modelLabel } = model
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
@@ -113,6 +134,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
     fittedClinicalInput.contextAdaptation,
   )
   const displayedTotal = showsAdaptedScope ? fittedTotal : total
+  const originalTotal = snapshot.originalTokens ?? total
   const budget = evaluateContextBudget(
     displayedTotal,
     effectiveModelId,
@@ -223,8 +245,8 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         >
           <p className="font-medium">
             {locale === 'zh-TW'
-              ? `原始選擇約 ${formatApproxTokenCount(total)} tokens → 本次實際送出約 ${formatApproxTokenCount(fittedTotal)} tokens`
-              : `Saved selection: about ${formatApproxTokenCount(total)} tokens → actual content for this run: about ${formatApproxTokenCount(fittedTotal)} tokens`}
+              ? `原始選擇約 ${formatApproxTokenCount(originalTotal)} tokens → 本次實際送出約 ${formatApproxTokenCount(fittedTotal)} tokens`
+              : `Saved selection: about ${formatApproxTokenCount(originalTotal)} tokens → actual content for this run: about ${formatApproxTokenCount(fittedTotal)} tokens`}
           </p>
           <p>
             {formatClinicalContextAdaptationNotice(
