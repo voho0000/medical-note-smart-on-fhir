@@ -93,7 +93,7 @@ describe('OpenAiService', () => {
 
       // Assert
       expect(result.text).toBe('Hello! How can I help you?')
-      expect(result.metadata.modelId).toBe('gpt-5.4-nano')
+      expect(result.metadata.modelId).toBe('unreported')
       expect(result.metadata.provider).toBe('openai')
       expect(result.metadata.tokensUsed).toBe(20)
     })
@@ -243,6 +243,7 @@ describe('OpenAiService', () => {
         json: async () => ({
           message: 'Proxy Luna response',
           openAiResponse: {
+            model: 'gpt-5.6-luna',
             output: [{
               type: 'message',
               content: [{ type: 'output_text', text: 'Proxy Luna response' }],
@@ -274,6 +275,7 @@ describe('OpenAiService', () => {
         text: 'Proxy Luna response',
         metadata: {
           modelId: 'gpt-5.6-luna',
+          modelExecution: { requestedModelId: 'gpt-5.6-luna', routedModelId: 'gpt-5.6-luna', actualModelId: 'gpt-5.6-luna', actualModelIds: ['gpt-5.6-luna'] },
           provider: 'openai',
           tokensUsed: 42,
         },

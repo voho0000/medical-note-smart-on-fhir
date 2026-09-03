@@ -1,3 +1,4 @@
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
@@ -109,13 +110,18 @@ export class OpenAiCompatibleService {
       }
 
       const data = await response.json() as {
+        model?: string
         choices?: Array<{ message?: { content?: string } }>
         usage?: { total_tokens?: number }
       }
+      const modelExecution = typeof data.model === 'string'
+        ? reportModelExecution(createModelExecution(request.modelId), data.model)
+        : createModelExecution(request.modelId)
       return {
         text: data.choices?.[0]?.message?.content ?? '',
         metadata: {
-          modelId: config.modelId,
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           provider: 'custom',
           tokensUsed: data.usage?.total_tokens,
         },

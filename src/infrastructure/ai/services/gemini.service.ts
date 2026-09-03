@@ -1,3 +1,4 @@
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 // Gemini Service Implementation
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
@@ -99,12 +100,17 @@ export class GeminiService {
       const data = await response.json()
       const text = this.extractGeminiContent(data, shouldUseProxy)
 
+      const upstreamData = data.geminiResponse ?? data
+      const modelExecution = typeof upstreamData.modelVersion === 'string'
+        ? reportModelExecution(createModelExecution(request.modelId), upstreamData.modelVersion)
+        : createModelExecution(request.modelId)
       return {
         text,
         metadata: {
-          modelId: request.modelId,
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           provider: 'gemini',
-          tokensUsed: data.usageMetadata?.totalTokenCount || data.usage?.total_tokens,
+          tokensUsed: upstreamData.usageMetadata?.totalTokenCount || data.usage?.total_tokens,
         },
       }
     } finally {

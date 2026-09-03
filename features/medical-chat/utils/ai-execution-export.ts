@@ -1,6 +1,9 @@
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+
 export interface MedicalChatExecutionRecord {
   version: 1
   feature: 'medical-chat'
+  modelExecution?: AiModelExecution
   modelName: string
   modelId: string
   timestamp: string

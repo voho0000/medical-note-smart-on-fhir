@@ -1,6 +1,8 @@
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
 
 export interface MedicalSummaryGenerationInfo {
+  modelExecution?: AiModelExecution
   prefix?: string
   modelName: string
   generatedAtIso?: string
@@ -81,6 +83,7 @@ export function buildSummaryGenerationInfo({
 
   return {
     modelName,
+    modelExecution: generation.modelExecution,
     generatedAtIso: generatedAt.toISOString(),
     generatedAtText,
     generatedAtLabel,

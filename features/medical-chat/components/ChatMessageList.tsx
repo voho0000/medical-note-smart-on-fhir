@@ -15,6 +15,8 @@ import type { ChatDataScope, ChatMessage, ChatReplyReference } from "@/src/appli
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
+import { ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { AlertTriangle, Check, Copy, Reply, RotateCcw, Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
@@ -198,6 +200,9 @@ const MessageItem = memo(function MessageItem({
         <span>{formatTimestamp(message.timestamp)}</span>
       </div>
       <div className="flex flex-col gap-2 max-w-[92%] sm:max-w-[85%]">
+        {message.role === "assistant" && (!replyDisabled || message.modelExecution?.actualModelId) && (
+          <ModelExecutionNotice execution={message.modelExecution} />
+        )}
         {message.role === "assistant" && message.agentStates && message.agentStates.length > 1 && (
           <AgentStateHistory 
             states={message.agentStates} 
@@ -338,6 +343,9 @@ const MessageItem = memo(function MessageItem({
   return prevProps.message.id === nextProps.message.id &&
          prevProps.message.content === nextProps.message.content &&
          prevProps.message.error === nextProps.message.error &&
+         prevProps.message.modelExecution === nextProps.message.modelExecution &&
+         prevProps.modelDisplayName === nextProps.modelDisplayName &&
+         prevProps.t === nextProps.t &&
          prevProps.onRetry === nextProps.onRetry &&
          prevProps.message.agentStates?.length === nextProps.message.agentStates?.length &&
          prevProps.message.replyTo?.messageId === nextProps.message.replyTo?.messageId &&
@@ -357,7 +365,7 @@ export function ChatMessageList({
   customModelDisplayNames,
   onRetry,
 }: ChatMessageListProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -419,10 +427,9 @@ export function ChatMessageList({
           </div>
         ) : (
           messages.map((message) => {
-            const modelDisplayName = getModelDisplayName(
-              message.modelId,
-              customModelDisplayNames,
-            )
+            const modelDisplayName = message.modelExecution
+              ? modelExecutionLabel(message.modelExecution, locale)
+              : getModelDisplayName(message.modelId, customModelDisplayNames)
             return (
               <MessageItem
                 key={message.id}

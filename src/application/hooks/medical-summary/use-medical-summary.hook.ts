@@ -10,6 +10,7 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
+import { createModelExecution, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { useCallback, useMemo, useRef } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
@@ -186,6 +187,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ctx.operationKey,
       'medical-summary',
     )
+    let modelExecution = createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId)
     const outputLocale: 'en' | 'zh-TW' = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
@@ -241,6 +243,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             modelId: ctx.modelId,
             operationKey: ctx.operationKey,
             diagnosticFeature: 'medical-summary',
+            requestedModelId: ctx.requestedModelId,
+            onModelExecution: (execution) => {
+              modelExecution = {
+                ...execution,
+                actualModelIds: [...new Set([...modelExecution.actualModelIds, ...execution.actualModelIds])],
+              }
+            },
             throwOnAbort: true,
             signal,
             ...(isLocalModel
@@ -286,7 +295,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const generation = (generatedAt: number) => ({
       source: 'live' as const,
       modelId: ctx.modelId,
-      modelName: ctx.modelName,
+      modelName: modelExecutionLabel(modelExecution, ctx.locale),
+      modelExecution,
       generatedAt,
     })
     const bundleRevision = medicalSummaryStore.getState().bundleRevision

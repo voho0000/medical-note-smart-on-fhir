@@ -1,3 +1,5 @@
+import type { AiModelExecution } from './ai-model-execution.entity'
+
 // Core Domain Entities: AI & LLM
 
 export type AiProvider = 'openai' | 'gemini' | 'claude' | 'custom'
@@ -42,6 +44,7 @@ export interface AiQueryRequest {
 export interface AiQueryResponse {
   text: string
   metadata: {
+    modelExecution?: AiModelExecution
     modelId: string
     provider: AiProvider
     tokensUsed?: number

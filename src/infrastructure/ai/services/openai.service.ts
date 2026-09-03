@@ -1,3 +1,4 @@
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 // OpenAI Service Implementation
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
@@ -139,10 +140,14 @@ export class OpenAiService {
         : data
       const text = this.extractOpenAiContent(data, shouldUseProxy, isResponsesApi)
 
+      const modelExecution = typeof upstreamData.model === 'string'
+        ? reportModelExecution(createModelExecution(request.modelId), upstreamData.model)
+        : createModelExecution(request.modelId)
       return {
         text,
         metadata: {
-          modelId: request.modelId,
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           provider: 'openai',
           tokensUsed: upstreamData.usage?.total_tokens,
         },

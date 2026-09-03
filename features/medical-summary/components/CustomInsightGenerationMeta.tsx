@@ -1,5 +1,6 @@
 "use client"
 
+import { ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import {
@@ -203,6 +204,7 @@ export function CustomInsightGenerationMeta({
           ) : null}
         </>
       ) : null}
+      <div className="basis-full"><ModelExecutionNotice execution={metadata?.modelExecution} /></div>
     </div>
   )
 }

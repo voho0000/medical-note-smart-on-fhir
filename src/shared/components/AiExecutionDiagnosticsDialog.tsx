@@ -1,5 +1,7 @@
 "use client"
 
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import { ModelExecutionNotice } from './ModelExecutionNotice'
 import { Download, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +25,7 @@ import { formatAiExecutionTimestamp } from "@/src/shared/utils/ai-execution-diag
 export interface AiExecutionDiagnosticsPreviewRecord {
   id?: string
   feature?: string
+  modelExecution?: AiModelExecution
   modelName: string
   modelId: string
   timestamp: string
@@ -167,6 +170,7 @@ export function AiExecutionDiagnosticsDialog({
                         {labels.downloadThis}
                       </Button>
                     </div>
+                    <ModelExecutionNotice execution={record.modelExecution} />
                     <dl className="grid gap-2 rounded-md border bg-card p-3 text-xs sm:grid-cols-2">
                       <div>
                         <dt className="text-muted-foreground">{labels.model}</dt>

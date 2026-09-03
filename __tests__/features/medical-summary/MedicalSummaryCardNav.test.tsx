@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 import {
   MedicalSummaryCardNav,
   type MedicalSummaryCardNavItem,
@@ -29,6 +31,15 @@ class ResizeObserverMock {
 }
 
 describe('MedicalSummaryCardNav', () => {
+  it('keeps the actual model visible with a fallback notice below the navigation', () => {
+    const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    render(<LanguageProvider><MedicalSummaryCardNav items={items} ariaLabel="摘要" onJump={() => {}}
+      generationInfo={{ modelName: 'Gemini 3.1 Flash-Lite', ariaLabel: 'Gemini 3.1 Flash-Lite', modelExecution: execution }}
+    /></LanguageProvider>)
+    expect(screen.getByTestId('medical-summary-generation-meta')).toHaveTextContent('Gemini 3.1 Flash-Lite')
+    expect(screen.getByRole('status')).toHaveTextContent('本次未能依選擇的 Gemini 3.8 Flash 完成')
+  })
+
   beforeAll(() => {
     Object.defineProperty(globalThis, 'ResizeObserver', {
       configurable: true,

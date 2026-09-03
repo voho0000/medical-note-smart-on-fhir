@@ -1,3 +1,7 @@
+jest.mock('@/src/infrastructure/ai/streaming/model-reporting.middleware', () => ({
+  withModelReporting: (model: unknown) => model,
+}))
+
 const mockChat = jest.fn((modelId: string) => ({ kind: 'chat-model', modelId }))
 const mockResponses = jest.fn((modelId: string) => ({ kind: 'responses-model', modelId }))
 const mockCreateOpenAI = jest.fn((_config: unknown) => ({

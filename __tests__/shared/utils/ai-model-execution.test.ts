@@ -1,0 +1,32 @@
+import { createModelExecution, reportModelExecution, modelExecutionFallback, modelExecutionNotice, sameModelVersion } from '@/src/shared/utils/ai-model-execution'
+
+describe('model attribution', () => {
+  it('identifies Flash → Lite fallback and retains both selected and actual ids', () => {
+    const result = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'models/gemini-3.1-flash-lite')
+    expect(result.actualModelId).toBe('gemini-3.1-flash-lite')
+    expect(result.requestedModelId).toBe('gemini-3.8-flash')
+    expect(modelExecutionFallback(result)).toBe(true)
+    expect(modelExecutionNotice(result, 'zh-TW')).toContain('實際使用 Gemini 3.1 Flash-Lite')
+  })
+  it('does not mistake dated provider revisions for another model', () => {
+    expect(sameModelVersion('gpt-5.4-nano', 'gpt-5.4-nano-2026-03-17')).toBe(true)
+    expect(sameModelVersion('gemini-3.8-flash', 'gemini-3.8-flash-001')).toBe(true)
+    expect(sameModelVersion('gemini-3.8-flash', 'gemini-3.8-flash-lite')).toBe(false)
+  })
+  it('retains fallback evidence even if a later tool step uses the requested model', () => {
+    const first = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    const last = reportModelExecution(first, 'gemini-3.8-flash')
+    expect(last.actualModelIds).toEqual(['gemini-3.1-flash-lite', 'gemini-3.8-flash'])
+    expect(modelExecutionFallback(last)).toBe(true)
+  })
+  it('reports a client-side key gate even when the server honors the routed model', () => {
+    const result = reportModelExecution(createModelExecution('gemini-3.1-pro-preview', 'gemini-3.1-flash-lite'), 'gemini-3.1-flash-lite')
+    expect(modelExecutionFallback(result)).toBe(true)
+  })
+  it('separates unknown provenance from an observed fallback', () => {
+    const result = createModelExecution('gemini-3.8-flash')
+    expect(modelExecutionFallback(result)).toBe(false)
+    expect(modelExecutionNotice(result, 'zh-TW')).toContain('無法確認')
+    expect(modelExecutionNotice(reportModelExecution(result, 'gemini-3.8-flash'), 'zh-TW')).toBeNull()
+  })
+})

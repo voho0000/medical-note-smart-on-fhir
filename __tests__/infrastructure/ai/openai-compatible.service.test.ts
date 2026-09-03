@@ -32,7 +32,7 @@ describe('OpenAiCompatibleService', () => {
       maxTokens: 64,
     })).resolves.toMatchObject({
       text: 'local answer',
-      metadata: { modelId: 'local-medical-model', provider: 'custom', tokensUsed: 42 },
+      metadata: { modelId: 'unreported', provider: 'custom', tokensUsed: 42 },
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)

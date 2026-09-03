@@ -51,6 +51,15 @@ describe('GeminiService', () => {
   })
 
   describe('query', () => {
+    it.each([false, true])('records actual model from a fallback response (wrapped proxy=%s)', async (wrapped) => {
+      const upstream = { modelVersion: 'gemini-3.1-flash-lite', usageMetadata: { totalTokenCount: 9 }, candidates: [{ content: { parts: [{ text: 'Lite answer' }] } }] }
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => wrapped ? { message: 'Lite answer', geminiResponse: upstream } : upstream } as Response)
+      const result = await service.query({ modelId: 'gemini-3.8-flash', messages: [{ role: 'user', content: 'hello' }] })
+      expect(result.metadata).toMatchObject({ modelId: 'gemini-3.1-flash-lite', tokensUsed: 9, modelExecution: {
+        requestedModelId: 'gemini-3.8-flash', actualModelId: 'gemini-3.1-flash-lite',
+      } })
+    })
+
     const mockRequest: AiQueryRequest = {
       modelId: 'gemini-3.1-flash-lite',
       messages: [
@@ -86,7 +95,8 @@ describe('GeminiService', () => {
 
       // Assert
       expect(result.text).toBe('Hello! How can I assist you?')
-      expect(result.metadata.modelId).toBe('gemini-3.1-flash-lite')
+      expect(result.metadata.modelId).toBe('unreported')
+      expect(result.metadata.modelExecution?.actualModelId).toBeNull()
       expect(result.metadata.provider).toBe('gemini')
       expect(result.metadata.tokensUsed).toBe(25)
     })

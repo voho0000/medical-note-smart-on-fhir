@@ -4,6 +4,8 @@
  * Following Single Responsibility Principle
  */
 
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import { createModelExecution, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import {
@@ -23,7 +25,6 @@ import {
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
-import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 import {
   useAiExecutionDiagnosticsStore,
   type AiExecutionStatus,
@@ -36,6 +37,8 @@ interface UseUnifiedAiOptions {
 }
 
 interface QueryOptions {
+  requestedModelId?: string
+  onModelExecution?: (execution: AiModelExecution) => void
   modelId?: string
   temperature?: number
   maxTokens?: number
@@ -148,6 +151,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         openAiCompatible,
       })
       const timestamp = new Date().toISOString()
+      let modelExecution = createModelExecution(queryOptions?.requestedModelId ?? modelId, modelId)
       let outputData = ''
       const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
         useAiExecutionDiagnosticsStore.getState().addRecord({
@@ -156,8 +160,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           feature: queryOptions?.diagnosticFeature || 'ai',
           operationKey: queryOptions?.operationKey ?? null,
           transport: 'query',
-          modelName: modelDisplayLabel(modelId, openAiCompatible),
-          modelId,
+          modelName: modelExecutionLabel(modelExecution),
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           timestamp,
           prompt: diagnosticPrompt(messages),
           inputData: {
@@ -185,6 +190,10 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           signal: abortController.signal,
         })
 
+        modelExecution = result.metadata.modelExecution
+          ? { ...result.metadata.modelExecution, requestedModelId: queryOptions?.requestedModelId ?? modelId }
+          : modelExecution
+        queryOptions?.onModelExecution?.(modelExecution)
         outputData = result.text
         record('completed')
         options.onSuccess?.(outputData)
@@ -239,6 +248,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         openAiCompatible,
       )
 
+      let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId)
       let fullText = ''
       const timestamp = new Date().toISOString()
       let recorded = false
@@ -251,8 +261,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           feature: streamOptions?.diagnosticFeature || 'ai',
           operationKey: streamOptions?.operationKey ?? null,
           transport: 'stream',
-          modelName: modelDisplayLabel(modelId, openAiCompatible),
-          modelId,
+          modelName: modelExecutionLabel(modelExecution),
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           timestamp,
           prompt: diagnosticPrompt(messages),
           inputData: {
@@ -288,6 +299,11 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           maxTokens: streamOptions?.maxTokens,
           reasoningEffort: streamOptions?.reasoningEffort,
           responseFormat: streamOptions?.responseFormat,
+          requestedModelId: streamOptions?.requestedModelId,
+          onModelExecution: (execution) => {
+            modelExecution = execution
+            streamOptions?.onModelExecution?.(execution)
+          },
           onChunk: (chunk: string) => {
             fullText = chunk
             streamOptions?.onChunk?.(chunk)

@@ -10,6 +10,7 @@ import { render, screen } from '@testing-library/react'
 import { ChatMessageList } from '@/features/medical-chat/components/ChatMessageList'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 // jsdom has no ResizeObserver (radix ScrollArea needs it) and react-markdown is
 // heavy/irrelevant here — we only assert child ORDER, so stub both to passthroughs.
@@ -33,6 +34,18 @@ function renderList(afterMessages?: React.ReactNode) {
 }
 
 describe('ChatMessageList — afterMessages slot (follow-up chips placement)', () => {
+  it('updates an unchanged answer label and shows fallback when actual metadata arrives', () => {
+    const pending = createModelExecution('gemini-3.8-flash')
+    const message = { id: 'a1', role: 'assistant' as const, content: 'SAME_ANSWER', timestamp: 0, modelId: 'gemini-3.8-flash', modelExecution: pending }
+    const view = render(<LanguageProvider><ChatMessageList messages={[message]} isLoading={true} /></LanguageProvider>)
+    expect(screen.getByText('實際模型未回報')).toBeInTheDocument()
+    view.rerender(<LanguageProvider><ChatMessageList messages={[{ ...message, modelExecution: reportModelExecution(pending, 'gemini-3.1-flash-lite') }]} isLoading={false} /></LanguageProvider>)
+    expect(screen.getByText('Gemini 3.1 Flash-Lite')).toHaveAttribute('title', 'Gemini 3.1 Flash-Lite')
+    expect(screen.getByRole('status')).toHaveTextContent('本次未能依選擇的 Gemini 3.8 Flash 完成')
+    expect(screen.getByRole('status')).toHaveTextContent('實際使用 Gemini 3.1 Flash-Lite')
+    expect(screen.getByText('SAME_ANSWER')).toBeInTheDocument()
+  })
+
   it('renders afterMessages AFTER the last (assistant) message in the thread', () => {
     renderList(<div data-testid="chips">CHIPS</div>)
     const answer = screen.getByText('ANSWER_TEXT')
