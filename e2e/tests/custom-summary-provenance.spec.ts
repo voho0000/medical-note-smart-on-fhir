@@ -13,6 +13,7 @@ test.describe('custom summary generation provenance', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
+          modelVersion: 'gemini-3-flash-preview',
           candidates: [{
             content: {
               parts: [{ text: '### 重要變化摘要\n\n- **2018/02/12：**肌酸酐 1.6 mg/dL\n- 已完成自訂摘要測試。' }],
