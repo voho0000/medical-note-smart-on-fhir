@@ -101,7 +101,7 @@ describe('GeminiService', () => {
 
       await service.query({
         ...mockRequest,
-        modelId: 'gemini-3.7-flash',
+        modelId: 'gemini-3.8-flash',
         messages: [
           { role: 'system', content: 'Follow clinical safety rules.' },
           { role: 'user', content: 'Summarize the record.' },
@@ -324,7 +324,7 @@ describe('GeminiService', () => {
 
       await expect(proxyService.query({
         ...proxyRequest,
-        modelId: 'gemini-3.7-flash',
+        modelId: 'gemini-3.8-flash',
       })).rejects.toThrow('personal Gemini API key')
       expect(mockFetch).not.toHaveBeenCalled()
     })

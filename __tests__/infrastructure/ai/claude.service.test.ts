@@ -175,7 +175,7 @@ describe('ClaudeService', () => {
     const service = new ClaudeService('test-personal-key', { create })
 
     await expect(service.query({
-      modelId: 'gemini-3.7-flash',
+      modelId: 'gemini-3.8-flash',
       messages: [{ role: 'user', content: 'Summarize the record.' }],
     })).rejects.toThrow('is not a Claude model')
     expect(create).not.toHaveBeenCalled()
