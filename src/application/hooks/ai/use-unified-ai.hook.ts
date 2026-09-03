@@ -151,7 +151,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         openAiCompatible,
       })
       const timestamp = new Date().toISOString()
-      let modelExecution = createModelExecution(queryOptions?.requestedModelId ?? modelId, modelId)
+      let modelExecution = createModelExecution(queryOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let outputData = ''
       const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
         useAiExecutionDiagnosticsStore.getState().addRecord({
@@ -191,7 +191,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         })
 
         modelExecution = result.metadata.modelExecution
-          ? { ...result.metadata.modelExecution, requestedModelId: queryOptions?.requestedModelId ?? modelId }
+          ? { ...modelExecution, ...result.metadata.modelExecution, requestedModelId: queryOptions?.requestedModelId ?? modelId }
           : modelExecution
         queryOptions?.onModelExecution?.(modelExecution)
         outputData = result.text
@@ -248,7 +248,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         openAiCompatible,
       )
 
-      let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId)
+      let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let fullText = ''
       const timestamp = new Date().toISOString()
       let recorded = false
@@ -301,8 +301,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           responseFormat: streamOptions?.responseFormat,
           requestedModelId: streamOptions?.requestedModelId,
           onModelExecution: (execution) => {
-            modelExecution = execution
-            streamOptions?.onModelExecution?.(execution)
+            modelExecution = { ...modelExecution, ...execution }
+            streamOptions?.onModelExecution?.(modelExecution)
           },
           onChunk: (chunk: string) => {
             fullText = chunk

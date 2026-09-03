@@ -463,6 +463,8 @@ export type MedicalSummaryGeneration = {
   source: 'live'
   modelId: string
   modelExecution?: AiModelExecution
+  /** Provenance of the cards currently retained, including across partial retries. */
+  cardModelExecutions?: Partial<Record<MedicalSummaryCardId, AiModelExecution>>
   /** Immutable display name captured at generation time (especially
    * important for user-configured upstream model ids). */
   modelName: string

@@ -428,8 +428,11 @@ export function ChatMessageList({
           </div>
         ) : (
           messages.map((message) => {
-            const modelDisplayName = message.modelExecution
-              ? modelExecutionLabel(message.modelExecution)
+            const execution = message.modelExecution
+            const legacyCustomName = execution && !execution.actualModelId && !execution.customModelId
+              ? customModelDisplayNames?.[execution.routedModelId] : undefined
+            const modelDisplayName = execution
+              ? legacyCustomName ?? modelExecutionLabel(execution)
               : getModelDisplayName(message.modelId, customModelDisplayNames)
             return (
               <MessageItem

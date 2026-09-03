@@ -3,11 +3,11 @@
 import { AlertTriangle } from 'lucide-react'
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { modelExecutionFallback, modelExecutionNotice } from '@/src/shared/utils/ai-model-execution'
+import { modelExecutionFallback, modelExecutionNotice, modelExecutionUncertain } from '@/src/shared/utils/ai-model-execution'
 import { InfoHint } from './InfoHint'
 
 export function ModelExecutionInfo({ execution }: { execution?: AiModelExecution }) {
-  return execution && !execution.actualModelId ? <UnreportedModelInfo execution={execution} /> : null
+  return execution && modelExecutionUncertain(execution) ? <UnreportedModelInfo execution={execution} /> : null
 }
 
 function UnreportedModelInfo({ execution }: { execution: AiModelExecution }) {

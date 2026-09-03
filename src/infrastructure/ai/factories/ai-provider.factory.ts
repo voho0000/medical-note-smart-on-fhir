@@ -28,6 +28,7 @@ export interface ProviderConfig {
   apiKey?: string
   useProxy: boolean
   onModelReported?: (modelId: string | null) => void
+  onModelUnreported?: () => void
   openAiCompatible?: OpenAiCompatibleConfig | null
 }
 
@@ -42,7 +43,7 @@ export class AiProviderFactory {
    */
   create(config: ProviderConfig): ProviderResult {
     const result = this.createProvider(config)
-    return { ...result, model: withModelReporting(result.model, result.isGemini, config.onModelReported) }
+    return { ...result, model: withModelReporting(result.model, result.isGemini, config.onModelReported, config.onModelUnreported) }
   }
 
   private createProvider(config: ProviderConfig): ProviderResult {

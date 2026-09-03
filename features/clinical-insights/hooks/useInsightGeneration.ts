@@ -175,9 +175,9 @@ export function useInsightGeneration({
             { selectedContext: context, contextLimit },
           )
           if (overflow) throw new Error(overflow)
-          let modelExecution = createModelExecution(model)
+          let modelExecution = createModelExecution(model, model, modelName)
           const fullText = await ai.query(messages, {
-            onModelExecution: (execution) => { modelExecution = execution },
+            onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
             modelId: model,
             // Deterministic decoding improves factual repeatability on local
             // OpenAI-compatible models. A bounded completion also prevents

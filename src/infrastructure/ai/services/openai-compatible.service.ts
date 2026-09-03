@@ -42,6 +42,7 @@ export class OpenAiCompatibleService {
       )
     }
 
+    const execution = createModelExecution(request.modelId, request.modelId, config.modelId)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
 
@@ -115,8 +116,8 @@ export class OpenAiCompatibleService {
         usage?: { total_tokens?: number }
       }
       const modelExecution = typeof data.model === 'string'
-        ? reportModelExecution(createModelExecution(request.modelId), data.model)
-        : createModelExecution(request.modelId)
+        ? reportModelExecution(execution, data.model)
+        : execution
       return {
         text: data.choices?.[0]?.message?.content ?? '',
         metadata: {

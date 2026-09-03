@@ -155,6 +155,7 @@ describe('ClaudeService', () => {
       modelId: 'claude-haiku-4-5-20251001',
       apiKey: undefined,
       onModelReported: expect.any(Function),
+      onModelUnreported: expect.any(Function),
       useProxy: true,
     })
   })

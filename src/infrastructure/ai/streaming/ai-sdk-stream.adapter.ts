@@ -8,7 +8,7 @@
 // mode share one path.
 
 import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
-import { createModelExecution, reportModelExecution } from "@/src/shared/utils/ai-model-execution"
+import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
@@ -68,10 +68,14 @@ export class AiSdkStreamAdapter {
       : gateModel(config.model, !!config.apiKey)
     const definition = getModelDefinitionOrThrow(modelId)
     const useProxy = this.shouldUseProxy(config.apiKey, modelId)
-    let modelExecution = createModelExecution(config.requestedModelId ?? config.model, modelId)
+    let modelExecution = createModelExecution(config.requestedModelId ?? config.model, modelId, config.openAiCompatible?.modelId)
     config.onModelExecution?.(modelExecution)
     const { model } = this.providerFactory.create({
       modelId,
+      onModelUnreported: () => {
+        modelExecution = markModelExecutionUnreported(modelExecution)
+        config.onModelExecution?.(modelExecution)
+      },
       onModelReported: (actualModelId) => {
         modelExecution = reportModelExecution(modelExecution, actualModelId)
         config.onModelExecution?.(modelExecution)

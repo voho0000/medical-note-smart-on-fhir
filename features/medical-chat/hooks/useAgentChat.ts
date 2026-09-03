@@ -2,7 +2,7 @@
 "use client"
 
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
-import { createModelExecution, reportModelExecution, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
+import { createModelExecution, reportModelExecution, modelExecutionLabel, markModelExecutionUnreported } from '@/src/shared/utils/ai-model-execution'
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { toast } from "sonner"
 import {
@@ -271,7 +271,7 @@ export function useAgentChat(
         : endpointScope
 
       const requestTimestamp = new Date().toISOString()
-      let modelExecution = createModelExecution(modelId, effectiveModelId)
+      let modelExecution = createModelExecution(modelId, effectiveModelId, openAiCompatible?.modelId)
       let executionPrompt = systemPrompt
       let executionInput: unknown = []
       let executionOutput = ''
@@ -327,10 +327,11 @@ export function useAgentChat(
       // Create assistant message with thinking state
       const assistantMessageId = crypto.randomUUID()
       const updateModelExecution = (execution: AiModelExecution) => {
-        modelExecution = execution
+        const updated = { ...modelExecution, ...execution }
+        modelExecution = updated
         if (!mountedRef.current || abortController.signal.aborted) return
         setChatMessages((prev) => prev.map((m) => m.id === assistantMessageId
-          ? { ...m, modelId: execution.actualModelId ?? effectiveModelId, modelExecution: execution }
+          ? { ...m, modelId: updated.actualModelId ?? effectiveModelId, modelExecution: updated }
           : m))
       }
       const thinkingMessage = `🤔 ${t.agent.thinking}`
@@ -534,6 +535,7 @@ export function useAgentChat(
         const { model } = createAiProvider({
           modelId: effectiveModelId,
           onModelReported: (actualModelId) => updateModelExecution(reportModelExecution(modelExecution, actualModelId)),
+          onModelUnreported: () => updateModelExecution(markModelExecutionUnreported(modelExecution)),
           apiKey: apiKey || undefined,
           useProxy,
           openAiCompatible,

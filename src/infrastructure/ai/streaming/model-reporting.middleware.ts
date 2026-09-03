@@ -6,6 +6,7 @@ export function withModelReporting(
   model: Parameters<typeof wrapLanguageModel>[0]['model'],
   isGemini: boolean,
   onModelReported?: (modelId: string | null) => void,
+  onModelUnreported?: () => void,
 ) {
   const middleware: LanguageModelMiddleware = {
     specificationVersion: 'v3',
@@ -13,10 +14,12 @@ export function withModelReporting(
       ? { ...params, includeRawChunks: true }
       : params,
     wrapGenerate: async ({ doGenerate }) => {
+      onModelReported?.(null)
       const result = await doGenerate()
       const raw = result.response?.body as { modelVersion?: unknown } | undefined
       const id = isGemini ? raw?.modelVersion : result.response?.modelId
       if (typeof id === 'string' && id.trim()) onModelReported?.(id)
+      else onModelUnreported?.()
       return result
     },
     wrapStream: async ({ doStream }) => {
@@ -44,6 +47,9 @@ export function withModelReporting(
             // or duplicate it in the application stream or diagnostics.
             if (isGemini && chunk.type === 'raw') return
             controller.enqueue(chunk)
+          },
+          flush() {
+            if (!lastModelId) onModelUnreported?.()
           },
         })),
       }

@@ -10,7 +10,8 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
-import { createModelExecution, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
+import { createModelExecution, modelExecutionLabel, mergeModelExecutions } from '@/src/shared/utils/ai-model-execution'
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 import { useCallback, useMemo, useRef } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
@@ -183,11 +184,30 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   }, [audience])
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
-    useAiExecutionDiagnosticsStore.getState().clearOperationFeature(
-      ctx.operationKey,
-      'medical-summary',
-    )
-    let modelExecution = createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId)
+    const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
+    moduleRetryRequestsRef.current.delete(ctx.operationKey)
+    if (!retryRequest) {
+      useAiExecutionDiagnosticsStore.getState().clearOperationFeature(ctx.operationKey, 'medical-summary')
+    }
+    const initialExecution = () => createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId, ctx.modelName)
+    let modelExecution = initialExecution()
+    let currentCallCardIds = new Set<MedicalSummaryCardId>()
+    const cardModelExecutions: Partial<Record<MedicalSummaryCardId, AiModelExecution>> = {}
+    if (retryRequest) {
+      const base = retryRequest.baseResult
+      const baseGeneration = base.generation
+      const baseExecution = baseGeneration?.source === 'live' && baseGeneration.modelExecution
+        ? baseGeneration.modelExecution
+        : createModelExecution(baseGeneration?.modelId ?? ctx.modelId, baseGeneration?.modelId ?? ctx.modelId, baseGeneration?.modelName)
+      const retainedIds = base.completedCardIds ?? MEDICAL_SUMMARY_CARD_IDS.filter((id) => (
+        !base.cardErrors?.[id] && (id !== 'safety' || Boolean(base.safety))
+      ))
+      for (const id of retainedIds) {
+        if (retryRequest.cardIds.includes(id)) continue
+        cardModelExecutions[id] = baseGeneration?.source === 'live'
+          ? baseGeneration.cardModelExecutions?.[id] ?? baseExecution : baseExecution
+      }
+    }
     const outputLocale: 'en' | 'zh-TW' = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
@@ -195,8 +215,6 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const clinicalContext = [ctx.clinicalContext, longitudinalInvestigationContext]
       .filter(Boolean)
       .join('\n\n')
-    const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
-    moduleRetryRequestsRef.current.delete(ctx.operationKey)
     const isLocalModel = isCustomOpenAiModelId(ctx.modelId)
     const promptInput = {
       clinicalContext,
@@ -239,24 +257,28 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           }
         },
         execute: (messages) => streamWithCardProgressTimeout({
-          stream: (signal, streamChunk) => ctx.ai.stream(messages, {
-            modelId: ctx.modelId,
-            operationKey: ctx.operationKey,
-            diagnosticFeature: 'medical-summary',
-            requestedModelId: ctx.requestedModelId,
-            onModelExecution: (execution) => {
-              modelExecution = {
-                ...execution,
-                actualModelIds: [...new Set([...modelExecution.actualModelIds, ...execution.actualModelIds])],
-              }
-            },
-            throwOnAbort: true,
-            signal,
-            ...(isLocalModel
-              ? { temperature: 0, reasoningEffort: 'low' as const }
-              : {}),
-            onChunk: streamChunk,
-          }),
+          stream: (signal, streamChunk) => {
+            modelExecution = initialExecution()
+            currentCallCardIds = new Set()
+            return ctx.ai.stream(messages, {
+              modelId: ctx.modelId,
+              operationKey: ctx.operationKey,
+              diagnosticFeature: 'medical-summary',
+              requestedModelId: ctx.requestedModelId,
+              onModelExecution: (execution) => {
+                modelExecution = { ...modelExecution, ...execution }
+                // Metadata can arrive after a card's closing marker. Keep the
+                // final identity/uncertainty for every card produced by this call.
+                for (const id of currentCallCardIds) cardModelExecutions[id] = modelExecution
+              },
+              throwOnAbort: true,
+              signal,
+              ...(isLocalModel
+                ? { temperature: 0, reasoningEffort: 'low' as const }
+                : {}),
+              onChunk: streamChunk,
+            })
+          },
           onChunk,
           timeoutMs: isLocalModel ? MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS : null,
         }),
@@ -292,13 +314,14 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
     }
 
-    const generation = (generatedAt: number) => ({
-      source: 'live' as const,
-      modelId: ctx.modelId,
-      modelName: modelExecutionLabel(modelExecution),
-      modelExecution,
-      generatedAt,
-    })
+    const generation = (generatedAt: number) => {
+      const execution = mergeModelExecutions(Object.values(cardModelExecutions), modelExecution)
+      return {
+        source: 'live' as const, modelId: ctx.modelId,
+        modelName: modelExecutionLabel(execution), modelExecution: execution,
+        cardModelExecutions: { ...cardModelExecutions }, generatedAt,
+      }
+    }
     const bundleRevision = medicalSummaryStore.getState().bundleRevision
     const completedCardIds = new Set<MedicalSummaryCardId>(
       retryRequest?.baseResult.completedCardIds ?? (
@@ -324,6 +347,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // every later stream chunk while the model writes the remaining cards.
     const batchParseResults = new Map<MedicalSummaryCardId, unknown | null>()
     const publishCardResult = (card: MedicalSummaryCardDefinition, parsed: unknown) => {
+      cardModelExecutions[card.id] = modelExecution
+      currentCallCardIds.add(card.id)
       progressiveAggregate = card.apply(progressiveAggregate, parsed, ctx.catalog)
       publishedCardIds.add(card.id)
       completedCardIds.add(card.id)
