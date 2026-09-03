@@ -101,7 +101,7 @@ describe('GeminiService', () => {
 
       await service.query({
         ...mockRequest,
-        modelId: 'gemini-3.7-flash',
+        modelId: 'gemini-3.8-flash',
         messages: [
           { role: 'system', content: 'Follow clinical safety rules.' },
           { role: 'user', content: 'Summarize the record.' },
@@ -295,36 +295,39 @@ describe('GeminiService', () => {
       mutableEnv.proxyClientKey = ''
     })
 
-    it('targets the absolute geminiProxyUrl, not the relative /api/gemini-proxy', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: 'hi' }),
-      } as Response)
+    it.each(['gemini-3.1-flash-lite', 'gemini-3.8-flash'])(
+      'routes %s without a personal key to the absolute Gemini proxy',
+      async (modelId) => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ message: 'hi' }),
+        } as Response)
 
-      const proxyService = new GeminiService(null)
-      const result = await proxyService.query(proxyRequest)
+        const proxyService = new GeminiService(null)
+        const result = await proxyService.query({ ...proxyRequest, modelId })
 
-      const fetchUrl = mockFetch.mock.calls[0][0]
-      expect(fetchUrl).toBe('https://proxy.example.com/gemini')
-      expect(fetchUrl).not.toBe('/api/gemini-proxy')
+        const fetchUrl = mockFetch.mock.calls[0][0]
+        expect(fetchUrl).toBe('https://proxy.example.com/gemini')
+        expect(fetchUrl).not.toBe('/api/gemini-proxy')
 
-      const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>
-      expect(headers['x-proxy-key']).toBe('client-key')
-      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
-      expect(body).toEqual({
-        model: 'gemini-3.1-flash-lite',
-        messages: [{ role: 'user', content: 'Hello' }],
-      })
-      expect(body).not.toHaveProperty('contents')
-      expect(result.text).toBe('hi')
-    })
+        const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>
+        expect(headers['x-proxy-key']).toBe('client-key')
+        const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
+        expect(body).toEqual({
+          model: modelId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        })
+        expect(body).not.toHaveProperty('contents')
+        expect(result.text).toBe('hi')
+      },
+    )
 
     it('does not route a key-only Gemini model through the owner proxy', async () => {
       const proxyService = new GeminiService(null)
 
       await expect(proxyService.query({
         ...proxyRequest,
-        modelId: 'gemini-3.7-flash',
+        modelId: 'gemini-3.1-pro-preview',
       })).rejects.toThrow('personal Gemini API key')
       expect(mockFetch).not.toHaveBeenCalled()
     })

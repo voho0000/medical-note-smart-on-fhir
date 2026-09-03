@@ -184,15 +184,15 @@ export const MODEL_CATALOG = [
     roles: ['default'],
   },
   {
-    id: 'gemini-3.7-flash',
-    label: 'Gemini 3.7 Flash',
+    id: 'gemini-3.8-flash',
+    label: 'Gemini 3.8 Flash',
     descriptions: {
       en: 'Next-gen fast model',
       'zh-TW': '新一代快速模型',
     },
     provider: 'gemini',
     contextLimit: 900_000,
-    access: 'key-only',
+    access: 'proxy-or-key',
     apiSurface: 'gemini-generate-content',
     temperaturePolicy: 'passthrough',
     conversationMode: 'deep-agent',

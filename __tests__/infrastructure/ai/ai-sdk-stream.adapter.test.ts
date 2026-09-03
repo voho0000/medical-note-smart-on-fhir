@@ -9,7 +9,7 @@ jest.mock('ai', () => ({
 jest.mock('@/src/shared/config/env.config', () => ({
   ENV_CONFIG: {
     hasChatProxy: true,
-    hasGeminiProxy: false,
+    hasGeminiProxy: true,
     hasClaudeProxy: false,
     streamIdleTimeoutMs: 60_000,
   },
@@ -75,6 +75,28 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
       modelId: 'gpt-5.6-luna',
       apiKey: undefined,
       useProxy: true,
+    }))
+  })
+
+  it.each([
+    [null, true],
+    ['personal-gemini-key', false],
+  ] as const)('keeps Gemini 3.8 selected with personal key %s', async (apiKey, useProxy) => {
+    const create = jest.fn(() => ({ model: { kind: 'gemini' }, isGemini: true }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+
+    await adapter.stream({
+      model: 'gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey,
+      signal: new AbortController().signal,
+      onChunk: jest.fn(),
+    })
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'gemini-3.8-flash',
+      apiKey: apiKey ?? undefined,
+      useProxy,
     }))
   })
 

@@ -70,8 +70,8 @@ export class ProxyFetchInterceptor {
         // functionCall/functionResponse parts (no `.text`), so multi-step
         // agent tool loops lost their results and Gemini gave up. The proxy
         // forwards it to Google verbatim; we only inject routing markers
-        // (model is forced server-side; streaming is signalled by the SDK URL).
-        body = this.markGeminiPassthrough(body, String(url))
+        // (model is allowlisted server-side; streaming is signalled by the SDK URL).
+        body = this.markGeminiPassthrough(body, String(url), config.modelId)
       } else {
         // Transform OpenAI request format
         body = this.transformOpenAIRequest(body)
@@ -85,12 +85,15 @@ export class ProxyFetchInterceptor {
    * Pass the AI SDK's native Gemini body through, injecting only routing
    * markers the proxy strips before forwarding to Google.
    */
-  private markGeminiPassthrough(body: BodyInit | null | undefined, requestUrl: string): string | undefined {
+  private markGeminiPassthrough(body: BodyInit | null | undefined, requestUrl: string, modelId: string): string | undefined {
     if (!body || typeof body !== 'string') {
       return body as string | undefined
     }
     try {
       const parsed = JSON.parse(body)
+      // The SDK puts the model in its URL, which the single proxy URL replaces.
+      // Send the selected id explicitly so the backend can apply its allowlist.
+      parsed.model = modelId
       // The SDK targets :streamGenerateContent for streaming, :generateContent otherwise
       parsed.__proxyStreaming = requestUrl.includes('streamGenerateContent')
       return JSON.stringify(parsed)
