@@ -122,7 +122,7 @@ describe('MODEL_CATALOG contract', () => {
 
   it('keeps the current user-key Gemini and Claude lineup', () => {
     expect(GEMINI_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'gemini-3.7-flash',
+      'gemini-3.8-flash',
       'gemini-3.1-pro-preview',
     ])
     expect(CLAUDE_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([

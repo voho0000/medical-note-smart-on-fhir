@@ -19,14 +19,14 @@ describe('gateModel — downgrade stranded premium models', () => {
   })
 
   it('keeps a key-required model when the user HAS the provider key', () => {
-    expect(gateModel('gemini-3.7-flash', true)).toBe('gemini-3.7-flash')
+    expect(gateModel('gemini-3.8-flash', true)).toBe('gemini-3.8-flash')
     expect(gateModel('gpt-5.6-terra', true)).toBe('gpt-5.6-terra')
   })
 
   it('downgrades a key-required model to the free default when no key', () => {
     // every stranded premium pick lands on the one free default, regardless of
     // its original provider — a single predictable fallback.
-    expect(gateModel('gemini-3.7-flash', false)).toBe(DEFAULT_MODEL_ID)
+    expect(gateModel('gemini-3.8-flash', false)).toBe(DEFAULT_MODEL_ID)
     expect(gateModel('gpt-5.6-terra', false)).toBe(DEFAULT_MODEL_ID)
     expect(gateModel('claude-opus-5', false)).toBe(DEFAULT_MODEL_ID)
   })
@@ -42,13 +42,13 @@ describe('gateModel — downgrade stranded premium models', () => {
 describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
   it('downgrades a key-required model to the free default when no matching key', () => {
     expect(gateModelForKeys('claude-opus-5', {})).toBe(DEFAULT_MODEL_ID)
-    expect(gateModelForKeys('gemini-3.7-flash', {})).toBe(DEFAULT_MODEL_ID)
+    expect(gateModelForKeys('gemini-3.8-flash', {})).toBe(DEFAULT_MODEL_ID)
     expect(gateModelForKeys('gpt-5.6-terra', {})).toBe(DEFAULT_MODEL_ID)
   })
 
   it('keeps a key-required model when the matching provider key IS present', () => {
     expect(gateModelForKeys('claude-opus-5', { claudeKey: 'k' })).toBe('claude-opus-5')
-    expect(gateModelForKeys('gemini-3.7-flash', { geminiKey: 'k' })).toBe('gemini-3.7-flash')
+    expect(gateModelForKeys('gemini-3.8-flash', { geminiKey: 'k' })).toBe('gemini-3.8-flash')
     expect(gateModelForKeys('gpt-5.6-terra', { openAiKey: 'k' })).toBe('gpt-5.6-terra')
   })
 
