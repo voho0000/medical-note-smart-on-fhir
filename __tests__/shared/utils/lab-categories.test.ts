@@ -18,6 +18,26 @@ import {
 const cbc = LAB_CATEGORIES.find((c) => c.id === 'cbc')!
 const serology = LAB_CATEGORIES.find((c) => c.id === 'serology')!
 
+describe('static laboratory vocabulary performance', () => {
+  it('normalizes source values, not the whole category dictionary, for each result', () => {
+    const normalization = jest.spyOn(String.prototype, 'normalize')
+    try {
+      for (let i = 0; i < 100; i++) {
+        expect(categorizeObservation({
+          code: { text: `Unlisted assay ${i}` },
+          category: [{ coding: [{ code: 'laboratory' }] }],
+          valueQuantity: { value: i, unit: 'mg/dL' },
+        })?.id).toBe('other')
+      }
+      // An operation-count guard avoids machine-dependent timing assertions.
+      // The old implementation normalized thousands of static entries per row.
+      expect(normalization.mock.calls.length).toBeLessThan(2_000)
+    } finally {
+      normalization.mockRestore()
+    }
+  })
+})
+
 function makeObs(text: string, loinc: string, value = 50, unit = '%') {
   return {
     code: {

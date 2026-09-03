@@ -102,10 +102,12 @@ export function buildClinicalContextFitCandidate(
   targetTokens: number,
 ): ClinicalContextFitCandidate {
   const normalizedBase: ClinicalContextProfile = {
-    selection: { ...base.selection },
-    filters: { ...base.filters },
+    // Preserve immutable provider references so document-only changes do not
+    // invalidate unrelated laboratory, encounter and medication calculations.
+    selection: base.selection,
+    filters: base.filters,
     documentMode: base.documentMode ?? 'latestAdmission',
-    documentIds: [...(base.documentIds ?? [])],
+    documentIds: base.documentIds ?? [],
   }
   if (tier === 'full' || tier === 'prioritized') {
     return { tier, profile: normalizedBase }

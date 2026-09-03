@@ -1,6 +1,8 @@
 "use client"
 
 import { Database } from "lucide-react"
+import { startTransition, useEffect, useState } from "react"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -12,6 +14,33 @@ import {
 import { DataSelectionFeature } from "../Feature"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
+import type { DataSelectionFeatureProps } from "../Feature"
+
+function DeferredDataSelectionFeature(props: DataSelectionFeatureProps) {
+  const [ready, setReady] = useState(false)
+  const { t } = useLanguage()
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Give the dialog chrome a paint before starting the chart calculation.
+    // This is scheduling on the main thread, not a claim of background work.
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        if (!cancelled) startTransition(() => setReady(true))
+      }, 0)
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }, [])
+  return ready ? <DataSelectionFeature {...props} /> : (
+    <div role="status" aria-busy="true" className="py-4 text-sm text-muted-foreground">
+      {t.dataSelection.loadingData}
+    </div>
+  )
+}
 
 export interface DataSelectionDrawerProps {
   open: boolean
@@ -52,7 +81,7 @@ export function DataSelectionDrawer({
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
         <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <Database className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+            <Database aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
             {title}
           </SheetTitle>
           <SheetDescription className="text-xs leading-relaxed">{description}</SheetDescription>
@@ -60,14 +89,14 @@ export function DataSelectionDrawer({
 
         <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
           <div className="p-3 sm:p-4">
-            <DataSelectionFeature
+            {open && <DeferredDataSelectionFeature
               modelId={modelId}
               fallbackModelId={fallbackModelId}
               overflowIssue={overflowIssue}
               showScopeDescription={false}
               consumer={consumer}
               showTemplates={showTemplates}
-            />
+            />}
           </div>
         </ScrollArea>
 
