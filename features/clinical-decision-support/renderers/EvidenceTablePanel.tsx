@@ -36,12 +36,17 @@ import {
  * card it is sitting in.
  */
 
-/** A visit reads the numbers first, then the pictures, then the bedside. */
+/**
+ * A visit reads the numbers first, then the tracings and the pictures, then the
+ * bedside, then what is already on the prescription, and the background last.
+ */
 const CATEGORY_ORDER: readonly EvidenceItemCategory[] = [
   'biomarker',
   'weight',
   'imaging',
+  'ecg',
   'examination',
+  'medication',
   'context',
 ]
 
@@ -49,7 +54,9 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
   biomarker: { zh: '生物標記與檢驗', en: 'Biomarkers and laboratory' },
   weight: { zh: '體重', en: 'Weight' },
   imaging: { zh: '影像與心超', en: 'Imaging and echocardiography' },
+  ecg: { zh: '心電圖', en: 'Electrocardiogram' },
   examination: { zh: '理學檢查徵象', en: 'Examination signs' },
+  medication: { zh: '處方與用藥', en: 'Prescriptions and medications' },
   context: { zh: '臨床背景', en: 'Clinical context' },
 }
 
@@ -58,6 +65,17 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string 
   'lv-filling-pressure': {
     zh: 'LV filling pressure 證據',
     en: 'LV filling pressure evidence',
+  },
+  'amt-ivabradine': { zh: 'AMT · ivabradine', en: 'AMT: ivabradine' },
+  'amt-vericiguat': { zh: 'AMT · vericiguat', en: 'AMT: vericiguat' },
+  'amt-hydralazine-isdn': {
+    zh: 'AMT · hydralazine/ISDN',
+    en: 'AMT: hydralazine/ISDN',
+  },
+  'amt-digoxin': { zh: 'AMT · digoxin', en: 'AMT: digoxin' },
+  'hf-harmful-medication': {
+    zh: 'HF 應避免的藥物',
+    en: 'Medications to avoid in heart failure',
   },
 }
 

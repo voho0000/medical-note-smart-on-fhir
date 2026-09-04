@@ -19,6 +19,7 @@ import type { EvidenceTable } from '@/features/clinical-decision-support/types'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
   DiagnosticReportEntity,
+  MedicationEntity,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 
@@ -94,16 +95,92 @@ function congestionTable(): EvidenceTable {
   return table
 }
 
-function renderPanel(table: EvidenceTable, patientId: string | undefined = PATIENT_ID) {
+function renderPanel(
+  table: EvidenceTable,
+  patientId: string | undefined = PATIENT_ID,
+  recommendationId = 'heart-failure-congestion-diuretic',
+) {
   return render(
     <EvidenceTablePanel
       table={table}
-      recommendationId="heart-failure-congestion-diuretic"
+      recommendationId={recommendationId}
       locale="zh-TW"
       patientId={patientId}
       onNavigate={jest.fn()}
     />,
   )
+}
+
+/**
+ * The HFrEF patient the additional-medical-therapy and harmful-medication
+ * tables were written for: an LVEF of 30, a tracing that states its own rhythm
+ * and rate in one sentence, all four foundational pillars on the prescription,
+ * and one diltiazem the guideline names as harmful.
+ */
+function currentPrescription(id: string, name: string): MedicationEntity {
+  return {
+    id,
+    status: 'active',
+    intent: 'order',
+    authoredOn: '2026-07-10',
+    medicationCodeableConcept: { text: name },
+  }
+}
+
+const lvef30: ObservationEntity = {
+  id: 'lvef-30',
+  resourceType: 'Observation',
+  status: 'final',
+  effectiveDateTime: '2026-07-18',
+  code: {
+    coding: [{ system: LOINC_SYSTEM, code: '10230-1', display: 'Left ventricular ejection fraction' }],
+  },
+  valueQuantity: { value: 30, unit: '%', system: UCUM_SYSTEM, code: '%' },
+}
+
+const sinusEcg: DiagnosticReportEntity = {
+  id: 'ecg-2026-07-19',
+  status: 'final',
+  effectiveDateTime: '2026-07-19',
+  code: { text: '心電圖', coding: [{ code: '18001C', display: 'ECG' }] },
+  conclusion: 'Sinus rhythm, rate 82',
+}
+
+function heartFailureTable(concept: EvidenceTable['concept']): EvidenceTable {
+  const profile = createFhirCdssPatientProfile({
+    patient: { id: PATIENT_ID, resourceType: 'Patient', age: 68 },
+    conditions: [{
+      id: 'hf-condition',
+      code: {
+        coding: [{ system: ICD10_SYSTEM, code: 'I50.22', display: 'Chronic systolic heart failure' }],
+      },
+      clinicalStatus: 'active',
+    }],
+    encounters: [],
+    observations: [lvef30],
+    medications: [
+      currentPrescription('rx-entresto', 'Entresto (sacubitril/valsartan) 100 mg'),
+      currentPrescription('rx-bisoprolol', 'Bisoprolol 5 mg'),
+      currentPrescription('rx-spironolactone', 'Spironolactone 25 mg'),
+      currentPrescription('rx-dapagliflozin', 'Dapagliflozin 10 mg'),
+      currentPrescription('rx-diltiazem', 'Diltiazem 90 mg'),
+    ],
+    allergies: [],
+    carePlans: [],
+    procedures: [],
+    immunizations: [],
+    diagnosticReports: [sinusEcg],
+    documentReferences: [],
+    now: new Date('2026-07-29T00:00:00Z'),
+  })
+
+  const result = HEART_FAILURE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+  const table = result.recommendations
+    .flatMap((recommendation) => recommendation.evidenceTables ?? [])
+    .find((candidate) => candidate.concept === concept)
+
+  if (!table) throw new Error(`the heart-failure pack produced no ${concept} evidence table`)
+  return table
 }
 
 describe('EvidenceTablePanel', () => {
@@ -205,5 +282,111 @@ describe('EvidenceTablePanel', () => {
     const limitations = screen.getByTestId('cdss-evidence-limitations-congestion')
     expect(within(limitations).getAllByRole('listitem')).toHaveLength(table.limitations.length)
     expect(limitations).toHaveTextContent(table.limitations[0])
+  })
+})
+
+describe('EvidenceTablePanel with the additional-medical-therapy table', () => {
+  beforeEach(() => {
+    useEvidenceOverridesStore.setState({ byPatientId: {} })
+    window.localStorage.clear()
+  })
+
+  it('heads the table with the therapy the pack named it for', () => {
+    const table = heartFailureTable('amt-ivabradine')
+    renderPanel(table, PATIENT_ID, 'heart-failure-additional-medical-therapy')
+
+    expect(screen.getByRole('region', { name: 'AMT · ivabradine' })).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-evidence-counts-amt-ivabradine')).toHaveTextContent(
+      `支持 ${table.supportsCount} · 不支持 ${table.againstCount} · 無法判定 ${table.unknownCount}`,
+    )
+  })
+
+  it('reads the tracing before the bedside and the prescription after it', () => {
+    renderPanel(
+      heartFailureTable('amt-ivabradine'),
+      PATIENT_ID,
+      'heart-failure-additional-medical-therapy',
+    )
+
+    const groups = screen.getAllByTestId(/^cdss-evidence-group-/)
+    expect(groups.map((group) => group.getAttribute('data-testid'))).toEqual([
+      'cdss-evidence-group-imaging',
+      'cdss-evidence-group-ecg',
+      'cdss-evidence-group-examination',
+      'cdss-evidence-group-medication',
+    ])
+
+    expect(within(screen.getByTestId('cdss-evidence-group-ecg')).getByText('心電圖'))
+      .toBeInTheDocument()
+    expect(within(screen.getByTestId('cdss-evidence-group-medication')).getByText('處方與用藥'))
+      .toBeInTheDocument()
+  })
+
+  it('shows the matched term and the quoted sentence behind an ECG row', () => {
+    renderPanel(
+      heartFailureTable('amt-ivabradine'),
+      PATIENT_ID,
+      'heart-failure-additional-medical-therapy',
+    )
+
+    const rhythmRow = screen.getByTestId('cdss-evidence-row-amt:ivabradine:sinus-rhythm')
+    expect(within(rhythmRow).getByText('Sinus rhythm')).toBeInTheDocument()
+    expect(rhythmRow).toHaveTextContent('心電圖：sinus rhythm')
+    expect(screen.getByTestId('cdss-evidence-direction-amt:ivabradine:sinus-rhythm'))
+      .toHaveTextContent('支持')
+
+    const sources = screen.getByTestId('cdss-evidence-sources-amt:ivabradine:sinus-rhythm')
+    expect(within(sources).getByText('sinus-rhythm')).toBeInTheDocument()
+    expect(sources).toHaveTextContent('檢查報告')
+    expect(sources).toHaveTextContent('2026-07-19')
+    expect(sources).toHaveTextContent('Sinus rhythm, rate 82')
+
+    // The rate row reads the same tracing and quotes the same sentence.
+    const rateSources = screen.getByTestId('cdss-evidence-sources-amt:ivabradine:resting-heart-rate')
+    expect(within(rateSources).getByText('ecg-heart-rate')).toBeInTheDocument()
+    expect(rateSources).toHaveTextContent('Sinus rhythm, rate 82')
+  })
+})
+
+describe('EvidenceTablePanel with the harmful-medication table', () => {
+  beforeEach(() => {
+    useEvidenceOverridesStore.setState({ byPatientId: {} })
+    window.localStorage.clear()
+  })
+
+  it('names the concept and groups every scanned class under 處方與用藥', () => {
+    const table = heartFailureTable('hf-harmful-medication')
+    renderPanel(table, PATIENT_ID, 'heart-failure-medication-safety')
+
+    expect(screen.getByRole('region', { name: 'HF 應避免的藥物' })).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-evidence-counts-hf-harmful-medication')).toHaveTextContent(
+      `支持 ${table.supportsCount} · 不支持 ${table.againstCount} · 無法判定 ${table.unknownCount}`,
+    )
+
+    const groups = screen.getAllByTestId(/^cdss-evidence-group-/)
+    expect(groups.map((group) => group.getAttribute('data-testid')))
+      .toEqual(['cdss-evidence-group-medication'])
+    expect(within(groups[0]).getByText('處方與用藥')).toBeInTheDocument()
+  })
+
+  it('reads the diltiazem the record holds as supporting the finding', () => {
+    renderPanel(
+      heartFailureTable('hf-harmful-medication'),
+      PATIENT_ID,
+      'heart-failure-medication-safety',
+    )
+
+    const ccbRow = screen.getByTestId('cdss-evidence-row-hf-harm:non-dhp-ccb')
+    expect(ccbRow).toHaveTextContent('目前處方：Diltiazem 90 mg')
+    expect(screen.getByTestId('cdss-evidence-direction-hf-harm:non-dhp-ccb'))
+      .toHaveTextContent('支持')
+    expect(screen.getByTestId('cdss-evidence-sources-hf-harm:non-dhp-ccb'))
+      .toHaveTextContent('處方')
+
+    // A class the cross-institution record does not hold is answered, not absent.
+    expect(screen.getByTestId('cdss-evidence-row-hf-harm:nsaid'))
+      .toHaveTextContent('目前處方未見')
+    expect(screen.getByTestId('cdss-evidence-direction-hf-harm:nsaid'))
+      .toHaveTextContent('不支持')
   })
 })
