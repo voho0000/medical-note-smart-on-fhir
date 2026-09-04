@@ -55,7 +55,10 @@ next-env.d.ts
 !public/clinical-guidelines/taiwan-t2dm-2022/*.pdf
 
 # IDE and editor files
-.claude
+.claude/*
+!.claude/skills/
+# Skills are project knowledge, not local settings: they describe how to rebuild
+# things everyone here needs. Worktrees and machine settings stay ignored.
 
 # build-gh.mjs temp stash (left behind if a GH Pages build is interrupted)
 .api-stash-gh-build/
