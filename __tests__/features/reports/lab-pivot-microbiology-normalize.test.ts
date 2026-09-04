@@ -154,7 +154,7 @@ describe('buildLabPivots — microbiology name normalization', () => {
     expect(names.filter((name) => name === 'Anaerobic Culture')).toHaveLength(1)
   })
 
-  it('merges LOINC and corroborated NHI mycobacterial cultures under the official display name', () => {
+  it('merges LOINC and corroborated NHI mycobacterial cultures under the preferred display name', () => {
     const observations = [
       microbiologyObservation({
         id: 'loinc-culture',
@@ -182,7 +182,7 @@ describe('buildLabPivots — microbiology name normalization', () => {
     expect(populatedRows[0]).toMatchObject({
       mapKey: 'MYCOBACTERIAL-CULTURE',
       testKey: 'MYCOBACTERIAL-CULTURE',
-      displayName: '抗酸菌培養',
+      displayName: 'Mycobacterial Culture',
     })
     expect([...populatedRows[0].values.keys()]).toEqual([
       '2026-07-01',
@@ -272,8 +272,8 @@ describe('buildLabPivots — microbiology name normalization', () => {
     expect(populatedRows).toHaveLength(2)
     expect(populatedRows.map((row) => [row.testKey, row.displayName])).toEqual(
       expect.arrayContaining([
-        ['MYCOBACTERIAL-CULTURE', '抗酸菌培養'],
-        ['ACID-FAST-STAIN', '抗酸菌染色'],
+        ['MYCOBACTERIAL-CULTURE', 'Mycobacterial Culture'],
+        ['ACID-FAST-STAIN', 'AFB smear'],
       ]),
     )
     expect(buildLabPivots(observations).urine.rows.every((row) => row.values.size === 0)).toBe(true)
