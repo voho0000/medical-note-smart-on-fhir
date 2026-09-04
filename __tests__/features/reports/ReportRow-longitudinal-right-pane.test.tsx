@@ -11,6 +11,7 @@ import {
 
 jest.mock('@/features/report-interpretation', () => ({
   ReportInterpretationButton: () => null,
+  ReportInterpretationLauncher: () => null,
   ReportInterpretationPanel: () => null,
 }))
 
