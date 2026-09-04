@@ -654,10 +654,10 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // CANONICAL_KEYS is defined further down — after LOINC_TO_CANONICAL — so it
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
-  // Keep the official Taiwan clinical wording visible. The canonical key says
-  // what can be grouped; the UI does not silently rename it to a taxonomic term.
-  [MYCOBACTERIAL_CULTURE_KEY]: '抗酸菌培養',
-  [ACID_FAST_STAIN_KEY]: '抗酸菌染色',
+  // Use the organism-family name rather than "TB Culture": the same culture
+  // can also grow nontuberculous mycobacteria.
+  [MYCOBACTERIAL_CULTURE_KEY]: 'Mycobacterial Culture',
+  [ACID_FAST_STAIN_KEY]: 'AFB smear',
   [BLOOD_CULTURE_KEY]: 'Blood Culture',
   [AEROBIC_CULTURE_KEY]: 'Aerobic Culture',
   [GRAM_STAIN_KEY]: 'Gram Stain',

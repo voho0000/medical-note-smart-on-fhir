@@ -9,7 +9,9 @@
 // full reports inline under it.
 
 import { Fragment, useMemo, useState } from 'react'
+import { CircleAlert } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import {
   MICROBIOLOGY_STAGE_COLUMN_ORDER,
@@ -249,8 +251,8 @@ export function MicrobiologyCumulativeView({
       .join(' · ')
     return (
       <span key={group.name} className="line-clamp-2 break-words leading-snug">
-        <span className="text-muted-foreground">{group.name}</span>
-        {' '}
+        <span className="font-semibold text-foreground">{group.name}</span>
+        <span aria-hidden="true" className="text-muted-foreground/60"> · </span>
         {PREFIXED_STATES.includes(group.state) && (
           <span className={resultStateClass(group.state)}>
             {resultStateLabel(group.state)}
@@ -402,7 +404,7 @@ export function MicrobiologyCumulativeView({
                   </div>
                   {result.sourceRoleConflict && (
                     <div className="mt-0.5 font-medium text-amber-700 dark:text-amber-300">
-                      {strings.roleConflict ?? '來源代碼與名稱不一致'}
+                      {strings.roleConflict ?? '來源名稱與結果內容不一致'}
                     </div>
                   )}
                 </div>
@@ -533,12 +535,6 @@ export function MicrobiologyCumulativeView({
           <span aria-hidden="true"> · </span>
           {(strings.dateCount ?? '{count} 個日期').replace('{count}', String(dateCount))}
         </div>
-        {model.missingSpecimenCount > 0 && (
-          <p className="w-full text-[0.6875rem] leading-snug text-muted-foreground">
-            {strings.missingSpecimenWarning
-              ?? '健保資料常缺檢體來源；「未提供」各列僅依日期排列，可能來自不同檢體。'}
-          </p>
-        )}
       </div>
 
       <div
@@ -566,7 +562,26 @@ export function MicrobiologyCumulativeView({
                 {strings.dateHeader ?? '日期'}
               </th>
               <th className="border-b bg-muted px-2 py-1.5 text-left font-semibold">
-                {strings.specimenHeader ?? '檢體'}
+                <span className="inline-flex items-center gap-1">
+                  {strings.specimenHeader ?? '檢體'}
+                  {model.missingSpecimenCount > 0 && (
+                    <TapTooltip
+                      asChild
+                      side="top"
+                      content={strings.missingSpecimenWarning
+                        ?? '健保署資料未提供檢體來源，無法判斷結果來自痰、尿液或其他檢體；同日結果也不一定屬於同一份檢體。'}
+                    >
+                      <button
+                        type="button"
+                        aria-label={strings.missingSpecimenWarning
+                          ?? '健保署資料未提供檢體來源，無法判斷結果來自痰、尿液或其他檢體；同日結果也不一定屬於同一份檢體。'}
+                        className="inline-flex size-6 items-center justify-center rounded-full text-amber-700 outline-none transition-colors hover:text-amber-900 focus-visible:ring-2 focus-visible:ring-primary dark:text-amber-300 dark:hover:text-amber-100"
+                      >
+                        <CircleAlert aria-hidden="true" className="size-3.5" />
+                      </button>
+                    </TapTooltip>
+                  )}
+                </span>
               </th>
               {columns.map((column) => (
                 <th key={column} className="border-b border-l bg-muted px-2 py-1.5 text-left font-medium">
