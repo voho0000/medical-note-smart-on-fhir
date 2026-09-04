@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { createFhirCdssPatientProfile } from './adapters/fhir-cdss-profile'
+import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import {
   getApplicableClinicalGuidelinePacks,
   getDefaultClinicalGuidelinePack,

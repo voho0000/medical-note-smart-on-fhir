@@ -15,7 +15,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { getClinicalModuleDefinition } from '@voho0000/personalized-care'
+import { clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -39,7 +39,6 @@ import type {
   GuidelineReference,
 } from '../types'
 import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-card'
-import { clinicalModuleLabel } from '../utils/clinical-module-labels'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 
 interface ClinicalDecisionSupportViewProps {
