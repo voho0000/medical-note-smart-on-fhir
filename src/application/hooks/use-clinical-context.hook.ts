@@ -18,9 +18,12 @@ import { useProceduresContext } from "./clinical-context/useProceduresContext"
 import { useVitalSignsContext } from "./clinical-context/useVitalSignsContext"
 import { useImmunizationsContext } from "./clinical-context/useImmunizationsContext"
 import { useProblemListContext } from "./clinical-context/useProblemListContext"
+import { useProblemTimelineContext } from "./clinical-context/useProblemTimelineContext"
 import type { ClinicalData } from "./clinical-context/types"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import { listClinicalDocuments, resolveSelectedDocuments, formatDocumentsSection } from "@/src/core/utils/clinical-documents.utils"
+import type { DocumentTextMode } from "@/src/core/utils/clinical-documents.utils"
+import { resolveDocumentTextMode } from "@/src/core/utils/document-text-policy.utils"
 import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { buildClinicalContextCoverageSection } from "@/src/core/utils/clinical-context-coverage.utils"
@@ -51,6 +54,13 @@ export interface UseClinicalContextOptions {
   clinicalDataOverride?: ClinicalData | null
   /** Shared maximum for selected document bodies in this generated context. */
   documentTokenBudget?: number
+  /**
+   * Whether automatically selected documents are sent whole or reduced to
+   * their clinically dense sections. Only a REQUEST: a manual ('custom')
+   * selection and the AI-handoff consumer always win with full text. The
+   * policy table lives in core/utils/document-text-policy.utils.ts.
+   */
+  documentTextMode?: DocumentTextMode
 }
 
 export function useClinicalContext(
@@ -126,6 +136,14 @@ export function useClinicalContext(
     filters
   )
 
+  // The longitudinal claims view of the same problems: one line per ICD-10
+  // category with its span, encounter/inpatient counts, and where it is
+  // followed. Rendered immediately after the problem list it belongs to.
+  const problemTimelineSection = useProblemTimelineContext(
+    selectedData.problemList ?? false,
+    clinicalData,
+  )
+
   // Registry-driven sections (extensible via dataCategoryRegistry)
   const cachedRegistryContext = useRegistryContextCache(clinicalData, nowMs, locale)
 
@@ -181,9 +199,18 @@ export function useClinicalContext(
       profile.documentIds,
     )
   }, [selectedData.documents, clinicalData, allDocuments, profile.documentMode, profile.documentIds])
+  const documentTextMode: DocumentTextMode = resolveDocumentTextMode(
+    activeConsumer,
+    profile.documentMode,
+    options.documentTextMode,
+  )
   const documentsSection = useMemo(
-    () => formatDocumentsSection(selectedDocuments ?? [], options.documentTokenBudget),
-    [selectedDocuments, options.documentTokenBudget],
+    () => formatDocumentsSection(
+      selectedDocuments ?? [],
+      options.documentTokenBudget,
+      { documentTextMode },
+    ),
+    [selectedDocuments, options.documentTokenBudget, documentTextMode],
   )
   const includedDocumentIds = useMemo(
     () => (selectedDocuments ?? []).map((document) => document.id),
@@ -212,57 +239,79 @@ export function useClinicalContext(
     []
   )
 
+  // SECTION ORDER — safety-critical, compact facts first; bulky free text last.
+  //
+  // The consumer is an LLM writing a first-visit summary, and one of them is a
+  // local model with weaker long-context recall. Anything it must not miss
+  // (who the patient is, when the record ends, what they react to, what is
+  // wrong with them, what they take) has to be readable before the ~47k tokens
+  // of discharge summaries, not buried after them. Every section's INTERNAL
+  // format is unchanged; only their order here moved.
+  //
+  //   1 demographics · 2 temporal reference · 3 allergies · 4 problems
+  //   (+ claims timeline) · 5 standing care context · 6 vitals · 7 medications
+  //   & immunizations · 8 procedures & admissions · 9 labs · 10 imaging ·
+  //   11 documents · 12 retrieval coverage
   const getClinicalContext = useCallback((): ClinicalContextSection[] => {
     const sections: ClinicalContextSection[] = []
 
+    // 1-2. Who, and as of when.
+    if (patientSection) sections.push(patientSection)
     if (temporalReferenceSection) sections.push(temporalReferenceSection)
 
-    // Patient group
-    if (patientSection) sections.push(patientSection)
-    sections.push(...vitalSignsSections)
+    // 3. Allergies: the single most consequential fact to miss.
+    if (allergiesSection) sections.push(allergiesSection)
+
+    // 4. Active problems, then their longitudinal claims timeline.
     if (problemListSection) sections.push(problemListSection)
+    if (problemTimelineSection) sections.push(problemTimelineSection)
+
+    // 5. Standing care context that constrains any plan.
     pushRegistrySection(sections, advanceDirectivesSection)
     pushRegistrySection(sections, medicalDevicesSection)
     pushRegistrySection(sections, carePlansSection)
 
-    // Visit group
-    if (encountersSection) sections.push(encountersSection)
+    // 6. Vitals — compact, and read alongside the problem list.
+    sections.push(...vitalSignsSections)
 
-    // Reports group
-    pushRegistrySection(sections, labReportsSection)
-    pushRegistrySection(sections, imagingReportsSection)
-    pushRegistrySection(sections, observationsSection)
-    if (proceduresSection) sections.push(proceduresSection)
-
-    // Medication group
+    // 7. Medications (current / recently ended / historical) and immunizations.
     if (medicationsSection) sections.push(medicationsSection)
-    if (allergiesSection) sections.push(allergiesSection)
     if (immunizationsSection) sections.push(immunizationsSection)
 
-    // Documents group
+    // 8. Procedures and the admission/visit chronology they belong to.
+    if (proceduresSection) sections.push(proceduresSection)
+    if (encountersSection) sections.push(encountersSection)
+
+    // 9-10. Measurements, then imaging impressions.
+    pushRegistrySection(sections, labReportsSection)
+    pushRegistrySection(sections, observationsSection)
+    pushRegistrySection(sections, imagingReportsSection)
+
+    // 11. Bulk free text last.
     pushRegistrySection(sections, documentsSection)
 
-    // Retrieval/coverage metadata belongs last: it informs absence semantics
-    // without interrupting the clinical chronology above.
+    // 12. Retrieval/coverage metadata: it informs absence semantics without
+    // interrupting the clinical narrative above.
     pushRegistrySection(sections, coverageSection)
 
     return sections
   }, [
-    temporalReferenceSection,
     patientSection,
-    vitalSignsSections,
+    temporalReferenceSection,
+    allergiesSection,
     problemListSection,
+    problemTimelineSection,
     advanceDirectivesSection,
     medicalDevicesSection,
     carePlansSection,
+    vitalSignsSections,
+    medicationsSection,
+    immunizationsSection,
+    proceduresSection,
     encountersSection,
     labReportsSection,
-    imagingReportsSection,
     observationsSection,
-    proceduresSection,
-    medicationsSection,
-    allergiesSection,
-    immunizationsSection,
+    imagingReportsSection,
     documentsSection,
     coverageSection,
     pushRegistrySection,

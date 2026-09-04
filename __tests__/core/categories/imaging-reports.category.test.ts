@@ -126,3 +126,89 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(items.some((item) => item.includes('omitted for brevity'))).toBe(false)
   })
 })
+
+describe('imagingReportsCategory — impression-first AI context', () => {
+  const narrative = (impression: string) => [
+    'INDICATION: follow-up.',
+    'TECHNIQUE: portable AP chest radiograph.',
+    'FINDINGS: verbose description that should not reach the AI context.',
+    `IMPRESSION: ${impression}`,
+  ].join('\n')
+
+  const report = (
+    id: string,
+    code: string,
+    date: string,
+    impression: string,
+  ) => ({
+    id,
+    status: 'final',
+    code: { text: code },
+    effectiveDateTime: date,
+    conclusion: narrative(impression),
+  })
+
+  const clinicalData = { observations: [], encounters: [] } as any
+
+  const render = (reports: any[]) => {
+    const section = imagingReportsCategory.getContextSection(reports, filters, clinicalData)
+    return section && !Array.isArray(section) ? section.items : []
+  }
+
+  it('keeps only the impression of the current study of a kind', () => {
+    const items = render([report('r1', 'Chest radiograph AP', '2026-08-10', 'Small left effusion. Stable lines.')])
+    expect(items[0]).toBe('Chest radiograph AP (2026-08-10): IMPRESSION: Small left effusion. Stable lines.')
+    expect(items.join('\n')).not.toContain('TECHNIQUE')
+    expect(items.join('\n')).not.toContain('verbose description')
+  })
+
+  it('reduces older studies of the same kind to one citable line each', () => {
+    const items = render([
+      report('r1', 'Chest radiograph AP', '2026-08-10', 'Small left effusion. Stable lines.'),
+      report('r2', 'CXR portable', '2026-06-07', 'Low lung volume. Crowded basal markings.'),
+      report('r3', '胸部Ｘ光（床邊）', '2026-07-09', 'Increased left basilar opacity. Unchanged heart size.'),
+    ])
+    expect(items).toContain('Earlier studies (one-line impressions):')
+    // Only the newest chest radiograph keeps its full impression.
+    expect(items.filter((item) => item.startsWith('Chest radiograph AP'))).toHaveLength(1)
+    const older = items.filter((item) => item.startsWith('2026-'))
+    expect(older).toEqual([
+      '2026-07-09 | XR chest | 胸部Ｘ光（床邊）: Increased left basilar opacity.',
+      '2026-06-07 | XR chest | CXR portable: Low lung volume.',
+    ])
+    // The date + report title on each line is what resolves it to its
+    // DiagnosticReport in the prompt's SOURCE LIST.
+    expect(older.join('\n')).not.toMatch(/\[L\d+\]/)
+  })
+
+  it('keeps a different modality+region as its own current study', () => {
+    const items = render([
+      report('r1', 'Chest radiograph AP', '2026-08-10', 'Small left effusion.'),
+      report('r2', 'MRI spine with contrast', '2026-07-05', 'Multifocal marrow lesions.'),
+    ])
+    expect(items.filter((item) => item.includes('IMPRESSION:'))).toHaveLength(2)
+    expect(items.some((item) => item.startsWith('Earlier studies'))).toBe(false)
+  })
+
+  it('groups a study written in Chinese with its English-titled equivalent', () => {
+    const items = render([
+      report('r1', '胸腹骨盆電腦斷層', '2026-08-07', 'Known osseous and hepatic disease.'),
+      report('r2', 'CT chest abdomen pelvis with contrast', '2026-07-06', 'Stable indexed lesions.'),
+    ])
+    expect(items.filter((item) => item.includes('IMPRESSION:'))).toHaveLength(1)
+    expect(items).toContain(
+      '2026-07-06 | CT chest+abdomen+pelvis | CT chest abdomen pelvis with contrast: Stable indexed lesions.',
+    )
+  })
+
+  it('emits the full narrative when no conclusion header is recognised', () => {
+    const items = render([{
+      id: 'r1',
+      status: 'final',
+      code: { text: '胸腔檢查（包括各種角度部位之胸腔檢查）' },
+      effectiveDateTime: '2026-06-02',
+      conclusion: 'Radiography of Chest A-P View(Supine)',
+    } as any])
+    expect(items[0]).toContain('Radiography of Chest A-P View(Supine)')
+  })
+})

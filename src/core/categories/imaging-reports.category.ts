@@ -1,4 +1,24 @@
-// Imaging Reports Category
+// Imaging Reports Category — IMPRESSION-FIRST in the AI clinical context.
+//
+// A radiology/pathology narrative is mostly descriptive sections (INDICATION,
+// TECHNIQUE, COMPARISON, FINDINGS, GROSS/MICROSCOPIC DESCRIPTION) that restate
+// what the conclusion already says; on a data-dense chart they are the largest
+// non-document cost in the context. So:
+//
+//   • the CURRENT report of each kind — newest per (modality, body region),
+//     derived from the study identity, modality alone when no region can be
+//     derived — keeps its impression/conclusion section;
+//   • every older report in the window keeps one line: date, modality+region,
+//     the report title, and the first sentence of its impression.
+//
+// Nothing is silently guessed: when no conclusion header is recognised the
+// report's full narrative is emitted exactly as before (see
+// src/core/utils/imaging-impression.utils.ts).
+//
+// Citation: source keys live only in the prompt's SOURCE LIST, and a line is
+// matched back to its DiagnosticReport/ImagingStudy by resource type + date +
+// display — so every line here, one-liners included, carries the report's own
+// title and its exam date.
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, ImagingStudy, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
@@ -12,6 +32,11 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
+import {
+  imagingGroupKey,
+  imagingImpressionSummary,
+  impressionOrFullText,
+} from '@/src/core/utils/imaging-impression.utils'
 
 function presentedFormText(report: ImagingReportData): string[] {
   return (report.presentedForm ?? []).map((attachment: any, index) => {
@@ -184,9 +209,8 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     }
 
     const observations = allClinicalData?.observations || []
-    
-    const items: string[] = []
-    filtered.forEach(report => {
+
+    const resolveObservations = (report: ImagingReportData): Observation[] => {
       const reportObs: Observation[] = []
       report.result?.forEach(result => {
         const id = referenceId(result.reference)
@@ -195,47 +219,111 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           if (obs) reportObs.push(obs)
         }
       })
-      
-      const datePart = report.effectiveDateTime 
-        ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
-        : ''
-      
-      const attachmentText = presentedFormText(report)
-      if (reportObs.length > 0) {
-        items.push(`${report.code?.text || 'Imaging Study'}${datePart}`)
-        reportObs.forEach(obs => {
-          expandObservationValues(obs).forEach((valueObservation) => {
-            const display = observationDisplayValue(valueObservation)
-            if (display) {
-              items.push(`  • ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''}`)
-            }
-          })
-        })
-        const reportText = [
-          report.conclusion,
-          ...(report.note ?? []).map((note) => note.text),
-          report._imagingStudyText,
-          ...attachmentText,
-        ].filter((text): text is string => !!text?.trim())
-        reportText.forEach((text) => items.push(`  • ${text}`))
-      } else {
-        const narrative = [
-          report.conclusion,
-          ...(report.note ?? []).map((note) => note.text),
-          report._imagingStudyText,
-          ...attachmentText,
-        ].filter((text): text is string => !!text?.trim()).join('\n')
-        if (narrative) {
-          items.push(`${report.code?.text || 'Study'}${datePart}: ${narrative}`)
+      return reportObs
+    }
+
+    const observationTexts = (reportObs: Observation[]): string[] =>
+      reportObs.flatMap((obs) =>
+        expandObservationValues(obs).flatMap((valueObservation) => {
+          const display = observationDisplayValue(valueObservation)
+          if (!display) return []
+          const label = valueObservation.code?.text
+            || valueObservation.code?.coding?.[0]?.display
+            || 'Finding'
+          return [`${label}: ${display.value}${display.unit ? ` ${display.unit}` : ''}`]
+        }),
+      )
+
+    // Narrative sources, in the order a reader would want them. `_imagingStudyText`
+    // is DICOM provenance rather than report prose, so it is never fed to the
+    // impression extractor — it is appended verbatim to the current report and
+    // is the whole narrative when a standalone ImagingStudy has no report.
+    const reportNarrative = (report: ImagingReportData): string =>
+      [
+        report.conclusion,
+        ...(report.note ?? []).map((note) => note.text),
+        ...presentedFormText(report),
+      ].filter((text): text is string => !!text?.trim()).join('\n')
+
+    const examDate = (report: ImagingReportData): string =>
+      (report.effectiveDateTime || report.issued || '').slice(0, 10)
+
+    const reportTitle = (report: ImagingReportData): string =>
+      report.code?.text || 'Imaging Study'
+
+    // Group by what the study IS, so the newest chest CT wins over an older
+    // chest CT even when the two were coded with different titles/languages.
+    const groups = new Map<string, ImagingReportData[]>()
+    for (const report of filtered) {
+      const identity = [
+        reportTitle(report),
+        ...(report.code?.coding ?? []).map((coding) => coding.display || coding.code || ''),
+        ...[report.category ?? []].flat().map((category) => category?.text || ''),
+        report._imagingStudyText?.match(/^Modality: .*$/m)?.[0] ?? '',
+      ].join(' ')
+      const { key } = imagingGroupKey(identity)
+      const bucket = groups.get(key)
+      if (bucket) bucket.push(report)
+      else groups.set(key, [report])
+    }
+
+    const current = new Set<ImagingReportData>()
+    for (const bucket of groups.values()) {
+      const newest = [...bucket].sort((a, b) => examDate(b).localeCompare(examDate(a)))[0]
+      if (newest) current.add(newest)
+    }
+
+    const labelFor = (report: ImagingReportData): string => {
+      const identity = [
+        reportTitle(report),
+        ...(report.code?.coding ?? []).map((coding) => coding.display || coding.code || ''),
+      ].join(' ')
+      return imagingGroupKey(identity).label
+    }
+
+    const items: string[] = []
+    const olderLines: string[] = []
+    const sorted = [...filtered].sort((a, b) => examDate(b).localeCompare(examDate(a)))
+
+    sorted.forEach(report => {
+      const reportObs = resolveObservations(report)
+      const narrative = reportNarrative(report)
+      const date = examDate(report)
+      const datePart = date ? ` (${date})` : ''
+
+      if (current.has(report)) {
+        // Current study of its kind: impression section only, plus any
+        // structured measurements and DICOM metadata.
+        const impression = impressionOrFullText(narrative) || report._imagingStudyText?.trim() || ''
+        const values = observationTexts(reportObs)
+        if (!impression && values.length === 0) return
+        items.push(`${reportTitle(report)}${datePart}${impression ? `: ${impression}` : ''}`)
+        values.forEach((text) => items.push(`  • ${text}`))
+        if (impression && report._imagingStudyText?.trim()) {
+          items.push(`  • ${report._imagingStudyText.trim()}`)
         }
+        return
       }
+
+      // Older study of the same kind: one line, still citable (title + date).
+      const gist = imagingImpressionSummary(narrative || report._imagingStudyText)
+      const values = observationTexts(reportObs)
+      const tail = [gist, values.join('; ')].filter(Boolean).join(' — ')
+      if (!tail) return
+      const label = labelFor(report)
+      olderLines.push(`${date || 'undated'} | ${label ? `${label} | ` : ''}${reportTitle(report)}: ${tail}`)
     })
-    
+
+    if (olderLines.length > 0) {
+      if (items.length > 0) items.push('')
+      items.push('Earlier studies (one-line impressions):', ...olderLines)
+    }
+
     if (items.length === 0) return null
 
     const title = filters.imagingReportVersion === 'latest'
-      ? 'Imaging Reports (Latest Only)'
-      : 'Imaging Reports'
+      ? 'Imaging Reports (Latest Only; impression/conclusion section for the current study of each modality+region, one line for earlier studies)'
+      : 'Imaging Reports (impression/conclusion section for the current study of each modality+region, one line for earlier studies)'
 
     return { title, items }
   }
