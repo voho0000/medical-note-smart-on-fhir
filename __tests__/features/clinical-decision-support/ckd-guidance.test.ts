@@ -620,7 +620,7 @@ describe('personalized CKD guidance', () => {
     })
   })
 
-  it('treats active prescriptions as present without asking whether the patient actually takes them', () => {
+  it('reads an active prescription as current use rather than as an unverified order', () => {
     const profile = buildProfile({
       encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
       observations: [
@@ -644,21 +644,21 @@ describe('personalized CKD guidance', () => {
 
     expect(automatedById['ckd-rasi-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 ACEI／ARB 處方。'],
+      nextActions: ['持續 ACEI／ARB。'],
     })
     expect(automatedById['ckd-sglt2-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 SGLT2i處方。'],
+      nextActions: ['持續 SGLT2i。'],
     })
     expect(automatedById['ckd-finerenone-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 finerenone 處方。'],
+      nextActions: ['持續 finerenone。'],
     })
     expect(automatedById['ckd-cardiovascular-risk']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 statin 處方。'],
+      nextActions: ['持續 statin。'],
     })
-    expect(profile.facts.sglt2Therapy.zh).toBe('已有處方：Dapagliflozin 10 mg')
+    expect(profile.facts.sglt2Therapy.zh).toBe('目前用藥中：Dapagliflozin 10 mg')
     expect(JSON.stringify(result)).not.toMatch(
       /尚未確認實際使用|確認目前是否使用|服藥依從性|目前無需另加提示/,
     )

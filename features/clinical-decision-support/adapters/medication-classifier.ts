@@ -5,8 +5,36 @@ import type {
   CdssMedicationClassState,
 } from '../types'
 
-const CURRENT_MEDICATION_STATUSES = new Set(['active', 'on-hold'])
-const HISTORICAL_MEDICATION_STATUSES = new Set(['completed', 'stopped'])
+/**
+ * 記錄來源是健保雲端病歷／健康存摺：跨院所的「處方」紀錄，只有「開過這張處方」
+ * 與「沒有這張處方」兩種狀態。Bridge 由 `authoredOn + expectedSupplyDuration`
+ * 推算 `status`：供應期內寫 `active`、供應期過了寫 `completed`；不會出現
+ * `on-hold` 或 `stopped`，也沒有 MedicationStatement 可以再確認一次。
+ *
+ * 因此 `completed` 只代表「這批藥發完了」，不代表停藥：慢性處方箋晚幾天回診、
+ * 換一家院所回補處方，都會讓供應期短暫斷開。供應結束後 30 天內的處方仍視為
+ * 使用中（晚領藥不是停藥），超過 30 天才視為沒有在用。
+ *
+ * 反過來說，跨院所資料裡「沒有紀錄」本身就是證據：不必再對醫師說「資料中未見
+ * 不等於沒有使用」。
+ */
+const PRESCRIPTION_GRACE_DAYS = 30
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Statuses that void a prescription record, mirroring `EXCLUDED_MEDICATION_STATUS`
+ * in the profile adapter. Everything else is admitted — including `unknown` and
+ * a missing status — and whether the patient is taking it is then decided by the
+ * supply window alone.
+ *
+ * This is a denylist rather than an `active|completed|on-hold|stopped` allowlist
+ * because `unknown` is a legal FHIR status and the NHI cloud record carries no
+ * lifecycle of its own: the bridge writes `unknown` on every MedicationRequest
+ * it emits, so the allowlist dropped every real prescription and left the packs
+ * scanning an empty medication list.
+ */
+const EXCLUDED_MEDICATION_STATUSES = new Set(['cancelled', 'entered-in-error'])
 const ANTIDIABETIC_CATEGORY = /antidiabetic|anti-diabetic|抗糖尿病|降血糖/i
 const RXNORM_SYSTEM = 'http://www.nlm.nih.gov/research/umls/rxnorm'
 
@@ -187,11 +215,20 @@ export function medicationClassesFromEvidence(input: {
     .map(([classId]) => classId)
 }
 
+/**
+ * Per-record reading of the two-state cloud record. `not-taking` is deliberately
+ * not a `CdssMedicationClassState`: a single record that is not being taken says
+ * nothing on its own — only the whole class rolls up to `not-found`.
+ */
+export type ClassifiedMedicationState =
+  | Extract<CdssMedicationClassState, 'confirmed-current' | 'on-hold'>
+  | 'not-taking'
+
 export interface ClassifiedMedication {
   classId: CdssMedicationClassId
   name: string
   medication: MedicationEntity
-  state: Exclude<CdssMedicationClassState, 'not-found' | 'uncertain'>
+  state: ClassifiedMedicationState
 }
 
 export interface MedicationClassAssessment {
@@ -223,16 +260,81 @@ function searchableMedicationText(medication: MedicationEntity): string {
   ].filter(Boolean).join(' ')
 }
 
+/**
+ * `Duration` -> days. Only units that can be read with certainty are converted;
+ * anything else (including a missing unit) is reported as unreadable so the
+ * caller treats the supply window as absent rather than guessing at it.
+ */
+function supplyDurationDays(duration: unknown): number | undefined {
+  const quantity = duration as {
+    value?: unknown
+    unit?: unknown
+    code?: unknown
+  } | null | undefined
+  const value = Number(quantity?.value)
+  if (!Number.isFinite(value) || value <= 0) return undefined
+
+  const unit = String(quantity?.code ?? quantity?.unit ?? '').trim().toLowerCase()
+  if (/^(?:d|day|days|天|日)$/.test(unit)) return value
+  if (/^(?:wk|w|week|weeks|週|周|星期)$/.test(unit)) return value * 7
+  if (/^(?:mo|month|months|月|個月)$/.test(unit)) return value * 30
+  if (/^(?:a|y|yr|year|years|年)$/.test(unit)) return value * 365
+  if (/^(?:h|hr|hour|hours|小時)$/.test(unit)) return value / 24
+  return undefined
+}
+
+/** `authoredOn + dispenseRequest.expectedSupplyDuration`, when both are readable. */
+function supplyEndMs(medication: MedicationEntity): number | undefined {
+  const days = supplyDurationDays(medication.dispenseRequest?.expectedSupplyDuration)
+  if (days === undefined) return undefined
+  const startMs = Date.parse(medication.authoredOn ?? '')
+  if (!Number.isFinite(startMs)) return undefined
+  return startMs + days * DAY_MS
+}
+
+/**
+ * The one definition of "病人有在用這個藥" for the whole adapter: an `active`
+ * prescription, or a `completed` one whose supply ran out no more than
+ * PRESCRIPTION_GRACE_DAYS ago. A `completed` prescription with no readable
+ * supply window cannot be placed in time, so it does not count.
+ */
+export function isMedicationBeingTaken(
+  medication: MedicationEntity,
+  now: Date = new Date(),
+): boolean {
+  const status = (medication.status ?? '').trim().toLowerCase()
+  if (EXCLUDED_MEDICATION_STATUSES.has(status)) return false
+  if (status === 'active') return true
+  // `completed`, `unknown` and a missing status all describe a prescription the
+  // record does not settle either way, so the supply window is what decides.
+  // `on-hold`, `stopped` and `draft` do settle it, and settle it as not taken.
+  if (status !== 'completed' && status !== 'unknown' && status !== '') return false
+  const endMs = supplyEndMs(medication)
+  if (endMs === undefined) return false
+  return now.getTime() - endMs <= PRESCRIPTION_GRACE_DAYS * DAY_MS
+}
+
+/**
+ * The day this prescription's supply runs out, as an ISO date. Undefined under
+ * exactly the condition that stops a `completed` prescription from counting as
+ * taken, so a caller that has no date here has no supply window to report.
+ */
+export function medicationSupplyEndDate(
+  medication: MedicationEntity,
+): string | undefined {
+  const endMs = supplyEndMs(medication)
+  if (endMs === undefined) return undefined
+  return new Date(endMs).toISOString().slice(0, 10)
+}
+
 function medicationRecordState(
   medication: MedicationEntity,
-): Exclude<CdssMedicationClassState, 'not-found' | 'uncertain'> {
-  if ((medication.status ?? '').toLowerCase() === 'on-hold') return 'on-hold'
-  if (HISTORICAL_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())) {
-    return 'historical-record-current-status-unknown'
-  }
-  return medication._sourceResourceType === 'MedicationStatement'
-    ? 'confirmed-current'
-    : 'active-order-unconfirmed'
+  now: Date,
+): ClassifiedMedicationState {
+  // The NHI cloud never sends `on-hold`; a directly connected hospital EHR can,
+  // and a held prescription is neither being taken nor simply absent.
+  if ((medication.status ?? '').trim().toLowerCase() === 'on-hold') return 'on-hold'
+  return isMedicationBeingTaken(medication, now) ? 'confirmed-current' : 'not-taking'
 }
 
 /**
@@ -261,25 +363,23 @@ export function medicationDisplayName(medication: MedicationEntity): string {
 
 export function currentMedicationRecords(
   medications: readonly MedicationEntity[],
+  now: Date = new Date(),
 ): MedicationEntity[] {
   return medications.filter((medication) => (
-    Boolean(medication.id)
-    && CURRENT_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
+    Boolean(medication.id) && isMedicationBeingTaken(medication, now)
   ))
 }
 
 export function classifyCurrentMedications(
   medications: readonly MedicationEntity[],
+  now: Date = new Date(),
 ): {
   classified: readonly ClassifiedMedication[]
   unclassifiedAntidiabeticCount: number
 } {
   const governedRecords = medications.filter((medication) => (
     Boolean(medication.id)
-    && (
-      CURRENT_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
-      || HISTORICAL_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
-    )
+    && !EXCLUDED_MEDICATION_STATUSES.has((medication.status ?? '').trim().toLowerCase())
   ))
   const classified: ClassifiedMedication[] = []
   let unclassifiedAntidiabeticCount = 0
@@ -296,13 +396,13 @@ export function classifyCurrentMedications(
         classId,
         name: medicationDisplayName(medication),
         medication,
-        state: medicationRecordState(medication),
+        state: medicationRecordState(medication, now),
       })
     }
 
     if (
       matchedClasses.length === 0
-      && CURRENT_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
+      && isMedicationBeingTaken(medication, now)
       && ANTIDIABETIC_CATEGORY.test(searchable)
       && !RECOGNIZED_OTHER_ANTIDIABETIC.test(searchable)
     ) {
@@ -321,18 +421,20 @@ export function assessMedicationClass(
   const ingredientAmbiguityAffectsClass = (
     classId === 'insulin' || classId === 'sulfonylurea'
   )
+  // No record, or only records that are not being taken, read the same way:
+  // cross-institution data means absence is evidence of not taking. The one
+  // genuine unknown left is an unmapped ingredient in the drug master.
+  const notTakingState: CdssMedicationClassState = (
+    ingredientAmbiguityAffectsClass && classified.unclassifiedAntidiabeticCount > 0
+      ? 'uncertain'
+      : 'not-found'
+  )
   return {
-    state: medications.length > 0
-      ? medications.some((item) => item.state === 'confirmed-current')
-        ? 'confirmed-current'
-        : medications.some((item) => item.state === 'active-order-unconfirmed')
-          ? 'active-order-unconfirmed'
-          : medications.some((item) => item.state === 'on-hold')
-            ? 'on-hold'
-            : 'historical-record-current-status-unknown'
-      : ingredientAmbiguityAffectsClass && classified.unclassifiedAntidiabeticCount > 0
-        ? 'uncertain'
-        : 'not-found',
+    state: medications.some((item) => item.state === 'confirmed-current')
+      ? 'confirmed-current'
+      : medications.some((item) => item.state === 'on-hold')
+        ? 'on-hold'
+        : notTakingState,
     medications,
     unclassifiedAntidiabeticCount: classified.unclassifiedAntidiabeticCount,
   }

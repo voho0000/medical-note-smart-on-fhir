@@ -403,6 +403,55 @@ describe('FHIR CDSS governed eGFR normalization', () => {
     })
   })
 
+  /**
+   * The NHI cloud record carries no verification state, so the bridge writes
+   * `unknown` on every Observation it emits. A whitelist of
+   * `final|amended|corrected` dropped every real lab and left the packs running
+   * on an empty profile, so the gate is a denylist of statuses that void a
+   * result instead.
+   */
+  it.each([
+    ['unknown', 'unknown'],
+    ['final', 'final'],
+    ['amended', 'amended'],
+    ['a missing status', undefined],
+  ])('admits a governed eGFR carrying %s', (_label, status) => {
+    const result = profile([
+      observation('egfr-status', {
+        status,
+        code: { coding: [{ system: LOINC_SYSTEM, code: '69405-9' }] },
+        valueQuantity: {
+          value: 34,
+          unit: 'mL/min/{1.73_m2}',
+          system: UCUM_SYSTEM,
+          code: 'mL/min/{1.73_m2}',
+        },
+      }),
+    ])
+
+    expect(result.facts.eGFR).toMatchObject({ numericValue: 34, date: '2026-06-01' })
+  })
+
+  it.each(['registered', 'preliminary', 'cancelled', 'entered-in-error'])(
+    'still rejects an eGFR whose status voids the result: %s',
+    (status) => {
+      const result = profile([
+        observation('egfr-voided', {
+          status,
+          code: { coding: [{ system: LOINC_SYSTEM, code: '69405-9' }] },
+          valueQuantity: {
+            value: 34,
+            unit: 'mL/min/{1.73_m2}',
+            system: UCUM_SYSTEM,
+            code: 'mL/min/{1.73_m2}',
+          },
+        }),
+      ])
+
+      expect(result.facts.eGFR).toBeUndefined()
+    },
+  )
+
   it('rejects an otherwise matching eGFR value with a non-UCUM system', () => {
     const result = profile([
       observation('egfr-wrong-system', {
@@ -420,6 +469,24 @@ describe('FHIR CDSS governed eGFR normalization', () => {
 })
 
 describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
+  /**
+   * `profile()` runs at 2026-07-29. The NHI cloud record only says whether a
+   * prescription exists, so "taking" is `active`, or `completed` whose supply
+   * window ended within the 30-day refill grace period.
+   */
+  function supplyWindow(days: number) {
+    return {
+      dispenseRequest: {
+        expectedSupplyDuration: {
+          value: days,
+          unit: 'days',
+          system: 'http://unitsofmeasure.org',
+          code: 'd',
+        },
+      },
+    }
+  }
+
   function medication(
     id: string,
     display: string,
@@ -439,7 +506,7 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     }
   }
 
-  it('identifies active insulin and sulfonylurea prescriptions without treating them as confirmed use', () => {
+  it('reads an active insulin and sulfonylurea prescription as current use', () => {
     const result = profile([], [
       medication('insulin', 'Insulin glargine (Lantus)'),
       medication('sulfonylurea', 'Glimepiride 2 mg'),
@@ -447,11 +514,11 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
 
     expect(result.medicationClassContexts).toMatchObject({
       insulin: {
-        state: 'active-order-unconfirmed',
+        state: 'confirmed-current',
         medicationNames: ['Insulin glargine (Lantus)'],
       },
       sulfonylurea: {
-        state: 'active-order-unconfirmed',
+        state: 'confirmed-current',
         medicationNames: ['Glimepiride 2 mg'],
       },
     })
@@ -470,21 +537,62 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
       sulfonylurea: { state: 'not-found' },
     })
     expect(result.facts.hypoglycemiaRiskMedications.zh).toBe(
-      '現有資料未見胰島素或磺醯脲',
+      '目前未使用胰島素或磺醯脲',
     )
   })
 
-  it('does not treat a completed sulfonylurea prescription as current use', () => {
+  it('keeps a completed prescription that ran out inside the refill grace period as current use', () => {
+    // Supply ended 2026-07-19, ten days before `now`. A late refill is not a
+    // discontinuation, so the class still reads as taken.
+    const result = profile([], [
+      {
+        ...medication('recent-su', 'Gliclazide 30 mg', 'completed'),
+        authoredOn: '2026-06-19',
+        ...supplyWindow(30),
+      },
+    ])
+
+    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe('confirmed-current')
+    expect(result.facts.hypoglycemiaRiskMedications.zh).toBe(
+      '目前用藥中：Gliclazide 30 mg',
+    )
+  })
+
+  it('reads a completed prescription that ran out beyond the grace period as not taken', () => {
+    // Supply ended 2026-06-14, 45 days before `now`.
+    const result = profile([], [
+      {
+        ...medication('lapsed-su', 'Gliclazide 30 mg', 'completed'),
+        authoredOn: '2026-05-15',
+        ...supplyWindow(30),
+      },
+    ])
+
+    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe('not-found')
+    expect(result.facts.hypoglycemiaRiskMedications.zh).toBe(
+      '目前未使用胰島素或磺醯脲',
+    )
+  })
+
+  it('reads a completed prescription with no supply duration as not taken', () => {
+    // Without `expectedSupplyDuration` the prescription cannot be placed in
+    // time at all, so the grace period cannot rescue it.
     const result = profile([], [
       medication('old-su', 'Gliclazide 30 mg', 'completed'),
     ])
 
-    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe(
-      'historical-record-current-status-unknown',
-    )
+    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe('not-found')
     expect(result.facts.hypoglycemiaRiskMedications.zh).toBe(
-      '歷史胰島素／磺醯脲處方：Gliclazide 30 mg',
+      '目前未使用胰島素或磺醯脲',
     )
+  })
+
+  it('reads an empty medication list as not taken rather than as an open question', () => {
+    const result = profile([], [])
+
+    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe('not-found')
+    expect(result.medicationClassContexts?.statin?.state).toBe('not-found')
+    expect(result.facts.statinTherapy.zh).toBe('目前未使用')
   })
 
   it('marks the assessment uncertain only when an active antidiabetic ingredient is unmapped', () => {
@@ -508,24 +616,26 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     ])
 
     expect(result.medicationClassContexts).toMatchObject({
-      'sglt2-inhibitor': { state: 'active-order-unconfirmed' },
-      statin: { state: 'active-order-unconfirmed' },
-      'ace-inhibitor-or-arb': { state: 'active-order-unconfirmed' },
-      finerenone: { state: 'active-order-unconfirmed' },
+      'sglt2-inhibitor': { state: 'confirmed-current' },
+      statin: { state: 'confirmed-current' },
+      'ace-inhibitor-or-arb': { state: 'confirmed-current' },
+      finerenone: { state: 'confirmed-current' },
     })
     expect(result.facts.statinTherapy.zh).toContain('Atorvastatin')
     expect(result.facts.aceArbTherapy.zh).toContain('Losartan')
   })
 
-  it('keeps historical ARB and statin prescriptions visible with dates and data coverage', () => {
+  it('reports lapsed ARB and statin prescriptions as not taken while keeping the data window', () => {
     const result = profile([], [
       {
         ...medication('old-statin', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
         authoredOn: '2025-05-20',
+        ...supplyWindow(28),
       },
       {
         ...medication('old-arb', 'Valsartan 80 mg', 'completed', 'ANTIHYPERTENSIVE AGENTS'),
         authoredOn: '2026-04-12',
+        ...supplyWindow(28),
       },
       {
         ...medication('coverage-end', 'Metformin 500 mg', 'active'),
@@ -533,57 +643,59 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
       },
     ])
 
+    // Lapsed is not the same as never: the class reads as not taken, and the
+    // dates behind that verdict stay on the context and in the card text.
     expect(result.medicationClassContexts).toMatchObject({
       statin: {
-        state: 'historical-record-current-status-unknown',
+        state: 'not-found',
         lastPrescriptionDate: '2025-05-20',
         dataWindowStartDate: '2025-05-20',
         dataWindowEndDate: '2026-06-25',
       },
       'ace-inhibitor-or-arb': {
-        state: 'historical-record-current-status-unknown',
+        state: 'not-found',
         lastPrescriptionDate: '2026-04-12',
         dataWindowStartDate: '2025-05-20',
         dataWindowEndDate: '2026-06-25',
       },
     })
-    expect(result.facts.statinTherapy.zh).toContain('最近 2025-05-20')
-    expect(result.facts.statinTherapy.zh).toContain('1 筆處方')
-    expect(result.facts.statinTherapy.zh).not.toContain('用藥資料範圍')
-    expect(result.facts.aceArbTherapy.zh).toContain('Valsartan')
+    expect(result.facts.statinTherapy.zh).toBe('目前未使用（最近一筆處方 2025-06-17 結束）')
+    expect(result.facts.aceArbTherapy.zh).toBe('目前未使用（最近一筆處方 2026-05-10 結束）')
+    expect(result.facts.aceArbTherapy.zh).not.toContain('Valsartan')
   })
 
-  it('deduplicates repeated historical prescriptions in the summary while preserving every source', () => {
+  it('deduplicates repeated refills of the same drug while preserving every source', () => {
     const result = profile([], [
       {
-        ...medication('old-statin-1', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
-        authoredOn: '2025-03-20',
+        ...medication('refill-1', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2026-06-01',
+        ...supplyWindow(30),
       },
       {
-        ...medication('old-statin-2', '  Rosuvastatin   10 mg  ', 'completed', 'LIPID MODIFYING AGENTS'),
-        authoredOn: '2025-05-20',
+        ...medication('refill-2', '  Rosuvastatin   10 mg  ', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2026-06-19',
+        ...supplyWindow(30),
       },
       {
-        ...medication('old-statin-3', 'ROSUVASTATIN 10 MG', 'completed', 'LIPID MODIFYING AGENTS'),
-        authoredOn: '2025-04-20',
+        ...medication('refill-3', 'ROSUVASTATIN 10 MG', 'active', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2026-07-20',
       },
     ])
 
     expect(result.medicationClassContexts?.statin).toMatchObject({
-      state: 'historical-record-current-status-unknown',
+      state: 'confirmed-current',
       medicationNames: ['Rosuvastatin 10 mg'],
-      lastPrescriptionDate: '2025-05-20',
+      lastPrescriptionDate: '2026-07-20',
     })
-    expect(result.facts.statinTherapy.zh).toBe(
-      '歷史處方：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
-    )
+    expect(result.facts.statinTherapy.zh).toBe('目前用藥中：Rosuvastatin 10 mg')
     expect(result.facts.statinTherapy.sources).toHaveLength(3)
   })
 
   it('uses the governed English ingredient name in physician medication evidence', () => {
     const historicalValsartan: MedicationEntity = {
-      ...medication('historical-valsartan', '得安穩膜衣錠160毫克', 'completed', 'CARDIOVASCULAR'),
-      authoredOn: '2026-04-25',
+      ...medication('governed-valsartan', '得安穩膜衣錠160毫克', 'completed', 'CARDIOVASCULAR'),
+      authoredOn: '2026-06-19',
+      ...supplyWindow(30),
       medicationCodeableConcept: {
         text: '得安穩膜衣錠160毫克',
         coding: [{
@@ -606,9 +718,7 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     expect(result.medicationClassContexts?.['ace-inhibitor-or-arb']).toMatchObject({
       medicationNames: ['VALSARTAN 160 MG'],
     })
-    expect(result.facts.aceArbTherapy.zh).toBe(
-      '歷史處方：VALSARTAN 160 MG（1 筆處方 · 最近 2026-04-25）',
-    )
+    expect(result.facts.aceArbTherapy.zh).toBe('目前用藥中：VALSARTAN 160 MG')
     expect(result.facts.aceArbTherapy.zh).not.toContain('得安穩')
     expect(result.facts.aceArbTherapy.sources).toHaveLength(1)
     expect(result.facts.aceArbTherapy.sources?.[0]).toMatchObject({
@@ -617,11 +727,12 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     })
   })
 
-  it('prefers a current class record without mixing historical names into current use', () => {
+  it('prefers a current class record without mixing lapsed names into current use', () => {
     const result = profile([], [
       {
         ...medication('old-statin', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
         authoredOn: '2025-05-20',
+        ...supplyWindow(28),
       },
       {
         ...medication('current-statin', 'Atorvastatin 20 mg', 'active', 'LIPID MODIFYING AGENTS'),
@@ -630,7 +741,7 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     ])
 
     expect(result.medicationClassContexts?.statin).toMatchObject({
-      state: 'active-order-unconfirmed',
+      state: 'confirmed-current',
       medicationNames: ['Atorvastatin 20 mg'],
       lastPrescriptionDate: '2026-06-25',
     })

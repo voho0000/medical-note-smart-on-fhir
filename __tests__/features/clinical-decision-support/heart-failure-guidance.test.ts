@@ -64,11 +64,22 @@ function medication(
   name: string,
   atcCode: string,
   source: 'MedicationStatement' | 'MedicationRequest' = 'MedicationStatement',
+  supply?: { status: string, authoredOn: string, days: number },
 ): MedicationEntity {
   return {
     id,
-    status: 'active',
-    authoredOn: '2026-07-01',
+    status: supply?.status ?? 'active',
+    authoredOn: supply?.authoredOn ?? '2026-07-01',
+    ...(supply ? {
+      dispenseRequest: {
+        expectedSupplyDuration: {
+          value: supply.days,
+          unit: 'days',
+          system: UCUM_SYSTEM,
+          code: 'd',
+        },
+      },
+    } : {}),
     _sourceResourceType: source,
     medicationCodeableConcept: {
       text: name,
@@ -209,7 +220,10 @@ describe('heart-failure clinical guidance pack', () => {
     ]))
   })
 
-  it('treats active orders as needing verification, not confirmed medication use', () => {
+  // The NHI cloud only ever sends a prescription: `active` while the supply
+  // lasts, `completed` after. Both count as taking inside the 30-day refill
+  // grace period, and neither leaves a third "ordered but unverified" state.
+  it('counts a cloud prescription order as a confirmed pillar', () => {
     const guidance = HEART_FAILURE_GUIDELINE_PACK.build({
       profile: profile({
         conditions: [heartFailureCondition()],
@@ -222,7 +236,13 @@ describe('heart-failure clinical guidance pack', () => {
           medication('arni-order', 'Sacubitril/valsartan', 'C09DX04', 'MedicationRequest'),
           medication('beta-order', 'Bisoprolol', 'C07AB07', 'MedicationRequest'),
           medication('mra-order', 'Eplerenone', 'C03DA04', 'MedicationRequest'),
-          medication('sglt2-order', 'Empagliflozin', 'A10BK03', 'MedicationRequest'),
+          // Supply ran out 2026-07-23, eight days before `now`: a late refill,
+          // not a discontinuation.
+          medication('sglt2-order', 'Empagliflozin', 'A10BK03', 'MedicationRequest', {
+            status: 'completed',
+            authoredOn: '2026-06-25',
+            days: 28,
+          }),
         ],
       }),
       locale: 'zh-TW',
@@ -232,16 +252,54 @@ describe('heart-failure clinical guidance pack', () => {
     )
 
     expect(gdmt).toMatchObject({
+      status: 'no-action',
+      title: expect.stringContaining('已確認 4/4 類'),
+    })
+  })
+
+  it('reads prescriptions whose supply lapsed long ago as not taken', () => {
+    const patientProfile = profile({
+      conditions: [heartFailureCondition()],
+      observations: [
+        lab('lvef', '10230-1', 32, '%'),
+        lab('egfr', '77147-7', 58, 'mL/min/1.73m²'),
+        lab('potassium', '2823-3', 4.3, 'mmol/L'),
+      ],
+      // Supply ran out 2026-02-02, far outside the 30-day grace period.
+      medications: [
+        medication('arni-old', 'Sacubitril/valsartan', 'C09DX04', 'MedicationRequest', {
+          status: 'completed', authoredOn: '2026-01-05', days: 28,
+        }),
+        medication('beta-old', 'Bisoprolol', 'C07AB07', 'MedicationRequest', {
+          status: 'completed', authoredOn: '2026-01-05', days: 28,
+        }),
+        medication('mra-old', 'Eplerenone', 'C03DA04', 'MedicationRequest', {
+          status: 'completed', authoredOn: '2026-01-05', days: 28,
+        }),
+        medication('sglt2-old', 'Empagliflozin', 'A10BK03', 'MedicationRequest', {
+          status: 'completed', authoredOn: '2026-01-05', days: 28,
+        }),
+      ],
+    })
+    const guidance = HEART_FAILURE_GUIDELINE_PACK.build({
+      profile: patientProfile,
+      locale: 'zh-TW',
+    })
+    const gdmt = guidance.recommendations.find(
+      (item) => item.id === 'heart-failure-hfref-gdmt',
+    )
+
+    expect(patientProfile.facts.arniTherapy.zh).toBe(
+      '目前未使用（最近一筆處方 2026-02-02 結束）',
+    )
+    expect(patientProfile.medicationClassContexts?.arni).toMatchObject({
+      state: 'not-found',
+      lastPrescriptionDate: '2026-01-05',
+    })
+    expect(gdmt).toMatchObject({
       status: 'review',
       title: expect.stringContaining('已確認 0/4 類'),
-      clinicalReviewItems: expect.arrayContaining([
-        '完整 medication reconciliation、實際服用方式、劑量與耐受性',
-      ]),
     })
-    expect(gdmt?.missingData).not.toContain(
-      '完整 medication reconciliation、實際服用方式、劑量與耐受性',
-    )
-    expect(gdmt?.title).toContain('4 類需核對')
   })
 
   it('does not treat ingredient-only metoprolol coding as the evidence-based CR/XL formulation', () => {

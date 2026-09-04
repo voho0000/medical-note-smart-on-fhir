@@ -26,11 +26,24 @@ function statinMedication(input: {
   sourceType: 'MedicationRequest' | 'MedicationStatement'
   status?: string
   useAtcCodeOnly?: boolean
+  id?: string
+  authoredOn?: string
+  supplyDays?: number
 }): MedicationEntity {
   return {
-    id: `statin-${input.sourceType}-${input.status ?? 'active'}`,
+    id: input.id ?? `statin-${input.sourceType}-${input.status ?? 'active'}`,
     status: input.status ?? 'active',
-    authoredOn: '2026-06-20',
+    authoredOn: input.authoredOn ?? '2026-06-20',
+    ...(input.supplyDays === undefined ? {} : {
+      dispenseRequest: {
+        expectedSupplyDuration: {
+          value: input.supplyDays,
+          unit: 'days',
+          system: 'http://unitsofmeasure.org',
+          code: 'd',
+        },
+      },
+    }),
     medicationCodeableConcept: input.useAtcCodeOnly
       ? {
           coding: [{
@@ -143,17 +156,34 @@ describe('DM CDSS cross-patient golden cases', () => {
     )
   })
 
+  // The NHI cloud record has two states, so the pack sees two: the patient is
+  // taking the class, or the patient is not. `now` in this scenario is
+  // 2026-07-29, so the supply windows below sit either inside or outside the
+  // 30-day grace period that keeps a late refill from reading as a stop.
   it.each([
     {
       label: 'active MedicationRequest',
       medication: statinMedication({ sourceType: 'MedicationRequest' }),
-      expectedState: 'active-order-unconfirmed',
+      expectedState: 'confirmed-current',
       expectedStatus: 'needs-data',
       expectedTitle: '已有 statin 處方',
     },
     {
       label: 'active MedicationStatement',
       medication: statinMedication({ sourceType: 'MedicationStatement' }),
+      expectedState: 'confirmed-current',
+      expectedStatus: 'needs-data',
+      expectedTitle: '已有 statin 處方',
+    },
+    {
+      label: 'completed MedicationRequest still inside the refill grace period',
+      medication: statinMedication({
+        id: 'statin-completed-in-grace',
+        sourceType: 'MedicationRequest',
+        status: 'completed',
+        authoredOn: '2026-06-19',
+        supplyDays: 30,
+      }),
       expectedState: 'confirmed-current',
       expectedStatus: 'needs-data',
       expectedTitle: '已有 statin 處方',
@@ -166,13 +196,30 @@ describe('DM CDSS cross-patient golden cases', () => {
       expectedTitle: 'statin 暫停中',
     },
     {
-      label: 'historical MedicationRequest',
-      medication: statinMedication({ sourceType: 'MedicationRequest', status: 'completed' }),
-      expectedState: 'historical-record-current-status-unknown',
-      expectedStatus: 'review',
-      expectedTitle: 'statin 為歷史處方',
+      label: 'completed MedicationRequest whose supply ran out months ago',
+      medication: statinMedication({
+        id: 'statin-completed-out-of-grace',
+        sourceType: 'MedicationRequest',
+        status: 'completed',
+        authoredOn: '2026-05-15',
+        supplyDays: 30,
+      }),
+      expectedState: 'not-found',
+      expectedStatus: 'actionable',
+      expectedTitle: '現有資料未見 statin',
     },
-  ])('distinguishes $label from confirmed medication use', ({
+    {
+      label: 'completed MedicationRequest with no supply duration to place it in time',
+      medication: statinMedication({
+        id: 'statin-completed-no-supply',
+        sourceType: 'MedicationRequest',
+        status: 'completed',
+      }),
+      expectedState: 'not-found',
+      expectedStatus: 'actionable',
+      expectedTitle: '現有資料未見 statin',
+    },
+  ])('reads $label as taking or not taking', ({
     medication,
     expectedState,
     expectedStatus,

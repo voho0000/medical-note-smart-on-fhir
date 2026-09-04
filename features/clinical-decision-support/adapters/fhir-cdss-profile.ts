@@ -24,9 +24,11 @@ import { getAuditedReferenceRangeBounds } from '@/src/shared/utils/interpretatio
 import {
   assessMedicationClass,
   classifyCurrentMedications,
+  isMedicationBeingTaken,
   currentMedicationRecords,
   medicationDisplayName,
   medicationClassSources,
+  medicationSupplyEndDate,
 } from './medication-classifier'
 import { assessMedicationClassAllergies } from './allergy-classifier'
 import {
@@ -164,7 +166,29 @@ const UPPER_ENDOSCOPY_CPT_CODES = new Set([
 ])
 const TRANSIENT_ELASTOGRAPHY_CPT_CODES = new Set(['91200'])
 
-const ACCEPTED_OBSERVATION_STATUS = new Set(['final', 'amended', 'corrected'])
+/**
+ * Observation statuses that void a result. Everything else is admitted —
+ * including `unknown` and a missing status — which is why this is a denylist,
+ * matching how Condition, Encounter and MedicationRequest are already gated
+ * below rather than the whitelist that used to sit here.
+ *
+ * `unknown` must pass. It is a legal FHIR status, and the NHI cloud record
+ * (雲端病歷／健康存摺) carries no verification state of its own, so the bridge
+ * writes `unknown` on every Observation it emits. Whitelisting
+ * `final|amended|corrected` therefore dropped every real lab and left the packs
+ * running on an empty profile. A value that carries a date and a code is still
+ * a result, whatever the source could say about its lifecycle.
+ *
+ * `registered` and `preliminary` stay out: they mark a result that has not been
+ * released, which the rest of the app already renders as 初步結果 rather than as
+ * a finding (`PRELIMINARY_STATUSES` in `lab-trend.utils`).
+ */
+const EXCLUDED_OBSERVATION_STATUS = new Set([
+  'registered',
+  'preliminary',
+  'cancelled',
+  'entered-in-error',
+])
 const EXCLUDED_CONDITION_STATUS = new Set(['inactive', 'resolved', 'entered-in-error'])
 const EXCLUDED_VERIFICATION_STATUS = new Set(['refuted', 'entered-in-error'])
 const EXCLUDED_ENCOUNTER_STATUS = new Set(['cancelled', 'entered-in-error'])
@@ -272,8 +296,7 @@ function isGovernedObservation(observation: ObservationEntity): boolean {
     observation.id
     && observation.effectiveDateTime
     && dateOnly(observation.effectiveDateTime)
-    && observation.status
-    && ACCEPTED_OBSERVATION_STATUS.has(observation.status),
+    && !EXCLUDED_OBSERVATION_STATUS.has((observation.status ?? '').trim().toLowerCase()),
   )
 }
 
@@ -412,8 +435,9 @@ function medicationSearchText(medication: MedicationEntity): string {
 
 function currentMedicationOverviewFact(
   medications: readonly MedicationEntity[],
+  now: Date,
 ): CdssFact | undefined {
-  const current = currentMedicationRecords(medications)
+  const current = currentMedicationRecords(medications, now)
   if (current.length === 0) return undefined
   const names = current.map(medicationDisplayName)
   const shown = names.slice(0, 5)
@@ -436,8 +460,9 @@ function currentMedicationOverviewFact(
 
 function currentNsaidFact(
   medications: readonly MedicationEntity[],
+  now: Date,
 ): CdssFact | undefined {
-  const matches = currentMedicationRecords(medications)
+  const matches = currentMedicationRecords(medications, now)
     .filter((medication) => COMMON_NSAID_PATTERN.test(medicationSearchText(medication)))
   if (matches.length === 0) return undefined
   const names = matches.map(medicationDisplayName)
@@ -450,8 +475,9 @@ function currentNsaidFact(
 
 function currentPotentialHfWorseningMedicationFact(
   medications: readonly MedicationEntity[],
+  now: Date,
 ): CdssFact | undefined {
-  const matches = currentMedicationRecords(medications)
+  const matches = currentMedicationRecords(medications, now)
     .filter((medication) => HF_WORSENING_MEDICATION_PATTERN.test(medicationSearchText(medication)))
   if (matches.length === 0) return undefined
   const names = matches.map(medicationDisplayName)
@@ -464,11 +490,12 @@ function currentPotentialHfWorseningMedicationFact(
 
 function currentMedicationPatternFact(
   medications: readonly MedicationEntity[],
+  now: Date,
   pattern: RegExp,
   labelZh: string,
   labelEn: string,
 ): CdssFact | undefined {
-  const matches = currentMedicationRecords(medications)
+  const matches = currentMedicationRecords(medications, now)
     .filter((medication) => pattern.test(medicationSearchText(medication)))
   if (matches.length === 0) return undefined
   const names = matches.map(medicationDisplayName)
@@ -1120,11 +1147,19 @@ function nhiSglt2CoverageContext(
 
 function medicationUseState(
   medication: MedicationEntity,
+  now: Date,
 ): 'confirmed_current' | 'active_order_unconfirmed' | 'not_current' | 'unknown' {
-  const sourceType = medication._sourceResourceType ?? 'MedicationRequest'
-  if (sourceType === 'MedicationStatement' && medication.status === 'active') return 'confirmed_current'
-  if (sourceType === 'MedicationRequest' && medication.status === 'active') return 'active_order_unconfirmed'
-  if (medication.status === 'completed' || medication.status === 'stopped') return 'not_current'
+  // Same two-state reading as the medication classifier: the cloud record shows
+  // a prescription that is still supplying (or only recently ran out), or it
+  // shows one that is not. `active_order_unconfirmed` is intentionally unused.
+  if (isMedicationBeingTaken(medication, now)) return 'confirmed_current'
+  const status = (medication.status ?? '').trim().toLowerCase()
+  if (status === 'completed' || status === 'stopped' || status === 'on-hold') return 'not_current'
+  // A cloud record with no lifecycle of its own still settles the question when
+  // it carries a supply window that has run out; without one, it does not.
+  if (status === 'unknown' || status === '') {
+    return medicationSupplyEndDate(medication) ? 'not_current' : 'unknown'
+  }
   return 'unknown'
 }
 
@@ -2033,12 +2068,13 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     }
   }
 
-  const medicationListOverview = currentMedicationOverviewFact(input.medications)
+  const medicationListOverview = currentMedicationOverviewFact(input.medications, now)
   if (medicationListOverview) facts.medicationListOverview = medicationListOverview
-  const currentNsaid = currentNsaidFact(input.medications)
+  const currentNsaid = currentNsaidFact(input.medications, now)
   if (currentNsaid) facts.currentNsaid = currentNsaid
   const currentPotentialHfWorseningMedication = currentPotentialHfWorseningMedicationFact(
     input.medications,
+    now,
   )
   if (currentPotentialHfWorseningMedication) {
     facts.currentPotentialHfWorseningMedication = currentPotentialHfWorseningMedication
@@ -2076,7 +2112,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     },
   ] as const
   medicationPatternFacts.forEach(({ key, pattern, zh, en }) => {
-    const fact = currentMedicationPatternFact(input.medications, pattern, zh, en)
+    const fact = currentMedicationPatternFact(input.medications, now, pattern, zh, en)
     if (fact) facts[key] = fact
   })
   if (facts.currentDoac || facts.currentVitaminKAntagonist) {
@@ -2091,7 +2127,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     }
   }
 
-  const classifiedMedications = classifyCurrentMedications(input.medications)
+  const classifiedMedications = classifyCurrentMedications(input.medications, now)
   const allergyAssessments = assessMedicationClassAllergies(input.allergies)
   const insulinAssessment = assessMedicationClass(classifiedMedications, 'insulin')
   const sulfonylureaAssessment = assessMedicationClass(classifiedMedications, 'sulfonylurea')
@@ -2147,11 +2183,45 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     .map((medication) => dateOnly(medication.authoredOn))
     .filter((date): date is string => Boolean(date))
     .sort()
+  /**
+   * Records the class dates should describe. When the class rolls up to a
+   * "not taking" state (`not-found`, or `uncertain` from drug-master
+   * ambiguity) no record matches that state, because "not taking" is a
+   * property of the class rather than of any one prescription. The lapsed
+   * prescriptions behind that verdict are still real data, so they are what
+   * the dates describe — a card reads better as
+   * 「目前未使用（最近一筆處方 2026-05-08 結束）」 than as a bare 「目前未使用」.
+   */
+  const datedMedicationRecords = (
+    assessment: ReturnType<typeof assessMedicationClass>,
+  ) => {
+    const matching = assessment.medications.filter(
+      (item) => item.state === assessment.state,
+    )
+    return matching.length > 0 ? matching : assessment.medications
+  }
+  /**
+   * Latest supply-end day in the class (`authoredOn + expectedSupplyDuration`).
+   * Absent when no record in the class carries a readable supply window — the
+   * caller then falls back to the prescription date, which is never absent for
+   * a class that has records at all.
+   *
+   * This is deliberately NOT folded into `medicationClassTimeline`: the shape
+   * that goes into `medicationClassContexts` is owned by
+   * `@voho0000/personalized-care`, which declares `lastPrescriptionDate` but no
+   * supply-end field. Adding one there is a care-package change.
+   */
+  const medicationClassLastSupplyEndDate = (
+    assessment: ReturnType<typeof assessMedicationClass>,
+  ): string | undefined => datedMedicationRecords(assessment)
+    .map((item) => medicationSupplyEndDate(item.medication))
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .at(-1)
   const medicationClassTimeline = (
     assessment: ReturnType<typeof assessMedicationClass>,
   ) => {
-    const dates = assessment.medications
-      .filter((item) => item.state === assessment.state)
+    const dates = datedMedicationRecords(assessment)
       .map((item) => dateOnly(item.medication.authoredOn))
       .filter((date): date is string => Boolean(date))
       .sort()
@@ -2225,12 +2295,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const hifPhiTimeline = medicationClassTimeline(hifPhiAssessment)
   const hypoglycemiaAssessments = [insulinAssessment, sulfonylureaAssessment]
   const medicationClassState = (
-    [
-      'confirmed-current',
-      'active-order-unconfirmed',
-      'on-hold',
-      'historical-record-current-status-unknown',
-    ] as const
+    ['confirmed-current', 'on-hold'] as const
   ).find((state) => (
     insulinAssessment.state === state || sulfonylureaAssessment.state === state
   )) ?? (
@@ -2252,37 +2317,25 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     .flatMap(medicationClassSources)
   facts.hypoglycemiaRiskMedications = medicationClassState === 'confirmed-current'
     ? {
-        zh: `已確認使用：${hypoglycemiaRiskSummaryZh}`,
-        en: `Confirmed current use: ${hypoglycemiaRiskSummaryEn}`,
+        zh: `目前用藥中：${hypoglycemiaRiskSummaryZh}`,
+        en: `Currently taking: ${hypoglycemiaRiskSummaryEn}`,
         sources: hypoglycemiaMedicationSources,
       }
-    : medicationClassState === 'active-order-unconfirmed'
+    : medicationClassState === 'on-hold'
       ? {
-          zh: `已有處方：${hypoglycemiaRiskSummaryZh}`,
-          en: `Prescription present: ${hypoglycemiaRiskSummaryEn}`,
+          zh: `暫停中的胰島素／磺醯脲：${hypoglycemiaRiskSummaryZh}`,
+          en: `Insulin/sulfonylurea on hold: ${hypoglycemiaRiskSummaryEn}`,
           sources: hypoglycemiaMedicationSources,
         }
-      : medicationClassState === 'on-hold'
+      : medicationClassState === 'uncertain'
         ? {
-            zh: `暫停中的胰島素／磺醯脲：${hypoglycemiaRiskSummaryZh}`,
-            en: `Insulin/sulfonylurea on hold: ${hypoglycemiaRiskSummaryEn}`,
-            sources: hypoglycemiaMedicationSources,
+            zh: `有 ${classifiedMedications.unclassifiedAntidiabeticCount} 筆降糖藥無法辨識成分`,
+            en: `${classifiedMedications.unclassifiedAntidiabeticCount} glucose-lowering medication record(s) have an unrecognized ingredient`,
           }
-        : medicationClassState === 'historical-record-current-status-unknown'
-          ? {
-              zh: `歷史胰島素／磺醯脲處方：${hypoglycemiaRiskSummaryZh}`,
-              en: `Historical insulin/sulfonylurea prescription: ${hypoglycemiaRiskSummaryEn}`,
-              sources: hypoglycemiaMedicationSources,
-            }
-          : medicationClassState === 'uncertain'
-            ? {
-                zh: `有 ${classifiedMedications.unclassifiedAntidiabeticCount} 筆降糖藥無法辨識成分`,
-                en: `${classifiedMedications.unclassifiedAntidiabeticCount} glucose-lowering medication record(s) have an unrecognized ingredient`,
-              }
-            : {
-                zh: '現有資料未見胰島素或磺醯脲',
-                en: 'No insulin or sulfonylurea appears in the available medication data',
-              }
+        : {
+            zh: '目前未使用胰島素或磺醯脲',
+            en: 'Not currently taking insulin or a sulfonylurea',
+          }
 
   const classFact = (
     assessment: ReturnType<typeof assessMedicationClass>,
@@ -2292,40 +2345,52 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     const names = medicationClassNames(assessment)
     const suffixZh = names.length > 0 ? `：${medicationNameSummary(names, 'zh-TW')}` : ''
     const suffixEn = names.length > 0 ? `: ${medicationNameSummary(names, 'en')}` : ''
+    // Say when the last prescription lapsed rather than only that nothing is
+    // being taken now. Prefer the supply-end day; fall back to the day the
+    // prescription was written when no supply window is readable. Empty when
+    // the class has no record at all, which is the one case where there is
+    // genuinely nothing to date.
     const timeline = medicationClassTimeline(assessment)
-    const matchingRecordCount = assessment.medications
-      .filter((item) => item.state === assessment.state)
-      .length
-    const timelineZh = assessment.state === 'historical-record-current-status-unknown'
-      ? `（${matchingRecordCount} 筆處方 · 最近 ${timeline.lastPrescriptionDate ?? '日期不明'}）`
-      : ''
-    const timelineEn = assessment.state === 'historical-record-current-status-unknown'
-      ? ` (${matchingRecordCount} prescription record${matchingRecordCount === 1 ? '' : 's'} · latest ${timeline.lastPrescriptionDate ?? 'unknown'})`
-      : ''
+    const lastSupplyEndDate = medicationClassLastSupplyEndDate(assessment)
+    const lapsedZh = lastSupplyEndDate
+      ? `（最近一筆處方 ${lastSupplyEndDate} 結束）`
+      : timeline.lastPrescriptionDate
+        ? `（最近一筆處方 ${timeline.lastPrescriptionDate} 開立）`
+        : ''
+    const lapsedEn = lastSupplyEndDate
+      ? ` (latest prescription ended ${lastSupplyEndDate})`
+      : timeline.lastPrescriptionDate
+        ? ` (latest prescription written ${timeline.lastPrescriptionDate})`
+        : ''
+    // `active-order-unconfirmed` and `historical-record-current-status-unknown`
+    // are no longer emitted: the cloud record only says whether the patient is
+    // taking the class. They stay here so the map still covers the shared
+    // `CdssMedicationClassState` union, and they read the same as the state
+    // they collapsed into.
     const labels = {
       'confirmed-current': {
-        zh: `已確認使用${suffixZh}`,
-        en: `Confirmed current use${suffixEn}`,
+        zh: `目前用藥中${suffixZh}`,
+        en: `Currently taking${suffixEn}`,
       },
       'active-order-unconfirmed': {
-        zh: `已有處方${suffixZh}`,
-        en: `Prescription present${suffixEn}`,
+        zh: `目前用藥中${suffixZh}`,
+        en: `Currently taking${suffixEn}`,
       },
       'on-hold': {
         zh: `暫停中${suffixZh}`,
         en: `On hold${suffixEn}`,
       },
       'historical-record-current-status-unknown': {
-        zh: `歷史處方${suffixZh}${timelineZh}`,
-        en: `Historical prescription${suffixEn}${timelineEn}`,
+        zh: `目前未使用${lapsedZh}`,
+        en: `Not currently taking${lapsedEn}`,
       },
       uncertain: {
         zh: '成分辨識不完整',
         en: 'Ingredient mapping is incomplete',
       },
       'not-found': {
-        zh: '現有資料未見處方',
-        en: 'No prescription appears in the available medication data',
+        zh: `目前未使用${lapsedZh}`,
+        en: `Not currently taking${lapsedEn}`,
       },
     } as const
     return {
@@ -2522,7 +2587,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     const name = forxiga.medicationCodeableConcept?.text
       ?? forxiga.medicationCodeableConcept?.coding?.find((coding) => coding.display)?.display
       ?? 'Forxiga'
-    const useState = medicationUseState(forxiga)
+    const useState = medicationUseState(forxiga, now)
     const source = medicationSource(forxiga)
     facts.forxiga = {
       zh: `${name}${date ? `（${date}）` : ''}`,
@@ -2531,12 +2596,10 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       sources: [source],
     }
     const useText = useState === 'confirmed_current'
-      ? { zh: '病歷記載目前使用中', en: 'Recorded as currently used' }
-      : useState === 'active_order_unconfirmed'
-        ? { zh: '病歷有有效處方', en: 'An active prescription is recorded' }
-        : useState === 'not_current'
-          ? { zh: '最近一筆為歷史處方', en: 'The latest record is a historical prescription' }
-          : { zh: '處方狀態不明', en: 'Prescription status is unknown' }
+      ? { zh: '目前用藥中', en: 'Currently taking' }
+      : useState === 'not_current'
+        ? { zh: '目前未使用（最近一筆處方已結束）', en: 'Not currently taking; the latest prescription has ended' }
+        : { zh: '處方狀態不明', en: 'Prescription status is unknown' }
     facts.forxigaUseStatus = { ...useText, date, sources: [source] }
     medicationContext = {
       forxiga: {
