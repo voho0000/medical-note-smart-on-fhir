@@ -105,9 +105,10 @@ button that never enables, because `canUseChat` needs
 `apiKeyAvailable || user || isAnonymous`).
 
 `fixtures/firebase-auth.ts` now serves that session locally — identitytoolkit
-is answered from the fixture, securetoken too, and the Firestore quota
-listener is cut. It is wired in `fixtures/test.ts`, which is why specs import
-`test`/`expect` from there and not from `@playwright/test`.
+is answered from the fixture, securetoken too, and a pre-navigation test flag
+keeps Firestore uninitialized. That avoids both production traffic and the
+Firestore SDK's WebChannel retry loop. It is wired in `fixtures/test.ts`, which
+is why specs import `test`/`expect` from there and not from `@playwright/test`.
 `firebase-isolation.spec.ts` asserts it is still in effect.
 
 For the REAL chain (anonymous sign-in -> ID token -> proxy header), use the

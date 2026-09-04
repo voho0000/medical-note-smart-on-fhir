@@ -39,6 +39,10 @@ let db: Firestore | undefined
 let appCheck: AppCheck | undefined
 
 if (typeof window !== 'undefined') {
+  const firestoreDisabledForE2E = Boolean((window as Window & {
+    __MEDIPRISMA_E2E_DISABLE_FIRESTORE__?: boolean
+  }).__MEDIPRISMA_E2E_DISABLE_FIRESTORE__)
+
   // Client-side initialization
   if (!getApps().length) {
     app = initializeApp(firebaseConfig)
@@ -77,16 +81,18 @@ if (typeof window !== 'undefined') {
   // and transparently falls back to HTTPS long-polling when streaming doesn't
   // work — keeping streaming's speed where the network allows it. Important
   // for in-hospital (VGH) deployments behind restrictive networks.
-  try {
-    db = initializeFirestore(
-      app,
-      { experimentalAutoDetectLongPolling: true },
-      'mediprisma',
-    )
-  } catch {
-    // Already initialized (e.g. Fast Refresh re-evaluated this module) — reuse
-    // the existing instance rather than throwing.
-    db = getFirestore(app, 'mediprisma')
+  if (!firestoreDisabledForE2E) {
+    try {
+      db = initializeFirestore(
+        app,
+        { experimentalAutoDetectLongPolling: true },
+        'mediprisma',
+      )
+    } catch {
+      // Already initialized (e.g. Fast Refresh re-evaluated this module) — reuse
+      // the existing instance rather than throwing.
+      db = getFirestore(app, 'mediprisma')
+    }
   }
 
   // E2E only: route auth + firestore to the local emulators so the full
@@ -96,7 +102,7 @@ if (typeof window !== 'undefined') {
   if (process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === '1') {
     try {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
-      connectFirestoreEmulator(db, '127.0.0.1', 8080)
+      if (db) connectFirestoreEmulator(db, '127.0.0.1', 8080)
     } catch {
       // Already connected (Fast Refresh re-evaluated this module).
     }

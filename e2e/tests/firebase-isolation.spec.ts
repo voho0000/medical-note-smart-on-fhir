@@ -18,7 +18,7 @@ test.describe('firebase isolation', () => {
       if (!url.includes('identitytoolkit.googleapis.com')) return
       identityBodies.push(await response.text().catch(() => ''))
     })
-    page.on('requestfailed', (request) => {
+    page.on('request', (request) => {
       if (request.url().includes('firestore.googleapis.com')) firestoreCalls.push(request.url())
     })
 
@@ -37,10 +37,9 @@ test.describe('firebase isolation', () => {
       expect(body).toContain('e2e-anonymous-uid')
     }
 
-    // The quota listener is cut rather than left retrying against a project
-    // the fake token could never read.
-    await expect.poll(() => firestoreCalls.length, {
-      message: 'the Firestore usage listener should be blocked, not answered',
-    }).toBeGreaterThan(0)
+    // Firestore stays uninitialized in the main suite. This is stronger than
+    // aborting the first request: the SDK never starts a WebChannel and cannot
+    // enter its background retry loop.
+    expect(firestoreCalls, 'the main E2E suite must not start Firestore').toEqual([])
   })
 })

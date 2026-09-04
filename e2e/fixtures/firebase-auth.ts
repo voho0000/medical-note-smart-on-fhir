@@ -59,6 +59,15 @@ const json = (body: unknown) => ({
  * spec creates itself — and applies before the app's first request.
  */
 export async function stubFirebaseAnonymousAuth(context: BrowserContext) {
+  // Run before any app script. Leaving Firestore uninitialized is important:
+  // aborting its WebChannel request still makes the SDK retry forever, which
+  // floods every tour run with expected-but-noisy transport errors.
+  await context.addInitScript(() => {
+    ;(window as Window & {
+      __MEDIPRISMA_E2E_DISABLE_FIRESTORE__?: boolean
+    }).__MEDIPRISMA_E2E_DISABLE_FIRESTORE__ = true
+  })
+
   await context.route('**/identitytoolkit.googleapis.com/**', async (route) => {
     const url = route.request().url()
 
@@ -107,10 +116,8 @@ export async function stubFirebaseAnonymousAuth(context: BrowserContext) {
     }))
   })
 
-  // The quota listener streams from Firestore. Nothing in the suite asserts on
-  // usage counts, and a fake token cannot read the real project anyway, so cut
-  // the connection instead of leaving a doomed WebChannel retrying in the
-  // background of every test.
+  // Fail closed if a future refactor bypasses the pre-navigation guard above.
+  // firebase-isolation.spec.ts asserts that this route is never reached.
   await context.route('**/firestore.googleapis.com/**', async (route) => {
     await route.abort('blockedbyclient')
   })
