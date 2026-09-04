@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
+import { BookOpen, CircleHelp, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
@@ -68,6 +68,11 @@ import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
 import { SourceSup } from "./components/SourceSup"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
+import {
+  isCustomSummaryEditorTourStep,
+  isCustomSummaryTourStep,
+  useRightFeatureTourStore,
+} from "@/features/right-feature-tour/right-feature-tour.store"
 import { DataSelectionDrawer } from "@/features/data-selection"
 import {
   MedicalSummaryCardLayoutManager,
@@ -145,7 +150,16 @@ export default function MedicalSummaryFeature() {
   const visibleInsightCount = visibleInsightPanels.length
   const insightsModel = useModelPref("insights")
   const setModelFor = useSetModelFor()
-  const [activeView, setActiveView] = useState<SummaryView>("standard")
+  const [selectedView, setActiveView] = useState<SummaryView>("standard")
+  const tourActive = useRightFeatureTourStore((state) => state.active)
+  const tourStep = useRightFeatureTourStore((state) => state.stepId)
+  const openCustomSummaryGuide = useRightFeatureTourStore((state) => state.openCustomSummaryGuide)
+  // Tour navigation is presentation-only. Once it ends, restore the clinician's
+  // selected reading mode and drawer state without mutating template settings.
+  const activeView = tourActive
+    ? (isCustomSummaryTourStep(tourStep) ? "custom" : "standard")
+    : selectedView
+  const tourEditorOpen = tourActive && isCustomSummaryEditorTourStep(tourStep)
   // Usage analytics: 標準 vs 自訂 reading mode, default included. Tour-driven
   // views report as `auto` because only the tab handler marks a user trigger.
   // Gated on the right panel actually showing this feature — visited right-panel
@@ -838,6 +852,7 @@ export default function MedicalSummaryFeature() {
           </TabsTrigger>
           <TabsTrigger
             value="custom"
+            data-tour="medical-summary-custom-tab"
             title={ms.customInsightsSubtitle}
             aria-label={ms.customSummaryTab}
             className={`${SUBTAB_TRIGGER_CLASSES} group min-w-[clamp(3rem,11cqw,4rem)] text-xs`}
@@ -932,7 +947,21 @@ export default function MedicalSummaryFeature() {
               <span className="hidden @min-[38rem]:inline">{ms.manageCustomInsights}</span>
             </Button>
           )}
-          <Popover open={summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
+          {activeView === "custom" && (
+            <Button
+              type="button"
+              data-tour="custom-summary-help"
+              variant="ghost"
+              size="icon"
+              className="hidden h-[44px] w-[44px] shrink-0 p-0 text-muted-foreground md:inline-flex lg:h-8 lg:w-8"
+              title={locale === "en" ? "User guide" : "使用教學"}
+              aria-label={locale === "en" ? "User guide" : "使用教學"}
+              onClick={openCustomSummaryGuide}
+            >
+              <CircleHelp className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+          <Popover open={!tourActive && summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -981,20 +1010,36 @@ export default function MedicalSummaryFeature() {
                 {ms.dataScopeButton}
               </Button>
               {activeView === "custom" ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-[44px] w-full justify-start gap-2 px-2 text-xs md:hidden"
-                  onClick={() => {
-                    setSummarySettingsOpen(false)
-                    openCustomManager()
-                  }}
-                  title={ms.customManagerDescription}
-                >
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  {ms.customManagerTitle}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-[44px] w-full justify-start gap-2 px-2 text-xs md:hidden"
+                    onClick={() => {
+                      setSummarySettingsOpen(false)
+                      openCustomManager()
+                    }}
+                    title={ms.customManagerDescription}
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    {ms.customManagerTitle}
+                  </Button>
+                  <Button
+                    type="button"
+                    data-tour="custom-summary-help"
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-[44px] w-full justify-start gap-2 px-2 text-xs md:hidden"
+                    onClick={() => {
+                      setSummarySettingsOpen(false)
+                      openCustomSummaryGuide()
+                    }}
+                  >
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                    {locale === "en" ? "Custom summaries guide" : "自訂摘要教學"}
+                  </Button>
+                </>
               ) : null}
               {activeView === "standard" && !isPatient && availableCardIds.length > 0 ? (
                 <Button
@@ -1221,9 +1266,11 @@ export default function MedicalSummaryFeature() {
         overflowIssue={activeView === "standard" ? overflowGuidance : null}
       />
       <CustomInsightModulesManagerDrawer
-        open={customManagerOpen}
+        open={tourActive ? tourEditorOpen : customManagerOpen}
         onOpenChange={setCustomManagerOpen}
-        initialPanelId={selectedCustomPanelId}
+        initialPanelId={tourActive ? visibleInsightPanels[0]?.id ?? insightPanels[0]?.id : selectedCustomPanelId}
+        guidedPreview={tourActive}
+        tourStep={tourActive ? tourStep : null}
       />
       <AiExecutionDiagnosticsDialog
         open={diagnosticsOpen}

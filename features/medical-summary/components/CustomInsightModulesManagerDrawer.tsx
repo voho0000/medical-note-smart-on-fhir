@@ -16,17 +16,23 @@ import { useAuth } from "@/src/application/providers/auth.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { CustomInsightModulesManager } from "@/features/clinical-insights/components/CustomInsightModulesManager"
 import { AuthDialog } from "@/features/auth/components/AuthDialog"
+import { cn } from "@/src/shared/utils/cn.utils"
+import type { RightFeatureTourStepId } from "@/features/right-feature-tour/right-feature-tour.store"
 
 interface CustomInsightModulesManagerDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialPanelId?: string
+  guidedPreview?: boolean
+  tourStep?: RightFeatureTourStepId | null
 }
 
 export function CustomInsightModulesManagerDrawer({
   open,
   onOpenChange,
   initialPanelId,
+  guidedPreview = false,
+  tourStep = null,
 }: CustomInsightModulesManagerDrawerProps) {
   const { t, locale } = useLanguage()
   const { user } = useAuth()
@@ -41,6 +47,8 @@ export function CustomInsightModulesManagerDrawer({
     : t.settings.customTemplateSyncSaved
 
   const handleOpenChange = (nextOpen: boolean) => {
+    // The tour owns visibility and must not save an existing dirty template.
+    if (guidedPreview) return
     if (!nextOpen && user && syncStatus === "dirty") void savePanels()
     onOpenChange(nextOpen)
   }
@@ -97,8 +105,18 @@ export function CustomInsightModulesManagerDrawer({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
+      <Sheet open={open} onOpenChange={handleOpenChange} modal={!guidedPreview}>
+        <SheetContent
+          side="right"
+          data-tour="custom-summary-manager"
+          className={cn(
+            "w-full gap-0 p-0 sm:max-w-3xl",
+            guidedPreview && "data-[state=open]:animate-none data-[state=closed]:animate-none",
+          )}
+          onOpenAutoFocus={(event) => { if (guidedPreview) event.preventDefault() }}
+          onCloseAutoFocus={(event) => { if (guidedPreview) event.preventDefault() }}
+          onInteractOutside={(event) => { if (guidedPreview) event.preventDefault() }}
+        >
           <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5 sm:pr-12">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0">
@@ -136,6 +154,8 @@ export function CustomInsightModulesManagerDrawer({
               <CustomInsightModulesManager
                 key={initialPanelId ?? "module-manager"}
                 initialPanelId={initialPanelId}
+                guidedPreview={guidedPreview}
+                tourStep={tourStep}
               />
             </div>
           </ScrollArea>

@@ -30,6 +30,7 @@ import {
   sanitizeInsightHtml,
 } from "@/features/clinical-insights/utils/insight-content"
 import { CustomInsightGenerationMeta } from "./CustomInsightGenerationMeta"
+import { CustomInsightDetailDialog } from "./CustomInsightDetailDialog"
 
 interface CustomInsightModulesSectionProps {
   onManage: (panelId?: string) => void
@@ -69,7 +70,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
   }
 
   return (
-    <section className="space-y-2" aria-label={labels.customSummaryTab}>
+    <section data-tour="custom-summary-modules" className="space-y-2" aria-label={labels.customSummaryTab}>
       {visiblePanels.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card px-3 py-8 text-center">
           <p className="text-sm font-medium text-foreground">{labels.customInsightsEmpty}</p>
@@ -127,7 +128,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                       ) : null}
                       <div
                         className={cn(
-                          "relative z-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1 @min-[38rem]:grid-cols-[auto_minmax(0,1fr)_auto] @min-[38rem]:gap-x-2",
+                          "relative z-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1 @max-[24rem]:grid-cols-1 @min-[38rem]:grid-cols-[auto_minmax(0,1fr)_auto] @min-[38rem]:gap-x-2",
                           canToggleResult && "pointer-events-none",
                         )}
                       >
@@ -149,16 +150,17 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                         <CustomInsightGenerationMeta
                           metadata={response?.metadata}
                           activeGeneration={status.isLoading ? status.activeGeneration : undefined}
-                          className="pointer-events-auto col-span-2 row-start-2 min-w-0 @min-[38rem]:col-span-1 @min-[38rem]:col-start-2 @min-[38rem]:row-start-1 @min-[38rem]:justify-self-end"
+                          className="pointer-events-auto col-span-2 row-start-2 min-w-0 @max-[24rem]:col-span-1 @max-[24rem]:col-start-1 @max-[24rem]:row-start-3 @min-[38rem]:col-span-1 @min-[38rem]:col-start-2 @min-[38rem]:row-start-1 @min-[38rem]:justify-self-end"
                         />
 
-                        <div className="col-start-2 row-start-1 flex items-center justify-end gap-1 @min-[38rem]:col-start-3">
+                        <div className="col-start-2 row-start-1 flex items-center justify-end gap-1 @max-[24rem]:col-start-1 @max-[24rem]:row-start-2 @max-[24rem]:justify-self-end @min-[38rem]:col-start-3">
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
                             className="pointer-events-auto h-11 shrink-0 gap-1 px-1.5 text-xs sm:h-7 sm:px-2"
                             onClick={() => onManage(panel.id)}
+                            data-tour="custom-summary-edit"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                             {labels.editCustomInsight}
@@ -168,7 +170,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                               type="button"
                               size="sm"
                               variant="secondary"
-                              className="pointer-events-auto h-11 shrink-0 gap-1 px-1.5 text-xs sm:h-7 sm:px-2"
+                              className="pointer-events-auto h-11 shrink-0 gap-1.5 px-3 text-xs sm:h-8 sm:px-3"
                               onClick={() => stopPanel(panel.id)}
                             >
                               <Square className="h-3.5 w-3.5 fill-current" />
@@ -178,15 +180,25 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                             <Button
                               type="button"
                               size="sm"
-                              variant="secondary"
-                              className="pointer-events-auto h-11 shrink-0 gap-1 px-1.5 text-xs sm:h-7 sm:px-2"
+                              variant="outline"
+                              className="pointer-events-auto h-11 shrink-0 gap-1.5 px-3 text-xs sm:h-8 sm:px-3"
                               disabled={!canGenerate || !hasData}
                               onClick={() => void runPanel(panel.id, { force: true })}
+                              data-tour="custom-summary-generate"
                             >
                               <Sparkles className="h-3.5 w-3.5" />
                               {hasResponse ? labels.customRegenerate : labels.customGenerate}
                             </Button>
                           )}
+                          {canToggleResult ? (
+                            <CustomInsightDetailDialog
+                              title={panel.title}
+                              content={responseText}
+                              format={viewFormat}
+                              metadata={response?.metadata}
+                              activeGeneration={status.isLoading ? status.activeGeneration : undefined}
+                            />
+                          ) : null}
                           {canToggleResult ? (
                             <span
                               aria-hidden="true"

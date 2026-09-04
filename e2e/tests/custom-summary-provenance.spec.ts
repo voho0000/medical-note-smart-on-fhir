@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures/test'
 import { importBundle } from '../fixtures/import'
 
 test.describe('custom summary generation provenance', () => {
-  test('shows per-module model, completion time and duration with responsive wrapping', async ({ page }) => {
+  test('shows per-module model, completion time and duration with responsive wrapping', async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('api_key_storage_type', 'sessionStorage')
       sessionStorage.setItem('gemini_api_key', 'e2e-gemini-key')
@@ -13,7 +13,6 @@ test.describe('custom summary generation provenance', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          modelVersion: 'gemini-3-flash-preview',
           candidates: [{
             content: {
               parts: [{ text: '### 重要變化摘要\n\n- **2018/02/12：**肌酸酐 1.6 mg/dL\n- 已完成自訂摘要測試。' }],
@@ -30,7 +29,7 @@ test.describe('custom summary generation provenance', () => {
     const summaryModule = summaryPanel.locator('article').filter({
       has: page.getByRole('heading', { name: '變化摘要' }),
     })
-    const generate = summaryModule.getByRole('button', { name: '產生', exact: true })
+    const generate = summaryModule.getByRole('button', { name: '產生摘要', exact: true })
     await expect(generate).toBeEnabled({ timeout: 20_000 })
     await generate.click()
 
@@ -39,7 +38,7 @@ test.describe('custom summary generation provenance', () => {
     await expect(customTab.locator('.animate-spin')).toHaveCount(0)
     await expect(summaryModule.locator('.animate-spin')).toHaveCount(1)
     await expect(summaryModule.locator('.animate-pulse')).toHaveCount(0)
-    await expect(summaryModule.getByRole('button', { name: '重跑', exact: true })).toBeVisible({ timeout: 20_000 })
+    await expect(summaryModule.getByRole('button', { name: '重新產生摘要', exact: true })).toBeVisible({ timeout: 20_000 })
     await expect(meta).toContainText('Gemini 3 Flash Preview')
     await expect(meta).toContainText(/\d{4}.+\d{2}:\d{2}/)
     await expect(meta).not.toContainText('產生於')
@@ -81,7 +80,7 @@ test.describe('custom summary generation provenance', () => {
     await expect(collapsedPreview).toHaveCSS('-webkit-line-clamp', '3')
     await expect(summaryModule.getByRole('heading', { name: '重要變化摘要', exact: true })).toBeHidden()
     await expect(meta).toBeVisible()
-    await expect(summaryModule.getByRole('button', { name: '編輯模板' })).toBeVisible()
+    await expect(summaryModule.getByRole('button', { name: '編輯' })).toBeVisible()
     await expandResult.click({ position: { x: 12, y: 12 } })
     await expect(collapsedPreview).toBeHidden()
     await expect(summaryModule.getByText('已完成自訂摘要測試。')).toBeVisible()
@@ -93,8 +92,22 @@ test.describe('custom summary generation provenance', () => {
     await expect(meta).toContainText('Gemini 3 Flash Preview')
 
     await page.setViewportSize({ width: 1440, height: 900 })
+    const openResult = summaryModule.getByRole('button', { name: '放大閱讀「變化摘要」摘要結果' })
+    await openResult.click()
+    const resultDialog = page.getByRole('dialog', { name: '變化摘要' })
+    await expect(resultDialog).toBeVisible()
+    await expect(resultDialog).toContainText('已完成自訂摘要測試。')
+    await expect(resultDialog).toContainText('Gemini 3 Flash Preview')
+    const wideDialogBox = await resultDialog.boundingBox()
+    expect(wideDialogBox).not.toBeNull()
+    expect(wideDialogBox!.width).toBeGreaterThanOrEqual(800)
+    expect(wideDialogBox!.height).toBeLessThanOrEqual(810)
+    await page.screenshot({ path: testInfo.outputPath('expanded-result-desktop.png'), animations: 'disabled' })
+    await resultDialog.getByRole('button', { name: 'Close' }).click()
+    await expect(resultDialog).toBeHidden()
+
     const wideMetaBox = await meta.boundingBox()
-    const wideEditBox = await summaryModule.getByRole('button', { name: '編輯模板' }).boundingBox()
+    const wideEditBox = await summaryModule.getByRole('button', { name: '編輯' }).boundingBox()
     expect(wideMetaBox).not.toBeNull()
     expect(wideEditBox).not.toBeNull()
     expect(Math.abs(wideMetaBox!.y - wideEditBox!.y)).toBeLessThan(8)
@@ -104,7 +117,7 @@ test.describe('custom summary generation provenance', () => {
       await page.setViewportSize({ width, height: 900 })
       await expect(meta).toBeVisible()
       const narrowDesktopMetaBox = await meta.boundingBox()
-      const narrowDesktopEditBox = await summaryModule.getByRole('button', { name: '編輯模板' }).boundingBox()
+      const narrowDesktopEditBox = await summaryModule.getByRole('button', { name: '編輯' }).boundingBox()
       expect(narrowDesktopMetaBox).not.toBeNull()
       expect(narrowDesktopEditBox).not.toBeNull()
       expect(narrowDesktopMetaBox!.y).toBeGreaterThan(narrowDesktopEditBox!.y)
@@ -117,7 +130,7 @@ test.describe('custom summary generation provenance', () => {
     for (const width of [430, 390]) {
       await page.setViewportSize({ width, height: 844 })
       const mobileMetaBox = await meta.boundingBox()
-      const mobileEditBox = await summaryModule.getByRole('button', { name: '編輯模板' }).boundingBox()
+      const mobileEditBox = await summaryModule.getByRole('button', { name: '編輯' }).boundingBox()
       expect(mobileMetaBox).not.toBeNull()
       expect(mobileEditBox).not.toBeNull()
       expect(mobileMetaBox!.y).toBeGreaterThan(mobileEditBox!.y)
@@ -126,6 +139,22 @@ test.describe('custom summary generation provenance', () => {
 
     await page.setViewportSize({ width: 320, height: 760 })
     await expect(meta).toBeVisible()
+    await openResult.click()
+    await expect(resultDialog).toBeVisible()
+    const phoneDialogBox = await resultDialog.boundingBox()
+    expect(phoneDialogBox).not.toBeNull()
+    expect(phoneDialogBox!.x).toBeGreaterThanOrEqual(0)
+    expect(phoneDialogBox!.width).toBeLessThanOrEqual(320)
+    expect(phoneDialogBox!.height).toBeLessThanOrEqual(684)
+    const closeResult = resultDialog.getByRole('button', { name: 'Close' })
+    const closeResultBox = await closeResult.boundingBox()
+    expect(closeResultBox).not.toBeNull()
+    expect(closeResultBox!.width).toBeGreaterThanOrEqual(44)
+    expect(closeResultBox!.height).toBeGreaterThanOrEqual(44)
+    await page.screenshot({ path: testInfo.outputPath('expanded-result-phone.png'), animations: 'disabled' })
+    await closeResult.click()
+    await expect(resultDialog).toBeHidden()
+
     const mobileCollapse = summaryModule.getByRole('button', { name: '收合「變化摘要」摘要結果' })
     const mobileCollapseBox = await mobileCollapse.boundingBox()
     expect(mobileCollapseBox).not.toBeNull()

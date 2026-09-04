@@ -112,7 +112,7 @@ export function CustomInsightModuleEditor({
     : t.settings.outputLanguageInterface
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center gap-3 border-b bg-muted/20 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -163,6 +163,7 @@ export function CustomInsightModuleEditor({
               size="icon"
               className="h-7 w-7 text-muted-foreground"
               onClick={handleShare}
+              data-tour="custom-summary-share"
               aria-label={t.promptGallery?.sharePrompt || "Share"}
               title={t.promptGallery?.sharePrompt || "Share"}
             >
@@ -186,71 +187,73 @@ export function CustomInsightModuleEditor({
       </div>
 
       <div className="space-y-4 p-4">
-        <div className="grid gap-1.5">
-          <label htmlFor={`module-name-${panel.id}`} className="text-xs font-medium text-foreground">
-            {t.settings.tabLabel}
-          </label>
-          <Input
-            id={`module-name-${panel.id}`}
-            value={panel.title}
-            onChange={(event) => onUpdate(panel.id, { title: event.target.value })}
-            placeholder={t.settings.tabLabelPlaceholder}
-            className="h-9"
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid content-start gap-1.5">
-            <label htmlFor={`module-output-format-${panel.id}`} className="text-xs font-medium text-foreground">
-              {t.settings.outputFormat}
+        <div data-tour="custom-summary-fields" className="space-y-4">
+          <div className="grid gap-1.5">
+            <label htmlFor={`module-name-${panel.id}`} className="text-xs font-medium text-foreground">
+              {t.settings.tabLabel}
             </label>
-            <Select
-              value={panel.outputFormat}
-              onValueChange={(value) => onUpdate(panel.id, { outputFormat: value as InsightOutputFormat })}
-            >
-              <SelectTrigger id={`module-output-format-${panel.id}`} className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="plain-text">{t.settings.outputFormatPlain}</SelectItem>
-                <SelectItem value="markdown">{t.settings.outputFormatMarkdown}</SelectItem>
-                <SelectItem value="html">{t.settings.outputFormatHtml}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[0.6875rem] leading-snug text-muted-foreground">
-              {panel.outputFormat === "plain-text"
-                ? t.settings.outputFormatPlainDesc
-                : panel.outputFormat === "html"
-                  ? t.settings.outputFormatHtmlDesc
-                  : t.settings.outputFormatMarkdownDesc}
-            </p>
+            <Input
+              id={`module-name-${panel.id}`}
+              value={panel.title}
+              onChange={(event) => onUpdate(panel.id, { title: event.target.value })}
+              placeholder={t.settings.tabLabelPlaceholder}
+              className="h-9"
+            />
           </div>
 
-          <div className="grid content-start gap-1.5">
-            <label htmlFor={`module-language-policy-${panel.id}`} className="text-xs font-medium text-foreground">
-              {t.settings.outputLanguage}
-            </label>
-            <Select
-              value={panel.languagePolicy}
-              onValueChange={(value) => onUpdate(panel.id, { languagePolicy: value as InsightLanguagePolicy })}
-            >
-              <SelectTrigger id={`module-language-policy-${panel.id}`} className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="follow-template">{t.settings.outputLanguageFollowTemplate}</SelectItem>
-                <SelectItem value="interface-language">{t.settings.outputLanguageInterface}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[0.6875rem] leading-snug text-muted-foreground">
-              {panel.languagePolicy === "follow-template"
-                ? t.settings.outputLanguageFollowTemplateDesc
-                : t.settings.outputLanguageInterfaceDesc}
-            </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid content-start gap-1.5">
+              <label htmlFor={`module-output-format-${panel.id}`} className="text-xs font-medium text-foreground">
+                {t.settings.outputFormat}
+              </label>
+              <Select
+                value={panel.outputFormat}
+                onValueChange={(value) => onUpdate(panel.id, { outputFormat: value as InsightOutputFormat })}
+              >
+                <SelectTrigger id={`module-output-format-${panel.id}`} className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="plain-text">{t.settings.outputFormatPlain}</SelectItem>
+                  <SelectItem value="markdown">{t.settings.outputFormatMarkdown}</SelectItem>
+                  <SelectItem value="html">{t.settings.outputFormatHtml}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[0.6875rem] leading-snug text-muted-foreground">
+                {panel.outputFormat === "plain-text"
+                  ? t.settings.outputFormatPlainDesc
+                  : panel.outputFormat === "html"
+                    ? t.settings.outputFormatHtmlDesc
+                    : t.settings.outputFormatMarkdownDesc}
+              </p>
+            </div>
+
+            <div className="grid content-start gap-1.5">
+              <label htmlFor={`module-language-policy-${panel.id}`} className="text-xs font-medium text-foreground">
+                {t.settings.outputLanguage}
+              </label>
+              <Select
+                value={panel.languagePolicy}
+                onValueChange={(value) => onUpdate(panel.id, { languagePolicy: value as InsightLanguagePolicy })}
+              >
+                <SelectTrigger id={`module-language-policy-${panel.id}`} className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="follow-template">{t.settings.outputLanguageFollowTemplate}</SelectItem>
+                  <SelectItem value="interface-language">{t.settings.outputLanguageInterface}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[0.6875rem] leading-snug text-muted-foreground">
+                {panel.languagePolicy === "follow-template"
+                  ? t.settings.outputLanguageFollowTemplateDesc
+                  : t.settings.outputLanguageInterfaceDesc}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border bg-muted/10">
+        <div data-tour="custom-summary-behavior" className="overflow-hidden rounded-lg border bg-muted/10">
           <div className="flex items-center gap-3 px-3 py-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
               <Eye className="h-4 w-4" />
@@ -292,7 +295,7 @@ export function CustomInsightModuleEditor({
           </div>
         </div>
 
-        <div className="grid gap-1.5 border-t pt-4">
+        <div data-tour="custom-summary-prompt" className="grid gap-1.5 border-t pt-4">
           <div className="flex items-center justify-between gap-3">
             <label htmlFor={`module-prompt-${panel.id}`} className="text-xs font-medium text-foreground">
               {t.settings.prompt}

@@ -36,6 +36,10 @@ export async function importBundle(
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, options.locale ?? 'zh-TW')
   await page.goto('/')
+  // The header file input exists in the server-rendered loading shell, before
+  // its change handler is ready. Wait for the client-resolved welcome screen
+  // so a fast file selection cannot be lost during hydration.
+  await expect(page.getByTestId('welcome-demo-card')).toBeVisible({ timeout: 20_000 })
   // Register before choosing the file so a fast import cannot settle between
   // setInputFiles resolving and the next Playwright command.
   await page.evaluate(() => {

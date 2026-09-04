@@ -15,15 +15,16 @@ jest.mock("@/src/application/providers/language.provider", () => ({
         customInsightsEmpty: "尚無摘要",
         customAutoBadge: "自動",
         customNoCitations: "目前不提供逐項來源引註",
-        customGenerate: "產生",
-        customRegenerate: "重跑",
+        customGenerate: "產生摘要",
+        customRegenerate: "重新產生摘要",
         customExpandResult: "展開「{title}」摘要結果",
         customCollapseResult: "收合「{title}」摘要結果",
+        customOpenResult: "放大閱讀「{title}」摘要結果",
         customGenerating: "正在產生",
         customDisplayAs: "顯示格式",
         customCopyText: "複製文字",
         customCopySource: "複製原始碼",
-        editCustomInsight: "編輯模板",
+        editCustomInsight: "編輯",
       },
     },
   }),
@@ -66,12 +67,19 @@ describe("CustomInsightModulesSection result disclosure", () => {
       .toContainElement(screen.getByRole("combobox", { name: "顯示格式: 第一張" }))
     expect(firstUtilityRow?.lastElementChild).toBe(firstDisclaimer)
 
-    fireEvent.click(screen.getAllByRole("button", { name: "編輯模板" })[0])
+    const editButton = screen.getAllByRole("button", { name: "編輯" })[0]
+    const regenerateButton = screen.getAllByRole("button", { name: "重新產生摘要" })[0]
+    expect(editButton).toHaveClass("sm:h-7", "px-1.5")
+    expect(regenerateButton).toHaveClass("border", "bg-background", "sm:h-8", "px-3")
+
+    fireEvent.click(editButton)
 
     expect(onManage).toHaveBeenCalledWith("first")
     expect(screen.getByText("第一張的完整內容")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "收合「第一張」摘要結果" }))
       .toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: "放大閱讀「第一張」摘要結果" }))
+      .toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "收合「第一張」摘要結果" }))
 
@@ -95,5 +103,11 @@ describe("CustomInsightModulesSection result disclosure", () => {
       .toHaveAttribute("aria-expanded", "true")
     expect(screen.getByRole("combobox", { name: "顯示格式: 第一張" }))
       .toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "放大閱讀「第一張」摘要結果" }))
+
+    const dialog = screen.getByRole("dialog", { name: "第一張" })
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveTextContent("第一張的完整內容")
   })
 })

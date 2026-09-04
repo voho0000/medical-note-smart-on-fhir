@@ -43,12 +43,15 @@ import { CustomInsightModuleEditor } from "./CustomInsightModuleEditor"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
 import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { PromptType, SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
+import { isCustomSummaryGalleryTourStep, type RightFeatureTourStepId } from "@/features/right-feature-tour/right-feature-tour.store"
 
 interface CustomInsightModulesManagerProps {
   initialPanelId?: string
+  guidedPreview?: boolean
+  tourStep?: RightFeatureTourStepId | null
 }
 
-export function CustomInsightModulesManager({ initialPanelId }: CustomInsightModulesManagerProps = {}) {
+export function CustomInsightModulesManager({ initialPanelId, guidedPreview = false, tourStep = null }: CustomInsightModulesManagerProps = {}) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
@@ -96,6 +99,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
   const resumeAfterLoginRef = useRef(false)
 
   const requestCustomization = (action: () => void | Promise<void>) => {
+    if (guidedPreview) return
     if (user || guestEditingApproved) return action()
     pendingCustomizationRef.current = action
     setShowTemplatePersistencePrompt(true)
@@ -127,7 +131,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
   }
 
   const handleUndoRemovePanel = () => {
-    if (!lastDeletedPanel) return
+    if (guidedPreview || !lastDeletedPanel) return
     restorePanel(lastDeletedPanel)
     setActiveId(lastDeletedPanel.id)
     setLastDeletedPanel(null)
@@ -147,6 +151,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
   }
 
   const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType) => {
+    if (guidedPreview) return
     if (useAs === "chat" || !canAddPanel) return
     await requestCustomization(async () => {
       const newPanelId = addPanel({
@@ -211,7 +216,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
             <ModelPicker
               modelId={insightsModel}
               fallbackModelId={MODEL_PREF_DEFAULTS.insights}
-              onSelect={(id) => setModelFor("insights", id)}
+              onSelect={(id) => { if (!guidedPreview) setModelFor("insights", id) }}
               tooltip={t.modelPicker.insightsTooltip}
               align="end"
             />
@@ -261,6 +266,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
           variant="outline"
           className="h-9 w-9 shrink-0"
           onClick={handleAddPanel}
+          data-tour="custom-summary-add"
           disabled={!canAddPanel}
           aria-label={t.settings.addTab}
           title={t.settings.addTab}
@@ -282,6 +288,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
               variant="ghost"
               className="h-7 w-7"
               onClick={handleAddPanel}
+              data-tour="custom-summary-add"
               disabled={!canAddPanel}
               aria-label={t.settings.addTab}
               title={t.settings.addTab}
@@ -324,7 +331,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
           </nav>
 
           <div className="space-y-1 border-t p-2">
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs" onClick={() => setShowGalleryDialog(true)}>
+            <Button data-tour="custom-summary-library" type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs" onClick={() => setShowGalleryDialog(true)}>
               <Library className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
               {t.promptGallery?.browseGallery || "Browse Gallery"}
             </Button>
@@ -348,7 +355,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
               maxSummaryModules={MAX_SUMMARY_INSIGHT_MODULES}
               maxAutoModules={MAX_AUTO_INSIGHT_MODULES}
               onUpdate={(id, patch) => void requestCustomization(() => updatePanel(id, patch))}
-              onUpdateAndSave={user ? updatePanelAndSave : undefined}
+              onUpdateAndSave={user && !guidedPreview ? updatePanelAndSave : undefined}
               onRemove={handleRemovePanel}
               onMove={handleMove}
               onShare={(panel) => {
@@ -371,7 +378,7 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
       </div>
 
       <div className="flex items-center gap-2 border-t pt-3 sm:hidden">
-        <Button type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs" onClick={() => setShowGalleryDialog(true)}>
+        <Button data-tour="custom-summary-library" type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs" onClick={() => setShowGalleryDialog(true)}>
           <Library className="h-3.5 w-3.5" />
           {t.promptGallery?.browseGallery || "Browse Gallery"}
         </Button>
@@ -382,20 +389,23 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
       </div>
 
       <SharePromptDialog
-        open={showShareDialog}
-        onOpenChange={setShowShareDialog}
-        initialTitle={promptToShare?.title || ""}
-        initialPrompt={promptToShare?.prompt || ""}
+        open={guidedPreview ? tourStep === "custom-summary-share-form" && !!user && !!activePanel : showShareDialog}
+        onOpenChange={(open) => { if (!guidedPreview) setShowShareDialog(open) }}
+        initialTitle={(guidedPreview ? activePanel : promptToShare)?.title || ""}
+        initialPrompt={(guidedPreview ? activePanel : promptToShare)?.prompt || ""}
         initialType="summary"
-        initialOutputFormat={promptToShare?.outputFormat}
-        initialLanguagePolicy={promptToShare?.languagePolicy}
+        initialOutputFormat={(guidedPreview ? activePanel : promptToShare)?.outputFormat}
+        initialLanguagePolicy={(guidedPreview ? activePanel : promptToShare)?.languagePolicy}
+        guidedPreview={guidedPreview}
       />
 
       <PromptGalleryDialog
-        open={showGalleryDialog}
-        onOpenChange={setShowGalleryDialog}
+        open={guidedPreview ? isCustomSummaryGalleryTourStep(tourStep) : showGalleryDialog}
+        onOpenChange={(open) => { if (!guidedPreview) setShowGalleryDialog(open) }}
         mode="summary"
         onSelectPrompt={handleSelectPrompt}
+        guidedPreview={guidedPreview}
+        previewFirstTemplate={guidedPreview && tourStep === "custom-summary-gallery-preview"}
       />
 
       <LoginRequiredDialog

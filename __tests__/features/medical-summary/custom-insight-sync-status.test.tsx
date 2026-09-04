@@ -119,4 +119,23 @@ describe('custom summary template sync status', () => {
     expect(savePanels).toHaveBeenCalledTimes(1)
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
+
+  it('does not save pending account changes or dismiss the guided preview', () => {
+    const savePanels = jest.fn().mockResolvedValue(true)
+    const onOpenChange = jest.fn()
+    mockUseAuth.mockReturnValue({ user: { uid: 'account-1' } })
+    mockUseClinicalInsightsConfig.mockReturnValue({
+      isLoading: false,
+      lastSavedAt: null,
+      savePanels,
+      syncStatus: 'dirty',
+    })
+
+    const { rerender } = render(<CustomInsightModulesManagerDrawer open guidedPreview onOpenChange={onOpenChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Close drawer' }))
+    rerender(<CustomInsightModulesManagerDrawer open={false} guidedPreview onOpenChange={onOpenChange} />)
+
+    expect(savePanels).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
 })

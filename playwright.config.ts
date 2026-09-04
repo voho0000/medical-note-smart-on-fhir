@@ -35,6 +35,15 @@ export default defineConfig({
       NEXT_PUBLIC_CHAT_URL: 'https://e2e-proxy.test/chat',
       NEXT_PUBLIC_GEMINI_URL: 'https://e2e-proxy.test/gemini',
       NEXT_PUBLIC_CLAUDE_URL: 'https://e2e-proxy.test/claude',
+      // Public, deliberately fake Firebase metadata. The request fixture
+      // answers Auth locally and leaves Firestore uninitialized, so a clean
+      // checkout can run without inheriting a developer's `.env.local`.
+      NEXT_PUBLIC_FIREBASE_API_KEY: 'e2e-fake-api-key',
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'e2e-mediprisma.firebaseapp.com',
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'e2e-mediprisma',
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'e2e-mediprisma.appspot.com',
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '1234567890',
+      NEXT_PUBLIC_FIREBASE_APP_ID: '1:1234567890:web:e2e000000000000000000',
     },
   },
 })

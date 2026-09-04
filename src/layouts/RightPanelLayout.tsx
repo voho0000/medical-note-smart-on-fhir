@@ -265,7 +265,9 @@ function RightPanelContentInner() {
       settings: 'settings',
       finish: 'medical-summary',
     }
-    const target = targetTab[tourStep]
+    const target = tourStep.startsWith('custom-summary')
+      ? 'medical-summary'
+      : targetTab[tourStep]
     if (target && features.some((feature) => feature.id === target)) {
       setActiveTab(target)
     }
