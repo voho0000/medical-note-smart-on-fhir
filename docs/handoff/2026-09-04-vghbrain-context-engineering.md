@@ -186,3 +186,35 @@ npx jest --runInBand __tests__/scripts/context-reduction-report.test.ts --silent
 - `npx eslint`（59 個變更檔）— 通過
 - `TZ=Asia/Taipei npx jest` — **424 suites 通過 / 2 skipped，4250 tests 通過**
 - 已知的跨 suite jsdom `scrollIntoView` flake（ChatMessageList / model-execution-info）本輪**未出現**。
+
+---
+
+## Medcloud-bridge-shaped 1M+ token 合成病歷（2026-09-04 追加）
+
+`docs/testing/medcloud-bridge-bundle-shape.md` 記錄 bridge 實際輸出形狀；
+`scripts/generate-medcloud-shaped-stress-bundle.cjs` 依該形狀產生確定性 fixture：
+8.3 MB／2,301 entries／**2,171,424 estimated tokens**（heuristic 跑在 pretty-print 後的 JSON 上），
+2018-04 至 2026-08 共 96 次住院、120 份 IMUE0070 出院病摘（含 24 份跨院重複，去重後 24 組）、
+193 份 IMUE0130 影像報告、263 筆 `status: unknown` 的 MedicationRequest、每個 clinical resource 一筆 Provenance。
+
+重新產生（輸出在 gitignore 的 `artifacts/synthetic-medcloud/`，Downloads 那份是手動複製）：
+
+```powershell
+node scripts/generate-medcloud-shaped-stress-bundle.cjs
+Copy-Item artifacts/synthetic-medcloud/synthetic-medcloud-oncology-v1-2171424.fhir.json $HOME/Downloads/
+```
+
+量測（外部 fixture 路徑；`CONTEXT_REDUCTION_WIDEN=1` 會另外寫 `-widened.md`）：
+
+```powershell
+$env:TZ='Asia/Taipei'; $env:CONTEXT_REDUCTION_REPORT='1'
+$env:CONTEXT_REDUCTION_FIXTURE="$HOME/Downloads/synthetic-medcloud-oncology-v1-2171424.fhir.json"
+$env:CONTEXT_REDUCTION_AS_OF='2026-09-03'; $env:CONTEXT_REDUCTION_OUT_DIR='<repo 外目錄>'
+npx jest --runInBand __tests__/scripts/context-reduction-report.test.ts --silent=false
+```
+
+結果：`all-data` 128,327 → `full` 25,568 tokens（Documents 佔 21,016），100K／150K 預算下皆選 `full`，
+4K 預算才降到 `tight`。**2.17M 的 JSON 只換到 25.6K 的預設 context** —— bridge 形狀有近 50% 是
+Provenance／meta，永遠不會進 context，所以「病歷 token 數」不能直接拿 JSON 大小推估。
+
+> Commit `7f508c18` 的 subject 行開頭多了一個 `@`（`@ docs(handoff): …`），合併前請在下一台機器 amend 掉。

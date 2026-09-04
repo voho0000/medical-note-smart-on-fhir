@@ -530,4 +530,8 @@ if (require.main === module) {
   console.log(JSON.stringify({ output, ...manifest }, null, 2))
 }
 
-module.exports = { buildSyntheticOncologyBundle, validateBundleReferences, estimateTokens }
+// dischargeSummaryLines / REASONS / LABS / labValue / era are the storyline
+// helpers; generate-medcloud-shaped-stress-bundle.cjs reuses them so the
+// bridge-shaped fixture tells the same 8-year oncology story.
+module.exports = { buildSyntheticOncologyBundle, validateBundleReferences, estimateTokens,
+  dischargeSummaryLines, REASONS, LABS, ORGANIZATIONS, ORGANIZATION_DEPARTMENTS, labValue, era, WARNING }
