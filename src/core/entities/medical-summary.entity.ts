@@ -1,3 +1,4 @@
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 // Medical Summary (醫療摘要) — the FIXED, structured shape the AI must return so
 // the UI renders固定卡片 instead of free-text markdown (same philosophy as
 // safety-alert.entity.ts). The AI may ONLY cite data via reference keys taken
@@ -461,6 +462,9 @@ export interface MedicalSummaryResult {
 export type MedicalSummaryGeneration = {
   source: 'live'
   modelId: string
+  modelExecution?: AiModelExecution
+  /** Provenance of the cards currently retained, including across partial retries. */
+  cardModelExecutions?: Partial<Record<MedicalSummaryCardId, AiModelExecution>>
   /** Immutable display name captured at generation time (especially
    * important for user-configured upstream model ids). */
   modelName: string

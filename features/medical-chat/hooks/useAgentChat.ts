@@ -1,6 +1,8 @@
 // Agent Chat Hook - Refactored
 "use client"
 
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import { createModelExecution, reportModelExecution, modelExecutionLabel, markModelExecutionUnreported } from '@/src/shared/utils/ai-model-execution'
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { toast } from "sonner"
 import {
@@ -21,7 +23,6 @@ import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-clie
 import { createUserMessage, createAgentState, formatChatMessageContentForAi } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
-  getModelDefinition,
   getModelDefinitionOrThrow,
   gateModelForKeys,
   isCustomOpenAiModelId,
@@ -270,10 +271,7 @@ export function useAgentChat(
         : endpointScope
 
       const requestTimestamp = new Date().toISOString()
-      const modelDefinition = getModelDefinition(effectiveModelId)
-      const modelName = isCustomEndpoint
-        ? openAiCompatible?.modelId.trim() || modelDefinition?.label || effectiveModelId
-        : modelDefinition?.label || effectiveModelId
+      let modelExecution = createModelExecution(modelId, effectiveModelId, openAiCompatible?.modelId)
       let executionPrompt = systemPrompt
       let executionInput: unknown = []
       let executionOutput = ''
@@ -285,8 +283,9 @@ export function useAgentChat(
         setLatestExecution({
           version: 1,
           feature: 'medical-chat',
-          modelName,
-          modelId: effectiveModelId,
+          modelName: modelExecutionLabel(modelExecution),
+          modelId: modelExecution.actualModelId ?? 'unreported',
+          modelExecution,
           timestamp: requestTimestamp,
           prompt: executionPrompt,
           inputData: executionInput,
@@ -327,6 +326,14 @@ export function useAgentChat(
 
       // Create assistant message with thinking state
       const assistantMessageId = crypto.randomUUID()
+      const updateModelExecution = (execution: AiModelExecution) => {
+        const updated = { ...modelExecution, ...execution }
+        modelExecution = updated
+        if (!mountedRef.current || abortController.signal.aborted) return
+        setChatMessages((prev) => prev.map((m) => m.id === assistantMessageId
+          ? { ...m, modelId: updated.actualModelId ?? effectiveModelId, modelExecution: updated }
+          : m))
+      }
       const thinkingMessage = `🤔 ${t.agent.thinking}`
       const initialState = createAgentState(thinkingMessage)
       setChatMessages([...newMessages, {
@@ -335,6 +342,7 @@ export function useAgentChat(
         content: thinkingMessage,
         timestamp: Date.now(),
         modelId: effectiveModelId,
+        modelExecution,
         dataScope: turnDataScope,
         agentStates: isStandardChat ? undefined : [initialState],
       }])
@@ -481,6 +489,8 @@ export function useAgentChat(
               ...boundedHistory,
             ],
             model: effectiveModelId,
+            requestedModelId: modelId,
+            onModelExecution: updateModelExecution,
             apiKey,
             openAiCompatible,
             signal: abortController.signal,
@@ -524,6 +534,8 @@ export function useAgentChat(
         // Create AI provider using factory
         const { model } = createAiProvider({
           modelId: effectiveModelId,
+          onModelReported: (actualModelId) => updateModelExecution(reportModelExecution(modelExecution, actualModelId)),
+          onModelUnreported: () => updateModelExecution(markModelExecutionUnreported(modelExecution)),
           apiKey: apiKey || undefined,
           useProxy,
           openAiCompatible,

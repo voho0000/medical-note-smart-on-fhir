@@ -68,7 +68,10 @@ import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
 } from '@/src/shared/utils/lab-normalize'
-import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
+import {
+  expandObservationValues,
+  observationDisplayValue,
+} from '@/src/core/utils/observation-value.utils'
 import {
   getAuditedReferenceRangeBounds,
   getInterpretationTag,
@@ -110,6 +113,20 @@ function observationDate(observation: any): string | undefined {
   return observation?.effectiveDateTime
     || observation?.effectivePeriod?.start
     || observation?.issued
+}
+
+function observationConcepts(observation: any): any[] {
+  return [observation?.code, ...(observation?.component ?? []).map((component: any) => component.code)]
+    .filter(Boolean)
+}
+
+function uniqueObservations(collection: ClinicalDataCollection): any[] {
+  const seen = new Set<string>()
+  return [...collection.observations, ...collection.vitalSigns].filter((observation: any) => {
+    if (observation.id && seen.has(observation.id)) return false
+    if (observation.id) seen.add(observation.id)
+    return true
+  })
 }
 
 function diagnosticReportDate(report: any): string | undefined {
@@ -231,7 +248,8 @@ function attachmentDetails(report: any) {
   return details
 }
 
-function observationResult(observation: any) {
+function observationResultFields(observation: any) {
+  const displayValue = observationDisplayValue(observation)
   const interpretation = getInterpretationTag(observation?.interpretation)
   // The source interpretation is authoritative. Only expose a reference range
   // when no interpretation exists, matching the app's audited abnormality
@@ -243,11 +261,14 @@ function observationResult(observation: any) {
   const abnormal = isAbnormalObservation(observation)
 
   return {
-    name: pickName(observation?.code) || 'Unknown',
+    name: pickName(observation?.code) || observation?.code?.coding?.[0]?.code || 'Unknown',
     value: observation?.valueQuantity?.value
       ?? observation?.valueString
-      ?? observation?.valueCodeableConcept?.text,
-    unit: observation?.valueQuantity?.unit || '',
+      ?? observation?.valueBoolean
+      ?? observation?.valueInteger
+      ?? observation?.valueDecimal
+      ?? displayValue?.value,
+    unit: displayValue?.unit || '',
     date: observationDate(observation),
     abnormal: hasNormalityAssessment ? abnormal : null,
     normalityStatus: interpretation?.label
@@ -260,6 +281,31 @@ function observationResult(observation: any) {
         ? 'audited-reference-range'
         : 'not-provided',
     ...(referenceRange ? { referenceRange } : {}),
+    ...(observation?.dataAbsentReason ? {
+      dataAbsentReason: pickName(observation.dataAbsentReason)
+        || observation.dataAbsentReason.coding?.[0]?.code,
+    } : {}),
+  }
+}
+
+function observationComponentFields(observation: any) {
+  const components = observation?.component ?? []
+  if (components.length === 0) return {}
+  // Keep each value with its own name, unit and assessment. A BP panel has no
+  // top-level value; flattening only that field silently loses both pressures.
+  // Missing components remain missing rather than borrowing an older value.
+  return {
+    components: components.map((component: any) => ({
+      ...observationResultFields(component),
+      loinc: loincOf(component.code),
+    })),
+  }
+}
+
+function observationResult(observation: any) {
+  return {
+    ...observationResultFields(observation),
+    ...observationComponentFields(observation),
   }
 }
 
@@ -270,7 +316,7 @@ function diagnosticReportSearchText(report: any): string {
     ...((report?.conclusionCode ?? []).map(conceptSearchText)),
     ...((report?.note ?? []).map((note: any) => note?.text)),
     ...((report?._observations ?? []).map((observation: any) =>
-      conceptSearchText(observation?.code)
+      observationConcepts(observation).map(conceptSearchText).join(' ')
     )),
     ...attachmentDetails(report).flatMap((attachment: any) => [
       attachment.title,
@@ -946,11 +992,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),
         }))
 
-        const obs = collection.observations.filter((o: any) => matches(o.encounter)).map((o: any) => ({
+        const obs = uniqueObservations(collection).filter((o: any) => matches(o.encounter)).map((o: any) => ({
           name: pickName(o.code),
           value: o.valueQuantity?.value ?? o.valueString,
           unit: o.valueQuantity?.unit,
           abnormal: isAbnormalObservation(o),
+          ...observationComponentFields(o),
         }))
 
         const procs = collection.procedures.filter((p: any) => matches(p.encounter)).map((p: any) => ({
@@ -1055,7 +1102,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
     // ── Reports ────────────────────────────────────────────────────────────
 
     queryObservations: tool({
-      description: 'Query patient observations (lab results, vital signs). Supports date range, exact code, fuzzy `codeQuery`, and `abnormalOnly`. For lab panels prefer queryDiagnosticReports; for trend of a specific lab prefer searchObservationByName.',
+      description: 'Query patient observations (lab results, vital signs). Supports date range, exact code, fuzzy `codeQuery`, and `abnormalOnly`. Detailed results preserve panel values (such as systolic/diastolic blood pressure) under components; code/name filters also match components. For lab panels prefer queryDiagnosticReports; for trend of a specific lab prefer searchObservationByName.',
       inputSchema: observationsSchema,
       execute: async ({ category, code, codeQuery, abnormalOnly, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof observationsSchema>) => {
@@ -1067,28 +1114,20 @@ export function createFhirTools(getData: () => AgentDataSource) {
         )
         if (unavailable) return scrub(unavailable)
 
-        const observations = collection!.observations
-        const vitals = collection!.vitalSigns
-        const seen = new Set<string>()
-        const list = [...observations, ...vitals].filter((o: any) => {
-          const id = o.id
-          if (id && seen.has(id)) return false
-          if (id) seen.add(id)
-          return true
-        })
+        const list = uniqueObservations(collection!)
 
         let filtered = list.filter((o: any) => {
           if (!matchCategoryCoding(o.category, category)) return false
           if (code) {
             // Case-insensitive — LLMs commonly mis-case ("body height" vs "Body Height")
             const targetLc = code.toLowerCase()
-            const codes: string[] = (o.code?.coding ?? [])
-              .map((c: any) => String(c?.code || '').toLowerCase())
-              .filter(Boolean)
-            const nameLc = pickName(o.code)?.toLowerCase() ?? ''
-            if (!codes.includes(targetLc) && nameLc !== targetLc) return false
+            const matchesCode = observationConcepts(o).some(concept =>
+              pickName(concept)?.toLowerCase() === targetLc
+              || (concept.coding ?? []).some((coding: any) => String(coding.code || '').toLowerCase() === targetLc)
+            )
+            if (!matchesCode) return false
           }
-          if (codeQuery && !matchSubstring(conceptSearchText(o.code), codeQuery)) return false
+          if (codeQuery && !observationConcepts(o).some(concept => matchSubstring(conceptSearchText(concept), codeQuery))) return false
           if (abnormalOnly && !isAbnormalObservation(o)) return false
           return true
         })
@@ -1143,6 +1182,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             effectiveDateTime: o.effectiveDateTime,
             abnormal: isAbnormalObservation(o),
             status: o.status,
+            ...observationComponentFields(o),
           })),
         })
       },
@@ -1453,7 +1493,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     searchObservationByName: tool({
-      description: 'Fuzzy-search observations by name when you don\'t know the LOINC. e.g. query="HbA1c" returns latest values. Set withTrend=true to get up to 10 most recent values for trending.',
+      description: 'Fuzzy-search observations by name or component name/code when you don\'t know the LOINC. e.g. query="HbA1c" returns latest values. Panel readings retain their named values and units under components. Set withTrend=true to get up to 10 most recent values for trending.',
       inputSchema: observationSearchSchema,
       execute: async ({ query, withTrend, limit }: z.infer<typeof observationSearchSchema>) => {
         const { collection } = getData()
@@ -1464,13 +1504,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         )
         if (unavailable) return scrub(unavailable)
 
-        const all = [...collection!.observations, ...collection!.vitalSigns]
-        const seen = new Set<string>()
-        const unique = all.filter((o: any) => {
-          if (o.id && seen.has(o.id)) return false
-          if (o.id) seen.add(o.id)
-          return true
-        })
+        const unique = uniqueObservations(collection!)
 
         // Grouping key = LOINC code so one analyte stored under different display
         // names (e.g. "eGFR" vs "Estimated GFR", both LOINC 33914-3) collapses
@@ -1491,12 +1525,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           pickName(concept) ||
           'Unknown'
 
-        // Seed match: the query may hit any display name OR coding display, not
-        // just the canonical text.
+        // Match panel and component names/codes, then retain each dated panel
+        // as a whole so systolic and diastolic readings cannot be mixed.
         const nameMatches = (o: any): boolean => {
-          const c = o.code || {}
-          const names = [c.text, ...((c.coding || []).map((x: any) => x.display))]
-          return names.some((n: string | undefined) => matchSubstring(n, query))
+          return observationConcepts(o).some(concept =>
+            matchSubstring(conceptSearchText(concept), query)
+          )
         }
         const seedKeys = new Set(unique.filter(nameMatches).map((o: any) => codeKey(o.code)))
         // Expand to every observation sharing a matched LOINC, so display aliases
@@ -1541,6 +1575,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             date: observationDate(obs),
             effectiveDateTime: obs.effectiveDateTime,
             abnormal: isAbnormalObservation(obs),
+            ...observationComponentFields(obs),
           })),
         })
       },
@@ -1583,11 +1618,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
         )
         if (unavailable) return scrub(unavailable)
 
-        const all = [...collection!.observations, ...collection!.vitalSigns]
+        const all = uniqueObservations(collection!)
         const counts = new Map<string, number>()
         for (const o of all) {
-          const name = pickName(o.code)
-          if (name) counts.set(name, (counts.get(name) ?? 0) + 1)
+          const names = new Set(observationConcepts(o).map(pickName).filter((name): name is string => !!name))
+          for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
         }
         const data = Array.from(counts.entries())
           .sort((a, b) => b[1] - a[1])

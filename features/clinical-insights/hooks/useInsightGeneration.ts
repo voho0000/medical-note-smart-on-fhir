@@ -1,5 +1,6 @@
 // Custom Hook: Insight Generation State Management
 // Business logic delegated to Use Case
+import { createModelExecution, modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
@@ -174,7 +175,9 @@ export function useInsightGeneration({
             { selectedContext: context, contextLimit },
           )
           if (overflow) throw new Error(overflow)
+          let modelExecution = createModelExecution(model, model, modelName)
           const fullText = await ai.query(messages, {
+            onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
             modelId: model,
             // Deterministic decoding improves factual repeatability on local
             // OpenAI-compatible models. A bounded completion also prevents
@@ -194,7 +197,8 @@ export function useInsightGeneration({
             metadata: {
               source: 'live',
               ...generateInsight.buildMetadata(model),
-              modelName,
+              modelName: modelExecutionLabel(modelExecution),
+              modelExecution,
               generatedAt,
               durationMs: Math.max(0, generatedAt - startedAt),
               outputFormat: panel.outputFormat,

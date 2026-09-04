@@ -6,6 +6,7 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -17,6 +18,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
+import { isTemplateTextReference, readTemplateText, removeTemplateText, splitTemplateText, writeTemplateText } from './template-text-storage'
 
 /**
  * How the real-time subscription orders results.
@@ -43,6 +45,8 @@ export interface UserCollectionSyncConfig<T, D extends DocumentData> {
   /** Extract the document id from an app-level item. */
   getId: (item: T) => string
   subscribeOrdering: SubscribeOrdering<T>
+  /** Full prompt fields use immutable external bodies when a document is too large. */
+  largeTextField?: string
 }
 
 export interface UserCollectionSync<T> {
@@ -69,7 +73,38 @@ export function createUserCollectionSync<T, D extends DocumentData>(
     toDoc,
     getId,
     subscribeOrdering,
+    largeTextField,
   } = config
+
+  async function decode(id: string, data: D): Promise<T> {
+    if (largeTextField && data.textBody !== undefined) {
+      if (!isTemplateTextReference(data.textBody)) throw new Error('Invalid template content reference')
+      return fromDoc(id, { ...data, [largeTextField]: await readTemplateText(data.textBody) })
+    }
+    return fromDoc(id, data)
+  }
+
+  async function encode(userId: string, item: T, now: Timestamp): Promise<DocumentData> {
+    const data = toDoc(item, now)
+    if (largeTextField && typeof data[largeTextField] === 'string' && splitTemplateText(data[largeTextField]).length > 1) {
+      const textBody = await writeTemplateText(data[largeTextField], userId, undefined, { collectionName, itemId: getId(item) })
+      return { ...data, [largeTextField]: '', textBody }
+    }
+    return data
+  }
+
+  async function oldBodyIds(userId: string, ids: string[]): Promise<string[]> {
+    if (!largeTextField || !db) return []
+    const snapshots = await Promise.all(ids.map(id => getDoc(doc(db!, 'users', userId, collectionName, id))))
+    return snapshots.flatMap(snapshot => {
+      const body = snapshot.data()?.textBody
+      return isTemplateTextReference(body) ? [body.id] : []
+    })
+  }
+
+  async function cleanBodies(ids: string[]) {
+    await Promise.all(ids.map(id => removeTemplateText(id).catch(() => {})))
+  }
 
   async function getAll(userId: string): Promise<T[]> {
     if (!db) return []
@@ -79,7 +114,7 @@ export function createUserCollectionSync<T, D extends DocumentData>(
       const q = query(itemsRef, orderBy('order', 'asc'))
       const snapshot = await getDocs(q)
 
-      return snapshot.docs.map(docSnap => fromDoc(docSnap.id, docSnap.data() as D))
+      return await Promise.all(snapshot.docs.map(docSnap => decode(docSnap.id, docSnap.data() as D)))
     } catch (error) {
       console.error(`[${logLabel}] Error loading ${nounPlural}:`, error)
       return []
@@ -88,15 +123,19 @@ export function createUserCollectionSync<T, D extends DocumentData>(
 
   async function save(userId: string, item: T): Promise<boolean> {
     if (!db) return false
-
+    let data: DocumentData | undefined
     try {
       const itemRef = doc(db, 'users', userId, collectionName, getId(item))
       const now = Timestamp.now()
 
-      await setDoc(itemRef, toDoc(item, now))
+      const oldBodies = await oldBodyIds(userId, [getId(item)])
+      data = await encode(userId, item, now)
+      await setDoc(itemRef, data)
+      await cleanBodies(oldBodies)
 
       return true
     } catch (error) {
+      if (isTemplateTextReference(data?.textBody)) await cleanBodies([data.textBody.id])
       console.error(`[${logLabel}] Error saving ${nounSingular}:`, error)
       return false
     }
@@ -107,7 +146,9 @@ export function createUserCollectionSync<T, D extends DocumentData>(
 
     try {
       const itemRef = doc(db, 'users', userId, collectionName, itemId)
+      const oldBodies = await oldBodyIds(userId, [itemId])
       await deleteDoc(itemRef)
+      await cleanBodies(oldBodies)
       return true
     } catch (error) {
       console.error(`[${logLabel}] Error deleting ${nounSingular}:`, error)
@@ -125,15 +166,18 @@ export function createUserCollectionSync<T, D extends DocumentData>(
         : // Don't use orderBy in Firestore - sort in memory to avoid index issues
           query(itemsRef)
 
-    return onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(docSnap => fromDoc(docSnap.id, docSnap.data() as D))
-      if (subscribeOrdering.mode === 'memory') {
-        items.sort(subscribeOrdering.compare)
-      }
-      onUpdate(items)
+    let generation = 0
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const current = ++generation
+      Promise.all(snapshot.docs.map(docSnap => decode(docSnap.id, docSnap.data() as D))).then(items => {
+        if (current !== generation) return
+        if (subscribeOrdering.mode === 'memory') items.sort(subscribeOrdering.compare)
+        onUpdate(items)
+      }).catch(error => console.error(`[${logLabel}] Error loading template content:`, error))
     }, (error) => {
       console.error(`[${logLabel}] Error in subscription:`, error)
     })
+    return () => { generation += 1; unsubscribe() }
   }
 
   async function batchSave(userId: string, items: T[]): Promise<boolean> {
@@ -155,7 +199,7 @@ export function createUserCollectionSync<T, D extends DocumentData>(
    */
   async function applyChanges(userId: string, upserts: T[], deleteIds: string[]): Promise<boolean> {
     if (!db) return false
-
+    const prepared: DocumentData[] = []
     try {
       const upsertsById = new Map(upserts.map((item) => [getId(item), item]))
       const deletes = [...new Set(deleteIds)].filter((id) => !upsertsById.has(id))
@@ -169,11 +213,19 @@ export function createUserCollectionSync<T, D extends DocumentData>(
       const itemsRef = collection(db, 'users', userId, collectionName)
       const batch = writeBatch(db)
       const now = Timestamp.now()
+      const oldBodies = await oldBodyIds(userId, [...upsertsById.keys(), ...deletes])
+      // Bodies are written privately before the one atomic parent commit.
+      for (const [id, item] of upsertsById) {
+        const data = await encode(userId, item, now)
+        prepared.push(data)
+        batch.set(doc(itemsRef, id), data)
+      }
       deletes.forEach((id) => batch.delete(doc(itemsRef, id)))
-      upsertsById.forEach((item, id) => batch.set(doc(itemsRef, id), toDoc(item, now)))
       await batch.commit()
+      await cleanBodies(oldBodies)
       return true
     } catch (error) {
+      await cleanBodies(prepared.flatMap(data => isTemplateTextReference(data.textBody) ? [data.textBody.id] : []))
       console.error(`[${logLabel}] Error applying ${nounPlural} changes:`, error)
       return false
     }

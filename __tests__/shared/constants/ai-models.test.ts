@@ -122,9 +122,14 @@ describe('MODEL_CATALOG contract', () => {
 
   it('keeps the current user-key Gemini and Claude lineup', () => {
     expect(GEMINI_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'gemini-3.7-flash',
       'gemini-3.1-pro-preview',
     ])
+    expect(getModelDefinition('gemini-3.8-flash')).toMatchObject({
+      provider: 'gemini',
+      access: 'proxy-or-key',
+      apiSurface: 'gemini-generate-content',
+      status: 'available',
+    })
     expect(CLAUDE_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
       'claude-sonnet-5',
       'claude-opus-5',

@@ -8,8 +8,11 @@ import { cn } from "@/src/shared/utils/cn.utils"
 function ScrollArea({
   className,
   children,
+  viewportProps,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+  viewportProps?: React.ComponentProps<typeof ScrollAreaPrimitive.Viewport>
+}) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
@@ -17,12 +20,13 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        {...viewportProps}
         data-slot="scroll-area-viewport"
         // overscroll-contain: reaching the top of a list must not hand the
         // gesture to the browser. On Chrome Android that means a pull-to-
         // refresh that reloads the SPA and destroys in-flight AI streams,
         // chat drafts and calculator input — all of which live in memory.
-        className="focus-visible:ring-ring/50 size-full overscroll-contain rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
+        className={cn("focus-visible:ring-ring/50 size-full overscroll-contain rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1", viewportProps?.className)}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

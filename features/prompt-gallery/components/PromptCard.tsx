@@ -61,8 +61,17 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
 
   return (
     <Card 
-      className="!gap-0 !py-0 flex cursor-pointer flex-col rounded-lg border-border shadow-none transition-colors hover:bg-muted/40 hover:shadow-none"
-      onClick={() => onPreview(prompt)}
+      className="!gap-0 !py-0 flex cursor-pointer flex-col rounded-lg border-border shadow-none transition-colors hover:bg-muted/40 hover:shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      role="button"
+      tabIndex={0}
+      aria-label={prompt.title}
+      onClick={(event) => { event.currentTarget.focus(); onPreview(prompt) }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onPreview(prompt)
+        }
+      }}
     >
       <CardHeader className="!pb-0 !pt-2 !px-3">
         <CardTitle className="text-sm line-clamp-1 leading-tight" title={prompt.title}>

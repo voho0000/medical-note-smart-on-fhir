@@ -145,7 +145,6 @@ export function hasExplicitSurgicalEvidence(procedure: any): boolean {
 
   return SURGICAL_PROCEDURE_TEXT.test(procedureSearchText(procedure))
 }
-
 export function isAiExcludedRehabilitationProcedure(procedure: any): boolean {
   return REHABILITATION_TEXT.test(procedureSearchText(procedure))
 }
@@ -157,7 +156,6 @@ export function isAiExcludedDentalProcedure(procedure: any): boolean {
 export function isAiExcludedRoutineProcedure(procedure: any): boolean {
   return ROUTINE_PROCEDURE_TEXT.test(conceptSearchText(procedure?.code))
 }
-
 function isAiExcludedEncounterByOwnFields(encounter: any): boolean {
   if (encounterCareDiscipline(encounter) !== 'western') return true
   return REHABILITATION_TEXT.test(encounterSearchText(encounter))

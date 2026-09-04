@@ -4,13 +4,14 @@
  */
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import {
   AlertCircle,
+  ArrowLeft,
   Check,
-  CheckCircle2,
-  ChevronDown,
   ClipboardList,
   Loader2,
+  Maximize2,
   MessageSquare,
   ShieldCheck,
   Stethoscope,
@@ -19,23 +20,17 @@ import {
 } from 'lucide-react'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -51,16 +46,19 @@ import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
 import { createSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { PromptCategory, PromptSpecialty, PromptType } from '../types/prompt.types'
-import type {
-  InsightLanguagePolicy,
-  InsightOutputFormat,
+import { PromptSpecialtyPicker } from './PromptSpecialtyPicker'
+import {
+  coerceInsightOutputFormat,
+  INSIGHT_OUTPUT_FORMATS,
+  type InsightLanguagePolicy,
+  type InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
 
 const TITLE_MAX_LENGTH = 100
 const DESCRIPTION_MAX_LENGTH = 180
-const PROMPT_MAX_LENGTH = 8000
 const TAG_MAX_LENGTH = 24
 const TAG_MAX_COUNT = 8
 
@@ -74,6 +72,7 @@ interface SharePromptDialogProps {
   initialOutputFormat?: InsightOutputFormat
   initialLanguagePolicy?: InsightLanguagePolicy
   onSuccess?: () => void
+  guidedPreview?: boolean
 }
 
 export function SharePromptDialog(props: SharePromptDialogProps) {
@@ -92,6 +91,7 @@ function SharePromptDialogForm({
   initialOutputFormat,
   initialLanguagePolicy,
   onSuccess,
+  guidedPreview = false,
 }: SharePromptDialogProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
@@ -100,6 +100,9 @@ function SharePromptDialogForm({
   const [title, setTitle] = useState(initialTitle || '')
   const [description, setDescription] = useState(initialDescription || '')
   const [prompt, setPrompt] = useState(initialPrompt || '')
+  const [outputFormat, setOutputFormat] = useState<InsightOutputFormat>(() =>
+    coerceInsightOutputFormat(initialOutputFormat),
+  )
   const [selectedTypes, setSelectedTypes] = useState<PromptType[]>([initialType])
   const [category, setCategory] = useState<PromptCategory>(
     initialType === 'summary' ? 'summary' : 'other',
@@ -107,10 +110,9 @@ function SharePromptDialogForm({
   const [selectedSpecialties, setSelectedSpecialties] = useState<PromptSpecialty[]>(['general'])
   const [tagInput, setTagInput] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [isAnonymous, setIsAnonymous] = useState(false)
+  const [isAnonymous, setIsAnonymous] = useState(!user?.displayName?.trim())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
 
   const categories: PromptCategory[] = [
     'soap', 'admission', 'discharge', 'safety', 'summary',
@@ -118,15 +120,11 @@ function SharePromptDialogForm({
   ]
 
   const types: PromptType[] = ['chat', 'summary']
-
-  const specialties: PromptSpecialty[] = [
-    'general', 'internal', 'surgery', 'emergency',
-    'pediatrics', 'obstetrics', 'psychiatry', 'neurology',
-    'rehabilitation', 'anesthesiology', 'ophthalmology',
-    'dermatology', 'urology', 'orthopedics', 'ent',
-    'radiology', 'radiation_oncology', 'pathology',
-    'nuclear_medicine', 'plastic_surgery', 'family_medicine', 'other',
-  ]
+  const outputFormatLabels: Record<InsightOutputFormat, string> = {
+    'plain-text': t.settings.outputFormatPlain,
+    markdown: t.settings.outputFormatMarkdown,
+    html: t.settings.outputFormatHtml,
+  }
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!loading) onOpenChange(nextOpen)
@@ -157,15 +155,8 @@ function SharePromptDialogForm({
     if (type === 'summary' && category === 'other') setCategory('summary')
   }
 
-  const toggleSpecialty = (specialty: PromptSpecialty) => {
-    if (selectedSpecialties.includes(specialty)) {
-      setSelectedSpecialties(selectedSpecialties.filter((item) => item !== specialty))
-    } else {
-      setSelectedSpecialties([...selectedSpecialties, specialty])
-    }
-  }
-
   const handleShare = async () => {
+    if (guidedPreview) return
     if (!user) {
       setError(t.promptGallery.loginRequiredDesc)
       return
@@ -194,26 +185,22 @@ function SharePromptDialogForm({
       await createSharedPrompt({
         title: title.trim(),
         description: description.trim() || undefined,
-        prompt: prompt.trim(),
+        prompt,
         types: selectedTypes,
         category,
         specialty: audience === 'medical' ? selectedSpecialties : [],
         audience: [audience],
         tags,
         authorId: user.uid,
-        authorName: isAnonymous ? undefined : user.displayName || user.email || undefined,
+        authorName: isAnonymous ? undefined : user.displayName?.trim() || undefined,
         isAnonymous,
-        outputFormat: initialOutputFormat,
+        outputFormat,
         languagePolicy: initialLanguagePolicy,
       })
 
-      setSuccess(true)
       onSuccess?.()
-
-      window.setTimeout(() => {
-        onOpenChange(false)
-        setSuccess(false)
-      }, 1000)
+      toast.success(t.promptGallery.shareSuccess)
+      onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.promptGallery.shareError)
     } finally {
@@ -230,15 +217,19 @@ function SharePromptDialogForm({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="flex max-h-[94vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+    <Dialog open={open} onOpenChange={(next) => { if (!guidedPreview) handleDialogOpenChange(next) }} modal={!guidedPreview}>
+      <DialogContent
+        data-tour="custom-summary-share-form"
+        className={cn("flex max-h-[94vh] max-w-5xl flex-col gap-0 overflow-hidden p-0", guidedPreview && GUIDED_PREVIEW_DIALOG_CLASSES)}
+        {...guidedPreviewEvents(guidedPreview)}
+      >
         <DialogHeader className="border-b px-5 py-4 pr-12">
           <DialogTitle>{t.promptGallery.sharePrompt}</DialogTitle>
           <DialogDescription>{t.promptGallery.shareDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <Alert className="mb-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-500/25 dark:bg-blue-500/10">
+          <Alert data-tour="template-share-review" className="mb-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-500/25 dark:bg-blue-500/10">
             <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <AlertTitle className="mb-0.5 text-sm">{t.promptGallery.sharePrivacyTitle}</AlertTitle>
             <AlertDescription className="text-xs leading-relaxed">
@@ -246,7 +237,7 @@ function SharePromptDialogForm({
             </AlertDescription>
           </Alert>
 
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
+          <div className={cn("grid items-start gap-4", !guidedPreview && "lg:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]")}>
           <section className="space-y-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -280,19 +271,74 @@ function SharePromptDialogForm({
               />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="share-template-prompt">{t.promptGallery.promptLabel} *</Label>
-                <span className="text-xs text-muted-foreground">{prompt.length}/{PROMPT_MAX_LENGTH}</span>
+            <Dialog>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="share-template-prompt">{t.promptGallery.promptLabel} *</Label>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs tabular-nums text-muted-foreground">{prompt.length} {t.clinicalInsights.chars}</span>
+                    <DialogTrigger asChild>
+                      <Button type="button" variant="outline" size="sm" disabled={guidedPreview || loading}
+                        className="gap-1.5 px-2 text-xs shadow-none max-md:min-h-11">
+                        <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t.settings.expandPromptEditor}
+                      </Button>
+                    </DialogTrigger>
+                  </div>
+                </div>
+                <Textarea
+                  id="share-template-prompt"
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder={t.promptGallery.promptPlaceholder}
+                  className="h-48 min-h-0 field-sizing-fixed resize-none overflow-y-auto text-sm leading-relaxed shadow-none"
+                />
               </div>
-              <Textarea
-                id="share-template-prompt"
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder={t.promptGallery.promptPlaceholder}
-                maxLength={PROMPT_MAX_LENGTH}
-                className="min-h-44 resize-y text-sm leading-relaxed"
-              />
+              <DialogContent showCloseButton={false}
+                className="flex h-[100dvh] max-h-[100dvh] max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(90dvh,54rem)] sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-lg sm:border">
+                <div className="flex shrink-0 items-center gap-3 border-b px-3 py-3 sm:px-4">
+                  <DialogClose asChild>
+                    <Button type="button" variant="ghost" size="sm" className="shrink-0 gap-1.5 px-2 max-md:min-h-11">
+                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                      {t.promptGallery.backToShareForm}
+                    </Button>
+                  </DialogClose>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="text-sm sm:text-base">{t.settings.promptEditorTitle}</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs tabular-nums">
+                      {prompt.length} {t.clinicalInsights.chars} · {outputFormatLabels[outputFormat]}
+                    </DialogDescription>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 p-3 sm:p-4">
+                  <Textarea
+                    aria-label={t.promptGallery.promptLabel}
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    placeholder={t.promptGallery.promptPlaceholder}
+                    className="h-full min-h-0 field-sizing-fixed resize-none overflow-y-auto text-sm leading-relaxed shadow-none"
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <div className="space-y-2">
+              <Label htmlFor="share-template-output-format">{t.promptGallery.outputFormatLabel}</Label>
+              <Select value={outputFormat} onValueChange={(value) => setOutputFormat(coerceInsightOutputFormat(value))}>
+                <SelectTrigger id="share-template-output-format" aria-describedby="share-template-output-format-hint" className="w-full shadow-none max-md:min-h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INSIGHT_OUTPUT_FORMATS.map((format) => (
+                    <SelectItem key={format} value={format} className="max-md:min-h-11">
+                      {outputFormatLabels[format]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p id="share-template-output-format-hint" className="text-xs leading-relaxed text-muted-foreground">
+                {t.promptGallery.outputFormatHint}
+              </p>
             </div>
           </section>
 
@@ -327,12 +373,7 @@ function SharePromptDialogForm({
                       selected && 'border-primary bg-primary/5 ring-1 ring-primary/30',
                     )}
                   >
-                    <span className={cn(
-                      'mt-0.5 rounded-md p-1.5',
-                      isChat
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                        : 'bg-teal-100 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
-                    )}>
+                    <span className="mt-0.5 text-muted-foreground">
                       <TypeIcon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 pr-5">
@@ -373,35 +414,13 @@ function SharePromptDialogForm({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>{t.promptGallery.specialtyLabel} *</Label>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-between font-normal">
-                        <span className="truncate">
-                          {selectedSpecialties.length === 0
-                            ? t.promptGallery.selectSpecialty
-                            : t.promptGallery.selectedSpecialties.replace(
-                              '{count}',
-                              String(selectedSpecialties.length),
-                            )}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="max-h-[300px] w-[min(400px,calc(100vw-3rem))] overflow-y-auto">
-                      <DropdownMenuLabel>{t.promptGallery.selectSpecialtyLabel}</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {specialties.map((item) => (
-                        <DropdownMenuCheckboxItem
-                          key={item}
-                          checked={selectedSpecialties.includes(item)}
-                          onCheckedChange={() => toggleSpecialty(item)}
-                        >
-                          {getSpecialtyLabel(item)}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Label htmlFor="share-template-specialty">{t.promptGallery.specialtyLabel} *</Label>
+                  <PromptSpecialtyPicker id="share-template-specialty" multiple
+                    value={selectedSpecialties} onChange={setSelectedSpecialties}
+                    describedBy="share-template-selected-specialties" />
+                  <p id="share-template-selected-specialties" className="text-xs leading-relaxed text-muted-foreground">
+                    {selectedSpecialties.map(getSpecialtyLabel).join(' / ')}
+                  </p>
                 </div>
               </div>
             </section>
@@ -465,13 +484,16 @@ function SharePromptDialogForm({
                   {t.promptGallery.anonymousLabel}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {isAnonymous ? t.promptGallery.anonymousOn : t.promptGallery.anonymousOff}
+                  {isAnonymous || !user?.displayName?.trim()
+                    ? t.promptGallery.anonymousOn
+                    : `${t.promptGallery.anonymousOff}：${user.displayName}`}
                 </p>
               </div>
               <Switch
                 id="share-template-anonymous"
                 checked={isAnonymous}
                 onCheckedChange={setIsAnonymous}
+                disabled={!user?.displayName?.trim()}
               />
             </div>
           </section>
@@ -483,14 +505,6 @@ function SharePromptDialogForm({
             </Alert>
           )}
 
-          {success && (
-            <Alert className="border-green-200 bg-green-50 dark:border-green-500/25 dark:bg-green-500/10">
-              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-300" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
-                {t.promptGallery.shareSuccess}
-              </AlertDescription>
-            </Alert>
-          )}
           </div>
           </div>
         </div>
@@ -499,7 +513,7 @@ function SharePromptDialogForm({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             {t.common.cancel}
           </Button>
-          <Button onClick={handleShare} disabled={loading || success || !title.trim() || !prompt.trim()}>
+          <Button onClick={handleShare} disabled={guidedPreview || loading || !title.trim() || !prompt.trim()}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {loading ? t.promptGallery.sharing : t.promptGallery.sharePrompt}
           </Button>

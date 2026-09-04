@@ -35,7 +35,7 @@ describe('large-chart data selection mounting', () => {
     const started = performance.now()
     const { unmount } = render(<DataSelectionPanel clinicalData={mockData} selectedData={ALL_DATA_SELECTION} filters={ALL_DATA_FILTERS} onSelectionChange={jest.fn()} onFiltersChange={jest.fn()} />)
     const elapsed = Math.round(performance.now() - started)
-    expect(screen.getByRole('switch', { name: '文件', exact: true })).toBeChecked()
+    expect(screen.getByRole('switch', { name: /^文件$/ })).toBeChecked()
     expect(screen.getByTestId('model-fitted-scope')).toBeInTheDocument()
     // full → trimmed → compact, exactly once each for the shared view.
     expect(registry.mock.calls.filter(([key]) => key === 'imagingReports')).toHaveLength(3)

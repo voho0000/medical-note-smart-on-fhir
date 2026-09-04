@@ -43,6 +43,7 @@ interface FirestoreClinicalInsightPanel {
 
 const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinicalInsightPanel>({
   collectionName: 'clinicalInsightPanels',
+  largeTextField: 'prompt',
   logLabel: 'Clinical Insights Sync',
   nounSingular: 'panel',
   nounPlural: 'panels',

@@ -1,3 +1,4 @@
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 // Clinical Insights Types
 import type { AiQueryResponse } from "@/src/core/entities/ai.entity"
 import type {
@@ -8,6 +9,7 @@ import type {
 export type QueryMetadata = AiQueryResponse['metadata']
 
 export interface InsightGenerationMetadata extends QueryMetadata {
+  modelExecution?: AiModelExecution
   /** Live generation or a bundled, audited demo snapshot. Legacy entries may omit it. */
   source?: 'live' | 'pre-generated'
   /** Human-readable model identity captured at generation time. */

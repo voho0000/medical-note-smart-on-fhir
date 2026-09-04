@@ -31,7 +31,7 @@ describe('HeaderAuthButton', () => {
       whisperUsage: 0,
       perplexityLimit: 0,
       whisperLimit: 0,
-    } as ReturnType<typeof useAuth>)
+    } as unknown as ReturnType<typeof useAuth>)
 
     render(<HeaderAuthButton />)
 

@@ -3,6 +3,7 @@
  * Creates AI providers (OpenAI/Gemini) with proxy or direct API configuration
  */
 
+import { withModelReporting } from '../streaming/model-reporting.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -26,6 +27,8 @@ export interface ProviderConfig {
   modelId: string
   apiKey?: string
   useProxy: boolean
+  onModelReported?: (modelId: string | null) => void
+  onModelUnreported?: () => void
   openAiCompatible?: OpenAiCompatibleConfig | null
 }
 
@@ -39,6 +42,11 @@ export class AiProviderFactory {
    * Create AI provider with appropriate configuration
    */
   create(config: ProviderConfig): ProviderResult {
+    const result = this.createProvider(config)
+    return { ...result, model: withModelReporting(result.model, result.isGemini, config.onModelReported, config.onModelUnreported) }
+  }
+
+  private createProvider(config: ProviderConfig): ProviderResult {
     const isCustom = isCustomOpenAiModelId(config.modelId)
     if (isCustom) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible)

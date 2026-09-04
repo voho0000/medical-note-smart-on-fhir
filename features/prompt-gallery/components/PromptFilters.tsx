@@ -3,7 +3,9 @@
  * Filter controls for the prompt gallery
  */
 
+import { useId } from 'react'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -15,6 +17,7 @@ import { Search } from 'lucide-react'
 import type { PromptType, PromptCategory, PromptSpecialty } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { PromptSpecialtyPicker } from './PromptSpecialtyPicker'
 
 interface PromptFiltersProps {
   searchQuery: string
@@ -39,6 +42,7 @@ export function PromptFilters({
 }: PromptFiltersProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
+  const filterId = useId()
   // Medical categories and specialties don't apply to patient-facing prompts.
   const showMedicalFilters = audience === 'medical'
 
@@ -55,18 +59,6 @@ export function PromptFilters({
     'procedure',
     'other',
   ]
-  const specialties: (PromptSpecialty | 'all')[] = [
-    'all',
-    'general',
-    'internal',
-    'surgery',
-    'emergency',
-    'pediatrics',
-    'obstetrics',
-    'psychiatry',
-    'other',
-  ]
-
   const getTypeLabel = (type: PromptType | 'all') => {
     if (type === 'all') return t.promptGallery.allTypes
     switch (type) {
@@ -82,11 +74,6 @@ export function PromptFilters({
   const getCategoryLabel = (category: PromptCategory | 'all') => {
     if (category === 'all') return t.promptGallery.allCategories
     return t.promptGallery.categories[category as keyof typeof t.promptGallery.categories] || category
-  }
-
-  const getSpecialtyLabel = (specialty: PromptSpecialty | 'all') => {
-    if (specialty === 'all') return t.promptGallery.allSpecialties
-    return t.promptGallery.specialties[specialty as keyof typeof t.promptGallery.specialties] || specialty
   }
 
   return (
@@ -106,65 +93,60 @@ export function PromptFilters({
           placeholder={t.promptGallery.searchPlaceholder}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 h-9 [&::-webkit-search-cancel-button]:appearance-none"
+          aria-label={t.promptGallery.searchPlaceholder}
+          className="pl-9 h-9 shadow-none max-md:min-h-11 [&::-webkit-search-cancel-button]:appearance-none"
         />
       </div>
 
-      {/* Filters - Compact Single Row */}
-      <div className="flex items-center gap-2">
-        <Select
-          value={selectedType || 'all'}
-          onValueChange={(value) => onTypeChange(value === 'all' ? undefined : (value as PromptType))}
-        >
-          <SelectTrigger className="h-9 w-[140px]">
-            <SelectValue placeholder={t.promptGallery.filterByType} />
-          </SelectTrigger>
-          <SelectContent>
-            {types.map((type) => (
-              <SelectItem key={type} value={type}>
-                {getTypeLabel(type)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Keep the longer specialty names on their own row on phones. */}
+      <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[140px_140px_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-1.5">
+          <Label htmlFor={`${filterId}-type`}>{t.promptGallery.filterByType}</Label>
+          <Select
+            value={selectedType || 'all'}
+            onValueChange={(value) => onTypeChange(value === 'all' ? undefined : (value as PromptType))}
+          >
+            <SelectTrigger id={`${filterId}-type`} className="h-9 w-full shadow-none max-md:min-h-11">
+              <SelectValue placeholder={t.promptGallery.filterByType} />
+            </SelectTrigger>
+            <SelectContent>
+              {types.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {getTypeLabel(type)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {showMedicalFilters && (
           <>
-            <Select
-              value={selectedCategory || 'all'}
-              onValueChange={(value) =>
-                onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
-              }
-            >
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder={t.promptGallery.filterByCategory} />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {getCategoryLabel(category)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`${filterId}-category`}>{t.promptGallery.filterByCategory}</Label>
+              <Select
+                value={selectedCategory || 'all'}
+                onValueChange={(value) =>
+                  onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
+                }
+              >
+                <SelectTrigger id={`${filterId}-category`} className="h-9 w-full shadow-none max-md:min-h-11">
+                  <SelectValue placeholder={t.promptGallery.filterByCategory} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {getCategoryLabel(category)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={selectedSpecialty || 'all'}
-              onValueChange={(value) =>
-                onSpecialtyChange(value === 'all' ? undefined : (value as PromptSpecialty))
-              }
-            >
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder={t.promptGallery.filterBySpecialty} />
-              </SelectTrigger>
-              <SelectContent>
-                {specialties.map((specialty) => (
-                  <SelectItem key={specialty} value={specialty}>
-                    {getSpecialtyLabel(specialty)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-1">
+              <Label htmlFor={`${filterId}-specialty`}>{t.promptGallery.filterBySpecialty}</Label>
+              <PromptSpecialtyPicker id={`${filterId}-specialty`} className="h-9"
+                value={selectedSpecialty} onChange={onSpecialtyChange} />
+            </div>
           </>
         )}
 

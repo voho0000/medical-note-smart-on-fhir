@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 import {
   MedicalSummaryCardNav,
   type MedicalSummaryCardNavItem,
@@ -29,6 +31,27 @@ class ResizeObserverMock {
 }
 
 describe('MedicalSummaryCardNav', () => {
+  it('keeps unreported model details in an info hint beside the model name', async () => {
+    const execution = createModelExecution('gemini-3.8-flash')
+    render(<LanguageProvider><MedicalSummaryCardNav items={items} ariaLabel="摘要" onJump={() => {}}
+      generationInfo={{ modelName: 'Gemini 3.8 Flash', ariaLabel: 'Gemini 3.8 Flash', modelExecution: execution,
+        generatedAtIso: '2026-09-03T00:00:00.000Z', generatedAtText: '2026/09/03 08:00' }}
+    /></LanguageProvider>)
+    expect(screen.getByTestId('medical-summary-generation-meta')).toHaveTextContent('Gemini 3.8 Flash')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    fireEvent.focus(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('API 未回報實際模型')
+  })
+
+  it('keeps the actual model visible with a fallback notice below the navigation', () => {
+    const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    render(<LanguageProvider><MedicalSummaryCardNav items={items} ariaLabel="摘要" onJump={() => {}}
+      generationInfo={{ modelName: 'Gemini 3.1 Flash-Lite', ariaLabel: 'Gemini 3.1 Flash-Lite', modelExecution: execution }}
+    /></LanguageProvider>)
+    expect(screen.getByTestId('medical-summary-generation-meta')).toHaveTextContent('Gemini 3.1 Flash-Lite')
+    expect(screen.getByRole('status')).toHaveTextContent('本次未能依選擇的 Gemini 3.8 Flash 完成')
+  })
+
   beforeAll(() => {
     Object.defineProperty(globalThis, 'ResizeObserver', {
       configurable: true,
@@ -127,7 +150,7 @@ describe('MedicalSummaryCardNav', () => {
       'aria-label',
       '由 MODEL_NAME 於 2026/07/19 14:32 產生，總耗時 01:23',
     )
-    fireEvent.focus(provenance)
+    fireEvent.focus(screen.getByText('MODEL_NAME'))
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent('MODEL_NAME')
     expect(tooltip).toHaveTextContent('產生時間：2026/07/19 14:32')
@@ -199,7 +222,7 @@ describe('MedicalSummaryCardNav', () => {
     expect(provenance).toHaveAttribute('aria-label', expect.stringContaining(longModelName))
     expect(provenance).not.toHaveAttribute('title')
 
-    fireEvent.focus(provenance)
+    fireEvent.focus(modelName)
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent(longModelName)
     expect(tooltip).toHaveTextContent('產生時間：2026/07/20 16:44')

@@ -4,6 +4,7 @@
 // dispatch by provider, but the implementation delegates to generateText()
 // instead of hand-rolled fetch. Proxy routing comes from AiProviderFactory.
 
+import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from '@/src/shared/utils/ai-model-execution'
 import { generateText } from 'ai'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
@@ -39,7 +40,10 @@ export class ClaudeService {
       throw new Error('Claude API key is required for this model. Please add it in Settings.')
     }
 
+    let modelExecution = createModelExecution(request.modelId)
     const { model } = this.providerFactory.create({
+      onModelReported: (id) => { modelExecution = reportModelExecution(modelExecution, id) },
+      onModelUnreported: () => { modelExecution = markModelExecutionUnreported(modelExecution) },
       modelId: request.modelId,
       apiKey: this.apiKey ?? undefined,
       useProxy,
@@ -61,7 +65,8 @@ export class ClaudeService {
     return {
       text: result.text,
       metadata: {
-        modelId: request.modelId,
+        modelId: modelExecution.actualModelId ?? 'unreported',
+        modelExecution,
         provider: 'claude',
         tokensUsed: result.usage?.totalTokens,
       },

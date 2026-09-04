@@ -7,6 +7,8 @@
 // forwards the SDK's native body verbatim (passthrough), so chat and agent
 // mode share one path.
 
+import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
+import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
@@ -34,6 +36,8 @@ export interface StreamConfig {
   openAiCompatible?: OpenAiCompatibleConfig | null
   signal: AbortSignal
   onChunk: (content: string) => void
+  requestedModelId?: string
+  onModelExecution?: (execution: AiModelExecution) => void
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
@@ -64,8 +68,18 @@ export class AiSdkStreamAdapter {
       : gateModel(config.model, !!config.apiKey)
     const definition = getModelDefinitionOrThrow(modelId)
     const useProxy = this.shouldUseProxy(config.apiKey, modelId)
+    let modelExecution = createModelExecution(config.requestedModelId ?? config.model, modelId, config.openAiCompatible?.modelId)
+    config.onModelExecution?.(modelExecution)
     const { model } = this.providerFactory.create({
       modelId,
+      onModelUnreported: () => {
+        modelExecution = markModelExecutionUnreported(modelExecution)
+        config.onModelExecution?.(modelExecution)
+      },
+      onModelReported: (actualModelId) => {
+        modelExecution = reportModelExecution(modelExecution, actualModelId)
+        config.onModelExecution?.(modelExecution)
+      },
       apiKey: config.apiKey ?? undefined,
       useProxy,
       openAiCompatible: config.openAiCompatible,

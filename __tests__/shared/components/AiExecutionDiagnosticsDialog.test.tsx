@@ -3,6 +3,8 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react'
 import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutionDiagnosticsDialog'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { createModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 const labels = {
   title: 'Diagnostics preview',
@@ -31,7 +33,7 @@ describe('AiExecutionDiagnosticsDialog', () => {
     const onDownloadAll = jest.fn()
     const onDownloadRecord = jest.fn()
     render(
-      <AiExecutionDiagnosticsDialog
+      <LanguageProvider><AiExecutionDiagnosticsDialog
         open
         onOpenChange={jest.fn()}
         labels={labels}
@@ -39,8 +41,9 @@ describe('AiExecutionDiagnosticsDialog', () => {
         onDownloadRecord={onDownloadRecord}
         records={[{
           id: 'execution-1',
-          modelName: 'Gemini Flash-Lite',
-          modelId: 'gemini-flash-lite',
+          modelName: 'Actual model not reported',
+          modelId: 'unreported',
+          modelExecution: createModelExecution('gemini-3.8-flash'),
           timestamp: '2026-08-05T02:51:53.866Z',
           prompt: 'SYSTEM PROMPT',
           inputData: { patient: 'masked' },
@@ -49,13 +52,16 @@ describe('AiExecutionDiagnosticsDialog', () => {
           errorMessage: null,
           status: 'completed',
         }]}
-      />,
+      /></LanguageProvider>,
     )
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByText('SYSTEM PROMPT')).toBeInTheDocument()
     expect(screen.getByText(/"patient": "masked"/)).toBeInTheDocument()
     expect(screen.getByText('MODEL OUTPUT')).toBeInTheDocument()
+    expect(screen.getByText('gemini-3.8-flash')).toBeInTheDocument()
+    expect(screen.queryByText('unreported')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' })).toBeInTheDocument()
     expect(screen.getByTitle('2026-08-05T02:51:53.866Z')).toHaveTextContent(/\([^)]+\)$/)
     expect(screen.queryByText('2026-08-05T02:51:53.866Z')).not.toBeInTheDocument()
     expect(onDownloadAll).not.toHaveBeenCalled()

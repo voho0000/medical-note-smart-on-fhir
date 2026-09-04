@@ -15,6 +15,8 @@ import type { ChatDataScope, ChatMessage, ChatReplyReference } from "@/src/appli
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
+import { ModelExecutionInfo, ModelExecutionNotice } from '@/src/shared/components/ModelExecutionNotice'
+import { modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { AlertTriangle, Check, Copy, Reply, RotateCcw, Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
@@ -175,7 +177,7 @@ const MessageItem = memo(function MessageItem({
       <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground px-1">
         <span className={cn(
           "min-w-0 max-w-[60vw] truncate font-medium tracking-wide sm:max-w-96",
-          !isCustomOpenAiModelId(message.modelId ?? '') && "uppercase",
+          !isCustomOpenAiModelId(message.modelExecution?.routedModelId ?? message.modelId ?? '') && "uppercase",
         )} title={message.role === 'assistant' ? modelDisplayName : undefined}>
           {message.role === "assistant" 
             ? modelDisplayName
@@ -183,6 +185,7 @@ const MessageItem = memo(function MessageItem({
             ? t.chat.you
             : t.chat.system}
         </span>
+        {message.role === "assistant" && <ModelExecutionInfo execution={message.modelExecution} />}
         {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
           <>
             <span>•</span>
@@ -198,6 +201,9 @@ const MessageItem = memo(function MessageItem({
         <span>{formatTimestamp(message.timestamp)}</span>
       </div>
       <div className="flex flex-col gap-2 max-w-[92%] sm:max-w-[85%]">
+        {message.role === "assistant" && (!replyDisabled || message.modelExecution?.actualModelId) && (
+          <ModelExecutionNotice execution={message.modelExecution} />
+        )}
         {message.role === "assistant" && message.agentStates && message.agentStates.length > 1 && (
           <AgentStateHistory 
             states={message.agentStates} 
@@ -338,6 +344,9 @@ const MessageItem = memo(function MessageItem({
   return prevProps.message.id === nextProps.message.id &&
          prevProps.message.content === nextProps.message.content &&
          prevProps.message.error === nextProps.message.error &&
+         prevProps.message.modelExecution === nextProps.message.modelExecution &&
+         prevProps.modelDisplayName === nextProps.modelDisplayName &&
+         prevProps.t === nextProps.t &&
          prevProps.onRetry === nextProps.onRetry &&
          prevProps.message.agentStates?.length === nextProps.message.agentStates?.length &&
          prevProps.message.replyTo?.messageId === nextProps.message.replyTo?.messageId &&
@@ -419,10 +428,12 @@ export function ChatMessageList({
           </div>
         ) : (
           messages.map((message) => {
-            const modelDisplayName = getModelDisplayName(
-              message.modelId,
-              customModelDisplayNames,
-            )
+            const execution = message.modelExecution
+            const legacyCustomName = execution && !execution.actualModelId && !execution.customModelId
+              ? customModelDisplayNames?.[execution.routedModelId] : undefined
+            const modelDisplayName = execution
+              ? legacyCustomName ?? modelExecutionLabel(execution)
+              : getModelDisplayName(message.modelId, customModelDisplayNames)
             return (
               <MessageItem
                 key={message.id}

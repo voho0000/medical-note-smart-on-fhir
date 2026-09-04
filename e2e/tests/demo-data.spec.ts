@@ -52,10 +52,10 @@ test.describe('demo data (試用資料)', () => {
     })
     const meta = summaryModule.getByTestId('custom-insight-generation-meta')
 
-    await expect(meta).toHaveText('預產生·Gemini 3.1 Flash-Lite', { timeout: 20_000 })
+    await expect(meta).toHaveText('預產生·Gemini 3 Flash Preview', { timeout: 20_000 })
     await expect(meta).toHaveAttribute(
       'aria-label',
-      '預產生摘要，由 Gemini 3.1 Flash-Lite 建立',
+      '預產生摘要，由 Gemini 3 Flash Preview 建立',
     )
     await expect(meta.locator('time')).toHaveCount(0)
   })
@@ -71,26 +71,26 @@ test.describe('demo data (試用資料)', () => {
 
     const summaryPanel = page.getByRole('tabpanel', { name: 'Summary', exact: true })
     await expect(summaryPanel.getByText(
-      '94-year-old man with stage 3b chronic kidney disease and anemia; recent claims repeatedly include pneumonia and hematologic-disease diagnosis codes.',
+      '94yo Male: Stage 3b CKD and Multi-morbidity Care',
       { exact: true },
     )).toBeVisible({ timeout: 20_000 })
 
     const meta = summaryPanel.getByTestId('medical-summary-generation-meta')
-    await expect(meta).toHaveText('Pre-generated·Gemini 3.1 Flash-Lite')
+    await expect(meta).toHaveText('Pre-generated·Gemini 3 Flash Preview')
     await expect(meta).toHaveAttribute(
       'aria-label',
-      'Pre-generated summary created with Gemini 3.1 Flash-Lite',
+      'Pre-generated summary created with Gemini 3 Flash Preview',
     )
 
     await summaryPanel.getByRole('tab', { name: 'Custom summaries' }).click()
     const customModule = summaryPanel.locator('article').filter({
       has: page.getByRole('heading', { name: "What's Changed" }),
     })
-    await expect(customModule).toContainText('Recent important changes', { timeout: 20_000 })
+    await expect(customModule).toContainText('August 27 records show', { timeout: 20_000 })
     await expect(customModule.getByTestId('custom-insight-generation-meta'))
       .toHaveAttribute(
         'aria-label',
-        'Pre-generated summary created with Gemini 3.1 Flash-Lite',
+        'Pre-generated summary created with Gemini 3 Flash Preview',
       )
   })
 })

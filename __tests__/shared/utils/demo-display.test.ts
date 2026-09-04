@@ -16,6 +16,12 @@ describe('demo display localization', () => {
       .toBe('Early-stage chronic kidney disease follow-up')
     expect(localizeDemoOrganizationDisplay('示範北辰醫院', 'en'))
       .toBe('C Hospital')
+    expect(localizeDemoOrganizationDisplay('示範長青藥局', 'en'))
+      .toBe('C Pharmacy')
+    expect(localizeDemoOrganizationDisplay('示範祥安診所', 'en'))
+      .toBe('D Clinic')
+    expect(localizeDemoOrganizationDisplay('示範康健診所', 'en'))
+      .toBe('E Clinic')
   })
 
   it('does not rewrite non-demo imported names', () => {

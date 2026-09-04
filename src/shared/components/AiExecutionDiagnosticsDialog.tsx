@@ -1,5 +1,8 @@
 "use client"
 
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import { ModelExecutionInfo, ModelExecutionNotice } from './ModelExecutionNotice'
+import { modelExecutionLabel } from '@/src/shared/utils/ai-model-execution'
 import { Download, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +26,7 @@ import { formatAiExecutionTimestamp } from "@/src/shared/utils/ai-execution-diag
 export interface AiExecutionDiagnosticsPreviewRecord {
   id?: string
   feature?: string
+  modelExecution?: AiModelExecution
   modelName: string
   modelId: string
   timestamp: string
@@ -135,6 +139,7 @@ export function AiExecutionDiagnosticsDialog({
           <Accordion type="multiple" defaultValue={defaultOpen} className="min-w-0 py-2">
             {records.map((record, index) => {
               const value = `execution-${index}`
+              const modelName = record.modelExecution ? modelExecutionLabel(record.modelExecution) : record.modelName
               return (
                 <AccordionItem key={record.id ?? value} value={value}>
                   <AccordionTrigger className="gap-3 py-3 hover:no-underline">
@@ -142,7 +147,7 @@ export function AiExecutionDiagnosticsDialog({
                       <span className="font-semibold">
                         {labels.execution} {index + 1}
                       </span>
-                      <span className="truncate text-muted-foreground">{record.modelName}</span>
+                      <span className="truncate text-muted-foreground">{modelName}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[0.6875rem] font-medium ${statusClass(record.status)}`}>
                         {statusLabel(record.status, labels)}
                       </span>
@@ -167,14 +172,20 @@ export function AiExecutionDiagnosticsDialog({
                         {labels.downloadThis}
                       </Button>
                     </div>
+                    <ModelExecutionNotice execution={record.modelExecution} />
                     <dl className="grid gap-2 rounded-md border bg-card p-3 text-xs sm:grid-cols-2">
                       <div>
                         <dt className="text-muted-foreground">{labels.model}</dt>
-                        <dd className="font-medium">{record.modelName}</dd>
+                        <dd className="flex min-w-0 items-center gap-1 font-medium">
+                          <span className="min-w-0 break-words">{modelName}</span>
+                          <ModelExecutionInfo execution={record.modelExecution} />
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">{labels.modelId}</dt>
-                        <dd className="break-all font-mono">{record.modelId}</dd>
+                        <dd className="break-all font-mono">{record.modelExecution
+                          ? record.modelExecution.actualModelId ?? record.modelExecution.routedModelId
+                          : record.modelId}</dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">{labels.timestamp}</dt>

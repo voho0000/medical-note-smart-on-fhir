@@ -62,6 +62,7 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
       }
       
       if (msg.modelId) cleanMsg.modelId = msg.modelId
+      if (msg.modelExecution) cleanMsg.modelExecution = msg.modelExecution
       if (msg.agentStates) cleanMsg.agentStates = msg.agentStates
       if (msg.replyTo) cleanMsg.replyTo = msg.replyTo
       if (msg.dataScope) cleanMsg.dataScope = msg.dataScope
@@ -180,6 +181,7 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
         content: msg.content,
         timestamp: msg.timestamp,
         ...(msg.modelId && { modelId: msg.modelId }),
+        ...(msg.modelExecution && { modelExecution: msg.modelExecution }),
         ...(msg.agentStates && { agentStates: msg.agentStates }),
         ...(msg.replyTo && { replyTo: msg.replyTo }),
         ...(msg.dataScope && { dataScope: msg.dataScope }),

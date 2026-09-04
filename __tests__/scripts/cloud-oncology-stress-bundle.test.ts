@@ -36,17 +36,26 @@ describe('cloud-record-shaped synthetic oncology fixture', () => {
 
   it('retains all radiology and pathology reports in the real AI report category', () => {
     const reports = imagingReportsCategory.extractData(parsed.collection)
+    const filters = ALL_DATA_FILTERS as unknown as Parameters<typeof imagingReportsCategory.getCount>[1]
     expect(parsed.collection.diagnosticReports).toHaveLength(2_328)
     expect(reports).toHaveLength(2_328)
-    expect(imagingReportsCategory.getCount(reports, ALL_DATA_FILTERS, parsed.collection)).toBe(2_328)
+    expect(imagingReportsCategory.getCount(reports, filters, parsed.collection)).toBe(2_328)
     expect(fixture.manifest.reportCounts).toEqual({ CXR: 1344, CT: 443, MRI: 192, US: 192, PATH: 48, IHC: 48, REVIEW: 48, CYTO: 13 })
     // Stable repeated names exercise the existing latest-by-name filter.
-    expect(imagingReportsCategory.getCount(reports, { ...ALL_DATA_FILTERS, imagingReportVersion: 'latest' }, parsed.collection)).toBeLessThan(30)
+    expect(imagingReportsCategory.getCount(
+      reports,
+      { ...filters, imagingReportVersion: 'latest' } as Parameters<typeof imagingReportsCategory.getCount>[1],
+      parsed.collection,
+    )).toBeLessThan(30)
   })
 
   it('exceeds one million tokens in decoded reports + discharge context, without truncation or duplicated attachment bodies', () => {
     const reports = imagingReportsCategory.extractData(parsed.collection)
-    const reportSection = imagingReportsCategory.getContextSection(reports, ALL_DATA_FILTERS, parsed.collection)
+    const reportSection = imagingReportsCategory.getContextSection(
+      reports,
+      ALL_DATA_FILTERS as unknown as Parameters<typeof imagingReportsCategory.getContextSection>[1],
+      parsed.collection,
+    )
     if (Array.isArray(reportSection)) throw new Error('Expected one report section')
     const reportText = reportSection?.items.join('\n\n') ?? ''
     const docs = formatDocumentsSection(listClinicalDocuments(parsed.collection))

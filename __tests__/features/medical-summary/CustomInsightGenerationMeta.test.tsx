@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react"
 import { CustomInsightGenerationMeta } from "@/features/medical-summary/components/CustomInsightGenerationMeta"
+import { createModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 jest.mock("@/src/application/providers/language.provider", () => ({
   useLanguage: () => ({
@@ -62,7 +63,7 @@ describe("CustomInsightGenerationMeta", () => {
       "datetime",
       "2026-08-27T06:32:00.000Z",
     )
-    expect(screen.getByText("GPT-5.6 Luna")).toHaveClass(
+    expect(screen.getByText("GPT-5.6 Luna").parentElement).toHaveClass(
       "max-[340px]:basis-full",
       "max-[340px]:max-w-full",
     )
@@ -83,6 +84,17 @@ describe("CustomInsightGenerationMeta", () => {
     )
 
     expect(screen.getByText("GPT-5.6 Luna")).toBeInTheDocument()
+  })
+
+  it('replaces a previously saved unreported label with the selected model and an info hint', () => {
+    render(<CustomInsightGenerationMeta metadata={{
+      modelId: 'gemini-3.8-flash', modelName: '實際模型未回報', provider: 'gemini',
+      generatedAt: Date.now(), modelExecution: createModelExecution('gemini-3.8-flash'),
+    }} />)
+    expect(screen.getByTestId('custom-insight-generation-meta')).toHaveTextContent('Gemini 3.8 Flash')
+    expect(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText('實際模型未回報')).not.toBeInTheDocument()
   })
 
   it("shows honest pre-generated demo provenance without inventing a time", () => {

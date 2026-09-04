@@ -114,7 +114,7 @@ describe('labReportsCategory — per-analyte trend', () => {
   })
 })
 
-describe('labReportsCategory — source status omission', () => {
+describe('labReportsCategory — source finality status', () => {
   const render = (status: string, depth: 'latest' | '8') => {
     const statusData = [{
       resourceType: 'Observation',
@@ -132,22 +132,21 @@ describe('labReportsCategory — source status omission', () => {
   }
 
   it.each(['latest', '8'] as const)(
-    'omits unknown status and finality commentary in %s mode',
+    'suppresses repeated unknown markers and emits one section-level note in %s mode',
     (depth) => {
       const output = render('unknown', depth)
 
       expect(output).toContain('0.8')
       expect(output).not.toContain('{status:unknown}')
-      expect(output).not.toContain('finality status')
+      expect(output.match(/laboratory report finality status is unavailable/g)).toHaveLength(1)
     },
   )
 
-  it('also omits non-final source statuses', () => {
+  it('continues to flag actionable non-final statuses per result', () => {
     const output = render('preliminary', '8')
 
-    expect(output).toContain('0.8')
-    expect(output).not.toContain('{status:preliminary}')
-    expect(output).not.toContain('status')
+    expect(output).toContain('{status:preliminary}')
+    expect(output).not.toContain('finality status is unavailable')
   })
 })
 

@@ -29,6 +29,7 @@ interface FirestoreChatTemplate {
 
 const templateSync = createUserCollectionSync<ChatTemplate, FirestoreChatTemplate>({
   collectionName: 'chatTemplates',
+  largeTextField: 'content',
   logLabel: 'Template Sync',
   nounSingular: 'template',
   nounPlural: 'templates',

@@ -1,3 +1,5 @@
+import type { AiModelExecution } from './ai-model-execution.entity'
+
 // Chat message domain types.
 //
 // These lived in the zustand chat.store, which made core use-cases and the
@@ -42,6 +44,7 @@ export interface ChatMessage {
   content: string
   timestamp: number
   modelId?: string
+  modelExecution?: AiModelExecution
   agentStates?: AgentState[]
   images?: ChatImage[]  // Support multiple images
   toolCalls?: string[]  // List of tool names that were called

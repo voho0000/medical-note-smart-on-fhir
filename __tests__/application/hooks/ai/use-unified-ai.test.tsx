@@ -2,6 +2,8 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 const mockStream = jest.fn()
 const mockQuery = jest.fn()
@@ -53,6 +55,24 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 }))
 
 describe('useUnifiedAi cancellation', () => {
+  it.each(['stream', 'query'] as const)('keeps actual provenance in %s diagnostics and forwards it to result owners', async (transport) => {
+    const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    if (transport === 'stream') mockStream.mockImplementationOnce(async (options) => {
+      options.onModelExecution(execution)
+      options.onChunk('actual Lite answer')
+    })
+    else mockQuery.mockResolvedValueOnce({ text: 'actual Lite answer', metadata: { modelId: 'gemini-3.1-flash-lite', modelExecution: execution } })
+    const onModelExecution = jest.fn()
+    const { result } = renderHook(() => useUnifiedAi())
+    await act(async () => {
+      await result.current[transport]([{ role: 'user', content: 'hello' }], { modelId: 'gemini-3.8-flash', onModelExecution })
+    })
+    expect(onModelExecution).toHaveBeenCalledWith(execution)
+    expect(useAiExecutionDiagnosticsStore.getState().records.at(-1)).toMatchObject({
+      modelId: 'gemini-3.1-flash-lite', modelName: 'Gemini 3.1 Flash-Lite', modelExecution: execution,
+    })
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     mockStoreListeners.clear()

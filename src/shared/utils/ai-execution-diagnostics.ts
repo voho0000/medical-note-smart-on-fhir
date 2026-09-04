@@ -1,3 +1,5 @@
+import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+
 export type AiExecutionStatus = 'completed' | 'error' | 'aborted'
 
 export interface AiExecutionDiagnosticRecord {
@@ -6,6 +8,7 @@ export interface AiExecutionDiagnosticRecord {
   feature: string
   operationKey: string | null
   transport: 'query' | 'stream'
+  modelExecution?: AiModelExecution
   modelName: string
   modelId: string
   timestamp: string

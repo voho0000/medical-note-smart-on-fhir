@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { ModelExecutionInfo } from '@/src/shared/components/ModelExecutionNotice'
 import {
   formatGenerationDuration,
   type MedicalSummaryGenerationInfo,
@@ -117,16 +118,14 @@ export function SummaryGenerationMeta({
   }
   if (!generationInfo) return null
 
-  const meta = (
+  return (
     <div
       data-testid="medical-summary-generation-meta"
       className={cn(
         "flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-muted-foreground/80",
-        generationInfo.generatedAtText && "cursor-help focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         className,
       )}
       aria-label={generationInfo.ariaLabel}
-      tabIndex={generationInfo.generatedAtText ? 0 : undefined}
     >
       <Cpu aria-hidden="true" className="h-3 w-3 shrink-0 @max-[28rem]:hidden" />
       {generationInfo.prefix ? (
@@ -136,12 +135,26 @@ export function SummaryGenerationMeta({
         </>
       ) : null}
       {generationInfo.generatedAtText ? (
-        <span className="min-w-0 max-w-[10rem] flex-[0_1_auto] truncate">
-          {generationInfo.modelName}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="min-w-0 max-w-[10rem] flex-[0_1_auto] cursor-help truncate focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50" tabIndex={0}>
+              {generationInfo.modelName}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} className="max-w-[min(90vw,32rem)] space-y-1 whitespace-normal text-left text-xs">
+            <div className="break-all font-medium">{generationInfo.modelName}</div>
+            <div>
+              {generationInfo.generatedAtLabel ?? null}
+              <time dateTime={generationInfo.generatedAtIso} className="tabular-nums">
+                {generationInfo.generatedAtText}
+              </time>
+            </div>
+          </TooltipContent>
+        </Tooltip>
       ) : (
         <TruncatedModelName modelName={generationInfo.modelName} />
       )}
+      <ModelExecutionInfo execution={generationInfo.modelExecution} />
       {generationInfo.durationLabel && generationInfo.durationText ? (
         <>
           <span aria-hidden="true" className="shrink-0">·</span>
@@ -151,28 +164,5 @@ export function SummaryGenerationMeta({
         </>
       ) : null}
     </div>
-  )
-
-  if (!generationInfo.generatedAtIso || !generationInfo.generatedAtText) {
-    return meta
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{meta}</TooltipTrigger>
-      <TooltipContent
-        side="top"
-        sideOffset={4}
-        className="max-w-[min(90vw,32rem)] space-y-1 whitespace-normal text-left text-xs"
-      >
-        <div className="break-all font-medium">{generationInfo.modelName}</div>
-        <div>
-          {generationInfo.generatedAtLabel ?? null}
-          <time dateTime={generationInfo.generatedAtIso} className="tabular-nums">
-            {generationInfo.generatedAtText}
-          </time>
-        </div>
-      </TooltipContent>
-    </Tooltip>
   )
 }

@@ -26,7 +26,6 @@ describe('adaptive clinical context', () => {
       if (documentIds.length) expect(candidate.documentTokenBudget).toBeUndefined()
     }
   })
-
   it.each(['full', 'prioritized'] as const)('preserves immutable profile field identities in the %s tier', (tier) => {
     const base = {
       ...fullProfile,

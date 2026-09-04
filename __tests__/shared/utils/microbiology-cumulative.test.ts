@@ -73,24 +73,89 @@ describe('buildMicrobiologyCumulativeModel', () => {
     })
   })
 
-  it('trusts the NHI testing role and flags a conflicting local name', () => {
+  it('standardizes from the original microbiology name and ignores the NHI role', () => {
     const model = buildMicrobiologyCumulativeModel([
       microbiologyObservation({
         id: 'conflict',
         date: '2026-05-22',
-        nhiCode: '13025C',
-        nhiDisplay: '抗酸性濃縮抹片染色檢查',
+        nhiCode: '13013C',
+        nhiDisplay: '抗酸菌鑑定檢查',
         name: 'TB Culture',
         specimen: 'Blood',
-        value: 'No Growth for Mycobacterium',
+        value: 'acid fast bacilli not found',
       }),
     ])
 
     expect(model.tracks[0].results[0]).toMatchObject({
-      stage: 'directExam',
-      standardizedName: '抗酸菌染色',
+      stage: 'culture',
+      standardizedName: 'Mycobacterial Culture',
       sourceRoleConflict: true,
-      sourceOrderCode: '13025C',
+      sourceOrderCode: '13013C',
+    })
+  })
+
+  it('keeps every flattened source row while assigning smear and culture columns', () => {
+    const observations = [
+      ['culture-code-smear-value', '13026C', '抗酸菌培養', '分枝桿菌培養及抗酸性染色', 'acid fast bacilli not found'],
+      ['culture-code-culture-value', '13026C', '抗酸菌培養', 'TB Culture', 'No Growth for Mycobacterium'],
+      ['smear-code-smear-value', '13025C', '抗酸性濃縮抹片染色檢查', '分枝桿菌培養及抗酸性染色', 'acid fast bacilli not found'],
+      ['smear-code-culture-value', '13025C', '抗酸性濃縮抹片染色檢查', 'TB Culture', 'No Growth for Mycobacterium'],
+      ['identification-code-smear-value', '13013C', '抗酸菌鑑定檢查', 'TB Culture', 'acid fast bacilli not found'],
+    ].map(([id, nhiCode, nhiDisplay, name, value]) => microbiologyObservation({
+      id,
+      date: '2026-05-22',
+      nhiCode,
+      nhiDisplay,
+      name,
+      value,
+    }))
+
+    const model = buildMicrobiologyCumulativeModel(observations)
+
+    expect(model.resultCount).toBe(5)
+    expect(model.tracks[0].results.filter((result) => result.stage === 'directExam')).toHaveLength(2)
+    expect(model.tracks[0].results.filter((result) => result.stage === 'culture')).toHaveLength(3)
+    expect(model.tracks[0].results.map((result) => result.id)).toEqual(expect.arrayContaining([
+      'culture-code-smear-value',
+      'culture-code-culture-value',
+      'smear-code-smear-value',
+      'smear-code-culture-value',
+      'identification-code-smear-value',
+    ]))
+  })
+
+  it('deduplicates only a repeated FHIR resource id', () => {
+    const repeated = microbiologyObservation({
+      id: 'same-resource',
+      date: '2026-05-22',
+      nhiCode: '13025C',
+      nhiDisplay: '抗酸性濃縮抹片染色檢查',
+      name: '分枝桿菌培養及抗酸性染色',
+      value: 'acid fast bacilli not found',
+    })
+
+    const model = buildMicrobiologyCumulativeModel([repeated, repeated])
+
+    expect(model.resultCount).toBe(1)
+  })
+
+  it('uses a clinician-facing English name for mycobacterial identification', () => {
+    const model = buildMicrobiologyCumulativeModel([
+      microbiologyObservation({
+        id: 'mycobacterial-identification',
+        date: '2026-05-22',
+        nhiCode: '13013C',
+        nhiDisplay: '抗酸菌鑑定檢查',
+        name: 'AFS+Culture identification',
+        specimen: 'Sputum',
+        value: 'Mycobacterium avium complex',
+      }),
+    ])
+
+    expect(model.tracks[0].results[0]).toMatchObject({
+      stage: 'identification',
+      standardizedName: 'Mycobacterial Identification',
+      sourceOrderCode: '13013C',
     })
   })
 
@@ -110,6 +175,49 @@ describe('buildMicrobiologyCumulativeModel', () => {
     expect(model.tracks[0]).toMatchObject({
       specimen: 'unknown',
       specimenConfidence: 'missing',
+    })
+  })
+
+  it('infers specimen hints from the original report name', () => {
+    const model = buildMicrobiologyCumulativeModel([
+      microbiologyObservation({
+        id: 'pus-wound',
+        date: '2026-04-01',
+        nhiCode: '13007C',
+        nhiDisplay: '細菌培養鑑定檢查',
+        name: 'Aerobic Culture(Pus/Wound)',
+        value: 'No growth to date',
+      }),
+      microbiologyObservation({
+        id: 'midstream-urine',
+        date: '2026-04-02',
+        nhiCode: '13007C',
+        nhiDisplay: '細菌培養鑑定檢查',
+        name: 'Urine culture(Middle stream)',
+        value: 'No growth after 48 hours',
+      }),
+      microbiologyObservation({
+        id: 'sputum-microscopy',
+        date: '2026-04-03',
+        nhiCode: '13006C',
+        nhiDisplay: '細菌顯微鏡檢查',
+        name: 'EP.cell-Sputum',
+        value: '10-25/LF',
+      }),
+    ])
+    const results = model.tracks.flatMap((track) => track.results)
+
+    expect(results.find((result) => result.id === 'pus-wound')).toMatchObject({
+      specimen: 'Pus / Wound',
+      specimenConfidence: 'inferred',
+    })
+    expect(results.find((result) => result.id === 'midstream-urine')).toMatchObject({
+      specimen: 'Urine (midstream)',
+      specimenConfidence: 'inferred',
+    })
+    expect(results.find((result) => result.id === 'sputum-microscopy')).toMatchObject({
+      specimen: 'Sputum',
+      specimenConfidence: 'inferred',
     })
   })
 
@@ -191,12 +299,17 @@ describe('buildMicrobiologyCumulativeModel', () => {
     ])
 
     const results = model.tracks.flatMap((track) => track.results)
-    expect(results).toHaveLength(2)
-    expect(results.find((result) => result.sourceOrderCode === '13006C')).toMatchObject({
-      stage: 'directExam',
-      standardizedName: 'Gram Stain',
-      state: 'contaminated',
-    })
+    expect(results).toHaveLength(3)
+    expect(results.filter((result) => result.sourceOrderCode === '13006C')).toHaveLength(2)
+    expect(results.filter((result) => result.sourceOrderCode === '13006C')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'directExam',
+          standardizedName: 'Gram Stain',
+          state: 'contaminated',
+        }),
+      ]),
+    )
     expect(results.find((result) => result.sourceOrderCode === '13023C')).toMatchObject({
       stage: 'susceptibility',
       standardizedName: '抗生素藥敏試驗',
@@ -348,8 +461,8 @@ describe('classifyResultState via model', () => {
   })
 })
 
-describe('NHI susceptibility order codes', () => {
-  it('routes 13009C and 13015C to the susceptibility stage by code, not by item text', () => {
+describe('microbiology source-name authority', () => {
+  it('uses clear antibiogram content but does not let billing codes override other reports', () => {
     const model = buildMicrobiologyCumulativeModel([
       microbiologyObservation({
         id: 'one-organism-susceptibility',
@@ -376,8 +489,8 @@ describe('NHI susceptibility order codes', () => {
       state: 'detected',
     })
     expect(results.find((result) => result.sourceOrderCode === '13015C')).toMatchObject({
-      stage: 'susceptibility',
-      standardizedName: '抗酸菌藥敏試驗',
+      stage: 'culture',
+      standardizedName: 'Mycobacterial Culture',
       family: 'mycobacteriology',
       state: 'noGrowth',
     })

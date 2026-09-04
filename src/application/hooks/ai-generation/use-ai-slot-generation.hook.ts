@@ -81,6 +81,7 @@ export interface AiSlotRunContext {
   ai: ReturnType<typeof useUnifiedAi>
   /** The gated model this run actually streams on. */
   modelId: string
+  requestedModelId?: string
   /** Immutable user-facing name of the model that actually ran. */
   modelName: string
   /** Exact result slot that owns this request and its AbortController. */
@@ -495,6 +496,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           ai,
           modelId: resolvedModelId,
           modelName: resolvedModelName,
+          requestedModelId: selectedModelId,
           operationKey: slotKey,
           contextLimit: resolvedContextLimit,
           contextAdaptation,
@@ -513,7 +515,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, preserveManualDocuments, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, preserveManualDocuments, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
