@@ -71,7 +71,35 @@ const CLASS_PATTERNS: Readonly<Record<CdssMedicationClassId, RegExp>> = {
   'iron-therapy': /\b(?:ferrous (?:sulfate|sulphate|fumarate|gluconate|succinate|ascorbate)|iron (?:sucrose|dextran|isomaltoside|polysaccharide|protein succinylate)|ferric (?:carboxymaltose|derisomaltose|gluconate|pyrophosphate)|sodium ferrous citrate|ferumoxytol|saccharated ferric oxide|venofer|ferinject|injectafer|monofer|feraheme|ferrlecit|infed|ferromia|legofer)\b|硫酸亞鐵|葡萄糖酸亞鐵|富馬酸亞鐵|蔗糖鐵|羧基麥芽糖鐵|鐵劑|口服鐵|靜脈鐵/i,
   'erythropoiesis-stimulating-agent': /\b(?:erythropoietin|epoetin(?:\s*(?:alfa|alpha|beta|theta|zeta))?|darbepoetin|methoxy polyethylene glycol[-\s]*epoetin beta|eprex|recormon|neorecormon|aranesp|mircera|epogen|procrit|retacrit|binocrit|silapo)\b|紅血球生成素|促紅血球生成素/i,
   'hif-phi': /\b(?:roxadustat|daprodustat|vadadustat|enarodustat|molidustat|desidustat|evrenzo|vafseo|jesduvroq|duvroq)\b|低氧誘導因子|缺氧誘導因子/i,
+  aspirin: /\b(?:aspirin|acetylsalicylic acid|lysine aspirin|bokey|aspirin protect)\b|阿斯匹林|乙醯水楊酸|伯基/i,
+  'p2y12-inhibitor': /\b(?:p2y12|clopidogrel|ticlopidine|prasugrel|ticagrelor|cangrelor|plavix|brilinta|efient|licodin)\b|氯吡格雷|得保栓|百無凝|抑凝安/i,
+  'direct-oral-anticoagulant': /\b(?:doac|noac|direct oral anticoagulant|rivaroxaban|apixaban|edoxaban|dabigatran|xarelto|eliquis|lixiana|pradaxa)\b|直接口服抗凝血劑|新型口服抗凝血劑|拜瑞妥|艾必克凝|里先安|普栓達/i,
+  'vitamin-k-antagonist': /\b(?:vitamin k antagonist|warfarin|acenocoumarol|phenprocoumon|coumadin|orfarin|mafarin)\b|維生素\s?K\s?拮抗劑|口服抗凝血素|可化凝|脈化寧|歐服寧/i,
+  'low-molecular-weight-heparin': /\b(?:low[- ]molecular[- ]weight heparin|lmwh|enoxaparin|dalteparin|nadroparin|tinzaparin|parnaparin|reviparin|bemiparin|clexane|fragmin|fraxiparine|innohep)\b|低分子量肝素|克立生|弗列明|速避凝/i,
+  ivabradine: /\b(?:ivabradine|procoralan|coralan|ivaheart)\b|伊伐布雷定|康立來|立舒心/i,
+  vericiguat: /\b(?:vericiguat|verquvo)\b|維利西呱/i,
+  // A conjunction, not a product: see HYDRALAZINE_COMPONENT / NITRATE_COMPONENT
+  // below. This pattern only catches a single record that names both
+  // ingredients itself (a fixed-dose combination such as BiDil); the ordinary
+  // two-tablet regimen is assembled from separate records.
+  'hydralazine-isdn': /\b(?:bidil)\b|hydralazine[\s\S]{0,80}isosorbide|isosorbide[\s\S]{0,80}hydralazine/i,
+  digoxin: /\b(?:digoxin|digitoxin|metildigoxin|methyldigoxin|lanoxin|lanitop|digosin|cardiacin)\b|毛地黃|地高辛|隆我心|朗寧/i,
 }
+
+/**
+ * Hydralazine／ISDN is prescribed in Taiwan as two separate tablets, so the
+ * class is only true when both halves are being taken at once. These component
+ * matchers are private to that conjunction and are not classes of their own:
+ * hydralazine alone is an antihypertensive and a nitrate alone is anti-anginal,
+ * and reading either as H-ISDN would tell the heart-failure pack the patient is
+ * already on a therapy they have never been given.
+ */
+const HYDRALAZINE_COMPONENT = /\b(?:hydralazine|dihydralazine|apresoline)\b|亥爪拉[任壬]|辛爪拉任|拉貝克/i
+const HYDRALAZINE_ATC = new Set(['C02DB01', 'C02DB02'])
+// Isosorbide only. Glyceryl trinitrate (C01DA02) is the as-needed anginal
+// rescue, not the maintenance nitrate the H-ISDN evidence is built on.
+const NITRATE_COMPONENT = /\b(?:isosorbide (?:di|mono)nitrate|isdn|ismn)\b|硝酸異山梨(?:酯|醇)|伊索倍雷|伊速必得/i
+const NITRATE_ATC = new Set(['C01DA08', 'C01DA14', 'C01DA58'])
 const RECOGNIZED_OTHER_ANTIDIABETIC = /\b(?:metformin|semaglutide|liraglutide|dulaglutide|exenatide|lixisenatide|tirzepatide|ozempic|rybelsus|victoza|trulicity|bydureon|mounjaro|sitagliptin|linagliptin|saxagliptin|alogliptin|vildagliptin|jan(?:u)?via|trajenta|onglyza|galvus|pioglitazone|rosiglitazone|acarbose|miglitol|voglibose|repaglinide|nateglinide)\b|二甲雙胍|胰妥讚|瑞倍適|胰妥善|易週糖|猛健樂/i
 
 type CodingLike = {
@@ -195,6 +223,38 @@ function matchesStandardCode(
       return code === 'B03XA01' || code === 'B03XA02' || code === 'B03XA03'
     case 'hif-phi':
       return code === 'B03XA05' || code === 'B03XA07' || code === 'B03XA08'
+    case 'aspirin':
+      // B01AC06 antiplatelet aspirin, B01AC56 with a PPI, N02BA01 the analgesic
+      // salicylate. Multi-ingredient combinations are left to the name pattern,
+      // because B01AC30 "combinations" does not itself imply aspirin.
+      return code === 'B01AC06' || code === 'B01AC56' || code === 'N02BA01'
+    case 'p2y12-inhibitor':
+      // Listed, not prefixed: B01AC also holds aspirin, dipyridamole, cilostazol
+      // and the prostacyclins, none of which act on P2Y12.
+      return ['B01AC04', 'B01AC05', 'B01AC22', 'B01AC24', 'B01AC25'].includes(code)
+    case 'direct-oral-anticoagulant':
+      // B01AF is entirely oral direct factor Xa inhibitors. B01AE is taken one
+      // code at a time because it also holds the parenteral direct thrombin
+      // inhibitors (argatroban, bivalirudin), which are not DOACs.
+      return code === 'B01AE07' || code.startsWith('B01AF')
+    case 'vitamin-k-antagonist':
+      return code.startsWith('B01AA')
+    case 'low-molecular-weight-heparin':
+      // Listed rather than prefixed: B01AB01 is unfractionated heparin and
+      // B01AB09 danaparoid is a heparinoid, neither of which is an LMWH.
+      return [
+        'B01AB04', 'B01AB05', 'B01AB06', 'B01AB07', 'B01AB08', 'B01AB10', 'B01AB12',
+      ].includes(code)
+    case 'ivabradine':
+      return code === 'C01EB17'
+    case 'vericiguat':
+      return code === 'C01DX22'
+    case 'hydralazine-isdn':
+      // No ATC code names the two-tablet regimen, so the structural path runs
+      // through the component matchers in classifyCurrentMedications instead.
+      return false
+    case 'digoxin':
+      return code === 'C01AA04' || code === 'C01AA05' || code === 'C01AA08'
   }
 }
 
@@ -410,7 +470,60 @@ export function classifyCurrentMedications(
     }
   }
 
+  classified.push(...hydralazineIsdnConjunction(governedRecords, classified, now))
+
   return { classified, unclassifiedAntidiabeticCount }
+}
+
+/**
+ * `hydralazine-isdn` is the only class a single prescription cannot answer:
+ * Taiwan has no fixed-dose product, so the regimen appears as a hydralazine
+ * record and a nitrate record that mean H-ISDN only together. Neither half is a
+ * class of its own — hydralazine alone is an antihypertensive and a nitrate
+ * alone is anti-anginal — so the components are matched here rather than in
+ * CLASS_PATTERNS, and both must be currently taken before the class is present.
+ * Both contributing records are returned so the card can cite what it read.
+ */
+function hydralazineIsdnConjunction(
+  governedRecords: readonly MedicationEntity[],
+  classified: readonly ClassifiedMedication[],
+  now: Date,
+): ClassifiedMedication[] {
+  // A fixed-dose product already matched CLASS_PATTERNS, and would otherwise
+  // satisfy both component scans on its own and be cited twice.
+  const alreadyClassified = new Set(
+    classified
+      .filter((item) => item.classId === 'hydralazine-isdn')
+      .map((item) => item.medication.id),
+  )
+  const componentsInUse = (
+    pattern: RegExp,
+    atcCodes: ReadonlySet<string>,
+  ): MedicationEntity[] => governedRecords.filter((medication) => (
+    !alreadyClassified.has(medication.id)
+    && medicationRecordState(medication, now) === 'confirmed-current'
+    && (
+      pattern.test(searchableMedicationText(medication))
+      || medicationCodings(medication).some((coding) => (
+        isAtcSystem(coding.system) && atcCodes.has(normalizedCode(coding.code))
+      ))
+    )
+  ))
+
+  const hydralazine = componentsInUse(HYDRALAZINE_COMPONENT, HYDRALAZINE_ATC)
+  const nitrate = componentsInUse(NITRATE_COMPONENT, NITRATE_ATC)
+  if (hydralazine.length === 0 || nitrate.length === 0) return []
+
+  const contributing = new Map<string, MedicationEntity>()
+  for (const medication of [...hydralazine, ...nitrate]) {
+    contributing.set(medication.id as string, medication)
+  }
+  return [...contributing.values()].map((medication) => ({
+    classId: 'hydralazine-isdn' as const,
+    name: medicationDisplayName(medication),
+    medication,
+    state: 'confirmed-current' as const,
+  }))
 }
 
 export function assessMedicationClass(

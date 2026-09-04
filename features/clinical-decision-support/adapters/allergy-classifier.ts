@@ -112,5 +112,18 @@ export function assessMedicationClassAllergies(
     'iron-therapy': assessmentFor('iron-therapy'),
     'erythropoiesis-stimulating-agent': assessmentFor('erythropoiesis-stimulating-agent'),
     'hif-phi': assessmentFor('hif-phi'),
+    // Antithrombotics: a documented reaction is what turns an antiplatelet or
+    // anticoagulant recommendation into a choice between agents.
+    aspirin: assessmentFor('aspirin'),
+    'p2y12-inhibitor': assessmentFor('p2y12-inhibitor'),
+    'direct-oral-anticoagulant': assessmentFor('direct-oral-anticoagulant'),
+    'vitamin-k-antagonist': assessmentFor('vitamin-k-antagonist'),
+    'low-molecular-weight-heparin': assessmentFor('low-molecular-weight-heparin'),
+    ivabradine: assessmentFor('ivabradine'),
+    vericiguat: assessmentFor('vericiguat'),
+    // Recorded against whichever half the reaction names; the class pattern
+    // only matches a record that carries both ingredients.
+    'hydralazine-isdn': assessmentFor('hydralazine-isdn'),
+    digoxin: assessmentFor('digoxin'),
   }
 }
