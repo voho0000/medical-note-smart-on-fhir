@@ -1,4 +1,4 @@
-import { getInterpretationTag } from "@/src/shared/utils/interpretation-helpers"
+import { getInterpretationTag } from "@voho0000/clinical-lab-normalization/interpretation"
 
 type Quantity = { value?: number; unit?: string }
 type ReferenceRange = { low?: Quantity; high?: Quantity; text?: string }

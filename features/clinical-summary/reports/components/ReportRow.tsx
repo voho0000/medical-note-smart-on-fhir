@@ -19,7 +19,7 @@ import {
   getReferenceRangeComparison,
   isObservationAbnormal,
   isReferenceRangeAssessmentUnavailable,
-} from '../utils/interpretation-helpers'
+} from '@voho0000/clinical-lab-normalization/interpretation'
 import { ObservationBlock } from './ObservationBlock'
 import {
   ObservationLongitudinalAction,

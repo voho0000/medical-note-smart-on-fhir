@@ -12,7 +12,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import {
   MICROBIOLOGY_STAGE_COLUMN_ORDER,
   buildMicrobiologyCumulativeModel,

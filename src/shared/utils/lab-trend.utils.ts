@@ -1,4 +1,4 @@
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
@@ -6,7 +6,7 @@ import {
   getAuditedReferenceRangeBounds,
   getInterpretationCode,
   isObservationAbnormal,
-} from '@/src/shared/utils/interpretation-helpers'
+} from '@voho0000/clinical-lab-normalization/interpretation'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 

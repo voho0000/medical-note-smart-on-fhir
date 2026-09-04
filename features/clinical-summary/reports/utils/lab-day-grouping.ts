@@ -31,8 +31,8 @@ import {
   compareTestsByPreferred,
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
-import { getAnalyteLabel, getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
-import { isObservationAbnormal } from './interpretation-helpers'
+import { getAnalyteLabel, getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type { Observation, Row } from '../types'
 
 const CHEM_CATEGORY = LAB_CATEGORIES.find((c) => c.id === 'chem') ?? null

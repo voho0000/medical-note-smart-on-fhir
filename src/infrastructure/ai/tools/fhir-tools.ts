@@ -67,7 +67,7 @@ import {
 import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/canonical'
 import {
   expandObservationValues,
   observationDisplayValue,
@@ -75,7 +75,7 @@ import {
 import {
   getAuditedReferenceRangeBounds,
   getInterpretationTag,
-} from '@/src/shared/utils/interpretation-helpers'
+} from '@voho0000/clinical-lab-normalization/interpretation'
 
 export interface AgentDataSource {
   patient: PatientEntity | null

@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, type ReactNode } from 'react'
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 
 interface ReportNameModeContextValue {
   mode: AnalyteNameMode

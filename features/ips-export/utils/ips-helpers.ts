@@ -5,7 +5,7 @@ import type {
   DiagnosticReportEntity,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
-import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
 import { collectReportMemberIds, isVitalObservation } from '@/src/core/utils/observation-selectors'
 import type { FhirResource, IpsBundleEntry } from './ips-types'
 

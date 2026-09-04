@@ -12,7 +12,7 @@ import {
   canonicalKeyFromLoinc,
   canonicalTestKeyFromString,
   TEST_ALIASES,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/canonical'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
 
 export interface InvestigationCumulativeTarget {

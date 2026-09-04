@@ -13,7 +13,7 @@
 // We intentionally use display-text aliases (not LOINC mappings) so that
 // bridge mis-tags — e.g. a band-form row tagged with LOINC 770-8 — stay
 // in their own column and remain visible as bridge bugs.
-import { canonicalKeyFromLoinc, canonicalTestKeyFromString, getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { canonicalKeyFromLoinc, canonicalTestKeyFromString, getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
 
 describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
   describe('CBC differential cells', () => {
@@ -160,8 +160,8 @@ describe('CANONICAL_KEYS — column-header eligibility', () => {
   // this set, but the regression test pins the contract so a future
   // refactor that drops the spread is caught.
   const { CANONICAL_KEYS } = jest.requireActual<
-    typeof import('@/src/shared/utils/lab-normalize')
-  >('@/src/shared/utils/lab-normalize')
+    typeof import('@voho0000/clinical-lab-normalization/canonical')
+  >('@voho0000/clinical-lab-normalization/canonical')
 
   it.each(['NEU', 'LYM', 'MONO', 'EOS', 'BASO', 'BAND', 'WBC', 'RBC',
            'HB', 'HCT', 'PLT', 'MCV', 'MCH', 'MCHC', 'RDW',
@@ -174,8 +174,8 @@ describe('CANONICAL_KEYS — column-header eligibility', () => {
 
 describe('CANONICAL_DISPLAY — pretty column headers', () => {
   const { CANONICAL_DISPLAY } = jest.requireActual<
-    typeof import('@/src/shared/utils/lab-normalize')
-  >('@/src/shared/utils/lab-normalize')
+    typeof import('@voho0000/clinical-lab-normalization/canonical')
+  >('@voho0000/clinical-lab-normalization/canonical')
 
   it('uses conventional mixed-case clinical display labels', () => {
     expect(CANONICAL_DISPLAY['APTT-RATIO']).toBe('aPTT ratio')

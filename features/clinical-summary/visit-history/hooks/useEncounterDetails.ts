@@ -1,8 +1,9 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
-import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
+import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@voho0000/clinical-lab-normalization/interpretation"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
-import { getAnalyteDisplayForObs, getAnalyteLabel, getAnalyteCanonicalKey, type DisplayLang } from "@/src/shared/utils/lab-normalize"
+import { getAnalyteLabel, getAnalyteCanonicalKey } from "@voho0000/clinical-lab-normalization/canonical"
+import { getAnalyteDisplayForObs, type DisplayLang } from "@voho0000/clinical-lab-normalization/display"
 import {
   LAB_CATEGORIES,
   CANONICAL_TO_CATEGORY,

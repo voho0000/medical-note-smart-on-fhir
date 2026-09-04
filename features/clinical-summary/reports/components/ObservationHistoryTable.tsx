@@ -1,5 +1,5 @@
 import { cn } from '@/src/shared/utils/cn.utils'
-import { getAuditedReferenceRangeBounds } from '@/src/shared/utils/interpretation-helpers'
+import { getAuditedReferenceRangeBounds } from '@voho0000/clinical-lab-normalization/interpretation'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
 import { formatNumberSmart } from '../utils/number-format.utils'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
@@ -57,7 +57,7 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
     if (interp) {
       // Source interpretation is authoritative — once it's present we NEVER fall
       // through to app-side range math (2026-07-08 policy; see
-      // interpretation-helpers.ts). Match single-letter codes exactly so "high"
+      // @voho0000/clinical-lab-normalization/interpretation). Match single-letter codes exactly so "high"
       // doesn't also trigger the "low" branch via its "h"-fragment.
       if (interp === 'h' || interp === 'hh' || interp.includes('high')) return 'high'
       if (interp === 'l' || interp === 'll' || interp.includes('low')) return 'low'

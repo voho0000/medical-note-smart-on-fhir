@@ -8,16 +8,18 @@
 // (would defeat the feature).
 
 import {
+  getAnalyteCanonicalKey,
+} from '@voho0000/clinical-lab-normalization/canonical'
+import {
   getAnalyteDisplayLabel,
   getAnalyteDisplayParts,
   getAnalyteDisplayForObs,
   getAnalyteDisplayForMode,
   getOriginalAnalyteDisplayForObs,
-  getAnalyteCanonicalKey,
   bpComponentAbbr,
   CANONICAL_TO_LAY_ZH,
   CANONICAL_TO_LAY_EN,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/display'
 
 describe('report analyte name mode', () => {
   const mistranslatedAtypicalLymphocyte = {

@@ -69,7 +69,7 @@ export type ConvertDim =
 /**
  * Where an input's initial value comes from, if any. Resolved by
  * useLabAutofill against the current patient's observations / demographics.
- *  - lab:   canonical analyte keys (from lab-normalize), first match wins.
+ *  - lab:   canonical analyte keys (from @voho0000/clinical-lab-normalization), first match wins.
  *  - vital: LOINC codes for a vital sign (weight/height live outside the
  *           canonical lab map, so they're matched by LOINC directly).
  *  - age / sex: patient demographics.

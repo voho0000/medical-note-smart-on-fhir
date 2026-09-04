@@ -12,8 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Search, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
-import type { AnalyteNameMode, DisplayLang } from "@/src/shared/utils/lab-normalize"
+import { getAnalyteDisplayParts } from "@voho0000/clinical-lab-normalization/display"
+import type { AnalyteNameMode, DisplayLang } from "@voho0000/clinical-lab-normalization/display"
 import type { LabPivot } from "../hooks/useLabPivot"
 
 export interface AnalyteHit {

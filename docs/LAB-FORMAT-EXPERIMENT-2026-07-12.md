@@ -1,6 +1,6 @@
 # 檢驗格式 A/B 實驗:樞紐表 (pivot) vs 趨勢行 (trend) — 2026-07-12
 
-> **文件性質：實驗與實作決策紀錄。** 實驗數字與結論保持原樣，不應被解讀為每個新模型／新資料集都會得到相同結果。v0.40.0 的 production 路徑以 `src/application/hooks/clinical-context/formatters.ts`、各 clinical-context hooks、`lab-normalize.ts`、`lab-pivot.utils.ts` 與 coverage manifest 為準；相關回歸測試位於 `__tests__/application/hooks/clinical-context/` 與 lab utility tests。最後核對：2026-07-14。
+> **文件性質：實驗與實作決策紀錄。** 實驗數字與結論保持原樣，不應被解讀為每個新模型／新資料集都會得到相同結果。v0.40.0 的 production 路徑以 `src/application/hooks/clinical-context/formatters.ts`、各 clinical-context hooks、`@voho0000/clinical-lab-normalization`、`lab-pivot.utils.ts` 與 coverage manifest 為準；相關回歸測試位於 `__tests__/application/hooks/clinical-context/` 與 lab utility tests。最後核對：2026-07-14。
 
 **研究問題**:AI context 的檢驗段,改用匯出 tab 的「日期×項目 markdown 樞紐表」是否比現行「per-analyte 趨勢行」讓模型答得更準、引用更可靠、token 更省?
 

@@ -14,7 +14,7 @@
 import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.constants'
 
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
-import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 
 export interface LabSubgroup {
   /** Stable id — matches a key under t.reports.cumulativeSubgroups for display. */
@@ -124,7 +124,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // Plasma (CK-MB) — both verified at loinc.org (2026-06-16).
     // 2028-9 = Carbon dioxide, total [Moles/volume] S/P (TCO2), 19123-9 =
     // Magnesium [Mass/volume] S/P, 33762-6 = NT-proBNP [Mass/volume] S/P —
-    // all three already mapped + cited in lab-normalize LOINC_TO_CANONICAL
+    // all three already mapped + cited in clinical-lab-normalization LOINC_TO_CANONICAL
     // (CO2 / MG / NT-PROBNP); added here so they categorise into 生化 instead
     // of falling to 其他 (user report 2026-07-07; live loinc.org re-check was
     // classifier-blocked, mappings reused from the verified in-repo table).
@@ -387,7 +387,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // (流感 A/B、新冠抗原、黴漿菌 IgM). 健保存摺 ships these WITHOUT LOINC, so
     // categorise by NHI 醫令 code (14065C/14066C/14084C/12020C) — the reliable
     // identifier (code.text is inconsistent). Analyte canonicalisation +
-    // display labels live in lab-normalize (TEST_ALIASES / CANONICAL_DISPLAY).
+    // display labels live in clinical-lab-normalization (TEST_ALIASES / CANONICAL_DISPLAY).
     // hiddenByDefault: a minority panel — shown directly when space permits,
     // otherwise surfaced via 「查看更多」 without crowding routine labs.
     // When revealed manually, pinnedColumns still show the expected column
@@ -730,7 +730,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   }
 
   // ── Pass 4.5: canonical-analyte match ──────────────────────────────────
-  // lab-normalize already knows which source names mean which analyte — that
+  // clinical-lab-normalization already knows which source names mean which analyte — that
   // is how a row can be HEADED "GLUCOSE-AC" when the source said 飯前血糖.
   // Categorisation used to consult only the raw text against `codes`, so an
   // analyte the alias table recognised could still fail every pass above and

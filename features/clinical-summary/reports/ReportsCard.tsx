@@ -33,7 +33,7 @@ import {
   PROCEDURE_CATEGORY_CODES,
   type ProcedureCategoryCode,
 } from './utils/procedure-category'
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { TrendWindow } from './utils/trend-time-scale'
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'

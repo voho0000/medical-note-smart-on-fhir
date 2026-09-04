@@ -7,10 +7,12 @@
 import {
   getAnalyteLabel,
   getAnalyteCanonicalKey,
+} from '@voho0000/clinical-lab-normalization/canonical'
+import {
   getAnalyteDisplayForMode,
   getAnalyteDisplayForObs,
   getAnalyteDisplayLabel,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/display'
 
 const loincObs = (text: string, loinc: string): any => ({
   code: { text, coding: [{ system: 'http://loinc.org', code: loinc }] },

@@ -1,5 +1,5 @@
 import { observationDisplayValue } from '@/src/core/utils/observation-value.utils'
-import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import type { Row } from '../types'
 

@@ -4,7 +4,7 @@
 // so existing feature/test imports keep working unchanged.
 import { useMemo } from 'react'
 import { buildLabPivots, type LabPivot } from '@/src/shared/utils/lab-pivot.utils'
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 
 export {
   buildLabPivots,

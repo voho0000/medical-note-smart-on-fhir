@@ -3,7 +3,7 @@
 // tools must apply identical filtering so the LLM sees consistent
 // behaviour regardless of data source.
 
-import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
 
 export function isWithinDateRange(

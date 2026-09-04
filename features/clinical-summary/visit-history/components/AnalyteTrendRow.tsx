@@ -13,7 +13,7 @@ import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { CompactLabResultRow } from "@/features/clinical-summary/components/CompactLabResultRow"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { isAbnormalInterpretationLabel } from "@/src/shared/utils/interpretation-helpers"
+import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import type { EncounterObservation } from "./EncounterObservationCard"
 import type { EncounterTestSeries } from "../hooks/useEncounterDetails"
 

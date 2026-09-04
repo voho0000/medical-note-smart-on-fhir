@@ -20,7 +20,7 @@ import {
   bpComponentAbbr,
   getAnalyteDisplayForMode,
   getOriginalAnalyteDisplayForObs,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/display'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useReportNameMode } from '../context/report-name-mode.context'

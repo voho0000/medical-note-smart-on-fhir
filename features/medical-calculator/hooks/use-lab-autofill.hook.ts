@@ -11,7 +11,7 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
-import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinical-lab-normalization/canonical'
 import type { AutofillSource, VitalKind } from '../types'
 
 export interface AutofillValue {

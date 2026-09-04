@@ -2,7 +2,7 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForMode } from '@voho0000/clinical-lab-normalization/display'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
@@ -12,7 +12,7 @@ import {
   isInterpretationAbnormal,
   isReferenceRangeAssessmentUnavailable,
   type ReferenceRangeComparison,
-} from '../utils/interpretation-helpers'
+} from '@voho0000/clinical-lab-normalization/interpretation'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'

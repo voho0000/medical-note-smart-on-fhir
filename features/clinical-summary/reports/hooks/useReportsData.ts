@@ -6,11 +6,13 @@ import { inferReportDisplayGroup } from '../utils/grouping-helpers'
 import {
   getAnalyteLabel,
   getAnalyteCanonicalKey,
+  CANONICAL_DISPLAY,
+} from '@voho0000/clinical-lab-normalization/canonical'
+import {
   getAnalyteDisplayLabel,
   getOriginalAnalyteDisplayForObs,
-  CANONICAL_DISPLAY,
   type AnalyteNameMode,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/display'
 import {
   compareTestsByPreferred,
   CANONICAL_TO_CATEGORY,

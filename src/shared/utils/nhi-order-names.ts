@@ -21,7 +21,7 @@
 // memory/feedback_display_vs_canonical_separation.md. Adding a code here changes
 // only the rendered report title, never how reports are grouped or matched.
 
-import type { AudienceMode, DisplayLang } from './lab-normalize'
+import type { AudienceMode, DisplayLang } from '@voho0000/clinical-lab-normalization/display'
 
 export const NHI_ORDER_CODE_TO_EN: Record<string, string> = {
   // ── Urine / stool ──────────────────────────────────────────────

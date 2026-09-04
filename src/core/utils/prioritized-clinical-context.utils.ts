@@ -5,7 +5,7 @@ import {
   normalizeClinicalStatus,
 } from '@/src/core/utils/clinical-context-selection.utils'
 import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
-import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
 type PrioritizableCollection =

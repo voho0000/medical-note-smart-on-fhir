@@ -8,16 +8,18 @@ import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB
 import {
   CANONICAL_KEYS,
   CANONICAL_DISPLAY,
-  classifyGlucose,
-  GLUCOSE_SUBTYPE_LABEL,
   canonicalKeyFromLoinc,
   canonicalTestKeyFromString,
-  getOriginalAnalyteDisplayForObs,
   MYCOBACTERIAL_CULTURE_KEY,
+} from '@voho0000/clinical-lab-normalization/canonical'
+import {
+  classifyGlucose,
+  GLUCOSE_SUBTYPE_LABEL,
+  getOriginalAnalyteDisplayForObs,
   type AnalyteNameMode,
-} from '@/src/shared/utils/lab-normalize'
+} from '@voho0000/clinical-lab-normalization/display'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
-import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
@@ -93,7 +95,7 @@ function compactTrendUnit(unit: string | undefined): string {
 // HbA1c / glucose-AC …) was REMOVED per user directive. Abnormal flagging now
 // derives from the source's Observation.interpretation when present, falling
 // back only to audited source reference ranges (structured low/high or simple
-// text like "0~41" / "<5"; see src/shared/utils/interpretation-helpers.ts).
+// text like "0~41" / "<5"; see @voho0000/clinical-lab-normalization/interpretation).
 // The app still does not invent its own normal ranges.
 
 // Exported for unit-test access; the cumulative-report cell colouring
@@ -218,7 +220,7 @@ function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
 // must remain as separate pivot columns. All other tests merge by testKey so
 // cross-institution same-analyte rows collapse into one column.
 // Glucose was here but is now subclassified by display+LOINC (see
-// classifyGlucose in lab-normalize.ts), which is more reliable than NHI code
+// classifyGlucose in @voho0000/clinical-lab-normalization/display), which is more reliable than NHI code
 // because some hospitals bill finger sugar under fasting NHI codes.
 const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 

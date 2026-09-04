@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
 import { useReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
-import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 
 const Wrapper = ({ children }: { children: React.ReactNode }) => (
   <LanguageProvider>

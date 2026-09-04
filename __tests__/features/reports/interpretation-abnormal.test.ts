@@ -13,7 +13,7 @@ import {
   checkReferenceRangeAbnormal,
   isReferenceRangeAssessmentUnavailable,
   isObservationAbnormal,
-} from '@/src/shared/utils/interpretation-helpers'
+} from '@voho0000/clinical-lab-normalization/interpretation'
 
 describe('getInterpretationTag — array vs single shape', () => {
   it('reads the FHIR array shape [{coding:[{code}]}] (the v1.3.13 bug)', () => {

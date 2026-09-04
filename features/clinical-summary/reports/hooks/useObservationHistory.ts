@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
-import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
 

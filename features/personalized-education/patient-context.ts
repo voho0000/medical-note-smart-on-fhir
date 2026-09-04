@@ -1,5 +1,5 @@
 import { calculateAge, type PatientEntity } from '@/src/core/entities/patient.entity'
-import { getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import type {
   ConditionEntity,
   EncounterEntity,

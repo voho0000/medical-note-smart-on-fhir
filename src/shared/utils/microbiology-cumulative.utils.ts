@@ -1,5 +1,5 @@
 import { categorizeObservation, getTestDisplayName } from '@/src/shared/utils/lab-categories'
-import { getOriginalAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { getOriginalAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 
 export type MicrobiologyFamily = 'bacteriology' | 'mycobacteriology' | 'mycology'
 

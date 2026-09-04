@@ -1,6 +1,6 @@
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
-import { getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import {
   inferGroupFromObservation,
   inferReportDisplayGroup,

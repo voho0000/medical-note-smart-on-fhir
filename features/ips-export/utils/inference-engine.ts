@@ -22,7 +22,7 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
-import { checkReferenceRangeAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { checkReferenceRangeAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { parseInferenceResponse, type InferredProblemRaw } from './llm-json'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
