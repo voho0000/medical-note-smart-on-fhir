@@ -1,6 +1,5 @@
 import { categorizeObservation, getTestDisplayName } from '@/src/shared/utils/lab-categories'
 import { getOriginalAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
-import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 
 export type MicrobiologyFamily = 'bacteriology' | 'mycobacteriology' | 'mycology'
 
@@ -80,27 +79,11 @@ const FAMILY_ORDER: MicrobiologyFamily[] = [
 
 const NHI_ORDER_SYSTEM_FRAGMENTS = ['nhi-medical-order-code', 'nhi-lab-code', 'nhi.lab.code']
 
-const NHI_STAGE_BY_CODE: Record<string, MicrobiologyStage> = {
-  '13006C': 'directExam',
-  '13007C': 'culture',
-  '13008C': 'culture',
-  '13009C': 'susceptibility',
-  '13013C': 'identification',
-  '13015C': 'susceptibility',
-  '13016B': 'culture',
-  '13023C': 'susceptibility',
-  '13025C': 'directExam',
-  '13026C': 'culture',
-}
-
-const NHI_STANDARDIZED_NAME_BY_CODE: Record<string, string> = {
-  '13009C': '抗生素藥敏試驗',
-  '13013C': '抗酸菌鑑定',
-  '13015C': '抗酸菌藥敏試驗',
-  '13016B': 'Blood Culture',
-  '13023C': '抗生素藥敏試驗',
-  '13025C': '抗酸菌染色',
-  '13026C': '抗酸菌培養',
+const MYCOBACTERIAL_STANDARDIZED_NAME_BY_STAGE: Partial<Record<MicrobiologyStage, string>> = {
+  directExam: 'AFB smear',
+  culture: 'Mycobacterial Culture',
+  identification: 'Mycobacterial Identification',
+  susceptibility: 'Mycobacterial Susceptibility',
 }
 
 function normalizedText(value: unknown): string {
@@ -124,7 +107,7 @@ function isNhiOrderSystem(system: unknown): boolean {
 
 function localObservationLabels(obs: any): string {
   const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  return [
+  const labels = [
     obs?.code?.text,
     ...codings
       .filter((coding: any) => !isNhiOrderSystem(coding?.system))
@@ -132,7 +115,7 @@ function localObservationLabels(obs: any): string {
   ]
     .map(normalizedText)
     .filter(Boolean)
-    .join(' ')
+  return [...new Set(labels)].join(' ')
 }
 
 function getNhiOrderCode(obs: any): string | undefined {
@@ -147,49 +130,120 @@ function getNhiOrderCode(obs: any): string | undefined {
 
 function textStages(labels: string): Set<MicrobiologyStage> {
   const stages = new Set<MicrobiologyStage>()
-  if (/GRAM|ACID[ -]?FAST|AFB|STAIN|SMEAR|KOH|INDIA INK|染色|抹片|鏡檢/i.test(labels)) {
+  if (/GRAM|ACID[ -]?FAST|AFB|\bAFS?\s*STAIN\b|STAIN|SMEAR|KOH|INDIA INK|染色|抹片|鏡檢|\bEP\.?\s*CELL|\bW\.?B\.?C\.?(?:-|\s)*SPUTUM|\bNEUTROPHIL\b|\bG\([+-]\)\s*(?:BACILL|COCC)/i.test(labels)) {
     stages.add('directExam')
   }
   if (/PCR|NAAT|NUCLEIC|MOLECULAR|核酸|分子檢測/i.test(labels)) stages.add('molecular')
-  if (/CULTUR|培養/i.test(labels)) stages.add('culture')
-  if (/IDENTIF|鑑定/i.test(labels)) stages.add('identification')
-  if (/SUSCEPT|SENSITIV|RESIST|ANTIBIOGRAM|藥敏|敏感性|抗藥/i.test(labels)) {
+  if (/CULTUR|培養|\bANAEROBIC(?:\s*#\s*\d+)?\b|\bFUNG(?:US|AL)\s*#?\s*\d+\b/i.test(labels)) {
+    stages.add('culture')
+  }
+  if (/IDENTIF|鑑定|\bORGANISM\s*\d+\b|\bID\s*\+\s*DS\s+COMMON\b/i.test(labels)) {
+    stages.add('identification')
+  }
+  if (/SUSCEPT|SENSITIV|RESIST|ANTIBIOGRAM|\bMIC\b|藥敏|敏感性|抗藥|最低抑制濃度/i.test(labels)) {
     stages.add('susceptibility')
   }
   return stages
 }
 
-function classifyStage(obs: any, labels: string): {
+function mycobacterialStageFromResult(value: string): MicrobiologyStage | undefined {
+  if (/ACID[ -]?FAST BACILLI\s*(?:[-:–—]\s*)?(?:NOT\s+FOUND|NONE\s+SEEN|NEGATIVE)|無抗酸菌/i.test(value)) {
+    return 'directExam'
+  }
+  if (/NO\s+GROWTH\s+(?:FOR\s+MYCOBACTER(?:IUM|IA)|AFTER\s+\d+\s+WEEKS?)|NO\s+MYCOBACTER(?:IUM|IA).*(?:CULTUR|GROWTH)|MYCOBACTER(?:IUM|IA).*無生長/i.test(value)) {
+    return 'culture'
+  }
+  return undefined
+}
+
+function isGenericOrganismSlot(labels: string): boolean {
+  return /^ORGANISM\s*\d+$/i.test(labels.trim())
+}
+
+function isExplicitFungalCultureResult(value: string): boolean {
+  return /(?:NO\s+)?FUNGAL\s+GROWTH(?:\s+FOR\s+\d+\s+(?:DAYS?|WEEKS?))?/i.test(value)
+}
+
+function classifyStage(obs: any, value: string): {
   stage: MicrobiologyStage
   sourceRoleConflict: boolean
   sourceOrderCode?: string
 } {
   const sourceOrderCode = getNhiOrderCode(obs)
-  const sourceStage = sourceOrderCode ? NHI_STAGE_BY_CODE[sourceOrderCode] : undefined
-  const stagesFromText = textStages(labels)
-  if (sourceStage) {
-    const stagesFromLocalText = textStages(localObservationLabels(obs))
-    return {
-      stage: sourceStage,
-      sourceOrderCode,
-      sourceRoleConflict: stagesFromLocalText.size > 0 && !stagesFromLocalText.has(sourceStage),
-    }
-  }
-  const stage = MICROBIOLOGY_STAGE_ORDER.find((candidate) => stagesFromText.has(candidate)) ?? 'other'
-  return { stage, sourceRoleConflict: false, sourceOrderCode }
+  const localLabels = localObservationLabels(obs)
+  const stagesFromLocalText = textStages(localLabels)
+  const resultStage = mycobacterialStageFromResult(value)
+  const genericFungalCulture = isGenericOrganismSlot(localLabels)
+    && isExplicitFungalCultureResult(value)
+  const sourceRoleConflict = Boolean(
+    resultStage
+    && stagesFromLocalText.size > 0
+    && !stagesFromLocalText.has(resultStage),
+  )
+
+  // The source name is authoritative. Result wording only separates a truly
+  // compound source name such as 「分枝桿菌培養及抗酸性染色」.
+  const stage = genericFungalCulture
+    ? 'culture'
+    : stagesFromLocalText.has('susceptibility')
+    ? 'susceptibility'
+    : stagesFromLocalText.has('identification')
+      ? 'identification'
+      : stagesFromLocalText.has('molecular')
+        ? 'molecular'
+        : resultStage && stagesFromLocalText.has(resultStage)
+          ? resultStage
+          : MICROBIOLOGY_STAGE_ORDER.find((candidate) => stagesFromLocalText.has(candidate)) ?? 'other'
+
+  return { stage, sourceRoleConflict, sourceOrderCode }
 }
 
-function classifyFamily(labels: string, sourceOrderCode?: string): MicrobiologyFamily {
-  if (sourceOrderCode && ['13013C', '13015C', '13025C', '13026C'].includes(sourceOrderCode)) {
-    return 'mycobacteriology'
-  }
-  if (/MYCOBACT|TUBERC|ACID[ -]?FAST|\bAFB\b|結核|分枝桿菌|抗酸菌/i.test(labels)) {
+function classifyFamily(labels: string, value: string): MicrobiologyFamily {
+  const genericMycobacterialResult = /^(?:CULTURE|SMEAR)$/i.test(labels.trim())
+    && Boolean(mycobacterialStageFromResult(value))
+  if (genericMycobacterialResult || /MYCOBACT|TUBERC|ACID[ -]?FAST|\bAFB\b|\bAFS\b|\bAF\s*STAIN\b|\bTB\s+CULTURE\b|結核|分枝桿菌|抗酸(?:性|菌)/i.test(labels)) {
     return 'mycobacteriology'
   }
   if (/FUNG|YEAST|MOLD|MOULD|KOH|INDIA INK|黴菌|真菌|酵母/i.test(labels)) {
     return 'mycology'
   }
+  if (isGenericOrganismSlot(labels) && isExplicitFungalCultureResult(value)) {
+    return 'mycology'
+  }
   return 'bacteriology'
+}
+
+function standardizedNameFromOriginal(
+  originalName: string,
+  family: MicrobiologyFamily,
+  stage: MicrobiologyStage,
+): string {
+  if (family === 'mycobacteriology') {
+    return MYCOBACTERIAL_STANDARDIZED_NAME_BY_STAGE[stage] ?? originalName
+  }
+  if (family === 'mycology' && stage === 'culture') return 'Fungal Culture'
+  // A culture order may carry a flattened antibiogram as its actual result.
+  // Once the content proves this is susceptibility data, describe the result
+  // being displayed instead of repeating the culture container name.
+  if (stage === 'susceptibility') return '抗生素藥敏試驗'
+  if (/BLOOD\s+CULTURE|(?:細菌)?血液(?:細菌)?培養/i.test(originalName)) return 'Blood Culture'
+  if (/ANAEROBIC(?:\s+CULTU(?:RE)?)?(?:\s*#\s*\d+)?|厭氧培養/i.test(originalName)) return 'Anaerobic Culture'
+  if (/AEROBIC\s+CULTURE|嗜氧培養/i.test(originalName)) return 'Aerobic Culture'
+  if (/^CULTURE\s*\(\s*AEROBIC\s+CULTURE\s*\)$/i.test(originalName)) return 'Aerobic Culture'
+  if (/GRAM(?:[^A-Z0-9\s]S)?\s+STAIN|革蘭氏?染色|格蘭氏?染色/i.test(originalName)) return 'Gram Stain'
+  if (/FUNG(?:AL|US)(?:\s+CULTURE)?\s*#?\s*\d+|黴菌培養|真菌培養/i.test(originalName)) return 'Fungal Culture'
+  if (/^URINE\s+CULTURE/i.test(originalName)) return 'Urine Culture'
+  if (/\bID\s*\+\s*DS\s+COMMON\b/i.test(originalName)) return 'Culture Identification'
+  if (/^ORGANISM\s*\d+$/i.test(originalName)) return 'Organism identification'
+  if (/^EP\.?\s*CELL(?:-|\s)*SPUTUM$/i.test(originalName)) return 'Epithelial cells (microscopy)'
+  if (/^W\.?B\.?C\.?(?:-|\s)*SPUTUM$/i.test(originalName)) return 'WBC (microscopy)'
+  if (/^NEUTROPHILS?$/i.test(originalName)) return 'Neutrophils (microscopy)'
+  if (/^G\(\+\)\s*BACILL/i.test(originalName)) return 'Gram-positive bacilli'
+  if (/^G\(-\)\s*BACILL/i.test(originalName)) return 'Gram-negative bacilli'
+  if (/^G\(\+\)\s*COCC/i.test(originalName)) return 'Gram-positive cocci'
+  if (/^G\(-\)\s*COCC/i.test(originalName)) return 'Gram-negative cocci'
+  if (/\bMIC\b|藥敏|敏感性|最低抑制濃度/i.test(originalName)) return '抗生素藥敏試驗'
+  return originalName
 }
 
 function observationValue(obs: any): string {
@@ -257,6 +311,13 @@ function resolveSpecimen(obs: any, labels: string): {
     || normalizedText(obs?.bodySite?.coding?.[0]?.display)
   if (explicit) return { specimen: explicit, confidence: 'source' }
   if (/BLOOD\s+CULTURE|血液培養/i.test(labels)) return { specimen: 'Blood', confidence: 'inferred' }
+  if (/PUS\s*\/\s*WOUND|PUS\s*(?:OR|AND|&)\s*WOUND/i.test(labels)) {
+    return { specimen: 'Pus / Wound', confidence: 'inferred' }
+  }
+  if (/URINE\s+CULTURE\s*\(\s*MIDDLE\s+STREAM\s*\)/i.test(labels)) {
+    return { specimen: 'Urine (midstream)', confidence: 'inferred' }
+  }
+  if (/SPUTUM/i.test(labels)) return { specimen: 'Sputum', confidence: 'inferred' }
   return { specimen: 'unknown', confidence: 'missing' }
 }
 
@@ -277,31 +338,26 @@ export function buildMicrobiologyCumulativeModel(
     if (!date) return
 
     const labels = observationLabels(obs)
-    const stageInfo = classifyStage(obs, labels)
-    // Family classification must not consume the NHI order's explanatory
-    // display text. For example, 13007C says 「抗酸菌除外」 and would otherwise
-    // be promoted into the mycobacterial family merely because the excluded
-    // organism name appears in that sentence.
-    const family = classifyFamily(localObservationLabels(obs), stageInfo.sourceOrderCode)
+    const value = observationValue(obs)
+    const stageInfo = classifyStage(obs, value)
+    const family = classifyFamily(localObservationLabels(obs), value)
     const specimen = resolveSpecimen(obs, labels)
-    const identity = getLabPivotTestIdentity(obs, 'microbio', 'standardized')
     const originalName = getOriginalAnalyteDisplayForObs(obs)
       || getTestDisplayName(obs)
-      || identity.displayName
-    const value = observationValue(obs)
+      || 'Unknown microbiology test'
     const susceptibilities = extractSusceptibilities(obs)
+    const hasFreeTextSusceptibility = parseSusceptibilityFreeText(value) !== null
+    const stage = susceptibilities.length > 0 || hasFreeTextSusceptibility
+      ? 'susceptibility'
+      : stageInfo.stage
 
     results.push({
       id: resultId(obs, index),
       date,
       effectiveDateTime,
       family,
-      stage: susceptibilities.length > 0 && stageInfo.stage === 'other'
-        ? 'susceptibility'
-        : stageInfo.stage,
-      standardizedName: stageInfo.sourceOrderCode
-        ? (NHI_STANDARDIZED_NAME_BY_CODE[stageInfo.sourceOrderCode] ?? identity.displayName)
-        : identity.displayName,
+      stage,
+      standardizedName: standardizedNameFromOriginal(originalName, family, stage),
       originalName,
       specimen: specimen.specimen,
       specimenConfidence: specimen.confidence,
@@ -311,6 +367,38 @@ export function buildMicrobiologyCumulativeModel(
       sourceOrderCode: stageInfo.sourceOrderCode,
       sourceRoleConflict: stageInfo.sourceRoleConflict,
       susceptibilities,
+    })
+  })
+
+  // Some source reports use only the generic names `CULTURE` and `SMEAR`.
+  // `SMEAR + Negative` is ambiguous in isolation, but becomes an AFB smear
+  // when its exact report context also contains a generic culture whose text
+  // explicitly names Mycobacterium. This uses source-name/result context only;
+  // the billing code is deliberately not consulted.
+  const exactReportGroups = new Map<string, MicrobiologyCumulativeResult[]>()
+  results.forEach((result) => {
+    const key = [
+      result.effectiveDateTime,
+      result.organization ?? '',
+      result.specimen,
+    ].map((part) => normalizedText(part).toLowerCase()).join('|')
+    const group = exactReportGroups.get(key) ?? []
+    group.push(result)
+    exactReportGroups.set(key, group)
+  })
+  exactReportGroups.forEach((group) => {
+    const hasExplicitGenericMycobacterialCulture = group.some((result) => (
+      /^CULTURE$/i.test(result.originalName.trim())
+      && result.family === 'mycobacteriology'
+      && result.stage === 'culture'
+      && mycobacterialStageFromResult(result.value) === 'culture'
+    ))
+    if (!hasExplicitGenericMycobacterialCulture) return
+    group.forEach((result) => {
+      if (!/^SMEAR$/i.test(result.originalName.trim())) return
+      if (result.stage !== 'directExam' || !/^NEGATIVE$/i.test(result.value.trim())) return
+      result.family = 'mycobacteriology'
+      result.standardizedName = MYCOBACTERIAL_STANDARDIZED_NAME_BY_STAGE.directExam ?? result.originalName
     })
   })
 
@@ -341,23 +429,14 @@ export function buildMicrobiologyCumulativeModel(
     })
   })
 
-  // Bridges can emit both the local-name and LOINC-normalized copy of the same
-  // report. Collapse only semantically identical rows; different values or
-  // hospitals remain visible as separate source results.
-  const seenResultKeys = new Set<string>()
+  // Equal-looking rows may be separate specimens or separately collected
+  // smears. Preserve every distinct source resource and let the view show a
+  // compact ×N count. Only remove the same FHIR resource if it was passed into
+  // the model more than once.
+  const seenResourceIds = new Set<string>()
   const uniqueResults = results.filter((result) => {
-    const key = [
-      result.effectiveDateTime,
-      result.organization ?? '',
-      result.sourceOrderCode ?? '',
-      result.family,
-      result.stage,
-      result.standardizedName,
-      result.specimen,
-      result.value,
-    ].map((part) => normalizedText(part).toLowerCase()).join('|')
-    if (seenResultKeys.has(key)) return false
-    seenResultKeys.add(key)
+    if (seenResourceIds.has(result.id)) return false
+    seenResourceIds.add(result.id)
     return true
   })
 
