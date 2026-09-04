@@ -29,6 +29,7 @@ async function main() {
   const { scopeClinicalDataForAi } = await import(path.join(ROOT, 'src/core/utils/ai-clinical-scope.utils.ts'))
   const { listClinicalDocuments, resolveSelectedDocuments } = await import(path.join(ROOT, 'src/core/utils/clinical-documents.utils.ts'))
   const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
+  const { DEMO_DATA_AS_OF_MS } = await import(path.join(ROOT, 'src/shared/constants/demo-data.constants.ts'))
   const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
 
   const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/demo/demo-bundle.json'), 'utf8'))
@@ -49,6 +50,7 @@ async function main() {
     DEFAULT_DATA_SELECTION,
     DEFAULT_DATA_FILTERS,
     includedDocumentIds,
+    DEMO_DATA_AS_OF_MS,
   )
   let failures = 0
   const fail = (msg: string) => { failures += 1; console.error('✗', msg) }
@@ -80,16 +82,17 @@ async function main() {
       for (const e of emph) if (e.text.length > EMPHASIS_MAX_CHARS) fail(`summary[${tag}]: emphasis too long: ${e.text}`)
       for (const issue of auditSummaryGrounding(snapshot, grounding)) fail(`summary[${tag}] grounding: ${issue}`)
       if (aud === 'patient') {
-        const urinaryEducation = snapshot.medicationEducation
-        const betmiga = urinaryEducation.find(
-          (item: { name: string }) => item.name.includes('Betmiga'),
-        )
-        if (!betmiga) fail(`summary[${tag}]: missing standalone Betmiga education item`)
-        if (betmiga && (betmiga.sources.join(',') !== 'M6' || /Harnalidge|Oxbu/.test(betmiga.name))) {
-          fail(`summary[${tag}]: Betmiga item is not isolated to its exact M6 record`)
-        }
-        if (betmiga && /口乾|便祕|姿勢.*頭暈|dry mouth|constipation|dizz/i.test(betmiga.attention)) {
-          fail(`summary[${tag}]: Betmiga inherited another medicine's anticholinergic/orthostatic reminder`)
+        const education = snapshot.medicationEducation
+        const expectedCurrentEducation = [
+          { pattern: /Forxiga/, sources: 'M10' },
+          { pattern: /Aricept/, sources: 'M5,M11' },
+        ]
+        for (const expected of expectedCurrentEducation) {
+          const item = education.find((candidate: { name: string }) => expected.pattern.test(candidate.name))
+          if (!item) fail(`summary[${tag}]: missing current medication education for ${expected.pattern.source}`)
+          if (item && item.sources.join(',') !== expected.sources) {
+            fail(`summary[${tag}]: ${expected.pattern.source} cites ${item.sources.join(',')} instead of ${expected.sources}`)
+          }
         }
       }
       console.log(`✓ summary[${tag}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.investigations.length} investigation trends, ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)

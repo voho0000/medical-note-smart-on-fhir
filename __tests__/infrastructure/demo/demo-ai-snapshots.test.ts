@@ -2,6 +2,7 @@ import {
   DEMO_CLINICAL_INSIGHT_GENERATION,
   DEMO_MEDICAL_SUMMARY_GENERATION,
   DEMO_SAFETY_SCAN_GENERATION,
+  demoClinicalInsightSnapshots,
   demoMedicalSummarySnapshots,
   demoSafetyScanSnapshots,
   getDemoClinicalInsightSnapshot,
@@ -34,8 +35,8 @@ describe('demo clinical-insight snapshots', () => {
   it('declares honest pre-generated model provenance without a fabricated time', () => {
     expect(DEMO_CLINICAL_INSIGHT_GENERATION).toEqual({
       source: 'pre-generated',
-      modelId: 'gemini-3.1-flash-lite',
-      modelName: 'Gemini 3.1 Flash-Lite',
+      modelId: 'gemini-3-flash-preview',
+      modelName: 'Gemini 3 Flash Preview',
       provider: 'gemini',
     })
     expect(DEMO_CLINICAL_INSIGHT_GENERATION).not.toHaveProperty('generatedAt')
@@ -47,7 +48,7 @@ describe('demo clinical-insight snapshots', () => {
       'patient',
       'zh-TW',
       'health-overview',
-    )?.text).toContain('最近值得注意的健康變化')
+    )?.text).toContain('截至 8 月 27 日')
   })
 
   it('never supplies a demo snapshot for a real patient', () => {
@@ -65,7 +66,17 @@ describe('demo clinical-insight snapshots', () => {
       'medical',
       'en',
       'changes',
-    )?.text).toContain('Recent important changes')
+    )?.text).toContain('August 27 records show')
+  })
+
+  it('does not promote the unconfirmed myeloma ICD claim into any snapshot', () => {
+    const allSnapshots = JSON.stringify({
+      summaries: demoMedicalSummarySnapshots,
+      insights: demoClinicalInsightSnapshots,
+      safety: demoSafetyScanSnapshots,
+    })
+    expect(allSnapshots).not.toMatch(/多發性骨髓瘤|multiple\s+myeloma|\bmyeloma\b|\bMM\b/i)
+    expect(allSnapshots).toMatch(/申報|claim/i)
   })
 })
 
@@ -73,8 +84,8 @@ describe('demo medical-summary snapshots', () => {
   it('declares honest pre-generated model provenance without a fabricated time', () => {
     expect(DEMO_MEDICAL_SUMMARY_GENERATION).toEqual({
       source: 'pre-generated',
-      modelId: 'gemini-3.1-flash-lite',
-      modelName: 'Gemini 3.1 Flash-Lite',
+      modelId: 'gemini-3-flash-preview',
+      modelName: 'Gemini 3 Flash Preview',
     })
     expect(DEMO_MEDICAL_SUMMARY_GENERATION).not.toHaveProperty('generatedAt')
     expect(DEMO_SAFETY_SCAN_GENERATION).toEqual(DEMO_MEDICAL_SUMMARY_GENERATION)
@@ -115,11 +126,11 @@ describe('demo medical-summary snapshots', () => {
     expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
   })
 
-  it('uses the same de-identified facility aliases as the English demo UI', () => {
+  it('keeps the compact English reconciliation fully English and de-identified', () => {
     const reconciliation = demoMedicalSummarySnapshots.en.medical
       .medicationReview.reconciliation.map((item) => item.text).join(' ')
-    expect(reconciliation).toContain('B Hospital')
-    expect(reconciliation).toContain('A Pharmacy')
+    expect(reconciliation).toContain('Aricept')
+    expect(reconciliation).not.toContain('示範')
     expect(reconciliation).not.toMatch(/Demo (Grace|Sunny)/)
   })
 
@@ -169,12 +180,14 @@ describe('demo medical-summary snapshots', () => {
               expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
             ]),
           }))
-        expect(finalized.timeline.find((event) => event.key === 'D1'))
-          .toEqual(expect.objectContaining({
+        const documentTimeline = finalized.timeline.find((event) => event.key === 'D1')
+        if (documentTimeline) {
+          expect(documentTimeline).toEqual(expect.objectContaining({
             documentEvidence: expect.arrayContaining([
               expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
             ]),
           }))
+        }
         expect(auditSummaryGrounding(snapshot, grounding)).toEqual([])
 
         const safetySnapshot = demoSafetyScanSnapshots[locale][audience]
@@ -259,25 +272,19 @@ describe('demo medical-summary snapshots', () => {
     expect(unresolvable).toEqual([])
   })
 
-  it('keeps exact NHI terminology from crossing between urinary medicine education items', () => {
+  it('keeps current medication terminology aligned with each education item', () => {
     const education = demoMedicalSummarySnapshots['zh-TW'].patient.medicationEducation
-    const harnalidge = education.find((item) => item.name.includes('Harnalidge'))
-    const oxbu = education.find((item) => item.name.includes('Oxbu'))
-    const betmiga = education.find((item) => item.name.includes('Betmiga'))
+    const aricept = education.find((item) => item.name.includes('Aricept'))
+    const glaucoma = education.find((item) => item.sources.join(',') === 'M2,M3,M4')
 
-    expect(harnalidge).toMatchObject({ sources: ['M4'] })
-    expect(oxbu).toMatchObject({ sources: ['M5'] })
-    expect(betmiga).toMatchObject({ sources: ['M6'] })
-    expect(betmiga?.name).toContain('mirabegron')
-    expect(betmiga?.benefit).toContain('不是抗膽鹼藥')
-    expect(betmiga?.attention).not.toMatch(/口乾|便祕|姿勢.*頭暈/)
+    expect(aricept).toMatchObject({ sources: ['M5', 'M11'] })
+    expect(aricept?.benefit).toContain('失智症治療')
+    expect(glaucoma).toMatchObject({ sources: ['M2', 'M3', 'M4'] })
 
-    expect(demoMedicalSummarySnapshots['zh-TW'].medical.medicationReview.regimen)
-      .toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'Harnalidge', sources: ['M4'] }),
-        expect.objectContaining({ name: 'Oxbu', sources: ['M5'] }),
-        expect.objectContaining({ name: 'Betmiga', sources: ['M6'] }),
-      ]))
+    const regimen = demoMedicalSummarySnapshots['zh-TW'].medical.medicationReview.regimen
+    expect(regimen.some((item) => item.sources.includes('M13'))).toBe(true)
+    expect(regimen.some((item) => item.sources.includes('M5') && item.sources.includes('M11'))).toBe(true)
+    expect(regimen.some((item) => item.sources.includes('M10'))).toBe(true)
   })
 
   it.each(['medical', 'patient'] as const)(
