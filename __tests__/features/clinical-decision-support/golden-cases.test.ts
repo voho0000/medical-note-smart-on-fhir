@@ -138,7 +138,7 @@ describe('DM CDSS cross-patient golden cases', () => {
     expect(lipid).toMatchObject({
       priority: 'high',
       status: 'actionable',
-      title: 'ASCVD：現有資料未見 statin',
+      title: 'ASCVD：無 statin 處方',
     })
     expect(lipid?.missingData).toContain('LDL-C 與採檢日期')
     expect(lipid?.recommendation).toContain('不阻擋本次開始評估')
@@ -192,8 +192,8 @@ describe('DM CDSS cross-patient golden cases', () => {
       label: 'on-hold MedicationRequest',
       medication: statinMedication({ sourceType: 'MedicationRequest', status: 'on-hold' }),
       expectedState: 'on-hold',
-      expectedStatus: 'review',
-      expectedTitle: 'statin 暫停中',
+      expectedStatus: 'actionable',
+      expectedTitle: '無 statin 處方',
     },
     {
       label: 'completed MedicationRequest whose supply ran out months ago',
@@ -206,7 +206,7 @@ describe('DM CDSS cross-patient golden cases', () => {
       }),
       expectedState: 'not-found',
       expectedStatus: 'actionable',
-      expectedTitle: '現有資料未見 statin',
+      expectedTitle: '無 statin 處方',
     },
     {
       label: 'completed MedicationRequest with no supply duration to place it in time',
@@ -217,7 +217,7 @@ describe('DM CDSS cross-patient golden cases', () => {
       }),
       expectedState: 'not-found',
       expectedStatus: 'actionable',
-      expectedTitle: '現有資料未見 statin',
+      expectedTitle: '無 statin 處方',
     },
   ])('reads $label as taking or not taking', ({
     medication,

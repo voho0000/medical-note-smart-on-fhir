@@ -663,7 +663,7 @@ describe('personalized CKD guidance', () => {
       /尚未確認實際使用|確認目前是否使用|服藥依從性|目前無需另加提示/,
     )
     expect(result.notEvaluated).toEqual(expect.arrayContaining([
-      expect.stringContaining('處方資料只代表曾開立或仍有有效處方'),
+      expect.stringContaining('處方紀錄涵蓋跨院，據此判定用藥類別是否存在'),
     ]))
   })
 
