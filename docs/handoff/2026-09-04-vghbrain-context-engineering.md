@@ -89,6 +89,33 @@
 **真實 Medcloud capture（5 位病人）**：548–4,672 tokens，階梯完全未觸發。
 用藥修正後各病人顯示 **9–43 筆**（修正前一律 0）。
 
+### 下載資料夾的 66 MB 合成病歷
+
+`C:\Users\voho00\Downloads\synthetic-cloud-oncology-v2-1100000-tokens.fhir.json`
+（66,414,511 bytes、2026-09-03）是**同一支產生器的舊版輸出**，不是另一個病人；**不要複製進 repo**。
+與 `artifacts/synthetic-oncology/` 今天重跑的版本差異只有三處：sha256（`7f44b6f4…` vs `ce79ad03…`）、
+bundle entries 27,945 vs 27,961、MedicationRequest **768（全部 `completed/order`）vs 784**
+（772 completed + 12 active，含 6 長期單／6 慢箋／4 近期停藥）；出院病摘是**純敘述段落、無標頭**，
+新版才是 NHI 版面（住院臆斷／出院診斷／癌症期別／主訴／病史）。其餘資源數完全相同
+（Observation 24,192、DiagnosticReport 2,328、Encounter 384、Composition 49、Procedure 96…）。
+
+量測（external fixture，`CONTEXT_REDUCTION_AS_OF=2026-09-03`）：all-data 上限 **385,273**；
+`full` **51,014**／`trimmed` 5,792／`compact` 5,420／`tight` 4,207／`prioritized` 50,675。
+100K 與 150K 目標都**選中 `full`**，關鍵事實 **0/209 流失**；只有 4K 目標掉到 `prioritized`
+（3,797，失去 23 份病摘 + 48 項手術）。段落成本：Documents **46,888**、檢驗 971、影像 718、
+就診 781、手術 601、用藥 540（納入 40 筆、渲染 15 行）。文件 24 份，**全部整份送出、0 份走
+keySections**——舊版病摘沒有 NHI 標頭，抽取器認不出結論標頭就回退全文，這正是新版把病摘從
+46.9K 壓到 19.6K 的來源。Widened 控制組：**73,952**（影像段 23,075），不影響階梯，仍選 `full`。
+
+另一台電腦兩種做法皆可：直接拿這個檔當 external fixture 跑（下節指令加
+`CONTEXT_REDUCTION_FIXTURE=<絕對路徑>` + `CONTEXT_REDUCTION_OUT_DIR=<repo 外目錄>`
++ `CONTEXT_REDUCTION_AS_OF=2026-09-03`），或用
+`scripts/generate-cloud-oncology-stress-bundle.cjs` 重新產生新版。
+
+> Downloads 內其他 bundle（`ehr-fhir-bridge-*-50205180-*.json` 1–4 MB，含一個 `-deid-` 版；
+> `patient2.fhir.bundle.json` 4.9 MB）**本輪未使用**，可能是真實或去識別資料，
+> 一律適用上面的隱私規則：不得進入本 repo、不得寫進報告。
+
 ---
 
 ## 如何重現量測
