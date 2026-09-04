@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FileSearch, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
@@ -14,6 +14,10 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import {
+  useEvidenceOverrides,
+  useEvidenceOverridesStore,
+} from './stores/evidence-overrides.store'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -136,7 +140,18 @@ export default function LiveClinicalDecisionSupportFeature() {
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
-  const profile = useMemo(() => {
+  const patientId = patient?.id
+  const evidenceOverrides = useEvidenceOverrides(patientId)
+  const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
+
+  // The switches this physician set on this chart survive a reload, so they are
+  // read back before the pack runs rather than after.
+  useEffect(() => {
+    if (patientId) hydrateEvidenceOverrides(patientId)
+  }, [hydrateEvidenceOverrides, patientId])
+
+  // The chart half of the profile: expensive, and independent of the switches.
+  const recordProfile = useMemo(() => {
     if (!patient) return null
     return createFhirCdssPatientProfile({
       patient,
@@ -148,6 +163,11 @@ export default function LiveClinicalDecisionSupportFeature() {
       carePlans: clinicalData.carePlans,
       procedures: clinicalData.procedures,
       immunizations: clinicalData.immunizations,
+      // Report narrative is structured evidence too: a chest film's conclusion
+      // and a discharge summary's physical examination each state findings the
+      // structured record does not otherwise carry.
+      diagnosticReports: clinicalData.diagnosticReports,
+      documentReferences: clinicalData.documentReferences,
     })
   }, [
     clinicalData.conditions,
@@ -158,8 +178,16 @@ export default function LiveClinicalDecisionSupportFeature() {
     clinicalData.carePlans,
     clinicalData.procedures,
     clinicalData.immunizations,
+    clinicalData.diagnosticReports,
+    clinicalData.documentReferences,
     patient,
   ])
+
+  // Toggling a row re-enters the pack through the profile, so a module's status
+  // follows what the physician left standing. Nothing patches a rendered card.
+  const profile = useMemo(() => (
+    recordProfile ? { ...recordProfile, evidenceOverrides } : null
+  ), [evidenceOverrides, recordProfile])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -288,7 +316,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       {result.clinicalHandoff ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
-      <ClinicalDecisionSupportView result={result} locale={cdssLocale} />
+      <ClinicalDecisionSupportView result={result} locale={cdssLocale} patientId={patientId} />
     </div>
   )
 }

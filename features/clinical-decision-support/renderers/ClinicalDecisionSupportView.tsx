@@ -40,10 +40,16 @@ import type {
 } from '../types'
 import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-card'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
+import { EvidenceTablePanel } from './EvidenceTablePanel'
 
 interface ClinicalDecisionSupportViewProps {
   result: CdssResult
   locale: CdssLocale
+  /**
+   * Whose chart this is. The evidence switches are a clinical judgement about
+   * one person, so they are stored per patient and never carried across.
+   */
+  patientId?: string
 }
 
 const statusStyle: Record<CdssStatus, string> = {
@@ -1406,10 +1412,12 @@ function RecommendationDetail({
   isEnglish,
   onNavigate,
   label,
+  patientId,
 }: {
   recommendation: CdssRecommendation
   isEnglish: boolean
   onNavigate: (target: ResourceNavTarget) => void
+  patientId?: string
   label: {
     evidence: string
     missing: string
@@ -1591,6 +1599,22 @@ function RecommendationDetail({
           onNavigate={onNavigate}
         />
       ) : null}
+
+      {/*
+        A module that concluded anything about 鬱血 or LV filling pressure ships
+        the rows it concluded from, immediately under the evidence it summarised
+        — switching one off recomputes the pack rather than editing this card.
+      */}
+      {(recommendation.evidenceTables ?? []).map((table) => (
+        <EvidenceTablePanel
+          key={`${recommendation.id}-${table.concept}`}
+          table={table}
+          recommendationId={recommendation.id}
+          locale={isEnglish ? 'en' : 'zh-TW'}
+          patientId={patientId}
+          onNavigate={onNavigate}
+        />
+      ))}
 
       {isCompactClassification ? (
         <ClassificationActionPlan
@@ -1799,6 +1823,7 @@ function RecommendationDetail({
 export function ClinicalDecisionSupportView({
   result,
   locale,
+  patientId,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -2337,6 +2362,7 @@ export function ClinicalDecisionSupportView({
                     isEnglish={isEnglish}
                     onNavigate={navigateToResource}
                     label={label}
+                    patientId={patientId}
                   />
                 </div>
               ) : null}
