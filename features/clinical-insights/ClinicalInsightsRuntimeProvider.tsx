@@ -51,6 +51,10 @@ import {
 } from "@/src/infrastructure/demo/demo-ai-snapshots"
 import { useAiDataSource } from '@/src/application/hooks/ai-generation/ai-data-source'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import {
+  isVghBrainModel,
+  VGHBRAIN_CLINICAL_TOKEN_LIMIT,
+} from '@/src/shared/utils/vghbrain-context-policy'
 
 const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const INSIGHTS_PIPELINE_VERSION = "custom-summary-modules-v2"
@@ -120,7 +124,19 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     openAiCompatibleProfiles,
   )
   const contextLimit = modelContextLimit(model, openAiCompatible)
-  const fittedClinicalInput = useClinicalAiInput(contextLimit)
+  const modelName = modelDisplayLabel(model, openAiCompatible)
+  // VGHBrain enforces explicit input caps instead of tokenizer headroom, and
+  // must never reach the model with text-truncated records. Mirror the Medical
+  // Summary path (use-ai-slot-generation) so both consumers of the same
+  // clinical selection fit it identically.
+  const isVghBrain = isVghBrainModel(modelName)
+  const fittedClinicalInput = useClinicalAiInput(
+    contextLimit,
+    'insights',
+    1,
+    !isVghBrain,
+    isVghBrain ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
+  )
   const dataSource = useAiDataSource()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
   const [bundleRevision, setBundleRevision] = useState(0)
@@ -141,7 +157,6 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const canGenerate = modelProvider === 'custom'
     ? isOpenAiCompatibleRuntimeReady(openAiCompatible)
     : hasModelProviderKey || hasModelProxy
-  const modelName = modelDisplayLabel(model, openAiCompatible)
   const autoRunScope = authLoading
     ? "auth-loading"
     : hasModelProviderKey

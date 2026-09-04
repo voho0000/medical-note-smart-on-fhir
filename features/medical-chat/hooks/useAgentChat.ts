@@ -58,7 +58,13 @@ import {
   apiKeyForModel,
   hasDirectModelAccess,
   modelContextLimit,
+  modelDisplayLabel,
 } from '@/src/shared/utils/model-access.utils'
+import {
+  capVghBrainContextLimit,
+  isVghBrainModel,
+  VGHBRAIN_CLINICAL_TOKEN_LIMIT,
+} from '@/src/shared/utils/vghbrain-context-policy'
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
@@ -136,8 +142,21 @@ export function useAgentChat(
     contextModelId,
     openAiCompatibleProfiles,
   )
+  // VGHBrain enforces explicit input caps instead of tokenizer headroom, and
+  // must never receive text-truncated clinical records. Mirror the Medical
+  // Summary (use-ai-slot-generation) and Clinical Insights paths so every
+  // consumer of the same clinical selection fits it identically.
+  const contextModelName = modelDisplayLabel(contextModelId, contextOpenAiCompatible)
+  const isVghBrainContextModel = isVghBrainModel(contextModelName)
   const fittedClinicalInput = useClinicalAiInput(
-    modelContextLimit(contextModelId, contextOpenAiCompatible),
+    capVghBrainContextLimit(
+      modelContextLimit(contextModelId, contextOpenAiCompatible),
+      contextModelName,
+    ),
+    'insights',
+    1,
+    !isVghBrainContextModel,
+    isVghBrainContextModel ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
   )
   const selectedClinicalContext = fittedClinicalInput.clinicalContext
   const { t, locale } = useLanguage()

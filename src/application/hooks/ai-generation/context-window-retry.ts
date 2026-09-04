@@ -6,6 +6,7 @@ import {
 import {
   ContextOverflowError,
   createContextOverflowIssue,
+  type ProtectedDocumentSummary,
 } from '@/src/shared/utils/context-budget'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { capVghBrainContextLimit, isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT } from '@/src/shared/utils/vghbrain-context-policy'
@@ -21,6 +22,9 @@ export interface ContextWindowRetryRequest<TRequest, TResult> {
   locale: string
   /** Custom document selections must survive provider/preflight recovery intact. */
   preserveClinicalContext?: boolean
+  /** Manually selected documents protected in full. Only their heaviest few are
+   *  reported, so an overflow message can name the picks worth undoing. */
+  protectedDocuments?: ProtectedDocumentSummary[]
   buildRequest: (clinicalContext: string) => {
     request: TRequest
     /** Complete serialized prompt text, including fixed instructions and
@@ -74,9 +78,14 @@ export async function runWithContextWindowRetry<TRequest, TResult>(
         selectedContextLimit: isVgh ? VGHBRAIN_CLINICAL_TOKEN_LIMIT : undefined,
         allowExactFit: isVgh,
         contextLimit: capVghBrainContextLimit(options.contextLimit, options.modelName),
+        ...(options.protectedDocuments?.length ? { protectedDocuments: options.protectedDocuments } : {}),
       })
       if (overflow) {
-        if ((!isVgh || overflow.selectedTokens! <= VGHBRAIN_CLINICAL_TOKEN_LIMIT) && attempt === 0
+        // A missing selected-context estimate must fail closed: treat it as
+        // over the clinical cap so a caller that forgot `selectedContext`
+        // cannot get the optional-overhead retry (and then a send) for free.
+        if ((!isVgh || (overflow.selectedTokens ?? Number.POSITIVE_INFINITY) <= VGHBRAIN_CLINICAL_TOKEN_LIMIT)
+            && attempt === 0
             && options.recoverBeforeContextReduction?.('local-preflight')) {
           options.onRetry?.('optional-overhead-removed', 0)
           continue

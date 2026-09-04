@@ -25,6 +25,9 @@ jest.mock("@/src/application/providers/language.provider", () => ({
 }))
 
 jest.mock("@/src/shared/utils/context-budget", () => ({
+  ...jest.requireActual("@/src/shared/utils/context-budget"),
+  // This suite is about provenance, not budgets: never block on overflow.
+  createContextOverflowIssue: () => null,
   preflightContextWarning: () => null,
 }))
 

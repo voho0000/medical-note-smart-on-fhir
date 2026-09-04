@@ -36,7 +36,21 @@ export interface PreflightContextWarningOptions {
   selectedContextLimit?: number
   /** Explicit input caps permit exactly the stated maximum. Legacy guards do not. */
   allowExactFit?: boolean
+  /** Manually picked documents that are protected in full for this request.
+   *  Only the heaviest few are reported, so the user knows which picks to undo. */
+  protectedDocuments?: ProtectedDocumentSummary[]
 }
+
+/** One manually selected document, sized so the UI can name the heaviest picks. */
+export interface ProtectedDocumentSummary {
+  id: string
+  title: string
+  /** Estimated tokens this document contributes to the clinical context. */
+  tokens: number
+}
+
+/** How many protected documents an overflow issue names. */
+export const PROTECTED_DOCUMENT_HINT_LIMIT = 3
 
 /** Stable, machine-readable details for a request that cannot fit the model. */
 export interface ContextOverflowIssue {
@@ -56,6 +70,9 @@ export interface ContextOverflowIssue {
   overBy: number
   /** Concrete Data Selection target, after accounting for fixed prompt cost. */
   suggestedSelectedMax: number | null
+  /** Heaviest manually selected documents (descending), when the caller knows
+   *  them. Present only for the manual-document / VGHBrain branch. */
+  protectedDocuments?: ProtectedDocumentSummary[]
 }
 
 /** Error wrapper that keeps overflow data intact for actionable UI handling. */
@@ -151,8 +168,14 @@ export function createContextOverflowIssue(
         selectedTokens - overBy - (options.allowExactFit ? 0 : 1),
       ))
 
+  const protectedDocuments = (options.protectedDocuments ?? [])
+    .slice()
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, PROTECTED_DOCUMENT_HINT_LIMIT)
+
   return {
     kind: 'context-overflow',
+    ...(protectedDocuments.length === 0 ? {} : { protectedDocuments }),
     requestTokens: budget.tokens,
     selectedTokens,
     ...(selectedLimit === undefined ? {} : { selectedLimit }),
@@ -164,6 +187,36 @@ export function createContextOverflowIssue(
   }
 }
 
+/**
+ * One short sentence naming the heaviest manually selected documents, so the
+ * user can see WHICH picks to undo instead of only a token delta and a count.
+ * Returns '' when the caller did not supply document metadata.
+ */
+export function formatProtectedDocumentsHint(
+  issue: ContextOverflowIssue,
+  locale: string,
+): string {
+  const documents = issue.protectedDocuments ?? []
+  if (documents.length === 0) return ''
+  const list = documents
+    .map((document) => `${document.title}（~${formatApproxTokenCount(document.tokens)}）`)
+    .join('、')
+  if (locale === 'zh-TW') return `已選文件中最大的幾份：${list}。`
+  const enList = documents
+    .map((document) => `${document.title} (~${formatApproxTokenCount(document.tokens)})`)
+    .join(', ')
+  return `Largest selected documents: ${enList}.`
+}
+
+function appendProtectedDocumentsHint(
+  message: string,
+  issue: ContextOverflowIssue,
+  locale: string,
+): string {
+  const hint = formatProtectedDocumentsHint(issue, locale)
+  return hint ? `${message}${locale === 'zh-TW' ? '' : ' '}${hint}` : message
+}
+
 /** Format structured overflow data without losing the existing user wording. */
 export function formatContextOverflowIssue(
   issue: ContextOverflowIssue,
@@ -171,9 +224,13 @@ export function formatContextOverflowIssue(
 ): string {
   if (issue.selectedLimit !== undefined && issue.selectedTokens !== null
       && issue.selectedTokens > issue.selectedLimit) {
-    return locale === 'zh-TW'
-      ? `病人 context 約 ${formatApproxTokenCount(issue.selectedTokens)} tokens，超過 ${formatApproxTokenCount(issue.selectedLimit)} tokens 上限。本次未送出，也未截短文字；請縮小「資料選擇」範圍。加入導引等內容後，完整輸入也必須在 ${formatApproxTokenCount(issue.usable)} tokens 以內。`
-      : `Patient context is about ${formatApproxTokenCount(issue.selectedTokens)} tokens, above its ${formatApproxTokenCount(issue.selectedLimit)}-token cap. Nothing was sent or text-truncated; narrow Data Selection. The complete input including guidance must also fit within ${formatApproxTokenCount(issue.usable)} tokens.`
+    return appendProtectedDocumentsHint(
+      locale === 'zh-TW'
+        ? `病人 context 約 ${formatApproxTokenCount(issue.selectedTokens)} tokens，超過 ${formatApproxTokenCount(issue.selectedLimit)} tokens 上限。本次未送出，也未截短文字；請縮小「資料選擇」範圍。加入導引等內容後，完整輸入也必須在 ${formatApproxTokenCount(issue.usable)} tokens 以內。`
+        : `Patient context is about ${formatApproxTokenCount(issue.selectedTokens)} tokens, above its ${formatApproxTokenCount(issue.selectedLimit)}-token cap. Nothing was sent or text-truncated; narrow Data Selection. The complete input including guidance must also fit within ${formatApproxTokenCount(issue.usable)} tokens.`,
+      issue,
+      locale,
+    )
   }
   const requestTokens = formatApproxTokenCount(issue.requestTokens)
   const usableTokens = formatApproxTokenCount(issue.usable)
@@ -190,9 +247,13 @@ export function formatContextOverflowIssue(
       ? `（建議將選取病歷控制在約 ${formatApproxTokenCount(issue.suggestedSelectedMax)} tokens 以內）`
       : ` (aim for about ${formatApproxTokenCount(issue.suggestedSelectedMax)} tokens or fewer in selected records)`
 
-  return locale === 'zh-TW'
-    ? `準備送給模型的完整輸入約 ${requestTokens} tokens${selectedBreakdown}，超過此模型約 ${usableTokens} tokens 的可用輸入空間（總內容視窗約 ${limitTokens}，已保留 ${reserveTokens} 供模型回覆）。為避免結果被截斷，本次未送出；請在「資料選擇」縮小範圍${reductionTarget}，或改用內容視窗更大的模型。`
-    : `The prepared complete model input is about ${requestTokens} tokens${selectedBreakdown}, over this model’s ${usableTokens}-token input budget (the full context window is about ${limitTokens}, with ${reserveTokens} reserved for the reply). The request was not sent to avoid a truncated result. Narrow the scope under Data Selection${reductionTarget} or switch to a larger-context model.`
+  return appendProtectedDocumentsHint(
+    locale === 'zh-TW'
+      ? `準備送給模型的完整輸入約 ${requestTokens} tokens${selectedBreakdown}，超過此模型約 ${usableTokens} tokens 的可用輸入空間（總內容視窗約 ${limitTokens}，已保留 ${reserveTokens} 供模型回覆）。為避免結果被截斷，本次未送出；請在「資料選擇」縮小範圍${reductionTarget}，或改用內容視窗更大的模型。`
+      : `The prepared complete model input is about ${requestTokens} tokens${selectedBreakdown}, over this model’s ${usableTokens}-token input budget (the full context window is about ${limitTokens}, with ${reserveTokens} reserved for the reply). The request was not sent to avoid a truncated result. Narrow the scope under Data Selection${reductionTarget} or switch to a larger-context model.`,
+    issue,
+    locale,
+  )
 }
 
 /**

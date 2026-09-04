@@ -3,6 +3,7 @@ import {
   createContextOverflowIssue,
   evaluateContextBudget,
   formatContextOverflowIssue,
+  formatProtectedDocumentsHint,
   isContextOverflowError,
   preflightContextWarning,
   DEFAULT_RESPONSE_RESERVE,
@@ -131,5 +132,67 @@ describe('structured context overflow issue', () => {
     expect(error.issue).toBe(issue)
     expect(isContextOverflowError(error)).toBe(true)
     expect(isContextOverflowError(new Error(error.message))).toBe(false)
+  })
+})
+
+// A token delta and a protected-document COUNT do not tell the user which pick
+// to undo. The heaviest few selected documents are named instead.
+describe('protected documents in an overflow issue', () => {
+  const requestText = '病'.repeat(19500)
+  const selectedContext = '病'.repeat(6900)
+
+  function issueWithDocuments(documents: { id: string; title: string; tokens: number }[]) {
+    return createContextOverflowIssue(requestText, 'openai-compatible-custom', {
+      selectedContext,
+      protectedDocuments: documents,
+    })!
+  }
+
+  it('keeps the top 3 by estimated tokens, descending', () => {
+    const issue = issueWithDocuments([
+      { id: 'd1', title: '出院病摘 A', tokens: 7000 },
+      { id: 'd2', title: '出院病摘 B', tokens: 12000 },
+      { id: 'd3', title: '出院病摘 C', tokens: 500 },
+      { id: 'd4', title: '出院病摘 D', tokens: 9000 },
+    ])
+
+    expect(issue.protectedDocuments?.map((document) => document.id)).toEqual(['d2', 'd4', 'd1'])
+  })
+
+  it('omits the field entirely when the caller supplies no documents', () => {
+    const issue = createContextOverflowIssue(requestText, 'openai-compatible-custom', {
+      selectedContext,
+    })!
+    expect(issue.protectedDocuments).toBeUndefined()
+    expect(formatProtectedDocumentsHint(issue, 'en')).toBe('')
+    expect(formatContextOverflowIssue(issue, 'en')).not.toContain('Largest selected documents')
+    expect(formatContextOverflowIssue(issue, 'zh-TW')).not.toContain('已選文件中最大的幾份')
+  })
+
+  it('names the documents in both locales, after the existing wording', () => {
+    const issue = issueWithDocuments([
+      { id: 'd1', title: 'Discharge summary 2026-01', tokens: 12000 },
+      { id: 'd2', title: 'Discharge summary 2025-11', tokens: 9000 },
+    ])
+
+    const en = formatContextOverflowIssue(issue, 'en')
+    expect(en).toContain('or fewer in selected records)')
+    expect(en).toContain('Largest selected documents: Discharge summary 2026-01 (~12k), Discharge summary 2025-11 (~9k).')
+
+    const zh = formatContextOverflowIssue(issue, 'zh-TW')
+    expect(zh).toContain('已選文件中最大的幾份：Discharge summary 2026-01（~12k）、Discharge summary 2025-11（~9k）。')
+  })
+
+  it('also names them on the clinical-cap message and on the error', () => {
+    const capped = createContextOverflowIssue(selectedContext, 'openai-compatible-custom', {
+      selectedContext,
+      selectedContextLimit: 100,
+      protectedDocuments: [{ id: 'd1', title: 'Progress note', tokens: 4600 }],
+    })!
+    const error = new ContextOverflowError(capped, 'en')
+
+    expect(error.message).toContain('above its 100-token cap')
+    expect(error.message).toContain('Largest selected documents: Progress note (~4.6k).')
+    expect(error.issue.protectedDocuments).toHaveLength(1)
   })
 })

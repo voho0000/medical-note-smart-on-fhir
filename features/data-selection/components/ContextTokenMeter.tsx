@@ -20,6 +20,7 @@ import {
   evaluateContextBudget,
   formatApproxTokenCount,
   formatContextOverflowIssue,
+  formatProtectedDocumentsHint,
   type ContextOverflowIssue,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
@@ -168,6 +169,17 @@ function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' 
   )
 
   const pct = Math.round(budget.fraction * 100)
+  // The clinical-cap wording comes straight from the shared formatter, which
+  // already names the heaviest protected documents. The generic branch builds
+  // its own copy, so it renders that hint as its own line instead.
+  const overflowExceedsSelectedLimit = Boolean(
+    overflowIssue && overflowIssue.selectedLimit !== undefined
+    && overflowIssue.selectedTokens !== null
+    && overflowIssue.selectedTokens > overflowIssue.selectedLimit,
+  )
+  const protectedDocumentsHint = overflowIssue && !overflowExceedsSelectedLimit
+    ? formatProtectedDocumentsHint(overflowIssue, locale)
+    : ''
 
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
@@ -284,7 +296,7 @@ function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' 
           className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
         >
           <p className="font-medium">
-            {overflowIssue.selectedLimit !== undefined && overflowIssue.selectedTokens !== null && overflowIssue.selectedTokens > overflowIssue.selectedLimit
+            {overflowExceedsSelectedLimit
               ? formatContextOverflowIssue(overflowIssue, locale)
               : (ds.tokenMeterOverflowGuidance ?? "上次完整摘要輸入約 {request} tokens，超過可用的 {usable} tokens。")
               .replace("{request}", formatApproxTokenCount(overflowIssue.requestTokens))
@@ -297,6 +309,7 @@ function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' 
                 .replace("{target}", formatApproxTokenCount(overflowIssue.suggestedSelectedMax))}
             </p>
           ) : null}
+          {protectedDocumentsHint ? <p>{protectedDocumentsHint}</p> : null}
           {overflowIssue.suggestedSelectedMax !== null && displayedTotal <= overflowIssue.suggestedSelectedMax ? (
             <p className="mt-0.5 font-medium text-emerald-700 dark:text-emerald-300">
               {ds.tokenMeterTargetReached ?? "目前已低於建議值；關閉後可重新產生，系統會再次檢查完整輸入。"}

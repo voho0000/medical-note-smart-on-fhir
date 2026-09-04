@@ -8,7 +8,16 @@ import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
 import { useInsightResponsesStore } from './useInsightResponsesStore'
 import type { ResponseEntry, PanelStatus } from '../types'
-import { preflightContextWarning } from '@/src/shared/utils/context-budget'
+import {
+  ContextOverflowError,
+  createContextOverflowIssue,
+  isContextOverflowError,
+} from '@/src/shared/utils/context-budget'
+import {
+  capVghBrainContextLimit,
+  isVghBrainModel,
+  VGHBRAIN_CLINICAL_TOKEN_LIMIT,
+} from '@/src/shared/utils/vghbrain-context-policy'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
   formatClinicalContextAdaptationNotice,
@@ -168,13 +177,32 @@ export function useInsightGeneration({
           },
         }))
         try {
-          const overflow = preflightContextWarning(
+          // VGHBrain has its own explicit caps: 100K for the patient context
+          // alone and 150K for the complete request (exactly at the cap is
+          // allowed). Reuse the shared overflow formatter so the clinical-cap
+          // wording matches the Medical Summary path exactly.
+          const isVghBrain = isVghBrainModel(modelName)
+          const overflow = createContextOverflowIssue(
             messages.map((message) => message.content).join('\n\n'),
             model,
-            locale,
-            { selectedContext: context, contextLimit },
+            {
+              selectedContext: context,
+              contextLimit: capVghBrainContextLimit(contextLimit, modelName),
+              ...(contextAdaptation?.protectedDocuments?.length
+                ? { protectedDocuments: contextAdaptation.protectedDocuments }
+                : {}),
+              ...(isVghBrain
+                ? {
+                    selectedContextLimit: VGHBRAIN_CLINICAL_TOKEN_LIMIT,
+                    allowExactFit: true,
+                  }
+                : {}),
+            },
           )
-          if (overflow) throw new Error(overflow)
+          // A structured ContextOverflowError (not a plain Error) is what the
+          // generation job stores as an actionable issue, so the insights
+          // surface can render the reduction target. The message is identical.
+          if (overflow) throw new ContextOverflowError(overflow, locale)
           let modelExecution = createModelExecution(model, model, modelName)
           const fullText = await ai.query(messages, {
             onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
@@ -209,7 +237,12 @@ export function useInsightGeneration({
           if (runIdRef.current !== runId || ownerChanged()) return
           const errorMessage = getUserErrorMessage(error)
           console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
-          errors[panel.id] = new Error(errorMessage)
+          // Keep the structured overflow error intact (its message is already
+          // the user-facing text) so the panel can show the reduction target
+          // and which selected documents are the heaviest.
+          errors[panel.id] = isContextOverflowError(error) && error.message === errorMessage
+            ? error
+            : new Error(errorMessage)
         } finally {
           if (runIdRef.current === runId && !ownerChanged()) {
             setPanelStatus((prev) => {

@@ -157,6 +157,29 @@ describe('context-window provider retry', () => {
     expect(recoverBeforeContextReduction).not.toHaveBeenCalled()
   })
 
+  it('fails closed when a caller supplies no selected clinical context', async () => {
+    // Without `selectedContext` the overflow issue carries selectedTokens=null.
+    // That unknown must count as OVER the 100K clinical cap, not as zero: an
+    // unmeasured selection may not buy the optional-overhead retry and a send.
+    const execute = jest.fn()
+    const recoverBeforeContextReduction = jest.fn(() => true)
+    await expect(runWithContextWindowRetry({
+      clinicalContext: undefined as unknown as string,
+      contextLimit: 154_000,
+      modelId: 'custom-openai:vghtpe-tvghbrain',
+      modelName: 'tvghbrain3.5',
+      locale: 'zh-TW',
+      buildRequest: () => {
+        const requestText = 'a'.repeat(150_001 * 4)
+        return { request: requestText, requestText }
+      },
+      execute,
+      recoverBeforeContextReduction,
+    })).rejects.toBeInstanceOf(ContextOverflowError)
+    expect(recoverBeforeContextReduction).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
+  })
+
   it('does not loop or truncate if removing optional guidance still cannot fit', async () => {
     const clinicalContext = 'a'.repeat(100_000 * 4)
     const execute = jest.fn()
@@ -329,5 +352,53 @@ describe('context-window provider retry', () => {
     expect(requests[0]).toMatch(/^with-index:/)
     expect(requests[1]).toMatch(/^without-index:/)
     expect(recoverBeforeContextReduction).toHaveBeenCalledWith('provider-overflow')
+  })
+})
+
+// A blocked manual selection must say WHICH documents are the heaviest, not
+// only how many are protected.
+describe('protected documents on a blocked manual selection', () => {
+  const protectedDocuments = [
+    { id: 'd1', title: '出院病摘 2026-01', tokens: 7_000 },
+    { id: 'd2', title: '出院病摘 2025-11', tokens: 12_000 },
+    { id: 'd3', title: '門診紀錄 2025-10', tokens: 500 },
+    { id: 'd4', title: '出院病摘 2025-06', tokens: 9_000 },
+  ]
+
+  async function blockedIssue(documents = protectedDocuments) {
+    try {
+      await runWithContextWindowRetry({
+        clinicalContext: 'x'.repeat(40_000 * 4),
+        preserveClinicalContext: true,
+        contextLimit: 32_768,
+        modelId: 'test-model',
+        modelName: 'test-model',
+        locale: 'zh-TW',
+        protectedDocuments: documents,
+        buildRequest: text => ({ request: text, requestText: text }),
+        execute: jest.fn(),
+      })
+    } catch (error) {
+      return error as ContextOverflowError
+    }
+    throw new Error('expected a ContextOverflowError')
+  }
+
+  it('attaches the top 3 protected documents, sorted by tokens descending', async () => {
+    const error = await blockedIssue()
+    expect(error).toBeInstanceOf(ContextOverflowError)
+    expect(error.issue.protectedDocuments).toEqual([
+      { id: 'd2', title: '出院病摘 2025-11', tokens: 12_000 },
+      { id: 'd4', title: '出院病摘 2025-06', tokens: 9_000 },
+      { id: 'd1', title: '出院病摘 2026-01', tokens: 7_000 },
+    ])
+    expect(error.message).toContain('已選文件中最大的幾份：出院病摘 2025-11（~12k）')
+    expect(error.message).not.toContain('門診紀錄')
+  })
+
+  it('leaves the message unchanged when the caller knows no documents', async () => {
+    const error = await blockedIssue([])
+    expect(error.issue.protectedDocuments).toBeUndefined()
+    expect(error.message).not.toContain('已選文件中最大的幾份')
   })
 })

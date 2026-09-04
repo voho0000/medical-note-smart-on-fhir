@@ -55,12 +55,20 @@ const customJestConfig = {
     ].join('|') + ')/)',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
-  // Without this, stale copies under .claude/worktrees/ get picked up and fail the run
+  // Without this, stale copies under .claude/worktrees/ and tmp/ (gitignored
+  // scratch checkouts) get picked up and fail the run
   testPathIgnorePatterns: [
     '/node_modules/',
     '<rootDir>/.claude/',
     '<rootDir>/out/',
     '<rootDir>/coverage/',
+    '<rootDir>/tmp/',
+  ],
+  // Keep haste/module resolution out of those scratch copies too, so a stale
+  // duplicate module never shadows the real one.
+  modulePathIgnorePatterns: [
+    '<rootDir>/.claude/',
+    '<rootDir>/tmp/',
   ],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
