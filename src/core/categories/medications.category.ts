@@ -3,10 +3,15 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { MedicationRequest } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
+import { isMedicationCurrentlyInUse } from '@/src/core/utils/clinical-context-selection.utils'
 
-const isActiveMedication = (med: MedicationRequest): boolean => {
-  return med.status === 'active' || med.status === 'completed'
-}
+// Same currency rule as the AI context (useMedicationsContext →
+// isMedicationCurrentlyInUse), so the selection badge cannot claim "0 active"
+// for a chart whose medications the context is about to list. A bare
+// status===active/completed test reported 0 for every dispensing-claims source,
+// which populates a days-supply but leaves status at `unknown`.
+const isActiveMedication = (med: MedicationRequest): boolean =>
+  isMedicationCurrentlyInUse(med, Date.now())
 
 const isChronicMedication = (med: any): boolean => {
   const coding = med?.courseOfTherapyType?.coding

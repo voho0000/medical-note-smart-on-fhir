@@ -47,7 +47,15 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // not silently widen an empty bounded window; the coverage manifest retains
   // the distinction between no selected visits and unavailable data.
   encounterTimeRange: '6m',
-  medicationStatus: 'active',
+  // A first-visit summary needs three things: what the patient is on now, what
+  // stopped recently enough to still matter, and a compact sense of the rest.
+  // useMedicationsContext already renders exactly those three buckets
+  // (Currently evidenced / Recently ended ≤90d / Past medications) — but
+  // `active` collapses it to the first bucket alone, so the reader cannot see a
+  // drug that ran out last month. The window below is what keeps the historical
+  // bucket compact; the status filter stays available for users who want only
+  // the current list.
+  medicationStatus: 'all',
   medicationChronic: 'all',
   // Meds default to the last 6 months; the hook dedups by drug name so chronic
   // refills still collapse to one current row.

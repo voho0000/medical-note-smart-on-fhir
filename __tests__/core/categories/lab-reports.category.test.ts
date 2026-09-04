@@ -25,12 +25,12 @@ const all = {
 const section = (depth: 'latest' | '3' | '8' | '16' | 'all') =>
   labReportsCategory.getContextSection(data, { labDepth: depth, labReportTimeRange: 'all' } as any, all)
 
-// Analyte lines are headed by the CANONICAL name (CREA / HB), the same label
-// the cumulative report uses — 'Creatinine' and 'Hemoglobin' resolve to those
-// through the alias table.
+// Analyte lines are headed by the SOURCE's own label ('Creatinine', not the
+// canonical 'CREA'), because summary citations resolve a context line against
+// the source catalog by resource type + date + `code.text`.
 const lineFor = (items: string[], analyte: string) => items.find((i) => i.startsWith(analyte)) || ''
 
-describe('labReportsCategory — per-analyte trend', () => {
+describe('labReportsCategory — per-analyte series', () => {
   it('count tracks the depth: latest = distinct analytes, other = every reading', () => {
     const latest = labReportsCategory.getCount(data, { labReportTimeRange: 'all', labDepth: 'latest' } as any, all)
     expect(latest).toBe(3) // Creatinine, Hemoglobin, CRP (narrative report not counted)
@@ -38,40 +38,52 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(allReadings).toBe(5) // Creatinine ×3 + Hemoglobin + CRP
   })
 
-  it('all → chronological trend (oldest → newest) with abnormal flag', () => {
+  it('all → latest value first, then priors newest-first, with the abnormal flag', () => {
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const cr = lineFor(items, 'CREA')
-    expect(cr).toContain('1.2')
+    const cr = lineFor(items, 'Creatinine')
     expect(cr).toContain('2.1')
-    expect(cr).toContain('→') // it's a series
-    expect(cr).toContain('[H]') // the 2.1 reading is flagged high
-    expect(cr.indexOf('1.2')).toBeLessThan(cr.indexOf('2.1')) // oldest first
-    expect(cr).toContain('(mg/dL)') // unit in the header
+    expect(cr).toContain('1.5')
+    expect(cr).toContain('1.2')
+    expect(cr).toContain('prior')
+    expect(cr).toContain('mg/dL') // unit next to the latest value
+    // Latest (abnormal, flagged H) leads; the oldest reading trails.
+    expect(cr.indexOf('2.1')).toBeLessThan(cr.indexOf('1.2'))
+    expect(cr).toMatch(/2\.1 mg\/dL \(2026-05-10, H\)/)
     expect(cr).not.toMatch(/\[O\d+\]/)
   })
 
   it('latest → only the most recent value per analyte', () => {
     const s = section('latest')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    // 'latest' lists analytes one per line under the source's own display
-    // name; the pivot/Key-trends output below uses the canonical one.
     const cr = lineFor(items, 'Creatinine')
     expect(cr).toContain('2.1')
-    expect(cr).not.toContain('1.2') // older readings dropped
-    expect(cr).not.toContain('→')
+    // Older readings are summarised by the range tail, never listed one by one.
+    expect(cr).not.toContain('prior')
+    expect(cr).not.toContain('1.5')
     expect(cr).not.toMatch(/\[O\d+\]/)
   })
 
-  it("depth='all' renders every reading uncapped (no …earlier elision)", () => {
-    // 'all' = 每項目全部、不設上限。Creatinine 有 3 筆,全數保留,無「…earlier」。
+  it('summarises hidden history losslessly (min/max with dates + total count)', () => {
+    const s = section('latest')
+    const items = Array.isArray(s) ? [] : s?.items ?? []
+    const cr = lineFor(items, 'Creatinine')
+    // 3 readings, 1 shown → the other 2 are still accounted for.
+    expect(cr).toContain('range 1.2–2.1')
+    expect(cr).toContain('(01-10, 05-10)')
+    expect(cr).toContain('since 2026-01-10')
+    expect(cr).toContain('n=3')
+  })
+
+  it("depth='all' renders every reading with no range tail (nothing was hidden)", () => {
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const cr = lineFor(items, 'CREA')
+    const cr = lineFor(items, 'Creatinine')
     expect(cr).toContain('1.2')
     expect(cr).toContain('1.5')
     expect(cr).toContain('2.1')
-    expect(cr).not.toContain('earlier')
+    expect(cr).not.toContain('n=')
+    expect(cr).not.toContain('range')
   })
 
   it("tolerates a missing labDepth (defaults to the latest branch, no crash)", () => {
@@ -85,14 +97,20 @@ describe('labReportsCategory — per-analyte trend', () => {
   it('includes standalone observations and narrative conclusions', () => {
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    // CRP is a categorized analyte → lives in the chem pivot table (one
-    // multi-line item: header + dated rows) rather than a per-analyte line.
-    const chemTable = items.find((i) => i.startsWith('[chem]'))
-    expect(chemTable).toBeTruthy()
-    expect(chemTable).toContain('CRP')
-    expect(chemTable).toContain('\n| 2026-05-12 |')
-    expect(chemTable).not.toMatch(/\[O\d+\]/)
+    const crp = lineFor(items, 'CRP')
+    expect(crp).toContain('5')
+    expect(crp).toContain('mg/L')
+    expect(crp).not.toMatch(/\[O\d+\]/)
     expect(items.find((i) => i.includes('No growth'))).not.toMatch(/\[L\d+\]/)
+  })
+
+  it('groups analytes under their lab panel', () => {
+    const s = section('all')
+    const items = Array.isArray(s) ? [] : s?.items ?? []
+    expect(items).toContain('[chem]')
+    expect(items).toContain('[cbc]')
+    // The panel tag precedes the analytes that belong to it.
+    expect(items.indexOf('[cbc]')).toBeLessThan(items.indexOf(lineFor(items, 'Hemoglobin')))
   })
 
   it('keeps non-lab standalone observations out of Lab Reports and in Other Observations', () => {
@@ -150,13 +168,14 @@ describe('labReportsCategory — source finality status', () => {
   })
 })
 
-describe('labReportsCategory — pivot rendering (full-history mode)', () => {
-  // Properly-coded analytes (WBC/CREA hit the canonical alias maps) so they
-  // land in pivot tables; WBC has abnormal cells so it also drives Key trends.
+describe('labReportsCategory — abnormal ordering and flags', () => {
+  // Properly-coded analytes so both land in the cbc/chem panels; WBC is
+  // abnormal at its latest reading, CREA is not.
   const mixed = [
     { resourceType: 'Observation', code: { text: 'WBC' }, valueQuantity: { value: 15.2, unit: 'K/µL' }, effectiveDateTime: '2026-05-01', interpretation: [{ coding: [{ code: 'H' }] }] },
     { resourceType: 'Observation', code: { text: 'WBC' }, valueQuantity: { value: 11.1, unit: 'K/µL' }, effectiveDateTime: '2026-04-01', interpretation: [{ coding: [{ code: 'H' }] }] },
     { resourceType: 'Observation', code: { text: 'CREA' }, valueQuantity: { value: 1.1, unit: 'mg/dL' }, effectiveDateTime: '2026-05-01' },
+    { resourceType: 'Observation', code: { text: 'ALT' }, valueQuantity: { value: 90, unit: 'U/L' }, effectiveDateTime: '2026-05-01', interpretation: [{ coding: [{ code: 'H' }] }] },
   ] as any
 
   const items = (() => {
@@ -168,37 +187,29 @@ describe('labReportsCategory — pivot rendering (full-history mode)', () => {
     return Array.isArray(s) ? [] : s?.items ?? []
   })()
 
-  it('renders date × test pivot tables per panel', () => {
-    // Each panel table is ONE multi-line item: "[cbc]\n| Date | … |\n…"
-    const cbcTable = items.find((i) => i.startsWith('[cbc]'))
-    expect(cbcTable).toBeTruthy()
-    expect(cbcTable).toContain('| Date |')
-    expect(cbcTable).toContain('WBC')
-    // newest-first data row with the abnormal flag
-    expect(cbcTable).toContain('\n| 2026-05-01 |')
-    expect(cbcTable).toContain('15.2 H')
+  it('flags the latest reading and every prior reading independently', () => {
+    const wbc = items.find((i) => i.startsWith('WBC')) || ''
+    expect(wbc).toContain('WBC 15.2 K/µL (2026-05-01, H)')
+    expect(wbc).toContain('prior 11.1H (04-01)')
   })
 
-  it('appends key trends for analytes with abnormal values', () => {
-    const keyTrendHeader = items.findIndex((i) => i.startsWith('Key trends'))
-    expect(keyTrendHeader).toBeGreaterThan(-1)
-    const wbcTrend = items.slice(keyTrendHeader).find((i) => i.startsWith('WBC'))
-    expect(wbcTrend).toBeTruthy()
-    // oldest → newest with flags
-    expect(wbcTrend!.indexOf('11.1')).toBeLessThan(wbcTrend!.indexOf('15.2'))
-    expect(wbcTrend).toContain('[H]')
+  it('normal analytes carry no flag', () => {
+    const crea = items.find((i) => i.startsWith('CREA')) || ''
+    expect(crea).toContain('CREA 1.1 mg/dL (2026-05-01)')
+    expect(crea).not.toMatch(/\(2026-05-01, /)
   })
 
-  it('normal-only analytes stay out of key trends', () => {
-    const keyTrendHeader = items.findIndex((i) => i.startsWith('Key trends'))
-    const tail = items.slice(keyTrendHeader)
-    expect(tail.some((i) => i.startsWith('CREA'))).toBe(false)
+  it('within a panel, analytes abnormal at their latest reading come first', () => {
+    const chem = items.indexOf('[chem]')
+    const panel = items.slice(chem + 1)
+    expect(panel.findIndex((i) => i.startsWith('ALT')))
+      .toBeLessThan(panel.findIndex((i) => i.startsWith('CREA')))
   })
 })
 
 describe('labReportsCategory — window fallback (empty range)', () => {
-  // All readings are from 2026; a '1w' window relative to test-run "now" will
-  // usually be empty, forcing the recent-sampling-day fallback.
+  // All readings are from 2020; a '1w' window relative to test-run "now" will
+  // always be empty, forcing the recent-sampling-day fallback.
   const oldData = [
     { resourceType: 'Observation', code: { text: 'Creatinine' }, valueQuantity: { value: 1.2, unit: 'mg/dL' }, effectiveDateTime: '2020-01-10' },
     { resourceType: 'Observation', code: { text: 'Creatinine' }, valueQuantity: { value: 1.5, unit: 'mg/dL' }, effectiveDateTime: '2020-02-10' },
@@ -212,10 +223,8 @@ describe('labReportsCategory — window fallback (empty range)', () => {
       allOld,
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    expect(items.some((i) => i.includes('no labs fell within the selected time range'))).toBe(true)
-    // The readings themselves come back — as a 生化 pivot, since they now
-    // categorise instead of falling through as loose lines.
-    expect(items.join('\n')).toContain('CREA')
+    expect(items.some((i) => i.includes('predate the selected time range'))).toBe(true)
+    expect(items.join('\n')).toContain('Creatinine')
   })
 
   it('getCount matches the fallback (non-zero) rather than reporting 0', () => {
@@ -236,27 +245,37 @@ describe('labReportsCategory — trend depth', () => {
     effectiveDateTime: `2026-${String(i + 1).padStart(2, '0')}-01`.replace('2026-13', '2026-12'),
   })) as any
 
-  // A recognised analyte renders as its panel's pivot (one row per sampling
-  // day), so depth is counted in ROWS. It used to be counted in arrows, back
-  // when 'Creatinine' failed categorisation and fell through as a loose
-  // per-analyte line — the cap is the same, the shape it caps is not.
-  const rows = (depth: string) => {
+  // Depth is counted in READINGS shown on the analyte's line: the latest value
+  // plus its `prior` list.
+  const shown = (depth: string) => {
     const s = labReportsCategory.getContextSection(
       series,
       { labDepth: depth, labReportTimeRange: 'all' } as any,
       { observations: [] },
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
-    const chem = items.find((i) => i.startsWith('[chem]')) || ''
-    return chem.split('\n').filter((line) => /^\| 20/.test(line)).length
+    const line = items.find((i) => i.startsWith('Creatinine')) || ''
+    const priors = /\| prior ([^|]+)/.exec(line)
+    return 1 + (priors ? priors[1].split(',').length : 0)
   }
 
-  it('caps the rendered trend at the configured point count', () => {
-    // 3 per test → fewer readings than 16; 'all' shows the full 12-point series.
-    expect(rows('3')).toBe(3)
-    expect(rows('3')).toBeLessThan(rows('16'))
-    expect(rows('16')).toBeLessThanOrEqual(rows('all'))
-    expect(rows('all')).toBe(12) // every reading, uncapped
+  it('caps the rendered readings at the configured point count', () => {
+    expect(shown('3')).toBe(3)
+    expect(shown('3')).toBeLessThan(shown('16'))
+    expect(shown('16')).toBeLessThanOrEqual(shown('all'))
+    expect(shown('all')).toBe(12) // every reading, uncapped
+  })
+
+  it('a capped analyte still reports the full series size and extremes', () => {
+    const s = labReportsCategory.getContextSection(
+      series,
+      { labDepth: '3', labReportTimeRange: 'all' } as any,
+      { observations: [] },
+    )
+    const items = Array.isArray(s) ? [] : s?.items ?? []
+    const line = items.find((i) => i.startsWith('Creatinine')) || ''
+    expect(line).toContain('n=12')
+    expect(line).toContain('range 1–2.1')
   })
 })
 
@@ -296,5 +315,94 @@ describe('labReportsCategory — panel sub-selection', () => {
       { observations: [] },
     )
     expect(cbcOnly).toBe(1)
+  })
+})
+
+// Regression: widening the lab time range must never REMOVE analytes.
+//
+// Found on a real chart whose last full panel predated every offered window but
+// which had one isolated later reading. The recent-sampling-days fallback used
+// to fire only when the window was COMPLETELY empty, so:
+//   6m  → window empty        → fallback → the whole last panel rendered
+//   3y  → window caught the 1 stray reading → fallback suppressed → 1 analyte
+// i.e. asking for MORE history hid the patient's most recent real panel. The
+// fallback is now a floor that is unioned with the window, so the result is
+// monotone in the range.
+//
+// SYNTHETIC data in the real shape: one dense old panel, one sparse later reading.
+describe('labReportsCategory — recent sampling days are a floor, not an alternative', () => {
+  const STALE_PANEL_DAY = '2019-04-02'
+  const STRAY_DAY = '2024-06-15'
+
+  const staleObservations = [
+    { id: 's1', code: { text: 'Sodium' }, valueQuantity: { value: 140, unit: 'mmol/L' }, effectiveDateTime: STALE_PANEL_DAY },
+    { id: 's2', code: { text: 'Potassium' }, valueQuantity: { value: 4.1, unit: 'mmol/L' }, effectiveDateTime: STALE_PANEL_DAY },
+    { id: 's3', code: { text: 'Chloride' }, valueQuantity: { value: 103, unit: 'mmol/L' }, effectiveDateTime: STALE_PANEL_DAY },
+    { id: 'stray', code: { text: 'Glucose' }, valueQuantity: { value: 95, unit: 'mg/dL' }, effectiveDateTime: STRAY_DAY },
+  ]
+  const staleData = [
+    {
+      id: 'panel-old',
+      resourceType: 'DiagnosticReport',
+      code: { text: 'Electrolytes' },
+      effectiveDateTime: STALE_PANEL_DAY,
+      result: [{ reference: 'Observation/s1' }, { reference: 'Observation/s2' }, { reference: 'Observation/s3' }],
+    },
+    {
+      id: 'panel-stray',
+      resourceType: 'DiagnosticReport',
+      code: { text: 'Glucose' },
+      effectiveDateTime: STRAY_DAY,
+      result: [{ reference: 'Observation/stray' }],
+    },
+  ] as any
+  const staleAll = { observations: staleObservations, diagnosticReports: staleData }
+
+  const itemsFor = (range: string): string[] => {
+    const section = labReportsCategory.getContextSection(
+      staleData,
+      { labDepth: '8', labReportTimeRange: range } as any,
+      staleAll,
+    )
+    return Array.isArray(section) ? [] : section?.items ?? []
+  }
+
+  const analytes = (range: string): string[] =>
+    itemsFor(range).filter((line) =>
+      !line.startsWith('[') && !line.startsWith('Note:') && line.trim() !== '',
+    )
+
+  beforeAll(() => {
+    jest.useFakeTimers()
+    // Both sampling days are in the past: 6m catches nothing, 3y catches only
+    // the stray reading, `all` catches everything.
+    jest.setSystemTime(Date.parse('2026-07-13T12:00:00+08:00'))
+  })
+  afterAll(() => {
+    jest.useRealTimers()
+  })
+
+  it('keeps the last full panel visible when the window catches only a stray reading', () => {
+    const wide = analytes('3y')
+    for (const analyte of ['Sodium', 'Potassium', 'Chloride', 'Glucose']) {
+      expect(wide.some((line) => line.startsWith(analyte))).toBe(true)
+    }
+  })
+
+  it('never renders fewer analytes as the range widens', () => {
+    const counts = ['6m', '1y', '3y', 'all'].map((range) => analytes(range).length)
+    for (let i = 1; i < counts.length; i += 1) {
+      expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1])
+    }
+  })
+
+  it('flags that the shown sampling days predate the selected range', () => {
+    const items = itemsFor('6m')
+    expect(items.some((line) => line.startsWith('Note:') && line.includes('predate the selected time range'))).toBe(true)
+  })
+
+  it('does not claim a fallback when the window already holds the recent days', () => {
+    const items = itemsFor('all')
+    expect(items.some((line) => line.includes('predate the selected time range'))).toBe(false)
   })
 })

@@ -2,30 +2,42 @@
 // see trends (e.g. Creatinine 1.2 → 1.5 → 2.0 = worsening renal function).
 // Lab values are intentionally NOT scattered under each visit in the encounter
 // view; the trend lives here, in one place, undivided.
+//
+// The line shape and the reasoning behind it live in
+// src/core/utils/lab-series-context.utils.ts. In short, one line per analyte:
+// latest value + unit + date + abnormal flag, then the readings before it up to
+// the `labDepth` cap, then — only when the cap actually hid something — a
+// lossless `range … span … n=` tail. Widening the time range therefore adds
+// facts to existing lines instead of adding rows.
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
-import { buildLabPivots, type LabPivot, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  labStatusSuffix,
+  renderLabSeriesItems,
+  type LabSeriesPoint,
+} from '@/src/core/utils/lab-series-context.utils'
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 
 // Union type for lab data (DiagnosticReport or standalone Observation)
 type LabData = DiagnosticReport | Observation
 
-// Cap the trend at the most recent N readings per analyte to keep the context
-// bounded; older points are summarised as "…(N earlier)". User-tunable via the
-// labDepth filter ('3'/'8'/'16' = cap K; 'all' = uncapped).
+// Cap the readings rendered per analyte to keep the context bounded; anything
+// older is summarised losslessly by the series' `range … n=` tail rather than
+// dropped. User-tunable via the labDepth filter ('latest' = 1 point;
+// '3'/'8'/'16' = cap K; 'all' = uncapped).
 const DEFAULT_TREND_POINTS = 8
 
-// Max trend points per analyte for the pivot / trend-line rendering, derived
-// from labDepth. 'all' → uncapped (Infinity); '3'/'8'/'16' → that many; the
-// 'latest' depth uses a separate compact branch and never reads this.
+// Readings rendered per analyte, derived from labDepth. 'latest' → 1;
+// 'all' → uncapped (Infinity); '3'/'8'/'16' → that many.
 function trendPointsFrom(filters?: Record<string, unknown>): number {
   const depth = String(filters?.labDepth ?? '')
   if (depth === 'all') return Number.POSITIVE_INFINITY
+  if (depth === 'latest') return 1
   const n = Number(depth)
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_TREND_POINTS
 }
@@ -140,93 +152,32 @@ function collectLabPoints(
 
 const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
-// ── Pivot rendering (full-trend mode) ───────────────────────────────────────
-// Experiment-driven (docs/LAB-FORMAT-EXPERIMENT-2026-07-12.md): a date × test
-// markdown pivot beats per-analyte trend lines on answer accuracy (+20pp),
-// citation validity (+24pp), hallucinations (¼) AND tokens (0.53–0.83×) —
-// the gap widening exactly on data-dense (ICU/onco) patients. Trend lines only
-// won single-analyte trajectory reading, so an abnormal-analyte trend appendix
-// (key trends) follows the tables. Reuses the cumulative report's pivot
-// builder, so abnormal flags come from the shared source-faithful policy
-// (isObservationAbnormal), not just interpretation codes.
+// ── Series rendering ────────────────────────────────────────────────────────
+// The per-analyte series lives in src/core/utils/lab-series-context.utils.ts.
+// It keeps the source-faithful abnormal policy the cumulative report uses
+// (formatValue → isObservationAbnormal) and the shared panel taxonomy, so the
+// flags and grouping here match every other lab surface in the app.
+//
+// History note: this section used to render a date × test markdown pivot plus a
+// duplicated "Key trends" appendix (docs/LAB-FORMAT-EXPERIMENT-2026-07-12.md).
+// The appendix restated the table verbatim, and the table itself paid for a
+// cell per analyte per date whether or not that analyte was drawn — neither
+// survives a widened time range. The series carries the same facts, plus a
+// min/max/count tail for everything the depth cap hides.
 
-/** Max analytes in the key-trends appendix. */
-const MAX_KEY_TRENDS = 8
-const UNREMARKABLE_LAB_STATUSES = new Set(['final', 'amended', 'corrected', 'unknown'])
 const UNKNOWN_FINALITY_NOTE =
   'Note: laboratory report finality status is unavailable in the source cloud record.'
 
-function labStatusSuffix(status?: string): string {
-  return status && !UNREMARKABLE_LAB_STATUSES.has(status)
-    ? ` {status:${status}}`
-    : ''
-}
-
-function pivotCellText(row: LabRow, date: string): string {
-  const cell = row.values.get(date)
-  if (!cell) return '-'
-  const status = labStatusSuffix(cell.status)
-  if (!cell.isAbnormal) return `${cell.value}${status}`
-  return `${cell.value} ${cell.interpretationCode || '*'}${status}`
-}
-
-function capPointsPerAnalyte(points: LabPoint[], maxPoints: number): LabPoint[] {
-  if (!Number.isFinite(maxPoints)) return points
-  const groups = new Map<string, LabPoint[]>()
-  for (const point of points) {
-    const key = `${point.panel}|${point.name}|${point.unit}`
-    const group = groups.get(key)
-    if (group) group.push(point)
-    else groups.set(key, [point])
-  }
-  return [...groups.values()].flatMap((group) =>
-    [...group]
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-      .slice(0, maxPoints),
-  )
-}
-
-function renderPivotTable(pivot: LabPivot): string[] {
-  // Only rows with actual values (skips pinned-column stubs) and only dates
-  // those rows cover. Returned as ONE multi-line item so the generic section
-  // formatter's "- " bullet lands on the panel tag only — the table lines stay
-  // un-prefixed, valid markdown, and cheaper.
-  const rows = pivot.rows.filter((r) => r.values.size > 0)
-  if (!rows.length) return []
-  const dates = pivot.dates.filter((d) => rows.some((r) => r.values.has(d)))
-  const header = `| Date | ${rows.map((r) => (r.unit ? `${r.displayName} (${r.unit})` : r.displayName)).join(' | ')} |`
-  const sep = `| ${Array(rows.length + 1).fill('---').join(' | ')} |`
-  const body = dates.map((d) => `| ${d} | ${rows.map((r) => pivotCellText(r, d)).join(' | ')} |`)
-  return [[`[${pivot.category.id}]`, header, sep, ...body].join('\n')]
-}
-
-/** Trend lines for analytes with ≥1 abnormal value — covers the one task the
- *  pivot lost in the experiment (following a single analyte over time). */
-function renderKeyTrends(
-  pivots: Record<string, LabPivot>,
-  maxTrendPoints: number,
-): string[] {
-  const candidates: { row: LabRow; abnormalCount: number }[] = []
-  for (const pivot of Object.values(pivots)) {
-    for (const row of pivot.rows) {
-      if (row.values.size < 2) continue
-      const abnormalCount = [...row.values.values()].filter((c) => c.isAbnormal).length
-      if (abnormalCount > 0) candidates.push({ row, abnormalCount })
-    }
-  }
-  if (!candidates.length) return []
-  candidates.sort((a, b) => b.abnormalCount - a.abnormalCount || b.row.values.size - a.row.values.size)
-  const lines = candidates.slice(0, MAX_KEY_TRENDS).map(({ row }) => {
-    const series = [...row.values.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-    const recent = series.slice(-maxTrendPoints)
-    const omitted = series.length - recent.length
-    const trend = recent
-      .map(([date, cell]) => `${cell.value}${cell.isAbnormal ? `[${cell.interpretationCode || '*'}]` : ''} (${date})`)
-      .join(' → ')
-    const head = row.unit ? `${row.displayName} (${row.unit})` : row.displayName
-    return `${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`
-  })
-  return ['Key trends (analytes with abnormal values, oldest → newest):', ...lines, '']
+function toSeriesPoints(points: LabPoint[]): LabSeriesPoint[] {
+  return points.map((point) => ({
+    name: point.name,
+    unit: point.unit,
+    value: point.value,
+    date: point.date,
+    status: point.status,
+    panel: point.panel,
+    observation: point.obs,
+  }))
 }
 
 interface WindowedLabs {
@@ -236,11 +187,22 @@ interface WindowedLabs {
   fallbackDays: number
 }
 
-// Apply the time window with a count-floor fallback: labs are the most
+// Apply the time window with a recent-sampling-days FLOOR: labs are the most
 // unevenly distributed category (a stable patient's last panel may predate any
-// wall-clock window), so an empty window falls back to the most recent
-// FALLBACK_SAMPLING_DAYS distinct sampling days instead of an empty section.
+// wall-clock window), so the most recent FALLBACK_SAMPLING_DAYS distinct
+// sampling days are always included, whether or not the window caught anything.
 // getCount and getContextSection share this so the badge matches the context.
+//
+// It is a floor, not an alternative. When the fallback only fired on a
+// COMPLETELY empty window, a window that happened to catch one stray reading
+// suppressed it entirely — so widening the range could REMOVE analytes: a
+// patient whose last full panel predates the range but who has one isolated
+// later reading rendered 16 analyte lines at 6m (empty → fallback) and 4 at 3y
+// (one stray reading → no fallback), hiding the most recent real panel. As a
+// floor the result is monotone in the range: widening can only ever add.
+// Because the floor days are the most recent ones overall, they are already
+// inside any window that reaches current data, so a normally-populated chart is
+// unaffected.
 function applyLabWindow(
   points: LabPoint[],
   conclusions: NarrativeReport[],
@@ -253,10 +215,8 @@ function applyLabWindow(
   const inWindow = makeTimeRangeTest(range, allClinicalData as { encounters?: [] } | null)
   const inRangePoints = points.filter((p) => inWindow(p.date))
   const inRangeConclusions = conclusions.filter((c) => inWindow(c.date))
-  if (inRangePoints.length > 0 || inRangeConclusions.length > 0) {
-    return { points: inRangePoints, conclusions: inRangeConclusions, fallbackDays: 0 }
-  }
 
+  // The most recent distinct sampling days across all of history — the floor.
   const days = [
     ...new Set(
       [...points.map((p) => p.date), ...conclusions.map((c) => c.date)]
@@ -266,15 +226,22 @@ function applyLabWindow(
   ]
     .sort((a, b) => b.localeCompare(a))
     .slice(0, FALLBACK_SAMPLING_DAYS)
-  if (days.length === 0) return { points: [], conclusions: [], fallbackDays: 0 }
-
   const daySet = new Set(days)
   const onDays = (d?: string): boolean => !!d && daySet.has(d.slice(0, 10))
-  return {
-    points: points.filter((p) => onDays(p.date)),
-    conclusions: conclusions.filter((c) => onDays(c.date)),
-    fallbackDays: days.length,
-  }
+
+  const keptPoints = points.filter((p) => inWindow(p.date) || onDays(p.date))
+  const keptConclusions = conclusions.filter((c) => inWindow(c.date) || onDays(c.date))
+
+  // Only report a fallback when the floor actually contributed readings the
+  // window did not already hold — otherwise the note would claim a widening
+  // that never happened.
+  const addedPoints = keptPoints.length - inRangePoints.length
+  const addedConclusions = keptConclusions.length - inRangeConclusions.length
+  const fallbackDays = addedPoints > 0 || addedConclusions > 0
+    ? days.filter((day) => !inWindow(day)).length
+    : 0
+
+  return { points: keptPoints, conclusions: keptConclusions, fallbackDays }
 }
 
 export const labReportsCategory: DataCategory<LabData> = {
@@ -366,64 +333,10 @@ export const labReportsCategory: DataCategory<LabData> = {
       ? windowed.points
       : windowed.points.filter((p) => panels.has(p.panel))
 
-    const items: string[] = []
-
-    if (depth === 'latest') {
-      // Latest value per analyte — compact list, unchanged.
-      const byName = new Map<string, LabPoint[]>()
-      for (const p of inRange) {
-        const arr = byName.get(p.name)
-        if (arr) arr.push(p)
-        else byName.set(p.name, [p])
-      }
-      for (const name of [...byName.keys()].sort()) {
-        const series = byName.get(name)!.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-        const unit = series[series.length - 1].unit
-        const head = `${name}${unit ? ` (${unit})` : ''}`
-        const last = series[series.length - 1]
-        const flag = last.interp ? ` [${last.interp}]` : ''
-        const status = labStatusSuffix(last.status)
-        const date = last.date ? ` (${shortDate(last.date)})` : ''
-        items.push(`${head}: ${last.value}${flag}${status}${date}`)
-      }
-    } else {
-      // Full-history mode: date × test pivot tables (per lab panel) + key-trend
-      // appendix. See the pivot-rendering block above for the experiment basis.
-      const capped = capPointsPerAnalyte(inRange, maxTrendPoints)
-      const pivotable = capped.filter((p) => p.panel && p.date)
-      const pivots = buildLabPivots(pivotable.map((p) => p.obs))
-      for (const pivot of Object.values(pivots)) {
-        items.push(...renderPivotTable(pivot))
-      }
-      items.push(...renderKeyTrends(pivots, maxTrendPoints))
-
-      // Uncategorized points (no panel match — free-text analytes etc.) keep
-      // the per-analyte trend-line format so no data is lost vs the old view.
-      const others = inRange.filter((p) => !p.panel || !p.date)
-      if (others.length > 0) {
-        const byName = new Map<string, LabPoint[]>()
-        for (const p of others) {
-          const arr = byName.get(p.name)
-          if (arr) arr.push(p)
-          else byName.set(p.name, [p])
-        }
-        items.push('Other results:')
-        for (const name of [...byName.keys()].sort()) {
-          const series = byName.get(name)!.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-          const unit = series[series.length - 1].unit
-          const head = `${name}${unit ? ` (${unit})` : ''}`
-          const recent = series.slice(-maxTrendPoints)
-          const omitted = series.length - recent.length
-          const trend = recent
-            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${labStatusSuffix(p.status)}${p.date ? ` (${shortDate(p.date)})` : ''}`)
-            .join(' → ')
-          items.push(`${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`)
-        }
-        items.push('')
-      }
-      // Trim trailing blank line for a tidy section.
-      while (items.length && items[items.length - 1] === '') items.pop()
-    }
+    // One line per analyte, grouped by panel. `latest` is just the depth-1 case
+    // of the same renderer, so the two depths can no longer drift apart in
+    // labelling, flags or ordering.
+    const items = renderLabSeriesItems(toSeriesPoints(inRange), maxTrendPoints)
 
     // Narrative reports without numeric results (microbiology / pathology).
     const inRangeConclusions = windowed.conclusions
@@ -447,14 +360,14 @@ export const labReportsCategory: DataCategory<LabData> = {
 
     if (windowed.fallbackDays > 0) {
       items.unshift(
-        `Note: no labs fell within the selected time range; showing the most recent ${windowed.fallbackDays} sampling day(s) instead.`,
+        `Note: the most recent ${windowed.fallbackDays} sampling day(s) predate the selected time range and are shown anyway, so the latest available panel is not hidden.`,
         '',
       )
     }
 
     const title = depth === 'latest'
-      ? 'Lab Reports (latest value per test)'
-      : 'Lab Reports (date × test pivot per panel, newest first; abnormal flagged H/L/*)'
+      ? 'Lab Reports (latest value per test, grouped by panel; abnormal flagged H/L/*)'
+      : 'Lab Reports (per-analyte series by panel: latest | prior values | range/n of hidden history; abnormal flagged H/L/*)'
     return { title, items }
   },
 }

@@ -72,7 +72,11 @@ describe('data-selection.constants', () => {
   describe('DEFAULT_DATA_FILTERS', () => {
     it('should have all filter options defined', () => {
       expect(DEFAULT_DATA_FILTERS.problemListStatus).toBe('active')
-      expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('active')
+      // 'all' so the medication section renders all three of its buckets
+      // (currently evidenced / recently ended ≤90d / past) out of the box —
+      // 'active' collapsed it to the first, hiding a drug that ran out last
+      // month. medicationTimeRange below is what keeps the history compact.
+      expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('all')
       expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
       expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.labDepth).toBe('8')
