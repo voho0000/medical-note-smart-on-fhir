@@ -28,6 +28,7 @@ import { AiDemographicsGateDialog } from "@/features/medical-summary/components/
 import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
 import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
+import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 import {
@@ -651,6 +652,17 @@ function PageContent() {
 }
 
 export default function Page() {
+  // Pilot packs are a URL switch, read once at app start in the same spirit as
+  // the SMART launch params: `?pilotPacks=heart-failure-cdss` shows this browser
+  // a pack the package ships disabled, `?pilotPacks=` clears it, and the
+  // Medcloud launch route honours neither (the gate itself refuses there).
+  // Read during this first render rather than from an effect, so the pack
+  // registry already answers correctly the first time a feature asks it.
+  useState(() => {
+    if (typeof window !== 'undefined') applyPilotPackIdsFromUrl(window.location.search)
+    return null
+  })
+
   return (
     <AppProviders>
       <ErrorBoundary>

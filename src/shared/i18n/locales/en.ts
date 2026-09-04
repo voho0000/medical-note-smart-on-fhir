@@ -1626,6 +1626,8 @@ export const en = {
     betaFeatures: 'Beta features',
     enableBetaFeatures: 'Enable Beta features',
     betaFeaturesDescription: 'Show experimental tools such as personalised care guidance and education. This setting is saved for this account in this browser.',
+    pilotPacks: 'Pilot modules',
+    pilotPacksDescription: 'Care-guidance pathways that have not been released yet. What you turn on here appears in Personalised guidance for this browser only, marked as a pilot.',
     theme: 'Theme',
     themeDescription: 'Switch between light and dark UI',
     themeLight: 'Light',

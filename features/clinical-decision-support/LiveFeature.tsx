@@ -101,12 +101,16 @@ function DiseaseSwitcher({
           // clinician can see at a glance which ones this record activates
           // instead of clicking through every disease to find out.
           const applicable = applicablePackIds.has(pack.id)
+          // A pack in this list that the package has not released is here
+          // because the pilot gate let it through for this browser. Say so, so
+          // a tester never mistakes it for generally available guidance.
+          const pilot = !pack.enabled
           return (
             <button
               key={pack.id}
               type="button"
               className={[
-                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                'inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors',
                 selected
                   ? 'bg-background text-foreground shadow-sm'
                   : applicable
@@ -121,9 +125,18 @@ function DiseaseSwitcher({
                   : '本次資料未啟動此路徑'}
               data-testid={`cdss-disease-switch-${pack.id}`}
               data-applicable={applicable ? 'true' : 'false'}
+              data-pilot={pilot ? 'true' : undefined}
               onClick={() => onSelect(pack.id)}
             >
               {pack.label[isEnglish ? 'en' : 'zh']}
+              {pilot && (
+                <span
+                  className="rounded-sm bg-amber-500/15 px-1 py-px text-[0.9em] font-normal text-amber-700 dark:text-amber-400"
+                  data-testid={`cdss-disease-switch-pilot-${pack.id}`}
+                >
+                  {isEnglish ? 'Pilot' : '試辦'}
+                </span>
+              )}
             </button>
           )
         })}
