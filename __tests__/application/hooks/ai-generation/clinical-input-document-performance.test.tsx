@@ -53,16 +53,40 @@ describe('document-only clinical input changes', () => {
   })
   afterEach(() => jest.restoreAllMocks())
 
-  it('invalidates the old custom-selection cache identity without changing automatic-mode identities', () => {
+  it('gives manual and automatic document policies distinct cache identities', () => {
     mockProfile = { ...mockProfile, selection: { ...mockProfile.selection, documents: true }, documentMode: 'custom', documentIds: ['document-2'] }
     const { result, rerender } = renderHook(() => useClinicalAiInput(154_000, 'insights', 1, false, 100_000))
-    const legacySignature = () => clinicalAiSourceSignature(mockPatient, mockProfile, result.current.clinicalData!, result.current.catalog)
+    const signatureFor = (policy: Record<string, string> = {}) => clinicalAiSourceSignature(
+      mockPatient, { ...mockProfile, ...policy }, result.current.clinicalData!, result.current.catalog,
+    )
     expect(result.current.contextAdaptation).toBeNull()
-    expect(result.current.inputSignature).not.toBe(legacySignature())
+    // Manual picks stay complete text; older caches built before that guarantee
+    // must not be reused.
+    expect(result.current.inputSignature).not.toBe(signatureFor())
+    expect(result.current.inputSignature).toBe(signatureFor({ manualDocumentPolicy: 'complete-v1' }))
     mockProfile = { ...mockProfile, documentMode: 'all' }
     rerender()
     expect(result.current.contextAdaptation).toBeNull()
-    expect(result.current.inputSignature).toBe(legacySignature())
+    // Automatic modes send key sections only; that is a different input than
+    // the full documents older summaries were written from.
+    expect(result.current.inputSignature).not.toBe(signatureFor())
+    expect(result.current.inputSignature).toBe(signatureFor({ documentTextPolicy: 'key-sections-v1' }))
+  })
+
+  it('never gives the AI handoff a key-sections cache identity', () => {
+    mockProfile = { ...mockProfile, selection: { ...mockProfile.selection, documents: true }, documentMode: 'all' }
+    const { result } = renderHook(() => useClinicalAiInput(154_000, 'aiExport', 1, false, 100_000))
+    const signatureFor = (policy: Record<string, string> = {}) => clinicalAiSourceSignature(
+      mockPatient, { ...mockProfile, ...policy }, result.current.clinicalData!, result.current.catalog,
+    )
+
+    // A handoff carries complete documents, so it must never be filed under —
+    // or hydrated from — the reduced key-sections identity.
+    expect(result.current.inputSignature).not.toBe(signatureFor({ documentTextPolicy: 'key-sections-v1' }))
+    expect(result.current.inputSignature).toBe(signatureFor({ documentTextPolicy: 'complete-v1' }))
+    for (const doc of listClinicalDocuments(mockData)) {
+      expect(result.current.contextView.getFormattedClinicalContext()).toContain(doc.text)
+    }
   })
 
   it.each([100_000, 15_000, 700])('preserves every custom document and its entire body at a %i token budget', (clinicalLimit) => {
@@ -85,6 +109,10 @@ describe('document-only clinical input changes', () => {
     if (clinicalLimit === 700) {
       expect(input.contextAdaptation?.tier).toBe('prioritized')
       expect(input.contextAdaptation?.protectedDocumentCount).toBe(2)
+      // The count alone does not say which pick to undo — name the heaviest.
+      const named = input.contextAdaptation?.protectedDocuments ?? []
+      expect(named.map(document => document.id).sort()).toEqual([...mockProfile.documentIds].sort())
+      expect(named.every(document => document.tokens > 0)).toBe(true)
       expect(estimateTokens(input.clinicalContext)).toBeGreaterThan(700)
     } else {
       expect(estimateTokens(input.clinicalContext)).toBeLessThan(clinicalLimit)
@@ -94,6 +122,34 @@ describe('document-only clinical input changes', () => {
     generation.rerender()
     expect(generation.result.current.contextView.includedDocumentIds).toEqual([])
     expect(generation.result.current.clinicalContext).not.toContain('<BEGIN_DOCUMENT')
+  })
+
+  it('names at most the 3 heaviest protected documents, largest first', () => {
+    mockProfile = {
+      ...mockProfile,
+      selection: { ...mockProfile.selection, documents: true },
+      documentMode: 'custom',
+      documentIds: ['document-2', 'document-4', 'document-6', 'document-8', 'document-10'],
+    }
+    const { result } = renderHook(() => useClinicalAiInput(154_000, 'insights', 1, true, 700))
+
+    const named = result.current.contextAdaptation?.protectedDocuments ?? []
+    expect(result.current.contextAdaptation?.protectedDocumentCount).toBe(5)
+    expect(named).toHaveLength(3)
+    expect(named.map(document => document.tokens))
+      .toEqual([...named.map(document => document.tokens)].sort((a, b) => b - a))
+    for (const document of named) {
+      expect(mockProfile.documentIds).toContain(document.id)
+      expect(document.tokens).toBeGreaterThan(0)
+      expect(document.title).toBe('Discharge summary')
+    }
+  })
+
+  it('leaves protected documents unset when the selection is not manual', () => {
+    mockProfile = { ...mockProfile, selection: { ...mockProfile.selection, documents: true }, documentMode: 'all' }
+    const { result } = renderHook(() => useClinicalAiInput(154_000, 'insights', 1, true, 700))
+    expect(result.current.protectedDocuments).toEqual([])
+    expect(result.current.contextAdaptation?.protectedDocuments).toBeUndefined()
   })
 
   it('blocks stale generation input while capacity or saved document choices are deferred', () => {

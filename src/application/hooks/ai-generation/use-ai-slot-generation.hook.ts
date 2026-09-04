@@ -64,12 +64,15 @@ import {
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
 import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
+import type { ProtectedDocumentSummary } from '@/src/shared/utils/context-budget'
 import { providerClinicalContextSafetyFraction } from './context-window-retry'
 import { isVghBrainModel, VGHBRAIN_CLINICAL_TOKEN_LIMIT } from '@/src/shared/utils/vghbrain-context-policy'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
   preserveManualDocuments?: boolean
+  /** Heaviest manually selected documents, so an overflow message can name them. */
+  protectedDocuments?: ProtectedDocumentSummary[]
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -273,6 +276,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     inputSignature,
     sourceScopeSignature = '',
     preserveManualDocuments = false,
+    protectedDocuments = [],
     clinicalData: scopedClinicalData,
     catalog,
     contextAdaptation,
@@ -501,6 +505,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           contextLimit: resolvedContextLimit,
           contextAdaptation,
           preserveManualDocuments,
+          protectedDocuments,
         }),
     })
     if (
@@ -515,7 +520,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, preserveManualDocuments, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, preserveManualDocuments, protectedDocuments, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

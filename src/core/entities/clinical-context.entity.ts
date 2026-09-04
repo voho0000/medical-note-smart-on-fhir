@@ -51,6 +51,17 @@ export interface DataFilters {
   medicationStatus: 'active' | 'all'
   medicationChronic: 'all' | 'chronic' | 'acute'
   medicationTimeRange: TimeRange
+  /**
+   * Transient, reducer-only escape hatch — NOT a user-facing filter. It has no
+   * entry in the medications category filter list, no default in
+   * DEFAULT_DATA_FILTERS, and is never written to a saved profile or preset:
+   * only the adaptive context ladder sets it on the throwaway filters it builds
+   * per fit tier (see buildClinicalContextFitCandidate). While set, a medicine
+   * the patient is still on survives the narrowed medication window, so an
+   * automatic 1y/6m reduction cannot hide current therapy. A medication range
+   * the user chose in Data Selection is always honoured as-is.
+   */
+  medicationKeepCurrentRegardlessOfRange?: boolean
 
   // Reports / observations
   // 每項目筆數 — 一個檢驗項目最多納入幾筆數值（合併自舊的 labReportVersion +

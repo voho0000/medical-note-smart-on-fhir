@@ -46,6 +46,14 @@ export interface PrioritizedClinicalDataResult {
 
 const MIN_DOCUMENT_BUDGET = 2_500
 const MAX_DOCUMENT_SHARE = 0.6
+/**
+ * Record selection works on estimates, and the formatted context adds section
+ * headers, coverage and temporal metadata on top of the selected records. Aim
+ * slightly under the caller's target so the measured result still fits it;
+ * otherwise the tier that was supposed to carry the most evidence is the one
+ * rejected for overflowing.
+ */
+const TARGET_UTILIZATION = 0.95
 
 function resourceDate(collection: PrioritizableCollection, value: any): string {
   switch (collection) {
@@ -283,12 +291,54 @@ export function prioritizeClinicalDataForTokenBudget(
   const recordCostTotal = candidates.reduce((sum, candidate) => sum + candidate.cost, 0)
   const documentCostTotal = documentCosts.reduce((sum, document) => sum + document.cost, 0)
   const totalCost = Math.max(1, recordCostTotal + documentCostTotal)
-  const retentionRatio = Math.min(1, Math.max(0.01, targetTokens / Math.max(1, originalFormattedTokens)))
-  const estimatedBudget = Math.max(1, Math.floor(totalCost * retentionRatio))
-  const rawDocumentShare = documentCostTotal / totalCost
-  const documentShare = documents.length === 0
+
+  // Document costs are already measured in the unit the formatter emits (the
+  // document body text itself). Record costs are raw-JSON estimates, several
+  // times larger than the compact lines those records actually render as.
+  // Budgeting both in one mixed total is what capped this tier at ~45% of a
+  // 100K target on a document-heavy chart: documents looked like a small share
+  // of the input, so most of the budget was reserved for structured records
+  // that could never spend it, and the leftover was never handed back.
+  // Everything below is therefore budgeted in rendered tokens, with record
+  // costs converted through the ratio measured on this dataset.
+  const measuredOriginal = originalFormattedTokens > 0
+    ? originalFormattedTokens
+    : totalCost
+  // Whatever the caller measured beyond the documents is the rendered size of
+  // the structured records — except that a record can never render larger than
+  // its own serialized form. Should this view's document set ever be smaller
+  // than the one the renderer emitted, the surplus would otherwise be charged
+  // to the records, which then claim capacity they cannot possibly use.
+  // (The discharge-deduplication key is now carried across the AI domain
+  // filter, so the two sets agree; this stays as a bound, not a correction.)
+  const recordRenderedTotal = Math.max(1, documents.length > 0
+    ? Math.min(recordCostTotal || 1, measuredOriginal - documentCostTotal)
+    : measuredOriginal - documentCostTotal)
+  const recordCostPerRenderedToken = recordCostTotal > 0
+    ? recordCostTotal / recordRenderedTotal
+    : 1
+  const toRecordCost = (renderedTokens: number): number => Math.min(
+    recordCostTotal,
+    Math.floor(Math.max(0, renderedTokens) * recordCostPerRenderedToken),
+  )
+  const toRenderedTokens = (cost: number): number =>
+    Math.floor(Math.max(0, cost) / recordCostPerRenderedToken)
+
+  const renderedTarget = Math.max(1, Math.floor(targetTokens * TARGET_UTILIZATION))
+  // An opening reservation only: whatever the records leave unspent flows to
+  // the documents below, and whatever the documents leave unspent flows back.
+  // Documents are reserved by what they actually cost, up to the share beyond
+  // which one long note would start evicting the structured evidence — not by
+  // their share of a total that mixes rendered and serialized units.
+  const documentReserve = documents.length === 0
     ? 0
-    : Math.min(MAX_DOCUMENT_SHARE, rawDocumentShare)
+    : Math.min(
+        documentCostTotal,
+        Math.max(
+          Math.min(MIN_DOCUMENT_BUDGET, renderedTarget),
+          Math.floor(renderedTarget * MAX_DOCUMENT_SHARE),
+        ),
+      )
   // Explicit selections reserve their full text first. Required safety records
   // remain mandatory even if the result overflows; preflight must report that
   // conflict instead of silently dropping documents or clinical safety facts.
@@ -296,7 +346,7 @@ export function prioritizeClinicalDataForTokenBudget(
     ? Math.floor(recordCostTotal * Math.min(1,
         Math.max(0, targetTokens - documentCostTotal) /
         Math.max(1, originalFormattedTokens - documentCostTotal)))
-    : Math.max(1, Math.floor(estimatedBudget * (1 - documentShare)))
+    : Math.max(1, toRecordCost(renderedTarget - documentReserve))
 
   const required = candidates.filter((candidate) => candidate.required)
   const optional = candidates
@@ -308,27 +358,45 @@ export function prioritizeClinicalDataForTokenBudget(
     ))
   const selected = new Set(required.map((candidate) => `${candidate.collection}:${candidate.id}`))
   let used = required.reduce((sum, candidate) => sum + candidate.cost, 0)
-  for (const candidate of optional) {
-    if (used + candidate.cost > nonDocumentBudget) continue
-    selected.add(`${candidate.collection}:${candidate.id}`)
-    used += candidate.cost
+  const selectOptional = (costBudget: number): void => {
+    for (const candidate of optional) {
+      const key = `${candidate.collection}:${candidate.id}`
+      if (selected.has(key)) continue
+      if (used + candidate.cost > costBudget) continue
+      selected.add(key)
+      used += candidate.cost
+    }
   }
+  selectOptional(nonDocumentBudget)
 
+  // Documents are whole records here: capacity the structured records did not
+  // use is spent on more complete discharge summaries, newest first, rather
+  // than on shortening every retained note.
   const selectedDocumentIds = new Set<string>()
-  const documentCostBudget = Math.max(1, Math.floor(estimatedBudget * documentShare))
+  const usedRenderedRecords = Math.min(renderedTarget, toRenderedTokens(used))
+  const documentBudget = options.preserveDocuments
+    ? Number.POSITIVE_INFINITY
+    : Math.max(0, renderedTarget - usedRenderedRecords)
   let usedDocumentCost = 0
   for (const document of documentCosts) {
-    if (options.preserveDocuments || selectedDocumentIds.size === 0 || usedDocumentCost + document.cost <= documentCostBudget) {
+    if (options.preserveDocuments || selectedDocumentIds.size === 0 || usedDocumentCost + document.cost <= documentBudget) {
       selectedDocumentIds.add(document.id)
       usedDocumentCost += document.cost
     }
   }
-  const documentTokenBudget = options.preserveDocuments || documents.length === 0
+  // …and capacity the documents did not use goes back to the next records.
+  if (!options.preserveDocuments) {
+    const spent = usedRenderedRecords + usedDocumentCost
+    const returned = toRecordCost(renderedTarget - spent)
+    if (returned > 0) selectOptional(used + returned)
+  }
+  const documentsFitWholly = options.preserveDocuments || usedDocumentCost <= documentBudget
+  const documentTokenBudget = documentsFitWholly || documents.length === 0
+    // Selecting whole documents inside the budget already bounds their text;
+    // shortening the survivors on top of that would drop the middle of a note
+    // that was deliberately retained in full.
     ? undefined
-    : Math.min(
-        documentCostTotal,
-        Math.max(MIN_DOCUMENT_BUDGET, Math.floor(targetTokens * documentShare)),
-      )
+    : Math.max(Math.min(MIN_DOCUMENT_BUDGET, targetTokens), documentBudget)
 
   const selectedObservationIds = new Set(
     candidates
@@ -382,7 +450,7 @@ export function prioritizeClinicalDataForTokenBudget(
   const retainedEstimatedTokens = collections.reduce(
     (sum, collection) => sum + ((data[collection] ?? []) as any[])
       .reduce((collectionSum, value) => collectionSum + recordCost(value), 0),
-    options.preserveDocuments ? documentCostTotal : Math.min(documentCostTotal, documentTokenBudget ?? 0),
+    options.preserveDocuments ? documentCostTotal : usedDocumentCost,
   )
 
   return {

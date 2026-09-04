@@ -36,9 +36,26 @@ describe('large-chart data selection mounting', () => {
     const { unmount } = render(<DataSelectionPanel clinicalData={mockData} selectedData={ALL_DATA_SELECTION} filters={ALL_DATA_FILTERS} onSelectionChange={jest.fn()} onFiltersChange={jest.fn()} />)
     const elapsed = Math.round(performance.now() - started)
     expect(screen.getByRole('switch', { name: /^文件$/ })).toBeChecked()
-    expect(screen.getByTestId('model-fitted-scope')).toBeInTheDocument()
-    // full → trimmed → compact, exactly once each for the shared view.
-    expect(registry.mock.calls.filter(([key]) => key === 'imagingReports')).toHaveLength(3)
+    const fitted = screen.getByTestId('model-fitted-scope')
+    // The chosen rung is the record-level `prioritized` one, filling the 100K
+    // VGHBrain clinical budget. It used to be `trimmed` at ~13K: the
+    // prioritizer budgets records through a dataset-wide estimate ratio, so its
+    // RENDERED size landed just past the target and best-fit rejected it. The
+    // hook now re-aims it at a budget scaled by the observed overshoot
+    // (`nextPrioritizedContextBudget`), so this rung fits by construction.
+    expect(fitted).toHaveTextContent('逐筆保留活動中問題')
+    expect(fitted.textContent ?? '').toMatch(/本次實際送出約 (7\d|8\d|9\d|100)k tokens/)
+    // full → trimmed (the first date-window rung that fits) → prioritized
+    // (never comparable, so always measured) → one prioritized convergence
+    // pass, for the shared view; the chosen rung is then served from the hook's
+    // context cache. The narrower date-window rungs below the first fitting one
+    // are skipped: they are nested inside it and cannot carry more. This used
+    // to take five builds, reaching `compact` before anything fitted —
+    // impression-first imaging reports (src/core/utils/imaging-impression.utils.ts)
+    // make the wider `trimmed` rung fit, so two whole passes were saved; the
+    // fourth build here is the single convergence pass that re-aims the
+    // prioritizer after its first rendered candidate overshot 100K.
+    expect(registry.mock.calls.filter(([key]) => key === 'imagingReports')).toHaveLength(4)
     if (process.env.CLINICAL_INPUT_BENCHMARK === '1') console.info('Synthetic panel mount', { elapsedMs: elapsed, imagingBuilds: registry.mock.calls.filter(([key]) => key === 'imagingReports').length })
     unmount()
     registry.mockRestore()

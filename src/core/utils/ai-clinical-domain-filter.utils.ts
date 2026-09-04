@@ -1,9 +1,17 @@
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import { getEncounterKindCode } from '@/src/shared/utils/encounter-type.utils'
+import {
+  carriedDischargeDeduplicationKey,
+  dischargeDeduplicationKeyForEncounter,
+  documentEncounterId,
+  withDischargeDeduplicationKey,
+} from '@/src/core/utils/clinical-documents.utils'
 
 type DomainFilterableClinicalData = Partial<ClinicalDataCollection> & {
   encounters?: any[]
   procedures?: any[]
+  compositions?: any[]
+  documentReferences?: any[]
 }
 
 const REHABILITATION_TEXT =
@@ -114,7 +122,46 @@ function encounterReferenceId(procedure: any): string | undefined {
   return typeof reference === 'string' ? reference.split('/').filter(Boolean).at(-1) : undefined
 }
 
-function encounterCareType(encounter: any): 'outpatient' | 'inpatient' | 'emergency' | 'other' {
+type EncounterCareType = 'outpatient' | 'inpatient' | 'emergency' | 'other'
+
+/**
+ * Care type resolved from a linked Encounter, carried on the Procedure itself.
+ *
+ * This filter runs twice on the AI path: once over the whole queried
+ * collection (inside `scopeClinicalDataForAi`) and again inside
+ * `useClinicalContext` over whatever transient view is being rendered. In the
+ * second pass the linked Encounter may have been removed by a time window or
+ * by record-level prioritization, which silently degraded an inpatient
+ * procedure to `other` and excluded a record the reducer had deliberately
+ * kept. Remembering the resolved care type makes the filter idempotent.
+ *
+ * The property is non-enumerable on purpose: it must not reach JSON
+ * signatures, source catalogs, selector cost estimates or the prompt.
+ */
+const RESOLVED_CARE_TYPE_KEY = '__aiEncounterCareType'
+
+function carriedCareType(procedure: any): EncounterCareType | undefined {
+  const value = procedure?.[RESOLVED_CARE_TYPE_KEY]
+  return value === 'inpatient' || value === 'emergency'
+    || value === 'outpatient' || value === 'other'
+    ? value
+    : undefined
+}
+
+function withCarriedCareType(procedure: any, careType: EncounterCareType): any {
+  if (!procedure || typeof procedure !== 'object') return procedure
+  if (carriedCareType(procedure) === careType) return procedure
+  const annotated = { ...procedure }
+  Object.defineProperty(annotated, RESOLVED_CARE_TYPE_KEY, {
+    value: careType,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  })
+  return annotated
+}
+
+function encounterCareType(encounter: any): EncounterCareType {
   const kind = String(getEncounterKindCode(encounter) ?? '').toLowerCase()
   const classCode = String(encounter?.class?.code ?? '').toLowerCase()
   if (['inpatient', 'imp', 'acute', 'ss', 'obsenc', 'prenc'].includes(kind)
@@ -130,6 +177,35 @@ function encounterCareType(encounter: any): 'outpatient' | 'inpatient' | 'emerge
     return 'outpatient'
   }
   return 'other'
+}
+
+/**
+ * Documents are not domain-filtered — only their Encounters are. Resolve the
+ * discharge-deduplication key of every document whose Encounter is about to be
+ * removed, and carry it on the document, so `deduplicatedAdmissions` still
+ * groups the same admissions once this view is listed by `useClinicalContext`.
+ * Documents whose Encounter survives are returned untouched, which keeps their
+ * decoded-text cache identity (base64 + HTML strip) intact.
+ */
+function withDocumentGroupingEvidence<T>(
+  documents: T[] | undefined,
+  encountersById: Map<string, any>,
+  excludedEncounterIds: Set<string>,
+): { documents: T[] | undefined; changed: boolean } {
+  if (!documents?.length || excludedEncounterIds.size === 0) {
+    return { documents, changed: false }
+  }
+  let changed = false
+  const annotated = documents.map((document) => {
+    if (carriedDischargeDeduplicationKey(document)) return document
+    const encounterId = documentEncounterId(document)
+    if (!encounterId || !excludedEncounterIds.has(encounterId)) return document
+    const key = dischargeDeduplicationKeyForEncounter(encountersById.get(encounterId))
+    if (!key) return document
+    changed = true
+    return withDischargeDeduplicationKey(document, key)
+  })
+  return { documents: changed ? annotated : documents, changed }
 }
 
 export function hasExplicitSurgicalEvidence(procedure: any): boolean {
@@ -167,6 +243,10 @@ function isAiExcludedEncounterByOwnFields(encounter: any): boolean {
  * removed; dental/rehabilitation procedures are removed even when standalone.
  * A linked excluded procedure also removes its encounter so old encounters do
  * not survive after their only relevant content was filtered out.
+ *
+ * Documents are never removed here, but a removed Encounter is the only carrier
+ * of a discharge summary's grouping identity, so that key is resolved and
+ * carried on the document before its Encounter leaves.
  */
 export function filterAiExcludedClinicalDomains<T extends DomainFilterableClinicalData>(
   input: T,
@@ -184,51 +264,70 @@ export function filterAiExcludedClinicalDomains<T extends DomainFilterableClinic
       .map((encounter) => encounter?.id)
       .filter(Boolean),
   )
-  const excludedProcedures = new Set<any>()
+  const excluded = new Array<boolean>(procedures.length).fill(false)
+  const careTypes = new Array<EncounterCareType | undefined>(procedures.length)
 
-  for (const procedure of procedures) {
-    const excludedDomain = isAiExcludedDentalProcedure(procedure)
-      || isAiExcludedRehabilitationProcedure(procedure)
+  // Pass 1: domain exclusions, which may themselves exclude an encounter that a
+  // later procedure links to. Care type is resolved here while the linked
+  // Encounter is still available, or read back from an earlier pass.
+  for (const [index, procedure] of procedures.entries()) {
     const linkedEncounterId = encounterReferenceId(procedure)
-    if (excludedDomain) {
-      excludedProcedures.add(procedure)
+    if (isAiExcludedDentalProcedure(procedure) || isAiExcludedRehabilitationProcedure(procedure)) {
+      excluded[index] = true
       if (linkedEncounterId) excludedEncounterIds.add(linkedEncounterId)
       continue
     }
     if (isAiExcludedRoutineProcedure(procedure)) {
-      excludedProcedures.add(procedure)
+      excluded[index] = true
       continue
     }
-    if (linkedEncounterId && excludedEncounterIds.has(linkedEncounterId)) {
-      excludedProcedures.add(procedure)
-      continue
-    }
-
-    // Claims-oriented outpatient feeds contain many routine services that add
-    // little value to an initial LLM summary. Keep procedures automatically for
-    // inpatient/emergency care; otherwise require explicit surgical evidence.
     const linkedEncounter = linkedEncounterId
       ? encountersById.get(linkedEncounterId)
       : undefined
-    const careType = linkedEncounter ? encounterCareType(linkedEncounter) : 'other'
-    if (!['inpatient', 'emergency'].includes(careType)
+    careTypes[index] = linkedEncounter
+      ? encounterCareType(linkedEncounter)
+      : carriedCareType(procedure)
+  }
+
+  // Pass 2: run once the excluded-encounter set is complete, so the outcome no
+  // longer depends on the order procedures happen to appear in.
+  for (const [index, procedure] of procedures.entries()) {
+    if (excluded[index]) continue
+    const linkedEncounterId = encounterReferenceId(procedure)
+    if (linkedEncounterId && excludedEncounterIds.has(linkedEncounterId)) {
+      excluded[index] = true
+      continue
+    }
+    // Claims-oriented outpatient feeds contain many routine services that add
+    // little value to an initial LLM summary. Keep procedures automatically for
+    // inpatient/emergency care; otherwise require explicit surgical evidence.
+    if (!['inpatient', 'emergency'].includes(careTypes[index] ?? 'other')
         && !hasExplicitSurgicalEvidence(procedure)) {
-      excludedProcedures.add(procedure)
+      excluded[index] = true
     }
   }
 
   const filteredEncounters = encounters.filter(
     (encounter) => !encounter?.id || !excludedEncounterIds.has(encounter.id),
   )
-  const filteredProcedures = procedures.filter((procedure) => {
-    if (excludedProcedures.has(procedure)) return false
-    const linkedEncounterId = encounterReferenceId(procedure)
-    return !linkedEncounterId || !excludedEncounterIds.has(linkedEncounterId)
+  const filteredProcedures = procedures.flatMap((procedure, index) => {
+    if (excluded[index]) return []
+    const careType = careTypes[index]
+    return [careType ? withCarriedCareType(procedure, careType) : procedure]
   })
+  const compositions = withDocumentGroupingEvidence(
+    input.compositions, encountersById, excludedEncounterIds,
+  )
+  const documentReferences = withDocumentGroupingEvidence(
+    input.documentReferences, encountersById, excludedEncounterIds,
+  )
 
   if (
     filteredEncounters.length === encounters.length
     && filteredProcedures.length === procedures.length
+    && filteredProcedures.every((procedure, index) => procedure === procedures[index])
+    && !compositions.changed
+    && !documentReferences.changed
   ) {
     return input
   }
@@ -237,5 +336,7 @@ export function filterAiExcludedClinicalDomains<T extends DomainFilterableClinic
     ...input,
     ...(input.encounters ? { encounters: filteredEncounters } : {}),
     ...(input.procedures ? { procedures: filteredProcedures } : {}),
+    ...(compositions.changed ? { compositions: compositions.documents } : {}),
+    ...(documentReferences.changed ? { documentReferences: documentReferences.documents } : {}),
   }
 }

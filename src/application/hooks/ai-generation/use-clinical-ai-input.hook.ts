@@ -3,6 +3,10 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
+import {
+  documentTextPolicyIdentity,
+  resolveDocumentTextMode,
+} from '@/src/core/utils/document-text-policy.utils'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import {
   useDataSelection,
@@ -15,6 +19,8 @@ import {
   fitClinicalContextTextToTokenBudget,
   hasManualDocumentSelection,
   nextClinicalContextFitTier,
+  nextPrioritizedContextBudget,
+  selectBestClinicalContextFitTier,
   type ClinicalContextAdaptation,
   type ClinicalContextFitTier,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
@@ -32,6 +38,7 @@ import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-c
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { defaultLocale } from '@/src/shared/i18n/i18n.config'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { PROTECTED_DOCUMENT_HINT_LIMIT } from '@/src/shared/utils/context-budget'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
@@ -83,9 +90,17 @@ export function clinicalAiSourceSignature(
   catalog: SummarySourceCatalogEntry[],
 ): string {
   return contentSignature([
-    // v3 invalidates summaries generated before exact per-row NHI terminology
-    // was included in the AI medication context and conflict policy.
-    'clinical-ai-source-v3',
+    // Context FORMAT version. Bump whenever the rendered clinical context
+    // changes shape, even when the selected records are identical: this
+    // signature is model-independent and record-derived, so without a bump a
+    // summary written against the previous format would be reused verbatim.
+    // v3 — exact per-row NHI terminology in the medication context.
+    // v4 — per-analyte lab series (replacing the date × test pivot + key-trend
+    //      appendix) and impression-first imaging reports.
+    // v5 — safety-first section order (demographics → temporal → allergies →
+    //      problems → medications → procedures/admissions → labs → imaging →
+    //      documents) plus the claims-derived problem timeline.
+    'clinical-ai-source-v5',
     JSON.stringify(patient ?? null),
     JSON.stringify(profile),
     JSON.stringify(clinicalData),
@@ -97,6 +112,24 @@ interface FitState {
   key: string | object
   tier: ClinicalContextFitTier
   originalTokens: number
+  /** Measured tokens of every rung visited so far, for best-fit selection. */
+  measuredTokens: Partial<Record<ClinicalContextFitTier, number>>
+  /** Budget handed to the record prioritizer. Undefined uses the plain target;
+   *  convergence lowers it when the rendered prioritized rung overshoots. */
+  prioritizedBudget?: number
+  /** Prioritizer re-runs performed for this key (0 before the first rebuild). */
+  prioritizedPasses: number
+  /** True while rungs are still being measured; false once one was chosen. */
+  probing: boolean
+}
+
+const INITIAL_FIT_STATE: FitState = {
+  key: '',
+  tier: 'full',
+  originalTokens: 0,
+  measuredTokens: {},
+  prioritizedPasses: 0,
+  probing: false,
 }
 
 /**
@@ -117,7 +150,7 @@ export function useClinicalAiInput(
   // Scope controls need the same fitting policy, not a generation-ready source
   // catalog or persistent signature. Preview-only callers expose neither.
   const includeSources = options.includeSources !== false
-  const [fitState, setFitState] = useState<FitState>({ key: '', tier: 'full', originalTokens: 0 })
+  const [fitState, setFitState] = useState<FitState>(INITIAL_FIT_STATE)
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const { locale } = useLanguage()
@@ -144,6 +177,10 @@ export function useClinicalAiInput(
   const { profile: activeProfile, contextLimit, targetFraction, maxClinicalTokens } = input
   const preserveManualDocuments = hasManualDocumentSelection(activeProfile)
   const allowTextTruncation = input.allowTextTruncation && !preserveManualDocuments
+  // One policy decision, shared by the rendered context below and by the cache
+  // identity: the handoff consumer and every manual selection carry complete
+  // documents; automatic modes carry key sections only.
+  const documentTextMode = resolveDocumentTextMode(consumer, activeProfile.documentMode)
 
   const rawDataReady = !!clinicalData
     && !clinicalData.isLoading
@@ -154,7 +191,7 @@ export function useClinicalAiInput(
   // Resolve the saved document selection without building a second formatted
   // context. This keeps the cache/scope identity model-independent while the
   // actual outbound request below may use a smaller transient profile.
-  const baseDocumentIds = useMemo(() => {
+  const baseDocuments = useMemo(() => {
     if (!rawDataReady || !clinicalData || !activeProfile.selection.documents) return []
     const documents = listClinicalDocuments(
       clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0],
@@ -163,8 +200,27 @@ export function useClinicalAiInput(
       documents,
       activeProfile.documentMode ?? 'deduplicatedAdmissions',
       activeProfile.documentIds ?? [],
-    ).map((document) => document.id)
+    )
   }, [rawDataReady, clinicalData, activeProfile])
+  const baseDocumentIds = useMemo(
+    () => baseDocuments.map((document) => document.id),
+    [baseDocuments],
+  )
+  // Which manual picks weigh the most. An overflow message that only reports a
+  // count leaves the user guessing which document to untick.
+  const protectedDocuments = useMemo(
+    () => (preserveManualDocuments
+      ? baseDocuments
+          .map((document) => ({
+            id: document.id,
+            title: document.title,
+            tokens: estimateTokens(document.text ?? ''),
+          }))
+          .sort((a, b) => b.tokens - a.tokens)
+          .slice(0, PROTECTED_DOCUMENT_HINT_LIMIT)
+      : []),
+    [baseDocuments, preserveManualDocuments],
+  )
 
   // The demo chart is judged against its own as-of date, not the wall clock —
   // otherwise its medications age out of scope and the pre-generated citations
@@ -227,7 +283,13 @@ export function useClinicalAiInput(
             documentIds: activeProfile.documentIds ?? [],
             // Earlier custom scopes could silently omit selected documents.
             // Do not hydrate those cached outputs under the new policy.
-            ...(preserveManualDocuments ? { manualDocumentPolicy: 'complete-v1' } : {}),
+            // Automatic document modes send only the clinically dense sections
+            // of a recognised discharge summary; a manual pick and the AI
+            // handoff send whole documents. Those are different inputs and
+            // must never be hydrated into each other.
+            ...(preserveManualDocuments
+              ? { manualDocumentPolicy: 'complete-v1' }
+              : documentTextPolicyIdentity(documentTextMode)),
           },
           baseScopedClinicalData,
           sourceIdentityCatalog,
@@ -241,12 +303,20 @@ export function useClinicalAiInput(
       sourceIdentityCatalog,
       includeSources,
       preserveManualDocuments,
+      documentTextMode,
     ],
   )
 
   const targetTokens = useMemo(
     () => {
-      if (!contextLimit || contextLimit <= 0) return Number.POSITIVE_INFINITY
+      // An absent/zero model window still has to respect an explicit clinical
+      // cap (VGHBrain's 100K): otherwise the caller silently gets an unbounded
+      // target and the tier ladder never advances.
+      if (!contextLimit || contextLimit <= 0) {
+        return maxClinicalTokens && maxClinicalTokens > 0
+          ? Math.max(1, maxClinicalTokens)
+          : Number.POSITIVE_INFINITY
+      }
       const normalizedFraction = Number.isFinite(targetFraction)
         ? Math.min(1, Math.max(0.01, targetFraction))
         : 1
@@ -274,6 +344,11 @@ export function useClinicalAiInput(
       : rawDataReady ? previewFitIdentity : ''
   const activeTier: ClinicalContextFitTier =
     fitKey && fitState.key === fitKey ? fitState.tier : 'full'
+  // The prioritizer's own budget, which convergence below may pull under the
+  // target once its rendered result has been measured.
+  const prioritizedBudget = fitKey && fitState.key === fitKey
+    ? fitState.prioritizedBudget ?? targetTokens
+    : targetTokens
   const fitCandidate = useMemo(
     () => buildClinicalContextFitCandidate(activeProfile, activeTier, targetTokens),
     [activeProfile, activeTier, targetTokens],
@@ -283,14 +358,14 @@ export function useClinicalAiInput(
       activeTier === 'prioritized' && baseScopedClinicalData
         ? prioritizeClinicalDataForTokenBudget(
             baseScopedClinicalData as Partial<ClinicalDataCollection>,
-            targetTokens,
+            prioritizedBudget,
             fitState.originalTokens,
             scopeNowMs,
             { preserveDocuments: preserveManualDocuments },
           )
         : null
     ),
-    [activeTier, baseScopedClinicalData, fitState.originalTokens, targetTokens, scopeNowMs, preserveManualDocuments],
+    [activeTier, baseScopedClinicalData, fitState.originalTokens, prioritizedBudget, scopeNowMs, preserveManualDocuments],
   )
   const contextView = useClinicalContext(consumer, {
     profile: fitCandidate.profile,
@@ -315,16 +390,22 @@ export function useClinicalAiInput(
     () => estimateTokens(candidateClinicalContext),
     [candidateClinicalContext],
   )
-  const needsSmallerTier = Boolean(fitKey) &&
-    activeTier !== 'prioritized' &&
-    candidateTokens > targetTokens
+  // An intermediate measurement is never sent or cached, so the expensive
+  // outbound artifacts below stay unbuilt until a rung has been chosen.
+  const isFitting = Boolean(fitKey) && (
+    fitState.key === fitKey ? fitState.probing : candidateTokens > targetTokens
+  )
 
   useEffect(() => {
     if (inputPending || !fitKey || !rawDataReady) return
     // Measure each transient view before advancing. The reduction order is
     // full → 1 year / 8 labs → 6 months / 3 labs → 3 months / latest labs →
-    // record-level clinical prioritization. Only the final prioritized view
-    // may use bounded text fitting as a last resort.
+    // record-level clinical prioritization. A full context that already fits
+    // short-circuits immediately; otherwise every rung is measured and the
+    // largest one that still fits the target is used, because the ladder is
+    // not monotone (the record-level tier keeps far more evidence than the
+    // date-window tiers that precede it). Only the final prioritized view may
+    // use bounded text fitting as a last resort.
     // Tier advancement is background work too, so another control change can
     // interrupt it instead of queuing behind every mounted AI consumer.
     startTransition(() => setFitState((current) => {
@@ -334,17 +415,59 @@ export function useClinicalAiInput(
           key: fitKey,
           tier: nextClinicalContextFitTier('full'),
           originalTokens: candidateTokens,
+          measuredTokens: { full: candidateTokens },
+          prioritizedPasses: 0,
+          probing: true,
         }
       }
-      if (candidateTokens > targetTokens && current.tier !== 'prioritized') {
-        return {
-          ...current,
-          tier: nextClinicalContextFitTier(current.tier),
+      if (!current.probing) return current
+      const measuredTokens = { ...current.measuredTokens, [current.tier]: candidateTokens }
+      if (current.tier === 'prioritized') {
+        // Make this rung fit by construction. The prioritizer selects whole
+        // records against a budget derived from a dataset-wide estimate ratio,
+        // so its RENDERED size can land just past the target — and best-fit
+        // then rejected the only rung able to fill the window, falling back to
+        // `trimmed` at a fraction of the capacity. Re-aim it at a budget scaled
+        // by the observed overshoot and rebuild; the first candidate that fits
+        // is kept. Bounded passes, and only reached when prioritized overshoots
+        // (a fitting `full` context short-circuits long before this).
+        const nextBudget = nextPrioritizedContextBudget(
+          current.prioritizedBudget ?? targetTokens,
+          candidateTokens,
+          targetTokens,
+          current.prioritizedPasses,
+          current.measuredTokens.prioritized,
+        )
+        if (nextBudget !== null) {
+          return {
+            ...current,
+            measuredTokens,
+            prioritizedBudget: nextBudget,
+            prioritizedPasses: current.prioritizedPasses + 1,
+          }
         }
       }
-      return current
+      // The date-window rungs are nested by construction (trimmed ⊇ compact ⊇
+      // tight), so once one of them fits, no narrower one can carry more and
+      // measuring them would only cost another pass over a large chart. Only
+      // the record-level tier is not comparable, so it is always measured.
+      const nextTier = candidateTokens <= targetTokens && current.tier !== 'prioritized'
+        ? 'prioritized'
+        : nextClinicalContextFitTier(current.tier)
+      if (nextTier !== current.tier && measuredTokens[nextTier] === undefined) {
+        return { ...current, tier: nextTier, measuredTokens }
+      }
+      return {
+        ...current,
+        tier: selectBestClinicalContextFitTier(measuredTokens, targetTokens),
+        measuredTokens,
+        probing: false,
+      }
     }))
-  }, [activeTier, candidateTokens, fitKey, inputPending, rawDataReady, targetTokens])
+    // `prioritizedPasses` keeps the effect firing across a convergence pass
+    // whose rebuilt context happens to measure identically: without it the
+    // no-progress guard below would never run and probing would never settle.
+  }, [activeTier, candidateTokens, fitKey, fitState.prioritizedPasses, inputPending, rawDataReady, targetTokens])
 
   const clinicalContext = useMemo(
     () => (
@@ -372,7 +495,7 @@ export function useClinicalAiInput(
     // Intermediate tiers cannot be sent or cached. Building their outbound
     // records/catalog only repeats expensive report extraction before the next
     // tier replaces them; the final settled tier still uses the same builder.
-    () => (!includeSources || needsSmallerTier ? null : prioritizedResult
+    () => (!includeSources || isFitting ? null : prioritizedResult
       ? prioritizedResult.data as ClinicalAiDataInput
       : rawDataReady && clinicalData
         ? scopeClinicalDataForAi(
@@ -392,32 +515,43 @@ export function useClinicalAiInput(
       includedDocumentIds,
       scopeNowMs,
       includeSources,
-      needsSmallerTier,
+      isFitting,
     ],
   )
   const catalog = useMemo(
     () => (scopedClinicalData ? getSourceCatalog(scopedClinicalData, locale) : []),
     [scopedClinicalData, locale],
   )
-  const isCalculating = inputPending || needsSmallerTier
+  const isCalculating = inputPending || isFitting
   const dataReady = rawDataReady && !isCalculating
   // Do not hydrate or expose a generation slot for an intermediate fitting
   // tier. The signature itself is model-independent once the adapted context
   // has settled.
   const inputSignature = dataReady ? sourceSignature : ''
   const adaptedTokens = useMemo(() => estimateTokens(clinicalContext), [clinicalContext])
+  // A reduction driven purely by an explicit clinical cap (no model window)
+  // must still be announced rather than applied silently.
+  const adaptationLimit = contextLimit && contextLimit > 0
+    ? contextLimit
+    : maxClinicalTokens && maxClinicalTokens > 0 ? maxClinicalTokens : 0
   const contextAdaptation: ClinicalContextAdaptation | null =
-    activeTier === 'full' || !contextLimit
+    activeTier === 'full' || !adaptationLimit
       ? null
       : {
           tier: activeTier,
-          contextLimit,
+          contextLimit: adaptationLimit,
           targetTokens,
           originalTokens: fitState.key === fitKey
             ? fitState.originalTokens
             : candidateTokens,
           adaptedTokens,
           protectedDocumentCount: preserveManualDocuments ? baseDocumentIds.length : undefined,
+          ...(protectedDocuments.length > 0 ? { protectedDocuments } : {}),
+          // Diagnostics: builds of the record prioritizer, so a chart that
+          // needs repeated convergence passes is visible rather than inferred.
+          ...(activeTier === 'prioritized'
+            ? { prioritizedPasses: fitState.prioritizedPasses + 1 }
+            : {}),
         }
 
   return {
@@ -437,5 +571,6 @@ export function useClinicalAiInput(
     contextView,
     isCalculating,
     preserveManualDocuments,
+    protectedDocuments,
   }
 }

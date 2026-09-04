@@ -1,5 +1,7 @@
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import { buildSourceCatalog } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
 function dateAt(dayOffset: number): string {
   return new Date(Date.UTC(2026, 0, 1 + dayOffset)).toISOString()
@@ -23,6 +25,56 @@ describe('prioritized clinical context', () => {
     expect(result.data.procedures).toEqual([])
     expect(result.retainedEstimatedTokens).toBeGreaterThan(700)
     expect(prioritizeClinicalDataForTokenBudget(input, 700, 100_000).data.compositions).toHaveLength(1)
+  })
+
+  it('spends the whole budget on more whole documents instead of stopping at a fixed share', () => {
+    // A document-heavy chart: 40 discharge summaries render as ~2k tokens each
+    // and dominate the formatted context, while the structured records render
+    // as a few compact lines despite their much larger raw-JSON footprint.
+    const compositions = Array.from({ length: 40 }, (_, index) => ({
+      id: `doc-${index}`,
+      title: 'Discharge summary',
+      date: dateAt(-index * 30),
+      section: [{ text: { div: `<div>admission ${index} ${'course narrative '.repeat(700)}</div>` } }],
+    }))
+    const observations = Array.from({ length: 200 }, (_, index) => ({
+      id: `obs-${index}`,
+      code: { text: 'Creatinine' },
+      effectiveDateTime: dateAt(-index),
+      valueQuantity: { value: 1 + index / 100, unit: 'mg/dL' },
+      interpretation: { coding: [{ code: 'N' }] },
+      note: [{ text: `structured payload ${'detail '.repeat(40)}` }],
+    }))
+    const input = {
+      compositions,
+      observations,
+      vitalSigns: [],
+      allergies: [{ id: 'allergy-1', code: { text: 'Penicillin' } }],
+      conditions: [{ id: 'condition-active', code: { text: 'CKD' } }],
+    }
+    // The rendered original the hook measures: the document bodies plus the
+    // handful of compact lines the structured records format as.
+    const documentTokens = listClinicalDocuments(input)
+      .reduce((sum, document) => sum + estimateTokens(`${document.title}\n${document.text}`), 0)
+    const perDocument = documentTokens / compositions.length
+    expect(documentTokens).toBeGreaterThan(100_000)
+    const result = prioritizeClinicalDataForTokenBudget(
+      input,
+      100_000,
+      documentTokens + 4_000,
+      Date.UTC(2026, 8, 3),
+    )
+
+    // Newest first, whole documents, filling the window well past the ~45% of
+    // target this tier used to stop at…
+    expect(result.data.compositions![0].id).toBe('doc-0')
+    const retainedDocumentTokens = result.data.compositions!.length * perDocument
+    expect(retainedDocumentTokens).toBeGreaterThan(80_000)
+    // …and never above the caller's target.
+    expect(retainedDocumentTokens).toBeLessThanOrEqual(100_000)
+    // Whole-record selection replaces per-document text shortening.
+    expect(result.documentTokenBudget).toBeUndefined()
+    expect(result.data.allergies).toEqual(input.allergies)
   })
 
   it('reduces a 75k selection toward 50k by retaining newer records first', () => {

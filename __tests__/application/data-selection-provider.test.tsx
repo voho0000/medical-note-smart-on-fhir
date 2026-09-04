@@ -101,7 +101,9 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled exports', (
 
     const stored = JSON.parse(localStorage.getItem('clinicalDataProfiles') ?? '{}')
     expect(stored.aiExport.documentIds).toBeUndefined()
-    expect(stored.aiExport.documentMode).toBe('deduplicatedAdmissions')
+    // The MODE is a reusable workflow choice and is stored as chosen; only the
+    // patient-scoped ids are withheld.
+    expect(stored.aiExport.documentMode).toBe('custom')
     expect(result.current.getProfile('aiExport').documentIds).toEqual(['patient-document-1'])
   })
 
@@ -170,5 +172,64 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled exports', (
     act(() => result.current.resetToDefaults())
     expect(result.current.activePreset).toBe('followUp')
     expect(result.current.getProfile('chat').selection.medicalDevices).toBe(false)
+  })
+})
+
+// A manual document selection is the user's explicit act. Persisting it as an
+// automatic mode meant that unticking every document (an intentionally empty
+// custom selection) silently restored the latest documents after a reload.
+describe('DataSelectionProvider — document mode survives a reload', () => {
+  it('round-trips an intentionally empty custom selection', () => {
+    const first = setup()
+    act(() => {
+      first.result.current.setDocumentMode('custom')
+      first.result.current.setDocumentIds([])
+    })
+    first.unmount()
+
+    const { result } = setup()
+    expect(result.current.getProfile('chat').documentMode).toBe('custom')
+    expect(result.current.getProfile('chat').documentIds).toEqual([])
+    expect(result.current.getProfile('insights').documentMode).toBe('custom')
+  })
+
+  it('round-trips a non-empty custom selection without restoring patient document ids', () => {
+    const first = setup()
+    act(() => {
+      first.result.current.setDocumentMode('custom')
+      first.result.current.setDocumentIds(['Composition/doc-1', 'Composition/doc-2'])
+    })
+    first.unmount()
+
+    const { result } = setup()
+    expect(result.current.getProfile('chat').documentMode).toBe('custom')
+    // Patient-scoped FHIR ids are never restored from the origin-global record.
+    expect(result.current.getProfile('chat').documentIds).toEqual([])
+    expect(JSON.stringify(localStorage)).not.toContain('doc-1')
+  })
+
+  it('keeps an automatic mode a reload away from the default too', () => {
+    const first = setup()
+    act(() => first.result.current.setDocumentMode('all'))
+    first.unmount()
+
+    expect(setup().result.current.getProfile('chat').documentMode).toBe('all')
+  })
+
+  it('an explicit profile reset still returns to the default mode', () => {
+    const first = setup()
+    act(() => first.result.current.setDocumentModeFor('aiExport', 'custom'))
+    act(() => first.result.current.resetProfileFor('aiExport'))
+    expect(first.result.current.getProfile('aiExport').documentMode).toBe('deduplicatedAdmissions')
+    first.unmount()
+
+    expect(setup().result.current.getProfile('aiExport').documentMode).toBe('deduplicatedAdmissions')
+  })
+
+  it('selectAllData still overrides a custom mode with all', () => {
+    const { result } = setup()
+    act(() => result.current.setDocumentMode('custom'))
+    act(() => result.current.selectAllData())
+    expect(result.current.getProfile('chat').documentMode).toBe('all')
   })
 })

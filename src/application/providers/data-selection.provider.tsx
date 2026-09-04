@@ -105,6 +105,18 @@ function cloneTemplate(template: DataSelectionTemplate): DataSelectionTemplate {
   }
 }
 
+const DOCUMENT_MODES: DocumentMode[] = [
+  'deduplicatedAdmissions',
+  'latestAdmission',
+  'recentAdmissions',
+  'all',
+  'custom',
+]
+
+function isDocumentMode(value: unknown): value is DocumentMode {
+  return typeof value === 'string' && (DOCUMENT_MODES as string[]).includes(value)
+}
+
 function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS): ConsumerProfile {
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
@@ -178,13 +190,13 @@ export function coerceProfile(
     // highlight is derived live from selection/filters. Any such keys on an old
     // stored profile are simply ignored here. Legacy supplementaryNotes and
     // editedClinicalContext keys are also intentionally dropped.
-    // A custom document selection is meaningful only together with patient-
-    // specific FHIR document IDs. Those IDs must never be restored from the
-    // origin-global preference record, so migrate custom mode to the safe
-    // admission default as well.
-    documentMode: mode === 'all' || mode === 'recentAdmissions' || mode === 'deduplicatedAdmissions'
-      ? mode
-      : 'deduplicatedAdmissions',
+    // 'custom' is a deliberate user choice and survives a reload: rewriting it
+    // to an automatic mode silently re-added documents the user had unticked.
+    // The patient-specific FHIR document IDs are still never restored from the
+    // origin-global preference record, so a rehydrated custom profile starts
+    // from an empty pick list rather than another patient's documents.
+    // Unknown / legacy mode values still fall back to the current default.
+    documentMode: isDocumentMode(mode) ? mode : 'deduplicatedAdmissions',
     documentIds: [],
   }
 }
@@ -220,11 +232,14 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Persist only reusable workflow choices. FHIR document IDs are patient-
     // scoped working state and must not survive a patient/account transition.
+    // The MODE is a reusable choice, though — including 'custom'. Rewriting it
+    // to an automatic mode here made an intentionally empty manual selection
+    // silently restore documents after a reload.
     storage.set(STORAGE_KEYS.DATA_PROFILES, Object.fromEntries(
       Object.entries(profiles).map(([consumer, profile]) => [consumer, {
         selection: profile.selection,
         filters: profile.filters,
-        documentMode: profile.documentMode === 'custom' ? 'deduplicatedAdmissions' : profile.documentMode,
+        documentMode: profile.documentMode,
       }]),
     ))
   }, [profiles])

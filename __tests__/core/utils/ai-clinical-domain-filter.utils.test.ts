@@ -1,4 +1,8 @@
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
+import {
+  listClinicalDocuments,
+  resolveSelectedDocuments,
+} from '@/src/core/utils/clinical-documents.utils'
 
 const ENCOUNTER_KIND_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/encounter-kind'
@@ -154,5 +158,138 @@ describe('filterAiExcludedClinicalDomains', () => {
       'inpatient-drainage',
       'emergency-treatment',
     ])
+  })
+})
+
+describe('filterAiExcludedClinicalDomains idempotence', () => {
+  const inpatientEncounter = encounter('admission-2018', 'inpatient')
+  const inpatientProcedure = procedure('cvc-check', 'Central venous access assessment', 'admission-2018')
+
+  it('keeps an inpatient procedure when a second pass no longer carries its encounter', () => {
+    const first = filterAiExcludedClinicalDomains({
+      encounters: [inpatientEncounter],
+      procedures: [inpatientProcedure],
+    } as any)
+    expect(first.procedures?.map((record: any) => record.id)).toEqual(['cvc-check'])
+
+    // What the record prioritizer hands the renderer: the procedure survives,
+    // its encounter fell outside the encounter time window. Re-deriving the
+    // care type from this reduced view would demote it to `other` and exclude
+    // a record the reducer deliberately kept.
+    const second = filterAiExcludedClinicalDomains({
+      encounters: [],
+      procedures: first.procedures,
+    } as any)
+
+    expect(second.procedures?.map((record: any) => record.id)).toEqual(['cvc-check'])
+    const third = filterAiExcludedClinicalDomains({ procedures: second.procedures } as any)
+    expect(third.procedures?.map((record: any) => record.id)).toEqual(['cvc-check'])
+  })
+
+  it('does not leak the carried care type into serialized clinical data', () => {
+    const filtered = filterAiExcludedClinicalDomains({
+      encounters: [inpatientEncounter],
+      procedures: [inpatientProcedure],
+    } as any)
+    expect(JSON.parse(JSON.stringify(filtered.procedures![0]))).toEqual(inpatientProcedure)
+    expect(Object.keys(filtered.procedures![0])).toEqual(Object.keys(inpatientProcedure))
+  })
+
+  it('still excludes an outpatient procedure without surgical evidence on every pass', () => {
+    const outpatient = filterAiExcludedClinicalDomains({
+      encounters: [encounter('clinic-visit')],
+      procedures: [procedure('routine-check', 'Nutrition counselling', 'clinic-visit')],
+    } as any)
+    expect(outpatient.procedures).toEqual([])
+  })
+})
+
+describe('filterAiExcludedClinicalDomains discharge grouping evidence', () => {
+  const DENTAL_SERVICE_TYPE = {
+    coding: [{ system: 'http://terminology.hl7.org/CodeSystem/service-type', code: '88' }],
+  }
+
+  function admission(id: string, organization: string, icd: string, serviceType?: unknown) {
+    return encounter(id, 'inpatient', {
+      serviceProvider: { reference: `Organization/${organization}`, display: organization },
+      reasonCode: [{ coding: [{ code: icd }] }],
+      ...(serviceType ? { serviceType } : {}),
+    })
+  }
+
+  function dischargeSummary(id: string, date: string, encounterId: string) {
+    return {
+      id,
+      date,
+      type: { coding: [{ code: '18842-5' }] },
+      context: { encounter: [{ reference: `Encounter/${encounterId}` }] },
+      content: [{ attachment: { contentType: 'text/plain', data: btoa(id) } }],
+    }
+  }
+
+  // Two admissions at the same institution with the same primary ICD, one of
+  // them on an encounter this filter removes. Without carried evidence the
+  // renderer loses the grouping key and sends both notes while every AI
+  // selector, which resolves documents before the filter, sends only the newest.
+  const input = () => ({
+    encounters: [
+      admission('dental-admission', 'a-hospital', 'N39.0', DENTAL_SERVICE_TYPE),
+      admission('western-admission', 'a-hospital', 'N39.0'),
+      admission('other-admission', 'b-hospital', 'N39.0'),
+    ],
+    documentReferences: [
+      dischargeSummary('newest-dental', '2026-03-01', 'dental-admission'),
+      dischargeSummary('older-western', '2025-03-01', 'western-admission'),
+      dischargeSummary('other-org', '2025-01-01', 'other-admission'),
+    ],
+  }) as any
+
+  it('groups a discharge summary whose encounter the filter removed', () => {
+    const source = input()
+    const beforeFilter = resolveSelectedDocuments(
+      listClinicalDocuments(source), 'deduplicatedAdmissions', [],
+    ).map((document) => document.id)
+    expect(beforeFilter).toEqual(['newest-dental', 'other-org'])
+
+    const filtered = filterAiExcludedClinicalDomains(source)
+    expect(filtered.encounters?.map((record: any) => record.id))
+      .toEqual(['western-admission', 'other-admission'])
+
+    const afterFilter = resolveSelectedDocuments(
+      listClinicalDocuments(filtered as any), 'deduplicatedAdmissions', [],
+    ).map((document) => document.id)
+    expect(afterFilter).toEqual(beforeFilter)
+  })
+
+  it('carries the key across repeated passes and never serializes it', () => {
+    const source = input()
+    const once = filterAiExcludedClinicalDomains(source)
+    // A later stage may drop more encounters (time window, record-level
+    // prioritization). The key resolved here still travels with the document.
+    const twice = filterAiExcludedClinicalDomains({
+      ...once, encounters: [],
+    } as any)
+    expect(listClinicalDocuments(twice as any)
+      .find((document) => document.id === 'newest-dental')?.dischargeDeduplicationKey)
+      .toBe(listClinicalDocuments(source)
+        .find((document) => document.id === 'newest-dental')?.dischargeDeduplicationKey)
+
+    const annotated = once.documentReferences!.find((d: any) => d.id === 'newest-dental')!
+    const original = source.documentReferences.find((d: any) => d.id === 'newest-dental')
+    expect(JSON.parse(JSON.stringify(annotated))).toEqual(original)
+    expect(Object.keys(annotated)).toEqual(Object.keys(original))
+    // Documents whose encounter survives keep their identity, so the decoded
+    // document-text cache is not invalidated by this pass.
+    expect(once.documentReferences!.find((d: any) => d.id === 'other-org'))
+      .toBe(source.documentReferences.find((d: any) => d.id === 'other-org'))
+  })
+
+  it('leaves the raw record view untouched — the domain filter is AI-only', () => {
+    const source = input()
+    filterAiExcludedClinicalDomains(source)
+    expect(source.encounters).toHaveLength(3)
+    expect(source.documentReferences.every(
+      (document: any) => Object.keys(document).every((key) => !key.startsWith('__')),
+    )).toBe(true)
   })
 })

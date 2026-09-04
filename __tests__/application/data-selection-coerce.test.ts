@@ -40,10 +40,36 @@ describe('coerceProfile — schema migration preserves user choices', () => {
     expect(p.filters).toEqual(DEFAULT_DATA_FILTERS)
   })
 
-  it('drops patient-specific document picks from persistent profiles', () => {
+  it('drops patient-specific document ids but keeps the custom mode the user chose', () => {
+    // The ids are patient-scoped and must never come back from the origin-global
+    // preference record; the MODE is a reusable workflow choice. Rewriting it to
+    // an automatic mode silently re-added documents the user had unticked.
     const p = coerceProfile({ documentMode: 'custom', documentIds: ['a', 'b'] })
-    expect(p.documentMode).toBe('deduplicatedAdmissions')
+    expect(p.documentMode).toBe('custom')
     expect(p.documentIds).toEqual([])
+  })
+
+  it('rehydrates an intentionally empty custom selection as custom, not automatic', () => {
+    const p = coerceProfile({ documentMode: 'custom', documentIds: [] })
+    expect(p.documentMode).toBe('custom')
+    expect(p.documentIds).toEqual([])
+  })
+
+  it('keeps every other valid document mode', () => {
+    for (const mode of ['all', 'recentAdmissions', 'deduplicatedAdmissions', 'latestAdmission'] as const) {
+      expect(coerceProfile({ documentMode: mode }).documentMode).toBe(mode)
+    }
+  })
+
+  it('coerces a legacy/unknown document mode to the current default', () => {
+    // Old localStorage records predate documentMode entirely, or carry a value
+    // that no longer exists. Both migrate to today's default.
+    expect(coerceProfile({ selection: { ...DEFAULT_DATA_SELECTION } }).documentMode)
+      .toBe('deduplicatedAdmissions')
+    expect(coerceProfile({ documentMode: 'latestDischarge' as never }).documentMode)
+      .toBe('deduplicatedAdmissions')
+    expect(coerceProfile({ documentMode: null as never }).documentMode)
+      .toBe('deduplicatedAdmissions')
   })
 
   it('drops legacy supplementary notes and manual context overrides', () => {
