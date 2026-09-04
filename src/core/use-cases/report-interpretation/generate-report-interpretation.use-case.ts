@@ -15,6 +15,7 @@ import {
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
+import { formatReportTextForAi } from '@/src/shared/utils/report-text-format'
 
 // Same fast, cheap, clean-JSON model the safety scan pinned after the head-to-
 // head eval — pin it so this on-demand task doesn't ride the user's possibly-slow
@@ -55,7 +56,7 @@ const LONG_DOCUMENT_SCHEMA_HINT =
 // is where explanation belongs. Keeping them apart is the anti-hallucination
 // firewall (see report-interpretation.entity.ts).
 const FAITHFUL_TRANSLATION_RULE =
-  ' The "translation" field must be a FAITHFUL, COMPLETE rendering of the report: do NOT add findings, numbers, diagnoses, or reassurance that are not in the source, and do NOT drop anything. Keep the original clinical terms but add a short gloss in parentheses where a layperson would not know the word (e.g. 「肝實質回音增強 (increased liver echogenicity)」). If the report is ALREADY in the target language, lightly clean it up and expand jargon in-place, but still change no facts. All explanation, plain-language rephrasing, and context belong ONLY in "summary" / "findings" / "watchFor" — never inside "translation".'
+  ' The "translation" field must be a FAITHFUL, COMPLETE rendering of the report: do NOT add findings, numbers, diagnoses, or reassurance that are not in the source, and do NOT drop anything. Keep the original clinical terms but add a short gloss in parentheses where a layperson would not know the word (e.g. 「肝實質回音增強 (increased liver echogenicity)」). If the report is ALREADY in the target language, lightly clean it up and expand jargon in-place, but still change no facts. The source has been preformatted to match the report shown to the reader: preserve its section order and line boundaries in "translation". Translate every source line in the same order; put each separate finding or numbered item on its own Markdown line or list item, and NEVER merge distinct source lines into one run-on paragraph. All explanation, plain-language rephrasing, and context belong ONLY in "summary" / "findings" / "watchFor" — never inside "translation".'
 
 // Safety framing, adapted from the safety-alerts standard: no diagnosis, no
 // medication changes, calm and non-alarming, never turn a finding into a scare.
@@ -174,7 +175,11 @@ export function prepareReportText(
   // often carry the patient's name, chart number, and 身分證字號 in the free
   // text — mask those before the text reaches any cloud LLM. Display paths
   // never go through here, so the UI keeps showing the source verbatim.
-  const clean = scrubFreeText((text ?? '').trim(), piiLiterals)
+  const scrubbed = scrubFreeText((text ?? '').trim(), piiLiterals)
+  // Short reports use the same deterministic, wording-preserving structure as
+  // the on-screen original. Long documents keep their document-native layout
+  // because digest mode is intentionally not a line-by-line translation.
+  const clean = mode === 'standard' ? formatReportTextForAi(scrubbed) : scrubbed
   if (mode !== 'long-document') {
     if (clean.length <= REPORT_INPUT_CHAR_CAP) {
       return { text: clean, truncated: false, coverage: 'full', mode }

@@ -83,4 +83,22 @@ describe('prepareReportText', () => {
     expect(messages[1].content).not.toContain('王小明')
     expect(messages[1].content).toContain('請特別向[已遮蔽]解釋。')
   })
+
+  it('sends standard reports with the same line structure shown in the UI', () => {
+    const messages = generateReportInterpretationUseCase.buildMessages({
+      reportText:
+        'Radiography shows:Tortuosity thoracic aorta. Borderline cardiomegaly. ' +
+        'Bilateral pleural change with effusion.',
+      locale: 'zh-TW',
+    })
+
+    expect(messages[0].content).toContain('preserve its section order and line boundaries')
+    expect(messages[1].content).toContain([
+      'Report text:',
+      'Radiography shows:',
+      '  Tortuosity thoracic aorta.',
+      '  Borderline cardiomegaly.',
+      '  Bilateral pleural change with effusion.',
+    ].join('\n'))
+  })
 })

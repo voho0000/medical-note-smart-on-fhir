@@ -232,13 +232,8 @@ export function formatReportText(raw: string): ReportLine[] {
   return lines
 }
 
-/**
- * Serialize a report with the same hierarchy used by `FormattedReportText`.
- * Clipboard text cannot carry the component's visual padding, so two spaces
- * per level preserve the heading/item relationship without changing any
- * clinical wording. List markers stripped by the parser are restored here.
- */
-export function formatReportTextForClipboard(raw: string): string {
+/** Serialize the display parser's hierarchy without changing clinical words. */
+function serializeFormattedReportText(raw: string): string {
   return formatReportText(raw)
     .map((line) => {
       const indent = '  '.repeat(line.level)
@@ -246,4 +241,24 @@ export function formatReportTextForClipboard(raw: string): string {
       return `${indent}${marker}${line.text}`
     })
     .join('\n')
+}
+
+/**
+ * Give the translation model the same source hierarchy the reader sees.
+ * The original FHIR narrative is often one run-on string; sending it directly
+ * made otherwise distinct findings easy for the model to merge into one
+ * Chinese paragraph.
+ */
+export function formatReportTextForAi(raw: string): string {
+  return serializeFormattedReportText(raw)
+}
+
+/**
+ * Serialize a report with the same hierarchy used by `FormattedReportText`.
+ * Clipboard text cannot carry the component's visual padding, so two spaces
+ * per level preserve the heading/item relationship without changing any
+ * clinical wording. List markers stripped by the parser are restored here.
+ */
+export function formatReportTextForClipboard(raw: string): string {
+  return serializeFormattedReportText(raw)
 }

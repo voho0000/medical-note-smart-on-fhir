@@ -32,7 +32,7 @@ import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
-import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 // Circular at module level (LabDayGroupCard nests ReportRow for its members)
 // but safe: `export function ReportRow` is hoisted, and the reference is only
@@ -133,7 +133,17 @@ function formatImageBytes(size?: number): string {
  *  node is snapshotted into the right-detail context and rendered apart from the
  *  originating ReportRow, so it can't share the row's local state. Falls back to
  *  a single natural-scroll column when only text OR only images are present. */
-function ReportImagingDetail({ text, images, title, reportId }: { text: string; images: ReportImage[]; title: string; reportId?: string }) {
+function ReportImagingDetail({
+  text,
+  images,
+  title,
+  reportId,
+}: {
+  text: string
+  images: ReportImage[]
+  title: string
+  reportId?: string
+}) {
   const { t } = useLanguage()
   const tt = (t as any).reports?.image
   const hasText = text.length > 0
@@ -226,10 +236,9 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
     </div>
   ) : null
 
-  // 「AI 翻譯解讀」in the docked (向右展開) view — manual mode: shows the result
-  // already generated inline (shared per-reportId cache) or a trigger button, so
-  // docking a report to read it never auto-spends an AI call. Sits above the
-  // original text so a 民眾 sees the AI result first.
+  // The translation launcher finishes in the background before opening this
+  // view, so manual mode can render the cached result without another AI call.
+  // Ordinary 「向右展開」continues to show a manual trigger when uncached.
   const interpretBlock = reportId && hasText ? (
     <ReportInterpretationPanel
       reportId={reportId}
@@ -361,9 +370,27 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
  *  rows (the very same ObservationBlocks the accordion expands to inline), in a
  *  scroll region with a persistent scrollbar so a long panel reads beside the
  *  list. */
-function ReportPanelDetail({ observations }: { observations: Observation[] }) {
+function ReportPanelDetail({
+  observations,
+  interpretation,
+}: {
+  observations: Observation[]
+  interpretation?: {
+    reportId: string
+    reportText: string
+    reportTitle: string
+  }
+}) {
   return (
     <div className="scrollbar-thin-persistent h-full space-y-0 overflow-y-auto pr-1">
+      {interpretation && (
+        <ReportInterpretationPanel
+          reportId={interpretation.reportId}
+          reportText={interpretation.reportText}
+          reportTitle={interpretation.reportTitle}
+          autoGenerate={false}
+        />
+      )}
       {observations.map((obs, i) => (
         <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
       ))}
@@ -513,14 +540,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
   // panel's truncated title can un-truncate once the user opens it.
   const [panelExpanded, setPanelExpanded] = useState(() => defaultOpen.includes(row.id))
   const { copied, copy: copyToClipboard } = useCopyToClipboard(1500)
-  // 「AI 翻譯解讀」panel — opened per report on demand (民眾 feature). Host owns the
-  // open state; the panel below self-generates on first open.
-  const [interpretOpen, setInterpretOpen] = useState(false)
   // 向右展開 — single long reports (imaging / ECG / pathology narratives) can be
   // pushed to the right pane so the long text reads beside the rest of the list.
   // Lab panels / 累積報告 are deliberately excluded (handled below in the
   // isLongText branch only).
-  const { detail: rightDetail, toggleDetail } = useRightDetail()
+  const { detail: rightDetail, showDetail, toggleDetail } = useRightDetail()
 
   const handleCopy = async (text: string) => {
     if (!await copyToClipboard(formatReportTextForClipboard(text))) {
@@ -687,9 +711,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
       // that share the single right-pane slot.
       const reportSourceId = `report:${row.id}`
       const isReportRightActive = rightDetail?.sourceId === reportSourceId
-      const openReportRight = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        toggleDetail({
+      const createReportRightDetail = () => ({
           sourceId: reportSourceId,
           title: (
             <span className="flex items-center gap-1.5 min-w-0">
@@ -702,8 +724,26 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           // key per report so the splitter ratio (and lightbox state) reset to
           // the content-aware default on each open instead of React reusing the
           // instance and carrying a previous report's dragged ratio over.
-          node: <ReportImagingDetail key={reportSourceId} text={fullText} images={images ?? []} title={row.title} reportId={reportSourceId} />,
+          node: (
+            <ReportImagingDetail
+              key={reportSourceId}
+              text={fullText}
+              images={images ?? []}
+              title={row.title}
+              reportId={reportSourceId}
+            />
+          ),
         })
+      const openReportRight = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        toggleDetail(createReportRightDetail())
+      }
+      const showReportInterpretationRight = () => {
+        // Keep the source visible for side-by-side comparison: translation
+        // completion opens the right pane and expands the matching original
+        // report on the left in the same state update.
+        setTextExpanded(true)
+        showDetail(createReportRightDetail())
       }
       return (
         <>
@@ -773,13 +813,13 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     stopPropagation so opening it doesn't also toggle the
                     accordion (the header row is itself a toggle button). */}
                 {hasText && !isReportRightActive && (
-                  <ReportInterpretationButton
-                    active={interpretOpen}
+                  <ReportInterpretationLauncher
                     dataTour="report-ai-interpretation"
-                    onToggle={(e) => {
-                      e.stopPropagation()
-                      setInterpretOpen((v) => !v)
-                    }}
+                    detailSourceId={reportSourceId}
+                    reportId={reportSourceId}
+                    reportText={fullText}
+                    reportTitle={row.title}
+                    onReady={showReportInterpretationRight}
                   />
                 )}
                 {/* 向右展開 — full report text + images in the right pane
@@ -824,19 +864,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 )}
               </div>
             </div>
-            {/* 「AI 翻譯解讀」panel — rendered ABOVE the original report text so a
-                民眾 who only reads the AI result sees it immediately without
-                scrolling past the English narrative. The original stays below
-                for anyone who wants to compare. Auto-generates on open. Hidden
-                while docked to the right pane (which shows the same card there),
-                so the result isn't duplicated. */}
-            {hasText && interpretOpen && !isReportRightActive && (
-              <ReportInterpretationPanel
-                reportId={`report:${row.id}`}
-                reportText={fullText}
-                reportTitle={row.title}
-              />
-            )}
             {hasText && (
               textExpanded ? (
                 <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
@@ -1026,9 +1053,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
   const panelSourceId = `report:${row.id}`
   const isPanelRightActive = rightDetail?.sourceId === panelSourceId
   const canExpandPanelRight = row.group === 'procedures' || displayObs.length >= 3
-  const openPanelRight = (e: React.SyntheticEvent) => {
-    e.stopPropagation()
-    toggleDetail({
+  const createPanelRightDetail = () => ({
       sourceId: panelSourceId,
       title: (
         <span className="flex items-center gap-1.5 min-w-0">
@@ -1043,15 +1068,33 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           )}
         </span>
       ),
-      node: <ReportPanelDetail key={panelSourceId} observations={displayObs} />,
+      node: (
+        <ReportPanelDetail
+          key={panelSourceId}
+          observations={displayObs}
+          interpretation={panelHasNarrative ? {
+            reportId: panelSourceId,
+            reportText: panelNarrative,
+            reportTitle: row.title,
+          } : undefined}
+        />
+      ),
     })
+  const openPanelRight = (e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    toggleDetail(createPanelRightDetail())
+  }
+  const showPanelInterpretationRight = () => {
+    // Reveal the structured source rows alongside the finished translation.
+    setPanelExpanded(true)
+    showDetail(createPanelRightDetail())
   }
 
   return (
     <>
       <Accordion
         type="multiple"
-        defaultValue={defaultOpen.includes(row.id) ? [row.id] : []}
+        value={panelExpanded ? [row.id] : []}
         onValueChange={(open) => setPanelExpanded(open.includes(row.id))}
         className="w-full min-w-0 max-w-full"
       >
@@ -1197,14 +1240,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   AccordionTrigger <button> without button-in-button. Hidden
                   while docked to the right pane (which owns the card). */}
               {panelHasNarrative && !isPanelRightActive && (
-                <ReportInterpretationButton
+                <ReportInterpretationLauncher
                   asDiv
-                  active={interpretOpen}
                   dataTour="report-ai-interpretation"
-                  onToggle={(e) => {
-                    e.stopPropagation()
-                    setInterpretOpen((v) => !v)
-                  }}
+                  detailSourceId={panelSourceId}
+                  reportId={panelSourceId}
+                  reportText={panelNarrative}
+                  reportTitle={row.title}
+                  onReady={showPanelInterpretationRight}
                 />
               )}
               {/* 向右展開 — placed LAST in the right cluster so it sits just
@@ -1237,16 +1280,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               )}
             </div>
           </AccordionTrigger>
-          {/* 「AI 翻譯解讀」panel — above the structured rows, shown whenever the
-              button is toggled, independent of the accordion's expand state so a
-              民眾 sees the AI result without expanding. Hidden while docked. */}
-          {panelHasNarrative && interpretOpen && !isPanelRightActive && (
-            <ReportInterpretationPanel
-              reportId={`report:${row.id}`}
-              reportText={panelNarrative}
-              reportTitle={row.title}
-            />
-          )}
           <AccordionContent className="pb-0">
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (

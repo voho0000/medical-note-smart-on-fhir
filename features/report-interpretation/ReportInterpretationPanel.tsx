@@ -42,7 +42,7 @@ function getLabels(locale: string) {
       : 'This is taking longer than usual. The request will stop after 1 minute 30 seconds so you can retry.',
     elapsed: zh ? '已等待 {elapsed}' : 'Elapsed {elapsed}',
     loadingCached: zh ? '讀取既有 AI 解讀…' : 'Loading saved AI explanation…',
-    trigger: zh ? 'AI 翻譯解讀' : 'AI translate & explain',
+    trigger: zh ? 'AI翻譯' : 'Translate',
     regenerate: zh ? '重新產生' : 'Regenerate',
     copy: zh ? '複製' : 'Copy',
     copied: zh ? '已複製' : 'Copied',
@@ -99,6 +99,8 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
     useReportInterpretation(hookArgs)
   const errorView = error ? describeInterpretationError(error, labels) : null
   const autoRequestedKeyRef = useRef<string | null>(null)
+  const handleRegenerate = () => void regenerate()
+  const handleManualGenerate = () => void generate()
 
   // Auto-generate once for this exact input. The generate callback can change
   // identity when hook dependencies update; treating that as fresh intent made
@@ -135,10 +137,10 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
       <div className={cn('my-2', className)}>
         <button
           type="button"
-          onClick={() => void generate()}
-          className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/[0.04] px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+          onClick={handleManualGenerate}
+          className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/30 bg-primary/[0.04] px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
         >
-          <Languages className="h-3.5 w-3.5" />
+          <Languages className="h-3 w-3" />
           {labels.trigger}
         </button>
       </div>
@@ -173,7 +175,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
           {errorView.retryable && (
             <button
               type="button"
-              onClick={() => void regenerate()}
+              onClick={handleRegenerate}
               className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-primary"
             >
               <RotateCw className="h-3 w-3" />
@@ -204,7 +206,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
                 : labels.translationHeading}
             </h4>
             <div className="text-sm leading-relaxed text-foreground/90">
-              <MarkdownRenderer content={result.translation} />
+              <MarkdownRenderer content={result.translation} preserveSoftBreaks />
             </div>
           </section>
 
@@ -221,7 +223,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
             </div>
           </section>
 
-          <FooterBar labels={labels} result={result} onRegenerate={() => void regenerate()} />
+          <FooterBar labels={labels} result={result} onRegenerate={handleRegenerate} />
         </div>
       )}
 

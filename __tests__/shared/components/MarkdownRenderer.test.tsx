@@ -46,4 +46,13 @@ describe('MarkdownRenderer', () => {
     expect(container).toHaveTextContent('2018/02/12：肌酸酐 1.6 mg/dL')
     expect(container).not.toHaveTextContent('**')
   })
+
+  it('can preserve soft line breaks for line-aligned report translations', () => {
+    const { container } = render(
+      <MarkdownRenderer content={'第一項\n第二項'} preserveSoftBreaks />,
+    )
+
+    expect(container.firstElementChild).toHaveClass('whitespace-pre-wrap')
+    expect(container.querySelector('p')?.textContent).toBe('第一項\n第二項')
+  })
 })

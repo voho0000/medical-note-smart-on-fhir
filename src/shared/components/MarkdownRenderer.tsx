@@ -7,6 +7,8 @@ import { normalizeMarkdownEmphasisBoundaries } from '@/src/shared/utils/markdown
 
 interface MarkdownRendererProps {
   content: string
+  /** Preserve model-authored soft line breaks without changing markdown globally. */
+  preserveSoftBreaks?: boolean
 }
 
 const COMPONENTS: Components = {
@@ -76,7 +78,10 @@ const MarkdownBlock = memo(function MarkdownBlock({ content }: { content: string
   )
 })
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  content,
+  preserveSoftBreaks = false,
+}: MarkdownRendererProps) {
   // Render block-by-block so streaming is cheap: splitting is O(n) but only the
   // last block is re-parsed per update (completed blocks are memoized), instead
   // of re-parsing the whole growing message every ~100ms — which is what froze
@@ -87,7 +92,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: Mark
     [content],
   )
   return (
-    <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
+    <div className={`prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1${preserveSoftBreaks ? ' whitespace-pre-wrap' : ''}`}>
       {blocks.map((block, i) => (
         <MarkdownBlock key={i} content={block} />
       ))}

@@ -29,7 +29,7 @@ import { useRightDetail } from '@/src/application/providers/right-detail.provide
 import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { RIGHT_PANE_ACTION_CLASSES } from '@/src/shared/config/ui-theme.config'
-import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer, HtmlDocumentBody } from './components/HtmlDocumentRenderer'
@@ -142,10 +142,9 @@ function DocumentEntryCard({
   }, [])
   const anchorRef = useResourceAnchor<HTMLLIElement>(resourceType, entry.id, handleResourceMatch)
 
-  // 「AI 翻譯解讀」— on-demand per document (民眾 feature). Plain-text extraction
-  // reuses the same strip-HTML path the clinical-context builder uses, so the
-  // model gets the readable document text (not sanitised HTML / base64).
-  const [interpretOpen, setInterpretOpen] = useState(false)
+  // Plain-text extraction reuses the same strip-HTML path the clinical-context
+  // builder uses, so the model gets readable document text (not sanitised HTML
+  // or base64) when 「AI翻譯」opens the document in the right pane.
   const docPlainText = useMemo(() => getDocumentPlainText(entry), [entry])
   const canInterpret = docPlainText.trim().length > 0
   const interpretationMode = entry.isDischargeSummary ? 'long-document' : 'standard'
@@ -154,12 +153,10 @@ function DocumentEntryCard({
 
   // 向右展開 — dock the full document (the same content the maximize dialog
   // shows) in the right pane to read it beside the list.
-  const { detail: rightDetail, toggleDetail } = useRightDetail()
+  const { detail: rightDetail, showDetail, toggleDetail } = useRightDetail()
   const sourceId = `doc:${entry.id}`
   const isRightActive = rightDetail?.sourceId === sourceId
-  const openRight = (e: React.SyntheticEvent) => {
-    e.stopPropagation()
-    toggleDetail({
+  const createRightDetail = () => ({
       sourceId,
       title: (
         <span className="flex items-center gap-1.5 min-w-0">
@@ -173,9 +170,9 @@ function DocumentEntryCard({
       ),
       node: (
         <div key={sourceId} className="scrollbar-thin-persistent h-full overflow-y-auto pr-1">
-          {/* 「AI 翻譯解讀」in the docked view — manual mode (shares the inline
-              per-reportId cache), above the document body so a 民眾 sees the AI
-              result first without scrolling. */}
+          {/* The launcher completes before opening this pane, so manual mode
+              reuses the cached result. Ordinary right-pane opening remains
+              non-generating. */}
           {canInterpret && (
             <ReportInterpretationPanel
               reportId={sourceId}
@@ -215,7 +212,11 @@ function DocumentEntryCard({
         </div>
       ),
     })
+  const openRight = (e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    toggleDetail(createRightDetail())
   }
+  const showInterpretationRight = () => showDetail(createRightDetail())
   // div[role=button] (not <button>) so it can nest inside HtmlDocumentRenderer's
   // AccordionTrigger button without invalid HTML; mousedown stopProp keeps the
   // click from toggling the accordion. Desktop-only (no right pane on phones).
@@ -290,12 +291,13 @@ function DocumentEntryCard({
               Hidden while docked to the right pane (which owns the AI card
               there), so there's no duplicate left card / orphan button. */}
           {canInterpret && !isRightActive && (
-            <ReportInterpretationButton
-              active={interpretOpen}
-              onToggle={(e) => {
-                e.stopPropagation()
-                setInterpretOpen((v) => !v)
-              }}
+            <ReportInterpretationLauncher
+              detailSourceId={sourceId}
+              reportId={sourceId}
+              reportText={docPlainText}
+              reportTitle={entry.typeLabel}
+              mode={interpretationMode}
+              onReady={showInterpretationRight}
             />
           )}
           {/* Section-based compositions keep the action in the header. Adult
@@ -359,20 +361,6 @@ function DocumentEntryCard({
           {entry.institution && periodStr && <span className="select-none">·</span>}
           {periodStr && <span className="tabular-nums">{periodStr}</span>}
         </div>
-      )}
-
-      {/* 「AI 翻譯解讀」panel — rendered ABOVE the document body so a 民眾 who
-          only reads the AI result sees it immediately instead of having to
-          scroll past (or expand) the original document. Auto-generates on open.
-          Hidden while docked to the right pane (which shows the same card
-          there), so the result isn't duplicated. */}
-      {canInterpret && interpretOpen && !isRightActive && (
-        <ReportInterpretationPanel
-          reportId={`doc:${entry.id}`}
-          reportText={docPlainText}
-          reportTitle={entry.typeLabel}
-          mode={interpretationMode}
-        />
       )}
 
       {/* Source-specific renderer. Composition → per-section accordion,

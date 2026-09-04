@@ -86,12 +86,12 @@ const STEPS: TourStep[] = [
     highlightPadding: 10,
     title: { 'zh-TW': 'AI 幫你看懂報告文字', en: 'AI helps explain report text' },
     body: {
-      'zh-TW': '點擊「AI 翻譯解讀」後，系統才會翻譯這份報告文字，並用白話整理重點。它解讀的是報告文字，不是直接判讀影像，也不會自動執行。',
-      en: 'Select “AI translate & explain” to translate this report text and summarise it in plain language. It explains the written report, does not interpret image pixels directly, and never runs automatically.',
+      'zh-TW': '點擊「AI翻譯」後，系統會先在背景處理，完成才在右欄開啟，方便與左側原文對照。它解讀的是報告文字，不是直接判讀影像，也不會在未點擊時自動執行。',
+      en: 'Select “Translate” to process the report in the background. The right panel opens only when the result is ready, so you can compare it with the original on the left. It explains the written report, does not interpret image pixels directly, and never runs before you select it.',
     },
     fallbackBody: {
-      'zh-TW': '這份資料目前沒有可供 AI 翻譯解讀的報告文字；有文字內容時，報告列旁會出現「AI 翻譯解讀」按鈕。',
-      en: 'This record has no report text available for AI explanation. When narrative text is present, an “AI translate & explain” button appears beside the report.',
+      'zh-TW': '這份資料目前沒有可供 AI 翻譯解讀的報告文字；有文字內容時，報告列旁會出現「AI翻譯」按鈕。',
+      en: 'This record has no report text available for AI explanation. When narrative text is present, a “Translate” button appears beside the report.',
     },
   },
   {

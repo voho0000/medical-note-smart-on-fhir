@@ -34,7 +34,7 @@ import type { Row } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
-import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { NhiViewerActions } from './NhiViewerActions'
 import { ReportTypeBadge } from './ReportTypeBadge'
 
@@ -306,9 +306,6 @@ function NarrativeSubCard({
   const { t } = useLanguage()
   const rightLabels = (t as any).reports?.multiRegion
   const [expanded, setExpanded] = useState(false)
-  // 「AI 翻譯解讀」opens independently of the text expander — a 民眾 can read the
-  // AI result without first expanding the English narrative.
-  const [interpretOpen, setInterpretOpen] = useState(false)
   const text = getNarrativeText(row)
   const bodyPart = inferBodyPart(text)
   const firstLine = text.split(/\r?\n/).find((s) => s.trim().length > 0) || text
@@ -319,12 +316,10 @@ function NarrativeSubCard({
   // the right pane, matching a normal report row. Sub-reports are text-only
   // here (image sets are separate ImageSetSubCards), so the docked node is a
   // simple text + AI-panel column.
-  const { detail: rightDetail, toggleDetail } = useRightDetail()
+  const { detail: rightDetail, showDetail, toggleDetail } = useRightDetail()
   const reportId = `report:${row.id}`
   const isRightActive = rightDetail?.sourceId === reportId
-  const openRight = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    toggleDetail({
+  const createRightDetail = () => ({
       sourceId: reportId,
       title: (
         <span className="flex items-center gap-1.5 min-w-0">
@@ -336,8 +331,8 @@ function NarrativeSubCard({
       ),
       node: (
         <div key={reportId} className="scrollbar-thin-persistent h-full overflow-y-auto pr-1">
-          {/* AI card on top (manual mode — shares the inline per-reportId cache,
-              so docking never auto-spends), original narrative below. */}
+          {/* The launcher finishes before opening this pane. Manual mode then
+              reuses its cached result; ordinary docking stays non-generating. */}
           <ReportInterpretationPanel
             reportId={reportId}
             reportText={text}
@@ -348,6 +343,15 @@ function NarrativeSubCard({
         </div>
       ),
     })
+  const openRight = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleDetail(createRightDetail())
+  }
+  const showInterpretationRight = () => {
+    // Preserve the original narrative on the left for direct comparison with
+    // the completed translation that is about to open on the right.
+    setExpanded(true)
+    showDetail(createRightDetail())
   }
 
   return (
@@ -389,12 +393,12 @@ function NarrativeSubCard({
         {/* AI button hidden while docked to the right pane (which owns the card
             there) — no duplicate left card / orphan button. */}
         {hasText && !isRightActive && (
-          <ReportInterpretationButton
-            active={interpretOpen}
-            onToggle={(e) => {
-              e.stopPropagation()
-              setInterpretOpen((v) => !v)
-            }}
+          <ReportInterpretationLauncher
+            detailSourceId={reportId}
+            reportId={reportId}
+            reportText={text}
+            reportTitle={bodyPart || undefined}
+            onReady={showInterpretationRight}
           />
         )}
         {/* 向右展開 — dock to the right pane (desktop only). Neutral-grey button
@@ -422,18 +426,6 @@ function NarrativeSubCard({
           ▾
         </span>
       </div>
-      {/* 「AI 翻譯解讀」panel — above the original narrative so a 民眾 sees the AI
-          result first. Shown whenever opened, independent of the text expander.
-          Hidden while docked to the right pane (shown there instead). */}
-      {hasText && interpretOpen && !isRightActive && (
-        <div className="px-2.5">
-          <ReportInterpretationPanel
-            reportId={reportId}
-            reportText={text}
-            reportTitle={bodyPart || undefined}
-          />
-        </div>
-      )}
       {/* Expanded full report body */}
       {expanded && (
         <div className="px-2.5 pb-2.5 pt-0.5 text-xs border-t border-border/40">

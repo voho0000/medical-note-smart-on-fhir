@@ -1,5 +1,6 @@
 import {
   formatReportText,
+  formatReportTextForAi,
   formatReportTextForClipboard,
   type ReportLine,
 } from '@/src/shared/utils/report-text-format'
@@ -178,6 +179,19 @@ describe('formatReportText', () => {
       '  Tortuosity thoracic aorta.',
       '  Borderline cardiomegaly.',
       '  Peribronchial infiltration over lung field.',
+      '  Bilateral pleural change with effusion.',
+    ].join('\n'))
+  })
+
+  it('serializes the same visible hierarchy for the translation model', () => {
+    const raw =
+      'Radiography of Chest A-P View(Supine) Show:Tortuosity thoracic aorta. ' +
+      'Borderline cardiomegaly. Bilateral pleural change with effusion.'
+
+    expect(formatReportTextForAi(raw)).toBe([
+      'Radiography of Chest A-P View(Supine) Show:',
+      '  Tortuosity thoracic aorta.',
+      '  Borderline cardiomegaly.',
       '  Bilateral pleural change with effusion.',
     ].join('\n'))
   })

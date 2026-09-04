@@ -28,6 +28,15 @@ function RightDetailProbe() {
   return <span data-testid="right-detail-source">{detail?.sourceId ?? 'none'}</span>
 }
 
+function RightDetailNodeProbe() {
+  const { detail } = useRightDetail()
+  return (
+    <aside data-testid="right-detail-node" data-source-id={detail?.sourceId ?? ''}>
+      {detail?.node}
+    </aside>
+  )
+}
+
 const COMPACT_ROW: Row = {
   id: 'report-2',
   title: 'Potassium',
@@ -59,7 +68,36 @@ jest.mock('@/features/report-interpretation', () => ({
   ReportInterpretationButton: jest.requireActual(
     '@/features/report-interpretation/ReportInterpretationButton',
   ).ReportInterpretationButton,
-  ReportInterpretationPanel: () => null,
+  ReportInterpretationLauncher: ({
+    onReady,
+    dataTour,
+    detailSourceId,
+    asDiv,
+  }: {
+    onReady: () => void
+    dataTour?: string
+    detailSourceId?: string
+    asDiv?: boolean
+  }) => {
+    const Button = jest.requireActual(
+      '@/features/report-interpretation/ReportInterpretationButton',
+    ).ReportInterpretationButton
+    return (
+      <Button
+        active={false}
+        asDiv={asDiv}
+        dataTour={dataTour}
+        detailSourceId={detailSourceId}
+        onToggle={(event: React.MouseEvent) => {
+          event.stopPropagation()
+          onReady()
+        }}
+      />
+    )
+  },
+  ReportInterpretationPanel: ({ autoGenerate = true }: { autoGenerate?: boolean }) => (
+    <span data-testid="report-interpretation-panel" data-auto-generate={String(autoGenerate)} />
+  ),
 }))
 
 describe('ReportRow mobile actions', () => {
@@ -107,14 +145,17 @@ describe('ReportRow mobile actions', () => {
       <LanguageProvider>
         <AudienceProvider>
           <RightDetailProvider>
+            <RightDetailProbe />
+            <RightDetailNodeProbe />
             <ReportRow row={row} defaultOpen={[]} />
           </RightDetailProvider>
         </AudienceProvider>
       </LanguageProvider>,
     )
 
-    const aiButton = screen.getByRole('button', { name: 'AI 翻譯解讀' })
+    const aiButton = screen.getByRole('button', { name: 'AI翻譯' })
     expect(aiButton).toHaveClass('shrink-0', 'whitespace-nowrap')
+    expect(aiButton).toHaveAttribute('data-detail-source-id', 'report:report-1')
 
     const header = aiButton.closest('[role="button"][aria-expanded]')
     expect(header).toHaveClass('flex-col', 'sm:flex-row')
@@ -122,18 +163,27 @@ describe('ReportRow mobile actions', () => {
     expect(aiButton.parentElement).toHaveClass('flex-nowrap', 'justify-end')
     expect(aiButton.parentElement).not.toHaveClass('flex-wrap')
 
-    // The collapsed narrative is available after opening the card, but does
-    // not consume a third line in the compact phone list.
+    // The collapsed narrative is available before docking, but does not
+    // consume a third line in the compact phone list.
     expect(screen.getByText(/No focal consolidation/)).toHaveClass('max-sm:hidden')
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(aiButton)
+    expect(header).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('right-detail-source')).toHaveTextContent('report:report-1')
+    expect(screen.getByTestId('report-interpretation-panel'))
+      .toHaveAttribute('data-auto-generate', 'false')
 
     const rightPaneButton = screen.getByRole('button', { name: '在右側面板展開全文' })
-    expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-border', 'bg-background')
-
-    fireEvent.click(rightPaneButton)
     expect(rightPaneButton).toHaveClass('border-primary', 'bg-primary/10', 'text-primary')
 
     fireEvent.click(rightPaneButton)
-    expect(rightPaneButton).toHaveClass('border-border', 'bg-background')
+    expect(screen.getByTestId('right-detail-source')).toHaveTextContent('none')
+    expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-border', 'bg-background')
+
+    fireEvent.click(rightPaneButton)
+    expect(screen.getByTestId('report-interpretation-panel'))
+      .toHaveAttribute('data-auto-generate', 'false')
   })
 
   it('copies narrative reports with the formatted on-screen line breaks', async () => {
