@@ -25,6 +25,8 @@ describe('cloud-record-shaped synthetic oncology fixture', () => {
   it('has no progress notes or vital signs, and retains 96 discharge summaries', () => {
     expect(parsed.collection.vitalSigns).toHaveLength(0)
     expect(parsed.collection.observations).toHaveLength(24_192)
+    // 768 historical inpatient courses + 6 chronic orders + 6 refills + 4 recent.
+    expect(parsed.collection.medications).toHaveLength(784)
     const documents = listClinicalDocuments(parsed.collection)
     expect(documents).toHaveLength(97)
     expect(documents.filter(doc => doc.isDischargeSummary)).toHaveLength(96)
@@ -49,7 +51,37 @@ describe('cloud-record-shaped synthetic oncology fixture', () => {
     )).toBeLessThan(30)
   })
 
-  it('exceeds one million tokens in decoded reports + discharge context, without truncation or duplicated attachment bodies', () => {
+  it('exceeds one million tokens of raw report + discharge narrative, without truncation or duplicated attachment bodies', () => {
+    // The ceiling is a property of the FIXTURE, so it is measured on the source
+    // narratives — not through the AI report formatter, which now deliberately
+    // reduces radiology/pathology reports to their impression (see the next
+    // test and src/core/utils/imaging-impression.utils.ts).
+    const rawReportText = fixture.bundle.entry
+      .map(({ resource }: any) => resource)
+      .filter((resource: any) => resource.resourceType === 'DiagnosticReport')
+      .map((resource: any) => resource.conclusion
+        ?? (resource.presentedForm ?? [])
+          .map((attachment: any) => attachment.data ? Buffer.from(attachment.data, 'base64').toString('utf8') : '')
+          .join('\n'))
+      .join('\n\n')
+    const docs = formatDocumentsSection(listClinicalDocuments(parsed.collection))
+    const documentText = docs?.items.join('\n\n') ?? ''
+    const context = [documentText, rawReportText].join('\n\n')
+    expect(estimateTokens(context)).toBeGreaterThan(1_100_000)
+    expect(documentText).not.toContain(DOCUMENT_CONTEXT_OMISSION_MARKER)
+    expect(rawReportText).toContain('No significant interval change.')
+    expect(rawReportText).toContain('ADDENDUM: additional immunostains')
+    expect(rawReportText).toContain('OUTSIDE SLIDE REVIEW:')
+    expect(rawReportText).toContain('SPECIMEN: left pleural fluid')
+    for (const { resource } of fixture.bundle.entry.filter(({ resource }: any) => resource.resourceType === 'DiagnosticReport')) {
+      expect(Boolean(resource.conclusion) !== Boolean(resource.presentedForm?.length)).toBe(true)
+    }
+    if (process.env.SYNTHETIC_FIXTURE_REPORT === '1') console.info('Cloud fixture verification', {
+      rawReportTokens: estimateTokens(rawReportText), documentTokens: estimateTokens(documentText), combinedTokens: estimateTokens(context),
+    })
+  })
+
+  it('renders those reports impression-first in the AI context, far below the raw ceiling', () => {
     const reports = imagingReportsCategory.extractData(parsed.collection)
     const reportSection = imagingReportsCategory.getContextSection(
       reports,
@@ -58,21 +90,18 @@ describe('cloud-record-shaped synthetic oncology fixture', () => {
     )
     if (Array.isArray(reportSection)) throw new Error('Expected one report section')
     const reportText = reportSection?.items.join('\n\n') ?? ''
-    const docs = formatDocumentsSection(listClinicalDocuments(parsed.collection))
-    const documentText = docs?.items.join('\n\n') ?? ''
-    const context = [documentText, reportText].join('\n\n')
-    expect(estimateTokens(context)).toBeGreaterThan(1_100_000)
-    expect(context).not.toContain(DOCUMENT_CONTEXT_OMISSION_MARKER)
-    expect(reportText).toContain('No significant interval change.')
-    expect(reportText).toContain('ADDENDUM: additional immunostains')
-    expect(reportText).toContain('OUTSIDE SLIDE REVIEW:')
-    expect(reportText).toContain('SPECIMEN: left pleural fluid')
-    for (const { resource } of fixture.bundle.entry.filter(({ resource }: any) => resource.resourceType === 'DiagnosticReport')) {
-      expect(Boolean(resource.conclusion) !== Boolean(resource.presentedForm?.length)).toBe(true)
-    }
-    if (process.env.SYNTHETIC_FIXTURE_REPORT === '1') console.info('Cloud fixture verification', {
-      reportTokens: estimateTokens(reportText), documentTokens: estimateTokens(documentText), combinedTokens: estimateTokens(context),
-    })
+
+    // Conclusions survive for every report shape in the fixture …
+    expect(reportText).toContain('IMPRESSION:')
+    expect(reportText).toContain('DIAGNOSIS: metastatic carcinoma')
+    expect(reportText).toContain('INTERPRETATION:')
+    // … and every report is still individually citable by date + title.
+    expect(reportSection?.items.filter((item) => /^\d{4}-\d{2}-\d{2} \| /.test(item)).length)
+      .toBeGreaterThan(2_000)
+    // … while the descriptive sections that dominated the raw text are gone.
+    expect(reportText).not.toContain('TECHNIQUE:')
+    expect(reportText).not.toContain('GROSS DESCRIPTION:')
+    expect(estimateTokens(reportText)).toBeLessThan(400_000)
   })
 
   it('models short repeated CXR noise and longer cross-sectional reports', () => {
@@ -83,7 +112,7 @@ describe('cloud-record-shaped synthetic oncology fixture', () => {
   })
 
   it('resolves every reference and links addendum/review to the original specimen', () => {
-    expect(validateBundleReferences(fixture.bundle).resourceCount).toBe(27_945)
+    expect(validateBundleReferences(fixture.bundle).resourceCount).toBe(27_961)
     const reports = fixture.bundle.entry.map(({ resource }: any) => resource)
     for (let a = 0; a < 96; a += 2) {
       const original = reports.find((r: any) => r.id === `synthetic-cloud-path-${a}-0`)

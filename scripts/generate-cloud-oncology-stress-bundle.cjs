@@ -95,19 +95,11 @@ function buildCloudOncologyBundle({ targetTokens = 1_100_000 } = {}) {
     && resource.resourceType !== 'CarePlan'
     && !resource.id.startsWith('synthetic-progress-')
     && !(resource.category ?? []).some?.(category => category.coding?.some(coding => coding.code === 'vital-signs')))
-  // Remove references in the inherited discharge narrative to data absent from
-  // this cloud-shaped revision. No patient data is read or persisted as input.
-  const clean = text => text.replaceAll('The latest temperature observations and dated blood counts', 'The dated blood counts')
-    .replaceAll('Transfer summaries and outpatient notes', 'Discharge summaries and outpatient encounter records')
-  for (const { resource } of bundle.entry) {
-    for (const section of resource.section ?? []) if (section.text?.div) section.text.div = clean(section.text.div)
-    for (const content of resource.content ?? []) {
-      const attachment = content.attachment
-      if (!attachment?.data) continue
-      const bytes = Buffer.from(clean(Buffer.from(attachment.data, 'base64').toString('utf8')), 'utf8')
-      attachment.data = bytes.toString('base64'); attachment.size = bytes.length
-    }
-  }
+  // The inherited discharge narrative used to name progress notes, transfer
+  // summaries and temperature observations — none of which exist in this
+  // cloud-shaped revision — and had to be rewritten here. The NHI 出院病摘
+  // template now only cites labs, imaging and pathology, all of which this
+  // variant carries, so no post-hoc text surgery is needed.
   const reportCounts = Object.fromEntries(Object.keys(titles).map(type => [type, 0]))
   let reportTokens = 0
   const addReport = (type, a, serial, offset, outpatient = null) => {
@@ -185,6 +177,7 @@ function buildCloudOncologyBundle({ targetTokens = 1_100_000 } = {}) {
   return { bundle, manifest: { generatorVersion: 2, variant: 'cloud-record-report-heavy', asOf: bundle.timestamp, syntheticOnly: true,
     targetNarrativeTokens: targetTokens, estimatedReportBodyTokens: reportTokens, estimatedDocumentBodyTokens: documentTokens,
     estimatedNarrativeTokens: documentTokens + reportTokens, reportCounts, resourceCounts,
+    medicationMix: base.manifest.medicationMix,
     progressNotes: 0, vitalSigns: 0, dischargeSummaries: 96, newestDocumentId: 'synthetic-newest-non-discharge', latestDischargeId: 'synthetic-discharge-95',
     tokenMetric: 'MediPrisma heuristic on decoded report and discharge narrative; before filtering/fitting, not JSON bytes or model-specific exact tokens.',
     limitations: ['Fully fabricated. No real patient or demo chart input. Not for clinical decisions.',

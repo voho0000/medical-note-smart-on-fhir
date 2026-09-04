@@ -13,7 +13,7 @@
 - `artifacts/synthetic-oncology/synthetic-oncology-1250000-tokens.fhir.json`：FHIR R4 `collection` Bundle，可從 MediPrisma 匯入 FHIR JSON。
 - `artifacts/synthetic-oncology/synthetic-oncology-1250000-tokens.manifest.json`：筆數、估計 token、SHA-256、限制與參照檢查結果。
 
-預設 JSON 約 **65.7 MB**，共 **27,656** 個 resources；未壓縮的 JSON 是為了方便直接匯入。
+預設 JSON 約 **65.8 MB**，共 **27,673** 個 resources；未壓縮的 JSON 是為了方便直接匯入。
 `artifacts/` 已被專案忽略，不會隨網站發布；需要保存原始檔時請自行備份，或使用下列指令重建。
 
 | 類別 | 數量 |
@@ -22,21 +22,23 @@
 | 合成院所 | 3 |
 | 住院／門診 Encounter | 96／288 |
 | 出院病摘 | 96 |
-| 病程紀錄 | 563 |
+| 病程紀錄 | 564 |
 | 更新的非住院文件 | 1 |
 | 檢驗／生命徵象 Observation | 25,536 |
 | 影像文字報告 DiagnosticReport | 192 |
-| MedicationRequest | 768 |
+| MedicationRequest | 784 |
 | Procedure | 96 |
 
-660 份文件混用 Composition 與內嵌 UTF-8 HTML/base64 的 DocumentReference，可測試兩條文件解析路徑。沒有外部附件、真實照片、有效身分證號或實際聯絡資料。
+784 筆 MedicationRequest 中，768 筆是綁住院 Encounter 的 `completed` 歷史療程；另有 6 筆長期 `active` 醫囑（asOf 前 14–30 個月開立）、6 筆對應的 90 天慢箋續領，以及 4 筆在 asOf 前 11–38 天用完的短療程，用來填滿「目前用藥／近期結束／歷史」三個分組。詳見 `synthetic-cloud-oncology-stress.md` 的用藥組成表。
+
+661 份文件混用 Composition 與內嵌 UTF-8 HTML/base64 的 DocumentReference，可測試兩條文件解析路徑。沒有外部附件、真實照片、有效身分證號或實際聯絡資料。
 
 ## Token 定義
 
 預設檔名中的 `1250000` 是**文件正文的最低估計目標**，不是總 JSON、base64 或模型輸入上限。
 驗證使用應用程式的 `LocalBundleService.parse`、`listClinicalDocuments`、`formatDocumentsSection` 與 `estimateTokens`。
 
-在全部文件、沒有文字截短的情況下，文件 context 本身為 **1,285,021 estimated tokens**；共有 660 對 BEGIN/END 文件界線，沒有中段省略標記。其他結構化病歷還會增加內容量。
+在全部文件、沒有文字截短的情況下，文件 context 本身為 **1,286,217 estimated tokens**；共有 661 對 BEGIN/END 文件界線，沒有中段省略標記。其他結構化病歷還會增加內容量。
 
 這是 MediPrisma 現行中英文比例估算法，**不是 VGHBrain 或其他模型 tokenizer 的精確計數**。若需要模型精確門檻，必須另用該模型 tokenizer 驗證。
 
@@ -48,6 +50,7 @@
 4. VGHBrain 仍應套用現有 **病人 context 100K、完整 input 150K** 政策。畫面顯示縮減後小於 100K，不表示這份原始資料沒有超過 1M；不要為了看到百萬 token 而繞過保護直接送出。
 5. 「最近一次住院」應選 `synthetic-discharge-95`，其全文遠小於 100K。最新任意文件則是 `synthetic-newest-non-discharge`，刻意不屬於出院病摘。
 6. 依「院所＋第一個 ICD」去重時，96 份出院病摘應保留 24 份；病程與其他非出院文件不屬於這個去重規則，因此這個模式仍可能很大。
+7. 出院病摘採健保「出院病摘」表單版面（見 [雲端版說明](synthetic-cloud-oncology-stress.md#出院病摘版面與關鍵段落抽取)）。去重後的 24 份文件全部可被關鍵段落抽取辨識，沒有整份退回全文的情形。
 
 資料時間固定為 2018 年至 2026 年，截點為 2026-09-03。日後使用「最近三個月」等相對日期篩選時，數量自然會變少；做跨版本負載比較請使用全部時間範圍。
 
@@ -70,4 +73,4 @@ node scripts/generate-oncology-stress-bundle.cjs 2000000
 
 固定規則與日期確保同版本、同參數產生相同內容。既有同名 JSON 若內容不同，產生器會拒絕覆寫，請先保留舊版再處理。
 
-測試涵蓋唯一資源 ID、FHIR ID 格式、單一病人、81,854 個內部參照解析、應用程式匯入、解碼後 token 門檻，以及文件選取回歸。**沒有宣稱已通過完整 HL7 FHIR validator 或臨床語意驗證。**
+測試涵蓋唯一資源 ID、FHIR ID 格式、單一病人、81,890 個內部參照解析、應用程式匯入、解碼後 token 門檻，以及文件選取回歸。**沒有宣稱已通過完整 HL7 FHIR validator 或臨床語意驗證。**

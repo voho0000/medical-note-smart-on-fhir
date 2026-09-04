@@ -8,7 +8,7 @@
 - `artifacts/synthetic-oncology/synthetic-cloud-oncology-v2-1100000-tokens.fhir.json`
 - 同目錄、同檔名的 `.manifest.json` 記錄筆數、估計 token 與 SHA-256。
 
-FHIR R4 collection Bundle，約 **66.4 MB**，共 **27,945 個 resources**。可直接使用 MediPrisma 的 FHIR JSON 匯入功能。
+FHIR R4 collection Bundle，約 **66.5 MB**，共 **27,961 個 resources**。可直接使用 MediPrisma 的 FHIR JSON 匯入功能。
 第一版檔案沒有刪除或覆寫；比較時請注意檔名中的 `cloud-oncology-v2`。
 `artifacts/` 不會納入 Git 或網站發布，長期保存請備份檔案，亦可用下列指令重建。
 
@@ -30,7 +30,21 @@ FHIR R4 collection Bundle，約 **66.4 MB**，共 **27,945 個 resources**。可
 | 外院玻片複閱 | 48 |
 | 胸水細胞學報告 | 13 |
 | 實驗室 Observation | 24,192 |
-| 用藥 MedicationRequest | 768 |
+| 用藥 MedicationRequest | 784 |
+
+### 用藥組成（784 筆）
+
+原本 768 筆全部是 `completed`、綁住院 Encounter、且沒有可計算的供應天數，因此「目前用藥」永遠是空的，無法量測用藥保留率。現在加入門診慢性處方層：
+
+| 群組 | 筆數 | 形狀 | 預期分組 |
+| --- | ---: | --- | --- |
+| 住院療程（原有） | 768 | `completed`，無 `expectedSupplyDuration` | Past medications（歷史） |
+| 長期用藥原始醫囑 | 6 | `active`、`courseOfTherapyType=continuous`、authoredOn 為 asOf 前 14–30 個月、不給供應天數（狀態即為現行） | Currently evidenced（測試「一年前開立仍在使用」） |
+| 慢箋續領 | 6 | 同藥同 sig、`active`、authoredOn 為 asOf 前 12–26 天、`expectedSupplyDuration` 90 天（涵蓋 asOf） | Currently evidenced，並與原始醫囑合併為同一藥（refill 收合） |
+| 近期結束的短療程 | 4 | `completed`、authoredOn 在 3 個月內、供應在 asOf 前 11–38 天用完 | Recently ended（90 天窗） |
+
+藥品為 amlodipine、atorvastatin、apixaban、pantoprazole、levothyroxine、letrozole（長期）與 dexamethasone、ciprofloxacin、filgrastim、ondansetron（短療程），使用 RxNorm 成分層代碼，劑量文字明確標示為合成、不可作為處方。
+長期／續領記錄以 asOf 為基準日產生；日曆走過 asOf 太久之後，續領的 90 天供應會過期，「目前用藥」會再度變空，屆時需重新產生檔案。
 
 所有影像／病理均為 `DiagnosticReport`，不偽装成病程文件。部分正文放在 `conclusion`，部分為內嵌 `presentedForm` 文字附件；同一份正文不在兩處重複存放。沒有實際影像圖檔或外部附件網址。
 
@@ -38,13 +52,36 @@ CXR 是短報告，帶有重複「無明顯變化」、肺不張、導管位置�
 
 **檢查與就醫頻率為維持百萬 token 壓力刻意放大，不代表一般癌症病人就醫頻率，也不是建議檢查排程。** 臨床文字與檢驗數值為合成模板，不宜用來驗證治療決策。
 
+## 出院病摘版面與關鍵段落抽取
+
+96 份出院病摘採健保「出院病摘」表單版面（v1 與 v2 共用同一產生器函式 `dischargeSummaryLines`）：
+
+1. 表頭：院所名稱、`出院病摘`、合成警語。
+2. 行政欄位區塊：以 tab 分隔的 `欄位：值` 表格列（`病患姓名`、`出生日期`、`病歷號碼`、`住院日期`、`出院日期`、`出院科別`、`病房床號`、`醫療機構名稱`、`醫事人員`、`轉入／轉出醫院`）。
+3. 臨床段落標題：`住院臆斷`、`出院診斷`、`癌症期別`、`主訴`、`病史`、`理學檢查發現`、`檢驗`、`特殊檢查`、`醫療影像檢查`、`病理報告`（僅癌症再評估住院，12 份）、`手術日期及方法`、`住院治療經過`、`合併症與併發症`、`出院指示`、`出院狀況`。
+
+中英夾雜、`欄位：值` 與 `欄位\t值` 兩種列型都有，與去識別化的真實 NHI 出院病摘結構一致；**內容全部由規則生成，沒有抄錄任何真實或示範病歷文字。**
+
+`出院診斷` 直接對應該次住院 Encounter 的 ICD，`手術日期及方法` 對應該次住院的 Procedure（癌症再評估住院為切片，與 `病理報告` 一致）。文件去重（96 → 24）仍只依 Encounter 的 `serviceProvider` 與第一個 ICD，與正文無關。
+
+以應用程式的 `extractDocumentKeySections` 量測去重後的 24 份文件：
+
+| 指標 | 數值 |
+| --- | ---: |
+| 退回全文（fallback） | **0 / 24** |
+| 全文 tokens | 46,086 |
+| 關鍵段落 tokens | 19,646 |
+| 縮減率 | **57.4%** |
+
+被丟棄的段落為 document header、administrative fields、history、physical exam、labs、other studies、imaging reports；保留診斷、癌症期別、主訴、病理、手術、住院治療經過、合併症、出院指示與出院狀況。作為對照，去識別化示範病歷的真實出院病摘縮減率為 66.3%。每份出院病摘平均約 1,897 estimated tokens（改版前的散文式版面為 1,905），量測基準仍可比較。
+
 ## Token 驗證
 
 經應用程式匯入解析、解碼並使用實際報告／文件 formatter：
 
-- 影像／病理 context：942,374 estimated tokens。
-- 出院病摘與測試文件 context：187,070 estimated tokens。
-- 兩者合併：**1,129,445 estimated tokens**。尚未加上檢驗、用藥等其他結構化內容。
+- 影像／病理 context：917,993 estimated tokens。
+- 出院病摘與測試文件 context：186,861 estimated tokens。
+- 兩者合併：**1,104,854 estimated tokens**。尚未加上檢驗、用藥等其他結構化內容。
 
 這是「全部時間、全部版本、未縮減」的內容，不是 JSON 或 base64 大小換算，也不是 VGHBrain tokenizer 的精確計數。
 `1100000` 是產生器針對報告及文件正文設定的估計目標；formatting 的日期、標題等還會增加少量 token。

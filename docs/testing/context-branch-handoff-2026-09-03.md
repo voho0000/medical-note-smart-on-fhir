@@ -15,7 +15,7 @@ npm run dev
 
 `npm run packages:ci` 可能需要該電腦原有的 GitHub Packages 存取設定。不要將 token 或 `.env.local` 加入 Git；依 `.env.example` 設定本機環境。未建立本機分支時，`git switch --track origin/codex/vghbrain-context-test`。
 
-產生的 FHIR 檔案：`artifacts/synthetic-oncology/synthetic-cloud-oncology-v2-1100000-tokens.fhir.json`（約 66.4 MB）。全部為規則生成的合成資料，無真實病人資料。Git 保存產生器與驗證測試，不保存大型產物。優先使用 v2：無病程紀錄、無生命徵象，大量 CXR、其他影像、病理與檢驗。
+產生的 FHIR 檔案：`artifacts/synthetic-oncology/synthetic-cloud-oncology-v2-1100000-tokens.fhir.json`（約 66.5 MB）。全部為規則生成的合成資料，無真實病人資料。Git 保存產生器與驗證測試，不保存大型產物。優先使用 v2：無病程紀錄、無生命徵象，大量 CXR、其他影像、病理與檢驗。
 
 ## 已推 master 的效能批次
 
