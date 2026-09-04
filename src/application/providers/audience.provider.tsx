@@ -4,6 +4,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AUDIENCE_CHANGED_EVENT } from './font-size.provider'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
+import { setUserProps } from '@/src/application/telemetry/usage-analytics'
+import { useTourAnalytics } from '@/src/shared/config/tour-analytics'
+import { usePreferenceProps } from '@/src/application/telemetry/use-preference-props'
 
 export type Audience = 'medical' | 'patient'
 
@@ -39,6 +42,24 @@ export function AudienceProvider({ children }: { children: ReactNode }) {
     }
     setHasSelected(localStorage.getItem(AUDIENCE_SELECTED_KEY) === '1')
   }, [])
+
+  // Usage analytics: the guided-tour store subscription needs a host that is
+  // mounted for the whole session and exactly once. This provider is it —
+  // app/page.tsx (where the tours render) is a busier file and mounting there
+  // buys nothing.
+  useTourAnalytics()
+  // Same host, same reason: mounted for the whole session and exactly once.
+  // NOTE: this makes LanguageProvider a REQUIREMENT of AudienceProvider — the
+  // `locale` property reads useLanguage(). app-providers.tsx already nests them
+  // that way; a test that renders AudienceProvider alone must wrap it too.
+  usePreferenceProps()
+
+  // Usage analytics: reported from here rather than from auth.provider so the
+  // value is the one actually in effect — the Medcloud route forces clinician
+  // mode regardless of what an earlier visit persisted.
+  useEffect(() => {
+    setUserProps({ audience })
+  }, [audience])
 
   const setAudience = useCallback((next: Audience) => {
     setAudienceState(next)

@@ -30,6 +30,8 @@ import { useAllergies } from '../allergies/hooks/useAllergies'
 import { useActiveAllergies } from '../allergies/hooks/useActiveAllergies'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
+import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
+import { markUserTrigger, trackEvent, useTrackView } from '@/src/application/telemetry/usage-analytics'
 import { MedicationList } from './components/MedicationList'
 import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
 import { VaccineList } from './components/VaccineList'
@@ -88,6 +90,13 @@ export function MedListCard() {
   const pendingNav = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
   const navigateToResource = useResourceNavigationStore((s) => s.navigate)
+
+  // Usage analytics: the 用藥 inner view (清單 / 時間軸 / 健保餘藥), default
+  // included. Programmatic resets (citation navigation, tour, the empty
+  // remaining-supply fallback) report as `auto`. Gated on the clinical tab
+  // being on screen — this card stays mounted after its first visit.
+  const clinicalTabActive = useClinicalTabActivity()
+  useTrackView('meds', view, clinicalTabActive)
 
   useEffect(() => {
     if (!pendingNav || ![
@@ -174,12 +183,15 @@ export function MedListCard() {
   const { detail: rightDetail, toggleDetail, showDetail } = useRightDetail()
   const isTimelineRight = rightDetail?.sourceId === MED_TIMELINE_ID
   const timelineTitle = `${tabMedicationsLabel} · ${timelineLabel}`
-  const openTimelineRight = () =>
+  const openTimelineRight = () => {
+    // A pure click with no state to observe, so it reports itself.
+    trackEvent('view_open', { area: 'meds', id: 'timeline-right', trigger: 'user' })
     toggleDetail({
       sourceId: MED_TIMELINE_ID,
       title: timelineTitle,
       node: <MedicationTimeline medications={filteredMedications} />,
     })
+  }
   useEffect(() => {
     if (rightDetail?.sourceId === MED_TIMELINE_ID) {
       showDetail({
@@ -306,6 +318,8 @@ export function MedListCard() {
                     type="button"
                     data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
                     onClick={() => {
+                      // Plain buttons: clicking the active view still fires.
+                      if (v !== view) markUserTrigger('meds')
                       setView(v)
                       setSearchQuery('')
                     }}

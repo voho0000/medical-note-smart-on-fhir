@@ -31,6 +31,7 @@ import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-c
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { defaultLocale } from '@/src/shared/i18n/i18n.config'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { countPatientResources } from '@/src/application/telemetry/patient-resource-counts'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
@@ -388,6 +389,18 @@ export function useClinicalAiInput(
   // has settled.
   const inputSignature = dataReady ? sourceSignature : ''
   const adaptedTokens = useMemo(() => estimateTokens(clinicalContext), [clinicalContext])
+  // Usage analytics only (`ai_result`): how big the chart IS, as opposed to
+  // how much of it the scoping above kept. Computed here rather than from a
+  // second useClinicalDataQuery subscription in each AI surface — this hook
+  // already holds the whole chart, and `rawDataReady` is already the
+  // "everything settled, nothing blocking" gate, so a half-loaded chart
+  // yields undefined and the counts are simply omitted from the event.
+  const patientCounts = useMemo(
+    () => (rawDataReady && clinicalData
+      ? countPatientResources(clinicalData as unknown as Parameters<typeof countPatientResources>[0])
+      : undefined),
+    [rawDataReady, clinicalData],
+  )
   const contextAdaptation: ClinicalContextAdaptation | null =
     activeTier === 'full' || !contextLimit
       ? null
@@ -417,5 +430,6 @@ export function useClinicalAiInput(
     contextAdaptation,
     contextView,
     isCalculating,
+    patientCounts,
   }
 }

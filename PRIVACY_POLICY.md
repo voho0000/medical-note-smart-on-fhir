@@ -1,6 +1,6 @@
 # MediPrisma 隱私權政策
 
-**生效／最後更新：2026-07-22**
+**生效／最後更新：2026-09-04**
 **適用程式基準：v0.43.0**
 
 本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
@@ -84,7 +84,34 @@ Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplex
 
 Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在安全與營運 log 中處理 IP、timestamp、request metadata、錯誤與 user agent。其實際內容與期限由各服務與部署者政策決定。
 
-本 app code 雖可設定 Firebase measurement id，但目前沒有初始化 Firebase Analytics 或呼叫 analytics event API；若部署者另外加入 analytics，必須更新本政策與 consent。
+### 2.8 使用統計（Firebase Analytics／GA4）
+
+官方部署**會**初始化 Firebase Analytics（GA4），用來了解各功能實際被使用的情形。啟用條件嚴格：只在正式網域 `mediprisma.tw` 與 `voho0000.github.io` 執行；localhost、Firebase emulator、E2E 測試與伺服器端渲染一律不送。SDK 於瀏覽器閒置時才延遲載入，載入前的事件先排隊。
+
+**記錄的事件（十個）**
+
+| 事件 | 意義 |
+|---|---|
+| `view_open` | 看到某一層的某一頁（左右面板、報告、累積報告、用藥、摘要） |
+| `chat_send` | 送出一次臨床對話（只記來源、有無圖片、model、是否 Agent 模式） |
+| `handoff_copy` | 複製「帶回紀錄」的檢驗／報告／全部區塊 |
+| `tour_start` | 開始一次導覽 |
+| `tour_end` | 結束一次導覽（完成或中途離開、停在哪一步） |
+| `report_interpret` | 要求或重新產生一份報告的 AI 翻譯解讀 |
+| `app_launch` | 每次開啟 app 一次（啟動來源、院所、工作站代碼） |
+| `ai_result` | 每次 AI 呼叫的結果（成功／逾時／額度用盡／取消…）與耗時分級 |
+| `source_nav` | 點擊 AI 引用跳到原始資料（只記 FHIR 資源類型） |
+| `summary_copy` | 複製醫療摘要的區塊 |
+
+**記錄的使用者屬性（十個）**：`launch_source`（啟動來源）、`site`（`?site=` 院所標記）、`audience`（醫事人員／民眾模式）、`auth_kind`（匿名或 Google 登入）、`app_version`、`auto_summary`（摘要是否自動產生）、`locale`（介面語言）、`key_mode`（自帶金鑰或內建 proxy）、`workstation`、`browser_id`。
+
+`workstation` 是啟動網址中可選的 `?ws=` 參數，由院內 launcher 填入的**診間／工作站代碼**（格式限制為英數與 `_`、`-`，最多 32 字元，刻意排除 `@`、`.` 與空白，使帳號或人名無法通過）。**目前尚未有任何 launcher 實際使用此參數**，因此實務上一律為 `unknown`。
+
+`browser_id` 見 §3.4。
+
+**明確不記錄**：任何病人資料或 FHIR 內容（姓名、病歷號、檢驗值、報告與文件文字、翻譯與解讀結果、被引用資源的 id 與標題）、送給 AI 的提示詞與 AI 的回覆內容、複製到剪貼簿的文字、Firebase uid（從不呼叫 `setUserId`）、完整網址與其 query 參數。自動 `page_view` 已關閉（正是因為 SMART 啟動網址帶有 `iss` 與 OAuth `code`），Google Signals 與廣告個人化亦已關閉。依 Google 說明，GA4 不會記錄或保存個別 IP 位址（僅於伺服器端用於推導概略地理位置後即丟棄）；此為 Google 的產品行為，非本 app 可驗證或控制的部分。§2.7 所述的 hosting／Firebase 營運 log 不受此影響。
+
+程式端以白名單強制上述邊界：事件名稱、參數名稱與參數值都逐一比對允許清單，字串上限 64 字元，任何不符者整筆丟棄。相關程式集中在 `src/infrastructure/telemetry/usage-analytics.ts`。
 
 ## 3. 瀏覽器端儲存
 
@@ -115,6 +142,8 @@ Medical Summary、Safety、Report Interpretation 等結果可能以加密形式�
 
 LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、onboarding、資料選擇、模型偏好、卡片版面、template、media consent 與 SMART OAuth session 等必要狀態。Firebase Auth／Firestore／App Check 也可能使用瀏覽器 storage、cookie 或 IndexedDB 維持 session 與防濫用。
 
+其中 `browser_id`（localStorage 鍵值 `mediprisma.analytics.browser_id`）是第一次使用時產生的 32 字元隨機十六進位值，僅用於使用統計，用來估算「有多少個瀏覽器／機器在使用」。它是隨機數字，**不由裝置特徵推導**，也**不與任何帳號、Firebase uid、使用者或病人關聯**。清除網站資料（或使用無痕視窗）即會重置為新值；無法寫入時（無痕、封鎖 storage）則完全不送這個屬性。
+
 ## 4. 第三方與資料接收者
 
 只有啟用對應功能時才會使用相關服務：
@@ -128,6 +157,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | 語音 | Whisper 相容 endpoint／proxy | 音訊轉文字 |
 | 回饋郵件 | Resend 與部署的 feedback function | 傳送問題回報 |
 | Hosting | GitHub Pages；可選 mediprisma.tw host | 提供靜態 app |
+| 使用統計 | Google Analytics 4（Firebase Analytics） | 了解功能使用情形與 AI 可靠性（見 §2.8；不含病人資料） |
 | 自訂 AI | 使用者／醫療機構設定的 OpenAI-compatible endpoint；可選 MediPrisma Firebase Gateway | 依使用者明確選擇直接處理，或經受限 Gateway 轉送 |
 
 自備 API key 的請求通常由瀏覽器直接送到該 provider；自訂 OpenAI-compatible endpoint 可由使用者明確改選 Firebase Gateway；免費內建模型通常經 MediPrisma Firebase Functions proxy。各接收端會依自己的條款或機構政策處理資料，部署者應確認資料地區、保留、訓練使用、subprocessor、刪除與契約條件。
@@ -159,6 +189,10 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 - 在 history 刪除個別對話。
 - 清除本地 Bundle／cache／keys。
 - 管理個人 chat templates、custom summary modules 與 shared prompts。
+
+關於使用統計（§2.8）：這些資料在使用者開啟 app 時即開始收集，**不會另外跳出詢問視窗，目前也沒有提供關閉的開關**。可用的做法是清除網站資料（會一併重置 `browser_id`），或使用會封鎖 GA 的瀏覽器／擴充套件——後者只影響統計，不影響 app 功能。本段刻意如實描述現況，不主張存在尚未實作的同意機制。
+
+<!-- TODO(owner): decide opt-out -->
 
 Codebase 尚未提供完整的「刪除 Firebase 帳號及所有子 collection」自助流程。如需帳號層級存取或刪除，請聯絡部署者；部署者必須核對身分、適用法律與第三方備份／保留限制。
 

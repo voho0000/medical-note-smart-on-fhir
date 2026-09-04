@@ -8,6 +8,10 @@
 import { Languages, Loader2 } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import {
+  trackEvent,
+  type ReportInterpretHost,
+} from '@/src/application/telemetry/usage-analytics'
 
 interface ReportInterpretationButtonProps {
   active: boolean
@@ -23,6 +27,8 @@ interface ReportInterpretationButtonProps {
    *  header is itself a <button> (e.g. a Radix AccordionTrigger on a panel
    *  report) — a nested <button> is invalid HTML. Defaults to a real <button>. */
   asDiv?: boolean
+  /** Which surface this button sits on, for usage analytics. */
+  analyticsHost: ReportInterpretHost
 }
 
 export function ReportInterpretationButton({
@@ -33,8 +39,16 @@ export function ReportInterpretationButton({
   detailSourceId,
   busy = false,
   asDiv,
+  analyticsHost,
 }: ReportInterpretationButtonProps) {
   const { locale } = useLanguage()
+  // Usage analytics: only the OPENING press. Collapsing the panel again is not
+  // a request for an interpretation, and counting it would double every use.
+  // A cache hit still counts — the user asked for it either way.
+  const handleToggle = (e: React.MouseEvent) => {
+    if (!active) trackEvent('report_interpret', { host: analyticsHost, action: 'open' })
+    onToggle(e)
+  }
   const label = busy
     ? locale === 'zh-TW' ? '翻譯中' : 'Translating'
     : locale === 'zh-TW' ? 'AI翻譯' : 'Translate'
@@ -66,7 +80,7 @@ export function ReportInterpretationButton({
         data-tour={dataTour}
         data-detail-source-id={detailSourceId}
         tabIndex={0}
-        onClick={busy ? (e) => e.stopPropagation() : onToggle}
+        onClick={busy ? (e) => e.stopPropagation() : handleToggle}
         // stop the parent header-button (accordion trigger) from also toggling.
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
@@ -74,7 +88,7 @@ export function ReportInterpretationButton({
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             e.stopPropagation()
-            onToggle(e as unknown as React.MouseEvent)
+            handleToggle(e as unknown as React.MouseEvent)
           }
         }}
         title={accessibleLabel}
@@ -94,7 +108,7 @@ export function ReportInterpretationButton({
       data-tour={dataTour}
       data-detail-source-id={detailSourceId}
       disabled={busy}
-      onClick={onToggle}
+      onClick={handleToggle}
       title={accessibleLabel}
       aria-label={accessibleLabel}
       aria-busy={busy}

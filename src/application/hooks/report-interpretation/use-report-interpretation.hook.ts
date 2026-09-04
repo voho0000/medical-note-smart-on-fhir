@@ -43,6 +43,11 @@ import { usePatient } from '@/src/application/hooks/patient/use-patient-query.ho
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import {
+  SINGLE_REPORT_FED_COUNTS,
+  useLoadedPatientCounts,
+} from '@/src/application/telemetry/patient-resource-counts'
 import { resolveOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
 import { withReportInterpretationTimeout } from './report-interpretation-timeout'
 
@@ -108,6 +113,10 @@ export function useReportInterpretation(
   const { audience } = useAudience()
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
+  // Usage analytics only: how big the chart behind this report is. Read here
+  // rather than threaded in from the report row — the hook already sits in
+  // the React Query tree via usePatient, so it costs no new plumbing.
+  const patientCounts = useLoadedPatientCounts()
   const preferredModelId = useReportInterpretationPrefsStore((state) => state.modelId)
   const promptOverride = useReportInterpretationPrefsStore((state) => state.customPrompt)
   const openAiKey = useApiKey()
@@ -193,12 +202,25 @@ export function useReportInterpretation(
       const myKey = compositeKey
       if (force) clearSlot(myKey)
       useAiExecutionDiagnosticsStore.getState().clearOperation(myKey)
+      // Prepared once for the run: `produce` needs its truncation metadata and
+      // the analytics estimate needs its size. The clamped, PII-scrubbed text
+      // is what actually leaves the browser, so that is what gets measured —
+      // the raw report would overstate a long document that was clipped.
+      const prepared = prepareReportText(clean, mode, piiLiterals)
       await runGenerationJob({
         store: useStore,
         key: myKey,
         cacheKey: cacheKey(myKey),
+        analytics: {
+          surface: 'report_interp',
+          modelId: effectiveModelId,
+          contextTokens: estimateTokens(prepared.text),
+          counts: patientCounts,
+          // This surface never receives a chart — the fed set is exactly the
+          // one report the user pressed the button on.
+          fedCounts: SINGLE_REPORT_FED_COUNTS,
+        },
         produce: async () => {
-          const prepared = prepareReportText(clean, mode, piiLiterals)
           const messages = generateReportInterpretationUseCase.buildMessages({
             reportText: clean,
             reportTitle,
@@ -233,7 +255,7 @@ export function useReportInterpretation(
         },
       })
     },
-    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, streamAi, clearSlot, effectiveModelId, piiLiterals, customPrompt],
+    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, streamAi, clearSlot, effectiveModelId, piiLiterals, customPrompt, patientCounts],
   )
 
   const generate = useCallback(() => run(false), [run])

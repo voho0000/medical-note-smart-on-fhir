@@ -334,6 +334,7 @@ function NarrativeSubCard({
           {/* The launcher finishes before opening this pane. Manual mode then
               reuses its cached result; ordinary docking stays non-generating. */}
           <ReportInterpretationPanel
+            analyticsHost="report-row"
             reportId={reportId}
             reportText={text}
             reportTitle={bodyPart || undefined}
@@ -394,6 +395,7 @@ function NarrativeSubCard({
             there) — no duplicate left card / orphan button. */}
         {hasText && !isRightActive && (
           <ReportInterpretationLauncher
+            analyticsHost="report-row"
             detailSourceId={reportId}
             reportId={reportId}
             reportText={text}

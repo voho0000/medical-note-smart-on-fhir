@@ -40,6 +40,7 @@ import {
   ClinicalTabTrigger,
 } from "@/src/shared/components/clinical-workspace"
 import { usePanelScrollMemory } from "./use-panel-scroll-memory"
+import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -279,6 +280,10 @@ function RightPanelContentInner() {
 
   const { hostRef: scrollMemoryHostRef, captureBeforeSwitch } = usePanelScrollMemory(effectiveTab)
   const changeTab = (next: string) => {
+    // Also reached from the overflow menu, which — unlike Radix's
+    // onValueChange — fires for the tab that is already open. Marking there
+    // would leave a pending flag that mislabels the NEXT right-panel view.
+    if (next !== effectiveTab) markUserTrigger('right')
     captureBeforeSwitch()
     setActiveTab(next)
   }
@@ -298,6 +303,9 @@ function RightPanelContentInner() {
   if (effectiveTab && !visitedTabs.has(effectiveTab)) {
     setVisitedTabs(new Set(visitedTabs).add(effectiveTab))
   }
+  // Usage analytics: which right-panel feature is on screen, default included.
+  useTrackView('right', effectiveTab)
+
 
   // Tab-bar grouping is purely registry-driven (no feature ids here):
   // [pinned…] [temp trigger for an active overflow tab?] [more ▾] [pinLocked…]

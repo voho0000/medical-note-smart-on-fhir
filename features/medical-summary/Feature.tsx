@@ -111,6 +111,7 @@ type SummaryView = "standard" | "custom"
 
 const CARD_NAV_ACTIVATION_OFFSET_PX = 48
 
+import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
 function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
   let parent = element.parentElement
   while (parent) {
@@ -124,7 +125,7 @@ function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
-  const { setActiveTab } = useRightPanel()
+  const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
   const { diagnosticReports, observations } = useClinicalData()
   const base = t.medicalSummary
   const isPatient = audience === "patient"
@@ -145,6 +146,11 @@ export default function MedicalSummaryFeature() {
   const insightsModel = useModelPref("insights")
   const setModelFor = useSetModelFor()
   const [activeView, setActiveView] = useState<SummaryView>("standard")
+  // Usage analytics: 標準 vs 自訂 reading mode, default included. Tour-driven
+  // views report as `auto` because only the tab handler marks a user trigger.
+  // Gated on the right panel actually showing this feature — visited right-panel
+  // tabs stay mounted for the rest of the session.
+  useTrackView('summary', activeView, rightPanelTab === 'medical-summary')
   const [customUnread, setCustomUnread] = useState(false)
   const [customManagerOpen, setCustomManagerOpen] = useState(false)
   const [dataScopeOpen, setDataScopeOpen] = useState(false)
@@ -354,7 +360,9 @@ export default function MedicalSummaryFeature() {
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
       const store = useResourceNavigationStore.getState()
-      store.navigate(target)
+      // Every citation in this feature (summary cards AND the safety scan)
+      // routes through here; a caller that already knows better wins.
+      store.navigate({ ...target, origin: target.origin ?? 'summary' })
       const mySeq = useResourceNavigationStore.getState().seq
       setTimeout(() => {
         const s = useResourceNavigationStore.getState()
@@ -804,6 +812,7 @@ export default function MedicalSummaryFeature() {
       <Tabs
         value={activeView}
         onValueChange={(value) => {
+          markUserTrigger('summary')
           const next = value as SummaryView
           setActiveView(next)
           if (next === "custom") {

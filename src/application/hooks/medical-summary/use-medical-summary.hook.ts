@@ -641,6 +641,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   }, [])
 
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
+    // Summary and the safety scan are produced by ONE generation job, so the
+    // reliability event is reported once, as `summary`.
+    analyticsSurface: 'summary',
     defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
     selectedModelId: modelId,
     // The persisted "自動產生" switch is the single authorization for a

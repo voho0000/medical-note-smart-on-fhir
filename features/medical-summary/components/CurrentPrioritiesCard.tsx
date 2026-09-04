@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { trackEvent } from "@/src/application/telemetry/usage-analytics"
 import type {
   MedicalSummaryResult,
   ResolvedSourceRef,
@@ -52,7 +53,12 @@ export function CurrentPrioritiesCard({
       .filter(Boolean)
       .join("\n")
 
-    if (!await copy(text)) toast.error(copyFailedLabel)
+    if (!await copy(text)) {
+      toast.error(copyFailedLabel)
+      return
+    }
+    // Usage analytics: that the hero block was copied, never what was in it.
+    trackEvent('summary_copy', { block: 'hero' })
   }
 
   useLayoutEffect(() => {

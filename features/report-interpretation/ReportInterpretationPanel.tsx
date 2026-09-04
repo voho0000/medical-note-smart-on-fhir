@@ -19,6 +19,10 @@ import { isQuotaExceededError } from '@/src/core/errors'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { MarkdownRenderer } from '@/src/shared/components/MarkdownRenderer'
 import {
+  trackEvent,
+  type ReportInterpretHost,
+} from '@/src/application/telemetry/usage-analytics'
+import {
   useReportInterpretation,
   type UseReportInterpretationArgs,
 } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
@@ -89,18 +93,38 @@ interface ReportInterpretationPanelProps extends UseReportInterpretationArgs {
    *  SHOWS a result that was already generated elsewhere (shared per-reportId
    *  cache), but if none exists it shows a trigger button instead of generating. */
   autoGenerate?: boolean
+  /** Which surface this panel sits on, for usage analytics. Omit to report
+   *  nothing (e.g. the EMR hand-off panel, whose translations are driven by the
+   *  copy flow and already counted as `handoff_copy`). */
+  analyticsHost?: ReportInterpretHost
 }
 
 export function ReportInterpretationPanel(props: ReportInterpretationPanelProps) {
-  const { className, autoGenerate = true, ...hookArgs } = props
+  const { className, autoGenerate = true, analyticsHost, ...hookArgs } = props
   const { locale } = useLanguage()
   const labels = getLabels(locale)
   const { result, isGenerating, error, generationKey, isHydrated, generate, regenerate } =
     useReportInterpretation(hookArgs)
+  // Usage analytics: explicit presses only. The auto-generate effect below is
+  // a consequence of the host mounting this panel, which the button already
+  // reported — counting it too would double every inline use.
+  const handleRegenerate = () => {
+    if (analyticsHost) {
+      trackEvent('report_interpret', { host: analyticsHost, action: 'regenerate' })
+    }
+    void regenerate()
+  }
+  const handleManualGenerate = () => {
+    // The manual-mode trigger IS this host's 「AI 翻譯解讀」 entry point (the
+    // docked right-pane view mounts the panel without generating), so it is an
+    // `open`, not a regenerate.
+    if (analyticsHost) {
+      trackEvent('report_interpret', { host: analyticsHost, action: 'open' })
+    }
+    void generate()
+  }
   const errorView = error ? describeInterpretationError(error, labels) : null
   const autoRequestedKeyRef = useRef<string | null>(null)
-  const handleRegenerate = () => void regenerate()
-  const handleManualGenerate = () => void generate()
 
   // Auto-generate once for this exact input. The generate callback can change
   // identity when hook dependencies update; treating that as fresh intent made

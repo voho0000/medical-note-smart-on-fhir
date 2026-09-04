@@ -160,6 +160,7 @@ export function DocumentDetailDialog({
               {interpretation && (
                 <ReportInterpretationButton
                   active={interpretOpen}
+                  analyticsHost="document-dialog"
                   onToggle={(e) => {
                     e.stopPropagation()
                     setInterpretOpen((value) => !value)
@@ -192,6 +193,7 @@ export function DocumentDetailDialog({
               reportText={interpretation.reportText}
               reportTitle={interpretation.reportTitle}
               mode={interpretation.mode}
+              analyticsHost="document-dialog"
               className="mb-4"
             />
           )}

@@ -37,6 +37,7 @@ import { ChatTemplatesManagerDrawer } from "./ChatTemplatesManagerDrawer"
 import { ChatInputArea } from "./ChatInputArea"
 import { SuggestionChips } from "./SuggestionChips"
 import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
+import { trackEvent } from "@/src/application/telemetry/usage-analytics"
 import { useAgentChat } from "../hooks/useAgentChat"
 import { useFollowupSuggestions } from "../hooks/useFollowupSuggestions"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
@@ -505,7 +506,16 @@ export default function MedicalChat() {
     
     // Require either text or images
     if (!trimmed && !hasImages) return
-    
+
+    // Usage analytics: shape of the turn only. `trimmed`, the reply reference
+    // and the images themselves never leave this function.
+    trackEvent('chat_send', {
+      source: typeof overrideText === "string" ? 'chip' : 'typed',
+      has_image: hasImages,
+      model_id: chatModelPref,
+      agent_mode: !isStandardChat,
+    })
+
     // Convert File objects to ChatImage (base64) for API
     let chatImages: ChatImage[] | undefined
     if (hasImages) {
@@ -548,7 +558,7 @@ export default function MedicalChat() {
     // Wait for AI response to complete
     await sendPromise
     // Stage 2: AI response completion will trigger another forceSave to update with full conversation
-  }, [input, imageUpload.images, replyDraft, chat, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups, t])
+  }, [input, imageUpload.images, replyDraft, chat, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups, t, chatModelPref, isStandardChat])
 
   const handleReplyToSelection = useCallback((reply: ChatReplyReference) => {
     setReplyDraft(reply)

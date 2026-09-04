@@ -2,10 +2,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { CurrentPrioritiesCard } from '@/features/medical-summary/components/CurrentPrioritiesCard'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import { trackEvent } from '@/src/application/telemetry/usage-analytics'
 
 jest.mock('sonner', () => ({
   toast: { error: jest.fn() },
 }))
+
+jest.mock('@/src/application/telemetry/usage-analytics', () => {
+  const actual = jest.requireActual('@/src/application/telemetry/usage-analytics')
+  return { ...actual, trackEvent: jest.fn() }
+})
 
 const result: MedicalSummaryResult = {
   headline: '近期需關注腎功能與用藥整合',
@@ -73,5 +79,38 @@ describe('CurrentPrioritiesCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '複製' }))
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('複製失敗'))
+  })
+})
+
+describe('CurrentPrioritiesCard usage analytics', () => {
+  const mockedTrackEvent = trackEvent as jest.MockedFunction<typeof trackEvent>
+  const writeText = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+  })
+
+  it('reports one summary_copy for the hero block', async () => {
+    writeText.mockResolvedValue(undefined)
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: '複製' }))
+
+    await waitFor(() => expect(mockedTrackEvent).toHaveBeenCalledTimes(1))
+    expect(mockedTrackEvent).toHaveBeenCalledWith('summary_copy', { block: 'hero' })
+  })
+
+  it('reports nothing when the clipboard write fails', async () => {
+    writeText.mockRejectedValue(new Error('clipboard blocked'))
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: '複製' }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(mockedTrackEvent).not.toHaveBeenCalled()
   })
 })

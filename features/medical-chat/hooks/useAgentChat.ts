@@ -16,6 +16,8 @@ import { useAiConfigStore, useAllApiKeys } from "@/src/application/stores/ai-con
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
+import { trackEvent, type AiOutcome } from "@/src/application/telemetry/usage-analytics"
+import { bucketDuration, classifyAiOutcome, nowMs } from "@/src/application/telemetry/ai-outcome"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
@@ -60,6 +62,8 @@ import {
   modelContextLimit,
 } from '@/src/shared/utils/model-access.utils'
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
 import type { MedicalChatExecutionRecord } from '@/features/medical-chat/utils/ai-execution-export'
@@ -360,6 +364,44 @@ export function useAgentChat(
 
       setIsLoading(true)
       setError(null)
+      // Usage analytics: chat does not go through runGenerationJob, so this
+      // turn measures and classifies itself with the same shared helpers.
+      // Exactly one of the exits below reports; the guard makes that literal.
+      const turnStartedAt = nowMs()
+      let turnReported = false
+      // Standard chat is the only path that puts the selected chart in the
+      // prompt up front; the Agent path starts from an empty clinical context
+      // and pulls what it needs through tools, so there is no comparable
+      // number to report and the parameter is left off entirely rather than
+      // sent as 0. Same estimator as the 資料選擇 token meter and the summary
+      // surface, so the three are directly comparable.
+      const turnSendsChart = isStandardChat && turnDataScope !== 'general'
+      const turnContextTokens = turnSendsChart
+        ? estimateTokens(selectedClinicalContext)
+        : undefined
+      // What survived Data Selection and context fitting for THIS turn. Same
+      // gate as the token estimate: only the standard-chat path puts a chart
+      // in the prompt, so only it has a fed set to count.
+      const turnFedCounts = turnSendsChart && fittedClinicalInput.clinicalData
+        ? countContextResources(fittedClinicalInput.clinicalData)
+        : undefined
+      const reportChatResult = (outcome: AiOutcome) => {
+        if (turnReported) return
+        turnReported = true
+        trackEvent('ai_result', {
+          surface: 'chat',
+          outcome,
+          model_id: effectiveModelId,
+          duration_bucket: bucketDuration(nowMs() - turnStartedAt),
+          ...(turnContextTokens !== undefined
+            ? { context_tokens: turnContextTokens }
+            : {}),
+          // Describes the loaded patient, not this turn's payload, so it
+          // rides along on agent and general-scope turns as well.
+          ...(fittedClinicalInput.patientCounts ?? {}),
+          ...(turnFedCounts ?? {}),
+        })
+      }
       // Keep a local handle: the ref is nulled in `finally`, but late events /
       // pending timers still need to check THIS run's abort state.
       const abortController = new AbortController()
@@ -433,6 +475,7 @@ export function useAgentChat(
               : m)
           )
           recordExecution('error', unavailableMessage)
+          reportChatResult('error')
           setIsLoading(false)
           return
         }
@@ -512,6 +555,7 @@ export function useAgentChat(
             },
           })
           recordExecution('completed')
+          reportChatResult('ok')
           return
         }
 
@@ -526,6 +570,7 @@ export function useAgentChat(
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: unavailableMessage } : m)
             )
             recordExecution('error', unavailableMessage)
+            reportChatResult('error')
             setIsLoading(false)
             return
           }
@@ -697,14 +742,18 @@ export function useAgentChat(
           toolTrajectory: agentResult.trajectory,
         }
         recordExecution('completed')
+        reportChatResult('ok')
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           recordExecution('aborted')
+          // A user pressing stop is not a model failure.
+          reportChatResult('aborted')
           return
         }
         
         const errorMessage = getUserErrorMessage(err)
         recordExecution('error', errorMessage)
+        reportChatResult(classifyAiOutcome(err))
         const errorObj = new Error(errorMessage)
         setError(errorObj)
         // Keep whatever already streamed instead of replacing the answer with
@@ -742,7 +791,7 @@ export function useAgentChat(
         }
       }
     },
-    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, t, locale, isLocalMode, dataScope]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.patientCounts, fittedClinicalInput.clinicalData, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, t, locale, isLocalMode, dataScope]
   )
 
   const handleReset = useCallback(() => {

@@ -148,6 +148,43 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 - 將 AI 輸出定位為 decision support，要求臨床人員回查來源與確認。
 - 建立資料主體請求、匯出、刪除與 breach notification 程序。
 
+## 使用統計 (usage analytics)
+
+App 以 Firebase Analytics / GA4 記錄極小量的介面使用統計，用來知道哪些功能真的被用。唯一接觸 SDK 的檔案是 `src/infrastructure/telemetry/usage-analytics.ts`，事件名稱、參數 key、列舉值與型別（字串 ≤ 64 字元／數字／boolean）都走白名單，不符合就整筆丟棄。
+
+**收集的事件（十個）**
+
+| 事件 | 參數 |
+|---|---|
+| `view_open` | `area`（left / right / reports / cumulative / meds / summary）、`id`（該層的頁面 id）、`trigger`（user / auto） |
+| `chat_send` | `source`（typed / chip）、`has_image`、`model_id`、`agent_mode` |
+| `handoff_copy` | `mode`（labs / reports / all） |
+| `tour_start` | `tour`（left / right / custom-summary） |
+| `tour_end` | `tour`、`tour_outcome`（finish / abandon）、`step`（導覽關閉時的步驟 id） |
+| `report_interpret` | `host`（report-row / document-card / document-dialog）、`action`（open / regenerate） |
+| `app_launch` | `launch_source`（medcloud2 / smart / demo / import / none）、`site`（vghtpe / unknown）、`workstation`（診間／工作站代碼），每次開啟一次 |
+| `ai_result` | `surface`（哪個 AI 功能）、`outcome`（ok / error / timeout / aborted / context_overflow / quota / parse_failed）、`model_id`、`duration_bucket`（<5s / 5-15 / 15-45 / >45，**不送原始耗時**），以及下述選填的資料量數字 |
+| `source_nav` | `target_type`（FHIR resourceType 字串）、`from`（summary / safety / chat / unknown） |
+| `summary_copy` | `block`（hero / custom_module） |
+
+**`ai_result` 上的資料量數字（十三個選填欄位）**：`context_tokens`（送出的臨床脈絡 token 估算）、`resource_count` / `obs_count` / `med_count` / `doc_count` / `encounter_count` / `report_count`（目前載入的病歷有幾筆資源）、`fed_resource_count` / `fed_obs_count` / `fed_med_count` / `fed_doc_count` / `fed_encounter_count` / `fed_report_count`（經資料選擇與 context 縮減後，**實際送進模型**的那份 context 有幾筆資源）。
+
+這些數字**只在 AI 真的被呼叫時記錄**（擁有者 2026-09-04 決定），單純開啟或瀏覽病歷不會產生任何資料量紀錄。用途是替 AI 的成敗與延遲提供對照基準——沒有它們就答不出「AI 失敗是不是發生在特別大的病歷上、修剪之後是否仍然失敗」。
+
+兩組筆數走**同一份資源類別清單**，所以 `resource_count − fed_resource_count` 就是「被資料選擇與 context 縮減丟掉的筆數」，可以直接相減；該清單不含 `vitalSigns`（會與 observations 重複計）與 `medicationRemainingSummaries`（app 自己算的餘藥檢視，不是病人資料，也從不進 prompt）。
+
+全部十三個都是**總數與大小，不是識別子**：不含也無法推得任何 resource id、姓名、病歷號、日期、診斷／檢驗代碼、數值或文字；`fed_*` 同樣只是筆數，不透露被選中的是哪些資源。一個計數無法反推回病歷內容，也不與 Firebase uid 或任何帳號關聯。測不到就整個省略該欄位，不送 0。計數送精確值而非分桶（同一決定）：筆數會隨每次就診增加，是會漂移的量而非穩定屬性，分桶留到報表端再做。
+
+**收集的使用者屬性（十個）**：`launch_source`、`site`、`audience`、`auth_kind`、`app_version`、`auto_summary`（摘要是否自動產生）、`locale`（介面語言）、`key_mode`（自帶金鑰或用內建 proxy）、`workstation`（診間／工作站代碼）、`browser_id`（每個瀏覽器一組隨機值）。
+
+`workstation` 只來自啟動網址的 `?ws=` 參數，由院內 launcher（medcloud2 extension）自行填入，**不是**從瀏覽器、裝置指紋或任何本機環境推導出來的。它識別的是**一台機器或一間診間，不是一個人**：格式限制為 `/^[A-Za-z0-9_-]{1,32}$/`，刻意排除 `@`、`.` 與空白，讓帳號、e-mail 或人名這類值無法通過；格式不符時整個啟動網址會被判為無效（fail-closed），不會被默默接受。
+
+`browser_id` 是一組 32 字元的隨機十六進位值，第一次使用時由前端產生並存在該瀏覽器的 localStorage，用來估算「有多少台機器／瀏覽器在使用」。它**不綁定任何帳號、Firebase uid、使用者或病人**，也不是從裝置特徵推導出來的指紋——就是一個隨機數字。使用者清除網站資料（或用無痕視窗）即會重置為新值。
+
+**明確不收集**：任何病人資料或 FHIR 內容（姓名、病歷號、檢驗值、報告文字、翻譯與解讀結果、reportId、被引用資源的 id 與標題）、AI 呼叫的原始耗時、AI prompt 與回覆內容、複製到剪貼簿的文字、Firebase uid（從不呼叫 `setUserId`）、完整 URL 或任何 query 參數（SMART `iss`、OAuth `code` 都在 URL 上）。
+
+**執行範圍**：只在 `mediprisma.tw` 與 `voho0000.github.io` 兩個正式 hostname 上啟用；localhost、E2E、Firebase emulator、SSR 一律 no-op。自動 `page_view` 關閉、Google Signals 關閉、廣告個人化關閉（`send_page_view` / `allow_google_signals` / `allow_ad_personalization_signals` 皆為 `false`）。SDK 於 idle 時才動態載入，載入前的事件排隊（上限 50 筆），任何錯誤都靜默丟棄，不影響臨床流程。
+
 ## 已知限制與剩餘風險
 
 - Client-side app 無法抵抗同 origin XSS、惡意 extension、已被控制的裝置或使用者主動外洩。

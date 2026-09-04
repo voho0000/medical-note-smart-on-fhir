@@ -43,14 +43,30 @@ export type MedcloudLaunchContext =
       credential?: never
     }
 
+/** Workstation / clinic-room code supplied by the launcher.
+ *
+ * Deliberately narrow: letters, digits, `_` and `-`, at most 32 characters.
+ * The code identifies a ROOM OR MACHINE, never a person — the character class
+ * excludes the `@`, `.` and space that usernames, e-mail addresses and human
+ * names carry, so a launcher that reaches for a login name has to notice. */
+export const WORKSTATION_CODE_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
+
 export interface MedcloudLaunchOptions {
   auto: boolean
   site: 'vghtpe' | null
+  /** `?ws=` code, or null when the launcher did not supply one. */
+  workstation: string | null
 }
 
 /** Parse only the PHI-free launch controls accepted by the production app.
- * The two controls are deliberately independent: `medcloud2=auto` owns the
- * unattended workflow, while `site=vghtpe` owns hospital routing. */
+ * The controls are deliberately independent: `medcloud2=auto` owns the
+ * unattended workflow, `site=vghtpe` owns hospital routing, and `ws=` names the
+ * workstation / clinic room for usage statistics.
+ *
+ * Fail-closed, including for `ws`: a malformed or repeated code invalidates the
+ * WHOLE launch URL rather than being dropped. Silently ignoring it would let a
+ * launcher ship a broken (or over-informative) code for months without anyone
+ * noticing, and this parser is the app's only gate on what a URL may carry. */
 export function parseMedcloudLaunchOptions(
   value: string | URL,
 ): MedcloudLaunchOptions | null {
@@ -68,17 +84,21 @@ export function parseMedcloudLaunchOptions(
     })
     const autoValues = url.searchParams.getAll('medcloud2')
     const siteValues = url.searchParams.getAll('site')
+    const workstationValues = url.searchParams.getAll('ws')
     if (
       autoValues.length > 1 ||
       siteValues.length > 1 ||
-      parameterCount !== autoValues.length + siteValues.length ||
+      workstationValues.length > 1 ||
+      parameterCount !== autoValues.length + siteValues.length + workstationValues.length ||
       (autoValues.length === 1 && autoValues[0] !== 'auto') ||
-      (siteValues.length === 1 && siteValues[0] !== 'vghtpe')
+      (siteValues.length === 1 && siteValues[0] !== 'vghtpe') ||
+      (workstationValues.length === 1 && !WORKSTATION_CODE_PATTERN.test(workstationValues[0]))
     ) return null
 
     return {
       auto: autoValues.length === 1,
       site: siteValues.length === 1 ? 'vghtpe' : null,
+      workstation: workstationValues.length === 1 ? workstationValues[0] : null,
     }
   } catch {
     return null
@@ -91,6 +111,12 @@ export function isMedcloudAutoLaunchUrl(value: string | URL): boolean {
 
 export function isVghtpeLaunchUrl(value: string | URL): boolean {
   return parseMedcloudLaunchOptions(value)?.site === 'vghtpe'
+}
+
+/** The launcher-supplied workstation / clinic-room code, or null. Null also
+ *  covers an invalid launch URL — a rejected URL has no trustworthy code. */
+export function getLaunchWorkstation(value: string | URL): string | null {
+  return parseMedcloudLaunchOptions(value)?.workstation ?? null
 }
 
 function decodeBase64UrlSegment(value: string): Uint8Array | null {

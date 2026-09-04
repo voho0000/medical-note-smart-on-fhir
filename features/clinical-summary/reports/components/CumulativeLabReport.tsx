@@ -107,6 +107,11 @@ interface CumulativeLabReportProps {
    *  omitted the component falls back to its own internal state. */
   activeCategoryId?: string
   onCategoryChange?: (id: string) => void
+  /** The category actually rendered — the parent-controlled id when it is
+   *  usable, otherwise this component's own fallback. Reported separately from
+   *  `onCategoryChange` (which is the user's explicit pick) so a consumer can
+   *  observe the resolved default without being told a selection was made. */
+  onActiveCategoryResolved?: (id: string) => void
   /** Canonical test key to horizontally reveal (e.g. CRP) after navigation. */
   focusAnalyteKey?: string
   /** Re-triggers focus when the same analyte is requested again. */
@@ -538,6 +543,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   fullHeight = false,
   activeCategoryId,
   onCategoryChange,
+  onActiveCategoryResolved,
   focusAnalyteKey,
   focusNonce,
   trendWindow,
@@ -612,6 +618,12 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
     ? activeCategoryId
     : internalActiveId
   const activeIsMicrobiology = activeId === 'microbio'
+  // Tell the parent which category is on screen, including the fallback it
+  // never chose. Effect (not render) so the parent's setState is committed
+  // outside this component's render pass.
+  useEffect(() => {
+    if (activeId) onActiveCategoryResolved?.(activeId)
+  }, [activeId, onActiveCategoryResolved])
   // A category's table remains mounted after the first visit. New categories
   // select immediately and show a compact preparation state for one paint,
   // keeping a large table mount out of the pointer/keyboard event itself.

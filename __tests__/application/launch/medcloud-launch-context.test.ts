@@ -5,6 +5,7 @@ import {
   isMedcloudAutoLaunchUrl,
   isVghtpeLaunchUrl,
   MEDCLOUD_AUTO_LAUNCH_URL,
+  getLaunchWorkstation,
   parseMedcloudLaunchOptions,
   parseMedcloudLaunchContext,
   VGTPE_SITE_LAUNCH_URL,
@@ -31,22 +32,26 @@ describe('medcloud launch context', () => {
     expect(parseMedcloudLaunchOptions('https://mediprisma.tw/app/')).toEqual({
       auto: false,
       site: null,
+      workstation: null,
     })
     expect(parseMedcloudLaunchOptions(MEDCLOUD_AUTO_LAUNCH_URL)).toEqual({
       auto: true,
       site: null,
+      workstation: null,
     })
     expect(parseMedcloudLaunchOptions(VGTPE_SITE_LAUNCH_URL)).toEqual({
       auto: false,
       site: 'vghtpe',
+      workstation: null,
     })
     expect(parseMedcloudLaunchOptions(VGTPE_MEDCLOUD_LAUNCH_URL)).toEqual({
       auto: true,
       site: 'vghtpe',
+      workstation: null,
     })
     expect(parseMedcloudLaunchOptions(
       'https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto',
-    )).toEqual({ auto: true, site: 'vghtpe' })
+    )).toEqual({ auto: true, site: 'vghtpe', workstation: null })
     expect(isMedcloudAutoLaunchUrl(MEDCLOUD_AUTO_LAUNCH_URL)).toBe(true)
     expect(isMedcloudAutoLaunchUrl(VGTPE_SITE_LAUNCH_URL)).toBe(false)
     expect(isVghtpeLaunchUrl(VGTPE_SITE_LAUNCH_URL)).toBe(true)
@@ -71,6 +76,65 @@ describe('medcloud launch context', () => {
     )).toBeNull()
     expect(parseMedcloudLaunchOptions(
       'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe#extra',
+    )).toBeNull()
+  })
+
+  it('carries a workstation / clinic-room code alongside the existing controls', () => {
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&ws=OPD-3F-01',
+    )).toEqual({ auto: true, site: 'vghtpe', workstation: 'OPD-3F-01' })
+    // The Extension may hand over the site route without the unattended flow.
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=ws_12',
+    )).toEqual({ auto: false, site: 'vghtpe', workstation: 'ws_12' })
+    // A code alone still identifies a plain launch.
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?ws=A',
+    )).toEqual({ auto: false, site: null, workstation: 'A' })
+    expect(parseMedcloudLaunchOptions(
+      `https://mediprisma.tw/app/?ws=${'w'.repeat(32)}`,
+    )?.workstation).toBe('w'.repeat(32))
+
+    expect(getLaunchWorkstation(
+      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&ws=OPD-3F-01',
+    )).toBe('OPD-3F-01')
+    expect(getLaunchWorkstation(VGTPE_MEDCLOUD_LAUNCH_URL)).toBeNull()
+    expect(getLaunchWorkstation('https://evil.example/app/?ws=OPD-3F-01')).toBeNull()
+
+    // The launch controls keep working exactly as before with a code present.
+    expect(isMedcloudAutoLaunchUrl(
+      'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe&ws=OPD-3F-01',
+    )).toBe(true)
+    expect(isVghtpeLaunchUrl(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=OPD-3F-01',
+    )).toBe(true)
+  })
+
+  it('fails the whole launch URL on a malformed workstation code', () => {
+    // Fail-closed: a bad code is a launcher bug the operator must see, not
+    // something to drop silently.
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=A&ws=B',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=a b',
+    )).toBeNull()
+    expect(parseMedcloudLaunchOptions(
+      `https://mediprisma.tw/app/?site=vghtpe&ws=${'w'.repeat(33)}`,
+    )).toBeNull()
+    // The character class keeps person-shaped values out.
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=kuo.yihsin@vghtpe.gov.tw',
+    )).toBeNull()
+    // An unrelated extra parameter is still rejected, code or not.
+    expect(parseMedcloudLaunchOptions(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=OPD-3F-01&extra=1',
+    )).toBeNull()
+    expect(getLaunchWorkstation(
+      'https://mediprisma.tw/app/?site=vghtpe&ws=a b',
     )).toBeNull()
   })
 

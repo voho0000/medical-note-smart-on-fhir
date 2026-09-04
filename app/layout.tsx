@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 //   reCAPTCHA v3 (Firebase App Check) and the auth popup helper. The real win
 //   is blocking script loads from every OTHER origin — DOMPurify remains the
 //   defense for inline injection; CSP removes the remote-script blast radius.
+//   googletagmanager is the gtag.js loader the Firebase Analytics SDK injects
+//   at runtime (src/infrastructure/telemetry/usage-analytics.ts) — without it
+//   usage reporting is blocked completely silently.
 // - connect-src stays broad (https:) because SMART on FHIR must reach an
 //   arbitrary `iss` FHIR server chosen at launch time. HTTP is limited to
 //   loopback hosts so a production static build can still test a model running
@@ -29,7 +32,7 @@ export const metadata: Metadata = {
 // - Production only: `next dev` needs eval/websockets for HMR.
 export const CSP_CONTENT = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://apis.google.com",
+  "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",

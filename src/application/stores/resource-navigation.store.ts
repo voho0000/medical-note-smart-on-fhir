@@ -9,6 +9,7 @@
 // NAV_CLAIM_TIMEOUT_MS the caller may show a fallback toast — switching to
 // the right tab always succeeds; pinpoint scrolling is best-effort.
 import { create } from 'zustand'
+import { trackEvent } from '@/src/application/telemetry/usage-analytics'
 
 export interface ResourceNavTarget {
   resourceType: string
@@ -28,6 +29,10 @@ export interface ResourceNavTarget {
   /** Medication destinations may request the owning drug's refill history to
    *  open after the row claims navigation (used by 健保署餘藥計算). */
   expandMedicationHistory?: boolean
+  /** Which AI surface sent the clinician here, for usage analytics only.
+   *  Absent (a chart-internal jump) reports as `unknown`; it never affects
+   *  routing. */
+  origin?: 'summary' | 'safety' | 'chat'
 }
 
 /** resourceType → left-panel tab id (feature-registry ids). */
@@ -80,6 +85,15 @@ export const useResourceNavigationStore = create<ResourceNavigationStore>((set) 
   pending: null,
   seq: 0,
   consumedSeq: 0,
-  navigate: (target) => set((s) => ({ pending: target, seq: s.seq + 1 })),
+  navigate: (target) => {
+    // Usage analytics: does the clinician actually follow a citation into the
+    // chart? Only the FHIR resourceType travels — never the resource id, the
+    // display label, or the evidence quote.
+    trackEvent('source_nav', {
+      target_type: target.resourceType,
+      from: target.origin ?? 'unknown',
+    })
+    set((s) => ({ pending: target, seq: s.seq + 1 }))
+  },
   consume: () => set((s) => ({ pending: null, consumedSeq: s.seq })),
 }))

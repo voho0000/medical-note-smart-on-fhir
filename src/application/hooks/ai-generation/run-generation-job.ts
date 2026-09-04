@@ -7,7 +7,37 @@
 import { getUserErrorMessage } from '@/src/core/errors'
 import { saveEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { isContextOverflowError } from '@/src/shared/utils/context-budget'
+import {
+  trackEvent,
+  type AiOutcome,
+  type AiSurface,
+  type FedResourceCounts,
+  type PatientResourceCounts,
+} from '@/src/application/telemetry/usage-analytics'
+import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
+
+/**
+ * What a caller opts in with. Every measurement is optional and independent:
+ * `contextTokens` is how much went OUT on this call, `counts` is how big the
+ * loaded chart IS, `fedCounts` is how much of it survived Data Selection and
+ * context fitting. A surface may have any subset — whatever it cannot measure
+ * is simply absent from the event, never zero.
+ */
+export interface AiResultAnalytics {
+  surface: AiSurface
+  modelId: string
+  /** Estimated tokens of clinical context in this request. */
+  contextTokens?: number
+  /** Size of the chart currently loaded. Omitted when none is. */
+  counts?: PatientResourceCounts
+  /** How much of that chart survived Data Selection + context fitting and
+   *  actually reached the model. Omitted where there is no fed context
+   *  (agent-mode chat, general-scope chat). Partial: a surface may know some
+   *  fields and not others (report interpretation knows only that it fed one
+   *  report). */
+  fedCounts?: Partial<FedResourceCounts>
+}
 
 export async function runGenerationJob<T>(options: {
   store: AiResultStore<T>
@@ -19,8 +49,10 @@ export async function runGenerationJob<T>(options: {
   produce: () => Promise<T | null>
   /** A user cancellation invalidates the run without surfacing an error. */
   shouldCommit?: () => boolean
+  /** Opt in to the `ai_result` reliability event. Omit and nothing is sent. */
+  analytics?: AiResultAnalytics
 }): Promise<T | null> {
-  const { store, key, cacheKey, produce, shouldCommit = () => true } = options
+  const { store, key, cacheKey, produce, shouldCommit = () => true, analytics } = options
   // Never double-start the same slot's generation.
   if (store.getState().running[key]) return null
   const bundleRevision = store.getState().bundleRevision
@@ -34,13 +66,28 @@ export async function runGenerationJob<T>(options: {
   setRunning(key, true)
   setError(key, null)
   setIssue(key, null)
+  // Reporting is strictly an observer here: it reads the outcome this function
+  // already decides and never changes it. `report` fires at most once.
+  const startedAt = nowMs()
+  let reported = false
+  const report = (outcome: AiOutcome) => {
+    if (reported || !analytics) return
+    reported = true
+    reportAiResult(analytics, outcome, nowMs() - startedAt)
+  }
   try {
     const parsed = await produce()
-    if (!isCurrentBundle() || !shouldCommit()) return null
+    // A cancelled or superseded run is not a failure of the model.
+    if (!isCurrentBundle() || !shouldCommit()) {
+      report('aborted')
+      return null
+    }
     if (!parsed) {
+      report('parse_failed')
       setError(key, 'PARSE_FAILED')
       return null
     }
+    report('ok')
     // Always commit to THIS run's own slot — even if the user has since
     // switched away, the result is stored and shows when they switch back.
     setResult(key, parsed)
@@ -53,6 +100,7 @@ export async function runGenerationJob<T>(options: {
     ))
     return parsed
   } catch (err) {
+    report(isCurrentBundle() && shouldCommit() ? classifyAiOutcome(err) : 'aborted')
     if (isCurrentBundle() && shouldCommit()) {
       if (isContextOverflowError(err)) setIssue(key, err.issue)
       setError(key, getUserErrorMessage(err))
@@ -61,4 +109,25 @@ export async function runGenerationJob<T>(options: {
   } finally {
     if (isCurrentBundle()) setRunning(key, false)
   }
+}
+
+function reportAiResult(
+  analytics: AiResultAnalytics,
+  outcome: AiOutcome,
+  durationMs: number,
+): void {
+  trackEvent('ai_result', {
+    surface: analytics.surface,
+    outcome,
+    model_id: analytics.modelId,
+    duration_bucket: bucketDuration(durationMs),
+    // Spread rather than assigned: an absent measurement must leave the key
+    // off the event entirely, not sit on it as `undefined` or 0 — "we could
+    // not measure" and "we measured nothing" are different findings.
+    ...(typeof analytics.contextTokens === 'number'
+      ? { context_tokens: analytics.contextTokens }
+      : {}),
+    ...(analytics.counts ?? {}),
+    ...(analytics.fedCounts ?? {}),
+  })
 }

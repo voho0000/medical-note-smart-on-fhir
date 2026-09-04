@@ -23,6 +23,7 @@ import {
 } from "@/src/shared/components/clinical-workspace"
 import { ClinicalTabActivityProvider } from "@/src/application/providers/clinical-tab-activity.provider"
 import { LoaderCircle } from "lucide-react"
+import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -77,6 +78,10 @@ export default function ClinicalSummaryFeature() {
   const wasTourActiveRef = useRef(false)
   const pending = useResourceNavigationStore((s) => s.pending)
   const seq = useResourceNavigationStore((s) => s.seq)
+
+  // Usage analytics: the active clinical tab, including the default one the
+  // panel opens on. `trigger` separates a click from tour / citation navigation.
+  useTrackView('left', activeTab)
 
   // A newly visited tab can contain a large pivot table or clinical list. Mark
   // the tab active first, paint a lightweight loading frame, then mount the
@@ -209,6 +214,7 @@ export default function ClinicalSummaryFeature() {
   const getTabTheme = (tabId: string) => {
     return LEFT_PANEL_TAB_THEMES[tabId] || LEFT_PANEL_TAB_THEMES['patient']
   }
+          markUserTrigger('left')
 
   return (
     <div className="@container flex h-full min-h-0 flex-col overflow-hidden" data-tour="left-panel">

@@ -241,6 +241,7 @@ function ReportImagingDetail({
   // Ordinary 「向右展開」continues to show a manual trigger when uncached.
   const interpretBlock = reportId && hasText ? (
     <ReportInterpretationPanel
+      analyticsHost="report-row"
       reportId={reportId}
       reportText={text}
       reportTitle={title}
@@ -385,6 +386,7 @@ function ReportPanelDetail({
     <div className="scrollbar-thin-persistent h-full space-y-0 overflow-y-auto pr-1">
       {interpretation && (
         <ReportInterpretationPanel
+          analyticsHost="report-row"
           reportId={interpretation.reportId}
           reportText={interpretation.reportText}
           reportTitle={interpretation.reportTitle}
@@ -814,6 +816,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     accordion (the header row is itself a toggle button). */}
                 {hasText && !isReportRightActive && (
                   <ReportInterpretationLauncher
+                    analyticsHost="report-row"
                     dataTour="report-ai-interpretation"
                     detailSourceId={reportSourceId}
                     reportId={reportSourceId}
@@ -1241,6 +1244,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   while docked to the right pane (which owns the card). */}
               {panelHasNarrative && !isPanelRightActive && (
                 <ReportInterpretationLauncher
+                  analyticsHost="report-row"
                   asDiv
                   dataTour="report-ai-interpretation"
                   detailSourceId={panelSourceId}

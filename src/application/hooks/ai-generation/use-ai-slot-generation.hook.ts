@@ -45,6 +45,9 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob } from './run-generation-job'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
+import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
 import type {
   AiGenerationIssue,
   AiResultStore,
@@ -114,6 +117,9 @@ export interface AiSlotGenerationConfig<T> {
   /** Slot key → encrypted-session-cache key. MUST keep the feature's
    *  historical format so already-stored user results stay readable. */
   cacheKeyFor: (slotKey: string) => string
+  /** Which AI surface this pipeline is, for the `ai_result` reliability event.
+   *  Omit and the pipeline reports nothing. */
+  analyticsSurface?: AiSurface
   cacheMaxAgeMs: number
   /** Optional replacement cache reader (summary: legacy v5 patient fallback).
    *  Writes always go through cacheKeyFor. */
@@ -194,6 +200,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     requireDataReadyToGenerate,
     store,
     cacheKeyFor,
+    analyticsSurface,
     cacheMaxAgeMs,
     loadCached,
     run,
@@ -269,6 +276,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     clinicalData: scopedClinicalData,
     catalog,
     contextAdaptation,
+    // Usage analytics only: the size of the whole loaded chart, from the hook
+    // that already holds it.
+    patientCounts,
   } = useClinicalAiInput(
     resolvedContextLimit,
     'insights',
@@ -471,6 +481,26 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       store,
       key: slotKey,
       cacheKey: cacheKeyFor(slotKey),
+      analytics: analyticsSurface
+        ? {
+          surface: analyticsSurface,
+          modelId: resolvedModelId,
+          // The adapted context is what actually goes out — measured here,
+          // after every fitting tier has been applied. Estimated once per
+          // run (inside this callback), never on a render.
+          contextTokens: estimateTokens(clinicalContext),
+          // How big the underlying chart is, as opposed to how much of it
+          // this run selected. Both numbers are needed to tell "the model
+          // choked on a huge context" from "the model choked even though we
+          // had already cut a huge chart down".
+          counts: patientCounts,
+          // The other half of that pair: what Data Selection and the fitting
+          // tiers actually left to send.
+          fedCounts: scopedClinicalData
+            ? countContextResources(scopedClinicalData)
+            : undefined,
+        }
+        : undefined,
       shouldCommit: () => (
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
@@ -503,7 +533,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

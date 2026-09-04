@@ -17,6 +17,7 @@ import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { useReportInterpretation } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
+import { trackEvent } from '@/src/application/telemetry/usage-analytics'
 import {
   buildEmrLabText,
   buildEmrReportText,
@@ -213,6 +214,9 @@ export function EmrHandoffPanel() {
       toast.error(t.common.copyFailed)
       return
     }
+    // Usage analytics: which of the three blocks was copied. `text` is the
+    // patient's own lab / report content and never enters the event.
+    trackEvent('handoff_copy', { mode: key })
     setCopiedKey(key)
     if (copyTimer.current) window.clearTimeout(copyTimer.current)
     copyTimer.current = window.setTimeout(() => setCopiedKey(''), 2000)

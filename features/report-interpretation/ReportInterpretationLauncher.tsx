@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useCallback, useState } from 'react'
 import type { UseReportInterpretationArgs } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
+import type { ReportInterpretHost } from '@/src/application/telemetry/usage-analytics'
 import { ReportInterpretationButton } from './ReportInterpretationButton'
 
 const ReportInterpretationRequestRunner = dynamic(
@@ -18,6 +19,8 @@ interface ReportInterpretationLauncherProps extends UseReportInterpretationArgs 
   dataTour?: string
   detailSourceId?: string
   asDiv?: boolean
+  /** Which surface this launcher sits on, for usage analytics. */
+  analyticsHost: ReportInterpretHost
 }
 
 /** Starts translation in the background and reveals the right pane only after
@@ -28,6 +31,7 @@ export function ReportInterpretationLauncher({
   dataTour,
   detailSourceId,
   asDiv,
+  analyticsHost,
   ...request
 }: ReportInterpretationLauncherProps) {
   const [requested, setRequested] = useState(false)
@@ -46,6 +50,7 @@ export function ReportInterpretationLauncher({
     <>
       <ReportInterpretationButton
         active={false}
+        analyticsHost={analyticsHost}
         asDiv={asDiv}
         busy={requested}
         className={className}

@@ -175,6 +175,7 @@ function DocumentEntryCard({
               non-generating. */}
           {canInterpret && (
             <ReportInterpretationPanel
+              analyticsHost="document-card"
               reportId={sourceId}
               reportText={docPlainText}
               reportTitle={entry.typeLabel}
@@ -292,6 +293,7 @@ function DocumentEntryCard({
               there), so there's no duplicate left card / orphan button. */}
           {canInterpret && !isRightActive && (
             <ReportInterpretationLauncher
+              analyticsHost="document-card"
               detailSourceId={sourceId}
               reportId={sourceId}
               reportText={docPlainText}

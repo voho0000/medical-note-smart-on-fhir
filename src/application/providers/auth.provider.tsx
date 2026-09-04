@@ -1,7 +1,7 @@
 // Authentication Provider with Firebase
 'use client'
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useRef, useState, useEffect, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { 
   signInWithPopup,
@@ -30,6 +30,13 @@ import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-sessio
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
 import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 
+import { setUserProps, trackEvent } from '@/src/application/telemetry/usage-analytics'
+import {
+  detectLaunchSource,
+  detectSite,
+  detectWorkstation,
+} from '@/src/application/telemetry/launch-context'
+import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 export interface User {
   uid: string
   email: string | null
@@ -79,6 +86,15 @@ const convertFirebaseUser = (firebaseUser: FirebaseUser): User => ({
 // Helper: Get today's date string (YYYY-MM-DD)
 const getTodayString = () => new Date().toISOString().split('T')[0]
 
+// Usage analytics: one `app_launch` per PAGE LOAD, not per Firebase session.
+// A module-level flag (rather than the uid ref below) is what makes that true:
+// the uid ref resets on sign-out and would re-fire on the next sign-in.
+//
+// Known gap, deliberately not engineered around: if no Firebase user ever
+// materialises (anonymous sign-in disabled and nobody signed in), this load
+// reports no `app_launch`. Every production route in scope has a session.
+let launchReported = false
+
 // Helper: Detect if user is on mobile device
 const isMobileDevice = () => {
   if (typeof window === 'undefined') return false
@@ -100,6 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Anonymous visitors get a smaller free allowance; these are display-only,
   // the Functions enforce the real numbers (must mirror ANON_LIMITS).
   const dailyLimit = isAnonymous ? QUOTA_CONFIG.ANON_DAILY_LIMIT : QUOTA_CONFIG.DAILY_LIMIT
+  // Usage analytics: user properties are set once per Firebase session, keyed
+  // on the uid so a sign-in / sign-out cycle re-reports. The uid ITSELF is
+  // never sent — it is only the change detector.
+  const reportedUidRef = useRef<string | null>(null)
+  const appVersion = useAppVersion()
   const perplexityLimit = isAnonymous ? QUOTA_CONFIG.ANON_PERPLEXITY_LIMIT : QUOTA_CONFIG.PERPLEXITY_DAILY_LIMIT
   const whisperLimit = isAnonymous ? QUOTA_CONFIG.ANON_WHISPER_LIMIT : QUOTA_CONFIG.WHISPER_DAILY_LIMIT
 
@@ -133,6 +154,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!firebaseAuth) return
 
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+      if (firebaseUser && reportedUidRef.current !== firebaseUser.uid) {
+        reportedUidRef.current = firebaseUser.uid
+        void detectLaunchSource().then((launchSource) => {
+          const site = detectSite()
+          const workstation = detectWorkstation()
+          // The event carries the values itself, so counting launches never
+          // depends on the user properties having landed first.
+          if (!launchReported) {
+            launchReported = true
+            trackEvent('app_launch', { launch_source: launchSource, site, workstation })
+          }
+          setUserProps({
+            auth_kind: firebaseUser.isAnonymous ? 'anon' : 'google',
+            launch_source: launchSource,
+            site,
+            workstation,
+          })
+        })
+      }
       if (firebaseUser && !firebaseUser.isAnonymous) {
         // Real signed-in account
         setIsAnonymous(false)
@@ -186,6 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [])
 
+  // Reported separately from the sign-in properties: the version is fetched
+  // from /version.json at runtime (same source as the version chip) and can
+  // resolve before or after the auth listener fires.
+  useEffect(() => {
+    if (appVersion) setUserProps({ app_version: appVersion })
+  }, [appVersion])
+
   // Real-time usage listener — keyed on the active Firebase uid so it covers
   // anonymous visitors too (they meter against the same daily doc shape).
   useEffect(() => {
@@ -205,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = snapshot.data()
           setDailyUsage(data.count || 0)
           setPerplexityUsage(data.perplexityCount || 0)
+        reportedUidRef.current = null
           setWhisperUsage(data.whisperCount || 0)
         } else {
           setDailyUsage(0)
@@ -228,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const provider = new GoogleAuthProvider()
       
+
       // Add custom parameters to improve popup behavior
       provider.setCustomParameters({
         prompt: 'select_account',

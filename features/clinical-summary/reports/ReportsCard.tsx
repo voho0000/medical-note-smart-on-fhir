@@ -38,6 +38,7 @@ import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 import type { TrendWindow } from './utils/trend-time-scale'
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 import { groupCancerScreeningRows } from './utils/cancer-screening-grouping'
+import { markUserTrigger, useTrackView } from '@/src/application/telemetry/usage-analytics'
 import { groupAdultPreventiveRows } from './utils/adult-preventive-grouping'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
@@ -129,11 +130,18 @@ export function ReportsCard() {
   // A trend range is a comparison preference, not an analyte default. Keep the
   // user's explicit choice while they move between tests or fullscreen modes.
   const [cumulativeTrendWindow, setCumulativeTrendWindow] = useState<TrendWindow>()
+  // The category actually on screen, reported back by the table. Kept separate
+  // from `cumulativeCategoryId` (the parent-controlled selection) because the
+  // table falls back to its own first-non-empty category when the parent has
+  // none — which is the case for every session until the first manual pick.
+  const [resolvedCumulativeCategory, setResolvedCumulativeCategory] =
+    useState<string | undefined>()
   const cumulativeNameModeControl = useMemo(
     () => <ReportNameModeSwitch responsiveLabels />,
     [],
   )
   const handleCumulativeCategoryChange = useCallback((categoryId: string) => {
+    markUserTrigger('cumulative')
     setCumulativeCategoryId(categoryId)
     setCumulativeFocus(null)
   }, [])
@@ -149,6 +157,7 @@ export function ReportsCard() {
   // heavy work begins only after the selected state has painted.
   const [pendingTab, setPendingTab] = useState<string | null>(null)
   const handleTabChange = (val: string) => {
+    markUserTrigger('reports')
     setSearchQuery("")
     setActiveTab(val)
     setVisitedTabs(prev => prev.has(val) ? prev : new Set(prev).add(val))
@@ -164,6 +173,23 @@ export function ReportsCard() {
   const [procedureCategoryFilter, setProcedureCategoryFilter] =
     useState<ProcedureCategoryFilter>('all')
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
+
+  // Usage analytics. Both are gated on `clinicalTabActive`: this card stays
+  // mounted once the 報告 clinical tab has been visited, so without the gate it
+  // would report once per session while the left panel reports every visit.
+  //
+  // The cumulative category comes from the table's own resolved default (see
+  // `onActiveCategoryResolved`), not from `cumulativeCategoryId`, which stays
+  // undefined until the user picks — the default category is the most-viewed
+  // one by definition. It is additionally gated on the cumulative sub-tab
+  // being selected, because CumulativeLabReport stays force-mounted while the
+  // user reads 全部 / 檢驗 / 影像.
+  useTrackView('reports', activeTab, clinicalTabActive)
+  useTrackView(
+    'cumulative',
+    resolvedCumulativeCategory,
+    clinicalTabActive && activeTab === 'cumulative',
+  )
 
   useEffect(() => {
     // Idle-mount only the lightweight Reports shell. Preparing the cumulative
@@ -839,6 +865,7 @@ export function ReportsCard() {
             >
               {cumulativePrepared ? (
                 <CumulativeLabReport
+                  onActiveCategoryResolved={setResolvedCumulativeCategory}
                   observations={cumulativeSource.observations}
                   fullHeight={expanded}
                   activeCategoryId={cumulativeCategoryId}
