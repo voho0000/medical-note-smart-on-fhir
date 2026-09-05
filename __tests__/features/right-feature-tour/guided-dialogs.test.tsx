@@ -16,6 +16,12 @@ jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({
   createSharedPrompt: jest.fn(), deleteSharedPrompt: jest.fn(),
 }))
 jest.mock('@/features/prompt-gallery/hooks/usePromptGallery', () => ({ usePromptGallery: jest.fn() }))
+jest.mock('@/features/prompt-gallery/services/tenant-memberships.service', () => ({
+  subscribeTenantMemberships: jest.fn((_userId: string, onUpdate: (memberships: never[]) => void) => { onUpdate([]); return jest.fn() }),
+}))
+jest.mock('@/features/prompt-gallery/services/tenant-prompts.service', () => ({
+  getTenantPrompts: jest.fn(async () => []), createTenantPrompt: jest.fn(), deleteTenantPrompt: jest.fn(), incrementTenantPromptUsage: jest.fn(),
+}))
 jest.mock('@/features/prompt-gallery/services/prompt-favorites.service', () => ({
   subscribePromptFavorites: jest.fn((_userId: string, onUpdate: (favorites: never[]) => void) => { onUpdate([]); return jest.fn() }),
   savePromptFavorite: jest.fn(), removePromptFavorite: jest.fn(), getPromptFavorites: jest.fn(),

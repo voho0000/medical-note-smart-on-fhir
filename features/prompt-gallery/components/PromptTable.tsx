@@ -166,7 +166,7 @@ export function PromptTable({
               </TableCell>
               {showSource && (
                 <TableCell className="py-1.5">
-                  <PromptSourceBadge source={getPromptSource(prompt, currentUserId)} />
+                  <PromptSourceBadge source={getPromptSource(prompt, currentUserId)} tenantName={prompt.tenantName} />
                 </TableCell>
               )}
               <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">{formatPromptDate(prompt.updatedAt)}</TableCell>

@@ -101,7 +101,7 @@ export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onTog
               </Badge>
             )
           })}
-          <PromptSourceBadge source={source} />
+          <PromptSourceBadge source={source} tenantName={prompt.tenantName} />
           {sourceUpdated && (
             <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
               {t.promptGallery.sourceUpdated}

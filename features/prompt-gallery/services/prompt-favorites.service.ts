@@ -30,6 +30,8 @@ interface FirestorePromptFavorite {
   authorId: string | null
   authorName: string | null
   isAnonymous: boolean
+  tenantId: string | null
+  tenantName: string | null
 }
 
 const stringList = (value: unknown): string[] =>
@@ -72,6 +74,8 @@ const favoritesSync = createUserCollectionSync<PromptFavorite, FirestorePromptFa
         authorId: typeof data.authorId === 'string' ? data.authorId : undefined,
         authorName: data.isAnonymous === true ? undefined : typeof data.authorName === 'string' ? data.authorName : undefined,
         isAnonymous: data.isAnonymous === true,
+        tenantId: typeof data.tenantId === 'string' && data.tenantId ? data.tenantId : undefined,
+        tenantName: typeof data.tenantName === 'string' && data.tenantName ? data.tenantName : undefined,
         usageCount: 0,
       },
     }
@@ -95,6 +99,8 @@ const favoritesSync = createUserCollectionSync<PromptFavorite, FirestorePromptFa
     authorId: favorite.prompt.authorId ?? null,
     authorName: favorite.prompt.isAnonymous ? null : favorite.prompt.authorName ?? null,
     isAnonymous: favorite.prompt.isAnonymous === true,
+    tenantId: favorite.prompt.tenantId ?? null,
+    tenantName: favorite.prompt.tenantName ?? null,
   }),
   subscribeOrdering: { mode: 'memory', compare: (a, b) => b.savedAt.getTime() - a.savedAt.getTime() },
 })

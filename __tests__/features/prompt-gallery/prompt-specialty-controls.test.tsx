@@ -17,6 +17,9 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: jest.fn() }))
 jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({ createSharedPrompt: jest.fn() }))
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
+jest.mock('@/features/prompt-gallery/services/tenant-prompts.service', () => ({
+  getTenantPrompts: jest.fn(async () => []), createTenantPrompt: jest.fn(), deleteTenantPrompt: jest.fn(), incrementTenantPromptUsage: jest.fn(),
+}))
 
 beforeEach(() => {
   jest.mocked(useAudience).mockReturnValue({ audience: 'medical' } as ReturnType<typeof useAudience>)

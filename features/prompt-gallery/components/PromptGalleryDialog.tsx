@@ -2,14 +2,15 @@
  * Prompt Gallery Dialog Component
  * Main dialog for browsing and selecting prompts.
  *
- * Entries: all / favorites / mine / system. Favorites are a cross-source
- * collection of saved copies (usePromptFavorites), not a source. The list
+ * Entries: all / favorites / mine / department / system. Favorites are a
+ * cross-source collection of saved copies (usePromptFavorites), not a source;
+ * the department tab appears only for accounts with an active membership. The list
  * is a sortable table on desktop and cards on phones, and it scrolls as one
  * continuous list rather than paging.
  */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { X, Library, Share2, User, Heart, ShieldCheck } from 'lucide-react'
+import { X, Library, Share2, User, Heart, ShieldCheck, Building2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,9 @@ import { SharePromptDialog } from './SharePromptDialog'
 import { LoginRequiredDialog } from './LoginRequiredDialog'
 import { usePromptGallery } from '../hooks/usePromptGallery'
 import { usePromptFavorites } from '../hooks/usePromptFavorites'
+import { useTenantMemberships } from '../hooks/useTenantMemberships'
+import { useTenantPrompts } from '../hooks/useTenantPrompts'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useDesktopLayout } from '../hooks/useDesktopLayout'
 import { isSystemPrompt } from '../constants/prompt-source'
 import { favoriteHasUpdate } from '../utils/prompt-favorite.utils'
@@ -46,7 +50,7 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
 
-type GalleryTab = 'all' | 'fav' | 'my' | 'system'
+type GalleryTab = 'all' | 'fav' | 'my' | 'system' | 'tenant'
 
 interface PromptGalleryDialogProps {
   guidedPreview?: boolean
@@ -102,7 +106,15 @@ export function PromptGalleryDialog({
   })
 
   const favoritesHook = usePromptFavorites({ userId: favoritesUserId, enabled: open && !guidedPreview })
+  // Filter state for the lists that are already in memory (favorites, department).
   const [favoriteFilter, setFavoriteFilter] = useState<PromptGalleryFilter>(initialFilter)
+
+  // Department templates (科常用範本): one tab, switchable when the account belongs to several departments.
+  const memberships = useTenantMemberships({ userId: favoritesUserId, enabled: open && !guidedPreview })
+  const [selectedTenantId, setSelectedTenantId] = useState<string>()
+  const tenant = memberships.find((membership) => membership.tenantId === selectedTenantId) ?? memberships[0]
+  const tenantHook = useTenantPrompts({ tenantId: tenant?.tenantId, tenantName: tenant?.displayName, enabled: open && activeTab === 'tenant' })
+  const hasTenantTab = memberships.length > 0
 
   // Select the appropriate hook based on active tab
   const galleryHook = activeTab === 'my' ? myPromptsHook : allPromptsHook
@@ -116,7 +128,8 @@ export function PromptGalleryDialog({
     trackUsage,
     fetchPrompts,
   } = galleryHook
-  const filter = activeTab === 'fav' ? favoriteFilter : galleryFilter
+  const usesClientFilter = activeTab === 'fav' || activeTab === 'tenant'
+  const filter = usesClientFilter ? favoriteFilter : galleryFilter
 
   // Sync filter.audience when the global audience switches.
   // For patient audience, also clear category/specialty filters (they don't apply to citizen-facing prompts).
@@ -145,7 +158,8 @@ export function PromptGalleryDialog({
   const handleUse = (prompt: SharedPrompt, useAs?: PromptType) => {
     if (guidedPreview) return
     onSelectPrompt(prompt, useAs)
-    trackUsage(prompt.id)
+    if (prompt.tenantId) void tenantHook.trackUsage(prompt.id)
+    else void trackUsage(prompt.id)
   }
 
   /** Quick use from a row: skip the preview when the target is unambiguous and the user is signed in. */
@@ -186,12 +200,16 @@ export function PromptGalleryDialog({
   )
 
   const handleFilterChange = (newFilter: Partial<PromptGalleryFilter>) => {
-    if (activeTab === 'fav') setFavoriteFilter((previous) => ({ ...previous, ...newFilter }))
+    if (usesClientFilter) setFavoriteFilter((previous) => ({ ...previous, ...newFilter }))
     else updateFilter(newFilter)
   }
   const handleClearFilters = () => {
-    if (activeTab === 'fav') setFavoriteFilter(initialFilter)
+    if (usesClientFilter) setFavoriteFilter(initialFilter)
     else clearFilter()
+  }
+  const refreshLists = () => {
+    void fetchPrompts()
+    void tenantHook.fetchPrompts()
   }
 
   // Favorites whose gallery source moved on since the copy was saved.
@@ -205,17 +223,22 @@ export function PromptGalleryDialog({
       const list = favoritesHook.favorites.map((favorite) => favorite.prompt).filter((prompt) => matchesPromptFilter(prompt, favoriteFilter))
       return favoriteSort ? sortPrompts(list, favoriteSort) : list
     }
+    if (activeTab === 'tenant') {
+      return sortPrompts(tenantHook.prompts.filter((prompt) => matchesPromptFilter(prompt, favoriteFilter)), sort)
+    }
     const list = activeTab === 'system' ? prompts.filter(isSystemPrompt) : prompts
     return sortPrompts(list, sort)
-  }, [activeTab, favoritesHook.favorites, favoriteFilter, favoriteSort, prompts, sort])
+  }, [activeTab, favoritesHook.favorites, favoriteFilter, favoriteSort, prompts, sort, tenantHook.prompts])
 
-  const listLoading = activeTab === 'fav' ? favoritesHook.loading : loading
-  const listError = activeTab === 'fav' ? null : error
+  const listLoading = activeTab === 'fav' ? favoritesHook.loading : activeTab === 'tenant' ? tenantHook.loading : loading
+  const listError = activeTab === 'fav' ? null : activeTab === 'tenant' ? tenantHook.error : error
   const systemCount = useMemo(() => prompts.filter(isSystemPrompt).length, [prompts])
   const canFavorite = !guidedPreview
 
   const emptyState = activeTab === 'fav'
     ? { icon: Heart, title: t.promptGallery.noFavorites, description: t.promptGallery.noFavoritesDesc }
+    : activeTab === 'tenant'
+      ? { icon: Building2, title: t.promptGallery.noTenantPrompts, description: t.promptGallery.noTenantPromptsDesc }
     : activeTab === 'my'
       ? { icon: AlertCircle, title: t.promptGallery.noMyPrompts, description: t.promptGallery.noMyPromptsDesc }
       : { icon: AlertCircle, title: t.promptGallery.noResults, description: t.promptGallery.noResultsDescription }
@@ -251,8 +274,8 @@ export function PromptGalleryDialog({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-1 flex-col gap-0 overflow-hidden">
-            {/* Four entries need two rows on a phone; one row from md up. */}
-            <TabsList data-tour="gallery-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2 md:grid-cols-4`}>
+            {/* Two rows on a phone, one row from md up; the department tab is the fifth entry when present. */}
+            <TabsList data-tour="gallery-tabs" className={cn(SUBTAB_LIST_CLASSES, 'grid w-full', hasTenantTab ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4')}>
               <TabsTrigger
                 value="all"
                 className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
@@ -286,6 +309,21 @@ export function PromptGalleryDialog({
                   </span>
                 )}
               </TabsTrigger>
+              {hasTenantTab && (
+                <TabsTrigger
+                  value="tenant"
+                  className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
+                  disabled={guidedPreview}
+                >
+                  <Building2 className="h-4 w-4" />
+                  {t.promptGallery.tenantPrompts}
+                  {activeTab === 'tenant' && tenantHook.prompts.length > 0 && (
+                    <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">
+                      {tenantHook.prompts.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
               <TabsTrigger
                 value="system"
                 className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
@@ -302,6 +340,23 @@ export function PromptGalleryDialog({
             </TabsList>
 
             <TabsContent value={activeTab} className="flex-1 flex flex-col gap-2 overflow-hidden mt-3 [@media(max-height:500px)]:overflow-y-auto">
+            {/* Department switcher for accounts in more than one department */}
+            {activeTab === 'tenant' && memberships.length > 1 && tenant && (
+              <div className="flex shrink-0 items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" aria-hidden="true" />
+                <Select value={tenant.tenantId} onValueChange={setSelectedTenantId}>
+                  <SelectTrigger aria-label={t.promptGallery.tenantSwitcher} className="h-8 w-[14rem] shadow-none max-md:min-h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {memberships.map((membership) => (
+                      <SelectItem key={membership.tenantId} value={membership.tenantId}>{membership.displayName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Filters + result count in one row */}
             <div data-tour="gallery-filters" className="shrink-0">
             <PromptFilters
@@ -416,7 +471,7 @@ export function PromptGalleryDialog({
                       onPreview={handlePreview}
                       onUse={handleQuickUse}
                       updatedIds={updatedFavoriteIds}
-                      showSource={activeTab !== 'system'}
+                      showSource={activeTab !== 'system' && activeTab !== 'tenant'}
                     />
                   </div>
                 ) : (
@@ -450,12 +505,13 @@ export function PromptGalleryDialog({
         onUse={handleUse}
         useMode={mode}
         onShare={handleShare}
-        onDelete={fetchPrompts}
+        onDelete={refreshLists}
         onRestoreFocus={() => previewTrigger.current?.focus()}
         guidedPreview={guidedPreview}
         isFavorite={previewPrompt ? favoritesHook.isFavorite(previewPrompt.id) : false}
         onToggleFavorite={canFavorite ? handleToggleFavorite : undefined}
         sourceUpdated={previewPrompt ? updatedFavoriteIds.has(previewPrompt.id) : false}
+        canManage={!!previewPrompt?.tenantId && !!memberships.find((membership) => membership.tenantId === previewPrompt.tenantId)?.canPublish}
       />
 
       {/* Share Dialog */}
@@ -469,7 +525,9 @@ export function PromptGalleryDialog({
         initialType={sharePrompt?.types[0] || (mode === 'summary' ? 'summary' : 'chat')}
         initialOutputFormat={sharePrompt?.outputFormat}
         initialLanguagePolicy={sharePrompt?.languagePolicy}
-        onSuccess={fetchPrompts}
+        memberships={memberships}
+        initialTenantId={sharePrompt?.tenantId ?? (activeTab === 'tenant' ? tenant?.tenantId : undefined)}
+        onSuccess={refreshLists}
       />
 
       {/* Favorites need an account so they follow the user across devices */}
