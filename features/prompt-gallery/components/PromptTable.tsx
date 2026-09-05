@@ -86,7 +86,7 @@ export function PromptTable({
         <TableRow className="hover:bg-transparent">
           {onToggleFavorite && <TableHead className="w-10"><span className="sr-only">{t.promptGallery.favorites}</span></TableHead>}
           <SortableHead field="title" label={t.promptGallery.columnTemplate} {...headProps} />
-          <TableHead className="w-[5.5rem] text-xs">{t.promptGallery.columnType}</TableHead>
+          <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnType}</TableHead>
           <TableHead className="w-[6.5rem] text-xs">{t.promptGallery.columnCategory}</TableHead>
           <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnSpecialty}</TableHead>
           {showSource && <TableHead className="w-[5.5rem] text-xs">{t.promptGallery.columnSource}</TableHead>}
@@ -133,8 +133,8 @@ export function PromptTable({
                 </div>
                 <p className="truncate text-[0.6875rem] leading-tight text-muted-foreground">{prompt.description || prompt.prompt}</p>
               </TableCell>
-              <TableCell className="py-1.5">
-                <div className="flex gap-1">
+              <TableCell className="whitespace-normal py-1.5">
+                <div className="flex flex-wrap gap-1">
                   {prompt.types.map((type) => {
                     const style = TYPE_STYLES[type as keyof typeof TYPE_STYLES] || TYPE_STYLES.chat
                     const Icon = style.icon
