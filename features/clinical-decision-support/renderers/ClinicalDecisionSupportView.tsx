@@ -1430,7 +1430,7 @@ function RecommendationDetail({
     supporting: string
   }
 }) {
-  const [isSupportingOpen, setIsSupportingOpen] = useState(true)
+  const [isSupportingOpen, setIsSupportingOpen] = useState(false)
   const orderedPatientEvidence = recommendation.patientEvidence
     .map((evidence, originalIndex) => ({ evidence, originalIndex }))
     .sort((a, b) => (

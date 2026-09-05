@@ -386,6 +386,9 @@ describe('clinical decision summary', () => {
 
     fireEvent.click(row)
     const supporting = screen.getByTestId('cdss-supporting-context-ckd-mbd-monitoring')
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
+    expect(supporting).toHaveAttribute('open')
     expect(supporting).toHaveTextContent('KDIGO CKD-MBD 指引')
     expect(supporting).toHaveTextContent('2017')
     expect(supporting).toHaveTextContent('Recommendation 4.1.1')
@@ -564,6 +567,8 @@ describe('clinical decision summary', () => {
     expect(semanticCard).not.toHaveTextContent('Recommendations 3.7.2–3.7.3')
 
     const supporting = screen.getByTestId('cdss-supporting-context-sglt2-semantic')
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
     expect(supporting).toHaveAttribute('open')
     fireEvent.click(within(supporting).getByText('指引來源與限制'))
     expect(supporting).not.toHaveAttribute('open')
@@ -620,11 +625,17 @@ describe('clinical decision summary', () => {
     const nonMedicationSupporting = screen.getByTestId(
       'cdss-supporting-context-non-medication-coverage',
     )
+    expect(nonMedicationSupporting).not.toHaveAttribute('open')
+    fireEvent.click(within(nonMedicationSupporting).getByText('指引來源與限制'))
+    expect(nonMedicationSupporting).toHaveAttribute('open')
     expect(nonMedicationSupporting).not.toHaveTextContent('健保給付')
     expect(screen.queryByTestId('cdss-source-comparison-non-medication-coverage')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-medication-coverage'))
     const medicationSupporting = screen.getByTestId('cdss-supporting-context-medication-coverage')
+    expect(medicationSupporting).not.toHaveAttribute('open')
+    fireEvent.click(within(medicationSupporting).getByText('指引來源與限制'))
+    expect(medicationSupporting).toHaveAttribute('open')
     expect(medicationSupporting).toHaveTextContent('健保給付')
     expect(medicationSupporting).toHaveTextContent('不適用')
     expect(medicationSupporting).toHaveTextContent('本項是臨床照護問題，不屬於藥品給付判定。')
@@ -859,9 +870,11 @@ describe('clinical decision summary', () => {
     expect(actionPlan).not.toHaveTextContent('尚待確認')
     expect(actionPlan).toHaveClass('rounded-t-md')
     const supporting = screen.getByTestId('cdss-supporting-context-ckd-classification')
-    expect(supporting).toHaveAttribute('open')
+    expect(supporting).not.toHaveAttribute('open')
     expect(supporting).toHaveClass('rounded-b-md', 'border-t-0')
     expect(within(supporting).getByText('追蹤、來源與限制')).toBeInTheDocument()
+    fireEvent.click(within(supporting).getByText('追蹤、來源與限制'))
+    expect(supporting).toHaveAttribute('open')
     fireEvent.click(within(supporting).getByText('追蹤、來源與限制'))
     expect(supporting).not.toHaveAttribute('open')
     fireEvent.click(within(supporting).getByText('追蹤、來源與限制'))
@@ -895,6 +908,8 @@ describe('clinical decision summary', () => {
       '先評估 RASi 治療，再評估 finerenone。',
     )
     const supporting = screen.getByTestId('cdss-supporting-context-finerenone-review-dedupe')
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
     expect(supporting).toHaveAttribute('open')
     expect(within(supporting).queryByText('視臨床情境確認')).not.toBeInTheDocument()
     expect(within(supporting).queryByText('RASi 治療適切性與耐受性')).not.toBeInTheDocument()
@@ -920,6 +935,9 @@ describe('clinical decision summary', () => {
     fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-clinical-review-information-gain'))
 
     const supporting = screen.getByTestId('cdss-supporting-context-clinical-review-information-gain')
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
+    expect(supporting).toHaveAttribute('open')
     expect(within(supporting).queryByText('視臨床情境確認')).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-action-plan-clinical-review-information-gain')).toHaveTextContent(
       '評估是否開始治療；並確認近期低血壓或急性病況。',
