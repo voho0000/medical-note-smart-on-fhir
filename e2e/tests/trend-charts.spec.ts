@@ -43,9 +43,15 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await page.setViewportSize({ width: 390, height: 800 })
     await importBundle(page)
     await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
-    await page.getByRole('tab', { name: /^生化 \(/ }).click()
+    // 直式 (stacked) is the default cumulative layout: every category is
+    // already on screen, so the 生化 section is reached by scrolling to it
+    // rather than by selecting a sub-tab.
+    await page.locator('[data-cumulative-jump-chip="chem"]').click()
 
-    const trendAction = page.getByRole('button', { name: /^查看 .+ 趨勢$/ }).first()
+    const trendAction = page
+      .locator('[data-cumulative-section="chem"]')
+      .getByRole('button', { name: /^查看 .+ 趨勢$/ })
+      .first()
     await expect(trendAction).toBeVisible()
     await trendAction.click()
 

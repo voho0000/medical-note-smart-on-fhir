@@ -49,10 +49,16 @@ test.describe('medical-summary cumulative-report navigation', () => {
       await expect(reportsPanel).toHaveAttribute('data-state', 'active')
       await expect(reportsPanel.getByRole('tab', { name: '累積報告', exact: true }))
         .toHaveAttribute('data-state', 'active')
-      await expect(reportsPanel.getByRole('tab').filter({ hasText: /^生化/ }))
-        .toHaveAttribute('data-state', 'active')
+      // 直式 (stacked) is the default cumulative layout: there is no 生化 sub-tab
+      // any more — the citation scrolls to the 生化 section and its jump chip
+      // marks the current position.
+      await expect(reportsPanel.locator('[data-cumulative-section="chem"]')).toBeVisible()
+      await expect(reportsPanel.locator('[data-cumulative-jump-chip="chem"]'))
+        .toHaveAttribute('aria-current', 'true')
 
-      const focusedCreatinine = reportsPanel.locator('[data-lab-test-key="CREA"]').first()
+      const focusedCreatinine = reportsPanel
+        .locator('[data-cumulative-section="chem"] [data-lab-test-key="CREA"]')
+        .first()
       await expect(focusedCreatinine).toBeVisible()
       await expect(focusedCreatinine).toHaveClass(/bg-primary\/10/)
     }

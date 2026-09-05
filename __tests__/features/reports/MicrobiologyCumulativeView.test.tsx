@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { useTabsCumulativeLayout } from './helpers/cumulative-layout'
 
 const NHI_SYSTEM = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code'
 
@@ -48,6 +49,10 @@ function observation({ id, code, name, specimen, date, value }: {
 }
 
 describe('MicrobiologyCumulativeView', () => {
+  // Standalone (分頁) rendering: the grid owns its own title bar and scroller.
+  // Embedded in a 直式 section it drops both — see the stacked-view suite.
+  useTabsCumulativeLayout()
+
   it('renders one collection event per row with dates descending and expands source detail', () => {
     render(
       <CumulativeLabReport

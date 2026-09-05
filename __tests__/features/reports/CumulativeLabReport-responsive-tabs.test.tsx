@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
+import { useTabsCumulativeLayout } from './helpers/cumulative-layout'
 
 function TestProviders({ children }: { children: ReactNode }) {
   return (
@@ -13,6 +14,8 @@ function TestProviders({ children }: { children: ReactNode }) {
 }
 
 describe('CumulativeLabReport responsive category tabs', () => {
+  useTabsCumulativeLayout()
+
   const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
   const originalScrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
   let availableWidth = 560

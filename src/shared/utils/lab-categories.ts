@@ -43,6 +43,12 @@ export interface LabCategory {
    *  a minority of patients (e.g. arterial blood gas), this avoids crowding a
    *  narrow routine-outpatient view. */
   hiddenByDefault?: boolean
+  /** 直式 (stacked) cumulative report only: split this category's single wide
+   *  pivot into several side-by-side-free tables, each listing the subgroup
+   *  ids it holds, in order. Rows whose subgroup is not listed anywhere join
+   *  the LAST panel. A category without this renders one table. Exists so a
+   *  wide panel (生化: 19+ columns) reads without horizontal scrolling. */
+  stackedPanels?: string[][]
 }
 
 export const LAB_CATEGORIES: LabCategory[] = [
@@ -139,6 +145,10 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
       { id: 'cardiac',     members: ['TROP', 'CK', 'CKMB', 'NT-PROBNP'] },
     ],
+    // 直式 splits 生化 in two so neither table needs a horizontal scroll on a
+    // half-width panel: 腎功能＋電解質 (the routine renal/lyte draw) and
+    // 肝功能＋發炎/感染＋心肌酵素 (user request 2026-09-05).
+    stackedPanels: [['renal', 'electrolyte'], ['liver', 'inflam', 'cardiac']],
     // CL deliberately not pinned — most ambulatory chem panels don't include
     // chloride, so pinning would create persistent empty columns. When a
     // hospital does report it, the data-presence rule will surface the column.

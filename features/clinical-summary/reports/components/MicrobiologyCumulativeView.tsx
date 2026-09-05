@@ -14,6 +14,10 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import {
+  filterDatesByCumulativeRange,
+  type CumulativeRangeId,
+} from '../utils/cumulative-range.utils'
+import {
   MICROBIOLOGY_STAGE_COLUMN_ORDER,
   buildMicrobiologyCumulativeModel,
   buildMicrobiologyEvents,
@@ -35,6 +39,18 @@ interface MicrobiologyCumulativeViewProps {
   observations: any[]
   nameMode: AnalyteNameMode
   fullHeight?: boolean
+  /** 直式 (stacked) cumulative report: this grid is one section inside the
+   *  page-level scroller, so it must not open a vertical scroller of its own
+   *  and must not repeat a title the section heading already carries. */
+  embedded?: boolean
+  /** 顯示範圍 from the stacked toolbar. Applied to THIS view's own collection
+   *  dates (it builds its event rows from the observations directly, not from
+   *  the numeric pivot), so what it shows always matches what it counted.
+   *  Undefined = every date. */
+  range?: CumulativeRangeId
+  /** Reference "today" for the calendar-window ranges; passed in so every
+   *  section in one render compares against the same instant. */
+  rangeToday?: Date
 }
 
 function formatDate(date: string): string {
@@ -183,6 +199,9 @@ export function MicrobiologyCumulativeView({
   observations,
   nameMode,
   fullHeight = false,
+  embedded = false,
+  range,
+  rangeToday,
 }: MicrobiologyCumulativeViewProps) {
   const { t } = useLanguage()
   const strings = (t.reports as any).microbiologyCumulative ?? {}
@@ -190,7 +209,17 @@ export function MicrobiologyCumulativeView({
     () => buildMicrobiologyCumulativeModel(observations),
     [observations],
   )
-  const events = useMemo(() => buildMicrobiologyEvents(model), [model])
+  const allEvents = useMemo(() => buildMicrobiologyEvents(model), [model])
+  // Range filtering works on the DATE list, not the row list: one collection
+  // date can carry several events (specimen × organism family), and the range
+  // control counts dates.
+  const events = useMemo(() => {
+    if (!range) return allEvents
+    const dates = [...new Set(allEvents.map((event) => event.date))]
+      .sort((a, b) => b.localeCompare(a))
+    const kept = new Set(filterDatesByCumulativeRange(dates, range, rangeToday ?? new Date()))
+    return allEvents.filter((event) => kept.has(event.date))
+  }, [allEvents, range, rangeToday])
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
 
   const columns = useMemo(
@@ -237,7 +266,11 @@ export function MicrobiologyCumulativeView({
     )
   }
 
-  const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
+  // Embedded in a stacked section the page owns vertical scrolling; standalone
+  // (tabs layout) the grid keeps its own bounded scroller.
+  const heightClass = embedded
+    ? ''
+    : fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
   const detailColSpan = columns.length + 2
 
   const renderResultLine = (group: CellNameGroup) => {
@@ -526,22 +559,27 @@ export function MicrobiologyCumulativeView({
       data-testid="microbiology-cumulative-view"
       className={`flex w-full min-w-0 flex-col overflow-hidden rounded-md border bg-card ${heightClass}`}
     >
-      <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b px-3 py-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          {strings.title ?? '微生物累積結果'}
-        </h2>
-        <div className="text-xs tabular-nums text-muted-foreground">
-          {(strings.resultCount ?? '{count} 筆結果').replace('{count}', String(model.resultCount))}
-          <span aria-hidden="true"> · </span>
-          {(strings.dateCount ?? '{count} 個日期').replace('{count}', String(dateCount))}
+      {/* Embedded: the stacked section heading already names this panel and
+          states its date count — a second title inside the card reads as a
+          duplicate. */}
+      {!embedded && (
+        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b px-3 py-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            {strings.title ?? '微生物累積結果'}
+          </h2>
+          <div className="text-xs tabular-nums text-muted-foreground">
+            {(strings.resultCount ?? '{count} 筆結果').replace('{count}', String(model.resultCount))}
+            <span aria-hidden="true"> · </span>
+            {(strings.dateCount ?? '{count} 個日期').replace('{count}', String(dateCount))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div
         role="region"
         aria-label={strings.matrixLabel ?? '微生物累積表，可水平捲動'}
         tabIndex={0}
-        className="min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-track]:bg-muted/30"
+        className={`min-h-0 w-full max-w-full overflow-x-auto ${embedded ? '' : 'overflow-y-auto'} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-track]:bg-muted/30`}
         style={{ scrollbarWidth: 'thin' }}
       >
         {/* table-fixed so long narrative values wrap inside their workflow
@@ -556,7 +594,10 @@ export function MicrobiologyCumulativeView({
             <col className="w-[84px]" />
             {columns.map((column) => <col key={column} />)}
           </colgroup>
-          <thead className="sticky top-0 z-20">
+          {/* Sticky only against this view's OWN scroller; embedded there is
+              none, and sticking to the page would park the header over the
+              next section. */}
+          <thead className={embedded ? undefined : 'sticky top-0 z-20'}>
             <tr>
               <th className="sticky left-0 z-30 border-b border-r bg-muted px-2 py-1.5 text-left font-semibold">
                 {strings.dateHeader ?? '日期'}

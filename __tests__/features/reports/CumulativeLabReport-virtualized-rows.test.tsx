@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
+import { useTabsCumulativeLayout } from './helpers/cumulative-layout'
 
 // A years-of-data chemistry panel is hundreds of date rows × dozens of analyte
 // columns, and visited categories stay mounted — so the row count has to be
@@ -39,6 +40,10 @@ const VIEWPORT_HEIGHT = 600
 const ROW_HEIGHT = 28
 
 describe('CumulativeLabReport date-row virtualization', () => {
+  // Virtualization is a 分頁-layout contract: 直式 bounds the row count with
+  // the 顯示範圍 selector instead, and never virtualizes.
+  useTabsCumulativeLayout()
+
   const originalOffsetHeight = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,
     'offsetHeight',
