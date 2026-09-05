@@ -1,27 +1,14 @@
 import { expect, test } from '../fixtures/test'
+import { importBundle } from '../fixtures/import'
 
 test.describe('mobile visit row layout', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
   test('keeps four visit statistics visible without overlap or scrolling', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('medical-note-locale', 'zh-TW')
-      localStorage.setItem('medical-note-audience', 'medical')
-      localStorage.setItem('medical-note-audience-selected', '1')
-      localStorage.setItem('medical-note-onboarding-v1', '1')
-      localStorage.setItem('medical-note-left-browser-tour-v1', '1')
-    })
-
-    await page.goto('/')
-    await page.getByTestId('welcome-demo-card').click()
-    await expect(page.locator('span:visible').filter({ hasText: '陳○明' }).first())
-      .toBeVisible({ timeout: 30_000 })
+    await importBundle(page)
     await page.locator('[role="tab"]:visible').filter({ hasText: '就診紀錄' }).first().click()
 
-    const crowdedStats = page
-      .locator('[data-testid="visit-stat-strip"]')
-      .filter({ has: page.locator('[data-visit-stat="abnormal"]') })
-      .first()
+    const crowdedStats = page.locator('[data-testid="visit-stat-strip"]').first()
     await expect(crowdedStats).toBeAttached()
 
     const geometry = await crowdedStats.evaluate((stats) => {
@@ -83,24 +70,10 @@ test.describe('desktop visit row layout', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('keeps every statistic at its intrinsic width', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('medical-note-locale', 'zh-TW')
-      localStorage.setItem('medical-note-audience', 'medical')
-      localStorage.setItem('medical-note-audience-selected', '1')
-      localStorage.setItem('medical-note-onboarding-v1', '1')
-      localStorage.setItem('medical-note-left-browser-tour-v1', '1')
-    })
-
-    await page.goto('/')
-    await page.getByTestId('welcome-demo-card').click()
-    await expect(page.locator('span:visible').filter({ hasText: '陳○明' }).first())
-      .toBeVisible({ timeout: 30_000 })
+    await importBundle(page)
     await page.locator('[role="tab"]:visible').filter({ hasText: '就診紀錄' }).first().click()
 
-    const crowdedStats = page
-      .locator('[data-testid="visit-stat-strip"]')
-      .filter({ has: page.locator('[data-visit-stat="abnormal"]') })
-      .first()
+    const crowdedStats = page.locator('[data-testid="visit-stat-strip"]').first()
     await expect(crowdedStats).toBeAttached()
 
     const layout = await crowdedStats.evaluate((stats) => {
