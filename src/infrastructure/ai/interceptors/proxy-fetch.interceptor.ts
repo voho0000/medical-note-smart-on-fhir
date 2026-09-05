@@ -6,6 +6,7 @@
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
 import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
 import { getAppCheckToken } from '@/src/infrastructure/ai/utils/app-check'
+import { guardOpenAiResponsesProxyStream } from './openai-responses-stream.guard'
 
 export interface ProxyFetchConfig {
   proxyUrl: string
@@ -77,7 +78,15 @@ export class ProxyFetchInterceptor {
         body = this.transformOpenAIRequest(body)
       }
 
-      return originalFetch(config.proxyUrl, { ...init, headers, body })
+      const response = await originalFetch(config.proxyUrl, { ...init, headers, body })
+      const isOpenAiResponsesRequest =
+        !config.isGemini
+        && !config.isClaude
+        && /\/responses(?:[/?#]|$)/.test(String(url))
+
+      return isOpenAiResponsesRequest
+        ? guardOpenAiResponsesProxyStream(response)
+        : response
     }
   }
 

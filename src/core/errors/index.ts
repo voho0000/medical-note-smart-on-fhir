@@ -89,6 +89,10 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
     pattern: /network error|failed to fetch|fetch failed/i,
     message: '🌐 網路連線問題 - 請檢查網路連線'
   },
+  {
+    pattern: /upstream(?: request)? (?:failed|failure|error)|upstream_error/i,
+    message: 'AI 服務暫時無法回應，請稍後重試；若持續發生，請改用其他模型。'
+  },
   // Service unavailable
   {
     pattern: /service.*unavailable|500|502|503/i,
@@ -147,6 +151,7 @@ function buildErrorHaystack(error: unknown): string {
       lastError?: unknown
       cause?: unknown
       errors?: unknown
+      error?: unknown
     }
     if (typeof item.message === 'string') parts.push(item.message)
     if (item.statusCode != null) parts.push(`status ${String(item.statusCode)}`)
@@ -162,6 +167,7 @@ function buildErrorHaystack(error: unknown): string {
     // covers native Error wrapping used by fetch/provider libraries.
     visit(item.lastError, depth + 1)
     visit(item.cause, depth + 1)
+    visit(item.error, depth + 1)
     if (Array.isArray(item.errors)) item.errors.forEach((nested) => visit(nested, depth + 1))
   }
 

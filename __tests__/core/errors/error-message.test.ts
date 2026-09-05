@@ -42,6 +42,20 @@ describe('AI retry error messages', () => {
     expect(getUserErrorMessage(error)).toBe('AI 服務暂時無法完成請求，請稍後再試。')
   })
 
+  it('maps normalized nested Responses upstream errors to recovery guidance', () => {
+    const error = {
+      type: 'error',
+      error: {
+        code: 'upstream_error',
+        message: 'Upstream request failed',
+      },
+    }
+
+    expect(getUserErrorMessage(error)).toBe(
+      'AI 服務暫時無法回應，請稍後重試；若持續發生，請改用其他模型。',
+    )
+  })
+
   it('recognizes and localizes a nested LiteLLM context-window rejection', () => {
     const error = Object.assign(new Error('Failed after 3 attempts'), {
       lastError: {
