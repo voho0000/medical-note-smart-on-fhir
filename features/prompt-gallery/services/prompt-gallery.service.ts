@@ -9,12 +9,14 @@ import {
   splitTemplateText, writeTemplateText,
 } from '@/src/application/composition.template-text'
 import { getPromptSpecialtyFilterValues, PROMPT_SPECIALTY_GROUPS } from '../constants/prompt-specialties'
-import { normalizePromptTypes, type SharedPrompt, type PromptGalleryFilter, type PromptGallerySort } from '../types/prompt.types'
+import { normalizePromptTypes, PROMPT_CATEGORIES, type SharedPrompt, type PromptGalleryFilter, type PromptGallerySort } from '../types/prompt.types'
 import { coerceInsightLanguagePolicy, coerceInsightOutputFormat } from '@/src/shared/constants/clinical-insights.constants'
 
 const COLLECTION_NAME = 'sharedPrompts'
 const PAGE_SIZE = 100
-const categories = ['soap', 'admission', 'discharge', 'safety', 'summary', 'progress', 'consult', 'procedure', 'other']
+/** Sample output is illustrative; keep it well inside the 1 MiB document limit next to the prompt excerpt. */
+export const EXAMPLE_OUTPUT_MAX_LENGTH = 20000
+const categories: readonly string[] = PROMPT_CATEGORIES
 const specialties = new Set<string>(PROMPT_SPECIALTY_GROUPS.flatMap(group => [...group.specialties]))
 const stringList = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
 
@@ -29,7 +31,7 @@ function dateValue(value: unknown): Date {
 function convertToSharedPrompt(id: string, data: Record<string, unknown>): SharedPrompt | null {
   try {
     if (typeof data.title !== 'string' || !data.title.trim() || typeof data.prompt !== 'string') return null
-    for (const field of ['description', 'authorId', 'authorName'] as const) {
+    for (const field of ['description', 'authorId', 'authorName', 'exampleOutput'] as const) {
       if (data[field] !== undefined && typeof data[field] !== 'string') return null
     }
     for (const field of ['specialty', 'audience', 'tags'] as const) {
@@ -47,6 +49,7 @@ function convertToSharedPrompt(id: string, data: Record<string, unknown>): Share
       tags: (data.tags ?? []) as string[],
       outputFormat: data.outputFormat === undefined ? undefined : coerceInsightOutputFormat(data.outputFormat),
       languagePolicy: data.languagePolicy === undefined ? undefined : coerceInsightLanguagePolicy(data.languagePolicy),
+      exampleOutput: typeof data.exampleOutput === 'string' && data.exampleOutput ? data.exampleOutput : undefined,
       createdAt: dateValue(data.createdAt), updatedAt: dateValue(data.updatedAt),
       authorId: data.authorId as string | undefined,
       authorName: data.isAnonymous === true ? undefined : data.authorName as string | undefined,
@@ -145,6 +148,7 @@ function validatePrompt(prompt: NewPrompt) {
     || !stringList(prompt.audience) || !prompt.audience.length || !prompt.audience.every(value => ['medical', 'patient'].includes(value))
     || !stringList(prompt.tags) || prompt.tags.length > 8 || !prompt.tags.every(tag => tag.length <= 24)
     || (prompt.description !== undefined && (typeof prompt.description !== 'string' || prompt.description.length > 180))
+    || (prompt.exampleOutput !== undefined && (typeof prompt.exampleOutput !== 'string' || prompt.exampleOutput.length > EXAMPLE_OUTPUT_MAX_LENGTH))
     || (prompt.authorName !== undefined && (typeof prompt.authorName !== 'string' || prompt.authorName.length > 100))
     || (prompt.outputFormat !== undefined && !['plain-text', 'markdown', 'html'].includes(prompt.outputFormat))
     || (prompt.languagePolicy !== undefined && !['interface-language', 'follow-template'].includes(prompt.languagePolicy))
@@ -179,7 +183,7 @@ export async function deleteSharedPrompt(id: string): Promise<void> {
 
 export async function updateSharedPrompt(id: string, updates: Partial<NewPrompt>): Promise<void> {
   if (!db) throw new Error('Database unavailable')
-  const allowed = ['title', 'description', 'prompt', 'types', 'category', 'specialty', 'audience', 'tags', 'isAnonymous', 'authorName', 'outputFormat', 'languagePolicy']
+  const allowed = ['title', 'description', 'prompt', 'types', 'category', 'specialty', 'audience', 'tags', 'isAnonymous', 'authorName', 'outputFormat', 'languagePolicy', 'exampleOutput']
   if (Object.keys(updates).some(key => !allowed.includes(key))) throw new Error('Cannot change template ownership or usage')
   const ref = doc(db, COLLECTION_NAME, id)
   const snapshot = await getDoc(ref)

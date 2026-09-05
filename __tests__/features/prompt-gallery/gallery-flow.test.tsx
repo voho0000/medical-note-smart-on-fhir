@@ -15,11 +15,22 @@ jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience:
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
 jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({
   createSharedPrompt: jest.fn(), getSharedPrompts: jest.fn(), getMySharedPrompts: jest.fn(),
-  loadSharedPromptContent: jest.fn(), incrementPromptUsage: jest.fn(),
+  loadSharedPromptContent: jest.fn(), incrementPromptUsage: jest.fn(), EXAMPLE_OUTPUT_MAX_LENGTH: 20000,
+}))
+jest.mock('@/features/prompt-gallery/services/prompt-favorites.service', () => ({
+  subscribePromptFavorites: jest.fn((_userId: string, onUpdate: (favorites: never[]) => void) => { onUpdate([]); return jest.fn() }),
+  savePromptFavorite: jest.fn(), removePromptFavorite: jest.fn(), getPromptFavorites: jest.fn(),
 }))
 const template: SharedPrompt = { id: 'source', title: '範本', prompt: 'Full source', types: ['summary'],
   category: 'summary', specialty: ['general'], audience: ['medical'], tags: [], createdAt: new Date(), updatedAt: new Date() }
 
+// Radix scroll areas and tooltips measure with ResizeObserver, which jsdom lacks.
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: class { observe() {} unobserve() {} disconnect() {} },
+  })
+})
 beforeEach(() => {
   jest.clearAllMocks()
   jest.mocked(useAuth).mockReturnValue({ user: { uid: 'alice', displayName: 'Alice', email: 'private@example.test' } } as ReturnType<typeof useAuth>)

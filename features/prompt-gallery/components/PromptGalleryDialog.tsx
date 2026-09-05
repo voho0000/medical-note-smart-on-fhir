@@ -1,10 +1,15 @@
 /**
  * Prompt Gallery Dialog Component
- * Main dialog for browsing and selecting prompts
+ * Main dialog for browsing and selecting prompts.
+ *
+ * Entries: all / favorites / mine / system. Favorites are a cross-source
+ * collection of saved copies (usePromptFavorites), not a source. The list
+ * is a sortable table on desktop and cards on phones, and it scrolls as one
+ * continuous list rather than paging.
  */
 
-import { useState, useMemo, useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, X, Library, Share2, User } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { X, Library, Share2, User, Heart, ShieldCheck } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -20,25 +25,28 @@ import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { PromptFilters } from './PromptFilters'
 import { PromptCard } from './PromptCard'
+import { PromptTable } from './PromptTable'
 import { PromptPreviewDialog } from './PromptPreviewDialog'
 import { SharePromptDialog } from './SharePromptDialog'
+import { LoginRequiredDialog } from './LoginRequiredDialog'
 import { usePromptGallery } from '../hooks/usePromptGallery'
-import type { SharedPrompt, PromptType } from '../types/prompt.types'
+import { usePromptFavorites } from '../hooks/usePromptFavorites'
+import { useDesktopLayout } from '../hooks/useDesktopLayout'
+import { isSystemPrompt } from '../constants/prompt-source'
+import { favoriteHasUpdate } from '../utils/prompt-favorite.utils'
+import { loadSharedPromptContent } from '../services/prompt-gallery.service'
+import { matchesPromptFilter, sortPrompts } from '../utils/prompt-filter.utils'
+import type { SharedPrompt, PromptType, PromptGalleryFilter, PromptGallerySort } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
+
+type GalleryTab = 'all' | 'fav' | 'my' | 'system'
 
 interface PromptGalleryDialogProps {
   guidedPreview?: boolean
@@ -59,17 +67,21 @@ export function PromptGalleryDialog({
 }: PromptGalleryDialogProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
-  const { user } = useAuth()
-  const [selectedTab, setActiveTab] = useState<'all' | 'my'>('all')
-  const activeTab = guidedPreview ? 'all' : selectedTab
+  const { user, isAnonymous } = useAuth()
+  const isDesktop = useDesktopLayout()
+  const [selectedTab, setActiveTab] = useState<GalleryTab>('all')
+  const activeTab: GalleryTab = guidedPreview ? 'all' : selectedTab
   const [previewPrompt, setPreviewPrompt] = useState<SharedPrompt | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [sharePrompt, setSharePrompt] = useState<SharedPrompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest')
+  const [favoriteLoginOpen, setFavoriteLoginOpen] = useState(false)
+  // Gallery tabs default to newest first; favorites keep "most recently saved" until a column is picked.
+  const [sort, setSort] = useState<PromptGallerySort>({ field: 'createdAt', direction: 'desc' })
+  const [favoriteSort, setFavoriteSort] = useState<PromptGallerySort>()
   const previewTrigger = useRef<HTMLElement | null>(null)
-  const itemsPerPage = 8
+  // Favorites follow a signed-in account (FR-13); anonymous sessions are asked to sign in.
+  const favoritesUserId = user && !isAnonymous ? user.uid : undefined
 
   // Initialize filter based on mode + current audience
   const initialFilter = useMemo(() => {
@@ -79,46 +91,49 @@ export function PromptGalleryDialog({
     return base
   }, [mode, audience])
 
-  // Hook for "All Templates"
-  const allPromptsHook = usePromptGallery({ initialFilter, enabled: open && activeTab === 'all' })
-  
+  // Hook for "All Templates" (the system tab is a client-side slice of the same list)
+  const allPromptsHook = usePromptGallery({ initialFilter, enabled: open && (activeTab === 'all' || activeTab === 'system') })
+
   // Hook for "My Templates" (only if user is logged in)
-  const myPromptsHook = usePromptGallery({ 
+  const myPromptsHook = usePromptGallery({
     initialFilter,
     userId: user?.uid,
     enabled: open && activeTab === 'my' && !!user,
   })
 
+  const favoritesHook = usePromptFavorites({ userId: favoritesUserId, enabled: open && !guidedPreview })
+  const [favoriteFilter, setFavoriteFilter] = useState<PromptGalleryFilter>(initialFilter)
+
   // Select the appropriate hook based on active tab
+  const galleryHook = activeTab === 'my' ? myPromptsHook : allPromptsHook
   const {
     prompts,
     loading,
     error,
-    filter,
+    filter: galleryFilter,
     updateFilter,
     clearFilter,
     trackUsage,
     fetchPrompts,
-  } = activeTab === 'my' ? myPromptsHook : allPromptsHook
+  } = galleryHook
+  const filter = activeTab === 'fav' ? favoriteFilter : galleryFilter
 
   // Sync filter.audience when the global audience switches.
   // For patient audience, also clear category/specialty filters (they don't apply to citizen-facing prompts).
   useEffect(() => {
     const patch: Partial<typeof filter> = {}
-    if (filter.audience !== audience) patch.audience = audience
+    if (galleryFilter.audience !== audience) patch.audience = audience
     if (audience === 'patient') {
-      if (filter.category) patch.category = undefined
-      if (filter.specialty) patch.specialty = undefined
+      if (galleryFilter.category) patch.category = undefined
+      if (galleryFilter.specialty) patch.specialty = undefined
     }
     if (Object.keys(patch).length > 0) {
       updateFilter(patch)
     }
-  }, [audience, filter.audience, filter.category, filter.specialty, updateFilter])
+  }, [audience, galleryFilter.audience, galleryFilter.category, galleryFilter.specialty, updateFilter])
 
-  // Reset to "All" tab and page 1 when switching tabs
   const handleTabChange = (value: string) => {
-    setActiveTab(value as 'all' | 'my')
-    setCurrentPage(1)
+    setActiveTab(value as GalleryTab)
   }
 
   const handlePreview = (prompt: SharedPrompt) => {
@@ -133,10 +148,35 @@ export function PromptGalleryDialog({
     trackUsage(prompt.id)
   }
 
+  /** Quick use from a row: skip the preview when the target is unambiguous and the user is signed in. */
+  const handleQuickUse = async (prompt: SharedPrompt) => {
+    if (guidedPreview) return
+    if (!user || (mode === 'all' && prompt.types.length > 1)) {
+      handlePreview(prompt)
+      return
+    }
+    try {
+      const resolved = await loadSharedPromptContent(prompt)
+      handleUse(resolved, mode === 'all' ? resolved.types[0] : mode)
+      onOpenChange(false)
+    } catch {
+      handlePreview(prompt)
+    }
+  }
+
   const handleShare = (prompt: SharedPrompt) => {
     setSharePrompt(prompt)
     setShareOpen(true)
   }
+
+  const handleToggleFavorite = useCallback((prompt: SharedPrompt) => {
+    if (guidedPreview) return
+    if (!favoritesUserId) {
+      setFavoriteLoginOpen(true)
+      return
+    }
+    void favoritesHook.toggle(prompt)
+  }, [guidedPreview, favoritesUserId, favoritesHook])
 
   const hasActiveFilters = !!(
     filter.searchQuery ||
@@ -145,42 +185,54 @@ export function PromptGalleryDialog({
     filter.specialty
   )
 
-  // Sort prompts
-  const sortedPrompts = useMemo(() => {
-    const sorted = [...prompts]
-    if (sortBy === 'popular') {
-      return sorted.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
-    }
-    // Default: latest (already sorted by createdAt desc from Firestore)
-    return sorted
-  }, [prompts, sortBy])
-
-  // Pagination
-  const totalPages = Math.ceil(sortedPrompts.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentPrompts = sortedPrompts.slice(startIndex, endIndex)
-
-  // Reset to page 1 when filters change
-  const handleFilterChange = (newFilter: any) => {
-    updateFilter(newFilter)
-    setCurrentPage(1)
+  const handleFilterChange = (newFilter: Partial<PromptGalleryFilter>) => {
+    if (activeTab === 'fav') setFavoriteFilter((previous) => ({ ...previous, ...newFilter }))
+    else updateFilter(newFilter)
   }
+  const handleClearFilters = () => {
+    if (activeTab === 'fav') setFavoriteFilter(initialFilter)
+    else clearFilter()
+  }
+
+  // Favorites whose gallery source moved on since the copy was saved.
+  const updatedFavoriteIds = useMemo(() => {
+    const live = new Map(allPromptsHook.prompts.map((prompt) => [prompt.id, prompt]))
+    return new Set(favoritesHook.favorites.filter((favorite) => favoriteHasUpdate(favorite, live.get(favorite.id))).map((favorite) => favorite.id))
+  }, [allPromptsHook.prompts, favoritesHook.favorites])
+
+  const visiblePrompts = useMemo(() => {
+    if (activeTab === 'fav') {
+      const list = favoritesHook.favorites.map((favorite) => favorite.prompt).filter((prompt) => matchesPromptFilter(prompt, favoriteFilter))
+      return favoriteSort ? sortPrompts(list, favoriteSort) : list
+    }
+    const list = activeTab === 'system' ? prompts.filter(isSystemPrompt) : prompts
+    return sortPrompts(list, sort)
+  }, [activeTab, favoritesHook.favorites, favoriteFilter, favoriteSort, prompts, sort])
+
+  const listLoading = activeTab === 'fav' ? favoritesHook.loading : loading
+  const listError = activeTab === 'fav' ? null : error
+  const systemCount = useMemo(() => prompts.filter(isSystemPrompt).length, [prompts])
+  const canFavorite = !guidedPreview
+
+  const emptyState = activeTab === 'fav'
+    ? { icon: Heart, title: t.promptGallery.noFavorites, description: t.promptGallery.noFavoritesDesc }
+    : activeTab === 'my'
+      ? { icon: AlertCircle, title: t.promptGallery.noMyPrompts, description: t.promptGallery.noMyPromptsDesc }
+      : { icon: AlertCircle, title: t.promptGallery.noResults, description: t.promptGallery.noResultsDescription }
+  const EmptyIcon = emptyState.icon
 
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!guidedPreview) onOpenChange(next) }} modal={!guidedPreview}>
         <DialogContent
           data-tour="custom-summary-gallery"
-          className={cn("flex h-[85vh] w-[calc(100vw-2rem)] max-w-5xl flex-col", guidedPreview && GUIDED_PREVIEW_DIALOG_CLASSES)}
+          className={cn("flex h-[85vh] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-3", guidedPreview && GUIDED_PREVIEW_DIALOG_CLASSES)}
           {...guidedPreviewEvents(guidedPreview)}
         >
           <DialogHeader className="pr-10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <DialogTitle>{t.promptGallery.title}</DialogTitle>
-                <DialogDescription>{t.promptGallery.description}</DialogDescription>
-              </div>
+            <div className="flex items-center justify-between gap-4">
+              <DialogTitle>{t.promptGallery.title}</DialogTitle>
+              <DialogDescription className="sr-only">{t.promptGallery.description}</DialogDescription>
               {user && (
                 <Button
                   size="sm"
@@ -199,16 +251,30 @@ export function PromptGalleryDialog({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-1 flex-col gap-0 overflow-hidden">
-            <TabsList data-tour="gallery-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2`}>
-              <TabsTrigger 
-                value="all" 
+            {/* Four entries need two rows on a phone; one row from md up. */}
+            <TabsList data-tour="gallery-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full grid-cols-2 md:grid-cols-4`}>
+              <TabsTrigger
+                value="all"
                 className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
               >
                 <Library className="h-4 w-4" />
                 {t.promptGallery.allPrompts}
               </TabsTrigger>
-              <TabsTrigger 
-                value="my" 
+              <TabsTrigger
+                value="fav"
+                className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
+                disabled={guidedPreview}
+              >
+                <Heart className="h-4 w-4" fill={activeTab === 'fav' ? 'currentColor' : 'none'} />
+                {t.promptGallery.favorites}
+                {favoritesHook.favorites.length > 0 && (
+                  <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">
+                    {favoritesHook.favorites.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="my"
                 className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
                 disabled={!user}
               >
@@ -220,10 +286,23 @@ export function PromptGalleryDialog({
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger
+                value="system"
+                className={`${SUBTAB_TRIGGER_CLASSES} flex items-center gap-2`}
+                disabled={guidedPreview}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                {t.promptGallery.systemPrompts}
+                {systemCount > 0 && (
+                  <span className="ml-1 text-xs font-normal tabular-nums text-muted-foreground">
+                    {systemCount}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={activeTab} className="flex-1 flex flex-col gap-3 overflow-hidden mt-3 [@media(max-height:500px)]:overflow-y-auto">
-            {/* Filters */}
+            <TabsContent value={activeTab} className="flex-1 flex flex-col gap-2 overflow-hidden mt-3 [@media(max-height:500px)]:overflow-y-auto">
+            {/* Filters + result count in one row */}
             <div data-tour="gallery-filters" className="shrink-0">
             <PromptFilters
               searchQuery={filter.searchQuery || ''}
@@ -234,103 +313,81 @@ export function PromptGalleryDialog({
               onCategoryChange={(category) => handleFilterChange({ category })}
               selectedSpecialty={filter.specialty}
               onSpecialtyChange={(specialty) => handleFilterChange({ specialty })}
-            />
-            </div>
-
-            {/* Active Filters & Results Count */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 min-h-[32px]">
-              {(hasActiveFilters || prompts.length > 0) && !loading && (
+              trailing={!listLoading && !listError && (
                 <>
-                <div className="flex min-w-0 items-center gap-2 flex-wrap">
-                  {prompts.length > 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      {t.promptGallery.promptsCount.replace('{count}', prompts.length.toString())}
-                    </span>
-                  )}
-                  {filter.type && (
-                    <Badge variant="secondary" className="text-xs">
-                      {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}
-                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ type: undefined })}><X className="h-3 w-3" /></button>
-                    </Badge>
-                  )}
-                  {filter.category && (
-                    <Badge variant="secondary" className="text-xs">
-                      {t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}
-                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ category: undefined })}><X className="h-3 w-3" /></button>
-                    </Badge>
-                  )}
-                  {filter.specialty && (
-                    <Badge variant="secondary" className="max-w-full whitespace-normal text-xs">
-                      {t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}
-                      <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ specialty: undefined })}><X className="h-3 w-3" /></button>
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto">
                   {hasActiveFilters && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => { clearFilter(); setCurrentPage(1); }}
+                      onClick={handleClearFilters}
                       className="h-7 text-xs max-md:min-h-11"
                     >
                       <X className="h-3 w-3 mr-1" />
                       {t.promptGallery.clearFilters}
                     </Button>
                   )}
-                  <Select
-                    value={sortBy}
-                    onValueChange={(value) => { setSortBy(value as 'latest' | 'popular'); setCurrentPage(1); }}
-                  >
-                    <SelectTrigger aria-label={t.promptGallery.sortBy} className="w-[130px] h-7 max-md:min-h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="latest">{t.promptGallery.sortLatest}</SelectItem>
-                      <SelectItem value="popular">{t.promptGallery.sortPopular}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {t.promptGallery.resultsCount.replace('{count}', String(visiblePrompts.length))}
+                  </span>
                 </>
               )}
+            />
             </div>
 
-            {/* Results */}
-            <div className="flex-1 overflow-y-auto [@media(max-height:500px)]:min-h-32 [@media(max-height:500px)]:flex-none [@media(max-height:500px)]:overflow-visible">
+            {/* Active filter chips (screen-reader friendly removal) */}
+            {hasActiveFilters && !listLoading && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2 px-1">
+                {filter.type && (
+                  <Badge variant="secondary" className="text-xs">
+                    {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}
+                    <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ type: undefined })}><X className="h-3 w-3" /></button>
+                  </Badge>
+                )}
+                {filter.category && (
+                  <Badge variant="secondary" className="text-xs">
+                    {t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}
+                    <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ category: undefined })}><X className="h-3 w-3" /></button>
+                  </Badge>
+                )}
+                {filter.specialty && (
+                  <Badge variant="secondary" className="max-w-full whitespace-normal text-xs">
+                    {t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}
+                    <button type="button" aria-label={`${t.promptGallery.clearFilters}: ${t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}`} className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={() => handleFilterChange({ specialty: undefined })}><X className="h-3 w-3" /></button>
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {/* Results: one continuous scrolling list */}
+            <div className="flex-1 overflow-y-auto overscroll-contain [@media(max-height:500px)]:min-h-32 [@media(max-height:500px)]:flex-none [@media(max-height:500px)]:overflow-visible">
               {/* Loading */}
-              {loading && (
+              {listLoading && (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               )}
 
               {/* Error */}
-              {!loading && error && (
+              {!listLoading && listError && (
                 <div className="flex items-center justify-center h-full">
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>{listError}</AlertDescription>
                   </Alert>
                 </div>
               )}
 
               {/* Content */}
-              {!loading && !error && (
+              {!listLoading && !listError && (
                 <>
-                {prompts.length === 0 ? (
+                {visiblePrompts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
-                    <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium">
-                      {activeTab === 'my' ? t.promptGallery.noMyPrompts : t.promptGallery.noResults}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {activeTab === 'my' 
-                        ? t.promptGallery.noMyPromptsDesc 
-                        : t.promptGallery.noResultsDescription}
-                    </p>
+                    <EmptyIcon className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">{emptyState.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-2">{emptyState.description}</p>
                     {activeTab === 'my' && (
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         className="mt-4"
                         onClick={() => {
                           setSharePrompt(null)
@@ -340,50 +397,42 @@ export function PromptGalleryDialog({
                         {t.promptGallery.shareFirstPrompt}
                       </Button>
                     )}
+                    {activeTab === 'fav' && (
+                      <Button variant="outline" className="mt-4" onClick={() => setActiveTab('all')}>
+                        <Library className="mr-2 h-4 w-4" />
+                        {t.promptGallery.allPrompts}
+                      </Button>
+                    )}
+                  </div>
+                ) : isDesktop && !guidedPreview ? (
+                  <div className="rounded-lg border border-border bg-card">
+                    <PromptTable
+                      prompts={visiblePrompts}
+                      currentUserId={user?.uid}
+                      sort={activeTab === 'fav' ? favoriteSort : sort}
+                      onSortChange={activeTab === 'fav' ? setFavoriteSort : setSort}
+                      isFavorite={favoritesHook.isFavorite}
+                      onToggleFavorite={canFavorite ? handleToggleFavorite : undefined}
+                      onPreview={handlePreview}
+                      onUse={handleQuickUse}
+                      updatedIds={updatedFavoriteIds}
+                      showSource={activeTab !== 'system'}
+                    />
                   </div>
                 ) : (
-                  <>
-                    <div className={cn("grid grid-cols-1 gap-3 p-1 sm:grid-cols-2", !guidedPreview && "lg:grid-cols-4")}>
-                      {currentPrompts.map((prompt) => (
-                        <PromptCard
-                          key={prompt.id}
-                          prompt={prompt}
-                          onPreview={handlePreview}
-                          currentUserId={user?.uid}
-                        />
-                      ))}
-                    </div>
-                    
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 pt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          aria-label={t.promptGallery.previousPage}
-                          disabled={currentPage === 1}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm">
-                          {t.promptGallery.pagination
-                            .replace('{current}', currentPage.toString())
-                            .replace('{total}', totalPages.toString())
-                            .replace('{count}', prompts.length.toString())}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          aria-label={t.promptGallery.nextPage}
-                          disabled={currentPage === totalPages}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </>
+                  <div className={cn("grid grid-cols-1 gap-3 p-1 sm:grid-cols-2", !guidedPreview && "lg:grid-cols-4")}>
+                    {visiblePrompts.map((prompt) => (
+                      <PromptCard
+                        key={prompt.id}
+                        prompt={prompt}
+                        onPreview={handlePreview}
+                        currentUserId={user?.uid}
+                        isFavorite={favoritesHook.isFavorite(prompt.id)}
+                        onToggleFavorite={canFavorite ? handleToggleFavorite : undefined}
+                        sourceUpdated={updatedFavoriteIds.has(prompt.id)}
+                      />
+                    ))}
+                  </div>
                 )}
                 </>
               )}
@@ -395,8 +444,8 @@ export function PromptGalleryDialog({
 
       {/* Preview Dialog */}
       <PromptPreviewDialog
-        prompt={guidedPreview ? (previewFirstTemplate && !loading && !error ? currentPrompts[0] ?? null : null) : previewPrompt}
-        open={guidedPreview ? open && previewFirstTemplate && !loading && !error && !!currentPrompts[0] : previewOpen}
+        prompt={guidedPreview ? (previewFirstTemplate && !loading && !error ? visiblePrompts[0] ?? null : null) : previewPrompt}
+        open={guidedPreview ? open && previewFirstTemplate && !loading && !error && !!visiblePrompts[0] : previewOpen}
         onOpenChange={(next) => { if (!guidedPreview) setPreviewOpen(next) }}
         onUse={handleUse}
         useMode={mode}
@@ -404,6 +453,9 @@ export function PromptGalleryDialog({
         onDelete={fetchPrompts}
         onRestoreFocus={() => previewTrigger.current?.focus()}
         guidedPreview={guidedPreview}
+        isFavorite={previewPrompt ? favoritesHook.isFavorite(previewPrompt.id) : false}
+        onToggleFavorite={canFavorite ? handleToggleFavorite : undefined}
+        sourceUpdated={previewPrompt ? updatedFavoriteIds.has(previewPrompt.id) : false}
       />
 
       {/* Share Dialog */}
@@ -413,10 +465,20 @@ export function PromptGalleryDialog({
         initialTitle={sharePrompt?.title}
         initialDescription={sharePrompt?.description}
         initialPrompt={sharePrompt?.prompt}
+        initialExampleOutput={sharePrompt?.exampleOutput}
         initialType={sharePrompt?.types[0] || (mode === 'summary' ? 'summary' : 'chat')}
         initialOutputFormat={sharePrompt?.outputFormat}
         initialLanguagePolicy={sharePrompt?.languagePolicy}
         onSuccess={fetchPrompts}
+      />
+
+      {/* Favorites need an account so they follow the user across devices */}
+      <LoginRequiredDialog
+        open={favoriteLoginOpen}
+        onOpenChange={setFavoriteLoginOpen}
+        title={t.promptGallery.favoriteLoginRequired}
+        description={t.promptGallery.favoriteLoginDesc}
+        onLoginSuccess={() => setFavoriteLoginOpen(false)}
       />
     </>
   )

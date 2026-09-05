@@ -54,6 +54,8 @@ export function normalizePromptTypes(promptId: string, rawTypes: unknown): Promp
 
 export type PromptAudience = 'medical' | 'patient'
 
+export const PROMPT_CATEGORIES = ['soap', 'admission', 'discharge', 'safety', 'summary', 'progress', 'consult', 'procedure', 'other'] as const
+
 export type PromptCategory = 
   | 'soap'           // SOAP notes
   | 'admission'      // Admission notes
@@ -122,6 +124,8 @@ export interface SharedPrompt {
   outputFormat?: InsightOutputFormat
   /** Summary-module language contract. Missing on legacy/chat-only records. */
   languagePolicy?: InsightLanguagePolicy
+  /** Author-supplied sample output generated from de-identified data. */
+  exampleOutput?: string
   
   // Metadata
   createdAt: Date
@@ -146,4 +150,21 @@ export interface PromptGalleryFilter {
 export interface PromptGallerySort {
   field: 'createdAt' | 'updatedAt' | 'title' | 'usageCount'
   direction: 'asc' | 'desc'
+}
+
+/** Where a gallery prompt comes from, relative to the current user. */
+export type PromptSource = 'mine' | 'system' | 'shared'
+
+/**
+ * A favorite keeps the user's own copy of the prompt at the time it was saved,
+ * so a source that is later edited or deleted never breaks the favorite.
+ */
+export interface PromptFavorite {
+  /** Source prompt id; also the favorite document id, so a prompt is saved at most once. */
+  id: string
+  /** Snapshot of the source with its full text resolved. */
+  prompt: SharedPrompt
+  savedAt: Date
+  /** `updatedAt` of the source when saved; a newer source means the copy is behind. */
+  sourceUpdatedAt: Date
 }

@@ -16,6 +16,10 @@ jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({
   createSharedPrompt: jest.fn(), deleteSharedPrompt: jest.fn(),
 }))
 jest.mock('@/features/prompt-gallery/hooks/usePromptGallery', () => ({ usePromptGallery: jest.fn() }))
+jest.mock('@/features/prompt-gallery/services/prompt-favorites.service', () => ({
+  subscribePromptFavorites: jest.fn((_userId: string, onUpdate: (favorites: never[]) => void) => { onUpdate([]); return jest.fn() }),
+  savePromptFavorite: jest.fn(), removePromptFavorite: jest.fn(), getPromptFavorites: jest.fn(),
+}))
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
 
 const template: SharedPrompt = {
