@@ -2446,6 +2446,14 @@ export const zhTW = {
     publishTenantHint: '科常用範本只有該科成員看得到，適合放科內流程與院內規範。',
     tenantShareSuccess: '已發布到科常用範本',
     tenantPromptTooLong: '科常用範本內容過長，請縮短後再發布',
+    recentlyUsed: '最近使用',
+    clearRecent: '清除',
+    templateFillTitle: '模板填空',
+    templateFillHint: '填入的內容只用於這次帶入或複製，不會被儲存。',
+    templateFillReset: '重設欄位',
+    templateFillRequired: '請填寫',
+    templateFillMissing: '尚未填寫：{names}',
+    templateFillUseAnyway: '略過填空，直接帶入',
   },
 
   importBundle: {

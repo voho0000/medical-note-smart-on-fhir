@@ -2443,6 +2443,14 @@ export const en = {
     publishTenantHint: 'Department templates are visible only to that department, a good fit for local workflows and hospital rules.',
     tenantShareSuccess: 'Published to department templates',
     tenantPromptTooLong: 'This department template is too long. Shorten it and try again.',
+    recentlyUsed: 'Recent',
+    clearRecent: 'Clear',
+    templateFillTitle: 'Fill in the template',
+    templateFillHint: 'Values are used for this one use or copy and are never stored.',
+    templateFillReset: 'Reset fields',
+    templateFillRequired: 'Required',
+    templateFillMissing: 'Not filled in: {names}',
+    templateFillUseAnyway: 'Use without filling in',
   },
 
   importBundle: {

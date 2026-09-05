@@ -16,13 +16,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Calendar, TrendingUp, Trash2, Loader2, Copy } from 'lucide-react'
+import { Calendar, TrendingUp, Trash2, Loader2, Copy, RotateCcw } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { applyTemplateVariables, extractTemplateVariables, missingTemplateVariables } from '../utils/template-variables.utils'
 import type { PromptType, SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { deleteSharedPrompt, loadSharedPromptContent } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import { deleteTenantPrompt } from '@/features/prompt-gallery/services/tenant-prompts.service'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { LoginRequiredDialog } from './LoginRequiredDialog'
 import {
@@ -93,6 +96,8 @@ export function PromptPreviewDialog({
   const [pendingAction, setPendingAction] = useState<{ prompt: SharedPrompt; useAs?: PromptType } | null>(null)
   const [content, setContent] = useState<{ source: SharedPrompt; value?: SharedPrompt; error?: boolean }>()
   const [retry, setRetry] = useState(0)
+  // Template fill-in values belong to one prompt in this dialog session only (FR-09: never persisted).
+  const [valuesFor, setValuesFor] = useState<{ id: string; values: Record<string, string>; showMissing: boolean; pendingUseAs?: PromptType }>()
   useEffect(() => {
     let active = true
     if (open && prompt?.body) {
@@ -104,8 +109,15 @@ export function PromptPreviewDialog({
     return () => { active = false }
   }, [open, prompt, retry])
 
+  const resolved = prompt ? (prompt.body ? (content?.source === prompt ? content.value : undefined) : prompt) : undefined
+  const variables = useMemo(() => resolved ? extractTemplateVariables(resolved.prompt) : [], [resolved])
+  const fill = valuesFor?.id === prompt?.id ? valuesFor : undefined
+  const variableValues = useMemo(() => fill?.values ?? {}, [fill])
+  const filledPrompt = useMemo(() => resolved ? applyTemplateVariables(resolved.prompt, variableValues, variables) : '', [resolved, variableValues, variables])
+  const missing = missingTemplateVariables(variableValues, variables)
   if (!prompt) return null
-  const resolved = prompt.body ? (content?.source === prompt ? content.value : undefined) : prompt
+  const updateFill = (patch: Partial<{ values: Record<string, string>; showMissing: boolean; pendingUseAs?: PromptType }>) =>
+    setValuesFor({ id: prompt.id, values: variableValues, showMissing: fill?.showMissing ?? false, pendingUseAs: fill?.pendingUseAs, ...patch })
   const contentError = content?.source === prompt && content.error && !resolved
 
   const isAuthor = !!user?.uid && prompt.authorId === user.uid
@@ -142,18 +154,24 @@ export function PromptPreviewDialog({
     }).format(date)
   }
 
-  const handleUse = (useAs?: PromptType) => {
+  const handleUse = (useAs?: PromptType, ignoreMissing = false) => {
     if (guidedPreview || !resolved) return
+    // Placeholders left empty: point at the fields first; the user may still bring the raw template in.
+    if (missing.length > 0 && !ignoreMissing) {
+      updateFill({ showMissing: true, pendingUseAs: useAs })
+      return
+    }
+    const filled = filledPrompt === resolved.prompt ? resolved : { ...resolved, prompt: filledPrompt }
     // Check if user is logged in
     if (!user) {
       // Store the pending action and show login dialog
-      setPendingAction({ prompt: resolved, useAs })
+      setPendingAction({ prompt: filled, useAs })
       setShowLoginDialog(true)
       return
     }
 
     // User is logged in, proceed with the action
-    onUse(resolved, useAs)
+    onUse(filled, useAs)
     onOpenChange(false)
   }
 
@@ -170,7 +188,7 @@ export function PromptPreviewDialog({
   const handleCopy = async () => {
     if (guidedPreview || !resolved) return
     try {
-      await navigator.clipboard.writeText(resolved.prompt)
+      await navigator.clipboard.writeText(filledPrompt)
       toast.success(t.common.copied)
     } catch {
       toast.error(t.promptGallery.shareError)
@@ -212,11 +230,47 @@ export function PromptPreviewDialog({
             <Button variant="outline" onClick={() => { setContent(undefined); setRetry(value => value + 1) }}>{t.promptGallery.retry}</Button>
           </div>
         ) : resolved ? (
-          <pre className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm font-mono">{resolved.prompt}</pre>
+          <pre className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm font-mono">{filledPrompt}</pre>
         ) : <div role="status" className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />{t.common.loading}</div>}
       </div>
     </div>
   )
+
+  const templateFill = variables.length > 0 && resolved ? (
+    <div className="space-y-2 rounded-lg border border-border p-3" data-testid="template-fill">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-medium">{t.promptGallery.templateFillTitle}</h4>
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" disabled={guidedPreview || !Object.values(variableValues).some((value) => value?.trim())}
+          onClick={() => updateFill({ values: {}, showMissing: false })}>
+          <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
+          {t.promptGallery.templateFillReset}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">{t.promptGallery.templateFillHint}</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {variables.map((variable) => {
+          const invalid = !!fill?.showMissing && !variableValues[variable.name]?.trim()
+          const inputId = `template-var-${variable.name}`
+          return (
+            <div key={variable.name} className="space-y-1">
+              <Label htmlFor={inputId} className="text-xs">{variable.name} *</Label>
+              <Input
+                id={inputId}
+                value={variableValues[variable.name] ?? ''}
+                onChange={(event) => updateFill({ values: { ...variableValues, [variable.name]: event.target.value } })}
+                aria-invalid={invalid || undefined}
+                aria-describedby={invalid ? `${inputId}-error` : undefined}
+                disabled={guidedPreview}
+                autoComplete="off"
+                className="h-8 text-sm shadow-none"
+              />
+              {invalid && <p id={`${inputId}-error`} className="text-xs text-destructive">{t.promptGallery.templateFillRequired}</p>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
 
   const exampleOutput = (
     <div className="space-y-2">
@@ -346,6 +400,7 @@ export function PromptPreviewDialog({
             <ScrollArea viewportProps={{ tabIndex: 0, role: 'region', 'aria-label': t.promptGallery.promptContent }} className="h-[55vh] min-h-0 min-w-0 pr-4 [&_[data-slot=scroll-area-viewport]>div]:!block">
               <div className="min-w-0 space-y-4">
                 {metadata}
+                {templateFill}
                 {promptContent}
               </div>
             </ScrollArea>
@@ -357,6 +412,7 @@ export function PromptPreviewDialog({
           <ScrollArea viewportProps={{ tabIndex: 0, role: 'region', 'aria-label': t.promptGallery.promptContent }} className="h-[50vh] min-h-0 min-w-0 w-full shrink pr-4 [&_[data-slot=scroll-area-viewport]>div]:!block">
             <div className="min-w-0 space-y-4">
               {metadata}
+              {templateFill}
               {promptContent}
               {exampleOutput}
             </div>
@@ -366,6 +422,15 @@ export function PromptPreviewDialog({
         {deleteError && (
           <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
             {deleteError}
+          </div>
+        )}
+
+        {fill?.showMissing && missing.length > 0 && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span>{t.promptGallery.templateFillMissing.replace('{names}', missing.join('、'))}</span>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleUse(fill.pendingUseAs, true)}>
+              {t.promptGallery.templateFillUseAnyway}
+            </Button>
           </div>
         )}
 
