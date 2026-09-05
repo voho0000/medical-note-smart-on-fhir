@@ -126,6 +126,10 @@ export interface SharedPrompt {
   languagePolicy?: InsightLanguagePolicy
   /** Author-supplied sample output generated from de-identified data. */
   exampleOutput?: string
+  /** Set on department templates (tenantPrompts); absent on public gallery prompts. */
+  tenantId?: string
+  /** Display name of the department, resolved from the viewer's membership. */
+  tenantName?: string
   
   // Metadata
   createdAt: Date
@@ -153,7 +157,18 @@ export interface PromptGallerySort {
 }
 
 /** Where a gallery prompt comes from, relative to the current user. */
-export type PromptSource = 'mine' | 'system' | 'shared'
+export type PromptSource = 'mine' | 'system' | 'shared' | 'tenant'
+
+export type TenantRole = 'owner' | 'builder' | 'reviewer' | 'member'
+
+/** One of the signed-in account's active department memberships. */
+export interface TenantMembership {
+  tenantId: string
+  role: TenantRole
+  displayName: string
+  /** owner / builder may publish, edit and retire the department's templates. */
+  canPublish: boolean
+}
 
 /**
  * A favorite keeps the user's own copy of the prompt at the time it was saved,

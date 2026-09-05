@@ -48,7 +48,8 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
 import { createSharedPrompt, EXAMPLE_OUTPUT_MAX_LENGTH } from '@/features/prompt-gallery/services/prompt-gallery.service'
-import type { PromptCategory, PromptSpecialty, PromptType } from '../types/prompt.types'
+import type { PromptCategory, PromptSpecialty, PromptType, TenantMembership } from '../types/prompt.types'
+import { createTenantPrompt } from '@/features/prompt-gallery/services/tenant-prompts.service'
 import { PromptSpecialtyPicker } from './PromptSpecialtyPicker'
 import {
   coerceInsightOutputFormat,
@@ -74,6 +75,9 @@ interface SharePromptDialogProps {
   initialLanguagePolicy?: InsightLanguagePolicy
   onSuccess?: () => void
   guidedPreview?: boolean
+  /** Departments the user may publish to; when non-empty a publish-target picker appears. */
+  memberships?: TenantMembership[]
+  initialTenantId?: string
 }
 
 export function SharePromptDialog(props: SharePromptDialogProps) {
@@ -94,6 +98,8 @@ function SharePromptDialogForm({
   initialLanguagePolicy,
   onSuccess,
   guidedPreview = false,
+  memberships = [],
+  initialTenantId,
 }: SharePromptDialogProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
@@ -114,6 +120,10 @@ function SharePromptDialogForm({
   const [tagInput, setTagInput] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [isAnonymous, setIsAnonymous] = useState(!user?.displayName?.trim())
+  const publishTargets = memberships.filter((membership) => membership.canPublish)
+  const [publishTarget, setPublishTarget] = useState<string>(() =>
+    initialTenantId && publishTargets.some((membership) => membership.tenantId === initialTenantId) ? initialTenantId : 'public')
+  const targetMembership = publishTargets.find((membership) => membership.tenantId === publishTarget)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -185,7 +195,7 @@ function SharePromptDialogForm({
     setError(null)
 
     try {
-      await createSharedPrompt({
+      const payload = {
         title: title.trim(),
         description: description.trim() || undefined,
         prompt,
@@ -200,10 +210,12 @@ function SharePromptDialogForm({
         outputFormat,
         languagePolicy: initialLanguagePolicy,
         exampleOutput: exampleOutput.trim() || undefined,
-      })
+      }
+      if (targetMembership) await createTenantPrompt({ ...payload, tenantId: targetMembership.tenantId })
+      else await createSharedPrompt(payload)
 
       onSuccess?.()
-      toast.success(t.promptGallery.shareSuccess)
+      toast.success(targetMembership ? t.promptGallery.tenantShareSuccess : t.promptGallery.shareSuccess)
       onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.promptGallery.shareError)
@@ -453,6 +465,28 @@ function SharePromptDialogForm({
 
           <section className="space-y-3 rounded-xl border p-3">
             <h3 className="text-sm font-medium">{t.promptGallery.publishingOptions}</h3>
+
+            {publishTargets.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="share-template-target">{t.promptGallery.publishTarget}</Label>
+                <Select value={publishTarget} onValueChange={setPublishTarget}>
+                  <SelectTrigger id="share-template-target" aria-describedby="share-template-target-hint" className="w-full shadow-none max-md:min-h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public" className="max-md:min-h-11">{t.promptGallery.publishPublic}</SelectItem>
+                    {publishTargets.map((membership) => (
+                      <SelectItem key={membership.tenantId} value={membership.tenantId} className="max-md:min-h-11">
+                        {t.promptGallery.publishTenant.replace('{name}', membership.displayName)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p id="share-template-target-hint" className="text-xs leading-relaxed text-muted-foreground">
+                  {t.promptGallery.publishTenantHint}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">

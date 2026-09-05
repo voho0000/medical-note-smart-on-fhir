@@ -28,10 +28,10 @@ function dateValue(value: unknown): Date {
 }
 
 /** Isolate malformed legacy/public documents instead of failing the entire gallery. */
-function convertToSharedPrompt(id: string, data: Record<string, unknown>): SharedPrompt | null {
+export function convertToSharedPrompt(id: string, data: Record<string, unknown>): SharedPrompt | null {
   try {
     if (typeof data.title !== 'string' || !data.title.trim() || typeof data.prompt !== 'string') return null
-    for (const field of ['description', 'authorId', 'authorName', 'exampleOutput'] as const) {
+    for (const field of ['description', 'authorId', 'authorName', 'exampleOutput', 'tenantId'] as const) {
       if (data[field] !== undefined && typeof data[field] !== 'string') return null
     }
     for (const field of ['specialty', 'audience', 'tags'] as const) {
@@ -50,6 +50,7 @@ function convertToSharedPrompt(id: string, data: Record<string, unknown>): Share
       outputFormat: data.outputFormat === undefined ? undefined : coerceInsightOutputFormat(data.outputFormat),
       languagePolicy: data.languagePolicy === undefined ? undefined : coerceInsightLanguagePolicy(data.languagePolicy),
       exampleOutput: typeof data.exampleOutput === 'string' && data.exampleOutput ? data.exampleOutput : undefined,
+      tenantId: typeof data.tenantId === 'string' && data.tenantId ? data.tenantId : undefined,
       createdAt: dateValue(data.createdAt), updatedAt: dateValue(data.updatedAt),
       authorId: data.authorId as string | undefined,
       authorName: data.isAnonymous === true ? undefined : data.authorName as string | undefined,
@@ -138,8 +139,8 @@ export async function getSharedPrompt(id: string): Promise<SharedPrompt | null> 
   return prompt ? loadSharedPromptContent(prompt) : null
 }
 
-type NewPrompt = Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt' | 'body'>
-function validatePrompt(prompt: NewPrompt) {
+export type NewPrompt = Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt' | 'body' | 'tenantName'>
+export function validatePrompt(prompt: NewPrompt) {
   if (typeof prompt.title !== 'string' || !prompt.title.trim() || prompt.title.length > 100
     || typeof prompt.prompt !== 'string' || !prompt.prompt.trim()
     || !stringList(prompt.types) || !prompt.types.length || !prompt.types.every(type => ['chat', 'summary'].includes(type))
@@ -149,14 +150,17 @@ function validatePrompt(prompt: NewPrompt) {
     || !stringList(prompt.tags) || prompt.tags.length > 8 || !prompt.tags.every(tag => tag.length <= 24)
     || (prompt.description !== undefined && (typeof prompt.description !== 'string' || prompt.description.length > 180))
     || (prompt.exampleOutput !== undefined && (typeof prompt.exampleOutput !== 'string' || prompt.exampleOutput.length > EXAMPLE_OUTPUT_MAX_LENGTH))
+    || (prompt.tenantId !== undefined && (typeof prompt.tenantId !== 'string' || !prompt.tenantId || prompt.tenantId.length > 128))
     || (prompt.authorName !== undefined && (typeof prompt.authorName !== 'string' || prompt.authorName.length > 100))
     || (prompt.outputFormat !== undefined && !['plain-text', 'markdown', 'html'].includes(prompt.outputFormat))
     || (prompt.languagePolicy !== undefined && !['interface-language', 'follow-template'].includes(prompt.languagePolicy))
     || typeof prompt.authorId !== 'string' || !prompt.authorId) throw new Error('Invalid template data')
 }
 
-export async function createSharedPrompt(prompt: NewPrompt): Promise<string> {
+export async function createSharedPrompt(input: NewPrompt): Promise<string> {
   if (!db) throw new Error('Database unavailable')
+  // Public gallery prompts never carry a tenant; department templates go through createTenantPrompt.
+  const { tenantId: _tenantId, ...prompt } = input
   validatePrompt(prompt)
   const now = Timestamp.now()
   const data = Object.fromEntries(Object.entries({ ...prompt, usageCount: 0, createdAt: now, updatedAt: now,

@@ -23,9 +23,10 @@ export function isSystemPrompt(prompt: Pick<SharedPrompt, 'authorId' | 'authorNa
 
 /** Source badge relative to the current user: their own prompt wins over "system". */
 export function getPromptSource(
-  prompt: Pick<SharedPrompt, 'authorId' | 'authorName' | 'isAnonymous'>,
+  prompt: Pick<SharedPrompt, 'authorId' | 'authorName' | 'isAnonymous' | 'tenantId'>,
   userId?: string,
 ): PromptSource {
+  if (prompt.tenantId) return 'tenant'
   if (userId && prompt.authorId === userId) return 'mine'
   if (isSystemPrompt(prompt)) return 'system'
   return 'shared'

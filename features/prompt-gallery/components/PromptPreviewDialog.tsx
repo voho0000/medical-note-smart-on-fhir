@@ -21,6 +21,7 @@ import type { PromptType, SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { deleteSharedPrompt, loadSharedPromptContent } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { deleteTenantPrompt } from '@/features/prompt-gallery/services/tenant-prompts.service'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { LoginRequiredDialog } from './LoginRequiredDialog'
@@ -64,6 +65,8 @@ interface PromptPreviewDialogProps {
   onToggleFavorite?: (prompt: SharedPrompt) => void
   /** The gallery source is newer than the saved copy being previewed. */
   sourceUpdated?: boolean
+  /** Viewer may retire this department template (owner/builder) even without authoring it. */
+  canManage?: boolean
 }
 
 export function PromptPreviewDialog({
@@ -78,6 +81,7 @@ export function PromptPreviewDialog({
   isFavorite = false,
   onToggleFavorite,
   sourceUpdated = false,
+  canManage = false,
 }: PromptPreviewDialogProps) {
   const { t } = useLanguage()
   const { user } = useAuth()
@@ -104,7 +108,8 @@ export function PromptPreviewDialog({
   const resolved = prompt.body ? (content?.source === prompt ? content.value : undefined) : prompt
   const contentError = content?.source === prompt && content.error && !resolved
 
-  const isAuthor = user?.uid && prompt.authorId === user.uid
+  const isAuthor = !!user?.uid && prompt.authorId === user.uid
+  const canDelete = isAuthor || (!!prompt.tenantId && canManage)
   const source = getPromptSource(prompt, user?.uid)
   const isPatientOnly = prompt.audience.includes('patient') && !prompt.audience.includes('medical')
   const outputFormat = coerceInsightOutputFormat(prompt.outputFormat)
@@ -183,7 +188,8 @@ export function PromptPreviewDialog({
     setDeleting(true)
     setDeleteError(null)
     try {
-      await deleteSharedPrompt(prompt.id)
+      if (prompt.tenantId) await deleteTenantPrompt(prompt.id)
+      else await deleteSharedPrompt(prompt.id)
       onOpenChange(false)
       if (onDelete) {
         onDelete()
@@ -319,7 +325,7 @@ export function PromptPreviewDialog({
           </DialogDescription>
           {/* Source is secondary information: it says where the prompt comes from, not that saving it grants editing. */}
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <PromptSourceBadge source={source} />
+            <PromptSourceBadge source={source} tenantName={prompt.tenantName} />
             {sourceUpdated && (
               <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
                 {t.promptGallery.sourceUpdated}
@@ -366,7 +372,7 @@ export function PromptPreviewDialog({
         <DialogFooter data-tour="gallery-preview-actions" className="min-w-0 shrink-0">
           <div className="flex w-full flex-wrap justify-between gap-2">
             <div>
-              {isAuthor && (
+              {canDelete && (
                 <Button
                   variant="destructive"
                   onClick={handleDeleteClick}
