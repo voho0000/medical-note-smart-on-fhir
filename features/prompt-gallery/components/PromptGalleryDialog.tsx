@@ -10,7 +10,7 @@
  */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { X, Library, Share2, User, Heart, ShieldCheck, Building2 } from 'lucide-react'
+import { X, Library, Share2, User, Heart, ShieldCheck, Building2, History } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,7 @@ import { isSystemPrompt } from '../constants/prompt-source'
 import { favoriteHasUpdate } from '../utils/prompt-favorite.utils'
 import { loadSharedPromptContent } from '../services/prompt-gallery.service'
 import { matchesPromptFilter, sortPrompts } from '../utils/prompt-filter.utils'
+import { clearRecentPrompts, readRecentPrompts, recordRecentPrompt } from '../utils/recent-prompts.utils'
 import type { SharedPrompt, PromptType, PromptGalleryFilter, PromptGallerySort } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
@@ -116,6 +117,16 @@ export function PromptGalleryDialog({
   const tenantHook = useTenantPrompts({ tenantId: tenant?.tenantId, tenantName: tenant?.displayName, enabled: open && activeTab === 'tenant' })
   const hasTenantTab = memberships.length > 0
 
+  // 最近使用 (FR-10): ids + timestamps only, per account, in this browser.
+  const recentAccountId = user?.uid ?? 'anonymous'
+  const [recentVersion, setRecentVersion] = useState(0)
+  const recent = useMemo(() => readRecentPrompts(recentAccountId), [recentAccountId, recentVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rememberRecent = (prompt: SharedPrompt) => {
+    if (guidedPreview) return
+    recordRecentPrompt(recentAccountId, prompt)
+    setRecentVersion((version) => version + 1)
+  }
+
   // Select the appropriate hook based on active tab
   const galleryHook = activeTab === 'my' ? myPromptsHook : allPromptsHook
   const {
@@ -153,11 +164,13 @@ export function PromptGalleryDialog({
     previewTrigger.current = document.activeElement as HTMLElement
     setPreviewPrompt(prompt)
     setPreviewOpen(true)
+    rememberRecent(prompt)
   }
 
   const handleUse = (prompt: SharedPrompt, useAs?: PromptType) => {
     if (guidedPreview) return
     onSelectPrompt(prompt, useAs)
+    rememberRecent(prompt)
     if (prompt.tenantId) void tenantHook.trackUsage(prompt.id)
     else void trackUsage(prompt.id)
   }
@@ -221,14 +234,26 @@ export function PromptGalleryDialog({
   const visiblePrompts = useMemo(() => {
     if (activeTab === 'fav') {
       const list = favoritesHook.favorites.map((favorite) => favorite.prompt).filter((prompt) => matchesPromptFilter(prompt, favoriteFilter))
-      return favoriteSort ? sortPrompts(list, favoriteSort) : list
+      if (favoriteSort) return sortPrompts(list, favoriteSort)
+      // Default order: most recently used first, then most recently saved (spec 十).
+      const rank = new Map(recent.map((entry, index) => [entry.id, index]))
+      return [...list].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER))
     }
     if (activeTab === 'tenant') {
       return sortPrompts(tenantHook.prompts.filter((prompt) => matchesPromptFilter(prompt, favoriteFilter)), sort)
     }
     const list = activeTab === 'system' ? prompts.filter(isSystemPrompt) : prompts
     return sortPrompts(list, sort)
-  }, [activeTab, favoritesHook.favorites, favoriteFilter, favoriteSort, prompts, sort, tenantHook.prompts])
+  }, [activeTab, favoritesHook.favorites, favoriteFilter, favoriteSort, prompts, sort, tenantHook.prompts, recent])
+
+  // Resolve recent entries against whatever lists are loaded; unknown ids are simply skipped.
+  const recentPrompts = useMemo(() => {
+    const known = new Map<string, SharedPrompt>()
+    for (const prompt of [...allPromptsHook.prompts, ...myPromptsHook.prompts, ...favoritesHook.favorites.map((favorite) => favorite.prompt), ...tenantHook.prompts]) {
+      if (!known.has(prompt.id)) known.set(prompt.id, prompt)
+    }
+    return recent.map((entry) => known.get(entry.id)).filter((prompt): prompt is SharedPrompt => !!prompt).slice(0, 5)
+  }, [recent, allPromptsHook.prompts, myPromptsHook.prompts, favoritesHook.favorites, tenantHook.prompts])
 
   const listLoading = activeTab === 'fav' ? favoritesHook.loading : activeTab === 'tenant' ? tenantHook.loading : loading
   const listError = activeTab === 'fav' ? null : activeTab === 'tenant' ? tenantHook.error : error
@@ -354,6 +379,35 @@ export function PromptGalleryDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {/* 最近使用 quick access */}
+            {!guidedPreview && recentPrompts.length > 0 && (
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-xs">
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <History className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t.promptGallery.recentlyUsed}
+                </span>
+                {recentPrompts.map((prompt) => (
+                  <button
+                    key={prompt.id}
+                    type="button"
+                    onClick={() => handlePreview(prompt)}
+                    title={prompt.title}
+                    aria-label={`${t.promptGallery.recentlyUsed}: ${prompt.title}`}
+                    className="max-w-[12rem] truncate rounded-md border border-border bg-card px-2 py-0.5 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-9"
+                  >
+                    {prompt.title}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { clearRecentPrompts(recentAccountId); setRecentVersion((version) => version + 1) }}
+                  className="text-muted-foreground underline-offset-2 hover:underline max-md:min-h-9"
+                >
+                  {t.promptGallery.clearRecent}
+                </button>
               </div>
             )}
 
