@@ -9,7 +9,6 @@
  * host-resource interfaces, and that the two halves meet: profile in, modules out.
  */
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
-import { DEFAULT_CARE_PACK_ID } from '@voho0000/personalized-care'
 import {
   getApplicableClinicalGuidelinePacks,
   getDefaultClinicalGuidelinePack,
@@ -82,7 +81,9 @@ function buildProfile() {
 describe('CDSS package wiring', () => {
   it('registers the bundled care packs through the app composition root', () => {
     expect(getEnabledClinicalGuidelinePacks().length).toBeGreaterThan(0)
-    expect(getDefaultClinicalGuidelinePack().id).toBe(DEFAULT_CARE_PACK_ID)
+    // The host picks its own default rather than the package's: this app lists
+    // heart failure and CKD, and CKD is the released one a plain browser gets.
+    expect(getDefaultClinicalGuidelinePack().id).toBe('ckd-cdss')
   })
 
   it('turns app entities into a profile the default pack can build modules from', () => {

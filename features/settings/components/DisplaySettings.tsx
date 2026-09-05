@@ -26,18 +26,20 @@ import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
 import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
-import { CARE_PACKS } from '@voho0000/personalized-care'
 import {
   readPilotPackIds,
   writePilotPackIds,
 } from '@/features/clinical-decision-support/guideline-packs/pilot-gate'
+import { HOST_CARE_PACKS } from '@/features/clinical-decision-support/guideline-packs/registry'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
-// The packs the package ships unreleased. Listing them from CARE_PACKS rather
-// than from a hand-kept array means a newly written pack is offered here the
-// moment the package carries it, with no second place to update.
-const PILOT_CANDIDATE_PACKS = CARE_PACKS.filter((pack) => !pack.enabled)
+// The unreleased packs this app actually lists. Read from the composition
+// root's own switcher list rather than from every pack the package carries, so
+// this section can never offer a checkbox for a pathway the switcher would not
+// show anyway — and so a newly listed pack is offered here with no second place
+// to update.
+const PILOT_CANDIDATE_PACKS = HOST_CARE_PACKS.filter((pack) => !pack.enabled)
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
   { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[0.625rem]' },
@@ -174,8 +176,12 @@ export function DisplaySettings() {
 
       {/* Pilot modules — a host-side gate over packs the care package ships
           disabled, so a tester can be shown one without a package release.
-          Also reachable as `?pilotPacks=<id>,<id>`; this is the same store. */}
-      {pilotPacks.visible ? (
+          Also reachable as `?pilotPacks=<id>,<id>`; this is the same store.
+
+          Hidden once Beta features are on, because Beta already shows every
+          unreleased pack: leaving per-pack checkboxes standing there would be
+          controls that cannot change what the tester sees. */}
+      {pilotPacks.visible && !betaFeaturesEnabled ? (
         <div className="space-y-3" data-testid="pilot-packs-settings">
           <Label className="text-xs uppercase text-muted-foreground">
             {t.settings.pilotPacks}

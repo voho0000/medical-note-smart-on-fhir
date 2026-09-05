@@ -1,5 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
+import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
+
+const ICD10_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
+
+// The switcher lists heart failure then CKD; heart failure is still unreleased,
+// so it is visible only to a Beta-features browser — which is the only kind
+// that reaches this tab at all, since the tab itself is `beta: true`.
+function enableBetaFeatures(): void {
+  useBetaFeaturesStore.getState().setBetaFeaturesEnabled('switch-user', true)
+}
 
 const mockUsePatient = jest.fn()
 const mockUseClinicalData = jest.fn()
@@ -34,6 +44,9 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
 
 describe('Live personalized-guidance disease switch', () => {
   beforeEach(() => {
+    window.localStorage.clear()
+    useBetaFeaturesStore.setState({ enabledByUser: {} })
+    enableBetaFeatures()
     mockUsePatient.mockReturnValue({
       patient: {
         id: 'switch-patient',
@@ -46,36 +59,36 @@ describe('Live personalized-guidance disease switch', () => {
     mockUseClinicalData.mockReturnValue({
       conditions: [],
       encounters: [{
-        id: 'encounter-dm-ckd',
+        id: 'encounter-hf-ckd',
         status: 'finished',
         period: { start: '2026-06-25T00:00:00+08:00' },
         reasonCode: [
           {
             coding: [{
-              system: 'http://hl7.org/fhir/sid/icd-10-cm',
-              code: 'E11.9',
-              display: 'Type 2 diabetes mellitus',
+              system: ICD10_SYSTEM,
+              code: 'I50.22',
+              display: 'Chronic systolic (congestive) heart failure',
             }],
           },
           {
             coding: [{
-              system: 'http://hl7.org/fhir/sid/icd-10-cm',
+              system: ICD10_SYSTEM,
               code: 'N18.32',
               display: 'Chronic kidney disease, stage 3b',
             }],
           },
           {
             coding: [{
-              system: 'http://hl7.org/fhir/sid/icd-10-cm',
-              code: 'E78.5',
-              display: 'Hyperlipidemia',
+              system: ICD10_SYSTEM,
+              code: 'E11.9',
+              display: 'Type 2 diabetes mellitus',
             }],
           },
           {
             coding: [{
-              system: 'http://hl7.org/fhir/sid/icd-10-cm',
-              code: 'K74.60',
-              display: 'Cirrhosis of liver',
+              system: ICD10_SYSTEM,
+              code: 'E78.5',
+              display: 'Hyperlipidemia',
             }],
           },
         ],
@@ -166,56 +179,79 @@ describe('Live personalized-guidance disease switch', () => {
     })
   })
 
-  it('switches from CKD guidance to diabetes guidance and keeps sources separate', () => {
+  it('switches from heart-failure guidance to CKD guidance and keeps sources separate', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    const diabetesButton = screen.getByTestId('cdss-disease-switch-dm-ckd-cdss')
+    const heartFailureButton = screen.getByTestId('cdss-disease-switch-heart-failure-cdss')
     const ckdButton = screen.getByTestId('cdss-disease-switch-ckd-cdss')
-    // Only CKD and diabetes are surfaced while they are being refined; the
-    // other packs are built and tested but held back.
-    for (const held of ['hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
-      expect(screen.queryByTestId(`cdss-disease-switch-${held}-cdss`)).not.toBeInTheDocument()
+    // Heart failure and CKD are the two pathways this host lists. Every other
+    // pack the package ships is built and tested but not offered here — this
+    // record carries governed diabetes and hyperlipidemia diagnoses, and
+    // neither opens a switch.
+    for (const unlisted of ['dm-ckd', 'hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+      expect(screen.queryByTestId(`cdss-disease-switch-${unlisted}-cdss`)).not.toBeInTheDocument()
     }
 
-    // CKD sits first in the switcher, so it is the pathway the tab opens on.
-    expect(ckdButton.compareDocumentPosition(diabetesButton))
+    // Heart failure sits first in the switcher, and this record activates it,
+    // so it is the pathway the tab opens on.
+    expect(heartFailureButton.compareDocumentPosition(ckdButton))
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(ckdButton).toHaveAttribute('aria-pressed', 'true')
+    expect(heartFailureButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      '慢性腎臟病個人化照護指引',
+      '心衰竭個人化照護指引',
     )
+    expect(screen.getByTestId('mock-cdss-result')).not.toHaveTextContent('kdigo-ckd-2024')
+
+    fireEvent.click(ckdButton)
+
+    expect(ckdButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('慢性腎臟病個人化照護指引')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
       'kdigo-ckd-2024,kdigo-anemia-2026,taiwan-ckd-2025,taiwan-nhi-diabetes',
-    )
-    expect(screen.getByTestId('mock-cdss-result')).not.toHaveTextContent('ada-2026')
-
-    fireEvent.click(diabetesButton)
-
-    expect(diabetesButton).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('糖尿病個人化照護指引')
-    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      'ada-2026,taiwan-t2dm-2022,taiwan-nhi-diabetes',
     )
   })
 
   it('marks every pathway this record activates', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    for (const packId of ['dm-ckd-cdss', 'ckd-cdss']) {
+    for (const packId of ['heart-failure-cdss', 'ckd-cdss']) {
       expect(screen.getByTestId(`cdss-disease-switch-${packId}`))
         .toHaveAttribute('data-applicable', 'true')
     }
+  })
+
+  it('marks the unreleased pathway as a pilot', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    expect(screen.getByTestId('cdss-disease-switch-pilot-heart-failure-cdss'))
+      .toHaveTextContent('試辦')
+    expect(screen.queryByTestId('cdss-disease-switch-pilot-ckd-cdss')).not.toBeInTheDocument()
+  })
+
+  it('collapses to the released pathway when Beta features are off', () => {
+    useBetaFeaturesStore.setState({ enabledByUser: {} })
+
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    expect(screen.queryByTestId('cdss-disease-switch-heart-failure-cdss'))
+      .not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+      .toHaveAttribute('aria-pressed', 'true')
   })
 })
 
 describe('Live personalized-guidance default selection', () => {
   beforeEach(() => {
+    window.localStorage.clear()
+    useBetaFeaturesStore.setState({ enabledByUser: {} })
+    enableBetaFeatures()
     mockUsePatient.mockReturnValue({
       patient: { id: 'ckd-only-patient', resourceType: 'Patient', age: 74 },
       loading: false,
       error: null,
     })
-    // CKD only: no governed diabetes diagnosis and no diagnostic-range HbA1c.
+    // CKD only: no governed heart-failure diagnosis, so the pathway that leads
+    // the switcher is the one this record does not activate.
     mockUseClinicalData.mockReturnValue({
       conditions: [],
       encounters: [{
@@ -268,19 +304,19 @@ describe('Live personalized-guidance default selection', () => {
   it('dims a pathway this record does not activate', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    // CKD-only record: the diabetes pathway stays reachable but is marked as
-    // not activated, so the clinician can see that at a glance.
-    expect(screen.getByTestId('cdss-disease-switch-dm-ckd-cdss'))
+    // CKD-only record: the heart-failure pathway stays reachable but is marked
+    // as not activated, so the clinician can see that at a glance.
+    expect(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
       .toHaveAttribute('data-applicable', 'false')
     expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
       .toHaveAttribute('data-applicable', 'true')
   })
 
-  it('opens on a pathway the record activates instead of the fixed default', () => {
+  it('opens on a pathway the record activates instead of the first listed one', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    // Previously this opened on the diabetes pack and showed "本次未啟動糖尿病
-    // 決策路徑", leaving the clinician to click through every disease.
+    // Heart failure leads the switcher, but this record does not activate it,
+    // so the tab opens on CKD rather than on "本次未啟動心衰竭決策路徑".
     expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
       .toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
@@ -291,10 +327,10 @@ describe('Live personalized-guidance default selection', () => {
   it('shows the pack-owned explanation when a chosen pathway is not activated', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    fireEvent.click(screen.getByTestId('cdss-disease-switch-dm-ckd-cdss'))
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
 
     const state = screen.getByTestId('clinical-decision-support-state')
-    expect(state).toHaveTextContent('本次未啟動糖尿病決策路徑')
-    expect(state).toHaveTextContent('這不代表病人沒有糖尿病')
+    expect(state).toHaveTextContent('本次未啟動心衰竭決策路徑')
+    expect(state).toHaveTextContent('LVEF 或 BNP 單獨不會用來啟動或排除診斷')
   })
 })
