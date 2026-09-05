@@ -1,11 +1,10 @@
 "use client"
 
-import { type ReactNode, useCallback, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
   BookOpenCheck,
   ChevronDown,
-  CircleArrowRight,
   CircleHelp,
   ClipboardList,
   ExternalLink,
@@ -41,6 +40,12 @@ import type {
 import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-card'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
+import {
+  buildHeartFailureBoard,
+  HEART_FAILURE_LIST_STATUS_ORDER,
+} from './heart-failure-board'
+import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
+import { statusStyle, StatusIcon } from './status-presentation'
 
 interface ClinicalDecisionSupportViewProps {
   result: CdssResult
@@ -50,13 +55,6 @@ interface ClinicalDecisionSupportViewProps {
    * one person, so they are stored per patient and never carried across.
    */
   patientId?: string
-}
-
-const statusStyle: Record<CdssStatus, string> = {
-  actionable: 'bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-secondary',
-  'needs-data': 'bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200',
-  review: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-200',
-  'no-action': 'bg-emerald-100 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200',
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -95,12 +93,34 @@ const MODULE_GROUPS: readonly {
   { id: 'care', zh: '照護安排', en: 'Care planning', tone: 'orange' },
 ] as const).map((group) => ({ ...group, ...GROUP_TONES[group.tone] }))
 
+interface ModuleGroupPresentation {
+  id: string
+  zh: string
+  en: string
+  toneClass: string
+  dividerClass: string
+}
+
+/**
+ * The heart-failure list groups by what the clinician has to do rather than
+ * by workflow stage: the board above it already carries the treatment
+ * decisions, so what remains is ordered do → fetch → judge → done.
+ */
+const HEART_FAILURE_STATUS_GROUPS: Readonly<Record<CdssStatus, ModuleGroupPresentation>> = {
+  actionable: { id: 'actionable', zh: '可立即處理', en: 'Actionable now', ...GROUP_TONES.indigo },
+  'needs-data': { id: 'needs-data', zh: '需先補資料', en: 'Data needed', ...GROUP_TONES.orange },
+  review: { id: 'review', zh: '需臨床確認', en: 'Clinical review', ...GROUP_TONES.blue },
+  'no-action': { id: 'no-action', zh: '目前無需處理', en: 'No action needed', ...GROUP_TONES.teal },
+}
+
 type ModuleDisplayRow =
   | {
     kind: 'group'
-    group: (typeof MODULE_GROUPS)[number]
+    group: ModuleGroupPresentation
     count: number
     isCollapsed: boolean
+    /** The module names a collapsed group hides, so nothing disappears silently. */
+    summary?: string
   }
   | {
     kind: 'recommendation'
@@ -1083,13 +1103,6 @@ function ClassificationActionPlan({
   )
 }
 
-function StatusIcon({ status }: { status: CdssStatus }) {
-  if (status === 'actionable') return <CircleArrowRight className="mr-1 h-3.5 w-3.5" />
-  if (status === 'needs-data') return <FileSearch className="mr-1 h-3.5 w-3.5" />
-  if (status === 'no-action') return <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-  return <CircleHelp className="mr-1 h-3.5 w-3.5" />
-}
-
 function PreviewTextTooltip({
   text,
   children,
@@ -1853,20 +1866,38 @@ export function ClinicalDecisionSupportView({
   } as const
 
   const [requestedExpandedId, setRequestedExpandedId] = useState<string | null>(null)
+  // One clock per mount: the board prints how old each safety input is, and a
+  // clock read on every render would make the same value drift across ticks.
+  const [now] = useState(() => new Date())
+  const board = useMemo(
+    () => buildHeartFailureBoard(result, locale, now),
+    [locale, now, result],
+  )
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
   // whose wording is the same at every visit for every patient of this age and
   // stage. Left open they are read once and skipped thereafter, and they teach
   // the eye to skip the section, which matters because specialist referral
   // lives there too. So the section starts folded, and unfolds itself the moment
   // it holds something to do.
-  const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<CdssModuleGroupId>>(
-    () => new Set(
-      result.recommendations.some((item) => (
-        item.moduleGroup === 'care'
-        && (item.status === 'actionable' || item.priority === 'high')
-      ))
-        ? []
-        : ['care' as CdssModuleGroupId],
+  const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<string>>(
+    () => new Set<string>(
+      board
+        // On the heart-failure board the done modules fold into one line that
+        // names them; the rest of the list is what still needs the clinician.
+        // When nothing else is listed — a patient the pathway did not open
+        // for produces the phenotype card alone — the line is the whole list,
+        // so it stays open rather than hiding the one thing there is to read.
+        ? (result.recommendations.some((item) => (
+            !board.consumedIds.has(item.id) && item.status !== 'no-action'
+          ))
+            ? ['no-action']
+            : [])
+        : result.recommendations.some((item) => (
+          item.moduleGroup === 'care'
+          && (item.status === 'actionable' || item.priority === 'high')
+        ))
+          ? []
+          : ['care'],
     ),
   )
   const pointerGestureRef = useRef<{
@@ -1899,7 +1930,46 @@ export function ClinicalDecisionSupportView({
   const standaloneAutomatedChecks = restoredModules.standaloneChecks
   const hasCompleteModuleGrouping = displayRecommendations.length > 0
     && displayRecommendations.every((item) => item.moduleGroup !== undefined)
-  const moduleDisplayRows: ModuleDisplayRow[] = hasCompleteModuleGrouping
+  const moduleNameOf = (recommendation: CdssRecommendation): string => (
+    recommendation.moduleName ?? clinicalModuleLabel(
+      recommendation.id,
+      locale,
+      recommendation.title,
+      recommendation.domain,
+    )
+  )
+  const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = {
+    high: 0,
+    medium: 1,
+    routine: 2,
+  }
+  const heartFailureRows: ModuleDisplayRow[] = board
+    ? HEART_FAILURE_LIST_STATUS_ORDER.flatMap((status): ModuleDisplayRow[] => {
+      const items = displayRecommendations
+        .filter((item) => !board.consumedIds.has(item.id) && item.status === status)
+        .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority])
+      if (items.length === 0) return []
+      const isCollapsed = collapsedModuleGroups.has(status)
+      return [
+        {
+          kind: 'group',
+          group: HEART_FAILURE_STATUS_GROUPS[status],
+          count: items.length,
+          isCollapsed,
+          summary: isCollapsed ? items.map(moduleNameOf).join(' · ') : undefined,
+        },
+        ...(isCollapsed
+          ? []
+          : items.map((recommendation): ModuleDisplayRow => ({
+            kind: 'recommendation',
+            recommendation,
+          }))),
+      ]
+    })
+    : []
+  const moduleDisplayRows: ModuleDisplayRow[] = board
+    ? heartFailureRows
+    : hasCompleteModuleGrouping
     ? MODULE_GROUPS.flatMap((group): ModuleDisplayRow[] => {
       const groupRecommendations = displayRecommendations.filter(
         (item) => item.moduleGroup === group.id,
@@ -1931,8 +2001,12 @@ export function ClinicalDecisionSupportView({
       ? requestedExpandedId
       : (displayRecommendations[0]?.id ?? null)
   const clinicalSummary = buildClinicalDecisionSummary(result, locale)
-  const showClinicalSummary = clinicalSummary.missingInputs.length > 0
+  // The board answers what the clinical summary consolidates — what to do and
+  // what is missing — so the two never show together.
+  const showClinicalSummary = !board && (
+    clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
+  )
 
   return (
     <div className="space-y-3" data-testid="clinical-decision-support-view">
@@ -2071,6 +2145,25 @@ export function ClinicalDecisionSupportView({
         </details>
       ) : null}
 
+      {board ? (
+        <HeartFailureStatusBoard
+          board={board}
+          isEnglish={isEnglish}
+          now={now}
+          expandedId={expandedId}
+          onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          renderDetail={(recommendation) => (
+            <RecommendationDetail
+              recommendation={recommendation}
+              isEnglish={isEnglish}
+              onNavigate={navigateToResource}
+              label={label}
+              patientId={patientId}
+            />
+          )}
+        />
+      ) : null}
+
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}
@@ -2105,7 +2198,7 @@ export function ClinicalDecisionSupportView({
                 }}
               >
                 <span
-                  className={cn('flex shrink-0 items-center gap-1.5', row.group.toneClass)}
+                  className={cn('flex min-w-0 shrink items-center gap-1.5', row.group.toneClass)}
                   data-testid={`cdss-module-group-tone-${row.group.id}`}
                 >
                   <span className="text-[11px] font-semibold leading-none">
@@ -2119,6 +2212,15 @@ export function ClinicalDecisionSupportView({
                   >
                     · {row.count}
                   </span>
+                  {row.summary ? (
+                    <span
+                      className="min-w-0 truncate text-[11px] font-normal leading-none text-muted-foreground"
+                      title={row.summary}
+                      data-testid={`cdss-module-group-summary-${row.group.id}`}
+                    >
+                      {row.summary}
+                    </span>
+                  ) : null}
                   <ChevronDown
                     className={cn(
                       'h-3 w-3 opacity-75 transition-transform',
