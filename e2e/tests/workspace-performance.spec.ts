@@ -189,7 +189,7 @@ test.describe('clinical workspace performance contract', () => {
     await switchLeftTab(page, '報告')
     const trendOpenDurations: number[] = []
     const trendCloseDurations: number[] = []
-    for (const analyte of ['WBC', 'RBC', 'HB', 'PLT', 'NEU']) {
+    for (const analyte of ['WBC', 'RBC', 'Hb', 'PLT', 'NEU']) {
       const trendButton = page.getByRole('button', { name: `查看 ${analyte} 趨勢`, exact: true })
       await expect(trendButton).toBeVisible()
       trendOpenDurations.push(await clickAndMeasureTwoPaints(trendButton))
