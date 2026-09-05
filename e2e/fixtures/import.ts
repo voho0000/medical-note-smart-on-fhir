@@ -37,9 +37,15 @@ export async function importBundle(
   }, options.locale ?? 'zh-TW')
   await page.goto('/')
   // The header file input exists in the server-rendered loading shell, before
-  // its change handler is ready. Wait for the client-resolved welcome screen
-  // so a fast file selection cannot be lost during hydration.
-  await expect(page.getByTestId('welcome-demo-card')).toBeVisible({ timeout: 20_000 })
+  // its change handler is ready. A clean page resolves to Welcome, while a
+  // re-import resolves straight back to the persisted patient workspace. Wait
+  // for either client-only result before selecting the file so the change
+  // cannot be lost during hydration.
+  await expect.poll(async () => {
+    const welcomeReady = await page.getByTestId('welcome-demo-card').isVisible()
+    const patientReady = await page.locator('[data-slot="clinical-patient-context"]').count() > 0
+    return welcomeReady || patientReady
+  }, { timeout: 20_000 }).toBe(true)
   // Register before choosing the file so a fast import cannot settle between
   // setInputFiles resolving and the next Playwright command.
   await page.evaluate(() => {

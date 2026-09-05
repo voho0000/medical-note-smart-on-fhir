@@ -64,7 +64,9 @@ describe('guardOpenAiResponsesProxyStream', () => {
       model: openai.responses('gpt-5.6-terra'),
       prompt: 'hello',
       maxRetries: 0,
-      onError: ({ error }) => errors.push(error),
+      onError: ({ error }) => {
+        errors.push(error)
+      },
     })
 
     for await (const _ of result.textStream) {

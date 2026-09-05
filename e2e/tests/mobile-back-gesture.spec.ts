@@ -18,19 +18,28 @@ test.describe('phone back gesture', () => {
   test('closes an open detail instead of leaving the app', async ({ page }) => {
     await importBundle(page)
     await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
-    await page.getByRole('tab', { name: /^生化 \(/ }).click()
+    // 直式 is now the default cumulative layout. Categories are sections in
+    // one report rather than sub-tabs, so jump to and scope the action to 生化.
+    await page.locator('[data-cumulative-jump-chip="chem"]').click()
 
-    await page.getByRole('button', { name: /^查看 .+ 趨勢$/ }).first().click()
+    await page
+      .locator('[data-cumulative-section="chem"]')
+      .getByRole('button', { name: /^查看 .+ 趨勢$/ })
+      .first()
+      .click()
     await expect(page.getByRole('button', { name: '功能' })).toHaveAttribute('aria-pressed', 'true')
     const detailPanel = page.getByRole('region', { name: '功能' })
     await expect(detailPanel.getByTestId('cumulative-trend-detail')).toBeVisible()
 
     await page.goBack()
 
-    // Back into the clinical browser, on the sub-tab the trend was opened from.
+    // Back into the clinical browser, on the cumulative report section the
+    // trend was opened from.
     await expect(page.getByRole('button', { name: '臨床摘要' }))
       .toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('tab').filter({ hasText: '報告' }).first())
+      .toHaveAttribute('data-state', 'active')
+    await expect(page.getByRole('tab', { name: '累積報告', exact: true }))
       .toHaveAttribute('data-state', 'active')
     await expect(detailPanel.getByTestId('cumulative-trend-detail')).toBeHidden()
     // Still the same session: the imported patient was not thrown away.
