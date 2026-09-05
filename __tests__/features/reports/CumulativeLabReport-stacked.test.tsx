@@ -256,4 +256,71 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
     expect(within(microbio).getByTestId('microbiology-cumulative-view'))
       .not.toHaveClass('max-h-[60vh]')
   })
+
+  it('renders urine valueRange cells as intervals instead of missing data', () => {
+    const makeRange = (id: string, code: string, display: string, low: number, high: number) => ({
+      id,
+      status: 'final',
+      effectiveDateTime: '2026-08-14',
+      code: { coding: [{ system: 'http://loinc.org', code, display }] },
+      specimen: { display: 'Urine' },
+      valueRange: {
+        low: { value: low, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+        high: { value: high, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+      },
+    })
+    render(
+      <CumulativeLabReport
+        observations={[
+          makeRange('wbc-range', '5821-4', 'WBC/HPF', 0, 5),
+          makeRange('epith-range', '5787-7', 'EPITH', 0, 5),
+          makeRange('rbc-range', '5808-1', 'RBC/HPF', 30, 49),
+        ]}
+      />,
+      { wrapper: TestProviders },
+    )
+
+    const urine = section('urine')!
+    const rangeCells = [
+      ...within(urine).getAllByText('0–5'),
+      within(urine).getByText('30–49'),
+    ].map((value) => value.closest('td'))
+
+    expect(rangeCells).toHaveLength(3)
+    for (const cell of rangeCells) {
+      expect(cell).not.toHaveAttribute('aria-label', '無資料')
+    }
+    expect(urine).toHaveTextContent('/HPF')
+    expect(within(urine).queryByRole('button', { name: /WBC.*趨勢/i })).not.toBeInTheDocument()
+    expect(within(urine).queryByRole('button', { name: /EPITH.*趨勢/i })).not.toBeInTheDocument()
+    expect(within(urine).queryByRole('button', { name: /RBC.*趨勢/i })).not.toBeInTheDocument()
+  })
+
+  it('renders LOINC 764-1 as BAND in the differential sequence', () => {
+    const band = {
+      id: 'band-form',
+      status: 'final',
+      effectiveDateTime: '2026-08-14',
+      code: {
+        text: 'Band form 嗜中性帶狀球',
+        coding: [
+          { system: 'http://loinc.org', code: '764-1' },
+          { system: 'urn:oid:nhi.lab.code', code: '08013C', display: '白血球分類計數' },
+          { system: 'https://example.org/CodeSystem/his-local-lab', code: 'BAND-FORM', display: 'Band form 嗜中性帶狀球' },
+        ],
+      },
+      specimen: { display: 'Blood' },
+      valueQuantity: { value: 2, unit: '%', system: 'http://unitsofmeasure.org', code: '%' },
+    }
+    render(<CumulativeLabReport observations={[band]} />, { wrapper: TestProviders })
+
+    const cbc = section('cbc')!
+    const standardizedKeys = [...cbc.querySelectorAll<HTMLElement>('[data-lab-test-key]')]
+      .map((element) => element.dataset.labTestKey)
+    expect(standardizedKeys.indexOf('BAND')).toBe(standardizedKeys.indexOf('NEU') + 1)
+    expect(standardizedKeys.indexOf('LYM')).toBe(standardizedKeys.indexOf('BAND') + 1)
+    expect(within(cbc).getByText('2')).toBeInTheDocument()
+    expect(cbc).toHaveTextContent('%')
+    expect(cbc).not.toHaveTextContent('Band form 嗜中性帶狀球')
+  })
 })

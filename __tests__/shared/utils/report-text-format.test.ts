@@ -252,4 +252,35 @@ describe('formatReportText', () => {
       { text: 'Tortuosity thoracic aorta. Borderline cardiomegaly.', level: 0 },
     ])
   })
+
+  it('reflows a flattened microbiology report without adding or changing content', () => {
+    const raw = '報告結果 開單日期:115/08/14 15:15 採檢日期:115/08/14 15:23 ' +
+      '檢驗項目:13021 抗生素敏感性試驗(MIC法)二菌種 檢體編號:11513025188 Specimen:Sputum ' +
+      '〔最終報告〕 報告日期:115/08/18 08:32 報告:---------------------------------------- ' +
+      ': Final report (最終報告) :Sputum Culture : Sample Type : Sputum ' +
+      ': ISOLATE 1 : Klebsiella pneumoniae subsp. pneumoniae, 3+ ' +
+      ': ISOLATE 2 : Streptococcus anginosus, 3+ ' +
+      ': -------------------- : |Susceptibility | 1 | 2 |'
+
+    const formatted = formatReportTextForClipboard(raw)
+    const tableLine = formatReportText(raw).find((line) => line.text.includes('Susceptibility'))
+
+    expect(formatted).toContain('報告結果\n開單日期:115/08/14 15:15')
+    expect(formatted).toContain('\n採檢日期:115/08/14 15:23')
+    expect(formatted).toContain('\n檢驗項目:13021 抗生素敏感性試驗(MIC法)二菌種')
+    expect(formatted).toContain('\n: Final report (最終報告)\n: Sputum Culture')
+    expect(formatted).toContain('\n  : ISOLATE 1 : Klebsiella pneumoniae subsp. pneumoniae, 3+')
+    expect(formatted).toContain('\n  : ISOLATE 2 : Streptococcus anginosus, 3+')
+    expect(formatted).toContain('\n  : |Susceptibility | 1 | 2 |')
+    expect(tableLine?.tableCells).toEqual(['Susceptibility', '1', '2'])
+
+    // Layout may replace whitespace with line breaks, but every non-whitespace
+    // source character must remain present and in the same order.
+    expect(formatted.replace(/\s/g, '')).toBe(raw.replace(/\s/g, ''))
+  })
+
+  it('does not apply microbiology row splitting to an incomplete lookalike', () => {
+    const raw = 'Final report (最終報告) : ISOLATE 1 : Example organism'
+    expect(formatReportText(raw)).toEqual([{ text: raw, level: 0 }])
+  })
 })

@@ -23,6 +23,12 @@ export interface ReportLine {
   marker?: string
   /** True when the line is a section heading (e.g. "Impression:"). */
   heading?: boolean
+  /** Source-system divider rule, rendered as a real divider rather than dash noise. */
+  separator?: boolean
+  /** Fixed-width source row such as a microbiology susceptibility header. */
+  monospace?: boolean
+  /** Pipe-delimited source row rendered as a compact table without changing its text. */
+  tableCells?: string[]
 }
 
 // Section headings commonly seen in TW hospital endoscopy / imaging / ECG /
@@ -102,6 +108,97 @@ const LETTER_COLON_RE = /^([A-Z])\s*:\s*([\s\S]*)$/
 // Bullet markers.
 const BULLET_RE = /^([-*•·])\s+([\s\S]*)$/
 
+// Health Bank microbiology narratives can arrive as one flattened run where
+// spaces stand in for the source system's rows. Keep this detector deliberately
+// narrow: ordinary prose containing one of these words must not be split.
+const MICROBIOLOGY_BLOB_SIGNATURES = [
+  /\bFinal report\s*\(最終報告\)/i,
+  /\bISOLATE\s*\d+\s*[:：]/i,
+  /\|\s*Susceptibility\s*\|/i,
+]
+
+const MICROBIOLOGY_METADATA_BOUNDARY_RE = new RegExp(
+  String.raw`[ \t]+(?=(?:開單日期|採檢日期|檢驗項目|檢體編號|Specimen|報告日期|報告)\s*[:：]|〔最終報告〕)`,
+  'gi',
+)
+
+const MICROBIOLOGY_ROW_START = [
+  'Final report\\s*\\(最終報告\\)',
+  '[^:\uff1a\\r\\n]*?Culture',
+  'Sample Type',
+  'ISOLATE\\s*\\d+',
+  '\\|\\s*Susceptibility\\s*\\|',
+].join('|')
+
+const MICROBIOLOGY_ROW_BOUNDARY_RE = new RegExp(
+  String.raw`[ \t]*([:：])[ \t]*(?=(?:${MICROBIOLOGY_ROW_START}))`,
+  'gi',
+)
+
+const MICROBIOLOGY_HEADING_LINE_RE = /^(?:Final report\s*\(最終報告\)|[^:：\r\n]*?Culture)\s*[:：]?\s*$/i
+
+function isFlattenedMicrobiologyReport(raw: string): boolean {
+  return MICROBIOLOGY_BLOB_SIGNATURES.every((signature) => signature.test(raw))
+}
+
+/**
+ * Restore row boundaries in a clearly identified flattened microbiology
+ * report. This is deliberately a whitespace-only display transform: colons,
+ * separator rules, labels, dates, organisms, quantities and result tokens all
+ * remain verbatim and in source order.
+ */
+function reflowMicrobiologyBlob(raw: string): string {
+  if (!isFlattenedMicrobiologyReport(raw)) return raw
+
+  return raw
+    .replace(MICROBIOLOGY_METADATA_BOUNDARY_RE, '\n')
+    .replace(/(報告\s*[:：])\s*(-{12,})/gi, '$1\n$2')
+    .replace(/[ \t]*([:：])[ \t]*(?=-{12,})/g, '\n$1\n')
+    .replace(/\s+(-{12,})/g, '\n$1')
+    .replace(MICROBIOLOGY_ROW_BOUNDARY_RE, '\n$1')
+}
+
+function formatMicrobiologyLines(rawLines: string[]): ReportLine[] {
+  const lines: ReportLine[] = []
+  let pendingMarker: string | undefined
+
+  for (const rawLine of rawLines) {
+    if (/^[:：]$/.test(rawLine)) {
+      pendingMarker = rawLine
+      continue
+    }
+
+    const prefixed = rawLine.match(/^([:：])\s*([\s\S]+)$/)
+    const marker = prefixed?.[1] ?? pendingMarker
+    const text = (prefixed?.[2] ?? rawLine).trim()
+    pendingMarker = undefined
+    if (!text) continue
+
+    if (/^-{12,}$/.test(text)) {
+      lines.push({ text, level: 0, marker, separator: true })
+      continue
+    }
+
+    const heading = MICROBIOLOGY_HEADING_LINE_RE.test(text)
+    const nested = /^(?:Sample Type\s*[:：]|ISOLATE\s*\d+\s*[:：]|\|\s*Susceptibility\s*\|)/i.test(text)
+    const tableCells = /^\|[\s\S]*\|$/.test(text)
+      ? text.slice(1, -1).split('|').map((cell) => cell.trim())
+      : undefined
+    lines.push({
+      text,
+      level: nested ? 1 : 0,
+      marker,
+      heading,
+      monospace: tableCells === undefined && /^\|\s*Susceptibility\s*\|/i.test(text),
+      tableCells,
+    })
+  }
+
+  // A trailing source gutter marker is unlikely but must not disappear.
+  if (pendingMarker) lines.push({ text: pendingMarker, level: 0 })
+  return lines
+}
+
 // Radiology narrative reports (chest X-ray, sonography) carry NO headings and NO
 // numbers — they introduce findings with a verb + colon
 // ("Radiography of Chest A-P View(Supine) Show:", "Sonar ... reveals:") and then
@@ -165,10 +262,12 @@ function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []
 
+  const isMicrobiologyBlob = isFlattenedMicrobiologyReport(raw)
+
   // 1) Force every section heading onto its own line, then break apart numbered
   //    findings the bridge ran together. Both heal glued concatenations so a
   //    plain line-split doesn't bury "Impression:" / "2." mid-sentence.
-  const broken = raw
+  const broken = reflowMicrobiologyBlob(raw)
     .replace(KEYWORD_COLON_RE, (_m, kw) => `\n${kw}:`)
     .replace(GLUED_NUM_RE, (_m, before, marker) => `${before}\n${marker}`)
 
@@ -178,6 +277,8 @@ export function formatReportText(raw: string): ReportLine[] {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
+
+  if (isMicrobiologyBlob) return formatMicrobiologyLines(rawLines)
 
   const lines: ReportLine[] = []
   for (const line of rawLines) {

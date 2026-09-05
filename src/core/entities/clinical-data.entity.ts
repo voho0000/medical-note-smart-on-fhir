@@ -409,6 +409,20 @@ export interface ObservationEntity {
     system?: string
     code?: string
   }
+  valueRange?: {
+    low?: {
+      value?: number
+      unit?: string
+      system?: string
+      code?: string
+    }
+    high?: {
+      value?: number
+      unit?: string
+      system?: string
+      code?: string
+    }
+  }
   valueString?: string
   valueCodeableConcept?: {
     text?: string
@@ -450,6 +464,20 @@ export interface ObservationEntity {
       unit?: string
       system?: string
       code?: string
+    }
+    valueRange?: {
+      low?: {
+        value?: number
+        unit?: string
+        system?: string
+        code?: string
+      }
+      high?: {
+        value?: number
+        unit?: string
+        system?: string
+        code?: string
+      }
     }
     valueString?: string
     interpretation?: {

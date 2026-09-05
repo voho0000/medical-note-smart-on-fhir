@@ -14,6 +14,43 @@
 // bridge mis-tags — e.g. a band-form row tagged with LOINC 770-8 — stay
 // in their own column and remain visible as bridge bugs.
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString, getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
+import { categorizeObservation } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+
+const bandObservation = {
+  resourceType: 'Observation',
+  status: 'final',
+  code: {
+    text: 'Band form 嗜中性帶狀球',
+    coding: [
+      { system: 'http://loinc.org', code: '764-1', display: 'Band form neutrophils/Leukocytes in Blood by Manual count' },
+      { system: 'urn:oid:nhi.lab.code', code: '08013C', display: '白血球分類計數' },
+      { system: 'https://example.org/CodeSystem/his-local-lab', code: 'BAND-FORM', display: 'Band form 嗜中性帶狀球' },
+    ],
+  },
+  specimen: { display: 'Blood' },
+  effectiveDateTime: '2026-01-01',
+  valueQuantity: { value: 2, unit: '%', system: 'http://unitsofmeasure.org', code: '%' },
+}
+
+describe('Band form cumulative-report identity', () => {
+  it('uses LOINC 764-1 to place the source row in canonical CBC BAND', () => {
+    expect(categorizeObservation(bandObservation)?.id).toBe('cbc')
+    expect(getLabPivotTestIdentity(bandObservation, 'cbc', 'standardized')).toEqual({
+      testKey: 'BAND',
+      mapKey: 'BAND',
+      displayName: 'BAND',
+    })
+  })
+
+  it('keeps the hospital label auditable in original-name mode', () => {
+    expect(getLabPivotTestIdentity(bandObservation, 'cbc', 'original')).toEqual({
+      testKey: 'BAND',
+      mapKey: 'source:band form 嗜中性帶狀球',
+      displayName: 'Band form 嗜中性帶狀球',
+    })
+  })
+})
 
 describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
   describe('CBC differential cells', () => {

@@ -378,6 +378,53 @@ describe('FhirMapper', () => {
       expect(result.valueQuantity).toBeUndefined()
     })
 
+    it('preserves a top-level valueRange without collapsing it to one number', () => {
+      const valueRange = {
+        low: {
+          value: 0,
+          unit: '/HPF',
+          system: 'http://unitsofmeasure.org',
+          code: '/[HPF]',
+        },
+        high: {
+          value: 5,
+          unit: '/HPF',
+          system: 'http://unitsofmeasure.org',
+          code: '/[HPF]',
+        },
+      }
+
+      const result = FhirMapper.toObservation({
+        resourceType: 'Observation',
+        id: 'urine-wbc-range',
+        status: 'final',
+        code: { coding: [{ system: 'http://loinc.org', code: '5821-4' }] },
+        valueRange,
+      })
+
+      expect(result.valueRange).toEqual(valueRange)
+      expect(result.valueQuantity).toBeUndefined()
+    })
+
+    it('preserves component valueRange content', () => {
+      const valueRange = {
+        low: { value: 30, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+        high: { value: 49, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+      }
+      const result = FhirMapper.toObservation({
+        resourceType: 'Observation',
+        id: 'urine-panel',
+        status: 'final',
+        code: { text: 'Urinalysis' },
+        component: [{
+          code: { coding: [{ system: 'http://loinc.org', code: '5808-1' }] },
+          valueRange,
+        }],
+      })
+
+      expect(result.component?.[0].valueRange).toEqual(valueRange)
+    })
+
     it('should map FHIR Observation with components', () => {
       const fhirObservation = {
         id: 'obs-bp',

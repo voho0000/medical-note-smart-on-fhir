@@ -20,6 +20,31 @@ describe('formatValue — isAbnormal vs interpretation code', () => {
       expect(formatValue(makeObs(undefined, { valueString: '-' })).value).toBe('-')
       expect(formatValue(makeObs(undefined)).value).toBe('—')
     })
+
+    it('displays valueRange verbatim as an interval without making a trend point', () => {
+      const result = formatValue({
+        code: { text: 'WBC/HPF' },
+        valueRange: {
+          low: { value: 0, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+          high: { value: 5, unit: '/HPF', system: 'http://unitsofmeasure.org', code: '/[HPF]' },
+        },
+      })
+
+      expect(result).toMatchObject({ value: '0–5', unit: '/HPF' })
+      expect(result.numericValue).toBeUndefined()
+    })
+
+    it('falls back to the high endpoint unit code for a one-sided range', () => {
+      const result = formatValue({
+        valueRange: {
+          low: { value: 30 },
+          high: { value: 49, code: '/[HPF]' },
+        },
+      })
+
+      expect(result).toMatchObject({ value: '30–49', unit: '/[HPF]' })
+      expect(result.numericValue).toBeUndefined()
+    })
   })
 
   describe('normal-equivalent codes (should NOT be flagged abnormal)', () => {

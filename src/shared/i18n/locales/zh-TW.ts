@@ -1231,6 +1231,7 @@ export const zhTW = {
       organismLabel: '菌名',
       quantityLabel: '菌量',
       viewSourceText: '查看原文',
+      viewOriginalReport: '查看原始報告',
       susceptibilityResults: {
         S: '敏感',
         I: '中介',

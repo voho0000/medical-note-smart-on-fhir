@@ -27,9 +27,15 @@ export function observationDisplayValue(observation: any): ObservationDisplayVal
   if (observation?.valueRange) {
     const low = observation.valueRange.low?.value
     const high = observation.valueRange.high?.value
-    const unit = observation.valueRange.low?.unit || observation.valueRange.high?.unit
+    const unit = observation.valueRange.low?.unit
+      || observation.valueRange.low?.code
+      || observation.valueRange.high?.unit
+      || observation.valueRange.high?.code
     if (low !== undefined || high !== undefined) {
-      return { value: `${low ?? '?'}–${high ?? '?'}`, unit }
+      return {
+        value: `${low === undefined ? '?' : formatNumberSmart(low)}–${high === undefined ? '?' : formatNumberSmart(high)}`,
+        unit,
+      }
     }
   }
   return null

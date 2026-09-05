@@ -255,6 +255,7 @@ export class FhirMapper implements IDataMapper {
       meta: fhirResource.meta,
       code: fhirResource.code,
       valueQuantity: fhirResource.valueQuantity,
+      valueRange: fhirResource.valueRange,
       valueString: fhirResource.valueString,
       valueCodeableConcept: fhirResource.valueCodeableConcept,
       component: fhirResource.component,

@@ -1228,6 +1228,7 @@ export const en = {
       organismLabel: 'Organism',
       quantityLabel: 'Quantity',
       viewSourceText: 'View source text',
+      viewOriginalReport: 'View original report',
       susceptibilityResults: {
         S: 'susceptible',
         I: 'intermediate',

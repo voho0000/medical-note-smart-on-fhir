@@ -225,4 +225,63 @@ describe('MicrobiologyCumulativeView', () => {
     expect(row).toHaveTextContent('Escherichia coli')
     expect(row).toHaveTextContent('S 1 · I 2 · R 1')
   })
+
+  it('formats a source-system microbiology blob in the expanded report', () => {
+    const report = `開單日期：115/08/14 15:15  採檢日期：115/08/14 15:23
+檢驗項目：13021 抗生素敏感性試驗(MIC法)二菌種
+檢體編號：11513025188
+          Specimen：Sputum                  〔最終報告〕
+報告日期：115/08/18 08:32
+
+報告：----------------------------------------
+    ： Final report (最終報告)
+    ：Sputum Culture
+    ： Sample Type : Sputum
+    ： ISOLATE 1 : Klebsiella pneumoniae subsp. pneumoniae, 3+
+    ： ISOLATE 2 : Streptococcus anginosus, 3+
+    ：--------------------
+    ：|Susceptibility | 1 | 2 |`
+
+    render(
+      <CumulativeLabReport
+        activeCategoryId="microbio"
+        observations={[
+          observation({
+            id: 'flattened-susceptibility',
+            code: '13021',
+            name: '抗生素敏感性試驗(MIC法)二菌種',
+            date: '2026-08-18',
+            value: report,
+          }),
+        ]}
+      />,
+      { wrapper: TestProviders },
+    )
+
+    const rowButton = screen.getByRole('button', {
+      name: '26/08/18 未提供 一般細菌 完整報告',
+    })
+    const compactRow = rowButton.closest('tr') as HTMLElement
+    expect(compactRow).toHaveTextContent('ISOLATE 1 : Klebsiella pneumoniae subsp. pneumoniae, 3+')
+    expect(compactRow).toHaveTextContent('ISOLATE 2 : Streptococcus anginosus, 3+')
+    expect(compactRow).not.toHaveTextContent('開單日期')
+
+    fireEvent.click(rowButton)
+    const detail = screen.getByText('開單日期：115/08/14 15:15').closest('td') as HTMLElement
+    expect(within(detail).getByText('採檢日期：115/08/14 15:23')).toBeInTheDocument()
+    expect(within(detail).getByText('Final report (最終報告)')).toHaveClass('font-semibold')
+    expect(within(detail).getByText('Sputum Culture')).toHaveClass('font-semibold')
+    expect(within(detail).getByText('ISOLATE 1 : Klebsiella pneumoniae subsp. pneumoniae, 3+')).toBeInTheDocument()
+    expect(within(detail).getByText('ISOLATE 2 : Streptococcus anginosus, 3+')).toBeInTheDocument()
+    const table = within(detail).getByRole('table')
+    expect(within(table).getByText('Susceptibility')).toBeInTheDocument()
+    expect(within(table).getByText('1')).toBeInTheDocument()
+    expect(within(table).getByText('2')).toBeInTheDocument()
+
+    const originalToggle = within(detail).getByText('查看原始報告')
+    fireEvent.click(originalToggle)
+    expect(detail.querySelector('pre')?.textContent).toBe(
+      report.normalize('NFKC').trim().replace(/\s+/g, ' '),
+    )
+  })
 })

@@ -12,6 +12,8 @@ import { Fragment, useMemo, useState } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
+import { formatReportText } from '@/src/shared/utils/report-text-format'
+import { FormattedReportText } from './FormattedReportText'
 import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import {
   filterDatesByCumulativeRange,
@@ -178,7 +180,15 @@ function isolateSummary(isolate: SusceptibilityIsolate): string {
 function antibiogramCellSummary(text: string): string {
   const parsed = parseSusceptibilityFreeText(text)
   const summaries = parsed?.isolates.map(isolateSummary).filter(Boolean) ?? []
-  return summaries.length > 0 ? summaries.join(' · ') : text
+  if (summaries.length > 0) return summaries.join(' · ')
+
+  // A report may contain isolate identification but stop before the actual
+  // drug rows. Keep the compact cell useful by showing only the source's own
+  // ISOLATE lines; the full, formatted source remains in the expanded row.
+  const isolateLines = formatReportText(text)
+    .map((line) => line.text)
+    .filter((line) => /^ISOLATE\s*\d+\s*[:：]/i.test(line))
+  return isolateLines.length > 0 ? isolateLines.slice(0, 2).join(' · ') : text
 }
 
 function susceptibilityCounts(results: MicrobiologyCumulativeResult[]): { s: number; i: number; r: number } {
@@ -452,10 +462,22 @@ export function MicrobiologyCumulativeView({
                     const parsed = result.susceptibilities.length === 0
                       ? parseSusceptibilityFreeText(result.value)
                       : null
+                    const hasDistinctSource = result.sourceValue !== result.value
                     if (!parsed) {
                       return (
-                        <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                          {result.value}
+                        <div className="mt-0.5">
+                          <FormattedReportText
+                            text={result.sourceValue}
+                            className="text-sm leading-relaxed text-foreground"
+                          />
+                          {hasDistinctSource && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                {strings.viewOriginalReport ?? '查看原始報告'}
+                              </summary>
+                              <pre className="mt-1 max-w-full overflow-x-auto whitespace-pre rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-foreground">{result.value}</pre>
+                            </details>
+                          )}
                         </div>
                       )
                     }
@@ -512,14 +534,12 @@ export function MicrobiologyCumulativeView({
                             {parsed.leftover}
                           </div>
                         )}
-                        <details className="mt-1">
+                        {hasDistinctSource && <details className="mt-1">
                           <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                            {strings.viewSourceText ?? '查看原文'}
+                            {strings.viewOriginalReport ?? strings.viewSourceText ?? '查看原始報告'}
                           </summary>
-                          <div className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/40 px-2 py-1.5 text-xs leading-relaxed text-foreground">
-                            {result.value}
-                          </div>
-                        </details>
+                          <pre className="mt-1 max-w-full overflow-x-auto whitespace-pre rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-foreground">{result.value}</pre>
+                        </details>}
                       </div>
                     )
                   })()}

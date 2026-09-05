@@ -20,6 +20,11 @@ export interface Quantity {
   code?: string
 }
 
+export interface Range {
+  low?: Quantity
+  high?: Quantity
+}
+
 export interface Period {
   start?: string
   end?: string
@@ -69,6 +74,7 @@ export interface Basic {
 export interface ObservationComponent {
   code?: CodeableConcept
   valueQuantity?: Quantity
+  valueRange?: Range
   valueString?: string
   valueCodeableConcept?: CodeableConcept
   interpretation?: CodeableConcept
@@ -97,6 +103,7 @@ export interface Observation {
   effectivePeriod?: Period
   issued?: string
   valueQuantity?: Quantity
+  valueRange?: Range
   valueString?: string
   valueCodeableConcept?: CodeableConcept
   interpretation?: CodeableConcept

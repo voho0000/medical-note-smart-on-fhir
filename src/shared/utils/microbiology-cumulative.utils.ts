@@ -39,6 +39,7 @@ export interface MicrobiologyCumulativeResult {
   specimen: string
   specimenConfidence: MicrobiologySpecimenConfidence
   organization?: string
+  sourceValue: string
   value: string
   state: MicrobiologyResultState
   sourceOrderCode?: string
@@ -246,21 +247,25 @@ function standardizedNameFromOriginal(
   return originalName
 }
 
-function observationValue(obs: any): string {
+function observationSourceValue(obs: any): string {
   if (obs?.valueString !== undefined && obs.valueString !== null) {
-    return normalizedText(obs.valueString) || '—'
+    return String(obs.valueString) || '—'
   }
   if (obs?.valueCodeableConcept) {
     const concept = obs.valueCodeableConcept
-    return normalizedText(concept.text)
-      || normalizedText(concept.coding?.[0]?.display)
-      || normalizedText(concept.coding?.[0]?.code)
+    return String(concept.text ?? '')
+      || String(concept.coding?.[0]?.display ?? '')
+      || String(concept.coding?.[0]?.code ?? '')
       || '—'
   }
   if (obs?.valueQuantity?.value !== undefined && obs.valueQuantity?.value !== null) {
     return `${obs.valueQuantity.value}${obs.valueQuantity.unit ? ` ${obs.valueQuantity.unit}` : ''}`
   }
   return '—'
+}
+
+function observationValue(obs: any): string {
+  return normalizedText(observationSourceValue(obs)) || '—'
 }
 
 function classifyResultState(value: string, status: unknown): MicrobiologyResultState {
@@ -338,6 +343,7 @@ export function buildMicrobiologyCumulativeModel(
     if (!date) return
 
     const labels = observationLabels(obs)
+    const sourceValue = observationSourceValue(obs)
     const value = observationValue(obs)
     const stageInfo = classifyStage(obs, value)
     const family = classifyFamily(localObservationLabels(obs), value)
@@ -362,6 +368,7 @@ export function buildMicrobiologyCumulativeModel(
       specimen: specimen.specimen,
       specimenConfidence: specimen.confidence,
       organization: normalizedText(obs?.performer?.[0]?.display) || undefined,
+      sourceValue,
       value,
       state: classifyResultState(value, obs?.status),
       sourceOrderCode: stageInfo.sourceOrderCode,

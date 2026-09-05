@@ -22,6 +22,7 @@ import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 
 export interface LabCell {
   value: string
@@ -109,6 +110,17 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
     numericValue = obs.valueQuantity.value
     value = String(obs.valueQuantity.value)
     unit = obs.valueQuantity.unit || obs.valueQuantity.code
+  } else if (
+    obs.valueRange?.low?.value !== undefined
+    || obs.valueRange?.high?.value !== undefined
+  ) {
+    const low = obs.valueRange.low?.value
+    const high = obs.valueRange.high?.value
+    value = `${low === undefined ? '?' : formatNumberSmart(low)}–${high === undefined ? '?' : formatNumberSmart(high)}`
+    unit = obs.valueRange.low?.unit
+      || obs.valueRange.low?.code
+      || obs.valueRange.high?.unit
+      || obs.valueRange.high?.code
   } else if (obs.valueString) {
     value = obs.valueString
   } else if (obs.valueCodeableConcept?.text) {
