@@ -47,7 +47,7 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
-import { createSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { createSharedPrompt, EXAMPLE_OUTPUT_MAX_LENGTH } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { PromptCategory, PromptSpecialty, PromptType } from '../types/prompt.types'
 import { PromptSpecialtyPicker } from './PromptSpecialtyPicker'
 import {
@@ -67,6 +67,7 @@ interface SharePromptDialogProps {
   onOpenChange: (open: boolean) => void
   initialTitle?: string
   initialDescription?: string
+  initialExampleOutput?: string
   initialPrompt?: string
   initialType?: PromptType
   initialOutputFormat?: InsightOutputFormat
@@ -86,6 +87,7 @@ function SharePromptDialogForm({
   onOpenChange,
   initialTitle,
   initialDescription,
+  initialExampleOutput,
   initialPrompt,
   initialType = 'chat',
   initialOutputFormat,
@@ -99,6 +101,7 @@ function SharePromptDialogForm({
 
   const [title, setTitle] = useState(initialTitle || '')
   const [description, setDescription] = useState(initialDescription || '')
+  const [exampleOutput, setExampleOutput] = useState(initialExampleOutput || '')
   const [prompt, setPrompt] = useState(initialPrompt || '')
   const [outputFormat, setOutputFormat] = useState<InsightOutputFormat>(() =>
     coerceInsightOutputFormat(initialOutputFormat),
@@ -196,6 +199,7 @@ function SharePromptDialogForm({
         isAnonymous,
         outputFormat,
         languagePolicy: initialLanguagePolicy,
+        exampleOutput: exampleOutput.trim() || undefined,
       })
 
       onSuccess?.()
@@ -321,6 +325,27 @@ function SharePromptDialogForm({
                 </div>
               </DialogContent>
             </Dialog>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="share-template-example-output">{t.promptGallery.exampleOutputLabel}</Label>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {exampleOutput.length}/{EXAMPLE_OUTPUT_MAX_LENGTH}
+                </span>
+              </div>
+              <Textarea
+                id="share-template-example-output"
+                value={exampleOutput}
+                onChange={(event) => setExampleOutput(event.target.value)}
+                placeholder={t.promptGallery.exampleOutputPlaceholder}
+                maxLength={EXAMPLE_OUTPUT_MAX_LENGTH}
+                aria-describedby="share-template-example-output-hint"
+                className="h-28 min-h-0 field-sizing-fixed resize-none overflow-y-auto text-sm leading-relaxed shadow-none"
+              />
+              <p id="share-template-example-output-hint" className="text-xs leading-relaxed text-muted-foreground">
+                {t.promptGallery.exampleOutputHint}
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="share-template-output-format">{t.promptGallery.outputFormatLabel}</Label>

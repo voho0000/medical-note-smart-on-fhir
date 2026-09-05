@@ -1,18 +1,28 @@
 /**
  * Prompt Card Component
- * Displays a single prompt in the gallery with color-coded types
+ * Displays a single prompt in the gallery with color-coded types.
+ * Used on phone widths; desktop widths use PromptTable.
  */
 
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardList, Flame, MessageSquare } from 'lucide-react'
 import type { SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { getPromptSource } from '../constants/prompt-source'
+import { formatPromptDate } from '../utils/prompt-filter.utils'
+import { FavoriteButton } from './FavoriteButton'
+import { PromptSourceBadge } from './PromptSourceBadge'
 
 interface PromptCardProps {
   prompt: SharedPrompt
   onPreview: (prompt: SharedPrompt) => void
   currentUserId?: string // To identify if this is user's own prompt
+  /** Omit to hide the heart (e.g. guided previews without an account). */
+  isFavorite?: boolean
+  onToggleFavorite?: (prompt: SharedPrompt) => void
+  /** The gallery source is newer than this saved copy. */
+  sourceUpdated?: boolean
 }
 
 // Type color configurations (supports light/dark mode)
@@ -30,15 +40,15 @@ const TYPE_COLORS = {
 // Popular threshold
 const POPULAR_THRESHOLD = 10
 
-export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps) {
+export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onToggleFavorite, sourceUpdated }: PromptCardProps) {
   const { t } = useLanguage()
-  const isMyPrompt = currentUserId && prompt.authorId === currentUserId
+  const source = getPromptSource(prompt, currentUserId)
   const isPopular = (prompt.usageCount || 0) >= POPULAR_THRESHOLD
   const isPatientOnly = prompt.audience.includes('patient') && !prompt.audience.includes('medical')
   const patientTopicTags = prompt.tags
     .filter((tag) => tag !== '衛教' && tag !== '民眾版')
     .slice(0, 2)
-  
+
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'chat':
@@ -60,13 +70,14 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
   }
 
   return (
-    <Card 
+    <Card
       className="!gap-0 !py-0 flex cursor-pointer flex-col rounded-lg border-border shadow-none transition-colors hover:bg-muted/40 hover:shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       role="button"
       tabIndex={0}
       aria-label={prompt.title}
       onClick={(event) => { event.currentTarget.focus(); onPreview(prompt) }}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onPreview(prompt)
@@ -90,15 +101,21 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
               </Badge>
             )
           })}
-          {isMyPrompt && (
-            <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 border-0">
-              {t.promptGallery.myBadge}
+          <PromptSourceBadge source={source} />
+          {sourceUpdated && (
+            <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
+              {t.promptGallery.sourceUpdated}
             </Badge>
           )}
           {isPopular && (
             <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0 dark:text-orange-300" />
           )}
         </div>
+        {onToggleFavorite && (
+          <CardAction className="-mr-1.5 -mt-1">
+            <FavoriteButton active={!!isFavorite} onToggle={() => onToggleFavorite(prompt)} />
+          </CardAction>
+        )}
       </CardHeader>
 
       <CardContent className="!pb-2 !pt-2 !px-3 flex flex-col gap-1">
@@ -133,6 +150,8 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
         </div>
 
         <div className="flex items-center gap-1 text-[0.625rem] text-muted-foreground h-[16px]">
+          <span className="tabular-nums">{t.promptGallery.updatedAt} {formatPromptDate(prompt.updatedAt)}</span>
+          <span aria-hidden="true">·</span>
           {isPopular ? (
             <Flame className="h-2.5 w-2.5 text-orange-500 dark:text-orange-300" />
           ) : (
