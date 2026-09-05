@@ -1662,7 +1662,7 @@ export const en = {
     display: 'Display & About',
     betaFeatures: 'Beta features',
     enableBetaFeatures: 'Enable Beta features',
-    betaFeaturesDescription: 'Show experimental tools such as personalised care guidance and education. This setting is saved for this account in this browser.',
+    betaFeaturesDescription: 'Show experimental tools such as personalised care guidance and education. This setting is saved in this browser.',
     pilotPacks: 'Pilot modules',
     pilotPacksDescription: 'Care-guidance pathways that have not been released yet. Turning on Beta features shows all of them; here you can pick a single one, which appears in Personalised guidance for this browser only, marked as a pilot.',
     theme: 'Theme',
