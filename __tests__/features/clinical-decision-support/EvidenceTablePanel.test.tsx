@@ -390,3 +390,117 @@ describe('EvidenceTablePanel with the harmful-medication table', () => {
       .toHaveTextContent('不支持')
   })
 })
+
+/**
+ * 「沒有 I50」 is not 「沒有心衰竭」.
+ *
+ * Since the pack stopped gating on the diagnosis code, module 01 ships an
+ * itemised `hf-diagnosis` table for every patient, and the code is one row of
+ * it. The panel has to name that concept — a missing `CONCEPT_LABELS` key would
+ * leave the region unnamed for the reader and the screen reader alike — and it
+ * has to read the absent code as 不支持 while an LVEF of 30 from an
+ * echocardiography report's own text reads as 支持.
+ */
+const echoLvef30: DiagnosticReportEntity = {
+  id: 'echo-2026-07-18',
+  status: 'final',
+  effectiveDateTime: '2026-07-18',
+  code: { text: '心臟超音波', coding: [{ code: '18005C', display: 'Echocardiography' }] },
+  conclusion: 'LVEF (Simpson): 30 %. Dilated left ventricle with global hypokinesis.',
+}
+
+const egfr38: ObservationEntity = {
+  id: 'egfr-2026-07-20',
+  resourceType: 'Observation',
+  status: 'final',
+  effectiveDateTime: '2026-07-20',
+  code: {
+    coding: [{ system: LOINC_SYSTEM, code: '62238-1', display: 'eGFR (CKD-EPI)' }],
+  },
+  valueQuantity: {
+    value: 38,
+    unit: 'mL/min/1.73m2',
+    system: UCUM_SYSTEM,
+    code: 'mL/min/{1.73_m2}',
+  },
+}
+
+function heartFailurePhenotypeCards(input: {
+  conditions: Parameters<typeof createFhirCdssPatientProfile>[0]['conditions']
+  observations: Parameters<typeof createFhirCdssPatientProfile>[0]['observations']
+  diagnosticReports: Parameters<typeof createFhirCdssPatientProfile>[0]['diagnosticReports']
+}) {
+  const profile = createFhirCdssPatientProfile({
+    patient: { id: PATIENT_ID, resourceType: 'Patient', age: 68 },
+    conditions: input.conditions,
+    encounters: [],
+    observations: input.observations,
+    medications: [],
+    allergies: [],
+    carePlans: [],
+    procedures: [],
+    immunizations: [],
+    diagnosticReports: input.diagnosticReports,
+    documentReferences: [],
+    now: new Date('2026-07-29T00:00:00Z'),
+  })
+
+  return HEART_FAILURE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' }).recommendations
+}
+
+describe('EvidenceTablePanel with the heart-failure diagnosis table', () => {
+  beforeEach(() => {
+    useEvidenceOverridesStore.setState({ byPatientId: {} })
+    window.localStorage.clear()
+  })
+
+  it('names the concept and reads the absent code against an LVEF of 30 that supports it', () => {
+    const cards = heartFailurePhenotypeCards({
+      conditions: [],
+      observations: [],
+      diagnosticReports: [echoLvef30],
+    })
+    const table = cards
+      .flatMap((recommendation) => recommendation.evidenceTables ?? [])
+      .find((candidate) => candidate.concept === 'hf-diagnosis')
+
+    if (!table) throw new Error('the heart-failure pack produced no hf-diagnosis evidence table')
+    renderPanel(table, PATIENT_ID, 'heart-failure-phenotype')
+
+    expect(screen.getByRole('region', { name: '心衰竭診斷證據' })).toBeInTheDocument()
+
+    // The record holds no I50, and that row is the one arguing against.
+    const codeRow = screen.getByTestId('cdss-evidence-row-hf-diagnosis:code')
+    expect(codeRow).toHaveTextContent('跨院資料中未見 I50')
+    expect(screen.getByTestId('cdss-evidence-direction-hf-diagnosis:code'))
+      .toHaveTextContent('不支持')
+
+    // The ejection fraction the echocardiography report states in its own text
+    // reaches the table as the row that supports the diagnosis.
+    const lvefRow = screen.getByTestId('cdss-evidence-row-hf-diagnosis:lvef')
+    expect(lvefRow).toHaveTextContent('30%')
+    expect(screen.getByTestId('cdss-evidence-direction-hf-diagnosis:lvef'))
+      .toHaveTextContent('支持')
+  })
+
+  it('leaves module 01 no-action, and alone, for a CKD-only patient', () => {
+    const cards = heartFailurePhenotypeCards({
+      conditions: [{
+        id: 'ckd-condition',
+        code: {
+          coding: [{ system: ICD10_SYSTEM, code: 'N18.4', display: 'Chronic kidney disease, stage 4' }],
+        },
+        clinicalStatus: 'active',
+      }],
+      observations: [egfr38],
+      diagnosticReports: [],
+    })
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toMatchObject({
+      id: 'heart-failure-phenotype',
+      status: 'no-action',
+      priority: 'routine',
+    })
+  })
+})

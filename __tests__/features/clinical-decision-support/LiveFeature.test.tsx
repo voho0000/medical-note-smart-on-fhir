@@ -240,7 +240,7 @@ describe('Live personalized-guidance disease switch', () => {
   })
 })
 
-describe('Live personalized-guidance default selection', () => {
+describe('Live personalized-guidance on a record with no heart-failure diagnosis', () => {
   beforeEach(() => {
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
@@ -250,8 +250,9 @@ describe('Live personalized-guidance default selection', () => {
       loading: false,
       error: null,
     })
-    // CKD only: no governed heart-failure diagnosis, so the pathway that leads
-    // the switcher is the one this record does not activate.
+    // CKD only: no governed heart-failure diagnosis. Since the packs stopped
+    // gating on the diagnosis code, that record no longer closes the
+    // heart-failure pathway — it only decides how far it runs.
     mockUseClinicalData.mockReturnValue({
       conditions: [],
       encounters: [{
@@ -301,36 +302,37 @@ describe('Live personalized-guidance default selection', () => {
     })
   })
 
-  it('dims a pathway this record does not activate', () => {
+  it('leaves both pathways reachable when only one carries a diagnosis code', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    // CKD-only record: the heart-failure pathway stays reachable but is marked
-    // as not activated, so the clinician can see that at a glance.
-    expect(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
-      .toHaveAttribute('data-applicable', 'false')
-    expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
-      .toHaveAttribute('data-applicable', 'true')
+    // 「沒有 I50」 is not 「沒有心衰竭」: the heart-failure pathway evaluates this
+    // record too, and its first module returns the reading to the clinician.
+    for (const packId of ['heart-failure-cdss', 'ckd-cdss']) {
+      expect(screen.getByTestId(`cdss-disease-switch-${packId}`))
+        .toHaveAttribute('data-applicable', 'true')
+    }
   })
 
-  it('opens on a pathway the record activates instead of the first listed one', () => {
+  it('opens on the leading pathway and builds it instead of an unactivated state', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    // Heart failure leads the switcher, but this record does not activate it,
-    // so the tab opens on CKD rather than on "本次未啟動心衰竭決策路徑".
+    expect(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
+      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
+      '心衰竭個人化照護指引',
+    )
+    expect(screen.queryByTestId('clinical-decision-support-state')).not.toBeInTheDocument()
+  })
+
+  it('still switches to the pathway this record holds the diagnosis for', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+
     expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
       .toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
       '慢性腎臟病個人化照護指引',
     )
-  })
-
-  it('shows the pack-owned explanation when a chosen pathway is not activated', () => {
-    render(<LiveClinicalDecisionSupportFeature />)
-
-    fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
-
-    const state = screen.getByTestId('clinical-decision-support-state')
-    expect(state).toHaveTextContent('本次未啟動心衰竭決策路徑')
-    expect(state).toHaveTextContent('LVEF 或 BNP 單獨不會用來啟動或排除診斷')
   })
 })

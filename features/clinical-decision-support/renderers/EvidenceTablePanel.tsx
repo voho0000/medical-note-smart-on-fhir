@@ -61,6 +61,8 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
 }
 
 const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string }> = {
+  'hf-diagnosis': { zh: '心衰竭診斷證據', en: 'Heart-failure diagnosis evidence' },
+  'ckd-diagnosis': { zh: '慢性腎臟病診斷證據', en: 'CKD diagnosis evidence' },
   congestion: { zh: '鬱血證據', en: 'Congestion evidence' },
   'lv-filling-pressure': {
     zh: 'LV filling pressure 證據',
