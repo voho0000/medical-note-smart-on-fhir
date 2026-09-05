@@ -20,6 +20,9 @@ jest.mock("@/src/application/providers/language.provider", () => ({
         customExpandResult: "展開「{title}」摘要結果",
         customCollapseResult: "收合「{title}」摘要結果",
         customOpenResult: "放大閱讀「{title}」摘要結果",
+        customOpenPrompt: "放大查看「{title}」提示內容",
+        customPromptPreview: "模板提示",
+        customResultPreview: "摘要結果",
         customGenerating: "正在產生",
         customDisplayAs: "顯示格式",
         customCopyText: "複製文字",
@@ -35,6 +38,7 @@ jest.mock("@/features/clinical-insights/ClinicalInsightsRuntimeProvider", () => 
     panels: [
       { id: "first", title: "第一張", prompt: "第一個提示", showInSummary: true, outputFormat: "markdown" },
       { id: "second", title: "第二張", prompt: "第二個提示", showInSummary: true, outputFormat: "markdown" },
+      { id: "empty", title: "尚未產生", prompt: "第三個提示", showInSummary: true, outputFormat: "markdown" },
     ],
     canGenerate: true,
     hasData: true,
@@ -109,5 +113,20 @@ describe("CustomInsightModulesSection result disclosure", () => {
     const dialog = screen.getByRole("dialog", { name: "第一張" })
     expect(dialog).toBeInTheDocument()
     expect(dialog).toHaveTextContent("第一張的完整內容")
+  })
+
+  it("keeps the expanded action useful before a result exists", () => {
+    render(<CustomInsightModulesSection onManage={jest.fn()} />)
+
+    const openPrompt = screen.getByRole("button", { name: "放大查看「尚未產生」提示內容" })
+    expect(openPrompt).toBeEnabled()
+    expect(openPrompt).toHaveTextContent("")
+    expect(openPrompt).toHaveClass("h-11", "w-11", "sm:h-8", "sm:w-8")
+
+    fireEvent.click(openPrompt)
+
+    const dialog = screen.getByRole("dialog", { name: "尚未產生" })
+    expect(dialog).toHaveTextContent("模板提示")
+    expect(dialog).toHaveTextContent("第三個提示")
   })
 })

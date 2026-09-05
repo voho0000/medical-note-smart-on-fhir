@@ -153,7 +153,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                           className="pointer-events-auto col-span-2 row-start-2 min-w-0 @max-[24rem]:col-span-1 @max-[24rem]:col-start-1 @max-[24rem]:row-start-3 @min-[38rem]:col-span-1 @min-[38rem]:col-start-2 @min-[38rem]:row-start-1 @min-[38rem]:justify-self-end"
                         />
 
-                        <div className="col-start-2 row-start-1 flex items-center justify-end gap-1 @max-[24rem]:col-start-1 @max-[24rem]:row-start-2 @max-[24rem]:justify-self-end @min-[38rem]:col-start-3">
+                        <div className="col-start-2 row-start-1 flex flex-wrap items-center justify-end gap-1 @max-[24rem]:col-start-1 @max-[24rem]:row-start-2 @max-[24rem]:justify-self-end @min-[38rem]:col-start-3">
                           <Button
                             type="button"
                             size="sm"
@@ -190,15 +190,14 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                               {hasResponse ? labels.customRegenerate : labels.customGenerate}
                             </Button>
                           )}
-                          {canToggleResult ? (
-                            <CustomInsightDetailDialog
-                              title={panel.title}
-                              content={responseText}
-                              format={viewFormat}
-                              metadata={response?.metadata}
-                              activeGeneration={status.isLoading ? status.activeGeneration : undefined}
-                            />
-                          ) : null}
+                          <CustomInsightDetailDialog
+                            title={panel.title}
+                            content={hasResponse ? responseText : panel.prompt}
+                            format={hasResponse ? viewFormat : "plain-text"}
+                            contentKind={hasResponse ? "result" : "prompt"}
+                            metadata={hasResponse ? response?.metadata : undefined}
+                            activeGeneration={hasResponse && status.isLoading ? status.activeGeneration : undefined}
+                          />
                           {canToggleResult ? (
                             <span
                               aria-hidden="true"

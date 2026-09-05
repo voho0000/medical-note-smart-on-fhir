@@ -23,6 +23,7 @@ interface CustomInsightDetailDialogProps {
   title: string
   content: string
   format: InsightOutputFormat
+  contentKind: "prompt" | "result"
   metadata?: InsightGenerationMetadata | null
   activeGeneration?: ActiveInsightGeneration
 }
@@ -31,12 +32,22 @@ export function CustomInsightDetailDialog({
   title,
   content,
   format,
+  contentKind,
   metadata,
   activeGeneration,
 }: CustomInsightDetailDialogProps) {
-  const { t } = useLanguage()
+  const { locale, t } = useLanguage()
   const labels = t.medicalSummary
-  const triggerLabel = labels.customOpenResult.replace("{title}", title)
+  const showingPrompt = contentKind === "prompt"
+  const promptTriggerTemplate = labels.customOpenPrompt
+    ?? (locale === "en"
+      ? "Open {title} prompt in expanded view"
+      : "放大查看「{title}」提示內容")
+  const triggerLabel = (showingPrompt ? promptTriggerTemplate : labels.customOpenResult)
+    .replace("{title}", title)
+  const contentKindLabel = showingPrompt
+    ? (labels.customPromptPreview ?? (locale === "en" ? "Template prompt" : "模板提示"))
+    : (labels.customResultPreview ?? (locale === "en" ? "Summary result" : "摘要結果"))
   const contentRef = useRef<HTMLDivElement>(null)
 
   return (
@@ -47,7 +58,8 @@ export function CustomInsightDetailDialog({
           size="icon"
           variant="outline"
           data-tour="custom-summary-open-result"
-          className="pointer-events-auto h-11 w-11 shrink-0 p-0 sm:h-7 sm:w-7"
+          data-result-available={showingPrompt ? "false" : "true"}
+          className="pointer-events-auto h-11 w-11 shrink-0 p-0 sm:h-8 sm:w-8"
           title={triggerLabel}
           aria-label={triggerLabel}
         >
@@ -69,10 +81,15 @@ export function CustomInsightDetailDialog({
           <DialogTitle className="min-w-0 break-words text-left leading-snug">
             {title}
           </DialogTitle>
-          <CustomInsightGenerationMeta
-            metadata={metadata}
-            activeGeneration={activeGeneration}
-          />
+          <p className="text-xs font-medium text-muted-foreground">
+            {contentKindLabel}
+          </p>
+          {!showingPrompt ? (
+            <CustomInsightGenerationMeta
+              metadata={metadata}
+              activeGeneration={activeGeneration}
+            />
+          ) : null}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

@@ -38,7 +38,7 @@ const customSteps = [
   { title: ['用搜尋與篩選找到適合的範本', 'Find a template with search and filters'], target: 'gallery-filters' },
   { title: ['先預覽，再決定是否套用', 'Preview before adding a template'], target: 'gallery-tabs' },
   { title: ['回到模組，按「產生」套用模板', 'Return to the module and select Generate'], target: 'custom-summary-generate' },
-  { title: ['用較大的閱讀視窗查看完整結果', 'Read the full result in a larger view'], target: 'medical-summary-custom-tab' },
+  { title: ['用較大的閱讀視窗查看完整結果', 'Read the full result in a larger view'], target: 'custom-summary-open-result' },
   { title: ['完成！需要時可從章節重新開始', 'Done—revisit any chapter when you need it'], target: 'medical-summary-custom-tab' },
 ]
 
@@ -219,9 +219,36 @@ test.describe('right feature tour', () => {
         if (index === 7) await expect(page.getByRole('tab', { name: english ? 'All Prompts' : '所有範本', exact: true })).toHaveAttribute('aria-selected', 'true')
         if (index === 9) await expect(dialog).toContainText(english ? 'No template is available' : '目前沒有可預覽的範本')
         if (index === 10) await expect(dialog).toContainText(english ? 'no item-level source citations' : '沒有逐項來源引註')
-        if (index === 11) await expect(dialog).toContainText(english ? 'no result to expand' : '還沒有可放大閱讀的結果')
+        if (index === 11) {
+          await expect(dialog).toContainText(english ? 'no summary result yet' : '還沒有摘要結果')
+          const promptPreview = page.getByRole('button', {
+            name: english
+              ? /Open .+ prompt in expanded view/
+              : /放大查看「.+」提示內容/,
+          }).first()
+          await expect(promptPreview).toBeVisible()
+          await expect(promptPreview).toBeEnabled()
+        }
         await page.screenshot({ path: testInfo.outputPath(`${index}-${step.target}.png`) })
-        if (index < customSteps.length - 1) await next.click()
+        if (index < customSteps.length - 1) {
+          if (index === 10) {
+            await page.evaluate(() => {
+              const root = document.documentElement
+              root.dataset.tourHighlightMissing = 'false'
+              const interval = window.setInterval(() => {
+                if (!document.querySelector('[data-tour-overlay="right-highlight"]')) {
+                  root.dataset.tourHighlightMissing = 'true'
+                }
+              }, 8)
+              window.setTimeout(() => window.clearInterval(interval), 300)
+            })
+          }
+          await next.click()
+          if (index === 10) {
+            await page.waitForTimeout(320)
+            await expect(page.locator('html')).toHaveAttribute('data-tour-highlight-missing', 'false')
+          }
+        }
       }
 
       await back.click()

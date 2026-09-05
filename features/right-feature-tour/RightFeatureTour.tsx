@@ -47,6 +47,15 @@ function rectFromElement(element: HTMLElement): Rect {
   }
 }
 
+function isWithinViewport(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect()
+  const margin = 16
+  return rect.top >= margin
+    && rect.left >= margin
+    && rect.bottom <= window.innerHeight - margin
+    && rect.right <= window.innerWidth - margin
+}
+
 function sameRect(left: Rect | null, right: Rect): boolean {
   if (!left) return false
   return Math.abs(left.top - right.top) < 0.5
@@ -132,7 +141,12 @@ export function RightFeatureTour() {
       resizeObserver?.disconnect()
       resizeObserver = new ResizeObserver(updateRect)
       resizeObserver.observe(target)
-      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+      // Resolve the highlight before moving the page so a step never flashes
+      // at the viewport centre while its real target is already available.
+      updateRect()
+      if (!isWithinViewport(target)) {
+        target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+      }
       if (timer) clearTimeout(timer)
       timer = setTimeout(updateRect, 180)
     }
@@ -144,6 +158,7 @@ export function RightFeatureTour() {
         : (step.fallbackTarget ? visibleTarget(step.fallbackTarget) : null)
       const nextTarget = primary ?? fallback
       if (!nextTarget) {
+        if (attempts === 0) setTargetRect(null)
         attempts += 1
         if (attempts < maxAttempts) timer = setTimeout(resolve, 75)
         else {
@@ -195,11 +210,7 @@ export function RightFeatureTour() {
     window.addEventListener('transitionend', updateRect, true)
     mutationObserver = new MutationObserver(refreshTarget)
     mutationObserver.observe(document.body, { attributes: true, childList: true, subtree: true })
-    timer = setTimeout(() => {
-      setTargetRect(null)
-      setUsingFallback(false)
-      resolve()
-    }, 0)
+    resolve()
     return () => {
       if (timer) clearTimeout(timer)
       resizeObserver?.disconnect()

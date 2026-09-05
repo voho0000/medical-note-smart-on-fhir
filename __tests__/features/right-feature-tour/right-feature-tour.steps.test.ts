@@ -30,6 +30,18 @@ describe('tour catalogue', () => {
     }
   })
 
+  it('resolves the fixed expanded-view action immediately when no result exists', () => {
+    const steps = getRightTourSteps('custom-summary', {
+      medical: true,
+      authenticated: false,
+      betaEnabled: false,
+    })
+    const readResult = steps.find((step) => step.id === 'custom-summary-read-result')
+
+    expect(readResult?.fallbackTarget).toContain('data-result-available="false"')
+    expect(readResult?.fallbackGraceAttempts).toBe(0)
+  })
+
   it('keeps medical-only and opt-in beta tools out of ineligible Quick tours', () => {
     expect(getRightTourSteps('quick', { ...guest, medical: false }).some((step) => step.medicalOnly)).toBe(false)
     expect(getRightTourSteps('quick', { ...guest, betaEnabled: true }).some((step) => step.betaOnly)).toBe(false)

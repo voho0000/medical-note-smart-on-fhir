@@ -214,16 +214,20 @@ const ALL_STEPS: TourStep[] = [
   },
   {
     id: 'custom-summary-read-result',
-    target: '[data-tour="custom-summary-open-result"]',
-    fallbackTarget: '[data-tour="medical-summary-custom-tab"]',
+    target: '[data-tour="custom-summary-open-result"][data-result-available="true"]',
+    fallbackTarget: '[data-tour="custom-summary-open-result"][data-result-available="false"]',
+    // The result and prompt states share the same stable action. Resolve the
+    // currently rendered state immediately instead of flashing a centred tour
+    // while waiting for a result that this guide never generates.
+    fallbackGraceAttempts: 0,
     title: { 'zh-TW': '用較大的閱讀視窗查看完整結果', en: 'Read the full result in a larger view' },
     body: {
-      'zh-TW': '摘要產生完成後，按放大閱讀可在較寬的視窗查看完整內容；視窗會保留產生模型、時間與耗時，並沿用目前選擇的純文字、Markdown 或 HTML 顯示格式。內容仍沒有逐項來源引註，請回原始病歷核對。',
-      en: 'After generation, open the expanded view to read the full result in a wider window. It keeps the model, completion time, duration, and your current plain-text, Markdown, or HTML display format. Item-level citations are still unavailable, so verify against the source record.',
+      'zh-TW': '摘要產生完成後，按模組右側的斜箭頭放大按鈕，可在較寬的視窗查看完整內容；視窗會保留產生模型、時間與耗時，並沿用目前選擇的純文字、Markdown 或 HTML 顯示格式。內容仍沒有逐項來源引註，請回原始病歷核對。',
+      en: 'After generation, use the diagonal-arrow expand button on the module to read the full result in a wider window. It keeps the model, completion time, duration, and your current plain-text, Markdown, or HTML display format. Item-level citations are still unavailable, so verify against the source record.',
     },
     fallbackBody: {
-      'zh-TW': '目前還沒有可放大閱讀的結果。完成「產生摘要」後，模組右側會出現放大閱讀按鈕，適合查看較長內容；產生資訊與顯示格式都會保留。',
-      en: 'There is no result to expand yet. After Generate summary finishes, an expanded-view button appears beside the module for longer content, preserving generation details and the selected display format.',
+      'zh-TW': '目前還沒有摘要結果；按模組右側固定顯示的斜箭頭放大按鈕，可先在較大視窗檢查模板 Prompt。完成「產生摘要」後，同一按鈕會改為顯示完整摘要、產生資訊與目前的顯示格式。',
+      en: 'There is no summary result yet. Use the fixed diagonal-arrow expand button on the module to inspect the template prompt in a larger window. After Generate summary finishes, the same button shows the full result, generation details, and current display format.',
     },
   },
   {
