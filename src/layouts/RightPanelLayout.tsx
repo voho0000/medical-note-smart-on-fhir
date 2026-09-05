@@ -21,11 +21,10 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { useAuth } from "@/src/application/providers/auth.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
 import { resolveScrollMode, tabPanelClasses } from "@/src/shared/config/right-panel-scroll"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
-import { useBetaFeaturesStore } from "@/src/application/stores/beta-features.store"
+import { useBetaFeatures } from "@/src/application/hooks/use-beta-features.hook"
 import { RIGHT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
 // RightPanelProvider moved to AppProviders (app-level) in v0.4.0 so the
 // header's overflow menu can navigate to right-panel tabs (e.g. open
@@ -220,14 +219,8 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
 function RightPanelContentInner() {
   const { t } = useLanguage()
   const { audience } = useAudience()
-  const { user } = useAuth()
-  const betaFeaturesEnabled = useBetaFeaturesStore((state) => (
-    user ? state.enabledByUser[user.uid] === true : false
-  ))
-  const features = getEnabledRightPanelFeatures(audience, {
-    betaFeaturesEnabled,
-    isAuthenticated: Boolean(user),
-  })
+  const { enabled: betaFeaturesEnabled } = useBetaFeatures()
+  const features = getEnabledRightPanelFeatures(audience, { betaFeaturesEnabled })
   const { activeTab, setActiveTab } = useRightPanel()
   const tourActive = useRightFeatureTourStore((state) => state.active)
   const tourStep = useRightFeatureTourStore((state) => state.stepId)

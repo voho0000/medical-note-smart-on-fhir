@@ -44,7 +44,10 @@ describe('tour catalogue', () => {
 
   it('keeps medical-only and opt-in beta tools out of ineligible Quick tours', () => {
     expect(getRightTourSteps('quick', { ...guest, medical: false }).some((step) => step.medicalOnly)).toBe(false)
-    expect(getRightTourSteps('quick', { ...guest, betaEnabled: true }).some((step) => step.betaOnly)).toBe(false)
+    // Beta needs no account, so neither does the step that points at the tab
+    // Beta reveals — a signed-out visitor with the switch on sees both.
+    expect(getRightTourSteps('quick', { ...guest, betaEnabled: true }).some((step) => step.id === 'guidance')).toBe(true)
     expect(getRightTourSteps('quick', { ...guest, authenticated: true, betaEnabled: true }).some((step) => step.id === 'guidance')).toBe(true)
+    expect(getRightTourSteps('quick', guest).some((step) => step.betaOnly)).toBe(false)
   })
 })

@@ -7,9 +7,9 @@
  * signed off on.
  *
  * WHETHER: heart failure is still unreleased, so it shows to the audience the
- * 個人化照護指引 tab is already gated to — signed-in users with Beta features on
- * — or to a browser handed its pilot id while Beta is off. The unattended
- * Medcloud hand-off is outside both and gets released guidance only.
+ * 個人化照護指引 tab is already gated to — any visitor with Beta features on, no
+ * account required — or to a browser handed its pilot id while Beta is off. The
+ * unattended Medcloud hand-off is outside both and gets released guidance only.
  */
 let mockMedcloudLaunchRoute = false
 
@@ -24,7 +24,10 @@ import {
   getEnabledClinicalGuidelinePacks,
 } from '@/features/clinical-decision-support/guideline-packs/registry'
 import { writePilotPackIds } from '@/features/clinical-decision-support/guideline-packs/pilot-gate'
-import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
+import {
+  GUEST_BETA_FEATURES_KEY,
+  useBetaFeaturesStore,
+} from '@/src/application/stores/beta-features.store'
 
 /** What the host lists, in switcher order. */
 const HOST_PACK_IDS = ['heart-failure-cdss', 'ckd-cdss']
@@ -71,6 +74,15 @@ describe('care pack visibility', () => {
 
     expect(visibleIds()).toEqual(['heart-failure-cdss', 'ckd-cdss'])
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
+  })
+
+  it('shows both listed packs to a signed-out visitor who turned Beta on', () => {
+    // Beta no longer asks for an account, so the switch a guest browser flipped
+    // is stored under the guest key — and the switcher must read it exactly as
+    // it reads a signed-in account's.
+    useBetaFeaturesStore.getState().setBetaFeaturesEnabled(GUEST_BETA_FEATURES_KEY, true)
+
+    expect(visibleIds()).toEqual(['heart-failure-cdss', 'ckd-cdss'])
   })
 
   it('leaves a Beta-revealed pack marked unreleased, which is what the 試辦 chip reads', () => {

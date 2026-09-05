@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
+import { useBetaFeatures } from '@/src/application/hooks/use-beta-features.hook'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   markRightFeatureTourSeen,
@@ -72,9 +72,7 @@ export function RightFeatureTour() {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
-  const betaFeaturesEnabled = useBetaFeaturesStore((state) => (
-    user ? state.enabledByUser[user.uid] === true : false
-  ))
+  const { enabled: betaFeaturesEnabled } = useBetaFeatures()
   const active = useRightFeatureTourStore((state) => state.active)
   const kind = useRightFeatureTourStore((state) => state.kind)
   const stepId = useRightFeatureTourStore((state) => state.stepId)

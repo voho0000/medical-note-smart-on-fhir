@@ -135,15 +135,18 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
  */
 export function getEnabledRightPanelFeatures(
   audience?: 'medical' | 'patient',
-  options: { betaFeaturesEnabled?: boolean; isAuthenticated?: boolean } = {},
+  options: { betaFeaturesEnabled?: boolean } = {},
 ): RightPanelFeatureConfig[] {
   return RIGHT_PANEL_FEATURES
     .filter((feature) => (
       feature.enabled
-      && (!feature.beta || (
-        options.isAuthenticated === true
-        && options.betaFeaturesEnabled === true
-      ))
+      // The Beta switch is the whole gate. Being signed in is deliberately NOT
+      // part of it (owner decision, 2026-09): a visitor turns Beta on in
+      // 設定 → 顯示與關於 and the experimental tabs appear, account or not.
+      // The route exclusion the unattended Medcloud hand-off needs is applied
+      // where `betaFeaturesEnabled` is resolved (`useBetaFeatures`), not here —
+      // this function stays pure and window-free.
+      && (!feature.beta || options.betaFeaturesEnabled === true)
       && (!audience || !feature.audiences || feature.audiences.includes(audience))
     ))
     .sort((a, b) => a.order - b.order)

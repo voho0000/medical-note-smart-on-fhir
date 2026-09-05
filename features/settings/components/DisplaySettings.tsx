@@ -19,12 +19,11 @@ import { Switch } from '@/components/ui/switch'
 import { useTheme } from '@/src/application/providers/theme.provider'
 import { useFontSize, type FontSize } from '@/src/application/providers/font-size.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { useAuth } from '@/src/application/providers/auth.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
-import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
+import { useBetaFeatures } from '@/src/application/hooks/use-beta-features.hook'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
 import {
   readPilotPackIds,
@@ -53,11 +52,11 @@ export function DisplaySettings() {
   const { theme, setTheme } = useTheme()
   const { fontSize, setFontSize } = useFontSize()
   const { t, locale } = useLanguage()
-  const { user } = useAuth()
-  const betaFeaturesEnabled = useBetaFeaturesStore((state) => (
-    user ? state.enabledByUser[user.uid] === true : false
-  ))
-  const setBetaFeaturesEnabled = useBetaFeaturesStore((state) => state.setBetaFeaturesEnabled)
+  const {
+    enabled: betaFeaturesEnabled,
+    offered: betaFeaturesOffered,
+    setEnabled: setBetaFeaturesEnabled,
+  } = useBetaFeatures()
   const version = useAppVersion()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -145,9 +144,10 @@ export function DisplaySettings() {
         </div>
       </div>
 
-      {/* Experimental clinical tools are visible only to signed-in users and
-          remain opt-in even after authentication. */}
-      {user ? (
+      {/* Experimental clinical tools are opt-in, and opting in is all it takes:
+          no account required (owner decision, 2026-09). Hidden only where no
+          question may be asked at all — the unattended Medcloud hand-off. */}
+      {betaFeaturesOffered ? (
         <div className="space-y-3">
           <Label className="text-xs uppercase text-muted-foreground">
             {t.settings.betaFeatures}
@@ -164,9 +164,7 @@ export function DisplaySettings() {
             <Switch
               id="beta-features-enabled"
               checked={betaFeaturesEnabled}
-              onCheckedChange={(enabled) => {
-                if (user) setBetaFeaturesEnabled(user.uid, enabled)
-              }}
+              onCheckedChange={setBetaFeaturesEnabled}
               aria-describedby="beta-features-description"
               className="mt-0.5"
             />

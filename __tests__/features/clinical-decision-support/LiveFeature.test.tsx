@@ -1,14 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
-import { useBetaFeaturesStore } from '@/src/application/stores/beta-features.store'
+import {
+  GUEST_BETA_FEATURES_KEY,
+  useBetaFeaturesStore,
+} from '@/src/application/stores/beta-features.store'
 
 const ICD10_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
 
 // The switcher lists heart failure then CKD; heart failure is still unreleased,
 // so it is visible only to a Beta-features browser — which is the only kind
 // that reaches this tab at all, since the tab itself is `beta: true`.
+// Stored under the guest key: Beta takes no account, so this is the state a
+// signed-out visitor who flipped the switch is actually in.
 function enableBetaFeatures(): void {
-  useBetaFeaturesStore.getState().setBetaFeaturesEnabled('switch-user', true)
+  useBetaFeaturesStore.getState().setBetaFeaturesEnabled(GUEST_BETA_FEATURES_KEY, true)
 }
 
 const mockUsePatient = jest.fn()

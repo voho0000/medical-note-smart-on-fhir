@@ -21,8 +21,8 @@ const ALL_STEPS: TourStep[] = [
     target: '[data-tour="right-tabs"]',
     title: { 'zh-TW': '右側是臨床工作區', en: 'The right side is your clinical workspace' },
     body: {
-      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、複製與設定；登入後可從設定中自行開啟 Beta 功能。取消釘選的功能會收進「更多」選單。',
-      en: 'The tabs bring together the medical summary, clinical chat, calculators, copy tools, and settings. After signing in, Beta features can be enabled in Settings. Unpinned tools move into More.',
+      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、複製與設定；可從設定中自行開啟 Beta 功能，不需登入。取消釘選的功能會收進「更多」選單。',
+      en: 'The tabs bring together the medical summary, clinical chat, calculators, copy tools, and settings. Beta features can be enabled in Settings — no sign-in needed. Unpinned tools move into More.',
     },
   },
   {
@@ -348,7 +348,10 @@ export function getRightTourSteps(kind: 'quick' | 'custom-summary', options: {
       : !step.id.startsWith('custom-summary') || step.id === 'custom-summary')
     && (!step.medicalOnly || options.medical)
     && (!step.authenticatedOnly || options.authenticated)
-    && (!step.betaOnly || (options.authenticated && options.betaEnabled))
+    // Beta alone, no sign-in: the tab this step points at appears for anyone
+    // who turned the switch on, so the step must follow the same rule or the
+    // tour would skip a tab that is standing right there.
+    && (!step.betaOnly || options.betaEnabled)
   )).map((step) => kind === 'quick' && step.id === 'custom-summary' ? {
     ...step,
     body: {

@@ -23,7 +23,6 @@ describe('right-panel registry', () => {
   it('keeps education and CDSS as separate pinned modules', () => {
     const features = getEnabledRightPanelFeatures(undefined, {
       betaFeaturesEnabled: true,
-      isAuthenticated: true,
     })
     const defaults = groupRightPanelFeatures(features, {})
 
@@ -58,25 +57,38 @@ describe('right-panel registry', () => {
     ])
   })
 
+  it('opens the Beta tabs to a signed-out visitor who turned the switch on', () => {
+    // The owner's rule: no account, no sign-in prompt — flipping the switch in
+    // 設定 → 顯示與關於 is the entire gate. `getEnabledRightPanelFeatures` never
+    // hears about authentication, so there is nothing left that could ask.
+    const medicalIds = getEnabledRightPanelFeatures('medical', {
+      betaFeaturesEnabled: true,
+    }).map((feature) => feature.id)
+    expect(medicalIds).toContain('clinical-decision-support')
+
+    expect(getEnabledRightPanelFeatures('medical', {
+      betaFeaturesEnabled: false,
+    }).map((feature) => feature.id)).not.toContain('clinical-decision-support')
+    expect(getEnabledRightPanelFeatures('medical').map((feature) => feature.id))
+      .not.toContain('clinical-decision-support')
+  })
+
   it('shows each audience its Beta tab only after the user opts in', () => {
     expect(getEnabledRightPanelFeatures('patient').map((feature) => feature.id))
       .not.toContain('personalized-education')
     expect(getEnabledRightPanelFeatures('medical').map((feature) => feature.id))
       .not.toContain('clinical-decision-support')
     expect(getEnabledRightPanelFeatures('patient', {
-      betaFeaturesEnabled: true,
-      isAuthenticated: false,
+      betaFeaturesEnabled: false,
     }).map((feature) => feature.id)).not.toContain('personalized-education')
 
     const patientIds = getEnabledRightPanelFeatures('patient', {
       betaFeaturesEnabled: true,
-      isAuthenticated: true,
     }).map(
       (feature) => feature.id,
     )
     const medicalIds = getEnabledRightPanelFeatures('medical', {
       betaFeaturesEnabled: true,
-      isAuthenticated: true,
     }).map(
       (feature) => feature.id,
     )
@@ -96,7 +108,6 @@ describe('right-panel registry', () => {
     expect(
       getEnabledRightPanelFeatures('patient', {
         betaFeaturesEnabled: true,
-        isAuthenticated: true,
       }).find(
         (feature) => feature.id === 'personalized-education',
       )?.badge,
@@ -104,7 +115,6 @@ describe('right-panel registry', () => {
     expect(
       getEnabledRightPanelFeatures('medical', {
         betaFeaturesEnabled: true,
-        isAuthenticated: true,
       }).find(
         (feature) => feature.id === 'clinical-decision-support',
       )?.badge,
@@ -114,7 +124,6 @@ describe('right-panel registry', () => {
   it('keeps the personalized-education result mounted across tab switches', () => {
     const education = getEnabledRightPanelFeatures(undefined, {
       betaFeaturesEnabled: true,
-      isAuthenticated: true,
     }).find(
       (feature) => feature.id === 'personalized-education',
     )
@@ -149,7 +158,6 @@ describe('right-panel registry', () => {
     const structural = ['flex-1', 'min-h-0', 'h-full']
     for (const feature of getEnabledRightPanelFeatures(undefined, {
       betaFeaturesEnabled: true,
-      isAuthenticated: true,
     })) {
       const classes = feature.contentClassName?.split(' ') ?? []
       for (const token of structural) {

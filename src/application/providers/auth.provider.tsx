@@ -55,6 +55,13 @@ export interface AuthContextType {
    * "is there a usable proxy token", not `user`.
    */
   isAnonymous: boolean
+  /**
+   * uid of the active anonymous session, or null when there is none (no session
+   * yet, or a real account is signed in). Exposed because a not-signed-in
+   * visitor still needs a stable key for per-browser preferences such as the
+   * Beta switch; it is never an identity and must not be treated as one.
+   */
+  anonymousUid: string | null
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
@@ -387,6 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextType = {
     user,
     isAnonymous,
+    anonymousUid: isAnonymous ? activeUid : null,
     loading,
     signInWithGoogle,
     signInWithEmail,

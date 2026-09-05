@@ -1,0 +1,90 @@
+/**
+ * The Beta switch used to be rendered only for a signed-in account, so a
+ * visitor who never logs in had no way to reach the experimental tabs at all.
+ * The owner's rule is now the opposite: open 設定 → 顯示與關於, flip the switch,
+ * and 個人化照護指引 appears — no account anywhere in that path.
+ */
+import { fireEvent, render, screen } from '@testing-library/react'
+import { DisplaySettings } from '@/features/settings/components/DisplaySettings'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import {
+  GUEST_BETA_FEATURES_KEY,
+  useBetaFeaturesStore,
+} from '@/src/application/stores/beta-features.store'
+
+let mockMedcloudLaunchRoute = false
+
+jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
+  isMedcloudLaunchRoute: () => mockMedcloudLaunchRoute,
+}))
+
+// Signed out, on the free tier's anonymous session — the state a first-time
+// visitor is actually in.
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, isAnonymous: true, anonymousUid: null, loading: false }),
+}))
+
+jest.mock('@/src/application/providers/theme.provider', () => ({
+  useTheme: () => ({ theme: 'light', setTheme: jest.fn() }),
+}))
+
+jest.mock('@/src/application/providers/font-size.provider', () => ({
+  useFontSize: () => ({ fontSize: 'base', setFontSize: jest.fn() }),
+}))
+
+jest.mock('@/src/shared/hooks/use-app-version.hook', () => ({
+  useAppVersion: () => '0.0.0-test',
+}))
+
+jest.mock('@/src/application/hooks/chat/use-fhir-context.hook', () => ({
+  useFhirContext: () => ({ patientId: null, patientName: null, fhirServerUrl: null }),
+  isLocalBundleFhirUrl: () => false,
+}))
+
+jest.mock('@/features/feedback/components/FeedbackDialog', () => ({
+  FeedbackDialog: () => null,
+}))
+
+jest.mock('@/features/feature-request-pool', () => ({
+  FeatureRequestPoolDialog: () => null,
+}))
+
+function renderSettings() {
+  return render(
+    <LanguageProvider>
+      <DisplaySettings />
+    </LanguageProvider>,
+  )
+}
+
+describe('DisplaySettings Beta switch', () => {
+  beforeEach(() => {
+    mockMedcloudLaunchRoute = false
+    window.localStorage.clear()
+    useBetaFeaturesStore.setState({ enabledByUser: {} })
+  })
+
+  it('renders the switch for a signed-out visitor and stores their opt-in', () => {
+    renderSettings()
+
+    const toggle = screen.getByRole('switch', { name: '開啟 Beta 功能' })
+    expect(toggle).toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(toggle).not.toBeDisabled()
+
+    fireEvent.click(toggle)
+
+    expect(useBetaFeaturesStore.getState().enabledByUser[GUEST_BETA_FEATURES_KEY]).toBe(true)
+    expect(screen.getByRole('switch', { name: '開啟 Beta 功能' }))
+      .toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('hides the switch on the unattended Medcloud launch route', () => {
+    mockMedcloudLaunchRoute = true
+
+    renderSettings()
+
+    expect(screen.queryByRole('switch', { name: '開啟 Beta 功能' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('pilot-packs-settings')).not.toBeInTheDocument()
+  })
+})

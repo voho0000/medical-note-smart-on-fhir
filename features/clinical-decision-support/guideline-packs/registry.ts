@@ -22,11 +22,13 @@
  * here until it is named in that list — the package proposes, the host decides.
  *
  * WHETHER a listed pack shows: the Beta switch. The 個人化照護指引 tab is
- * already `beta: true`, so the only people who reach this list are signed-in
- * users who turned Beta features on in Settings — exactly the audience the
- * unreleased packs were written for. Making them ask for a URL parameter on top
- * of that was a second lock on the same door, so Beta alone now opens it, and
- * the per-pack pilot ids stay as the way in while Beta is off.
+ * already `beta: true`, so the only people who reach this list are visitors who
+ * turned Beta features on in Settings — exactly the audience the unreleased
+ * packs were written for. Signing in is not part of that gate (owner decision,
+ * 2026-09); the switch is stored per browser under the account uid, the
+ * anonymous uid, or a guest key. Making testers ask for a URL parameter on top
+ * of the switch was a second lock on the same door, so Beta alone now opens it,
+ * and the per-pack pilot ids stay as the way in while Beta is off.
  */
 import { PersonalizationSdkError } from '@voho0000/personalization-sdk'
 import { registerCarePacks } from '@voho0000/personalized-care/registry'
@@ -78,7 +80,8 @@ const HOST_PACKS: readonly ClinicalGuidelinePack[] = HOST_PACK_ORDER.map((id) =>
 export const HOST_CARE_PACKS = HOST_PACKS
 
 // A pack is visible when the package released it, when this browser has Beta
-// features on, or when it was handed to this browser as a single pilot id.
+// features on (no sign-in required), or when it was handed to this browser as
+// a single pilot id.
 //
 // The unattended Medcloud hand-off is outside the Beta term as well as the
 // pilot one: that route shows released guidance only, whatever a tester left
