@@ -364,6 +364,68 @@ describe('heart-failure board view', () => {
     expect(screen.getByTestId('cdss-recommendation-heart-failure-phenotype')).toBeInTheDocument()
   })
 
+  it('marks a value entered in the room and hands typed measurements back as vitals', () => {
+    const result = heartFailureResult()
+    const entered = evidence('血壓', '128/76 mmHg（2026-09-05 門診輸入）', 'bloodPressure')
+    const withEntry: CdssResult = {
+      ...result,
+      recommendations: result.recommendations.map((item) => ({
+        ...item,
+        patientEvidence: item.patientEvidence.map((row) => (
+          row.factKeys.includes('bloodPressure') ? entered : row
+        )),
+      })),
+    }
+    const onSave = jest.fn()
+    const onClear = jest.fn()
+    render(
+      <ClinicalDecisionSupportView
+        result={withEntry}
+        locale="zh-TW"
+        clinicVitals={{ systolic: 128, diastolic: 76, measuredOn: '2026-09-05' }}
+        onSaveClinicVitals={onSave}
+        onClearClinicVitals={onClear}
+      />,
+    )
+
+    const bp = screen.getByTestId('cdss-hf-metric-bloodPressure')
+    expect(bp).toHaveAttribute('data-entered', 'true')
+    expect(bp).toHaveTextContent('128/76')
+    expect(bp).toHaveTextContent('門診輸入')
+
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-open'))
+    expect(screen.getByTestId('cdss-hf-clinic-vitals-systolic')).toHaveValue(128)
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-heartRate'), { target: { value: '72' } })
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-bodyWeight'), { target: { value: '73.5' } })
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-save'))
+
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave.mock.calls[0][0]).toMatchObject({ systolic: 128, diastolic: 76, heartRate: 72, bodyWeight: 73.5 })
+    expect(onSave.mock.calls[0][0].measuredOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(screen.queryByTestId('cdss-hf-clinic-vitals-form')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-open'))
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-clear'))
+    expect(onClear).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses half a blood pressure and offers no entry without a save handler', () => {
+    const onSave = jest.fn()
+    const { unmount } = render(
+      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" onSaveClinicVitals={onSave} />,
+    )
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-open'))
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-systolic'), { target: { value: '130' } })
+    expect(screen.getByTestId('cdss-hf-clinic-vitals-save')).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('收縮壓與舒張壓要一起填')
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-diastolic'), { target: { value: '80' } })
+    expect(screen.getByTestId('cdss-hf-clinic-vitals-save')).toBeEnabled()
+    unmount()
+
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    expect(screen.queryByTestId('cdss-hf-clinic-vitals-open')).toBeNull()
+  })
+
   it('leaves every other pack on the generic module table', () => {
     render(<ClinicalDecisionSupportView result={heartFailureResult({ packId: 'ckd-cdss' })} locale="zh-TW" />)
 

@@ -21,6 +21,7 @@ import type {
   CdssStatus,
   ClinicalEvidence,
 } from '../types'
+import { CLINIC_ENTRY_PATTERN } from '../utils/apply-clinic-vitals'
 
 export const HEART_FAILURE_PACK_ID = 'heart-failure-cdss'
 
@@ -84,6 +85,8 @@ export interface HeartFailureMetric {
   ageDays?: number
   /** The pack marked the value as past its monitoring window. */
   stale: boolean
+  /** Entered in the room this visit rather than read from the record. */
+  entered: boolean
   /** Where the value came from, for the source link. */
   evidence?: ClinicalEvidence
 }
@@ -155,8 +158,12 @@ function findEvidence(
   return loose.find((item) => STALE_NOTE_PATTERN.test(item.value)) ?? loose[0]
 }
 
-/** The collection date several adapters print inside the value: 「142/84 mmHg（2026-04-18）」. */
-const INLINE_DATE_PATTERN = /\s*[（(](\d{4}-\d{2}-\d{2})[）)]/
+/**
+ * The collection date the adapter prints inside the value —
+ * 「142/84 mmHg（2026-04-18）」 — or, for a value entered in the room,
+ * the date with its provenance note: 「142/84 mmHg（2026-09-05 門診輸入）」.
+ */
+const INLINE_DATE_PATTERN = /\s*[（(]\s*(\d{4}-\d{2}-\d{2})(?:[,，\s]+[^（()）]*)?[）)]/
 
 function compactValue(value: string): {
   value: string
@@ -181,7 +188,7 @@ function metricFromEvidence(
 ): HeartFailureMetric {
   const label = isEnglish ? config.en : config.zh
   if (!evidence) {
-    return { factKey: config.factKey, label, kind: config.kind, stale: false }
+    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false }
   }
   const compact = compactValue(evidence.value)
   const date = latestSourceDate(evidence) ?? compact.inlineDate
@@ -195,6 +202,7 @@ function metricFromEvidence(
     date,
     ageDays: date ? daysBetween(date, now) : undefined,
     stale: compact.stale,
+    entered: CLINIC_ENTRY_PATTERN.test(evidence.value),
     evidence,
   }
 }
@@ -223,6 +231,7 @@ function metricFromEvidenceTable(
         date,
         ageDays: date ? daysBetween(date, now) : undefined,
         stale: compact.stale,
+        entered: CLINIC_ENTRY_PATTERN.test(item.value),
         evidence: {
           label: isEnglish ? item.label.en : item.label.zh,
           value: item.value,

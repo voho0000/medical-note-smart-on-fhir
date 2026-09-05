@@ -1,10 +1,13 @@
 "use client"
 
-import type { ReactNode } from 'react'
-import { ArrowRight, Check, ChevronDown, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { type ReactNode, useId, useState } from 'react'
+import { ArrowRight, Check, ChevronDown, PencilLine, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../types'
+import { type ClinicVitals, todayIsoDate } from '../stores/clinic-vitals.store'
 import {
   formatMetricDate,
   type HeartFailureBoardModel,
@@ -21,6 +24,11 @@ interface HeartFailureStatusBoardProps {
   onToggle: (id: string) => void
   /** The same decision detail the module list opens, so nothing is repeated here. */
   renderDetail: (recommendation: CdssRecommendation) => ReactNode
+  /** What the clinician measured in the room this visit, if anything. */
+  clinicVitals?: ClinicVitals
+  /** Absent when this surface cannot take measurements (no patient to attach them to). */
+  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onClearClinicVitals?: () => void
 }
 
 const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pattern)' } as const
@@ -28,6 +36,11 @@ const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pa
 function ageLabel(metric: HeartFailureMetric, isEnglish: boolean, now: Date): string | undefined {
   const date = formatMetricDate(metric.date, now)
   if (!date) return undefined
+  if (metric.entered) {
+    return metric.ageDays === 0
+      ? (isEnglish ? 'Entered today' : '今天 · 門診輸入')
+      : `${date} · ${isEnglish ? 'entered' : '門診輸入'}`
+  }
   if (metric.ageDays === undefined) return date
   if (metric.ageDays === 0) return `${date} · ${isEnglish ? 'today' : '今天'}`
   return `${date} · ${isEnglish ? `${metric.ageDays}d` : `${metric.ageDays}天`}`
@@ -60,6 +73,7 @@ function MetricCell({
       data-testid={`cdss-hf-metric-${metric.factKey}`}
       data-missing={missing ? 'true' : undefined}
       data-stale={metric.stale ? 'true' : undefined}
+      data-entered={metric.entered ? 'true' : undefined}
     >
       <div className="truncate text-[11px] font-medium leading-4 text-muted-foreground">
         {metric.label}
@@ -80,7 +94,11 @@ function MetricCell({
           <div
             className={cn(
               'truncate text-[11px] leading-4 tabular-nums',
-              metric.stale ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+              metric.stale
+                ? 'font-medium text-amber-700 dark:text-amber-300'
+                : metric.entered
+                  ? 'font-medium text-primary'
+                  : 'text-muted-foreground',
             )}
           >
             {ageLabel(metric, isEnglish, now) ?? (metric.stale ? (isEnglish ? 'Past window' : '已超過窗期') : '')}
@@ -88,6 +106,137 @@ function MetricCell({
         </>
       )}
     </div>
+  )
+}
+
+function parseNumber(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (!trimmed) return undefined
+  const value = Number(trimmed)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+/**
+ * The cuff, the pulse and the scale, typed in: a room's measurements are often
+ * not synced to the record the pack reads, and the freshest numbers a titration
+ * decision needs are the ones on the clinician's paper. Nothing is stored past
+ * this tab; saving hands the values to the pack, which recomputes every module
+ * that reads them.
+ */
+function ClinicVitalsForm({
+  isEnglish,
+  now,
+  initial,
+  onSave,
+  onClear,
+  onClose,
+}: {
+  isEnglish: boolean
+  now: Date
+  initial?: ClinicVitals
+  onSave: (vitals: ClinicVitals) => void
+  onClear?: () => void
+  onClose: () => void
+}) {
+  const id = useId()
+  const [systolic, setSystolic] = useState(initial?.systolic?.toString() ?? '')
+  const [diastolic, setDiastolic] = useState(initial?.diastolic?.toString() ?? '')
+  const [heartRate, setHeartRate] = useState(initial?.heartRate?.toString() ?? '')
+  const [bodyWeight, setBodyWeight] = useState(initial?.bodyWeight?.toString() ?? '')
+  const parsed = {
+    systolic: parseNumber(systolic),
+    diastolic: parseNumber(diastolic),
+    heartRate: parseNumber(heartRate),
+    bodyWeight: parseNumber(bodyWeight),
+  }
+  // A blood pressure is two numbers or none; one half cannot be read.
+  const bpHalfEntered = (parsed.systolic === undefined) !== (parsed.diastolic === undefined)
+  const hasAnything = parsed.heartRate !== undefined
+    || parsed.bodyWeight !== undefined
+    || (parsed.systolic !== undefined && parsed.diastolic !== undefined)
+  const canSave = hasAnything && !bpHalfEntered
+
+  const fields: readonly {
+    key: 'systolic' | 'diastolic' | 'heartRate' | 'bodyWeight'
+    label: string
+    unit: string
+    value: string
+    set: (value: string) => void
+    step: string
+  }[] = [
+    { key: 'systolic', label: isEnglish ? 'Systolic' : '收縮壓', unit: 'mmHg', value: systolic, set: setSystolic, step: '1' },
+    { key: 'diastolic', label: isEnglish ? 'Diastolic' : '舒張壓', unit: 'mmHg', value: diastolic, set: setDiastolic, step: '1' },
+    { key: 'heartRate', label: isEnglish ? 'Heart rate' : '心率', unit: 'bpm', value: heartRate, set: setHeartRate, step: '1' },
+    { key: 'bodyWeight', label: isEnglish ? 'Weight' : '體重', unit: 'kg', value: bodyWeight, set: setBodyWeight, step: '0.1' },
+  ]
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border bg-muted/20 px-3.5 py-2.5"
+      aria-label={isEnglish ? 'Measured in clinic' : '門診量測'}
+      data-testid="cdss-hf-clinic-vitals-form"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!canSave) return
+        onSave({
+          ...(parsed.systolic !== undefined && parsed.diastolic !== undefined
+            ? { systolic: parsed.systolic, diastolic: parsed.diastolic }
+            : {}),
+          ...(parsed.heartRate !== undefined ? { heartRate: parsed.heartRate } : {}),
+          ...(parsed.bodyWeight !== undefined ? { bodyWeight: parsed.bodyWeight } : {}),
+          measuredOn: todayIsoDate(now),
+        })
+        onClose()
+      }}
+    >
+      <span className="w-full text-xs text-muted-foreground @min-[40rem]:w-auto @min-[40rem]:self-center">
+        {isEnglish
+          ? 'Measured in clinic today. Kept for this tab only; every module recomputes from it.'
+          : '今日門診量測。只保留在這個分頁；各模組會依此重新判定。'}
+      </span>
+      {fields.map((field) => (
+        <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+          <span>{field.label} <span className="font-normal">{field.unit}</span></span>
+          <Input
+            id={`${id}-${field.key}`}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step={field.step}
+            value={field.value}
+            onChange={(event) => field.set(event.target.value)}
+            className="h-8 w-20 px-2 text-sm tabular-nums md:text-sm"
+            aria-invalid={bpHalfEntered && (field.key === 'systolic' || field.key === 'diastolic') ? true : undefined}
+            data-testid={`cdss-hf-clinic-vitals-${field.key}`}
+          />
+        </label>
+      ))}
+      <div className="flex items-center gap-1.5">
+        <Button type="submit" size="sm" className="h-8" disabled={!canSave} data-testid="cdss-hf-clinic-vitals-save">
+          {isEnglish ? 'Apply' : '套用'}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={onClose}>
+          {isEnglish ? 'Cancel' : '取消'}
+        </Button>
+        {initial && onClear ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 text-muted-foreground"
+            onClick={() => { onClear(); onClose() }}
+            data-testid="cdss-hf-clinic-vitals-clear"
+          >
+            {isEnglish ? 'Clear' : '清除'}
+          </Button>
+        ) : null}
+      </div>
+      {bpHalfEntered ? (
+        <span className="w-full text-[11px] text-amber-700 dark:text-amber-300" role="alert">
+          {isEnglish ? 'Enter both systolic and diastolic.' : '收縮壓與舒張壓要一起填。'}
+        </span>
+      ) : null}
+    </form>
   )
 }
 
@@ -180,7 +329,11 @@ export function HeartFailureStatusBoard({
   expandedId,
   onToggle,
   renderDetail,
+  clinicVitals,
+  onSaveClinicVitals,
+  onClearClinicVitals,
 }: HeartFailureStatusBoardProps) {
+  const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
   const lvefAge = board.lvef ? ageLabel(board.lvef, isEnglish, now) : undefined
   const expandedPillar = board.pillars.find((pillar) => pillar.id === expandedId)
   const gdmtExpanded = board.gdmt !== undefined && expandedId === board.gdmt.id
@@ -240,6 +393,33 @@ export function HeartFailureStatusBoard({
             ))}
           </div>
         </div>
+        {onSaveClinicVitals ? (
+          vitalsFormOpen ? (
+            <ClinicVitalsForm
+              isEnglish={isEnglish}
+              now={now}
+              initial={clinicVitals}
+              onSave={onSaveClinicVitals}
+              onClear={onClearClinicVitals}
+              onClose={() => setVitalsFormOpen(false)}
+            />
+          ) : (
+            <div className="flex items-center border-t border-border px-2 py-1">
+              <button
+                type="button"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setVitalsFormOpen(true)}
+                aria-expanded={false}
+                data-testid="cdss-hf-clinic-vitals-open"
+              >
+                <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
+                {clinicVitals
+                  ? (isEnglish ? 'Edit clinic measurements' : '修改門診量測')
+                  : (isEnglish ? 'Enter clinic measurements (BP, HR, weight)' : '輸入門診量測（血壓、心率、體重）')}
+              </button>
+            </div>
+          )
+        ) : null}
         {board.fmtSafety ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border bg-muted/40 px-3.5 py-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-teal-700 dark:text-secondary-foreground/80" aria-hidden="true" />

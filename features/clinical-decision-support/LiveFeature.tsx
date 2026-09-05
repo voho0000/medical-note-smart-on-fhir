@@ -18,6 +18,8 @@ import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
+import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
+import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -156,6 +158,9 @@ export default function LiveClinicalDecisionSupportFeature() {
   const patientId = patient?.id
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
+  const clinicVitals = useClinicVitals(patientId)
+  const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
+  const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
 
   // The switches this physician set on this chart survive a reload, so they are
   // read back before the pack runs rather than after.
@@ -198,9 +203,13 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   // Toggling a row re-enters the pack through the profile, so a module's status
   // follows what the physician left standing. Nothing patches a rendered card.
+  // The vitals measured in the room travel the same way: as facts on the
+  // profile, so every module that reads them recomputes.
   const profile = useMemo(() => (
-    recordProfile ? { ...recordProfile, evidenceOverrides } : null
-  ), [evidenceOverrides, recordProfile])
+    recordProfile
+      ? applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals)
+      : null
+  ), [clinicVitals, evidenceOverrides, recordProfile])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -329,7 +338,14 @@ export default function LiveClinicalDecisionSupportFeature() {
       {result.clinicalHandoff ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
-      <ClinicalDecisionSupportView result={result} locale={cdssLocale} patientId={patientId} />
+      <ClinicalDecisionSupportView
+        result={result}
+        locale={cdssLocale}
+        patientId={patientId}
+        clinicVitals={clinicVitals}
+        onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
+        onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
+      />
     </div>
   )
 }

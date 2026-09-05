@@ -45,6 +45,7 @@ import {
   HEART_FAILURE_LIST_STATUS_ORDER,
 } from './heart-failure-board'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
+import type { ClinicVitals } from '../stores/clinic-vitals.store'
 import { statusStyle, StatusIcon } from './status-presentation'
 
 interface ClinicalDecisionSupportViewProps {
@@ -55,6 +56,10 @@ interface ClinicalDecisionSupportViewProps {
    * one person, so they are stored per patient and never carried across.
    */
   patientId?: string
+  /** Vitals the clinician measured in the room this visit; heart-failure board only. */
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onClearClinicVitals?: () => void
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -1837,6 +1842,9 @@ export function ClinicalDecisionSupportView({
   result,
   locale,
   patientId,
+  clinicVitals,
+  onSaveClinicVitals,
+  onClearClinicVitals,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -2152,6 +2160,9 @@ export function ClinicalDecisionSupportView({
           now={now}
           expandedId={expandedId}
           onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          clinicVitals={clinicVitals}
+          onSaveClinicVitals={onSaveClinicVitals}
+          onClearClinicVitals={onClearClinicVitals}
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
