@@ -64,6 +64,17 @@ function run(nameMode: AnalyteNameMode) {
 }
 
 describe('useReportsData report name mode', () => {
+  it('uses the cumulative magnesium name for a single-analyte report title', () => {
+    const magnesium = {
+      ...atypicalLymphocyte,
+      code: { text: '鎂', coding: [{ system: 'http://loinc.org', code: '2601-3' }] },
+    }
+    const { result } = renderHook(() => useReportsData([
+      { ...report, code: { text: '鎂' }, _observations: [magnesium] },
+    ], [], 'standardized'), { wrapper: Wrapper })
+    expect(result.current.reportRows[0].title).toBe('Mg')
+  })
+
   it('keeps the existing clinical short name by default', () => {
     expect(run('standardized').title).toBe('LYM')
   })

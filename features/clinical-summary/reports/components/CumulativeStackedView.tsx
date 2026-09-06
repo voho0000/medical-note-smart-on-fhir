@@ -26,8 +26,7 @@ import {
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { CANONICAL_KEYS } from "@voho0000/clinical-lab-normalization/canonical"
-import { getAnalyteDisplayParts } from "@voho0000/clinical-lab-normalization/display"
+import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
 import type { LabPivot } from "../hooks/useLabPivot"
 import { LabPivotTable, type OpenTrendTarget } from "./LabPivotTable"
@@ -316,9 +315,7 @@ function CumulativeSection({
   const expectedColumnNames = useMemo(() => {
     if (totalDates > 0) return []
     return pivot.rows.slice(0, MAX_EXPECTED_COLUMN_NAMES).map((row) => (
-      nameMode === 'original' || !CANONICAL_KEYS.has(row.testKey)
-        ? row.displayName
-        : getAnalyteDisplayParts(row.testKey, audience, locale).name
+      getLabRowDisplayParts(row, audience, locale, nameMode).name
     ))
   }, [audience, locale, nameMode, pivot.rows, totalDates])
 

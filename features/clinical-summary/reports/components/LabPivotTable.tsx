@@ -14,8 +14,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
 import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
-import { CANONICAL_KEYS } from "@voho0000/clinical-lab-normalization/canonical"
-import { getAnalyteDisplayParts } from "@voho0000/clinical-lab-normalization/display"
+import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
 import { preloadCumulativeLabTrendModule } from "./cumulative-lab-trend-loader"
 
@@ -110,12 +109,8 @@ export const LabPivotTable = memo(function LabPivotTable({
   const missingValueLabel = locale.startsWith('zh') ? '無資料' : 'No data'
   // Recognized analytes use the same audience-aware display map as report
   // cards, so internal keys such as CA / EGFR(M) never leak into this surface.
-  // Unknown tests keep useLabPivot's source-derived displayName. Patient mode
+  // Unknown tests retain their full language-aware source label. Patient mode
   // can split a long name and its abbreviation across two header lines.
-  const columnParts = (testKey: string, displayName: string): { name: string; abbr: string | null } =>
-    nameMode === 'original' || !CANONICAL_KEYS.has(testKey)
-      ? { name: displayName, abbr: null }
-      : getAnalyteDisplayParts(testKey, audience, locale)
 
   useEffect(() => {
     if (!focusAnalyteKey) return
@@ -327,7 +322,7 @@ export const LabPivotTable = memo(function LabPivotTable({
               </th>
             )}
             {flatTests.map((test) => {
-              const { name, abbr } = columnParts(test.testKey, test.displayName)
+              const { name, abbr } = getLabRowDisplayParts(test, audience, locale, nameMode)
               const isFocused = test.testKey === focusAnalyteKey
               const sourceId = `cumulative-trend:${pivot.category.id}:${test.mapKey}`
               const isTrendActive = activeTrendSourceId === sourceId

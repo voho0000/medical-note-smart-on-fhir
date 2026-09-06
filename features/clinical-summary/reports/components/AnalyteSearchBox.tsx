@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Search, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { getAnalyteDisplayParts } from "@voho0000/clinical-lab-normalization/display"
+import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode, DisplayLang } from "@voho0000/clinical-lab-normalization/display"
 import type { LabPivot } from "../hooks/useLabPivot"
 
@@ -62,10 +62,8 @@ export function buildAnalyteIndex(
       if (seen.has(dedupeKey)) continue
       seen.add(dedupeKey)
 
-      const parts = getAnalyteDisplayParts(row.testKey, audience, locale)
-      const label = nameMode === "original" || audience === "medical"
-        ? row.displayName
-        : parts.name
+      const parts = getLabRowDisplayParts(row, audience, locale, nameMode)
+      const label = parts.name
       const alternatives = [row.displayName, parts.name, parts.abbr, row.testKey]
         .filter((value): value is string => !!value && value !== label)
       const uniqueAlternatives = [...new Set(alternatives)]

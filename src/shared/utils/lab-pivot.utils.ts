@@ -40,6 +40,8 @@ export interface LabRow {
   mapKey: string              // unique pivot key (NHI_CODE:testKey or testKey)
   testKey: string             // canonical analyte name; may match across institutions
   displayName: string         // shown in left column
+  /** Source coding retained for language-aware labels of unrecognized tests. */
+  displaySource?: { code?: any }
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
   subgroupId?: string         // assigned subgroup id (renal/liver/etc.)
@@ -409,12 +411,13 @@ export function buildLabPivots(
       const { isAbnormal } = fv
 
       if (!testMap.has(mapKey)) {
-        testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })
+        testMap.set(mapKey, { mapKey, testKey, displayName, displaySource: { code: obs.code }, values: new Map() })
       } else {
         // Prefer the shorter display name (cleaner labels)
         const row = testMap.get(mapKey)!
         if (displayName.length < row.displayName.length) {
           row.displayName = displayName
+          row.displaySource = { code: obs.code }
         }
       }
       const row = testMap.get(mapKey)!

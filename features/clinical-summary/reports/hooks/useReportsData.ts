@@ -19,6 +19,7 @@ import {
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
 import { getOrderNameDisplay, NHI_ORDER_CODE_TO_ZH, NHI_ORDER_CODE_TO_EN } from '@/src/shared/utils/nhi-order-names'
+import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-analyte-display.utils'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -642,6 +643,13 @@ export function buildReportsData(
       const sharedCanonicalTitle = sharedKey
         ? getAnalyteDisplayLabel(sharedKey, audience, locale)
         : sharedCanonical
+      const standardizedNames = obsForTitle.map((observation) =>
+        getAnalyteDisplayForMode(observation, audience, locale, 'standardized'),
+      )
+      const sharedStandardizedTitle = standardizedNames.length > 0
+        && standardizedNames.every((name) => name === standardizedNames[0] && name !== '—')
+        ? standardizedNames[0]
+        : null
       // Multi-analyte panels / cultures / serology / imaging have no shared
       // canonical analyte, so their title falls back to the bridge's Chinese
       // NHI 醫令名 (groupText). For these, swap in a curated English name keyed
@@ -649,12 +657,9 @@ export function buildReportsData(
       // DISPLAY ONLY — grouping/dedup above still key off the Chinese groupText.
       const orderCode = (head.code as any)?.coding?.[0]?.code as string | undefined
       const panelTitle = getOrderNameDisplay(orderCode, groupText, audience, locale)
-      // Patient + zh-TW: the official 健保醫令中文名 (sourced from
-      // NHI_ORDER_CODE_TO_ZH) takes priority over our short lay name so each row
-      // matches the patient's 健康存摺 exactly (09025C → 血清麩胺酸苯醋酸轉氨基脢,
-      // not 麩草轉胺脢). For single-analyte orders we append the canonical English
-      // short code for quick recognition (… (AST)), unless the official name
-      // already carries a parenthetical qualifier (avoids double parens).
+      // Patient + zh-TW: retain official NHI order names for panels without
+      // a shared analyte label. Single-analyte rows use the common display
+      // contract below, matching their cumulative and expanded result names.
       const officialZh = (audience === 'patient' && locale === 'zh-TW' && orderCode)
         ? NHI_ORDER_CODE_TO_ZH[orderCode]
         : undefined
@@ -664,6 +669,11 @@ export function buildReportsData(
         // the observation. Multi-analyte panels retain the source report title
         // while their children reveal each original analyte name.
         displayTitle = sharedOriginalTitle || groupText || derivePerDrTitle(head)
+      } else if (sharedStandardizedTitle) {
+        // A single analyte uses the same label as cumulative headers and its
+        // expanded results, including patient-language labels. Order names
+        // remain the fallback for multi-analyte panels.
+        displayTitle = sharedStandardizedTitle
       } else if (officialZh) {
         // Prefer the analyte-level canonical short code (AST, NA, …). Serology /
         // immunology orders (ANA, IgG, AMA …) often don't resolve to a canonical

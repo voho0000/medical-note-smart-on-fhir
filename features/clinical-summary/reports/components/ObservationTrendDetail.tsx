@@ -18,7 +18,6 @@ import { ReportHistoryList } from './ReportHistoryList'
 import type { Observation } from '../types'
 import {
   bpComponentAbbr,
-  getAnalyteDisplayForMode,
   getOriginalAnalyteDisplayForObs,
 } from '@voho0000/clinical-lab-normalization/display'
 import { useAudience } from '@/src/application/providers/audience.provider'
@@ -28,6 +27,7 @@ import { isInferredObservationUnit } from '@/src/shared/utils/observation-proven
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   buildLabTrendSeries,
   UNCATEGORIZED_LAB_TREND_CATEGORY,

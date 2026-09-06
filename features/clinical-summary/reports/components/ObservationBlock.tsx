@@ -2,7 +2,7 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getAnalyteDisplayForMode } from '@voho0000/clinical-lab-normalization/display'
+import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-analyte-display.utils'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
