@@ -26,5 +26,6 @@ red on a two-line version bump.
 
 - Before creating, changing, or reviewing rendered UI, read the repository root `DESIGN.md`.
 - Use the repository skill in `.agents/skills/design-mediprisma-ui/`.
+- For a disease's at-a-glance CDSS view (status board), use `.agents/skills/cdss-status-board/`.
 - Prefer existing tokens and shared primitives over one-off values.
 - Verify material UI changes with relevant tests, lint, a production build, and real browser checks.
