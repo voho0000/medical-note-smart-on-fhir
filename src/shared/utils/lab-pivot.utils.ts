@@ -245,6 +245,14 @@ function canonicalTestKey(obs: any): string {
   const fromLoinc = canonicalKeyFromLoinc(obs)
   if (fromLoinc) return fromLoinc
 
+  // Compatibility with clinical-lab-normalization 1.1.1: it only maps the
+  // mass-concentration magnesium code (19123-9). NHI also emits 2601-3,
+  // Magnesium [Moles/volume] in Serum or Plasma (https://loinc.org/2601-3/).
+  // Resolve the same panel key without changing the source value or unit.
+  if (obs?.code?.coding?.some((coding: { system?: string; code?: string }) =>
+    coding.system === FHIR_SYSTEMS.LOINC && coding.code === '2601-3',
+  )) return 'MG'
+
   // 2. Fall back to display-name alias when no recognized LOINC is present
   //    (some institutions / orphan obs ship without coding entries).
   //    Delegate to canonicalTestKeyFromString — the single source of truth for
@@ -253,6 +261,8 @@ function canonicalTestKey(obs: any): string {
   //    pathways can never drift.)
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
+  // These category allowlist names are not yet aliases in the package.
+  if (['鎂', 'MAGNESIUM'].includes(raw.trim().toUpperCase())) return 'MG'
   return canonicalTestKeyFromString(raw)
 }
 
