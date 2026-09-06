@@ -16,6 +16,28 @@ function row(testKey: string, subgroupId: string | undefined, valuesByDate: Reco
 }
 
 describe('splitPivotIntoStackedPanels', () => {
+  it('splits urine into physical/chemical and microscopy/ratios/other without losing rows or dates', () => {
+    const pivot: LabPivot = {
+      category: LAB_CATEGORIES.find((category) => category.id === 'urine')!,
+      dates: ['2026-09-05', '2026-09-01'],
+      rows: [
+        row('COLOR', 'physical', { '2026-09-05': 'Yellow' }),
+        row('PROT', 'chemical', { '2026-09-05': 'Negative' }),
+        row('RBC/HPF', 'micro', { '2026-09-05': '0-2' }),
+        row('ACR', 'ratio', { '2026-09-01': '12' }),
+        row('UNMAPPED URINE TEST', undefined, { '2026-09-01': 'Trace' }),
+      ],
+    }
+    const panels = splitPivotIntoStackedPanels(pivot)
+    expect(panels.map((panel) => panel.rows.map((entry) => entry.testKey))).toEqual([
+      ['COLOR', 'PROT'], ['RBC/HPF', 'ACR', 'UNMAPPED URINE TEST'],
+    ])
+    expect(panels.map((panel) => panel.dates)).toEqual([
+      ['2026-09-05'], ['2026-09-05', '2026-09-01'],
+    ])
+    expect(panels.flatMap((panel) => panel.rows)).toEqual(pivot.rows)
+  })
+
   it('splits 生化 into 腎功能＋電解質 and 肝功能＋發炎＋心肌, each with its own dates', () => {
     const pivot: LabPivot = {
       category: chem,
