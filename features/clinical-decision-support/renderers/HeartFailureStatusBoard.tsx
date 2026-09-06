@@ -264,28 +264,44 @@ function PillarTile({
 }) {
   const therapyDate = formatMetricDate(pillar.therapyDate, now)
   const gap = pillar.status === 'actionable' || pillar.status === 'needs-data'
+  // A pillar the pack did not evaluate is a plain card: it shows the
+  // prescription state and nothing else, and there is no detail to open.
+  const Tile: 'button' | 'div' = pillar.evaluated ? 'button' : 'div'
   return (
-    <button
-      type="button"
+    <Tile
+      {...(pillar.evaluated
+        ? {
+            type: 'button' as const,
+            'aria-expanded': expanded,
+            'aria-controls': `cdss-hf-pillar-detail-${pillar.id}`,
+            onClick: onToggle,
+          }
+        : {})}
       className={cn(
-        'flex min-h-11 min-w-0 flex-col gap-1.5 rounded-md border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/30',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex min-h-11 min-w-0 flex-col gap-1.5 rounded-md border border-border bg-card px-3 py-2.5 text-left',
+        pillar.evaluated && 'transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         expanded && 'bg-muted/25',
       )}
-      aria-expanded={expanded}
-      aria-controls={`cdss-hf-pillar-detail-${pillar.id}`}
-      onClick={onToggle}
       data-testid={`cdss-hf-pillar-${pillar.id}`}
       data-taking={pillar.taking ? 'true' : 'false'}
+      data-evaluated={pillar.evaluated ? 'true' : 'false'}
     >
       <span className="flex min-w-0 flex-col items-start gap-1">
         <span className="text-xs font-semibold leading-4 text-muted-foreground">{pillar.label}</span>
-        <Badge className={cn('h-5 shrink-0 px-1.5 text-[11px]', statusStyle[pillar.status])}>
-          <StatusIcon status={pillar.status} />
-          {pillar.taking && pillar.status === 'no-action'
-            ? (isEnglish ? 'Taking' : '使用中')
-            : statusLabel(pillar.status, isEnglish)}
-        </Badge>
+        {pillar.status ? (
+          <Badge className={cn('h-5 shrink-0 px-1.5 text-[11px]', statusStyle[pillar.status])}>
+            <StatusIcon status={pillar.status} />
+            {pillar.taking && pillar.status === 'no-action'
+              ? (isEnglish ? 'Taking' : '使用中')
+              : statusLabel(pillar.status, isEnglish)}
+          </Badge>
+        ) : (
+          <Badge className="h-5 shrink-0 bg-muted px-1.5 text-[11px] text-muted-foreground hover:bg-muted">
+            {pillar.taking
+              ? (isEnglish ? 'Taking · not assessed' : '使用中 · 本次未判定')
+              : (isEnglish ? 'Not assessed' : '本次未判定')}
+          </Badge>
+        )}
       </span>
       <span className="min-w-0">
         {pillar.taking ? (
@@ -318,7 +334,7 @@ function PillarTile({
           <span className="line-clamp-3 break-words">{pillar.nextAction}</span>
         </span>
       ) : null}
-    </button>
+    </Tile>
   )
 }
 
@@ -514,8 +530,15 @@ export function HeartFailureStatusBoard({
               {isEnglish ? 'Treatment decisions' : '治療決策'}
             </span>
             <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-pillars-title">
-              {board.gdmt?.title ?? (isEnglish ? 'HFrEF foundational medical therapy' : 'HFrEF 四大 FMT 支柱')}
+              {board.gdmt?.title ?? (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱')}
             </span>
+            {board.pillars.every((pillar) => !pillar.evaluated) ? (
+              <span className="text-xs text-muted-foreground" data-testid="cdss-hf-pillars-unassessed-note">
+                {isEnglish
+                  ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
+                  : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。'}
+              </span>
+            ) : null}
             {actionablePillars > 0 ? (
               <span className="text-xs tabular-nums text-muted-foreground">
                 {isEnglish ? `${actionablePillars} actionable` : `${actionablePillars} 項可處理`}
@@ -551,7 +574,7 @@ export function HeartFailureStatusBoard({
               />
             ))}
           </div>
-          {expandedPillar ? (
+          {expandedPillar?.recommendation ? (
             <div
               id={`cdss-hf-pillar-detail-${expandedPillar.id}`}
               role="region"

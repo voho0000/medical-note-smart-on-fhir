@@ -342,6 +342,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         result={result}
         locale={cdssLocale}
         patientId={patientId}
+        profileFacts={profile.facts}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}

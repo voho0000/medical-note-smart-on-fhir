@@ -15,7 +15,9 @@
  * fixed wording for that state, not the medication record.
  */
 import type {
+  CdssFact,
   CdssLocale,
+  CdssPatientProfile,
   CdssRecommendation,
   CdssResult,
   CdssStatus,
@@ -29,12 +31,20 @@ const PHENOTYPE_MODULE_ID = 'heart-failure-phenotype'
 const FMT_SAFETY_MODULE_ID = 'heart-failure-fmt-safety'
 const GDMT_MODULE_ID = 'heart-failure-hfref-gdmt'
 
-/** The four foundational classes, in the order the guideline lists them. */
+/**
+ * The four foundational classes, in the order the guideline lists them.
+ *
+ * `therapyFactKeys` are the adapter's medication-class facts for the pillar,
+ * read when the pack produced no module for it — outside the HFrEF pathway
+ * the pack evaluates none of the four, but the clinician still wants to see
+ * what the patient is on. A tile built that way carries no judgement and
+ * says so.
+ */
 const PILLAR_MODULES = [
-  { id: 'heart-failure-ras-inhibition', zh: 'ARNI／ACEI／ARB', en: 'ARNI / ACEI / ARB' },
-  { id: 'heart-failure-beta-blocker', zh: '實證 β 阻斷劑', en: 'Evidence-based β-blocker' },
-  { id: 'heart-failure-mra', zh: 'MRA', en: 'MRA' },
-  { id: 'heart-failure-sglt2', zh: 'SGLT2i', en: 'SGLT2i' },
+  { id: 'heart-failure-ras-inhibition', zh: 'ARNI／ACEI／ARB', en: 'ARNI / ACEI / ARB', therapyFactKeys: ['arniTherapy', 'aceArbTherapy'] },
+  { id: 'heart-failure-beta-blocker', zh: '實證 β 阻斷劑', en: 'Evidence-based β-blocker', therapyFactKeys: ['hfEvidenceBetaBlockerTherapy'] },
+  { id: 'heart-failure-mra', zh: 'MRA', en: 'MRA', therapyFactKeys: ['mraTherapy'] },
+  { id: 'heart-failure-sglt2', zh: 'SGLT2i', en: 'SGLT2i', therapyFactKeys: ['sglt2Therapy'] },
 ] as const
 
 export type HeartFailureMetricKind = 'lab' | 'measure'
@@ -94,8 +104,14 @@ export interface HeartFailureMetric {
 export interface HeartFailurePillar {
   id: string
   label: string
-  recommendation: CdssRecommendation
-  status: CdssStatus
+  /**
+   * The pack's module for this pillar. Absent when the pack did not evaluate
+   * it for this phenotype; the tile then shows the therapy fact alone.
+   */
+  recommendation?: CdssRecommendation
+  status?: CdssStatus
+  /** `false` when the tile is read from the record without a pack judgement. */
+  evaluated: boolean
   /** The class is being taken, read from the adapter's therapy fact. */
   taking: boolean
   /** 「Valsartan 80mg」 — the names after 「目前用藥中：」 when taking. */
@@ -263,12 +279,52 @@ function pillarFromRecommendation(
     label: isEnglish ? config.en : config.zh,
     recommendation,
     status: recommendation.status,
+    evaluated: true,
     taking,
     medicationNames,
     therapyText,
     therapyDate: latestSourceDate(therapyEvidence),
     therapyEvidence,
     nextAction: recommendation.nextActions[0],
+  }
+}
+
+/**
+ * A pillar the pack did not evaluate, read from the adapter's therapy facts.
+ * For a pillar with two classes (ARNI or ACEI/ARB) the class being taken
+ * wins; otherwise the first fact the record holds.
+ */
+function pillarFromFacts(
+  config: (typeof PILLAR_MODULES)[number],
+  facts: CdssPatientProfile['facts'] | undefined,
+  isEnglish: boolean,
+): HeartFailurePillar | undefined {
+  if (!facts) return undefined
+  const candidates = (config.therapyFactKeys as readonly string[])
+    .map((key) => ({ key, fact: facts[key] as CdssFact | undefined }))
+    .filter((entry): entry is { key: string; fact: CdssFact } => Boolean(entry.fact))
+  if (candidates.length === 0) return undefined
+  const textOf = (fact: CdssFact) => (isEnglish ? fact.en : fact.zh)
+  const chosen = candidates.find((entry) => TAKING_PATTERN.test(textOf(entry.fact))) ?? candidates[0]
+  const therapyText = textOf(chosen.fact)
+  const taking = TAKING_PATTERN.test(therapyText)
+  const therapyEvidence: ClinicalEvidence = {
+    label: isEnglish ? config.en : config.zh,
+    value: therapyText,
+    factKeys: [chosen.key],
+    sources: chosen.fact.sources,
+  }
+  return {
+    id: config.id,
+    label: isEnglish ? config.en : config.zh,
+    evaluated: false,
+    taking,
+    medicationNames: taking
+      ? therapyText.replace(TAKING_PATTERN, '').replace(/^[：:]\s*/, '').trim() || undefined
+      : undefined,
+    therapyText,
+    therapyDate: latestSourceDate(therapyEvidence) ?? chosen.fact.date,
+    therapyEvidence,
   }
 }
 
@@ -280,6 +336,8 @@ export function buildHeartFailureBoard(
   result: CdssResult,
   locale: CdssLocale,
   now: Date = new Date(),
+  /** The profile the pack read, for pillars the pack produced no module for. */
+  profileFacts?: CdssPatientProfile['facts'],
 ): HeartFailureBoardModel | undefined {
   if (result.packId !== HEART_FAILURE_PACK_ID) return undefined
   const isEnglish = locale === 'en'
@@ -309,15 +367,19 @@ export function buildHeartFailureBoard(
   ))
   const pillars = PILLAR_MODULES.flatMap((config) => {
     const recommendation = byId.get(config.id)
-    return recommendation ? [pillarFromRecommendation(config, recommendation, isEnglish)] : []
+    const pillar = recommendation
+      ? pillarFromRecommendation(config, recommendation, isEnglish)
+      : pillarFromFacts(config, profileFacts, isEnglish)
+    return pillar ? [pillar] : []
   })
+  const evaluatedPillars = pillars.filter((pillar) => pillar.evaluated)
 
   const consumedIds = new Set<string>([
     ...alerts.map((item) => item.id),
     ...pillars.map((item) => item.id),
     // The pillar heading is the GDMT module's own title, so its row would say
     // the same thing twice; it stays reachable from the heading.
-    ...(pillars.length > 0 && byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
+    ...(evaluatedPillars.length > 0 && byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
   ])
 
   return {
@@ -326,7 +388,7 @@ export function buildHeartFailureBoard(
     metrics,
     fmtSafety: byId.get(FMT_SAFETY_MODULE_ID),
     alerts,
-    gdmt: pillars.length > 0 ? byId.get(GDMT_MODULE_ID) : undefined,
+    gdmt: evaluatedPillars.length > 0 ? byId.get(GDMT_MODULE_ID) : undefined,
     pillars,
     consumedIds,
   }

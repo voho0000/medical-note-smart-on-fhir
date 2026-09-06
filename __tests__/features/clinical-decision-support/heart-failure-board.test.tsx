@@ -198,6 +198,26 @@ function heartFailureResult(overrides: Partial<CdssResult> = {}): CdssResult {
   }
 }
 
+function hfpefResult(): CdssResult {
+  const result = heartFailureResult()
+  return {
+    ...result,
+    recommendations: result.recommendations.filter((item) => !/ras-inhibition|beta-blocker|-mra$|sglt2|hfref-gdmt/.test(item.id)),
+  }
+}
+
+const HFPEF_FACTS = {
+  arniTherapy: { zh: '目前未使用', en: 'Not currently taking' },
+  aceArbTherapy: {
+    zh: '目前用藥中：Valsartan 80mg',
+    en: 'Currently taking: Valsartan 80mg',
+    sources: [{ resourceType: 'MedicationRequest' as const, resourceId: 'rx-1', date: '2026-08-20' }],
+  },
+  hfEvidenceBetaBlockerTherapy: { zh: '目前未使用', en: 'Not currently taking' },
+  mraTherapy: { zh: '目前未使用（最近一筆處方 2026-03-01 結束）', en: 'Not currently taking (latest prescription ended 2026-03-01)' },
+  sglt2Therapy: { zh: '目前用藥中：Dapagliflozin 10mg', en: 'Currently taking: Dapagliflozin 10mg' },
+}
+
 describe('heart-failure board model', () => {
   it('reads the safety inputs, their age, and what is missing out of the pack output', () => {
     const board = buildHeartFailureBoard(heartFailureResult(), 'zh-TW', NOW)
@@ -273,14 +293,25 @@ describe('heart-failure board model', () => {
     expect(buildHeartFailureBoard(heartFailureResult({ packId: 'ckd-cdss' }), 'zh-TW', NOW)).toBeUndefined()
   })
 
-  it('shows no pillars for a pathway that produced none', () => {
-    const result = heartFailureResult()
-    const hfpef: CdssResult = {
-      ...result,
-      recommendations: result.recommendations.filter((item) => !/ras-inhibition|beta-blocker|-mra$|sglt2|hfref-gdmt/.test(item.id)),
-    }
-    const board = buildHeartFailureBoard(hfpef, 'zh-TW', NOW)!
+  it('shows no pillars for a pathway that produced none when no facts are given', () => {
+    const board = buildHeartFailureBoard(hfpefResult(), 'zh-TW', NOW)!
     expect(board.pillars).toEqual([])
+    expect(board.gdmt).toBeUndefined()
+    expect(board.consumedIds.has('heart-failure-hfref-gdmt')).toBe(false)
+  })
+
+  it('reads unevaluated pillars from the therapy facts, taking class first', () => {
+    const board = buildHeartFailureBoard(hfpefResult(), 'zh-TW', NOW, HFPEF_FACTS)!
+
+    expect(board.pillars.map((pillar) => [pillar.id, pillar.evaluated, pillar.taking, pillar.medicationNames])).toEqual([
+      ['heart-failure-ras-inhibition', false, true, 'Valsartan 80mg'],
+      ['heart-failure-beta-blocker', false, false, undefined],
+      ['heart-failure-mra', false, false, undefined],
+      ['heart-failure-sglt2', false, true, 'Dapagliflozin 10mg'],
+    ])
+    expect(board.pillars[0].therapyEvidence?.factKeys).toEqual(['aceArbTherapy'])
+    expect(board.pillars[0].therapyDate).toBe('2026-08-20')
+    expect(board.pillars[0].status).toBeUndefined()
     expect(board.gdmt).toBeUndefined()
     expect(board.consumedIds.has('heart-failure-hfref-gdmt')).toBe(false)
   })
@@ -424,6 +455,27 @@ describe('heart-failure board view', () => {
 
     render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
     expect(screen.queryByTestId('cdss-hf-clinic-vitals-open')).toBeNull()
+  })
+
+  it('keeps the four pillars on screen outside the HFrEF pathway, as plain prescription state', () => {
+    render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" profileFacts={HFPEF_FACTS} />)
+
+    const pillars = screen.getByTestId('cdss-hf-pillars')
+    expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('四大 FMT 支柱')
+    expect(within(pillars).getByTestId('cdss-hf-pillars-unassessed-note')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-hf-gdmt-trigger')).toBeNull()
+
+    const sglt2 = within(pillars).getByTestId('cdss-hf-pillar-heart-failure-sglt2')
+    expect(sglt2.tagName).toBe('DIV')
+    expect(sglt2).toHaveAttribute('data-evaluated', 'false')
+    expect(sglt2).toHaveTextContent('Dapagliflozin 10mg')
+    expect(sglt2).toHaveTextContent('使用中 · 本次未判定')
+    const mra = within(pillars).getByTestId('cdss-hf-pillar-heart-failure-mra')
+    expect(mra).toHaveTextContent('本次未判定')
+    expect(mra).toHaveTextContent('目前未使用（最近一筆處方 2026-03-01 結束）')
+
+    fireEvent.click(sglt2)
+    expect(screen.queryByTestId('cdss-hf-pillar-detail-heart-failure-sglt2')).toBeNull()
   })
 
   it('leaves every other pack on the generic module table', () => {
