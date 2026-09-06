@@ -1181,6 +1181,7 @@ export const en = {
       months3: 'Last 3 months',
       months6: 'Last 6 months',
       year1: 'Last year',
+      all: 'All',
     },
     cumulativeStacked: {
       dateCount: '{count} dates',

@@ -50,7 +50,9 @@ const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => categor
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'pathology', 'vitals'])
 type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 type RawPreparationPriority = 'idle' | 'after-paint'
-const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-hidden rounded-lg border-border shadow-none hover:shadow-none`
+// Clip rounded edges without creating a scroll container: the cumulative
+// category bar must stick to the report panel's actual scrolling viewport.
+const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-clip rounded-lg border-border shadow-none hover:shadow-none`
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -861,7 +863,7 @@ export function ReportsCard() {
               key={tab.value}
               value={tab.value}
               forceMount={keepMounted}
-              className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
+              className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-clip'}
             >
               {cumulativePrepared ? (
                 <CumulativeLabReport

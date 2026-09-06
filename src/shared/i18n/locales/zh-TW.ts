@@ -1184,6 +1184,7 @@ export const zhTW = {
       months3: '最近三個月',
       months6: '最近半年',
       year1: '最近一年',
+      all: '全部',
     },
     cumulativeStacked: {
       dateCount: '{count} 個日期',

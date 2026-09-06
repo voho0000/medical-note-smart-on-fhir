@@ -32,6 +32,7 @@ export function useCumulativeRangeLabels(): Record<CumulativeRangeId, string> {
     months3: strings.months3 ?? '最近三個月',
     months6: strings.months6 ?? '最近半年',
     year1: strings.year1 ?? '最近一年',
+    all: strings.all ?? '全部',
   }
 }
 
@@ -44,7 +45,7 @@ export function CumulativeRangeSelector({
   value: CumulativeRangeId
   onChange: (range: CumulativeRangeId) => void
   className?: string
-  /** Phone toolbar row: the five options do not fit, so the pill row scrolls
+  /** Phone toolbar row: the range options do not fit, so the pill row scrolls
    *  sideways instead of wrapping into a second line. */
   scrollable?: boolean
 }) {

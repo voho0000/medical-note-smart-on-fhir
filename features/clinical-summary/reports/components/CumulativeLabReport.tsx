@@ -445,7 +445,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   return (
     <div className={fullHeight
       ? '@container flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden'
-      : '@container space-y-3 min-w-0 w-full max-w-full overflow-hidden'}
+      : '@container space-y-3 min-w-0 w-full max-w-full overflow-clip'}
     >
       {/* Cumulative utilities share one responsive row: finder left, layout +
           naming mode right. The middle cell carries the trend hint in 分頁 and

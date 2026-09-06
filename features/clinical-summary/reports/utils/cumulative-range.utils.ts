@@ -38,12 +38,13 @@ interface WindowRange {
   months: number
 }
 
-const RANGE_SPECS: Record<CumulativeRangeId, LatestRange | WindowRange> = {
+const RANGE_SPECS: Record<CumulativeRangeId, LatestRange | WindowRange | { kind: 'all' }> = {
   latest1: { kind: 'latest', count: 1 },
   latest3: { kind: 'latest', count: 3 },
   months3: { kind: 'window', months: 3 },
   months6: { kind: 'window', months: 6 },
   year1: { kind: 'window', months: 12 },
+  all: { kind: 'all' },
 }
 
 export function isCumulativeRangeId(value: unknown): value is CumulativeRangeId {
@@ -51,7 +52,7 @@ export function isCumulativeRangeId(value: unknown): value is CumulativeRangeId 
     && (CUMULATIVE_RANGE_IDS as string[]).includes(value)
 }
 
-/** `latest*` ranges are "N most recent rows"; the others are calendar windows. */
+/** `latest*` ranges are "N most recent rows"; other ranges use a calendar window or include all dates. */
 export function cumulativeRangeLatestCount(range: CumulativeRangeId): number | null {
   const spec = RANGE_SPECS[range]
   return spec?.kind === 'latest' ? spec.count : null

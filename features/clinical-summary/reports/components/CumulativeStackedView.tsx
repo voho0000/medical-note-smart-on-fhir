@@ -296,7 +296,7 @@ function CumulativeSection({
 
   const statusText = (() => {
     if (totalDates === 0) return strings.noDates ?? '無資料'
-    if (expanded) {
+    if (expanded || range === 'all') {
       return (strings.showingAll ?? '已展開全部 {count} 筆').replace('{count}', String(totalDates))
     }
     if (cumulativeRangeLatestCount(range) !== null) {
@@ -387,7 +387,7 @@ function CumulativeSection({
         </div>
       )}
 
-      {(hiddenDates > 0 || expanded) && totalDates > 0 && (
+      {range !== 'all' && (hiddenDates > 0 || expanded) && totalDates > 0 && (
         <div className="mt-1 flex justify-center">
           <button
             type="button"

@@ -21,6 +21,7 @@ export type CumulativeRangeId =
   | 'months3'
   | 'months6'
   | 'year1'
+  | 'all'
 
 export const CUMULATIVE_RANGE_IDS: CumulativeRangeId[] = [
   'latest1',
@@ -28,6 +29,7 @@ export const CUMULATIVE_RANGE_IDS: CumulativeRangeId[] = [
   'months3',
   'months6',
   'year1',
+  'all',
 ]
 
 export const DEFAULT_CUMULATIVE_RANGE: CumulativeRangeId = 'latest3'
