@@ -54,6 +54,8 @@ describe('curated demo echo fixture', () => {
       .map((entry) => entry.resource)
       .filter((resource) => FIXTURE_IDS.has(resource.id))
 
+    expect(DEMO_ECHO_NARRATIVE).toContain('REPORT:\r    \r    Indication:')
+    expect(DEMO_ECHO_NARRATIVE).not.toContain('\n')
     expect(DEMO_ECHO_NARRATIVE).toContain('EF(MM)       72.6')
     expect(DEMO_ECHO_NARRATIVE).toContain('LV Dias dysfunction: Grade 1')
     expect(DEMO_ECHO_NARRATIVE).toContain('AR:mild')
