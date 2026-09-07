@@ -114,7 +114,7 @@ describe('MicrobiologyCumulativeView', () => {
     fireEvent.click(screen.getByRole('button', { name: '26/06/12 Sputum 分枝桿菌 完整報告' }))
     const detail = screen.getByText('來源名稱：TB Culture').closest('td') as HTMLElement
     expect(within(detail).getByText('Mycobacterial Culture')).toBeInTheDocument()
-    expect(within(detail).getByText('No Growth for Mycobacterium')).toBeInTheDocument()
+    expect(within(detail).getByText('No Growth for Mycobacterium', { selector: 'span' })).toBeInTheDocument()
     expect(within(detail).getByText('示範醫院')).toBeInTheDocument()
     expect(within(detail).getByText('13026C')).toBeInTheDocument()
   })
@@ -194,8 +194,17 @@ describe('MicrobiologyCumulativeView', () => {
     expect(articles).toHaveLength(4)
     expect(within(detail).getAllByText('來源名稱：分枝桿菌培養及抗酸性染色')).toHaveLength(2)
     expect(within(detail).getAllByText('來源名稱：TB Culture')).toHaveLength(2)
-    expect(within(detail).getAllByText('acid fast bacilli not found')).toHaveLength(3)
-    expect(within(detail).getByText('No Growth for Mycobacterium')).toBeInTheDocument()
+    // Count the formatted results separately from the collapsed original text.
+    expect(within(detail).getAllByText('acid fast bacilli not found', { selector: 'span' })).toHaveLength(3)
+    expect(articles.map((article) => article.querySelector('[aria-label="原始報告"] pre')?.textContent).sort()).toEqual(
+      [
+        'acid fast bacilli not found',
+        'acid fast bacilli not found',
+        'acid fast bacilli not found',
+        'No Growth for Mycobacterium',
+      ].sort(),
+    )
+    expect(within(detail).getByText('No Growth for Mycobacterium', { selector: 'span' })).toBeInTheDocument()
   })
 
   it('places a culture-named report in susceptibility when its content is an antibiogram', () => {
@@ -278,10 +287,11 @@ describe('MicrobiologyCumulativeView', () => {
     expect(within(table).getByText('1')).toBeInTheDocument()
     expect(within(table).getByText('2')).toBeInTheDocument()
 
-    const originalToggle = within(detail).getByText('查看原始報告')
+    const originalToggle = within(detail).getByText('顯示原始報告')
     fireEvent.click(originalToggle)
-    expect(detail.querySelector('pre')?.textContent).toBe(
-      report.normalize('NFKC').trim().replace(/\s+/g, ' '),
-    )
+    const original = within(detail).getByRole('region', { name: '原始報告' })
+    expect(original.closest('details')).toHaveAttribute('open')
+    // Original punctuation, indentation and newlines must survive formatting.
+    expect(original.querySelector('pre')?.textContent).toBe(report)
   })
 })
