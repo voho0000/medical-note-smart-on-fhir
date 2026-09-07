@@ -1,3 +1,5 @@
+import { echoMeasurement, isDopplerEcho, isUpperEndoscopyReport, reflowReportLayout } from './report-layout-reflow'
+
 // Pure parser that turns a free-text hospital report (endoscopy, imaging, ECG,
 // pathology) into a lightly-structured list of lines for indented rendering.
 //
@@ -18,7 +20,7 @@ export interface ReportLine {
   /** Text content of the line (any leading marker stripped). */
   text: string
   /** Indentation level: 0 = section heading / flush body, 1 = item, 2 = sub-item. */
-  level: 0 | 1 | 2
+  level: 0 | 1 | 2 | 3
   /** Leading list marker, if any (e.g. "1.", "2)", "a)", "•"). Rendered separately. */
   marker?: string
   /** True when the line is a section heading (e.g. "Impression:"). */
@@ -29,6 +31,8 @@ export interface ReportLine {
   monospace?: boolean
   /** Pipe-delimited source row rendered as a compact table without changing its text. */
   tableCells?: string[]
+  /** Source label and its entire value/reference text; blanks stay blank. */
+  measurement?: { label: string; value: string }
 }
 
 // Section headings commonly seen in TW hospital endoscopy / imaging / ECG /
@@ -39,6 +43,16 @@ export interface ReportLine {
 // alternation prefers the longest match (e.g. "Other Interpretations" before
 // "Interpretations", "Impressions" before "Impression").
 const SECTION_KEYWORDS = [
+  'DOPPLER ＆ ECHOCARDIOGRAPHIC REPORT',
+  'DOPPLER & ECHOCARDIOGRAPHIC REPORT',
+  'Short summary', 'Sonar Diagnosis', 'Carotid Sonographic Data', 'Sonographic Data',
+  'CLINICAL DIAGNOSIS', 'B-MODE FINDINGS', 'DOPPLER FINDINGS', 'INTERPRETATION',
+  'PATHOLOGICAL DIAGNOSIS', 'GROSS FINDING', 'MICROSCOPIC FINDING',
+  'NUCLEAR MEDICINE STUDY', 'RADIOPHARMACEUTICAL', 'SCINTIGRAPHIC FINDINGS',
+  'INDICATION', 'COMMENTS', 'HOLTER REPORT', 'IMP', 'Imp', 'Suggestion',
+  'Chief Complain', 'Medication', 'HP FAST', '腎臟超音波', '心電圖',
+  'Esophagus', 'Stomach', 'Duodenum', 'Others', '技術員',
+  'LIVER', 'GB', 'PANCREAS', 'CBD', 'PORTAL VEIN', 'SPLEEN', 'KIDNEY',
   'Endoscopy',
   'Esophagoscopy',
   'Gastroscopy',
@@ -80,7 +94,7 @@ const KEYWORD_SOURCE = SECTION_KEYWORDS.join('|')
 // Matches a section keyword + colon anywhere in the text (case-sensitive).
 // Used to force every heading onto its own line, healing the bridge's glued
 // concatenations.
-const KEYWORD_COLON_RE = new RegExp(`(${KEYWORD_SOURCE})\\s*:`, 'g')
+const KEYWORD_COLON_RE = new RegExp(`(?<![A-Za-z])(${KEYWORD_SOURCE})[ \t]*([:：])`, 'g')
 
 // Matches a numbered list marker ("1." … "10.") glued mid-text onto the
 // preceding token, the way the bridge runs findings together
@@ -95,7 +109,7 @@ const GLUED_NUM_RE = /([A-Za-z一-鿿.;:)\]）】])\s*(\d{1,2}\.)(?=\s*[A-Z一-�
 
 // A line that *is* a section heading, optionally with inline content trailing
 // the colon ("Recommendation: correlate with clinical finding").
-const HEADING_LINE_RE = new RegExp(`^(${KEYWORD_SOURCE})\\s*:\\s*([\\s\\S]*)$`)
+const HEADING_LINE_RE = new RegExp(`^(${KEYWORD_SOURCE})[ \t]*([:：])\\s*([\\s\\S]*)$`)
 
 // Top-level numbered item: "1." / "10." but NOT a decimal like "0.5".
 // The dot must be followed by whitespace, end-of-line, or a non-digit
@@ -106,7 +120,7 @@ const SUB_PAREN_RE = /^\(?([0-9]{1,2}|[a-zA-Z])\)\s*([\s\S]*)$/
 // Sub-sub item: a single capital letter + colon, e.g. "A:" / "B:".
 const LETTER_COLON_RE = /^([A-Z])\s*:\s*([\s\S]*)$/
 // Bullet markers.
-const BULLET_RE = /^([-*•·])\s+([\s\S]*)$/
+const BULLET_RE = /^([-*•·●.])(?:\s+|(?=[(（]))([\s\S]*)$/
 
 // Health Bank microbiology narratives can arrive as one flattened run where
 // spaces stand in for the source system's rows. Keep this detector deliberately
@@ -239,6 +253,11 @@ function segmentFindings(body: string): string[] {
  * "Conclusion:" heading, so segmentation must reach there too.
  */
 function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
+  const bullet = BULLET_RE.exec(body)
+  if (bullet) {
+    lines.push({ text: bullet[2].trim(), level: 1, marker: bullet[1] })
+    return
+  }
   const fl = FINDINGS_LEADIN_RE.exec(body)
   if (fl) {
     lines.push({ text: fl[1].trim(), level: baseLevel })
@@ -247,6 +266,15 @@ function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
       lines.push({ text: finding, level: findingLevel })
     }
     return
+  }
+  // Long unlabelled CT/MR narratives still need readable paragraphs. Only
+  // insert whitespace at clear sentence boundaries; short prose stays intact.
+  if (body.length > 400) {
+    const paragraphs = body.replace(/([a-z]{3,}|[)\]])\.[ \t]+(?=[A-Z])/g, '$1.\n').split('\n')
+    if (paragraphs.length > 1) {
+      for (const paragraph of paragraphs) lines.push({ text: paragraph.trim(), level: baseLevel })
+      return
+    }
   }
   lines.push({ text: body.trim(), level: baseLevel })
 }
@@ -267,27 +295,75 @@ export function formatReportText(raw: string): ReportLine[] {
   // 1) Force every section heading onto its own line, then break apart numbered
   //    findings the bridge ran together. Both heal glued concatenations so a
   //    plain line-split doesn't bury "Impression:" / "2." mid-sentence.
-  const broken = reflowMicrobiologyBlob(raw)
-    .replace(KEYWORD_COLON_RE, (_m, kw) => `\n${kw}:`)
+  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? raw.replace(/\r\n?/g, '\n') : reflowReportLayout(raw))
+    .replace(KEYWORD_COLON_RE, (_m, kw, colon) => `\n${kw}${colon}`)
     .replace(GLUED_NUM_RE, (_m, before, marker) => `${before}\n${marker}`)
 
   // 2) Split, trim, drop blank lines (this also collapses the verbose blank
   //    runs the bridge pads reports with).
-  const rawLines = broken
+  const splitLines = broken
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
 
-  if (isMicrobiologyBlob) return formatMicrobiologyLines(rawLines)
+  if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
+
+  // Heading detection may insert a break after a source list marker. Reattach
+  // only a marker-only line to its heading; never consume adjacent findings.
+  const rawLines: string[] = []
+  for (const line of splitLines) {
+    const previous = rawLines.at(-1)
+    if (previous && /^(?:\d{1,2}\.|\(?[0-9]{1,2}\))$/.test(previous) && HEADING_LINE_RE.test(line)) {
+      rawLines[rawLines.length - 1] = `${previous} ${line}`
+    } else rawLines.push(line)
+  }
 
   const lines: ReportLine[] = []
+  let inEchoMeasurements = isDopplerEcho(raw)
+  let inCarotidTable = false
+  const upperEndoscopy = isUpperEndoscopyReport(raw)
+  let bodyLevel: 0 | 1 = 0
+  const numberedEndoscopy = /Endoscopy\s*[:：]/.test(raw) &&
+    /(?:Pre-procedure assessment|Findings and interventions)\s*:/.test(raw)
+  let numberedContinuation: ReportLine | undefined
+  const pushNumbered = (text: string, level: 1 | 2 | 3, marker: string) => {
+    const item: ReportLine = { text, level, marker }
+    if (/[:：]$/.test(text)) item.heading = true
+    lines.push(item)
+    numberedContinuation = numberedEndoscopy ? item : undefined
+  }
   for (const line of rawLines) {
+    if (/^Carotid Sonographic Data:/.test(line)) inCarotidTable = true
+    else if (inCarotidTable && /^Diam:/.test(line)) inCarotidTable = false
+    else if (inCarotidTable) {
+      const previous = lines.at(-1)
+      if (previous?.monospace) previous.text += `\n${line}`
+      else lines.push({ text: line, level: 0, monospace: true })
+      continue
+    }
+    if (/^(?:Conclusion|Short summary)[:：]/.test(line)) inEchoMeasurements = false
+    if (/^[-=_]{12,}$/.test(line)) {
+      numberedContinuation = undefined
+      lines.push({ text: line, level: 0, separator: true })
+      continue
+    }
+    const measurement = inEchoMeasurements ? echoMeasurement(line) : undefined
+    if (measurement) {
+      lines.push({ text: line, level: 1, measurement })
+      continue
+    }
+    if (/^(?:二尖瓣|三尖瓣|主動脈瓣|肺動脈瓣|心包膜液|其他發現|Diagnosis|Gross Finding|Microscopic Finding|Interpretation Summary|(?:MMode\/2D|Doppler) Measurements [＆&] Calculations|Left Ventricle|Left Atrium|Right Heart|Mitral Valve|Aortic Valve|Tricuspid Valve|Pulmonic Valve|Pericardium)$/.test(line)) {
+      lines.push({ text: line, level: 0, heading: true })
+      continue
+    }
     // Section heading, possibly carrying inline content after the colon.
     const h = HEADING_LINE_RE.exec(line)
     if (h) {
+      numberedContinuation = undefined
+      if (upperEndoscopy) bodyLevel = 1
       const kw = h[1]
-      const rest = h[2].trim()
-      lines.push({ text: `${kw}:`, level: 0, heading: true })
+      const rest = h[3].trim()
+      lines.push({ text: `${kw}${h[2]}`, level: 0, heading: true })
       // Inline content after the colon — may itself be a findings lead-in the
       // bridge tucked under "Conclusion:" / "Findings:", so route it through
       // pushBody (segments findings) rather than pushing one flat line.
@@ -298,28 +374,41 @@ export function formatReportText(raw: string): ReportLine[] {
     // Top-level numbered item ("1." … "10."), decimal-guarded.
     const n = NUM_DOT_RE.exec(line)
     if (n) {
-      lines.push({ text: n[2].trim(), level: 1, marker: `${n[1]}.` })
+      pushNumbered(n[2].trim(), 1, `${n[1]}.`)
+      continue
+    }
+
+    const fullWidthItem = /^(\d{1,2}＞)\s*(.*)$/.exec(line)
+    if (fullWidthItem) {
+      lines.push({ text: fullWidthItem[2], level: 1, marker: fullWidthItem[1] })
       continue
     }
 
     // Sub item "1)" / "a)" / "(1)".
     const s = SUB_PAREN_RE.exec(line)
     if (s) {
-      lines.push({ text: s[2].trim(), level: 2, marker: `${s[1]})` })
+      pushNumbered(s[2].trim(), 2, line.slice(0, line.indexOf(')') + 1))
+      continue
+    }
+
+    const letterDot = numberedEndoscopy ? /^([a-z]\.)\s+([\s\S]*)$/.exec(line) : null
+    if (letterDot) {
+      pushNumbered(letterDot[2], 3, letterDot[1])
       continue
     }
 
     // Sub-sub item "A:" / "B:".
     const lc = LETTER_COLON_RE.exec(line)
     if (lc) {
-      lines.push({ text: lc[2].trim(), level: 2, marker: `${lc[1]}:` })
+      pushNumbered(lc[2].trim(), 2, `${lc[1]}:`)
       continue
     }
 
     // Bullet "-" / "*" / "•".
-    const b = BULLET_RE.exec(line)
+    const b = BULLET_RE.exec(line) ?? (numberedEndoscopy ? /^([*])(?=\S)([\s\S]*)$/.exec(line) : null)
     if (b) {
-      lines.push({ text: b[2].trim(), level: 1, marker: '•' })
+      numberedContinuation = undefined
+      lines.push({ text: b[2].trim(), level: 1, marker: b[1] })
       continue
     }
 
@@ -327,7 +416,11 @@ export function formatReportText(raw: string): ReportLine[] {
     // radiology findings lead-in ("Radiography ... Show:Tortuosity...") — lead-in
     // flush at level 0, each finding indented at level 1. A structureless
     // multi-sentence paragraph WITHOUT a lead-in stays a single flush line.
-    pushBody(lines, line, 0)
+    if (numberedContinuation && lines.at(-1) === numberedContinuation) {
+      numberedContinuation.text += ` ${line}`
+      continue
+    }
+    pushBody(lines, line, bodyLevel)
   }
 
   return lines

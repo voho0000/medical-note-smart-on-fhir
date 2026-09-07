@@ -703,12 +703,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
     // header row toggles open/close (mirrors the multi-item accordion below).
     // Body text stays selectable; a Copy button shows when expanded.
     if (isLongText) {
-      const fullText = compactBlankLines(obs.valueString || '')
+      // Keep the source untouched for the raw-report disclosure. The display
+      // parser already handles excess blank lines in the formatted view.
+      const fullText = obs.valueString || ''
       // Image-only imaging reports (X-ray / ECG with empty conclusion) reach
       // this branch via the synthetic "Report Summary" obs but carry no text —
       // render just the header (title + image indicator), with no toggle,
       // chevron, or empty expandable.
-      const hasText = fullText.length > 0
+      const hasText = fullText.trim().length > 0
       // 向右展開 target id — namespaced so it can't collide with visit/med ids
       // that share the single right-pane slot.
       const reportSourceId = `report:${row.id}`

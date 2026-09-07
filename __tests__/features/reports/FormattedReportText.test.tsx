@@ -25,3 +25,34 @@ describe('FormattedReportText', () => {
     expect(table).toHaveTextContent('2')
   })
 })
+
+describe('echo report layout', () => {
+  it('renders only source values and leaves missing measurements blank', () => {
+    render(<FormattedReportText text={'DOPPLER ＆ ECHOCARDIOGRAPHIC REPORT: IVSd 1.0 (0.6~1.2)cm EF(biplane) (Normal≧55)% E/Sep e` Conclusion: ● Normal function ● mild AR'} />)
+    expect(screen.getByText('IVSd').tagName).toBe('DT')
+    expect(screen.getByText('1.0 (0.6~1.2)cm')).toBeInTheDocument()
+    expect(screen.queryByText('未填')).not.toBeInTheDocument()
+    expect(screen.getByText('E/Sep e`').nextElementSibling).toBeEmptyDOMElement()
+    expect(screen.getByText(/Normal≧55/, { selector: 'dd' }).textContent).toBe('(Normal≧55)%')
+    expect(screen.getByText('Normal function')).toBeInTheDocument()
+    expect(screen.getByText('mild AR')).toBeInTheDocument()
+  })
+})
+
+describe('original report disclosure', () => {
+  it('keeps the exact unformatted source in an initially closed disclosure', () => {
+    const raw = '  Findings:\n\n\n  A   0.5 cm lesion.\nImpression:1. Follow up.  '
+    const { container } = render(<FormattedReportText text={raw} />)
+    const details = container.querySelector('details')!
+    expect(details.open).toBe(false)
+    expect(details.querySelector('summary')).toHaveTextContent('顯示原始報告')
+    expect(details.querySelector('pre')?.textContent).toBe(raw)
+    expect(details.querySelector('pre')).not.toBeVisible()
+  })
+  it('renders source markup as text, never HTML', () => {
+    const raw = 'Findings: <img src=x onerror=alert(1)> & unchanged'
+    const { container } = render(<FormattedReportText text={raw} />)
+    expect(container.querySelector('pre')?.textContent).toBe(raw)
+    expect(container.querySelector('img')).toBeNull()
+  })
+})

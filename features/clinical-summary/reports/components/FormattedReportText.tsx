@@ -4,6 +4,7 @@
 // layout (heading vs item, indentation by level, marker column).
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatReportText } from "@/src/shared/utils/report-text-format"
+import { buttonVariants } from "@/components/ui/button"
 
 interface FormattedReportTextProps {
   text: string
@@ -17,6 +18,7 @@ const INDENT_BY_LEVEL: Record<number, string> = {
   0: '',
   1: 'pl-3',
   2: 'pl-7',
+  3: 'pl-10',
 }
 
 export function FormattedReportText({ text, className }: FormattedReportTextProps) {
@@ -24,15 +26,35 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
   if (lines.length === 0) return null
 
   return (
-    <div className={cn('space-y-1', className)}>
+    <div className={cn('@container/report space-y-1', className)}>
       {lines.map((line, i) => {
         if (line.separator) {
           return <div key={i} aria-hidden="true" className="my-2 border-t border-border" />
         }
+        if (line.measurement) {
+          // Keep consecutive source fields together, in row-major source order.
+          // Use the report's width, not the viewport: the right pane can be narrow
+          // even on a desktop monitor.
+          if (lines[i - 1]?.measurement) return null
+          const measurements = []
+          for (let j = i; j < lines.length && lines[j].measurement; j++) {
+            measurements.push(lines[j].measurement!)
+          }
+          return (
+            <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-sm leading-5 tabular-nums @min-[36rem]/report:grid-cols-2">
+              {measurements.map((measurement, index) => (
+                <div key={index} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-2 py-0.5">
+                  <dt className="min-w-0 break-words font-medium text-foreground">{measurement.label}</dt>
+                  <dd className="min-w-0 break-words">{measurement.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )
+        }
         if (line.heading) {
           // first:mt-0 so the very first heading doesn't add a leading gap.
           return (
-            <div key={i} className="mt-2 flex gap-1.5 first:mt-0">
+            <div key={i} className={cn("mt-2 flex gap-1.5 first:mt-0", INDENT_BY_LEVEL[line.level])}>
               {line.marker && (
                 <span className="shrink-0 text-muted-foreground" aria-hidden="true">{line.marker}</span>
               )}
@@ -78,6 +100,18 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           </div>
         )
       })}
+      <details className="group/raw min-w-0 pt-2">
+        <summary
+          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'min-h-11 cursor-pointer list-none text-muted-foreground sm:min-h-8 [&::-webkit-details-marker]:hidden')}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span className="group-open/raw:hidden">顯示原始報告</span>
+          <span className="hidden group-open/raw:inline">收起原始報告</span>
+        </summary>
+        <div role="region" aria-label="原始報告" className="mt-2 min-w-0 rounded-md border border-border bg-muted/30 p-3">
+          <pre className="m-0 whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
+        </div>
+      </details>
     </div>
   )
 }
