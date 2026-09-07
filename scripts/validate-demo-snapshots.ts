@@ -30,7 +30,7 @@ async function main() {
   const { listClinicalDocuments, resolveSelectedDocuments } = await import(path.join(ROOT, 'src/core/utils/clinical-documents.utils.ts'))
   const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
   const { DEMO_DATA_AS_OF_MS } = await import(path.join(ROOT, 'src/shared/constants/demo-data.constants.ts'))
-  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
+  const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots, remapDemoSnapshotSourceKeys } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
 
   const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/demo/demo-bundle.json'), 'utf8'))
   // Match the real demo/local import path: exact-code NHI MedicationKnowledge
@@ -65,7 +65,9 @@ async function main() {
     for (const aud of ['medical', 'patient'] as const) {
       const tag = `${locale}/${aud}`
       // --- medical summary: exact same path as a live reply ---
-      const snapshot = demoMedicalSummarySnapshots[locale][aud]
+      // Match runtime seeding: new demo reports can renumber short L keys;
+      // citations still belong to the original stable resource identities.
+      const snapshot = remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale][aud], catalog)
       const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
       if (!parsed) { fail(`summary[${tag}]: parseResult rejected`); continue }
       const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog, {
@@ -98,7 +100,9 @@ async function main() {
       console.log(`✓ summary[${tag}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.investigations.length} investigation trends, ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
       // --- safety: same path as a live reply ---
-      const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(demoSafetyScanSnapshots[locale][aud]))
+      const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(
+        remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale][aud], catalog),
+      ))
       if (!scan) { fail(`safety[${tag}]: parseScanResult rejected`); continue }
       for (const a of scan.alerts) {
         for (const k of a.sources ?? []) if (!keys.has(k)) fail(`safety[${tag}] "${a.title}": unknown key ${k}`)

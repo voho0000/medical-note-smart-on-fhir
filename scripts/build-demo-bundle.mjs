@@ -25,8 +25,10 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import demoLabDedupe from './demo-lab-dedupe.cjs'
+import demoEchoFixture from './demo-echo-fixture.cjs'
 
 const { pruneCrossLinkedLabDuplicates } = demoLabDedupe
+const { addDemoEchoFixture } = demoEchoFixture
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
@@ -718,6 +720,23 @@ if (LATEST_ONLY) {
   ]
   console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters, ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications, ${appended.filter((r) => r.resourceType === 'Composition').length} preventive report, and ${appended.filter((r) => r.resourceType === 'Observation').length} report observations`)
 }
+
+// Add the deidentified shared echo/Doppler pair after either full or
+// incremental selection. The helper anchors it to an existing demo hospital
+// encounter and refuses collisions, so rerunning this build is idempotent and
+// cannot overwrite a source-derived resource.
+const echoFixtureResult = addDemoEchoFixture(finalResources)
+finalResources = echoFixtureResult.resources
+if (echoFixtureResult.addedResources.length > 0) {
+  finalEntries = [
+    ...finalEntries,
+    ...echoFixtureResult.addedResources.map((resource) => ({
+      fullUrl: `${resource.resourceType}/${resource.id}`,
+      resource,
+    })),
+  ]
+}
+console.log(`   curated echo fixture: ${echoFixtureResult.addedResources.length} added (anchor ${echoFixtureResult.anchorEncounterId})`)
 
 const finalBundle = {
   resourceType: 'Bundle',

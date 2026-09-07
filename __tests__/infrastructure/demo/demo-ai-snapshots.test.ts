@@ -162,7 +162,9 @@ describe('demo medical-summary snapshots', () => {
       const catalogKeys = new Set(catalog.map((source) => source.key))
       const grounding = buildGroundingAuditInput(scopedClinicalData, catalog)
       for (const audience of ['medical', 'patient'] as const) {
-        const snapshot = demoMedicalSummarySnapshots[locale][audience]
+        const snapshot = remapDemoSnapshotSourceKeys(
+          demoMedicalSummarySnapshots[locale][audience], catalog,
+        )
         const parsedSummary = generateMedicalSummaryUseCase.parseResult(
           JSON.stringify(snapshot),
         )
@@ -190,7 +192,9 @@ describe('demo medical-summary snapshots', () => {
         }
         expect(auditSummaryGrounding(snapshot, grounding)).toEqual([])
 
-        const safetySnapshot = demoSafetyScanSnapshots[locale][audience]
+        const safetySnapshot = remapDemoSnapshotSourceKeys(
+          demoSafetyScanSnapshots[locale][audience], catalog,
+        )
         for (const alert of safetySnapshot.alerts) {
           expect((alert.sources ?? []).filter((key) => !catalogKeys.has(key))).toEqual([])
         }
@@ -241,7 +245,8 @@ describe('demo medical-summary snapshots', () => {
       includedDocumentIds,
       DEMO_DATA_AS_OF_MS,
     )
-    const catalogKeys = new Set(getSourceCatalog(scoped, 'zh-TW').map((source) => source.key))
+    const catalog = getSourceCatalog(scoped, 'zh-TW')
+    const catalogKeys = new Set(catalog.map((source) => source.key))
 
     const cited = new Set<string>()
     const walk = (value: unknown, field?: string): void => {
@@ -260,10 +265,10 @@ describe('demo medical-summary snapshots', () => {
       if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
     }
     for (const locale of ['zh-TW', 'en'] as const) {
-      walk(demoMedicalSummarySnapshots[locale].medical)
-      walk(demoMedicalSummarySnapshots[locale].patient)
-      walk(demoSafetyScanSnapshots[locale].medical)
-      walk(demoSafetyScanSnapshots[locale].patient)
+      walk(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].medical, catalog))
+      walk(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].patient, catalog))
+      walk(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].medical, catalog))
+      walk(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].patient, catalog))
     }
 
     const unresolvable = [...cited]

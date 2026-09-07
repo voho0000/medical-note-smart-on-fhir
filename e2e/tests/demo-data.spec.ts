@@ -60,6 +60,36 @@ test.describe('demo data (試用資料)', () => {
     await expect(meta.locator('time')).toHaveCount(0)
   })
 
+  test('includes one shared echocardiography and Doppler report in the actual trial data', async ({ page }) => {
+    await page.getByTestId('welcome-demo-card').click()
+    await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
+    await page.getByRole('tab').filter({ hasText: /^影像/ }).first().click()
+    const search = page.getByPlaceholder(/搜尋/)
+    await search.fill('18007C')
+    const row = page.locator('[data-tour="report-tour-row"]').filter({ visible: true })
+    await expect(row).toHaveCount(1)
+    const title = row.getByText('Echocardiography (including Doppler)', { exact: true })
+    await expect(title).toBeVisible()
+    await expect(row.getByTestId('shared-report-summary')).toHaveText('2 個檢查項目共用相同報告')
+    const header = row.locator('[role="button"][aria-expanded]').first()
+    if (await header.getAttribute('aria-expanded') !== 'true') await title.click()
+    await expect(row).toContainText('72.6')
+    await expect(row).toContainText('Grade 1')
+    await expect(row).toContainText('mild AR, mild PR')
+    const sources = row.getByTestId('shared-report-sources')
+    await sources.locator('summary').click()
+    await expect(sources.getByRole('listitem')).toHaveCount(2)
+    await expect(sources).toContainText('18005C')
+    await expect(sources).toContainText('18007C')
+    await expect(row.getByRole('button', { name: '複製報告全文', exact: true })).toHaveCount(1)
+    for (const token of ['長庚', '榮總', '嘉基']) {
+      await expect(row).not.toContainText(token)
+    }
+    await search.fill('18005C')
+    await expect(row).toHaveCount(1)
+  })
+
   test('seeds the English medical summary immediately after switching locale', async ({ page }) => {
     await page.getByTestId('welcome-demo-card').click()
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
