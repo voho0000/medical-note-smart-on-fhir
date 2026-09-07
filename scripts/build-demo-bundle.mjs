@@ -722,8 +722,8 @@ if (LATEST_ONLY) {
 }
 
 // Add the deidentified shared echo/Doppler pair after either full or
-// incremental selection. The helper anchors it to an existing demo hospital
-// encounter and refuses collisions, so rerunning this build is idempotent and
+// incremental selection. The helper retains the original dates in a dedicated
+// demo encounter and refuses collisions, so rerunning this build is idempotent and
 // cannot overwrite a source-derived resource.
 const echoFixtureResult = addDemoEchoFixture(finalResources)
 finalResources = echoFixtureResult.resources

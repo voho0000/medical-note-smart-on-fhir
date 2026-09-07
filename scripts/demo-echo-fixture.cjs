@@ -3,8 +3,9 @@
 /**
  * Curated, deidentified echo pair used to demonstrate shared-report grouping.
  * The clinical narrative comes from the user-supplied report, while every
- * patient, encounter, institution, date, resource id, and provenance value is
- * resolved entirely within the bundled demo record.
+ * patient, institution, resource id, and provenance value is
+ * resolved entirely within the bundled demo record. The original examination
+ * and report issue dates are retained in a dedicated demo encounter.
  */
 
 const fs = require('node:fs')
@@ -13,6 +14,9 @@ const path = require('node:path')
 const FIXTURE_SOURCE = 'mediprisma/curated-demo-fixture'
 const FIXTURE_TAG_SYSTEM = 'https://mediprisma.app/CodeSystem/demo-fixture'
 const FIXTURE_TAG_CODE = 'shared-echocardiography-report'
+const ECHO_ENCOUNTER_ID = 'demo-encounter-echo'
+const ECHO_EXAM_DATE = '2024-09-09T00:00:00+08:00'
+const ECHO_ISSUED_DATE = '2024-10-28T00:00:00+08:00'
 const ECHO_REPORT_ID = 'demo-diagnosticreport-echo'
 const DOPPLER_REPORT_ID = 'demo-diagnosticreport-echo-doppler'
 
@@ -157,7 +161,7 @@ function makeReport({ id, orderCode, title, anchor }) {
     subject: { reference: anchor.subject.reference },
     encounter: { reference: `Encounter/${anchor.id}` },
     effectiveDateTime: date,
-    issued: date,
+    issued: ECHO_ISSUED_DATE,
     performer: [{ display: institution }],
     conclusion: DEMO_ECHO_NARRATIVE,
   }
@@ -167,10 +171,20 @@ function addDemoEchoFixture(resources) {
   if (!Array.isArray(resources)) throw new TypeError('resources must be an array')
   const fixtureIds = new Set([ECHO_REPORT_ID, DOPPLER_REPORT_ID])
   const existingFixtures = resources.filter((resource) => fixtureIds.has(resource?.id))
-  const anchor = existingFixtureAnchor(resources, existingFixtures) || chooseAnchorEncounter(resources)
-  if (!anchor) throw new Error('No deidentified ambulatory demo-hospital encounter is available for the echo fixture')
+  const template = existingFixtureAnchor(resources, existingFixtures) || chooseAnchorEncounter(resources)
+  if (!template) throw new Error('No deidentified ambulatory demo-hospital encounter is available for the echo fixture')
 
+  const anchor = {
+    resourceType: 'Encounter',
+    id: ECHO_ENCOUNTER_ID,
+    status: 'finished',
+    class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'AMB' },
+    subject: { reference: template.subject.reference },
+    serviceProvider: { display: template.serviceProvider.display },
+    period: { start: ECHO_EXAM_DATE, end: ECHO_EXAM_DATE },
+  }
   const fixtures = [
+    anchor,
     makeReport({
       id: ECHO_REPORT_ID,
       orderCode: '18005C',
@@ -229,6 +243,9 @@ function addDemoEchoFixtureToBundle(bundle) {
 
 module.exports = {
   DEMO_ECHO_NARRATIVE,
+  ECHO_ENCOUNTER_ID,
+  ECHO_EXAM_DATE,
+  ECHO_ISSUED_DATE,
   DOPPLER_REPORT_ID,
   ECHO_REPORT_ID,
   FIXTURE_SOURCE,
