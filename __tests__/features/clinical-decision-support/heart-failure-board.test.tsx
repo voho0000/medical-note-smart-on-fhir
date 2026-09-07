@@ -500,6 +500,32 @@ describe('heart-failure board view', () => {
     expect(onClear).toHaveBeenCalledTimes(1)
   })
 
+  it('answers 今天有鬱血徵象嗎 with a tap, and stays unanswered by default', () => {
+    const onSave = jest.fn()
+    const { unmount } = render(
+      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" onSaveClinicVitals={onSave} />,
+    )
+    const signs = screen.getByTestId('cdss-hf-congestion-signs')
+    expect(signs).toHaveTextContent('預設未回答')
+    fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave.mock.calls[0][0]).toMatchObject({ congestionSigns: ['edema'] })
+    unmount()
+
+    render(
+      <ClinicalDecisionSupportView
+        result={heartFailureResult()}
+        locale="zh-TW"
+        clinicVitals={{ measuredOn: '2026-09-08', congestionSigns: ['edema'] }}
+        onSaveClinicVitals={onSave}
+      />,
+    )
+    expect(screen.getByTestId('cdss-hf-congestion-sign-edema')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-hf-congestion-signs')).toHaveTextContent('已寫進鬱血證據表')
+    fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
+    expect(onSave.mock.calls[1][0].congestionSigns).toBeUndefined()
+  })
+
   it('refuses half a blood pressure and offers no entry without a save handler', () => {
     const onSave = jest.fn()
     const { unmount } = render(

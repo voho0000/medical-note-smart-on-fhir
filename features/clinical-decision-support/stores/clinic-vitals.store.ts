@@ -15,11 +15,21 @@
  */
 import { create } from 'zustand'
 
+/**
+ * The one-tap answer to 「今天有鬱血徵象嗎？」. The default is no answer —
+ * the screen stays quiet and the pack assumes nothing — so only a sign the
+ * physician actually saw is ever written. Each option names the signs it
+ * stands for in the congestion evidence table.
+ */
+export type CongestionSignsAnswer = 'edema' | 'orthopnea-pnd' | 'jvp-rales'
+
 export interface ClinicVitals {
   systolic?: number
   diastolic?: number
   heartRate?: number
   bodyWeight?: number
+  /** Signs seen in the room this visit; absent means unanswered, never "none". */
+  congestionSigns?: readonly CongestionSignsAnswer[]
   /** The day the measurements were taken, as YYYY-MM-DD. */
   measuredOn: string
 }

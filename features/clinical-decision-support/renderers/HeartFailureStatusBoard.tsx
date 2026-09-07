@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../types'
-import { type ClinicVitals, todayIsoDate } from '../stores/clinic-vitals.store'
+import { type ClinicVitals, type CongestionSignsAnswer, todayIsoDate } from '../stores/clinic-vitals.store'
 import {
   formatMetricDate,
   type HeartFailureBoardModel,
@@ -585,6 +585,64 @@ export function HeartFailureStatusBoard({
           </>
         )}
       </section>
+
+      {/* 今天有鬱血徵象嗎？ — default unanswered and quiet; a tap writes today's sign into the evidence table and the pack recomputes. */}
+      {onSaveClinicVitals ? (
+        <section
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2"
+          aria-label={isEnglish ? 'Congestion signs today' : '今天的鬱血徵象'}
+          data-testid="cdss-hf-congestion-signs"
+        >
+          <span className="text-sm font-semibold text-foreground">
+            {isEnglish ? 'Congestion signs today?' : '今天有鬱血徵象嗎？'}
+          </span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={isEnglish ? 'Signs seen' : '看到的徵象'}>
+            {([
+              ['edema', isEnglish ? 'Edema' : '有：水腫'],
+              ['orthopnea-pnd', isEnglish ? 'Orthopnea / PND' : '有：orthopnea／PND'],
+              ['jvp-rales', isEnglish ? 'JVP / rales' : '有：JVP／rales'],
+            ] as const).map(([value, text]) => {
+              const selected = (clinicVitals?.congestionSigns ?? []).includes(value)
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selected}
+                  className={cn(
+                    'inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    selected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-card text-foreground hover:bg-muted/40',
+                  )}
+                  onClick={() => {
+                    const current = clinicVitals?.congestionSigns ?? []
+                    const next: CongestionSignsAnswer[] = selected
+                      ? current.filter((sign) => sign !== value)
+                      : [...current, value]
+                    onSaveClinicVitals({
+                      ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
+                      measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
+                      ...(next.length > 0 ? { congestionSigns: next } : { congestionSigns: undefined }),
+                    })
+                  }}
+                  data-testid={`cdss-hf-congestion-sign-${value}`}
+                >
+                  {text}
+                </button>
+              )
+            })}
+          </div>
+          <span className="text-[11px] leading-4 text-muted-foreground">
+            {(clinicVitals?.congestionSigns?.length ?? 0) > 0
+              ? (isEnglish
+                ? 'Written into the congestion table as today\'s examination; the modules above recomputed.'
+                : '已寫進鬱血證據表作為今天的檢查，上方判定已重算。')
+              : (isEnglish
+                ? 'Unanswered by default: nothing is assumed, and no negative finding is recorded.'
+                : '預設未回答：不假設無徵象，也不記錄陰性檢查。')}
+          </span>
+        </section>
+      ) : null}
 
       {/* The four pillars as a board: what the patient is on, what is missing, what next. */}
       {board.pillars.length > 0 ? (

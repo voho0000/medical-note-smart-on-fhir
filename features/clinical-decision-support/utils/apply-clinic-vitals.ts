@@ -8,7 +8,18 @@
  * where it came from wherever it is printed.
  */
 import type { CdssFreshnessContext, CdssPatientProfile } from '../types'
-import type { ClinicVitals } from '../stores/clinic-vitals.store'
+import type { ClinicVitals, CongestionSignsAnswer } from '../stores/clinic-vitals.store'
+
+/**
+ * The evidence-table terms each one-tap answer stands for. These are the
+ * congestion table's own term ids (`congestion:<term>` rows), so a tap lands
+ * on the rows the pack already reads; nothing is judged here.
+ */
+export const CONGESTION_SIGN_TERMS: Readonly<Record<CongestionSignsAnswer, readonly string[]>> = {
+  edema: ['pitting-edema'],
+  'orthopnea-pnd': ['orthopnea', 'paroxysmal-nocturnal-dyspnea'],
+  'jvp-rales': ['jvp', 'rales'],
+}
 
 export const CLINIC_ENTRY_NOTE = { zh: '門診輸入', en: 'entered in clinic' } as const
 
@@ -62,8 +73,21 @@ export function applyClinicVitals(
       date,
     }
   }
-  const factKeys = Object.keys(facts) as (keyof typeof DEFAULT_INTERVAL_DAYS)[]
-  if (factKeys.length === 0) return profile
+  const signs = vitals.congestionSigns ?? []
+  if (signs.length > 0) {
+    const matchedTerms = Array.from(new Set(signs.flatMap((sign) => CONGESTION_SIGN_TERMS[sign] ?? [])))
+    facts.clinicCongestionExam = {
+      zh: `門診理學檢查（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
+      en: `Clinic examination (${date}, ${CLINIC_ENTRY_NOTE.en})`,
+      date,
+      textEvidence: { direction: 'supports', matchedTerms },
+    }
+  }
+
+  const factKeys = Object.keys(facts).filter(
+    (key): key is keyof typeof DEFAULT_INTERVAL_DAYS => key in DEFAULT_INTERVAL_DAYS,
+  )
+  if (Object.keys(facts).length === 0) return profile
 
   const freshness: Record<string, CdssFreshnessContext> = {}
   for (const factKey of factKeys) {
