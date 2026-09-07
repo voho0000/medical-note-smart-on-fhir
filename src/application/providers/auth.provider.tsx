@@ -37,6 +37,7 @@ import {
   detectWorkstation,
 } from '@/src/application/telemetry/launch-context'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
+import { syncBetaFeaturesForAccount } from '@/src/application/services/beta-features-sync'
 export interface User {
   uid: string
   email: string | null
@@ -197,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 displayName: firebaseUser.displayName,
                 photoURL: firebaseUser.photoURL,
                 createdAt: new Date().toISOString(),
-              })
+              }, { merge: true })
             }
           } catch {
             // Silently handle errors (offline, permissions, etc.)
@@ -232,6 +233,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => unsubscribe()
   }, [])
+
+  // Keep preference sync independent of how many surfaces read the Beta hook.
+  const signedInUid = user?.uid
+  useEffect(() => {
+    if (!signedInUid) return
+    return syncBetaFeaturesForAccount(signedInUid)
+  }, [signedInUid])
 
   // Reported separately from the sign-in properties: the version is fetched
   // from /version.json at runtime (same source as the version chip) and can

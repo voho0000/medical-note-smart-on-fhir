@@ -55,6 +55,7 @@ export function DisplaySettings() {
   const {
     enabled: betaFeaturesEnabled,
     offered: betaFeaturesOffered,
+    syncError: betaFeaturesSyncError,
     setEnabled: setBetaFeaturesEnabled,
   } = useBetaFeatures()
   const version = useAppVersion()
@@ -160,6 +161,11 @@ export function DisplaySettings() {
               <p id="beta-features-description" className="text-xs leading-relaxed text-muted-foreground">
                 {t.settings.betaFeaturesDescription}
               </p>
+              {betaFeaturesSyncError ? (
+                <p role="status" className="text-xs leading-relaxed text-destructive">
+                  {t.settings.betaFeaturesSyncError}
+                </p>
+              ) : null}
             </div>
             <Switch
               id="beta-features-enabled"

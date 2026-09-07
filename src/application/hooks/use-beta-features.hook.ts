@@ -9,6 +9,8 @@
 //    (owner decision, 2026-09). A not-signed-in visitor stores the answer under
 //    the anonymous Firebase uid when there is one, and under a fixed guest key
 //    when there is not, so the switch remembers itself either way.
+//    Signed-in preferences are synchronized by AuthProvider; this hook reads
+//    the same local cache on every surface without adding more cloud listeners.
 //
 // 2. The unattended Medcloud hand-off is outside the Beta term entirely — that
 //    route must show no experimental tab and no opt-in switch, whatever a
@@ -34,6 +36,7 @@ export interface BetaFeaturesPreference {
   offered: boolean
   /** The `enabledByUser` key this visitor's answer is stored under. */
   storageKey: string
+  syncError: boolean
   setEnabled: (enabled: boolean) => void
 }
 
@@ -41,6 +44,7 @@ export function useBetaFeatures(): BetaFeaturesPreference {
   const { user, anonymousUid } = useAuth()
   const storageKey = resolveBetaFeaturesKey(user?.uid, anonymousUid)
   const storedEnabled = useBetaFeaturesStore((state) => state.enabledByUser[storageKey] === true)
+  const syncError = useBetaFeaturesStore((state) => Boolean(user && state.syncErrors[storageKey]))
   const setBetaFeaturesEnabled = useBetaFeaturesStore((state) => state.setBetaFeaturesEnabled)
   // One state object, one commit: "the client is running" and "this route
   // allows Beta" are decided together and are never separately true.
@@ -64,6 +68,7 @@ export function useBetaFeatures(): BetaFeaturesPreference {
     enabled: route.resolved && route.allowsBeta && storedEnabled,
     offered: route.resolved && route.allowsBeta,
     storageKey,
+    syncError,
     setEnabled,
   }
 }

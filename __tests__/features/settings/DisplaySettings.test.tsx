@@ -13,6 +13,7 @@ import {
 } from '@/src/application/stores/beta-features.store'
 
 let mockMedcloudLaunchRoute = false
+let mockUser: { uid: string } | null = null
 
 jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
   isMedcloudLaunchRoute: () => mockMedcloudLaunchRoute,
@@ -21,7 +22,7 @@ jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
 // Signed out, on the free tier's anonymous session — the state a first-time
 // visitor is actually in.
 jest.mock('@/src/application/providers/auth.provider', () => ({
-  useAuth: () => ({ user: null, isAnonymous: true, anonymousUid: null, loading: false }),
+  useAuth: () => ({ user: mockUser, isAnonymous: !mockUser, anonymousUid: null, loading: false }),
 }))
 
 jest.mock('@/src/application/providers/theme.provider', () => ({
@@ -60,8 +61,9 @@ function renderSettings() {
 describe('DisplaySettings Beta switch', () => {
   beforeEach(() => {
     mockMedcloudLaunchRoute = false
+    mockUser = null
     window.localStorage.clear()
-    useBetaFeaturesStore.setState({ enabledByUser: {} })
+    useBetaFeaturesStore.setState({ enabledByUser: {}, syncErrors: {} })
   })
 
   it('renders the switch for a signed-out visitor and stores their opt-in', () => {
@@ -86,5 +88,13 @@ describe('DisplaySettings Beta switch', () => {
 
     expect(screen.queryByRole('switch', { name: '開啟 Beta 功能' })).not.toBeInTheDocument()
     expect(screen.queryByTestId('pilot-packs-settings')).not.toBeInTheDocument()
+  })
+
+  it('explains account persistence and surfaces a sync failure for the active account', () => {
+    mockUser = { uid: 'account-a' }
+    useBetaFeaturesStore.getState().setSyncError('account-a', true)
+    renderSettings()
+    expect(screen.getByText(/登入後設定隨帳號保存/)).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent('目前無法同步 Beta 設定至帳號')
   })
 })

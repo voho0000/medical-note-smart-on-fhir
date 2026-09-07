@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware'
 
 interface BetaFeaturesState {
   enabledByUser: Record<string, boolean>
+  syncErrors: Record<string, boolean>
+  setSyncError: (userId: string, failed: boolean) => void
   setBetaFeaturesEnabled: (userId: string, enabled: boolean) => void
 }
 
@@ -28,7 +30,8 @@ export function resolveBetaFeaturesKey(
 }
 
 /**
- * Beta features are opt-in per browser. Keeping the default false ensures a
+ * Signed-in preferences sync to the account; guest preferences stay local.
+ * Keeping the default false ensures a
  * first-time visitor never sees experimental clinical tools unless they
  * deliberately enable them in Settings.
  *
@@ -39,6 +42,10 @@ export const useBetaFeaturesStore = create<BetaFeaturesState>()(
   persist(
     (set) => ({
       enabledByUser: {},
+      syncErrors: {},
+      setSyncError: (userId, failed) => set((state) => ({
+        syncErrors: { ...state.syncErrors, [userId]: failed },
+      })),
       setBetaFeaturesEnabled: (userId, enabled) => set((state) => ({
         enabledByUser: {
           ...state.enabledByUser,
@@ -48,6 +55,7 @@ export const useBetaFeaturesStore = create<BetaFeaturesState>()(
     }),
     {
       name: 'mediprisma-beta-features',
+      partialize: (state) => ({ enabledByUser: state.enabledByUser }),
     },
   ),
 )
