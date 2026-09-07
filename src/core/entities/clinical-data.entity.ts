@@ -592,9 +592,15 @@ export interface DiagnosticReportEntity {
   // to an off-heap IndexedDB Blob and `data` is replaced by `_imageRef` (the Blob
   // key) — see LocalBundleService.extractAndStoreImages.
   presentedForm?: Array<{ title?: string; contentType?: string; url?: string; data?: string; size?: number; _imageRef?: string }>
+  subject?: {
+    reference?: string
+    display?: string
+  }
   encounter?: {
     reference?: string
   }
+  /** True only when local import inferred encounter by calendar date. */
+  _encounterInferred?: boolean
   performer?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
   sourceSystem?: string

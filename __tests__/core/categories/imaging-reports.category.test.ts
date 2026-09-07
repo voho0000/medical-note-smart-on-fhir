@@ -121,4 +121,98 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(items.join('\n')).toContain('Imaging report 30')
     expect(items.some((item) => item.includes('omitted for brevity'))).toBe(false)
   })
+
+  it('counts an exact shared narrative once while retaining every source and distinct result', () => {
+    const shared = {
+      status: 'final',
+      subject: { reference: 'Patient/p-1' },
+      encounter: { reference: 'Encounter/e-1' },
+      effectiveDateTime: '2026-06-05T09:00:00+08:00',
+      performer: [{ display: '甲醫學中心' }],
+      conclusion: 'LVEF 63%. Mild mitral regurgitation.',
+    }
+    const reports = [
+      {
+        ...shared,
+        id: 'echo-2d',
+        code: { text: '2D echocardiography', coding: [{ code: '18005C' }] },
+        result: [{ reference: 'Observation/ef' }],
+        _observations: [{
+          id: 'image-quality',
+          status: 'final',
+          code: { text: 'Image quality score' },
+          valueQuantity: { value: 4, unit: '/5' },
+        }],
+        presentedForm: [{ title: '2D cine loop', contentType: 'image/jpeg', url: 'https://example.test/2d' }],
+      },
+      {
+        ...shared,
+        id: 'echo-doppler',
+        code: { text: 'Doppler echocardiography', coding: [{ code: '18007C' }] },
+        result: [{ reference: 'Observation/velocity' }],
+        _observations: [{
+          id: 'gradient',
+          status: 'final',
+          code: { text: 'Pressure gradient' },
+          valueQuantity: { value: 6, unit: 'mmHg' },
+        }],
+        presentedForm: [{ title: 'Doppler waveform', contentType: 'image/png', url: 'https://example.test/doppler' }],
+      },
+    ]
+    const clinicalData = {
+      observations: [
+        {
+          id: 'ef',
+          status: 'final',
+          code: { text: 'Ejection fraction' },
+          valueQuantity: { value: 63, unit: '%' },
+        },
+        {
+          id: 'velocity',
+          status: 'final',
+          code: { text: 'Peak velocity' },
+          valueQuantity: { value: 1.2, unit: 'm/s' },
+        },
+      ],
+      encounters: [],
+    }
+
+    expect(imagingReportsCategory.getCount(reports as any, filters, clinicalData as any)).toBe(1)
+
+    const section = imagingReportsCategory.getContextSection(reports as any, filters, clinicalData as any)
+    const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(text.match(/LVEF 63%\. Mild mitral regurgitation\./g)).toHaveLength(1)
+    expect(text).toContain('2D echocardiography [codes: 18005C] [id: echo-2d]')
+    expect(text).toContain('Doppler echocardiography [codes: 18007C] [id: echo-doppler]')
+    expect(text).toContain('Ejection fraction: 63 %')
+    expect(text).toContain('Peak velocity: 1.2 m/s')
+    expect(text).toContain('Image quality score: 4 /5')
+    expect(text).toContain('Pressure gradient: 6 mmHg')
+    expect(text).toContain('2D cine loop: [URL-backed report attachment not resolved; contentType=image/jpeg]')
+    expect(text).toContain('Doppler waveform: [URL-backed report attachment not resolved; contentType=image/png]')
+    expect(text).toContain('[shared narrative; count once]')
+  })
+
+  it('does not group reports linked only by an inferred encounter', () => {
+    const common = {
+      status: 'final',
+      subject: { reference: 'Patient/p-1' },
+      encounter: { reference: 'Encounter/inferred' },
+      _encounterInferred: true,
+      effectiveDateTime: '2026-06-05',
+      performer: [{ display: '甲醫學中心' }],
+      conclusion: 'Identical report text.',
+    }
+    const reports = [
+      { ...common, id: 'r-1', code: { text: 'Procedure A', coding: [{ code: 'A' }] } },
+      { ...common, id: 'r-2', code: { text: 'Procedure B', coding: [{ code: 'B' }] } },
+    ]
+    const clinicalData = { observations: [], encounters: [] }
+
+    expect(imagingReportsCategory.getCount(reports as any, filters, clinicalData as any)).toBe(2)
+    const section = imagingReportsCategory.getContextSection(reports as any, filters, clinicalData as any)
+    const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(text.match(/Identical report text\./g)).toHaveLength(2)
+    expect(text).not.toContain('[shared narrative; count once]')
+  })
 })

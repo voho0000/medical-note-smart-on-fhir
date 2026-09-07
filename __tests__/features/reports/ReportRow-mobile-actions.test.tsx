@@ -158,10 +158,10 @@ describe('ReportRow mobile actions', () => {
     expect(aiButton).toHaveAttribute('data-detail-source-id', 'report:report-1')
 
     const header = aiButton.closest('[role="button"][aria-expanded]')
-    expect(header).toHaveClass('flex-col', 'sm:flex-row')
+    expect(header).toHaveClass('flex-col', '@min-[520px]:flex-row')
     expect(header?.parentElement).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
-    expect(aiButton.parentElement).toHaveClass('flex-nowrap', 'justify-end')
-    expect(aiButton.parentElement).not.toHaveClass('flex-wrap')
+    expect(aiButton.parentElement).toHaveClass('flex-wrap', 'justify-start')
+    expect(aiButton.parentElement).toHaveClass('@min-[520px]:flex-nowrap', '@min-[520px]:justify-end')
 
     // The collapsed narrative is available before docking, but does not
     // consume a third line in the compact phone list.

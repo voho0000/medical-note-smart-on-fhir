@@ -35,6 +35,13 @@ import {
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
+import {
+  qualifyingSharedReportKeys,
+  reportSource,
+  sharedReportGroupingKey,
+  sharedReportTitle,
+  type SharedReportSource,
+} from '@/src/shared/utils/shared-report-grouping'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -199,6 +206,8 @@ export function buildReportsData(
     }
     const groups = new Map<string, DiagnosticReport[]>()
     const groupOrder: string[] = []
+    const sharedReportKeys = new Set<string>()
+    const sharedReportSourcesByKey = new Map<string, SharedReportSource[]>()
     // Rendering may deduplicate or merge several DiagnosticReports into one
     // row. Keep every original id (including ids of dropped duplicate copies)
     // so a medical-summary citation can still navigate to the rendered row.
@@ -226,13 +235,17 @@ export function buildReportsData(
     // Pass 1: build the natural grouping (as before).
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
+    const qualifyingSharedKeys = qualifyingSharedReportKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
       const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const key = `${text}|${date}|${inst}|${sourceProgram}`
+      const sharedKey = sharedReportGroupingKey(dr)
+      const key = sharedKey && qualifyingSharedKeys.has(sharedKey)
+        ? `shared-report|${sharedKey}`
+        : `${text}|${date}|${inst}|${sourceProgram}`
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
         naturalOrder.push(key)
@@ -289,6 +302,18 @@ export function buildReportsData(
     // group card.
     for (const key of naturalOrder) {
       const grp = naturalGroups.get(key)!
+      if (key.startsWith('shared-report|')) {
+        groups.set(key, grp)
+        viewerReportsByKey.set(key, grp)
+        diagnosticReportIdsByKey.set(
+          key,
+          grp.flatMap((report) => report.id ? [report.id] : []),
+        )
+        sharedReportKeys.add(key)
+        sharedReportSourcesByKey.set(key, grp.map(reportSource))
+        groupOrder.push(key)
+        continue
+      }
       const shouldSplit =
         grp.length > 1 && isCtCode(grp[0].code) && hasDistinctNarratives(grp)
       if (shouldSplit) {
@@ -317,6 +342,8 @@ export function buildReportsData(
     for (const key of groupOrder) {
       const grp = groups.get(key)!
       const head = grp[0]
+      const isSharedReport = sharedReportKeys.has(key)
+      const sharedReportSources = sharedReportSourcesByKey.get(key)
       const isMulti = grp.length > 1
       const linkedStudies: ImagingStudy[] = []
       const rowStudyIds = new Set<string>()
@@ -377,9 +404,16 @@ export function buildReportsData(
       const allObs: Observation[] = []
 
       for (const dr of grp) {
+        // Exact shared-report groups retain every source identity, image, and
+        // viewer action, while presenting narrative/observations from one
+        // representative. The grouping key proved those full narratives equal.
+        const includeClinicalContent = !isSharedReport || dr === head
         const obs = Array.isArray((dr as any)._observations)
           ? (dr as any)._observations.filter((o: any): o is Observation => !!o)
           : []
+        // Every linked source Observation remains owned by a report even when
+        // its duplicate narrative is represented once. Mark all ids as seen so
+        // the orphan pipeline cannot reintroduce a second copy below the row.
         obs.forEach((o: Observation) => {
           if (o?.id) seen.add(o.id)
         })
@@ -391,8 +425,19 @@ export function buildReportsData(
         // individual observation names are already the right labels. We clone
         // the obs (don't mutate the upstream resource).
         const drTitle = derivePerDrTitle(dr)
-        const perTitle = (isMulti && drTitle !== groupText) ? drTitle : null
+        const perTitle = (!isSharedReport && isMulti && drTitle !== groupText) ? drTitle : null
         for (const o of obs) {
+          const isNarrativeOnlyObservation = (
+            typeof o?.valueString === 'string'
+            && o.valueString.trim().length > 30
+            && o.valueQuantity == null
+            && o.valueCodeableConcept == null
+            && (!Array.isArray(o.component) || o.component.length === 0)
+          )
+          // The exact full narrative is already represented by the head. Keep
+          // every structured result from the remaining source procedures so a
+          // shared conclusion can never hide a different numeric/coded result.
+          if (!includeClinicalContent && isNarrativeOnlyObservation) continue
           if (perTitle) {
             allObs.push({
               ...o,
@@ -413,9 +458,9 @@ export function buildReportsData(
         // ("心電圖:", "Radiography ... Show:") and an app-added prefix showed up
         // as a redundant first line on every report. A report that genuinely
         // begins with "Conclusion:" keeps it, since we use the raw text.
-        if (conclusionText) summaryParts.push(conclusionText)
-        if (conclusionCodes && conclusionCodes !== '—') summaryParts.push(`Conclusion Codes: ${conclusionCodes}`)
-        if (notes.length > 0) summaryParts.push(notes.join('\n'))
+        if (includeClinicalContent && conclusionText) summaryParts.push(conclusionText)
+        if (includeClinicalContent && conclusionCodes && conclusionCodes !== '—') summaryParts.push(`Conclusion Codes: ${conclusionCodes}`)
+        if (includeClinicalContent && notes.length > 0) summaryParts.push(notes.join('\n'))
 
         if (Array.isArray(dr.presentedForm)) {
           for (const form of dr.presentedForm) {
@@ -456,7 +501,7 @@ export function buildReportsData(
             // keeping only the title. (HTML attachments are handled by the
             // document renderer, not here — skip them to avoid raw markup.)
             const ct = (form?.contentType || '').toLowerCase()
-            if (form?.data && ct.startsWith('text/') && !ct.includes('html')) {
+            if (includeClinicalContent && form?.data && ct.startsWith('text/') && !ct.includes('html')) {
               const decoded = decodeBase64Utf8(form.data).trim()
               if (decoded) {
                 summaryParts.push(decoded)
@@ -697,6 +742,9 @@ export function buildReportsData(
           ? sharedCanonicalTitle
           : panelTitle
       }
+      if (sharedReportSources) {
+        displayTitle = sharedReportTitle(sharedReportSources, locale, audience) ?? displayTitle
+      }
 
       const categoryText = Array.isArray(head.category)
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')
@@ -750,6 +798,7 @@ export function buildReportsData(
         bridgeDupCount: dupCountByKey.get(key),
         imagingStudyIds: rowStudyIds.size > 0 ? [...rowStudyIds] : undefined,
         diagnosticReportIds: diagnosticReportIdsByKey.get(key),
+        sharedReportSources,
       })
     }
 

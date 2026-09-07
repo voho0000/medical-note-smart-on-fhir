@@ -14,6 +14,7 @@ import { useRightDetail } from "@/src/application/providers/right-detail.provide
 import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
+import type { SharedReportSource } from '@/src/shared/utils/shared-report-grouping'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate, formatSourceTime } from '../utils/fhir-helpers'
 import {
   getReferenceRangeComparison,
@@ -101,11 +102,11 @@ function ReportTitle({
   className: string
 }) {
   if (expanded) {
-    return <span className={cn(className, 'whitespace-normal break-words')}>{children}</span>
+    return <span className={cn(className, 'select-text whitespace-normal break-words')}>{children}</span>
   }
   if (!expandable) {
     return (
-      <TapTooltip content={title} aria-label={title} className={cn(className, 'truncate')}>
+      <TapTooltip content={title} aria-label={title} className={cn(className, 'select-text truncate')}>
         {children}
       </TapTooltip>
     )
@@ -113,10 +114,103 @@ function ReportTitle({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn(className, 'truncate')}>{children}</span>
+        <span className={cn(className, 'select-text truncate')}>{children}</span>
       </TooltipTrigger>
       <TooltipContent>{title}</TooltipContent>
     </Tooltip>
+  )
+}
+
+function selectionIsInside(element: HTMLElement): boolean {
+  if (typeof window === 'undefined') return false
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || !selection.toString()) return false
+  const anchor = selection.anchorNode
+  const focus = selection.focusNode
+  return !!anchor && !!focus && element.contains(anchor) && element.contains(focus)
+}
+
+function CopyReportTitleAction({
+  title,
+  nestedInButton = true,
+  className,
+}: {
+  title: string
+  nestedInButton?: boolean
+  className?: string
+}) {
+  const { t } = useLanguage()
+  const { copied, copy } = useCopyToClipboard(1500)
+  const label = copied ? t.reports.titleCopied : t.reports.copyTitle
+  const activate = async (event: React.SyntheticEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!await copy(title)) toast.error(t.common.copyFailed)
+  }
+  const classes = cn(
+    'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:min-h-7 sm:min-w-7',
+    copied && 'text-primary',
+    className,
+  )
+  const content = copied
+    ? <Check className="h-3.5 w-3.5" aria-hidden="true" />
+    : <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {nestedInButton ? (
+          <span
+            role="button"
+            tabIndex={0}
+            data-testid="copy-report-title"
+            data-report-title-copy="true"
+            aria-label={label}
+            className={classes}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={activate}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') void activate(event)
+            }}
+          >
+            {content}
+          </span>
+        ) : (
+          <button
+            type="button"
+            data-testid="copy-report-title"
+            data-report-title-copy="true"
+            aria-label={label}
+            className={classes}
+            onClick={activate}
+          >
+            {content}
+          </button>
+        )}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function CopyableRightDetailTitle({
+  title,
+  dateLabel,
+  trailing,
+}: {
+  title: string
+  dateLabel?: string
+  trailing?: ReactNode
+}) {
+  return (
+    <span className="flex w-full min-w-0 items-center gap-1.5">
+      <span className="min-w-0 select-text truncate">{title}</span>
+      {dateLabel && (
+        <span className="shrink-0 text-xs font-normal text-muted-foreground">· {dateLabel}</span>
+      )}
+      {trailing}
+      <CopyReportTitleAction title={title} nestedInButton={false} />
+    </span>
   )
 }
 
@@ -125,6 +219,42 @@ function formatImageBytes(size?: number): string {
   const mb = size / (1024 * 1024)
   if (mb >= 1) return `${mb.toFixed(1)} MB`
   return `${Math.round(size / 1024)} KB`
+}
+
+function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
+  const { t } = useLanguage()
+  if (!sources || sources.length < 2) return null
+  const labels = t.reports.sharedReport
+  return (
+    <details
+      data-testid="shared-report-sources"
+      className="mt-2 border-t border-border/70 pt-2 text-xs text-muted-foreground"
+    >
+      <summary className="flex min-h-11 cursor-pointer select-none items-center font-medium text-foreground/80 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:min-h-6">
+        {labels.showSources}
+      </summary>
+      <ul className="mt-1.5 divide-y divide-border/60" aria-label={labels.sourceListLabel}>
+        {sources.map((source, index) => (
+          <li
+            key={`${source.reportId ?? 'source'}-${index}`}
+            className="grid gap-0.5 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3"
+          >
+            <span className="min-w-0 break-words text-foreground/90">{source.title}</span>
+            {source.codes.length > 0 && (
+              <span className="break-all tabular-nums">
+                {labels.orderCode}: {source.codes.join(', ')}
+              </span>
+            )}
+            {source.reportId && (
+              <span className="break-all sm:col-span-2">
+                {labels.recordId}: {source.reportId}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
 }
 
 /** Report detail rendered in the right pane (向右展開) — findings text on top,
@@ -138,11 +268,13 @@ function ReportImagingDetail({
   images,
   title,
   reportId,
+  sharedReportSources,
 }: {
   text: string
   images: ReportImage[]
   title: string
   reportId?: string
+  sharedReportSources?: SharedReportSource[]
 }) {
   const { t } = useLanguage()
   const tt = (t as any).reports?.image
@@ -233,6 +365,7 @@ function ReportImagingDetail({
         )}
       </button>
       <FormattedReportText text={text} className="text-sm leading-relaxed text-foreground/90" />
+      <SharedReportSources sources={sharedReportSources} />
     </div>
   ) : null
 
@@ -374,6 +507,7 @@ function ReportImagingDetail({
 function ReportPanelDetail({
   observations,
   interpretation,
+  sharedReportSources,
 }: {
   observations: Observation[]
   interpretation?: {
@@ -381,6 +515,7 @@ function ReportPanelDetail({
     reportText: string
     reportTitle: string
   }
+  sharedReportSources?: SharedReportSource[]
 }) {
   return (
     <div className="scrollbar-thin-persistent h-full space-y-0 overflow-y-auto pr-1">
@@ -396,6 +531,7 @@ function ReportPanelDetail({
       {observations.map((obs, i) => (
         <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
       ))}
+      <SharedReportSources sources={sharedReportSources} />
     </div>
   )
 }
@@ -718,12 +854,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
       const createReportRightDetail = () => ({
           sourceId: reportSourceId,
           title: (
-            <span className="flex items-center gap-1.5 min-w-0">
-              <span className="truncate">{row.title}</span>
-              {dateLabel && (
-                <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {dateLabel}</span>
-              )}
-            </span>
+            <CopyableRightDetailTitle title={row.title} dateLabel={dateLabel} />
           ),
           // key per report so the splitter ratio (and lightbox state) reset to
           // the content-aware default on each open instead of React reusing the
@@ -735,6 +866,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               images={images ?? []}
               title={row.title}
               reportId={reportSourceId}
+              sharedReportSources={row.sharedReportSources}
             />
           ),
         })
@@ -762,9 +894,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           >
             <div
               className={cn(
-                'flex rounded-md transition-all outline-none sm:mb-0.5',
+                'flex rounded-md transition-all outline-none @min-[520px]:mb-0.5',
                 hasText
-                  ? 'flex-col items-stretch gap-0 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between sm:gap-2'
+                  ? 'flex-col items-stretch gap-0 @min-[520px]:flex-row @min-[520px]:flex-nowrap @min-[520px]:items-center @min-[520px]:justify-between @min-[520px]:gap-2'
                   : 'flex-wrap items-center justify-between gap-2',
                 hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
               )}
@@ -775,6 +907,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 if (!hasText) return
                 if ((e.target as HTMLElement).closest('[data-report-history-action]')) return
                 if ((e.target as HTMLElement).closest('[data-report-image-action]')) return
+                if ((e.target as HTMLElement).closest('[data-report-title-copy]')) return
+                if (selectionIsInside(e.currentTarget)) return
                 setTextExpanded(!textExpanded)
               }}
               onKeyDown={(e) => {
@@ -785,7 +919,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 }
               }}
             >
-              <div className={cn('flex min-w-[8rem] flex-1 basis-0 items-center gap-1.5', hasText && 'w-full sm:w-auto sm:min-w-[12rem]')}>
+              <div className={cn('flex min-w-[8rem] flex-1 basis-0 items-center gap-1.5', hasText && 'w-full @min-[520px]:w-auto @min-[520px]:min-w-[12rem]')}>
                 {showTypeBadge && <ReportTypeBadge group={row.group} />}
                 <ReportTitle
                   title={row.title}
@@ -795,6 +929,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 >
                   <HighlightText text={row.title} query={query} />
                 </ReportTitle>
+                <CopyReportTitleAction title={row.title} />
                 {renderTrendButton()}
                 {hasImages && renderImageButton()}
               </div>
@@ -802,7 +937,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 className={cn(
                   'flex max-w-full shrink-0 items-center',
                   hasText
-                    ? 'min-w-0 flex-nowrap justify-end gap-1 sm:gap-2'
+                    ? 'min-w-0 flex-wrap justify-start gap-1 @min-[520px]:flex-nowrap @min-[520px]:justify-end @min-[520px]:gap-2'
                     : 'gap-2',
                 )}
               >
@@ -869,9 +1004,20 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 )}
               </div>
             </div>
+            {row.sharedReportSources && row.sharedReportSources.length > 1 && (
+              <div
+                data-testid="shared-report-summary"
+                className="mt-1 text-xs leading-relaxed text-muted-foreground"
+              >
+                {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
+              </div>
+            )}
             {hasText && (
               textExpanded ? (
-                <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
+                <>
+                  <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
+                  <SharedReportSources sources={row.sharedReportSources} />
+                </>
               ) : (
                 <p
                   className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80 max-sm:hidden"
@@ -1061,17 +1207,15 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
   const createPanelRightDetail = () => ({
       sourceId: panelSourceId,
       title: (
-        <span className="flex items-center gap-1.5 min-w-0">
-          <span className="truncate">{row.title}</span>
-          {accordionDateLabel && (
-            <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {accordionDateLabel}</span>
-          )}
-          {abnormalCount > 0 && (
+        <CopyableRightDetailTitle
+          title={row.title}
+          dateLabel={accordionDateLabel}
+          trailing={abnormalCount > 0 ? (
             <span className={cn('inline-flex items-center rounded-full px-1.5 py-0 text-[0.6875rem] font-medium', REPORT_ABNORMAL_TONE)}>
               {abnormalCount} 異常
             </span>
-          )}
-        </span>
+          ) : undefined}
+        />
       ),
       node: (
         <ReportPanelDetail
@@ -1082,6 +1226,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             reportText: panelNarrative,
             reportTitle: row.title,
           } : undefined}
+          sharedReportSources={row.sharedReportSources}
         />
       ),
     })
@@ -1113,6 +1258,20 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           )}
         >
           <AccordionTrigger
+            trailingAction={(
+              <CopyReportTitleAction
+                title={row.title}
+                nestedInButton={false}
+                className="mr-1 mt-1"
+              />
+            )}
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest('[data-report-title-copy]')) {
+                event.preventDefault()
+                return
+              }
+              if (selectionIsInside(event.currentTarget)) event.preventDefault()
+            }}
             className={cn(
               // `min-w-0` is what actually lets a long title truncate. The
               // trigger is a flex item of AccordionPrimitive.Header, so without
@@ -1286,6 +1445,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               )}
             </div>
           </AccordionTrigger>
+          {row.sharedReportSources && row.sharedReportSources.length > 1 && (
+            <div
+              data-testid="shared-report-summary"
+              className="px-2.5 pb-1.5 text-xs leading-relaxed text-muted-foreground"
+            >
+              {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
+            </div>
+          )}
           <AccordionContent className="pb-0">
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
@@ -1295,6 +1462,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   nested
                 />
               ))}
+              <div className="px-2.5 pb-2">
+                <SharedReportSources sources={row.sharedReportSources} />
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>

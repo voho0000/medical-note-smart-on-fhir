@@ -1058,6 +1058,8 @@ export const zhTW = {
     historyEmpty: '無歷史記錄。',
     possibleDuplicate: '可能重複',
     copyFullReport: '複製報告全文',
+    copyTitle: '複製報告標題',
+    titleCopied: '報告標題已複製',
     resizeTextAndImages: '拖移以調整文字與影像的高度比例',
     rightPane: {
       openText: '在右側面板展開全文',
@@ -1070,6 +1072,13 @@ export const zhTW = {
     bridgeDup: {
       label: '重複副本',
       tooltip: '健保署送出 {count} 份內容相同（或截斷版）的副本，已自動保留最完整的一份顯示。如為健保 FHIR bridge 去重漏網，可回報修正。',
+    },
+    sharedReport: {
+      summary: '{count} 個檢查項目共用相同報告',
+      showSources: '查看來源檢查項目',
+      sourceListLabel: '共用報告的來源檢查項目',
+      orderCode: '醫令碼',
+      recordId: '來源紀錄',
     },
     // 檢驗依採檢日合併（LabDayGroupCard＋檢視切換）
     labViewLabel: '檢驗檢視',

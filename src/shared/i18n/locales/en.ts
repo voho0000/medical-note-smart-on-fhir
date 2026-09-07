@@ -1057,6 +1057,8 @@ export const en = {
     historyEmpty: 'No history available.',
     possibleDuplicate: 'Possible duplicate',
     copyFullReport: 'Copy full report',
+    copyTitle: 'Copy report title',
+    titleCopied: 'Report title copied',
     resizeTextAndImages: 'Resize the text and image areas',
     rightPane: {
       openText: 'Open the full report in the right panel',
@@ -1069,6 +1071,13 @@ export const en = {
     bridgeDup: {
       label: 'dup copy',
       tooltip: 'The NHI sent {count} identical (or truncated) copies; the most complete one is kept. A leftover here is a source-side (FHIR bridge) dedup miss worth reporting.',
+    },
+    sharedReport: {
+      summary: '{count} procedures share this report',
+      showSources: 'View source procedures',
+      sourceListLabel: 'Source procedures sharing this report',
+      orderCode: 'Order code',
+      recordId: 'Source record',
     },
     // Lab collection-day grouping (LabDayGroupCard + view toggle)
     labViewLabel: 'Lab view',

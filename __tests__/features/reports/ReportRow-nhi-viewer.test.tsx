@@ -91,7 +91,7 @@ describe('ReportRow NHI DICOM viewer actions', () => {
     expect(document.body.innerHTML).not.toContain('evil.example')
   })
 
-  it('keeps a long report title readable when several distinct viewers remain', () => {
+  it('keeps a long report title readable and waits for a wide container before using one line', () => {
     const row = baseRow()
     row.title = '這是一個很長的影像檢查名稱，用來確認 Viewer 動作不會再把標題擠到完全消失'
     row.obs[0].valueString = 'A long report narrative that keeps this report in the expandable text layout for responsive testing.'
@@ -115,8 +115,8 @@ describe('ReportRow NHI DICOM viewer actions', () => {
     expect(trigger).toHaveTextContent('健保影像 3')
     expect(screen.queryByRole('button', { name: /健保影像 1/ })).not.toBeInTheDocument()
     const titleContainer = screen.getByText(row.title).parentElement
-    expect(titleContainer).toHaveClass('basis-0', 'sm:w-auto', 'sm:min-w-[12rem]')
-    expect(titleContainer?.parentElement).toHaveClass('sm:flex-nowrap')
+    expect(titleContainer).toHaveClass('basis-0', '@min-[520px]:w-auto', '@min-[520px]:min-w-[12rem]')
+    expect(titleContainer?.parentElement).toHaveClass('flex-col', '@min-[520px]:flex-nowrap')
     expect(screen.getByText(row.title)).toHaveClass('min-w-0', 'flex-1', 'truncate')
     expect(screen.getByRole('button', { name: '在右側面板展開全文' })).toBeInTheDocument()
   })

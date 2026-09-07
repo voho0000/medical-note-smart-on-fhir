@@ -19,6 +19,33 @@ const v2Category = (code: string) => [{
 const performer = (display: string) => [{ display }]
 
 describe('calculateReportTabCounts', () => {
+  it('counts exact shared narratives from different imaging procedures as one row', () => {
+    const base = {
+      status: 'final',
+      subject: { reference: 'Patient/example' },
+      encounter: { reference: 'Encounter/visit-1' },
+      category: category('imaging'),
+      effectiveDateTime: '2024-09-09T09:00:00+08:00',
+      performer: performer('示範醫院'),
+      conclusion: 'Same complete echocardiography report.',
+    }
+    const counts = calculateReportTabCounts([
+      {
+        ...base,
+        id: 'echo',
+        code: { text: '超音波心臟圖', coding: [{ code: '18005C' }] },
+      },
+      {
+        ...base,
+        id: 'doppler',
+        code: { text: '杜卜勒氏彩色心臟血流圖', coding: [{ code: '18007C' }] },
+      },
+    ], [], [], [])
+
+    expect(counts.all).toBe(1)
+    expect(counts.imaging).toBe(1)
+  })
+
   it('counts the lightweight tab projections using the same primary grouping units', () => {
     const linkedWbc = {
       id: 'obs-wbc',

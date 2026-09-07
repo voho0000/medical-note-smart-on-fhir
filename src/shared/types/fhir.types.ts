@@ -132,6 +132,9 @@ export interface DiagnosticReport {
   code?: CodeableConcept
   subject?: Reference
   encounter?: Reference
+  /** Internal local-import provenance. The source omitted encounter and the
+   * app attached one by date for navigation; never treat it as source proof. */
+  _encounterInferred?: boolean
   effectiveDateTime?: string
   effectivePeriod?: Period
   issued?: string

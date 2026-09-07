@@ -289,6 +289,7 @@ export class FhirMapper implements IDataMapper {
       meta: fhirResource.meta,
       identifier: fhirResource.identifier,
       code: fhirResource.code,
+      subject: fhirResource.subject,
       result: fhirResource.result,
       conclusion: fhirResource.conclusion,
       effectiveDateTime: fhirResource.effectiveDateTime,
@@ -302,6 +303,7 @@ export class FhirMapper implements IDataMapper {
       extension: fhirResource.extension,
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
+      _encounterInferred: fhirResource._encounterInferred,
       performer: fhirResource.performer,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id

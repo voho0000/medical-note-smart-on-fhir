@@ -490,6 +490,21 @@ describe('FhirMapper', () => {
       expect(result.effectivePeriod?.start).toBe('2025-03-01T08:00:00+08:00')
     })
 
+    it('preserves subject and explicit-vs-inferred encounter provenance', () => {
+      const result = FhirMapper.toDiagnosticReport({
+        resourceType: 'DiagnosticReport',
+        id: 'dr-provenance',
+        status: 'final',
+        subject: { reference: 'Patient/example' },
+        encounter: { reference: 'Encounter/visit-1' },
+        _encounterInferred: true,
+      }, [])
+
+      expect(result.subject).toEqual({ reference: 'Patient/example' })
+      expect(result.encounter).toEqual({ reference: 'Encounter/visit-1' })
+      expect(result._encounterInferred).toBe(true)
+    })
+
     it('should map FHIR DiagnosticReport without observations', () => {
       const fhirReport = {
         id: 'report-123',

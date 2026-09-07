@@ -494,6 +494,45 @@ describe('buildLongitudinalInvestigationContext', () => {
     expect(context).toContain('2026-05-25;')
     expect(context).toContain('2026-06-02;')
   })
+
+  it('joins a newer shared echo narrative to an older singleton without losing any source', () => {
+    const report = (
+      id: string,
+      date: string,
+      code: string,
+      title: string,
+      conclusion: string,
+    ) => ({
+      id,
+      status: 'final',
+      subject: { reference: 'Patient/p-1' },
+      encounter: { reference: `Encounter/e-${date}` },
+      category: [{ text: 'Radiology' }],
+      code: { text: title, coding: [{ code }] },
+      effectiveDateTime: date,
+      performer: [{ display: '甲醫學中心' }],
+      conclusion,
+    })
+    const newFinding = 'LVEF 63%. Mild mitral regurgitation.'
+    const oldFinding = 'LVEF 58%. Mild mitral regurgitation.'
+    const input = {
+      diagnosticReports: [
+        report('new-2d', '2026-06-05', '18005C', '2D echocardiography', newFinding),
+        report('new-doppler', '2026-06-05', '18007C', 'Doppler echocardiography', newFinding),
+        report('old-2d', '2025-11-12', '18005C', '2D echocardiography', oldFinding),
+      ],
+    }
+    const catalog = buildSourceCatalog(input as never)
+    const context = buildLongitudinalInvestigationContext(input as never, catalog)
+
+    expect(catalog.filter((source) => source.resourceType === 'DiagnosticReport')).toHaveLength(3)
+    expect(context.match(/LVEF 63%\. Mild mitral regurgitation\./g)).toHaveLength(1)
+    expect(context.match(/LVEF 58%\. Mild mitral regurgitation\./g)).toHaveLength(1)
+    expect(context).toContain('2025-11-12; L3: LVEF 58%')
+    expect(context).toContain('2026-06-05; L1 2D echocardiography')
+    expect(context).toContain('L1 2D echocardiography [codes: 18005C] [id: new-2d]')
+    expect(context).toContain('L2 Doppler echocardiography [codes: 18007C] [id: new-doppler]')
+  })
 })
 
 describe('buildCoverageStats', () => {

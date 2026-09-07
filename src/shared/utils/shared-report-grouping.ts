@@ -1,0 +1,195 @@
+import { decodeBase64Utf8 } from './base64.utils'
+import { getCodeableConceptText } from './fhir-helpers'
+import { inferReportDisplayGroup } from './report-grouping-helpers'
+
+export type SharedReportSource = {
+  reportId?: string
+  title: string
+  codes: string[]
+  codings: Array<{
+    system?: string
+    code: string
+    display?: string
+  }>
+}
+
+function reportExamDate(report: any): string | undefined {
+  return report?.effectiveDateTime || report?.effectivePeriod?.start
+}
+
+function reportInstitution(report: any): string | undefined {
+  return report?._observations?.[0]?.performer?.[0]?.display
+    || report?.performer?.[0]?.display
+    || undefined
+}
+
+function explicitReference(reference: unknown): string | null {
+  return typeof reference === 'string' && reference.trim()
+    ? reference.trim()
+    : null
+}
+
+/**
+ * Text that the report row presents as the report narrative. Keep this aligned
+ * with useReportsData so grouping never relies on a shorter subset than the
+ * clinician reads. Images and viewer capabilities are intentionally excluded:
+ * they remain attached to the merged display row as separate source assets.
+ */
+export function sharedReportNarrative(report: any): string {
+  const parts: string[] = []
+
+  if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
+    parts.push(report.conclusion)
+  }
+  if (Array.isArray(report?.note)) {
+    for (const note of report.note) {
+      if (typeof note?.text === 'string' && note.text.trim()) parts.push(note.text)
+    }
+  }
+  const conclusionCodes = Array.isArray(report?.conclusionCode)
+    ? report.conclusionCode
+        .map((concept: any) => getCodeableConceptText(concept))
+        .filter((value: string) => value && value !== '—')
+    : []
+  if (conclusionCodes.length > 0) parts.push(conclusionCodes.join(', '))
+  for (const observation of report?._observations ?? []) {
+    if (
+      typeof observation?.valueString === 'string'
+      && observation.valueString.trim().length > 30
+    ) {
+      parts.push(observation.valueString)
+    }
+  }
+  for (const form of report?.presentedForm ?? []) {
+    const contentType = String(form?.contentType ?? '').toLowerCase()
+    if (!form?.data || !contentType.startsWith('text/') || contentType.includes('html')) continue
+    const decoded = decodeBase64Utf8(form.data).trim()
+    if (decoded) parts.push(decoded)
+  }
+
+  return parts.join('\n').trim()
+}
+
+/** Whitespace-only normalization required for conservative shared-report grouping. */
+export function normalizeSharedReportNarrative(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+/**
+ * A report is eligible only when every boundary is explicit in the source.
+ * Local imports may add a date-matched encounter for visit navigation; the
+ * `_encounterInferred` marker prevents that convenience link from becoming
+ * evidence that two separately billed reports came from the same encounter.
+ */
+export function sharedReportGroupingKey(report: any): string | null {
+  const reportGroup = inferReportDisplayGroup(report)
+  const subject = explicitReference(report?.subject?.reference)
+  const encounter = report?._encounterInferred
+    ? null
+    : explicitReference(report?.encounter?.reference)
+  const dateValue = reportExamDate(report)
+  const dateMatch = typeof dateValue === 'string'
+    ? /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(dateValue.trim())
+    : null
+  const date = dateMatch ? dateMatch[0].slice(0, 10) : null
+  const dateIsValid = !!dateMatch && (() => {
+    const year = Number(dateMatch[1])
+    const month = Number(dateMatch[2])
+    const day = Number(dateMatch[3])
+    const value = new Date(Date.UTC(year, month - 1, day))
+    return value.getUTCFullYear() === year
+      && value.getUTCMonth() === month - 1
+      && value.getUTCDate() === day
+  })()
+  const institution = normalizeSharedReportNarrative(reportInstitution(report) ?? '')
+  const narrative = normalizeSharedReportNarrative(sharedReportNarrative(report))
+  const status = typeof report?.status === 'string' ? report.status.trim().toLowerCase() : ''
+  const sourceProgram = report?.meta?.tag?.some((tag: any) => tag?.code === 'adult-preventive')
+    ? 'adult-preventive'
+    : ''
+
+  if (
+    !subject
+    || !encounter
+    || !date
+    || !dateIsValid
+    || !institution
+    || !narrative
+    || (reportGroup !== 'imaging' && reportGroup !== 'pathology')
+    || status === 'entered-in-error'
+  ) return null
+  return JSON.stringify([subject, encounter, date, institution, sourceProgram, status, narrative])
+}
+
+export function reportSource(report: any): SharedReportSource {
+  const title = (getCodeableConceptText(report?.code) || '').trim()
+    || report?.id
+    || 'Unnamed report'
+  const codings: SharedReportSource['codings'] = (report?.code?.coding ?? []).flatMap((coding: any) => {
+    const code = typeof coding?.code === 'string' ? coding.code.trim() : ''
+    if (!code) return []
+    return [{
+      ...(typeof coding?.system === 'string' && coding.system.trim()
+        ? { system: coding.system.trim() }
+        : {}),
+      code,
+      ...(typeof coding?.display === 'string' && coding.display.trim()
+        ? { display: coding.display.trim() }
+        : {}),
+    }]
+  })
+  const codes = [...new Set<string>(codings.map((coding) => coding.code))]
+  return {
+    reportId: report?.id || undefined,
+    title,
+    codes,
+    codings,
+  }
+}
+
+export function sharedReportSourceIdentity(report: any): string {
+  const source = reportSource(report)
+  return JSON.stringify([source.title, source.codings])
+}
+
+/**
+ * Return only exact-text buckets that represent at least two different source
+ * procedures. Same-procedure duplicate copies retain the existing bridge-dup
+ * and CT handling.
+ */
+export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
+  const sourceIdentities = new Map<string, Set<string>>()
+  for (const report of reports) {
+    if (!report) continue
+    const key = sharedReportGroupingKey(report)
+    if (!key) continue
+    const identities = sourceIdentities.get(key) ?? new Set<string>()
+    identities.add(sharedReportSourceIdentity(report))
+    sourceIdentities.set(key, identities)
+  }
+  return new Set(
+    [...sourceIdentities.entries()]
+      .filter(([, identities]) => identities.size > 1)
+      .map(([key]) => key),
+  )
+}
+
+export function sharedReportTitle(
+  sources: SharedReportSource[],
+  locale: 'en' | 'zh-TW',
+  audience: 'medical' | 'patient' = 'medical',
+): string | null {
+  const codes = new Set(sources.flatMap((source) => source.codes))
+  const orderCodes = [...codes].filter((code) => /^\d{5}[A-Z]$/.test(code))
+  if (
+    orderCodes.length === 2
+    && codes.has('18005C')
+    && codes.has('18007C')
+    && sources.every((source) => source.codes.some((code) => code === '18005C' || code === '18007C'))
+  ) {
+    return audience === 'patient' && locale === 'zh-TW'
+      ? '心臟超音波（含杜卜勒血流）'
+      : 'Echocardiography (including Doppler)'
+  }
+  return null
+}

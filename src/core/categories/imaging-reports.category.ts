@@ -12,6 +12,13 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
+import {
+  qualifyingSharedReportKeys,
+  reportSource,
+  sharedReportGroupingKey,
+  sharedReportNarrative,
+  sharedReportTitle,
+} from '@/src/shared/utils/shared-report-grouping'
 
 function presentedFormText(report: ImagingReportData): string[] {
   return (report.presentedForm ?? []).map((attachment: any, index) => {
@@ -32,6 +39,47 @@ function presentedFormText(report: ImagingReportData): string[] {
 type ImagingReportData = DiagnosticReport & {
   _imagingStudyText?: string
   _imagingStudyIds?: string[]
+}
+
+function isSharedNarrativeAttachment(attachment: any): boolean {
+  const contentType = String(attachment?.contentType || '').toLowerCase()
+  return Boolean(
+    attachment?.data
+    && contentType.startsWith('text/')
+    && !contentType.includes('html'),
+  )
+}
+
+/** Report-specific context that must remain beside each source even when the
+ * exact narrative is shared by multiple billed procedures. */
+function reportSupplementalText(report: ImagingReportData): string[] {
+  const sourceSpecificAttachments = (report.presentedForm ?? [])
+    .filter((attachment) => !isSharedNarrativeAttachment(attachment))
+  const sharedAttachmentLabels = (report.presentedForm ?? []).flatMap((attachment, index) =>
+    isSharedNarrativeAttachment(attachment)
+      ? [`Text attachment included in shared narrative: ${attachment.title || `Presented form ${index + 1}`}`]
+      : [],
+  )
+  return [
+    report._imagingStudyText,
+    ...sharedAttachmentLabels,
+    ...presentedFormText({ ...report, presentedForm: sourceSpecificAttachments }),
+  ].filter((text): text is string => !!text?.trim())
+}
+
+function groupedReportCount(reports: ImagingReportData[]): number {
+  const qualifyingKeys = qualifyingSharedReportKeys(reports)
+  const seen = new Set<string>()
+  let count = 0
+  for (const report of reports) {
+    const key = sharedReportGroupingKey(report)
+    if (key && qualifyingKeys.has(key)) {
+      if (seen.has(key)) continue
+      seen.add(key)
+    }
+    count += 1
+  }
+  return count
 }
 
 // Helper to get latest imaging reports by name
@@ -159,7 +207,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
-    return filtered.length
+    return groupedReportCount(filtered)
   },
   
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
@@ -186,7 +234,77 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
+    const qualifyingKeys = qualifyingSharedReportKeys(filtered)
+    const sharedGroups = new Map<string, ImagingReportData[]>()
+    filtered.forEach((report) => {
+      const key = sharedReportGroupingKey(report)
+      if (!key || !qualifyingKeys.has(key)) return
+      const group = sharedGroups.get(key)
+      if (group) group.push(report)
+      else sharedGroups.set(key, [report])
+    })
+    const renderedSharedKeys = new Set<string>()
+
+    const appendObservations = (report: ImagingReportData, indent = '  ') => {
+      const reportObs: Observation[] = []
+      const addObservation = (obs: Observation | undefined) => {
+        if (!obs) return
+        const isAlreadyIncluded = reportObs.some((existing) =>
+          obs.id ? existing.id === obs.id : existing === obs,
+        )
+        if (!isAlreadyIncluded) reportObs.push(obs)
+      }
+      for (const obs of (report as any)._observations ?? []) addObservation(obs)
+      report.result?.forEach(result => {
+        const id = referenceId(result.reference)
+        if (id) {
+          const obs = observations.find((o: Observation) => o.id === id)
+          addObservation(obs)
+        }
+      })
+
+      reportObs.forEach(obs => {
+        expandObservationValues(obs).forEach((valueObservation) => {
+          const display = observationDisplayValue(valueObservation)
+          if (display) {
+            items.push(`${indent}• ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''} [status: ${normalizeClinicalStatus((obs as any).status) || 'unknown'}]`)
+          }
+        })
+      })
+      return reportObs.length > 0
+    }
+
     filtered.forEach(report => {
+      const groupingKey = sharedReportGroupingKey(report)
+      if (groupingKey && qualifyingKeys.has(groupingKey)) {
+        if (renderedSharedKeys.has(groupingKey)) return
+        renderedSharedKeys.add(groupingKey)
+
+        const groupedReports = sharedGroups.get(groupingKey) ?? [report]
+        const sources = groupedReports.map(reportSource)
+        const groupTitle = sharedReportTitle(sources, 'en')
+          ?? sources.map((source) => source.title).join(' + ')
+        const reportDate = report.effectiveDateTime || report.effectivePeriod?.start
+        const datePart = reportDate
+          ? ` (${new Date(reportDate).toLocaleDateString()})`
+          : ''
+        const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
+        items.push(`${groupTitle}${datePart} [status: ${reportStatus}] [shared narrative; count once]`)
+
+        groupedReports.forEach((sourceReport) => {
+          const source = reportSource(sourceReport)
+          const codes = source.codes.length > 0 ? ` [codes: ${source.codes.join(', ')}]` : ''
+          const id = source.reportId ? ` [id: ${source.reportId}]` : ''
+          items.push(`  • Source report: ${source.title}${codes}${id}`)
+          appendObservations(sourceReport, '    ')
+          reportSupplementalText(sourceReport)
+            .forEach((text) => items.push(`    • ${text}`))
+        })
+
+        items.push(`  • Shared narrative: ${sharedReportNarrative(report)}`)
+        return
+      }
+
       const reportObs: Observation[] = []
       report.result?.forEach(result => {
         const id = referenceId(result.reference)
@@ -195,7 +313,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           if (obs) reportObs.push(obs)
         }
       })
-      
+
       const datePart = report.effectiveDateTime 
         ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
         : ''
@@ -205,14 +323,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       const attachmentText = presentedFormText(report)
       if (reportObs.length > 0) {
         items.push(`${report.code?.text || 'Imaging Study'}${datePart}${statusPart}`)
-        reportObs.forEach(obs => {
-          expandObservationValues(obs).forEach((valueObservation) => {
-            const display = observationDisplayValue(valueObservation)
-            if (display) {
-              items.push(`  • ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''} [status: ${normalizeClinicalStatus((obs as any).status) || 'unknown'}]`)
-            }
-          })
-        })
+        appendObservations(report)
         const reportText = [
           report.conclusion,
           ...(report.note ?? []).map((note) => note.text),

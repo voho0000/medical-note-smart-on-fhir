@@ -1,6 +1,7 @@
 // Types for Reports - Re-export from shared types
 import type { Observation } from '@/src/shared/types/fhir.types'
 import type { ProcedureCategoryCode } from '../utils/procedure-category'
+import type { SharedReportSource } from '@/src/shared/utils/shared-report-grouping'
 
 export type {
   Coding,
@@ -128,4 +129,8 @@ export type Row = {
    * merge same-code/same-day records into one row, so `id` alone is not enough
    * to resolve source citations back to every original report. */
   diagnosticReportIds?: string[]
+  /** Distinct source procedures that intentionally share one exact narrative.
+   * The report text remains single-copy while these original identities stay
+   * inspectable and searchable. */
+  sharedReportSources?: SharedReportSource[]
 }

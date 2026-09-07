@@ -53,8 +53,18 @@ export function rowMatchesSearch(row: Row, rawQuery: string): boolean {
 
   const ownMatch = (
     row.title.toLowerCase().includes(query)
+    || (row.rawTitle ?? '').toLowerCase().includes(query)
     || row.meta.toLowerCase().includes(query)
     || (row.institution ?? '').toLowerCase().includes(query)
+    || (row.sharedReportSources?.some((source) => (
+      source.title.toLowerCase().includes(query)
+      || source.codes.some((code) => code.toLowerCase().includes(query))
+      || source.codings.some((coding) => (
+        (coding.display ?? '').toLowerCase().includes(query)
+        || (coding.system ?? '').toLowerCase().includes(query)
+      ))
+      || (source.reportId ?? '').toLowerCase().includes(query)
+    )) ?? false)
     || dateSearchTokens(row.effectiveDate).some((value) => value.toLowerCase().includes(query))
     || rowInnerMatch(row, query)
   )

@@ -71,6 +71,13 @@ import {
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
+import {
+  qualifyingSharedReportKeys,
+  reportSource,
+  sharedReportGroupingKey,
+  sharedReportNarrative,
+  sharedReportSourceIdentity,
+} from '@/src/shared/utils/shared-report-grouping'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -680,7 +687,12 @@ interface LongitudinalImagingPoint {
   key: string
   date: string
   finding: string
-  sourceKey: string
+  sources: Array<{
+    sourceKey: string
+    reportId: string
+    title: string
+    codes: string[]
+  }>
 }
 
 const compactWhitespace = (s: string): string => s.replace(/\s+/g, ' ').trim()
@@ -760,6 +772,24 @@ function observationsForReport(
   return out
 }
 
+function longitudinalImagingSeriesKey(
+  reports: DiagnosticReportEntity[],
+  label: string,
+  sharedSourceIdentities: string[],
+): string {
+  // NHI bills the 2D and Doppler portions of one echocardiogram separately.
+  // An exact shared narrative merges that encounter-level finding, while this
+  // stable modality key keeps it comparable with an older singleton 18005C or
+  // 18007C report. Do not generalize this alias to unrelated procedure pairs.
+  const isEchocardiography = reports.every((report) =>
+    reportSource(report).codes.some((code) => code === '18005C' || code === '18007C'),
+  )
+  if (isEchocardiography) return 'ECHOCARDIOGRAPHY'
+  return reports.length > 1
+    ? `SHARED:${sharedSourceIdentities.join('|')}`
+    : canonicalKey(label)
+}
+
 function collectLongitudinalLabPoints(
   input: SummaryCatalogInput,
   sourceByResourceId: Map<string, SummarySourceCatalogEntry>,
@@ -799,20 +829,67 @@ function collectLongitudinalImagingPoints(
   sourceByResourceId: Map<string, SummarySourceCatalogEntry>,
 ): LongitudinalImagingPoint[] {
   const points: LongitudinalImagingPoint[] = []
-  for (const report of input.diagnosticReports ?? []) {
-    if (inferGroupFromDiagnosticReport(report) !== 'imaging') continue
+  const imagingReports = (input.diagnosticReports ?? [])
+    .filter((report) => inferGroupFromDiagnosticReport(report) === 'imaging')
+  const qualifyingKeys = qualifyingSharedReportKeys(imagingReports)
+  const sharedGroups = new Map<string, DiagnosticReportEntity[]>()
+  for (const report of imagingReports) {
+    const key = sharedReportGroupingKey(report)
+    if (!key || !qualifyingKeys.has(key)) continue
+    const group = sharedGroups.get(key)
+    if (group) group.push(report)
+    else sharedGroups.set(key, [report])
+  }
+  const collectedSharedKeys = new Set<string>()
+
+  for (const report of imagingReports) {
+    const groupingKey = sharedReportGroupingKey(report)
+    const isShared = Boolean(groupingKey && qualifyingKeys.has(groupingKey))
+    if (isShared && groupingKey && collectedSharedKeys.has(groupingKey)) continue
+    if (isShared && groupingKey) collectedSharedKeys.add(groupingKey)
+
+    const groupedReports = isShared && groupingKey
+      ? sharedGroups.get(groupingKey) ?? [report]
+      : [report]
     const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
     const date = day(report.effectiveDateTime ?? report.issued)
     if (!reportKey || !date) continue
-    const finding = report.conclusion || report.note?.map((n) => n.text).filter(Boolean).join(' ')
+    const finding = isShared
+      ? sharedReportNarrative(report)
+      : report.conclusion || report.note?.map((n) => n.text).filter(Boolean).join(' ')
     if (!finding) continue
-    const label = conceptText(report.code) ?? 'Imaging'
+
+    const sourceReports = groupedReports.flatMap((sourceReport) => {
+      const sourceKey = sourceReport.id
+        ? sourceByResourceId.get(sourceReport.id)?.key
+        : undefined
+      if (!sourceKey) return []
+      const source = reportSource(sourceReport)
+      return [{
+        sourceKey,
+        reportId: sourceReport.id,
+        title: source.title,
+        codes: source.codes,
+      }]
+    })
+    if (sourceReports.length === 0) continue
+
+    const sourceIdentities = groupedReports
+      .map(sharedReportSourceIdentity)
+      .filter((identity, index, all) => all.indexOf(identity) === index)
+      .sort()
+    const sourceTitles = sourceReports
+      .map((source) => source.title)
+      .filter((title, index, all) => all.indexOf(title) === index)
+    const label = isShared
+      ? sourceTitles.join(' + ')
+      : conceptText(report.code) ?? 'Imaging'
     points.push({
       label,
-      key: canonicalKey(label),
+      key: longitudinalImagingSeriesKey(groupedReports, label, sourceIdentities),
       date,
       finding: truncateText(finding),
-      sourceKey: reportKey,
+      sources: sourceReports,
     })
   }
   return points
@@ -864,7 +941,17 @@ function formatLongitudinalImagingLines(points: LongitudinalImagingPoint[]): str
       const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
       const recent = sorted.slice(-LONGITUDINAL_MAX_IMAGING_POINTS)
       const seq = recent
-        .map((p) => `${p.date}; ${p.sourceKey}: ${p.finding}`)
+        .map((p) => {
+          const sourceText = p.sources.length === 1
+            ? p.sources[0].sourceKey
+            : p.sources.map((source) => {
+                const codes = source.codes.length > 0
+                  ? ` [codes: ${source.codes.join(', ')}]`
+                  : ''
+                return `${source.sourceKey} ${source.title}${codes} [id: ${source.reportId}]`
+              }).join(' + ')
+          return `${p.date}; ${sourceText}: ${p.finding}`
+        })
         .join(' → ')
       return `- ${sorted[0].label}: ${seq}`
     })

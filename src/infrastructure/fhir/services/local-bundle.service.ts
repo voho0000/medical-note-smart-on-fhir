@@ -834,7 +834,15 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
     for (const d of dateFields) {
       const key = toDateStr(d)
       if (key && encounterDateMap.has(key)) {
-        return { ...r, encounter: { reference: `Encounter/${encounterDateMap.get(key)}` } }
+        return {
+          ...r,
+          encounter: { reference: `Encounter/${encounterDateMap.get(key)}` },
+          // Preserve the difference between a source encounter reference and
+          // this date-only convenience link. Conservative report grouping must
+          // never use an inferred encounter as proof that two orders belong to
+          // the same encounter.
+          _encounterInferred: true,
+        }
       }
     }
 
