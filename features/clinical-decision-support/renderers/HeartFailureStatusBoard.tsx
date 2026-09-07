@@ -1,7 +1,7 @@
 "use client"
 
 import { type ReactNode, useId, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, PencilLine, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ListChecks, PencilLine, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -517,6 +517,74 @@ export function HeartFailureStatusBoard({
           </section>
         )
       })}
+
+      {/* What to do today, in the pack's words — or one quiet line when nothing is needed. */}
+      <section
+        className="overflow-hidden rounded-lg border border-border bg-card"
+        aria-label={isEnglish ? 'Today' : '今天要做的事'}
+        data-testid="cdss-hf-headlines"
+        data-silent={board.headlines.length === 0 ? 'true' : undefined}
+      >
+        {board.headlines.length === 0 ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            <span className="text-sm font-semibold text-foreground">
+              {isEnglish ? 'Nothing to do this visit' : '本次無需處理'}
+            </span>
+            <span className="tabular-nums">
+              {isEnglish
+                ? `${board.evaluatedCount} modules judged · the list below is for review only`
+                : `${board.evaluatedCount} 個模組已判定 · 下方清單只供核對`}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
+              <ListChecks className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <span className="text-sm font-semibold text-foreground">
+                {isEnglish
+                  ? `Today: ${board.headlines.length} thing${board.headlines.length === 1 ? '' : 's'}`
+                  : `今天要做的 ${board.headlines.length} 件事`}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {isEnglish ? "Each sentence is the pack's own next step; open the module for its basis." : '每一句都是 pack 的下一步原文；點開模組看依據。'}
+              </span>
+            </div>
+            <ol className="grid gap-2 p-3 @min-[40rem]:grid-cols-3">
+              {board.headlines.map((headline, index) => {
+                const expanded = expandedId === headline.recommendation.id
+                return (
+                  <li key={headline.recommendation.id} className="min-w-0">
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex h-full min-h-11 w-full min-w-0 gap-2 rounded-md border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/30',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        expanded && 'bg-muted/25',
+                      )}
+                      aria-expanded={expanded}
+                      onClick={() => onToggle(headline.recommendation.id)}
+                      data-testid={`cdss-hf-headline-${headline.recommendation.id}`}
+                    >
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold tabular-nums text-primary">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold leading-5 text-foreground">{headline.action}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                          <span className="font-medium text-foreground">{headline.moduleName}</span>
+                          {' · '}
+                          {headline.reason}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ol>
+          </>
+        )}
+      </section>
 
       {/* The four pillars as a board: what the patient is on, what is missing, what next. */}
       {board.pillars.length > 0 ? (

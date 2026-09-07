@@ -123,8 +123,30 @@ export interface HeartFailurePillar {
   nextAction?: string
 }
 
+/**
+ * One of the sentences that open the board: the pack's own next step for a
+ * module that needs the clinician today, with the module it came from so the
+ * reader can open it.
+ */
+export interface HeartFailureHeadline {
+  recommendation: CdssRecommendation
+  /** The pack's first next action — the sentence, never rephrased. */
+  action: string
+  /** Why: the module's title, which states the finding the action rests on. */
+  reason: string
+  moduleName: string
+}
+
 export interface HeartFailureBoardModel {
   phenotype?: CdssRecommendation
+  /**
+   * What to do today, at most three, in the order the clinician should read
+   * them: actionable before data-needed, higher priority first, then the
+   * pack's module order. Empty when the visit needs nothing — the silent state.
+   */
+  headlines: readonly HeartFailureHeadline[]
+  /** How many modules the pack judged this visit, for the silent line. */
+  evaluatedCount: number
   lvef?: HeartFailureMetric
   metrics: readonly HeartFailureMetric[]
   fmtSafety?: CdssRecommendation
@@ -365,6 +387,23 @@ export function buildHeartFailureBoard(
   const alerts = recommendations.filter((item) => (
     item.domain === 'safety' && item.status === 'actionable'
   ))
+  const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = { high: 0, medium: 1, routine: 2 }
+  const statusRank: Readonly<Partial<Record<CdssStatus, number>>> = { actionable: 0, 'needs-data': 1 }
+  const headlines: HeartFailureHeadline[] = recommendations
+    .filter((item) => item.status === 'actionable' || item.status === 'needs-data')
+    .filter((item) => item.nextActions[0])
+    .sort((a, b) => (
+      (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9)
+      || priorityRank[a.priority] - priorityRank[b.priority]
+      || (a.moduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.moduleOrder ?? Number.MAX_SAFE_INTEGER)
+    ))
+    .slice(0, 3)
+    .map((item) => ({
+      recommendation: item,
+      action: item.nextActions[0],
+      reason: item.title,
+      moduleName: item.moduleName ?? item.id,
+    }))
   const pillars = PILLAR_MODULES.flatMap((config) => {
     const recommendation = byId.get(config.id)
     const pillar = recommendation
@@ -384,6 +423,8 @@ export function buildHeartFailureBoard(
 
   return {
     phenotype,
+    headlines,
+    evaluatedCount: recommendations.length,
     lvef,
     metrics,
     fmtSafety: byId.get(FMT_SAFETY_MODULE_ID),

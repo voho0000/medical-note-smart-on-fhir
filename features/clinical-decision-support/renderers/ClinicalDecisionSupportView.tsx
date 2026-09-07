@@ -4,9 +4,11 @@ import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
   BookOpenCheck,
+  Check,
   ChevronDown,
   CircleHelp,
   ClipboardList,
+  Copy,
   ExternalLink,
   FileSearch,
   Gauge,
@@ -14,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -38,6 +41,7 @@ import type {
   GuidelineReference,
 } from '../types'
 import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-card'
+import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/build-rationale-copy-text'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
 import {
@@ -1437,11 +1441,14 @@ function RecommendationDetail({
   onNavigate,
   label,
   patientId,
+  copyProvenance,
 }: {
   recommendation: CdssRecommendation
   isEnglish: boolean
   onNavigate: (target: ResourceNavTarget) => void
   patientId?: string
+  /** Names the pack in the copied rationale; absent when the result has no version. */
+  copyProvenance?: RationaleCopyProvenance
   label: {
     evidence: string
     missing: string
@@ -1455,6 +1462,19 @@ function RecommendationDetail({
   }
 }) {
   const [isSupportingOpen, setIsSupportingOpen] = useState(false)
+  const { copied: rationaleCopied, copy: copyToClipboard } = useCopyToClipboard()
+  const copyRationale = async () => {
+    const ok = await copyToClipboard(buildRationaleCopyText(
+      recommendation,
+      isEnglish ? 'en' : 'zh-TW',
+      copyProvenance,
+    ))
+    if (!ok) {
+      toast.error(isEnglish
+        ? 'Could not copy — the clipboard is unavailable in this context.'
+        : '無法複製，此環境無法使用剪貼簿。')
+    }
+  }
   const orderedPatientEvidence = recommendation.patientEvidence
     .map((evidence, originalIndex) => ({ evidence, originalIndex }))
     .sort((a, b) => (
@@ -1590,17 +1610,35 @@ function RecommendationDetail({
               </>
             ) : null}
           </div>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void copyRationale()}
+            className="inline-flex min-h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={isEnglish
+              ? 'Copy the assessment, patient data, guideline citations and limits as plain text'
+              : '把判定、病人資料、指引出處與限制複製成純文字，可貼進病歷或申覆'}
+            data-testid={`cdss-copy-rationale-${recommendation.id}`}
+          >
+            {rationaleCopied
+              ? <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
+            {rationaleCopied
+              ? (isEnglish ? 'Copied' : '已複製')
+              : (isEnglish ? 'Copy rationale' : '複製理由')}
+          </button>
           {primaryGuidelineRule ? (
             <a
               href={primaryGuidelineRule.reference.url}
               target="_blank"
               rel="noreferrer"
-              className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary underline underline-offset-2"
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary underline underline-offset-2"
             >
               {isEnglish ? 'Open guideline source' : '查看指引原文'}
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           ) : null}
+          </div>
         </div>
         <p className="mt-1.5 text-sm font-medium leading-relaxed text-foreground">
           {primaryGuidelineSummary}
@@ -2016,6 +2054,9 @@ export function ClinicalDecisionSupportView({
       ? requestedExpandedId
       : (displayRecommendations[0]?.id ?? null)
   const clinicalSummary = buildClinicalDecisionSummary(result, locale)
+  const copyProvenance: RationaleCopyProvenance | undefined = result.packId && result.packVersion
+    ? { packId: result.packId, packVersion: result.packVersion }
+    : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
   const showClinicalSummary = !board && (
@@ -2177,6 +2218,7 @@ export function ClinicalDecisionSupportView({
               onNavigate={navigateToResource}
               label={label}
               patientId={patientId}
+              copyProvenance={copyProvenance}
             />
           )}
         />
@@ -2186,6 +2228,19 @@ export function ClinicalDecisionSupportView({
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}
       >
+        {board ? (
+          // Action first: the heart-failure list reads 處置 → 依據, the way the
+          // board's headlines do, so a reader who came from a sentence above
+          // lands on the same words.
+          <div
+            className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_2.75rem] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground @min-[40rem]:grid"
+            aria-hidden="true"
+          >
+            <span>{isEnglish ? 'Action' : '處置'}</span>
+            <span>{isEnglish ? 'Basis' : '依據'}</span>
+            <span />
+          </div>
+        ) : (
         <div
           className="hidden grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground @min-[40rem]:grid"
           aria-hidden="true"
@@ -2195,6 +2250,7 @@ export function ClinicalDecisionSupportView({
           <span>{label.nextStep}</span>
           <span />
         </div>
+        )}
 
         {moduleDisplayRows.map((row) => {
           if (row.kind === 'group') {
@@ -2307,11 +2363,14 @@ export function ClinicalDecisionSupportView({
                   recommendation.status === 'no-action'
                     ? 'hover:bg-emerald-100/50 dark:hover:bg-emerald-500/10'
                     : 'hover:bg-muted/30',
-                  '@min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3',
+                  board
+                    ? '@min-[40rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3'
+                    : '@min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3',
                   isExpanded && 'bg-muted/25',
                 )}
                 aria-expanded={isExpanded}
                 aria-controls={detailId}
+                data-layout={board ? 'action-first' : 'module-first'}
                 data-testid={`cdss-recommendation-trigger-${recommendation.id}`}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return
@@ -2346,6 +2405,68 @@ export function ClinicalDecisionSupportView({
                   setRequestedExpandedId(isExpanded ? null : recommendation.id)
                 }}
               >
+                {board ? (
+                  <>
+                    <span
+                      className="min-w-0 cursor-text"
+                      data-testid={`cdss-module-cell-${recommendation.id}`}
+                    >
+                      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        {!isRiskStratification ? (
+                          <Badge className={cn('h-5 shrink-0 px-1.5 text-[11px]', statusStyle[recommendation.status])}>
+                            <StatusIcon status={recommendation.status} />
+                            {label[recommendation.status]}
+                          </Badge>
+                        ) : null}
+                        <span
+                          className="min-w-0 text-sm font-semibold leading-snug text-foreground"
+                          data-testid={`cdss-action-headline-${recommendation.id}`}
+                        >
+                          {nextStepPreviewText ?? moduleName}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                        <span className="font-medium text-foreground">{moduleName}</span>
+                        {assessmentPreview ? ` · ${assessmentPreview}` : ''}
+                      </span>
+                    </span>
+                    <span
+                      className="min-w-0 cursor-text"
+                      data-testid={`cdss-evidence-preview-${recommendation.id}`}
+                    >
+                      {overviewEvidence.map((evidence, index) => (
+                        <span
+                          key={`${evidence.factKeys[0] ?? index}-${evidence.label}`}
+                          className="block min-w-0 truncate text-xs leading-relaxed text-muted-foreground"
+                          title={`${evidence.label}：${evidence.value}`}
+                        >
+                          <strong className="font-medium text-foreground">{evidence.label}：</strong>
+                          {compactOverviewEvidenceValue(evidence)}
+                        </span>
+                      ))}
+                      {overviewMissingForPreview ? (
+                        <span className="block min-w-0 truncate text-xs leading-relaxed text-muted-foreground" title={overviewMissingForPreview}>
+                          <strong className="font-medium text-foreground">{label.missingShort}：</strong>
+                          {overviewMissingForPreview}
+                        </span>
+                      ) : null}
+                      {recommendation.guidelineReferences[0] ? (
+                        <span
+                          className="mt-1 inline-flex max-w-full items-center rounded-md border border-border bg-background px-1.5 text-[11px] font-medium leading-5 text-foreground"
+                          data-testid={`cdss-guideline-chip-${recommendation.id}`}
+                        >
+                          <span className="truncate">
+                            {recommendation.guidelineReferences[0].title}
+                            {recommendation.guidelineReferences[0].evidenceGrade
+                              ? ` · ${recommendation.guidelineReferences[0].evidenceGrade}`
+                              : ''}
+                          </span>
+                        </span>
+                      ) : null}
+                    </span>
+                  </>
+                ) : (
+                <>
                 <span
                   className="min-w-0 cursor-text"
                   data-testid={`cdss-module-cell-${recommendation.id}`}
@@ -2455,6 +2576,9 @@ export function ClinicalDecisionSupportView({
                   )}
                 </span>
 
+                </>
+                )}
+
                 <span
                   className="flex min-h-8 select-none items-center justify-end gap-1 rounded-md px-1 text-xs font-medium text-primary @min-[40rem]:justify-center"
                   aria-hidden="true"
@@ -2483,6 +2607,7 @@ export function ClinicalDecisionSupportView({
                     onNavigate={navigateToResource}
                     label={label}
                     patientId={patientId}
+                    copyProvenance={copyProvenance}
                   />
                 </div>
               ) : null}

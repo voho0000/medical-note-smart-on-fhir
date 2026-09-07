@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { buildHeartFailureBoard } from '@/features/clinical-decision-support/renderers/heart-failure-board'
 import type {
@@ -289,6 +289,27 @@ describe('heart-failure board model', () => {
     ])
   })
 
+  it('opens with the pack\'s next steps for what needs the clinician today, actionable before data-needed', () => {
+    const board = buildHeartFailureBoard(heartFailureResult(), 'zh-TW', NOW)!
+
+    expect(board.headlines.map((headline) => [headline.recommendation.id, headline.action])).toEqual([
+      ['heart-failure-medication-safety', '完成跨處方來源 medication reconciliation，再由臨床人員決定替代、調整或續用。'],
+      ['heart-failure-ras-inhibition', '評估把 ACEI／ARB 換成 sacubitril/valsartan（ARNI），並記錄臨床決定。'],
+      ['heart-failure-mra', '評估建立或最佳化 MRA，並記錄臨床決定。'],
+    ])
+    expect(board.headlines[0].reason).toContain('NSAID')
+    expect(board.evaluatedCount).toBe(11)
+  })
+
+  it('is silent when nothing is actionable or missing', () => {
+    const result = heartFailureResult()
+    const quiet: CdssResult = {
+      ...result,
+      recommendations: result.recommendations.filter((item) => item.status === 'no-action' || item.status === 'review'),
+    }
+    expect(buildHeartFailureBoard(quiet, 'zh-TW', NOW)!.headlines).toEqual([])
+  })
+
   it('is not built for any other pack', () => {
     expect(buildHeartFailureBoard(heartFailureResult({ packId: 'ckd-cdss' }), 'zh-TW', NOW)).toBeUndefined()
   })
@@ -343,6 +364,45 @@ describe('heart-failure board view', () => {
     expect(within(pillars).getByTestId('cdss-hf-pillar-heart-failure-mra')).toHaveAttribute('data-taking', 'false')
     expect(within(pillars).getByTestId('cdss-hf-pillar-heart-failure-mra')).toHaveTextContent('目前未使用')
     expect(within(pillars).getByTestId('cdss-hf-pillar-heart-failure-sglt2')).toHaveTextContent('使用中')
+  })
+
+  it('reads today\'s sentences first, then lists rows action-first, and copies a rationale', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+
+    const headlines = screen.getByTestId('cdss-hf-headlines')
+    expect(headlines).toHaveTextContent('今天要做的 3 件事')
+    expect(within(headlines).getByTestId('cdss-hf-headline-heart-failure-medication-safety'))
+      .toHaveTextContent('完成跨處方來源 medication reconciliation')
+    expect(within(headlines).getByTestId('cdss-hf-headline-heart-failure-mra')).toHaveTextContent('MRA 治療')
+
+    // A listed row leads with the pack's next step; module and basis follow.
+    const row = screen.getByTestId('cdss-recommendation-trigger-heart-failure-congestion-diuretic')
+    expect(row).toHaveAttribute('data-layout', 'action-first')
+    expect(within(row).getByTestId('cdss-action-headline-heart-failure-congestion-diuretic'))
+      .toHaveTextContent('在鬱血證據表勾選適用的項目')
+    expect(within(row).getByTestId('cdss-module-cell-heart-failure-congestion-diuretic')).toHaveTextContent('鬱血與利尿策略')
+    expect(within(row).getByTestId('cdss-evidence-preview-heart-failure-congestion-diuretic')).toHaveTextContent('體重：74.5 kg')
+
+    fireEvent.click(row)
+    fireEvent.click(screen.getByTestId('cdss-copy-rationale-heart-failure-congestion-diuretic'))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    const copied = writeText.mock.calls[0][0] as string
+    expect(copied).toContain('【判定理由】鬱血與利尿策略')
+    expect(copied).toContain('來源：MediPrisma 個人化照護指引 · heart-failure-cdss 0.2.0-poc')
+  })
+
+  it('shows one quiet line when the visit needs nothing', () => {
+    const result = heartFailureResult()
+    const quiet: CdssResult = {
+      ...result,
+      recommendations: result.recommendations.filter((item) => item.status === 'no-action'),
+    }
+    render(<ClinicalDecisionSupportView result={quiet} locale="zh-TW" />)
+    const headlines = screen.getByTestId('cdss-hf-headlines')
+    expect(headlines).toHaveAttribute('data-silent', 'true')
+    expect(headlines).toHaveTextContent('本次無需處理')
   })
 
   it('lists what the board did not consume by what the clinician has to do, with done modules folded but named', () => {
