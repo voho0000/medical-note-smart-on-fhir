@@ -212,8 +212,10 @@ jobs:
           await writeFile('package-lock.json', `${JSON.stringify(lockfile, null, 2)}\n`)
           NODE
 
-      - name: Install app dependencies from the public registry
+      - name: Install app dependencies
         working-directory: app
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
         shell: bash
         run: |
           cleanup_npmrc() {
@@ -221,7 +223,10 @@ jobs:
           }
           trap cleanup_npmrc EXIT
           rm -f .npmrc
-          printf '%s\n' 'registry=https://registry.npmjs.org/' > .npmrc
+          printf '%s\n' \
+            '@voho0000:registry=https://npm.pkg.github.com' \
+            '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' \
+            'registry=https://registry.npmjs.org/' > .npmrc
           npm ci --ignore-scripts
 
       - name: Rebuild app dependencies
