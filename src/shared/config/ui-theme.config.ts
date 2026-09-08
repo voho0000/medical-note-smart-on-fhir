@@ -331,18 +331,3 @@ export function getCardClasses(panel: PanelType): string {
 export function getBadgeClasses(panel: PanelType): string {
   return BADGE_CLASSES[panel]
 }
-
-// Legacy helper functions for backward compatibility
-/**
- * @deprecated Use getTabClasses() instead
- */
-export function getActiveTabClasses(colorKey: keyof typeof UI_COLORS): string {
-  return TAB_ACTIVE_CLASSES[colorKey] || TAB_ACTIVE_CLASSES.settings
-}
-
-/**
- * @deprecated Use getCardClasses() instead
- */
-export function getBorderClass(colorKey: keyof typeof UI_COLORS): string {
-  return CARD_BORDER_CLASSES[colorKey]
-}
