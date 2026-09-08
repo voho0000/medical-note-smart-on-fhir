@@ -1,10 +1,14 @@
 name: Deploy HMC pilot preview
 
-# The workflow definition lives on protected master. Source access, pilot code
-# execution, and site publishing run in separate jobs so pilot code sees no secrets.
+# The workflow definition lives on protected master. An unprivileged signal
+# workflow fires after either pilot branch changes. Source access, pilot code
+# execution, and site publishing remain separate so pilot code sees no secrets.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  workflow_run:
+    workflows:
+      - HMC preview change signal
+    types:
+      - completed
   workflow_dispatch: {}
 
 permissions:
@@ -16,6 +20,7 @@ concurrency:
 
 jobs:
   resolve:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
