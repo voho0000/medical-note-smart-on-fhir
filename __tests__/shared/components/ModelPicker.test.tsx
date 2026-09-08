@@ -77,6 +77,14 @@ describe('ModelPicker custom model management entry', () => {
     })
   })
 
+  it('preserves an unavailable summary selection instead of displaying the default', () => {
+    render(<LanguageProvider><RightPanelProvider>
+      <ModelPicker modelId="gpt-5.6-terra" fallbackModelId="gemini-3.1-flash-lite"
+        preserveSelection onSelect={jest.fn()} />
+    </RightPanelProvider></LanguageProvider>)
+    expect(screen.getByTestId('model-picker-trigger')).toHaveTextContent('GPT-5.6 Terra')
+  })
+
   it('keeps a separate add entry after a custom endpoint is configured', () => {
     const onSelect = jest.fn()
 

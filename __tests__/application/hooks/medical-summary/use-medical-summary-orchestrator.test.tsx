@@ -477,6 +477,30 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
+  it('shows new model failures while retaining the previous coherent summary', () => {
+    const previousSummary = { headline: 'previous valid summary' }
+    const previousSafety = { alerts: [] }
+    arrange({ summaryResult: previousSummary, safetyResult: previousSafety })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    arrange({
+      summaryResult: { headline: '', cardErrors: { priorities: 'API Key error' } },
+      safetyResult: previousSafety,
+      summaryResultOwnerRuntimeId: 'new-model',
+      safetyResultOwnerRuntimeId: 'old-model',
+    })
+    rerender()
+    expect(result.current.result).toBe(previousSummary)
+    expect(result.current.cardErrors).toEqual({ priorities: 'API Key error' })
+
+    // The hook may retain that failed result while a new model hydrates.
+    // Its old error must not be attributed to the newly selected slot.
+    readSummaryGenerationSlot.mockReturnValue({
+      result: undefined, isRunning: false, error: null, issue: null,
+    })
+    rerender()
+    expect(result.current.cardErrors).toEqual({})
+  })
+
   it('captures the last coherent pair when regeneration starts during partial cache hydration', async () => {
     const summaryA = { headline: 'summary A' }
     const safetyA = { alerts: [{ id: 'safety-a' }] }

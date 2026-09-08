@@ -11,8 +11,6 @@ interface CareRemindersSafetyCardProps {
   error: string | null
   hasPatient: boolean
   renderSources?: (keys: string[], unsupportedKeys?: string[]) => ReactNode
-  onRetry?: () => void
-  retryLabel?: string
   title: string
 }
 
@@ -28,8 +26,6 @@ export function CareRemindersSafetyCard({
   error,
   hasPatient,
   renderSources,
-  onRetry,
-  retryLabel,
   title,
 }: CareRemindersSafetyCardProps) {
   const updatingExistingResult = isScanning && Boolean(result)
@@ -49,8 +45,6 @@ export function CareRemindersSafetyCard({
         error={error}
         hasPatient={hasPatient}
         renderSources={renderSources}
-        onRetry={onRetry}
-        retryLabel={retryLabel}
         showTitle={false}
         showScanSummary={false}
       />

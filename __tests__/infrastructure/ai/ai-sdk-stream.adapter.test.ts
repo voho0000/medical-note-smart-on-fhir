@@ -59,6 +59,20 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     expect(onChunk).toHaveBeenCalledWith('hello')
   })
 
+  it('does not send a fallback request when a selected premium model loses its key', async () => {
+    const create = jest.fn()
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+    await expect(adapter.stream({
+      model: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: null,
+      signal: new AbortController().signal,
+      onChunk: jest.fn(),
+    })).rejects.toMatchObject({ code: 'AI_API_KEY_MISSING' })
+    expect(create).not.toHaveBeenCalled()
+    expect(mockStreamText).not.toHaveBeenCalled()
+  })
+
   it('keeps Luna selected and uses the proxy when no personal key is present', async () => {
     const create = jest.fn(() => ({ model: { kind: 'responses' }, isGemini: false }))
     const adapter = new AiSdkStreamAdapter({ create } as any)
