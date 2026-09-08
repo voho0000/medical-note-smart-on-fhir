@@ -21,9 +21,9 @@ HMC 的 pilot 由兩個 repository 組成：
 
 只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
 
-預定的 preview 流程會在建置 `https://mediprisma.tw/app-hmc` 時，同時抓取上述兩個 `pilot/hmc`，先驗證並 build personalization packages，再把它們注入 HMC app。preview 應顯示 app 與 personalization 的 commit SHA；若驗證或 build 失敗，網站保留上一個可用版本。
+**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。部署流程每 15 分鐘檢查上述兩個 `pilot/hmc`，只要任一 branch 的 commit 改變，就會抓取兩邊的精確 commit，驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
 
-**截至 2026-09-08，跨 repository 的 `app-hmc` 自動部署尚未啟用。** 在 owner 宣布啟用前，push personalization 只會保存與驗證修改，不會更新網站。AI agent 不得自行發布 npm package、修改正式 package version、建立部署 token或改寫 workflow 來繞過這個狀態。
+可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。接受 app repository 的 collaborator 邀請後，也可到 GitHub Actions 手動執行 `Deploy HMC preview`，不必等待下一個 15 分鐘週期。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
 
 兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
 
@@ -31,7 +31,7 @@ HMC 的 pilot 由兩個 repository 組成：
 
 1. Clone repository，以 HMC 自己的 GitHub 帳號登入 GitHub CLI。
 2. 切換到 owner 已建立的 `pilot/hmc` branch。
-3. 向 owner 取得私下交付的 `.env.local`，放在 repository 根目錄，並執行 `chmod 600 .env.local`。
+3. 向 owner 取得私下交付的 `.env.local`，放在 repository 根目錄，並執行 `chmod 600 .env.local`。這是連到 owner 現有 Firebase web app 與 proxy 的 localhost client 設定，不是 Firebase 管理帳號或管理憑證。
 4. 用 `git check-ignore .env.local` 確認它被 Git 忽略。
 5. 私有 `@voho0000/*` packages 需要 HMC 自己 GitHub 帳號的唯讀 package 授權。不得使用 owner 的 GitHub token：
 
@@ -56,7 +56,7 @@ git merge origin/master
 
 ## Firebase 與 token 邊界
 
-`.env.local` 已包含 localhost 所需的 Firebase Web config、AI proxy 公開端點，以及只供 HMC localhost 使用的 App Check debug token。這讓 HMC 以一般登入使用者身分呼叫服務，不提供 Firebase 管理權限。
+`.env.local` 已包含 localhost 所需的 Firebase Web config、AI proxy 公開端點，以及只供 HMC localhost 使用的 App Check debug token。HMC 不需要也不會取得獨立 Firebase 專案。localhost 與 `app-hmc` 都連到 owner 現有的正式 Firebase；HMC 使用自己的 Firebase Auth 帳號與 UID，以一般使用者身分呼叫服務。Web config 與 App Check debug token 都不提供 Firebase Console、IAM、Rules、Functions 或其他管理權限。
 
 - 不得顯示、摘要、複製、上傳或在訊息中貼出 `.env.local` 的內容。
 - 不得把 `.env.local`、token、API key、cookies、Firebase ID token 或 FHIR access token 加入 Git。
@@ -68,7 +68,7 @@ git merge origin/master
 
 ## 正式資料的操作界線
 
-Firestore Rules 是最終權限來源。一般使用者可讀寫自己的 `users/{uid}` 個人資料，也可能依既有規則使用公開範本及所屬單位功能。修改前端程式不能取得 Rules 沒有授予的管理權限。
+Firestore Rules 是最終權限來源。HMC 與其他一般使用者相同，可依現行 Rules 讀寫自己 UID 底下的資料，也可能依既有規則使用公開範本及所屬單位功能；沒有另外建立 `pilot/hmc/{uid}` namespace。owner 與 HMC 使用不同登入帳號時，Firebase Auth UID 可區分資料操作身分。修改前端程式不能取得 Rules 沒有授予的管理權限。
 
 - 開發與測試優先使用 repository 內建的去識別化 demo 資料。
 - 不得把真實病人資料放進 source、fixture、test、snapshot、截圖、log、issue、commit、PR 或 AI agent prompt。
@@ -90,7 +90,7 @@ HMC 自備的 AI provider key 只能透過產品既有設定介面輸入，不�
 
 ## 完成修改
 
-依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。
+依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `Deploy HMC preview`；成功後用 `hmc-build.json` 確認兩個 SHA，並在 `app-hmc` 檢查實際 CDSS 畫面。
 
 提交正式版時建立 PR，清楚寫出：改了什麼、使用者會看到什麼、如何驗證，以及是否改變任何資料寫入或外部網路請求。不得自行 merge PR。
 
