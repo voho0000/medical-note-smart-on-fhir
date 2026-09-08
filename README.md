@@ -2,11 +2,11 @@
 
 **把跨院病歷整理成看得懂、查得到來源、能接續照護的臨床工作區。**
 
-MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查的 AI 摘要、臨床對話，以及依病人資料產生的個人化照護指引與衛教。支援醫療人員與民眾兩種閱讀方式，可從 SMART on FHIR 啟動，也能直接匯入本機資料。
+MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查的 AI 摘要、臨床對話與報告解讀。支援醫療人員與民眾兩種閱讀方式，可從 SMART on FHIR 啟動，也能直接匯入本機資料。
 
 [開啟 MediPrisma](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [文件索引](docs/README.md) · [English](#english)
 
-> 功能核對：2026-09-08，依 v0.51.0 與目前 `master` 已提交的實作整理。Beta、登入及機構設定會影響可用功能。
+> 功能核對：2026-09-08，依 v0.51.0 與目前 `master` 已提交的實作整理。登入及機構設定會影響可用功能。
 >
 > 本專案供研究與教學使用，非醫療器材。AI 與規則產出的內容供參考，臨床決策仍須由醫療人員確認。
 
@@ -15,7 +15,6 @@ MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查
 1. 開啟 [App](https://mediprisma.tw/app)，選擇醫療人員或民眾身份。
 2. 載入內建示範病人，或匯入自己的 FHIR Bundle／健康存摺 SDK JSON。
 3. 從「醫療摘要」掌握重點，再查看原始報告、提出問題或套用摘要範本。
-4. 想體驗個人化功能，可在「設定 → 顯示與關於」開啟 **Beta 功能**：醫療人員看到「個人化照護指引」，民眾看到「個人化衛教」。一般使用路徑的訪客也可開啟，無須先登入。
 
 ## 主要功能
 
@@ -52,21 +51,6 @@ MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查
 - 預覽提示內容及已提供的輸出範例，套用需要填寫欄位的範本。
 - 登入後可分享、管理自己的範本及收藏。
 - **科常用範本**依機構／科別成員資格顯示，發布與管理依權限開放。
-
-### 個人化照護指引與衛教 · Beta
-
-這兩個分頁使用病人資料與疾病規則套件產生結果，與 AI 自由文字摘要各自運作。
-
-| 對象 | 功能 | 目前範圍 |
-|---|---|---|
-| 醫療人員 | 個人化照護指引 | **心衰竭（試辦）、慢性腎臟病（CKD）**；呈現適用條件、處理建議、證據與指引來源 |
-| 民眾 | 個人化衛教 | **糖尿病**；依診斷、用藥與檢驗資料整理照護重點及衛教內容 |
-
-**心衰竭決策看板**將安全數據、今日結論、治療四支柱與處置依據放在前面，並可切換「決策看板 C」與「原版模組表」。醫師可補入當日血壓、心率、體重及鬱血徵象，讓規則重新判定；也能檢視證據表與複製判斷依據。
-
-照護指引區分「可立即處理」「需先補資料」「需臨床確認」「目前無需處理」四種結果。**缺少資料視為未知，不視為陰性**；必要資料載入不完整時不產生個人化建議。門診補入的數據按病人分開存於當前頁面記憶體，重新載入即清除。
-
-Beta 預設由使用者自行開啟。一般 Medcloud 自動啟動路徑不開放 Beta；北榮專用啟動路徑保留 Beta 開關並依使用者選擇顯示，不會自行開啟。完整差異見 [啟動路徑規則](docs/LAUNCH-ROUTE-GATES.md)。
 
 ### 計算、匯出與個人設定
 
@@ -172,15 +156,14 @@ src/shared/                     共用設定、模型清單與多語系
 ```
 
 - 資料分頁：[feature-registry.ts](src/shared/config/feature-registry.ts)
-- 主功能、受眾與 Beta 設定：[right-panel-registry.ts](src/shared/config/right-panel-registry.ts)
+- 主功能與受眾設定：[right-panel-registry.ts](src/shared/config/right-panel-registry.ts)
 - AI 模型與服務組裝：[模型清單](src/shared/constants/ai-models.constants.ts)、[composition.ai.ts](src/application/composition.ai.ts)
-- 照護指引與衛教採獨立套件，App 決定實際開放的疾病與呈現方式：[照護指引 registry](features/clinical-decision-support/guideline-packs/registry.ts)、[衛教 registry](features/personalized-education/disease-packs/registry.ts)
 
 修改介面前請閱讀 [DESIGN.md](DESIGN.md) 與 [AGENTS.md](AGENTS.md)。完整文件由 [docs/README.md](docs/README.md) 進入，包含架構、AI Agent、對話、範本庫、安全與測試說明。
 
 ## English
 
-**MediPrisma brings cross-facility records into a clinical workspace with source-linked AI summaries, conversations, and personalized care guidance.** It supports healthcare-professional and patient views, SMART on FHIR launch, local FHIR Bundles, and Taiwan Health Bank SDK JSON imports.
+**MediPrisma brings cross-facility records into a clinical workspace with source-linked AI summaries, conversations, and report explanations.** It supports healthcare-professional and patient views, SMART on FHIR launch, local FHIR Bundles, and Taiwan Health Bank SDK JSON imports.
 
 [Try the app](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [Documentation](docs/README.md)
 
@@ -192,13 +175,8 @@ Feature review: **September 8, 2026**, based on v0.51.0 and committed changes on
 - **Start with a medical summary:** cross-facility history, safety reminders, pending decisions, timeline, and source references. Add reusable custom summary modules and select the data supplied to summaries.
 - **Ask clinical questions:** an AI agent can query FHIR resources on demand, with medical-literature search where supported. Prompt shortcuts, follow-up suggestions, voice dictation, and temporary conversations support repeated work.
 - **Reuse prompts:** browse, filter, favorite, preview supplied example outputs, fill template fields, and revisit recently used templates. Department templates require membership and publishing permissions.
-- **Explore personalized care — Beta:** clinician guidance currently exposes **heart failure (pilot) and CKD**. The heart-failure board presents current inputs, conclusions, treatment pillars, and evidence; users can enter today's blood pressure, heart rate, weight, and congestion signs. Patient education currently covers **diabetes**.
 - **Calculate and export:** 58 clinical calculators across 10 categories, supported laboratory auto-fill, and IPS FHIR export with a Markdown preview. AI-inferred problems require confirmation before inclusion.
 - **Adjust the workspace:** clinician/patient audience, Chinese/English interface, dark mode, font size, and pinned feature tabs.
-
-To try Beta features, load a patient and enable **Beta features in Settings → Display & About**. Regular visitors can do this without signing in. Availability also depends on launch route: the hospital-specific VGH hand-off honors the user's Beta preference, while other unattended Medcloud launches suppress Beta. See [launch-route rules](docs/LAUNCH-ROUTE-GATES.md).
-
-Guidance uses disease rules and distinguishes **actionable**, **data needed**, **clinical review**, and **no action needed**. Missing data remains unknown. Required data-loading failures block personalized recommendations. Clinic-entered measurements remain in page memory and are cleared on reload.
 
 ### Data and AI
 
