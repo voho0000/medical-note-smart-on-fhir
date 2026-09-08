@@ -200,6 +200,9 @@ jobs:
           const lockfile = JSON.parse(await readFile('package-lock.json', 'utf8'))
 
           for (const name of localPackages) {
+            // The HF-only source slice is overlaid on this published package so
+            // the app retains CKD and the other released disease packs.
+            if (name === '@voho0000/personalized-care') continue
             delete manifest.dependencies?.[name]
             delete manifest.devDependencies?.[name]
             delete lockfile.packages?.['']?.dependencies?.[name]
