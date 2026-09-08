@@ -10,6 +10,23 @@
 - HMC 是正式 Firebase 的一般使用者，不具 Firebase Console、Google Cloud IAM、Firestore Rules 或 Functions 部署權限。
 - HMC localhost 讀寫的是正式帳號資料。任何模板、聊天、面板設定或公開範本操作，都可能立即反映在正式版。
 
+## 兩個 pilot repository 與 `app-hmc`
+
+HMC 的 pilot 由兩個 repository 組成：
+
+| Repository | Pilot branch | 負責內容 |
+| --- | --- | --- |
+| `medical-note-smart-on-fhir` | `pilot/hmc` | 畫面、互動、CDSS renderer、FHIR host composition |
+| `mediprisma-personalization` | `pilot/hmc` | CDSS facts、clinical modules、guideline packs、evidence indexes、FHIR adapters |
+
+只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
+
+預定的 preview 流程會在建置 `https://mediprisma.tw/app-hmc` 時，同時抓取上述兩個 `pilot/hmc`，先驗證並 build personalization packages，再把它們注入 HMC app。preview 應顯示 app 與 personalization 的 commit SHA；若驗證或 build 失敗，網站保留上一個可用版本。
+
+**截至 2026-09-08，跨 repository 的 `app-hmc` 自動部署尚未啟用。** 在 owner 宣布啟用前，push personalization 只會保存與驗證修改，不會更新網站。AI agent 不得自行發布 npm package、修改正式 package version、建立部署 token或改寫 workflow 來繞過這個狀態。
+
+兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
+
 ## 第一次設定
 
 1. Clone repository，以 HMC 自己的 GitHub 帳號登入 GitHub CLI。
@@ -87,4 +104,3 @@ HMC 自備的 AI provider key 只能透過產品既有設定介面輸入，不�
 - 需要存取其他使用者或真實病人的資料。
 - 發現 token 外洩、錯誤大量寫入或資料刪除。
 - 無法安全解決與 `master` 的 merge conflict。
-
