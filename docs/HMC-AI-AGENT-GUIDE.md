@@ -21,9 +21,11 @@ HMC 的 pilot 由兩個 repository 組成：
 
 只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
 
-**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。部署流程每 15 分鐘檢查上述兩個 `pilot/hmc`，只要任一 branch 的 commit 改變，就會抓取兩邊的精確 commit，驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後，仍必須先執行 `git push origin pilot/hmc`，把新 commit 推到 GitHub。push 是更新 preview 來源的必要步驟，但不會直接啟動部署；受保護 `master` 上的 workflow 每 15 分鐘抓取上述兩個 `pilot/hmc`，發現任一 branch 的 commit 改變後才開始 build。因此一般會在 push 後 0–15 分鐘自動更新。
 
-可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。接受 app repository 的 collaborator 邀請後，也可到 GitHub Actions 手動執行 `Deploy HMC preview`，不必等待下一個 15 分鐘週期。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
+若要立即更新，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+
+可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
 
 兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
 
