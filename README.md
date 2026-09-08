@@ -1,330 +1,225 @@
 # 醫析 MediPrisma · SMART on FHIR
 
-> 文件基準：v0.43.0（2026-07-22）｜程式行為以 registry、composition root 與測試為準。
+**把跨院病歷整理成看得懂、查得到來源、能接續照護的臨床工作區。**
 
-> 語言 / Language: [**中文**](#中文) ｜ [**English**](#english)
+MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查的 AI 摘要、臨床對話，以及依病人資料產生的個人化照護指引與衛教。支援醫療人員與民眾兩種閱讀方式，可從 SMART on FHIR 啟動，也能直接匯入本機資料。
 
-基於 **Next.js 16** 與 **SMART on FHIR** 的臨床資料整合與閱讀工具：集中呈現跨院就診、用藥、檢驗趨勢與臨床文件，並以可回查來源的 AI 摘要、安全提醒與報告解讀協助快速掌握重點。
+[開啟 MediPrisma](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [文件索引](docs/README.md) · [English](#english)
 
-> ⚠️ 研究／教學用途，非醫療器材，輸出僅供參考，臨床決策請以醫師判斷為準。
+> 功能核對：2026-09-08，依 v0.51.0 與目前 `master` 已提交的實作整理。Beta、登入及機構設定會影響可用功能。
+>
+> 本專案供研究與教學使用，非醫療器材。AI 與規則產出的內容供參考，臨床決策仍須由醫療人員確認。
 
----
+## 先試用，再接自己的資料
 
-# 中文
+1. 開啟 [App](https://mediprisma.tw/app)，選擇醫療人員或民眾身份。
+2. 載入內建示範病人，或匯入自己的 FHIR Bundle／健康存摺 SDK JSON。
+3. 從「醫療摘要」掌握重點，再查看原始報告、提出問題或套用摘要範本。
+4. 想體驗個人化功能，可在「設定 → 顯示與關於」開啟 **Beta 功能**：醫療人員看到「個人化照護指引」，民眾看到「個人化衛教」。一般使用路徑的訪客也可開啟，無須先登入。
 
-## 這個 app 做什麼
+## 主要功能
 
-- **臨床摘要**：病人資訊、就診紀錄、報告（含**累積報告**：檢驗數值跨時間表格化）、用藥、文件，從 FHIR 自動整理。
-- **報告 AI 翻譯解讀**：影像／病理／出院病摘等報告可一鍵生成忠實中譯＋白話解讀（重點、注意事項），呈現在原文**上方**（民眾預設只看得懂的部分，原文仍在下方供對照）；醫師與民眾皆可用，隨選生成、不預先耗用額度。
-- **醫療摘要**（開啟病人後的預設分頁）：**零點擊 AI 簡報**——跨院病程摘要（關鍵片語標示＋可點擊的來源引用，逐筆對回 FHIR 資源，查無來源標「未驗證」）、主動用藥安全警示、需要決定的事、跨院時間軸與資料涵蓋卡；民眾版另有固定的「我的用藥與照護」Card，以藥物帶來的幫助為主、搭配平實注意事項，且每項必須對應原始 Medication FHIR 紀錄。醫療人員版／民眾版各自生成，結果快取 12 小時。
-- **AI 協助**：
-  - **臨床 AI Agent 對話**：依問題自主決定是否以 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診），也可搜尋醫學文獻（Perplexity）。輸入 `/` 可快速套用提示模板，每次回答後提供可點選的追問建議。
-  - **自訂摘要模組**：嵌入**醫療摘要**的提示詞工作台；每個模組可排序、隱藏、手動執行或設定自動生成，也可從提示範本庫加入。主動安全警示由固定摘要流程獨立生成，不屬於自訂模組。
-  - **語音口述**：Whisper 轉錄。
-- **AI 資料範圍**：從醫療摘要的側邊 panel 調整要納入摘要與自訂摘要的 FHIR 資料（門診／檢驗／用藥…），並預覽 AI 主要收到的內容；臨床對話改由 Agent 按需查詢。
-- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、KFRE、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、58 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
-- **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
-- **提示範本庫**：提供社群共享的提示範本，也可保留個人的本機 templates。
-- **雙受眾**：首次使用可選擇醫療人員或民眾身份；藥名、檢驗名稱、臨床代碼與 AI 輸出會配合調整，並可隨時切換。
-- **多語言（中／英）、深色模式、響應式**。
+### 病歷與報告：把資料放回時間與來源中
 
-## 資料來源（三種）
+- **五個資料分頁**：病人資訊、就診紀錄、報告、用藥與文件，集中閱讀跨院資料。
+- **累積檢驗報告**：依類別呈現跨日期數值，支援日期範圍、全部日期與類別快速跳轉；標準化檢驗名稱，並保留原始結果文字。
+- **臨床報告閱讀**：整理影像、病理、出院病摘等內容；同份報告的相關項目可合併呈現，保留原文供核對。
+- **AI 翻譯與解讀**：按需產生中文翻譯與白話說明，與原文對照閱讀。
 
-1. **SMART on FHIR**：由 EHR 啟動（OAuth 2.0 + PKCE），即時讀取 FHIR 伺服器資料。
-2. **本地匯入**：匯入健保存摺等來源的 FHIR Bundle（`.json`）。完整匯入檔只儲存在本機；使用 AI 功能時，選取的相關內容才會依使用者設定傳送至所選 AI endpoint。
-3. **試用資料（示範病人）**：一鍵載入內建、**去識別化**的示範病人（改編自真實健保存摺，含出院病摘與真實影像），無需匯入任何檔案即可體驗；完整資料同樣儲存在本機。
+### 醫療摘要：先看到病程、風險與待確認事項
 
-## 部署
+醫療摘要是載入病人後的預設分頁，整理跨院病程、主動安全提醒、待決定事項、時間軸與資料涵蓋情形。摘要中的來源引用可回查 FHIR 資源；無法對應的引用會標示為未驗證。
 
-正式 App 發布至 `mediprisma.tw/app` 與 GitHub Pages；一般開發使用 `npm run dev`，正式建置使用 `npm run build`。另有 `build:mediprisma` 與 `build:gh` 產生對應 base path 的靜態版本。
+- 醫療人員版著重臨床重點；民眾版調整用語，並提供「我的用藥與照護」。
+- **自訂摘要模組**可新增、排序、隱藏、手動執行或設定自動生成，也可從提示範本庫加入。
+- 透過 **AI 資料範圍**選擇並預覽摘要使用的病歷內容。
+- 摘要結果提供展開閱讀與使用引導；生成結果可快取，減少重複請求。
 
-## 隱私與安全
+### 臨床對話：依問題查資料、接續追問
 
-- **本地匯入的完整 FHIR Bundle 儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。使用 AI 時，產生內容所需的選取資料會傳送至所選服務；內建模型可能經由 MediPrisma Firebase Functions 代理。
-- **API 金鑰**：Provider keys 預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。自訂 OpenAI-compatible 端點可明確選擇瀏覽器直連，或對不支援 CORS 的白名單 provider 使用 Firebase Gateway；後者會讓提示、回應與自備 key 暫時經過 Firebase，畫面會先行提示。
-- **自訂模型深入對話**：每個端點預設採自動偵測且 fail closed；能力測試會送出正式 FHIR tool schemas，但只用合成文字與瀏覽器內隨機值，不讀取病歷或呼叫 FHIR server。只有完整串流 tool-call 往返成功才會使用 Agent；端點、模型、transport 或 key 改變時會重新驗證。帶有 `site=vghtpe` 的受控 Medcloud 啟動才會攜帶 VGH credential 並建立 runtime-only TVGHBRAIN 3.5 profile；這是明確核准的例外，直接啟用 Agent 且不把信任旗標持久化。只有 `medcloud2=auto`、沒有院區參數的外院路徑不攜帶 VGH credential，使用一般預設模型，也不建立北榮地端 profile。使用者也可固定採標準對話。自訂 Agent 只取得瀏覽器綁定的 FHIR tools，不取得外部文獻搜尋工具。
-- **對話紀錄**：登入後，一般對話會儲存於 Firestore 並跨裝置同步；「無痕對話」不會儲存，訪客對話不會同步。
-- **回饋**：表單不自動附加 patientId，並提醒不要在自由文字輸入病人識別資訊；FHIR server URL 仍可能透露機構。
-- 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
+- 支援 Agent 工具呼叫，按需查詢病人、診斷、用藥、過敏、檢驗、生命徵象、處置與就診資料。
+- 支援透過 Perplexity 搜尋醫學文獻；是否可用取決於所選模型與服務設定。
+- 輸入 `/` 套用提示範本，回答後可點選建議問題繼續追問。
+- 支援 Whisper 語音口述、一般對話歷史與無痕對話。
+- 可選內建模型、自備 API 金鑰，或連接院內／地端 OpenAI-compatible 端點。
 
-## 線上展示
+### 提示範本庫：讓常用工作可以重複使用
 
-- **App**：<https://voho0000.github.io/medical-note-smart-on-fhir/>
-- **SMART Launch URL**：`https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch`
-- 可用 [SMART Health IT Launcher](https://launch.smarthealthit.org/) 輸入 Launch URL 啟動。
+範本可用於臨床對話、自訂摘要，或同時支援兩者。
 
-## AI 模型
+- 依用途、專科、受眾、分類與關鍵字尋找範本；桌面以表格瀏覽，手機以卡片呈現。
+- 支援系統範本、我的範本、收藏與最近使用。
+- 預覽提示內容及已提供的輸出範例，套用需要填寫欄位的範本。
+- 登入後可分享、管理自己的範本及收藏。
+- **科常用範本**依機構／科別成員資格顯示，發布與管理依權限開放。
 
-不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫；自訂 OpenAI-compatible provider 若封鎖瀏覽器 CORS，可明確改選受限的 Firebase Gateway。**模型在各 AI 功能內就地選擇**（對話工具列、自訂模組管理 drawer、醫療摘要標頭，各自記憶）；付費模型未提供金鑰時自動以免費模型執行並如實顯示。
+### 個人化照護指引與衛教 · Beta
 
-| 類別 | 模型 |
-|------|------|
-| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、GPT-5.6 Luna、Claude Haiku 4.5 |
-| 進階（需自備金鑰） | GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
+這兩個分頁使用病人資料與疾病規則套件產生結果，與 AI 自由文字摘要各自運作。
 
-醫學文獻搜尋使用 Perplexity。
+| 對象 | 功能 | 目前範圍 |
+|---|---|---|
+| 醫療人員 | 個人化照護指引 | **心衰竭（試辦）、慢性腎臟病（CKD）**；呈現適用條件、處理建議、證據與指引來源 |
+| 民眾 | 個人化衛教 | **糖尿病**；依診斷、用藥與檢驗資料整理照護重點及衛教內容 |
 
-## 技術堆疊
+**心衰竭決策看板**將安全數據、今日結論、治療四支柱與處置依據放在前面，並可切換「決策看板 C」與「原版模組表」。醫師可補入當日血壓、心率、體重及鬱血徵象，讓規則重新判定；也能檢視證據表與複製判斷依據。
 
-- **框架**：Next.js 16（App Router、Turbopack）、靜態匯出
-- **UI**：shadcn/ui、Tailwind CSS 4
-- **FHIR**：fhirclient 2.6.3
-- **AI**：Vercel AI SDK（OpenAI、Gemini、Claude、Perplexity）
-- **後端**：Firebase（Auth、Firestore、Functions）；Functions 與 Firestore Rules 在另一個 repo：[firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
-- **狀態**：Zustand + React Context
-- **測試**：Jest 30 + React Testing Library
-- **架構**：Clean Architecture + 功能模組（feature-based）
+照護指引區分「可立即處理」「需先補資料」「需臨床確認」「目前無需處理」四種結果。**缺少資料視為未知，不視為陰性**；必要資料載入不完整時不產生個人化建議。門診補入的數據按病人分開存於當前頁面記憶體，重新載入即清除。
 
-## 快速開始
+Beta 預設由使用者自行開啟。一般 Medcloud 自動啟動路徑不開放 Beta；北榮專用啟動路徑保留 Beta 開關並依使用者選擇顯示，不會自行開啟。完整差異見 [啟動路徑規則](docs/LAUNCH-ROUTE-GATES.md)。
 
-需要 Node.js 20+（CI 使用 24）。
+### 計算、匯出與個人設定
+
+- **醫療計算機**：10 類、58 個臨床評分與公式，包括 eGFR、KFRE、CHA₂DS₂-VASc、Child-Pugh、CURB-65；可依病人檢驗自動帶入支援的數值，附使用說明並可複製結果。
+- **IPS 匯出**：建立 International Patient Summary FHIR 文件與 Markdown 預覽；AI 推論的問題清單須逐項確認後才納入。
+- **閱讀設定**：中英文、深色模式、字級、響應式版面與功能分頁釘選；醫療人員／民眾身份可切換。
+
+## 資料如何進來
+
+| 來源 | 使用方式 |
+|---|---|
+| SMART on FHIR | 由 EHR 啟動或 standalone launch，使用 OAuth 2.0 與 PKCE 讀取授權範圍內的 FHIR 資料 |
+| 本機 FHIR Bundle | 匯入 `.json`，在瀏覽器中讀取與整理 |
+| 健康存摺 SDK JSON | 在瀏覽器轉換為 FHIR，保留轉換來源資訊；SDK JSON 轉換上限為 32 MB |
+| 示範病人 | 不需準備檔案即可體驗內建去識別化範例，包含臨床報告 |
+| Medcloud 整合 | 配合擴充套件交接資料並執行自動摘要；需要對應的整合環境 |
+
+## AI 服務與資料隱私
+
+AI 功能需要可用的服務設定與網路連線。內建代理提供每日額度；自備金鑰與自訂端點可在設定中管理。對話、醫療摘要與自訂摘要模組可分別選擇模型。
+
+目前整合 **OpenAI、Google Gemini、Anthropic Claude** 與 **OpenAI-compatible** 端點，文獻搜尋與語音轉錄另有服務設定。模型、免費代理資格及各功能預設值以 [模型清單](src/shared/constants/ai-models.constants.ts) 為準；實際可用性也取決於後端允許清單、額度及提供者狀態。
+
+| 資料 | 儲存與傳送方式 |
+|---|---|
+| 本機匯入的完整病歷 | 以 AES-GCM 加密存於瀏覽器 IndexedDB，最長 12 小時；過期於載入時清除，也可手動清除或登出清除 |
+| AI 請求 | 所需病歷內容會傳送至選定服務；內建代理經 Firebase Functions，自訂端點可選瀏覽器直連或受限 Gateway |
+| API 金鑰 | 預設僅保留於本次瀏覽工作階段；可自行選擇在裝置記住。Gateway 模式下，自備金鑰也會經過代理 |
+| 一般對話 | 登入且非無痕時，文字對話儲存於 Firestore；訪客與無痕對話不寫入雲端歷史 |
+| 範本與設定 | 部分登入使用者資料可同步；分享範本的內容依公開或科別權限供他人閱讀 |
+| 使用統計 | 官方部署啟用 GA4，記錄功能使用事件；不記錄病歷內容、提示詞、AI 回覆或完整啟動網址，使用隨機瀏覽器識別值估算使用情形 |
+
+自訂模型的 Agent 模式通常須先通過使用合成資料的工具呼叫測試，且只取得瀏覽器綁定的 FHIR 工具。北榮受控啟動的院內模型採專用設定；機構憑證不會套用到一般外院路徑。
+
+清除本地資料不會一併刪除雲端對話或第三方已收到的請求。詳見 [隱私政策](PRIVACY_POLICY.md) 與 [安全說明](docs/SECURITY.md)。
+
+## 開發與部署
+
+### 本機啟動
+
+建議使用 **Node.js 24**（與 CI 一致）、npm 與 GitHub CLI。部分 `@voho0000/*` 套件來自 GitHub Packages，需要具有套件讀取權限的 GitHub 帳號。
 
 ```bash
-npm install
+git clone https://github.com/voho0000/medical-note-smart-on-fhir.git
+cd medical-note-smart-on-fhir
 
-# 本機開發與 production build
-npm run dev           # http://localhost:3001
-npm run build
-
-# 測試
-npm test
-npm run test:watch
-npm run test:coverage
+gh auth login -h github.com
+npm run packages:ci
+cp .env.example .env.local
+npm run dev
 ```
 
-## SMART on FHIR 設定
+開啟 [localhost:3001](http://localhost:3001)。依 [`.env.example`](.env.example) 填入 Firebase、AI 代理與 SMART 設定；登入、雲端同步、免費代理等功能需要對應後端。
 
-在 FHIR 沙盒／伺服器註冊應用程式（**public client + PKCE**）：
+`NEXT_PUBLIC_` 變數會進入瀏覽器程式，不能用來保存私密金鑰。自架環境的 Firebase Functions 與 Firestore Rules 在獨立的 [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) 專案維護。
 
-- Launch URL：`<origin>/smart/launch`
-- Redirect URL：`<origin>/smart/callback`
-- Client Type：Public（PKCE）
-- EHR launch scopes：`launch openid fhirUser patient/*.rs online_access`
-- Standalone launch scopes：`launch/patient openid fhirUser patient/*.rs online_access`
-- Public client authorization requires S256 PKCE.
+### 常用指令
 
-> 本專案只用 **public client + PKCE**，不支援 client secret（靜態前端無法藏密碼）。`NEXT_PUBLIC_SMART_CLIENT_ID` 為公開識別碼、選用（預設 `my_web_app`）。
+| 指令 | 用途 |
+|---|---|
+| `npm run dev` | 本機開發，port 3001 |
+| `npm run build` | Next.js 正式建置 |
+| `npm run build:gh` | GitHub Pages 靜態匯出，base path `/medical-note-smart-on-fhir` |
+| `npm run build:mediprisma` | 官網靜態匯出，base path `/app` |
+| `npm run lint` | 程式檢查 |
+| `npx tsc --noEmit` | 型別檢查 |
+| `npm test` | Jest 單元與元件測試 |
+| `npm run test:e2e` | Playwright 瀏覽器測試，準備方式見 [E2E 文件](e2e/README.md) |
+| `npm run check:lockfile` | 檢查跨平台 lockfile 完整性 |
 
-## 部署
+**依賴維護**：現有套件版本更新使用 `npm run bump:dep -- <package> <version>`；新增／移除或更動依賴樹時使用 `npm run packages:install` 及對應包裝腳本，避免直接 `npm install` 遺失 Linux 所需的 lockfile 項目。詳見 [AGENTS.md](AGENTS.md)。
 
-**`mediprisma.tw/app` 與 GitHub Pages**：使用 `npm run build:mediprisma` 與 `npm run build:gh`。GitHub Pages 在 push 到 `master` 且 CI 通過後自動部署；手動可執行 `npm run deploy`。
+`master` 的程式變更通過 CI 後，工作流程會部署 GitHub Pages，並在同步憑證已設定時更新 `mediprisma.tw/app`。純 Markdown／文件變更會略過主 CI。靜態網站的安全 response headers 須由託管平台設定，不能依賴 Next.js `headers()`。
 
-> 注意：`next.config.ts` 的 `headers()`（CSP `frame-ancestors` 等）只在 Node 託管（`next start` / Vercel）生效；GitHub Pages 為靜態 CDN，這些 response header 不會送出。
+### SMART on FHIR 註冊
 
-環境變數以 [`.env.example`](./.env.example) 為準。`NEXT_PUBLIC_` 變數會在建置時進入瀏覽器 bundle，不可放入密鑰；`RESEND_API_KEY` 等伺服器端變數只適用於 `next dev`／Node 託管，不會被 GitHub Pages 靜態站使用。
+以 **public client + S256 PKCE** 註冊；本專案不使用 client secret。以下 `<app-url>` 必須包含部署的 base path，例如 `https://mediprisma.tw/app`。
 
-```
-# AI / 語音 / 回饋 代理（選用）
-NEXT_PUBLIC_CHAT_URL=...
-NEXT_PUBLIC_GEMINI_URL=...
-NEXT_PUBLIC_CLAUDE_URL=...
-NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL=...
-NEXT_PUBLIC_PERPLEXITY_PROXY_URL=...
-NEXT_PUBLIC_WHISPER_URL=...
-NEXT_PUBLIC_FEEDBACK_URL=...
-NEXT_PUBLIC_PROXY_KEY=...
-NEXT_PUBLIC_STREAM_IDLE_TIMEOUT_MS=60000
+| 項目 | 值 |
+|---|---|
+| Launch URL | `<app-url>/smart/launch` |
+| Redirect URL | `<app-url>/smart/callback` |
+| EHR launch scopes | `launch openid fhirUser patient/*.rs online_access` |
+| Standalone scopes | `launch/patient openid fhirUser patient/*.rs online_access` |
+| Client ID | `NEXT_PUBLIC_SMART_CLIENT_ID`，預設 `my_web_app` |
 
-# Firebase（選用：登入、對話歷史、提示範本庫、免費額度）
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
-NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY=...
-NEXT_PUBLIC_APPCHECK_DEBUG=...
-NEXT_PUBLIC_FIREBASE_EMULATOR=...
+可用 [SMART Health IT Launcher](https://launch.smarthealthit.org/) 搭配 GitHub Pages Launch URL 測試：
 
-# SMART（選用；client id 是公開識別碼，預設 my_web_app）
-NEXT_PUBLIC_SMART_CLIENT_ID=...
-NEXT_PUBLIC_SMART_ALLOWED_ISS=...
-
-# 靜態部署
-GITHUB_PAGES=...
-NEXT_PUBLIC_BASE_PATH=/medical-note-smart-on-fhir
-DEPLOY_BASE_PATH=...
-
-# Node 託管的內建 feedback route（伺服器端，靜態站不使用）
-RESEND_API_KEY=...
-FEEDBACK_TO_EMAIL=...
+```text
+https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
 ```
 
-## 架構
+### 技術與擴充位置
 
-Clean Architecture 分層：
+採用 **Next.js 16、React 19、TypeScript、Tailwind CSS 4、shadcn/ui、Vercel AI SDK、fhirclient、Firebase、TanStack Query 與 Zustand**；以 Jest／Testing Library 與 Playwright 驗證。
 
-```
-展示層 (Presentation)      app/ · features/ · components/
-應用層 (Application)        src/application/
-領域層 (Domain)            src/core/
-基礎設施層 (Infrastructure) src/infrastructure/
-```
-
-功能以 registry 可插拔：
-
-- **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
-- **右側面板** `src/shared/config/right-panel-registry.ts` — 5 個主功能：醫療摘要／臨床對話／匯出（IPS）／醫療計算機／設定；資料範圍與自訂摘要管理以可插拔 drawer 嵌入醫療摘要。
-- **AI 模型** `src/shared/constants/ai-models.constants.ts` — 唯一 model manifest；ID、provider、API surface、金鑰／proxy、內容視窗、Agent 模式與背景任務角色皆由同一筆定義驅動。具體 provider wiring 只放在 `src/application/composition.ai.ts`。若開放免費 proxy 模型，仍須另外審核 Firebase 後端 allowlist（安全邊界）。
-
-## 文件
-
-- [docs/README.md](./docs/README.md) — 文件入口、維護規則與歷史文件索引
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 系統架構
-- [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) — AI Agent 實作
-- [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) — 對話功能
-- [docs/PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) — 提示範本庫
-- [docs/FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) — 回饋系統
-- [docs/FEATURES.md](./docs/FEATURES.md) — 功能模組
-- [docs/SECURITY.md](./docs/SECURITY.md) ／ [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) — 安全與隱私
-- [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) — 後端 Functions / Rules / 部署
-
-## 作者與聯絡
-
-**臺北榮總醫療人工智慧發展中心 郭宜欣醫師**。任何回饋歡迎來信 <voho0000@gmail.com>。
-
-## 授權與支援
-
-本專案以 **Apache License 2.0** 授權（見 [LICENSE](LICENSE)）。問題請開 GitHub Issue，或用 app 內的「回報問題」。
-
----
-
-# English
-
-[🔝 Back to top](#醫析-mediprisma--smart-on-fhir) ｜ [切換中文](#中文)
-
-A clinical-data integration and reading tool built on **Next.js 16** and **SMART on FHIR**: it brings cross-facility visits, medications, test trends, and clinical documents together, with source-linked AI summaries, safety reminders, and report explanations to help users find the key points.
-
-Documentation baseline: v0.43.0 (2026-07-22). Runtime registries, composition roots, and tests are authoritative.
-
-> ⚠️ For research/education only — not a medical device. Output is for reference; clinical decisions remain the clinician's.
-
-## What it does
-
-- **Clinical summary**: patient info, visits, reports (including a **cumulative lab report** — values tabulated across dates), medications, documents — assembled from FHIR.
-- **Report AI translate & explain**: imaging/pathology reports and discharge summaries can generate a one-click faithful translation plus a plain-language interpretation (key points, what to watch for), shown **above** the original text (the original stays below for comparison); available to both clinicians and patients, generated on demand so it never spends quota unasked.
-- **Medical Summary** (the default tab after loading a patient): a **zero-click AI briefing** — cross-hospital course narrative, disease-oriented test trends, proactive safety alerts, pending decisions, problem list and timeline, followed by optional **custom summary modules**. The patient view also includes a fixed benefit-first **My medicines and care** card; every item must resolve to a Medication FHIR record. Custom modules use user-managed prompts, load independently from the fixed summary, and can be added from the Prompt Gallery directly inside the summary.
-- **AI**:
-  - **Clinical AI Agent chat**: autonomously decides whether to use client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters), and can also use medical-literature search (Perplexity). Type `/` for prompt templates and use tappable follow-up suggestions after each answer.
-  - **Custom summary modules**: reusable prompt templates embedded in **Medical Summary**; users can add, order, preview, manually run, or auto-generate selected modules without switching tabs.
-  - **Voice dictation**: Whisper transcription.
-- **AI data scope**: a reusable drawer inside Medical Summary for selecting and previewing the main FHIR context supplied to standard and custom summaries; agent chat queries FHIR on demand.
-- **Medical Calculator**: 58 MDCalc-style clinical scores/formulas across 10 categories (eGFR, KFRE, CHA₂DS₂-VASc, Child-Pugh, CURB-65…) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
-- **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
-- **Prompt Gallery**: provides community-shared prompt templates while retaining personal local templates.
-- **Two audiences**: choose healthcare-professional or patient/citizen; medication names, test labels, clinical codes, and AI output adapt, and the audience can be switched at any time.
-- **Bilingual (EN/中文), dark mode, responsive.**
-
-## Data sources
-
-1. **SMART on FHIR** — launched from an EHR (OAuth 2.0 + PKCE), reading the FHIR server live.
-2. **Local import** — import a FHIR Bundle (`.json`, e.g. from Taiwan's NHI health record). The full imported file stays on the device; when an AI feature is used, only selected relevant content is sent to the chosen AI endpoint according to user settings.
-3. **Demo data (sample patient)** — one-click load of a built-in, **de-identified** sample patient (adapted from a real NHI record, with a discharge summary and real images); no file needed, and the full dataset also stays on the device.
-
-## Deployment
-
-The app is published to `mediprisma.tw/app` and GitHub Pages. Use `npm run dev` for local development and `npm run build` for a production build; `build:mediprisma` and `build:gh` create the static artifacts for their respective base paths.
-
-## Privacy & security
-
-- **A locally imported full FHIR Bundle stays on the device**: it is AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime. Selected data needed for AI is sent to the chosen service and built-in models may route through MediPrisma Firebase Functions.
-- **API keys**: provider keys are kept only for the current browser session by default (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. A custom OpenAI-compatible endpoint explicitly uses either direct browser transport or the allow-listed Firebase Gateway for providers that block browser CORS. Gateway mode temporarily sends prompts, responses, and the user-owned key through Firebase and is disclosed in the UI.
-- **Deep Conversation for custom models**: each endpoint defaults to fail-closed automatic detection. The probe sends the production FHIR tool schemas but uses only synthetic text and a browser-generated random value; it never reads the chart or calls the FHIR server. Agent execution is enabled only after the streamed tool-call round trip succeeds; users can instead lock a profile to standard chat. Endpoint, model, transport, or key changes invalidate that trust. Custom Agents receive browser-bound FHIR tools but never the external literature-search tool.
-- **Conversation history**: signed-in regular conversations are stored in Firestore and synced across devices; temporary conversations are not saved, and guest conversations are not synced.
-- **Feedback** does not automatically attach a patient ID and warns users not to enter identifiers in free text; the FHIR server URL may still reveal the institution.
-- See [SECURITY.md](./docs/SECURITY.md) and [PRIVACY_POLICY.md](./PRIVACY_POLICY.md).
-
-## Live demo
-
-- **App**: <https://voho0000.github.io/medical-note-smart-on-fhir/>
-- **SMART Launch URL**: `https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch`
-- Launch via the [SMART Health IT Launcher](https://launch.smarthealthit.org/).
-
-## AI models
-
-Requests without your own key go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly. Custom OpenAI-compatible providers that block browser CORS can explicitly use the restricted Firebase Gateway. **Models are picked inside each AI feature** (chat toolbar, custom-module manager, medical-summary header — each remembered separately); a premium pick without its key transparently runs — and displays — as the free model.
-
-| Tier | Models |
-|------|--------|
-| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, GPT-5.6 Luna, Claude Haiku 4.5 |
-| Advanced (your own key) | GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
-
-Literature search uses Perplexity.
-
-## Tech stack
-
-- **Framework**: Next.js 16 (App Router, Turbopack), static export
-- **UI**: shadcn/ui, Tailwind CSS 4
-- **FHIR**: fhirclient 2.6.3
-- **AI**: Vercel AI SDK (OpenAI, Gemini, Claude, Perplexity)
-- **Backend**: Firebase (Auth, Firestore, Functions). Functions & Firestore Rules live in a separate repo: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
-- **State**: Zustand + React Context
-- **Testing**: Jest 30 + React Testing Library
-- **Architecture**: Clean Architecture + feature-based modules
-
-## Quick start
-
-Requires Node.js 20+ (CI uses 24).
-
-```bash
-npm install
-
-# Local development and production build
-npm run dev           # http://localhost:3001
-npm run build
-
-# Test
-npm test
-npm run test:watch
-npm run test:coverage
+```text
+app/ · features/ · components/   頁面與功能介面
+src/application/                使用案例、資料流程與服務組裝
+src/core/                       領域模型與介面
+src/infrastructure/             FHIR、AI、儲存與外部服務
+src/shared/                     共用設定、模型清單與多語系
 ```
 
-## SMART on FHIR config
+- 資料分頁：[feature-registry.ts](src/shared/config/feature-registry.ts)
+- 主功能、受眾與 Beta 設定：[right-panel-registry.ts](src/shared/config/right-panel-registry.ts)
+- AI 模型與服務組裝：[模型清單](src/shared/constants/ai-models.constants.ts)、[composition.ai.ts](src/application/composition.ai.ts)
+- 照護指引與衛教採獨立套件，App 決定實際開放的疾病與呈現方式：[照護指引 registry](features/clinical-decision-support/guideline-packs/registry.ts)、[衛教 registry](features/personalized-education/disease-packs/registry.ts)
 
-Register the app in your FHIR sandbox/server (**public client + PKCE**):
+修改介面前請閱讀 [DESIGN.md](DESIGN.md) 與 [AGENTS.md](AGENTS.md)。完整文件由 [docs/README.md](docs/README.md) 進入，包含架構、AI Agent、對話、範本庫、安全與測試說明。
 
-- Launch URL: `<origin>/smart/launch`
-- Redirect URL: `<origin>/smart/callback`
-- Client Type: Public (PKCE)
-- EHR launch scopes: `launch openid fhirUser patient/*.rs online_access`
-- Standalone launch scopes: `launch/patient openid fhirUser patient/*.rs online_access`
-- Public client authorization requires S256 PKCE.
+## English
 
-> This app uses **public client + PKCE** only — no client secret (a static front end can't keep one). `NEXT_PUBLIC_SMART_CLIENT_ID` is a public identifier, optional (defaults to `my_web_app`).
+**MediPrisma brings cross-facility records into a clinical workspace with source-linked AI summaries, conversations, and personalized care guidance.** It supports healthcare-professional and patient views, SMART on FHIR launch, local FHIR Bundles, and Taiwan Health Bank SDK JSON imports.
 
-## Deployment
+[Try the app](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [Documentation](docs/README.md)
 
-**`mediprisma.tw/app` and GitHub Pages**: use `npm run build:mediprisma` and `npm run build:gh`. GitHub Pages auto-deploys after a push to `master` passes CI. Manual: `npm run deploy`.
+Feature review: **September 8, 2026**, based on v0.51.0 and committed changes on `master`. For research and education; not a medical device. Outputs require clinical review.
 
-> Note: `next.config.ts`'s `headers()` (CSP `frame-ancestors`, etc.) only takes effect on a Node host (`next start` / Vercel); GitHub Pages is a static CDN and won't send those response headers.
+### What you can do
 
-See [`.env.example`](./.env.example) and the Chinese section above for the full list. Values prefixed with `NEXT_PUBLIC_` are injected into the browser bundle and must not contain secrets; server-only feedback variables apply only to `next dev` or a Node host.
+- **Read the record:** patient details, encounters, reports, medications, and documents; cumulative laboratory results with date filtering, standardized names, and original result text.
+- **Start with a medical summary:** cross-facility history, safety reminders, pending decisions, timeline, and source references. Add reusable custom summary modules and select the data supplied to summaries.
+- **Ask clinical questions:** an AI agent can query FHIR resources on demand, with medical-literature search where supported. Prompt shortcuts, follow-up suggestions, voice dictation, and temporary conversations support repeated work.
+- **Reuse prompts:** browse, filter, favorite, preview supplied example outputs, fill template fields, and revisit recently used templates. Department templates require membership and publishing permissions.
+- **Explore personalized care — Beta:** clinician guidance currently exposes **heart failure (pilot) and CKD**. The heart-failure board presents current inputs, conclusions, treatment pillars, and evidence; users can enter today's blood pressure, heart rate, weight, and congestion signs. Patient education currently covers **diabetes**.
+- **Calculate and export:** 58 clinical calculators across 10 categories, supported laboratory auto-fill, and IPS FHIR export with a Markdown preview. AI-inferred problems require confirmation before inclusion.
+- **Adjust the workspace:** clinician/patient audience, Chinese/English interface, dark mode, font size, and pinned feature tabs.
 
-## Architecture
+To try Beta features, load a patient and enable **Beta features in Settings → Display & About**. Regular visitors can do this without signing in. Availability also depends on launch route: the hospital-specific VGH hand-off honors the user's Beta preference, while other unattended Medcloud launches suppress Beta. See [launch-route rules](docs/LAUNCH-ROUTE-GATES.md).
 
-```
-Presentation      app/ · features/ · components/
-Application       src/application/
-Domain            src/core/
-Infrastructure    src/infrastructure/
-```
+Guidance uses disease rules and distinguishes **actionable**, **data needed**, **clinical review**, and **no action needed**. Missing data remains unknown. Required data-loading failures block personalized recommendations. Clinic-entered measurements remain in page memory and are cleared on reload.
 
-Pluggable via registries:
+### Data and AI
 
-- **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
-- **Right panel** `src/shared/config/right-panel-registry.ts` — 5 primary features: Medical Summary / Clinical Chat / Export (IPS) / Medical Calculator / Settings. Data scope and custom-summary management are pluggable drawers owned by Medical Summary.
-- **AI models** `src/shared/constants/ai-models.constants.ts` — the single model manifest for ids, providers, API surfaces, key/proxy policy, context windows, conversation mode, and internal task roles. Concrete provider wiring lives only in `src/application/composition.ai.ts`. Enabling an owner-funded proxy model still requires a separate review of the Firebase backend allowlist (the security boundary).
+Local imports are converted and stored in the browser; the full stored Bundle is AES-GCM encrypted with a maximum 12-hour lifetime. **AI features send the required record content to the selected service.** Built-in requests may pass through Firebase Functions; custom OpenAI-compatible endpoints support direct browser access or a restricted gateway. Keys are session-scoped by default, with an optional remember setting.
 
-## Docs
+Signed-in regular text conversations are stored in Firestore; guest and temporary conversations are not. Official deployments collect allow-listed GA4 usage events without record content, prompts, AI answers, or full launch URLs. Clearing local data does not delete cloud history or data already sent to providers. See the [privacy policy](PRIVACY_POLICY.md) and [security notes](docs/SECURITY.md).
 
-- [Documentation index](./docs/README.md), [architecture](./docs/ARCHITECTURE.md), [AI agent](./docs/AI_AGENT_IMPLEMENTATION.md), [medical chat](./docs/MEDICAL_CHAT.md), [prompt gallery](./docs/PROMPT_GALLERY.md), [feedback](./docs/FEEDBACK_SETUP.md), [feature modules](./docs/FEATURES.md), [security](./docs/SECURITY.md), [privacy policy](./PRIVACY_POLICY.md)
-- Backend: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
+The app integrates OpenAI, Gemini, Claude, and custom OpenAI-compatible models. The [model catalog](src/shared/constants/ai-models.constants.ts) defines selectable models and defaults; backend configuration and quotas determine actual availability.
 
-## Author & contact
+### Development
 
-**Dr. Yi-Hsin Kuo (郭宜欣), Medical Artificial Intelligence Development Center, Taipei Veterans General Hospital**. Feedback is welcome at <voho0000@gmail.com>.
+Use Node.js 24 and a GitHub CLI account with access to the project's GitHub Packages. Clone the repository, run `gh auth login -h github.com`, then `npm run packages:ci`. Copy [`.env.example`](.env.example) to `.env.local`, configure the required services, and run `npm run dev` at port 3001.
 
-## License & support
+Use `npm run build:gh` or `npm run build:mediprisma` for static exports. Register SMART as a public client with S256 PKCE; launch and callback URLs must include the deployment base path. Dependency changes should follow [AGENTS.md](AGENTS.md) to preserve cross-platform lockfile entries. Backend Functions and Rules live in [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir).
 
-Licensed under the **Apache License 2.0** (see [LICENSE](LICENSE)). Report issues via GitHub Issues or the in-app "report a problem".
+## 作者與授權 · Author & License
+
+**郭宜欣醫師｜臺北榮總醫療人工智慧發展中心**
+
+Yi-Hsin Kuo, MD · Taipei Veterans General Hospital
+
+聯絡：[voho0000@gmail.com](mailto:voho0000@gmail.com)。問題與建議可透過 [GitHub Issues](https://github.com/voho0000/medical-note-smart-on-fhir/issues) 或 App 內回報功能提出。
+
+本專案採 [Apache License 2.0](LICENSE)。
