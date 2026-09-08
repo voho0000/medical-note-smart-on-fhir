@@ -4,7 +4,7 @@
 
 MediPrisma 整合就診、用藥、檢驗與臨床文件，提供來源可回查的 AI 摘要、臨床對話與報告解讀。支援醫療人員與民眾兩種閱讀方式，可從 SMART on FHIR 啟動，也能直接匯入本機資料。
 
-[開啟 MediPrisma](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [文件索引](docs/README.md) · [English](#english)
+[開啟 MediPrisma](https://mediprisma.tw/app) · [GitHub Pages](https://voho0000.github.io/medical-note-smart-on-fhir/) · [文件索引](docs/README.md) · [協作指南](CONTRIBUTING.md) · [English](#english)
 
 > 功能核對：2026-09-08，依 v0.51.0 與目前 `master` 已提交的實作整理。登入及機構設定會影響可用功能。
 >
