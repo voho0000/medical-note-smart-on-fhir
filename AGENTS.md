@@ -22,6 +22,20 @@ red on a two-line version bump.
 - If the network-enabled checks cannot run, report that authentication could not be verified; do not report that the token expired or is invalid.
 - Never print, copy, persist, or expose the GitHub token itself.
 
+## Visibility gates
+
+- A change that hides, disables, or removes a clinical surface — a tab, a care
+  pack, a card, a switch — for a route, a site, a role, or a sign-in state is
+  never a side effect of another change. Ask the owner first, in the chat, with
+  the surface and the route named; do not infer it from a neighbouring rule
+  such as "this route must stay silent".
+- Every commit that touches such a gate carries a `Visible behaviour changes:`
+  section listing, one line per surface, what a user on which route can no
+  longer see or do — or `Visible behaviour changes: none`.
+- The gates in force are listed in `docs/LAUNCH-ROUTE-GATES.md`; update the
+  table in the same commit, and test the route where the surface is kept, not
+  only the one where it is hidden.
+
 ## UI design guidance
 
 - Before creating, changing, or reviewing rendered UI, read the repository root `DESIGN.md`.
