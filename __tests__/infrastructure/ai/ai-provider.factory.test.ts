@@ -2,6 +2,10 @@ jest.mock('@/src/infrastructure/ai/streaming/model-reporting.middleware', () => 
   withModelReporting: (model: unknown) => model,
 }))
 
+jest.mock('@/src/infrastructure/ai/streaming/openai-stateless.middleware', () => ({
+  withOpenAiStatelessResponses: (model: object) => ({ ...model, stateless: true }),
+}))
+
 const mockChat = jest.fn((modelId: string) => ({ kind: 'chat-model', modelId }))
 const mockResponses = jest.fn((modelId: string) => ({ kind: 'responses-model', modelId }))
 const mockCreateOpenAI = jest.fn((_config: unknown) => ({
@@ -67,6 +71,7 @@ describe('AiProviderFactory routing', () => {
     expect(result.model).toEqual({
       kind: 'responses-model',
       modelId: 'gpt-5.6-luna',
+      stateless: true,
     })
   })
 

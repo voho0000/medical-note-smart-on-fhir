@@ -4,6 +4,7 @@
  */
 
 import { withModelReporting } from '../streaming/model-reporting.middleware'
+import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -110,7 +111,7 @@ export class AiProviderFactory {
       return { model: sdk.chat(modelId), isGemini: false }
     }
     if (definition.apiSurface === 'openai-responses') {
-      return { model: sdk.responses(modelId), isGemini: false }
+      return { model: withOpenAiStatelessResponses(sdk.responses(modelId)), isGemini: false }
     }
     throw new Error(`OpenAI model ${modelId} has incompatible API surface ${definition.apiSurface}`)
   }
