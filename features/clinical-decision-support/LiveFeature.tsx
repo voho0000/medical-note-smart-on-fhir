@@ -167,7 +167,8 @@ function LayoutSwitcher({
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
     {
       id: 'board',
-      label: isEnglish ? 'Decision board' : '決策看板',
+      // The letter is how pilot users name this layout in feedback (direction C).
+      label: isEnglish ? 'Decision board C' : '決策看板 C',
       title: isEnglish
         ? "Today's sentences, safety inputs, the four pillars, then action-first rows"
         : '今天要做的事、安全數據、四支柱，再列處置優先的模組',
