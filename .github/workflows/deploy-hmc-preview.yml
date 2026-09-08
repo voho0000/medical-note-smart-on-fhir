@@ -35,7 +35,7 @@ jobs:
         with:
           repository: voho0000/mediprisma-personalization
           ref: pilot/hmc
-          token: ${{ secrets.PACKAGES_TOKEN }}
+          ssh-key: ${{ secrets.HMC_PERSONALIZATION_DEPLOY_KEY }}
           path: personalization
           persist-credentials: false
 
