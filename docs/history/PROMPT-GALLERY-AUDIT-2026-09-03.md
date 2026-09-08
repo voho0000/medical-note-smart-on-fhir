@@ -78,7 +78,7 @@
 
 ## F01：公開範本需要結構驗證與逐筆容錯
 
-位置：[firestore.rules](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/firebase-smart-on-fhir/firestore.rules:91>)、[資料轉換](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/services/prompt-gallery.service.ts:39>)、[搜尋](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/services/prompt-gallery.service.ts:130>)。
+位置：[firestore.rules](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/firebase-smart-on-fhir/firestore.rules:91>)、[資料轉換](../../features/prompt-gallery/services/prompt-gallery.service.ts)、[搜尋](../../features/prompt-gallery/services/prompt-gallery.service.ts)。
 
 建立規則只檢查登入、authorId 與 usageCount。模擬器接受 `title: 42`、物件型別的 `prompt`，且未登入者可讀取。前端直接信任這些欄位；重現測試中，一筆數字型別的 title 讓整次搜尋拋出 `toLowerCase` 錯誤，正常資料也無法回傳。若物件內容進入卡片或預覽，亦無法作為一般文字呈現。
 
@@ -88,7 +88,7 @@
 
 ## F02：不要自動把 email 當公開作者名稱
 
-位置：[SharePromptDialog.tsx](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/SharePromptDialog.tsx:196>)、[公開讀取規則](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/firebase-smart-on-fhir/firestore.rules:87>)。
+位置：[SharePromptDialog.tsx](../../features/prompt-gallery/components/SharePromptDialog.tsx)、[公開讀取規則](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/firebase-smart-on-fhir/firestore.rules:87>)。
 
 匿名開關預設關閉。當 Firebase 帳號沒有 displayName 時，表單會把 email 寫入公開的 authorName；畫面只說「將顯示您的名稱作為作者」。測試用 `displayName: null` 與合成 email，確認寄件內容包含該 email。
 
@@ -98,7 +98,7 @@
 
 ## F03：長文需要拆開儲存
 
-位置：[createSharedPrompt](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/services/prompt-gallery.service.ts:198>)、[單次文件寫入](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/services/prompt-gallery.service.ts:229>)。
+位置：[createSharedPrompt](../../features/prompt-gallery/services/prompt-gallery.service.ts)、[單次文件寫入](../../features/prompt-gallery/services/prompt-gallery.service.ts)。
 
 前端已移除 prompt 長度限制，但完整文字仍與 metadata 存在同一個 Firestore 文件。Firestore 每文件上限是 1 MiB；這是位元組與整份文件的限制，不能以固定中文字數換算。詳見 [Firebase 官方規格](https://firebase.google.com/docs/firestore/quotas)。
 
@@ -110,7 +110,7 @@
 
 ## F04：長單行預覽破壞版面與操作
 
-位置：[預覽 ScrollArea](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptPreviewDialog.tsx:178>)、[pre 文字容器](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptPreviewDialog.tsx:240>)。
+位置：[預覽 ScrollArea](../../features/prompt-gallery/components/PromptPreviewDialog.tsx)、[pre 文字容器](../../features/prompt-gallery/components/PromptPreviewDialog.tsx)。
 
 `whitespace-pre-wrap` 會保留換行，但目前沒有處理超長無空白字串的斷行與容器最小寬度。用約 10 萬字的連續英文／數字重現：在 1280 px 畫面，對話框寬 894 px，文字容器卻寬約 842,955 px，「使用」按鈕出現在 x≈843,160。320 px 畫面也一樣，對話框寬 286 px，但主要操作仍遠在畫面外。
 
@@ -120,7 +120,7 @@
 
 ## F05：篩選與熱門排序只處理取回的 100 筆
 
-位置：[limit 與後置篩選](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/services/prompt-gallery.service.ts:110>)、[熱門排序](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptGalleryDialog.tsx:153>)。
+位置：[limit 與後置篩選](../../features/prompt-gallery/services/prompt-gallery.service.ts)、[熱門排序](../../features/prompt-gallery/components/PromptGalleryDialog.tsx)。
 
 服務先依伺服器可處理的條件排序、取 100 筆，再處理摘要相容類型、關鍵字、受眾等條件。重現案例：最新 100 筆是 chat，第 101 筆才是 summary；摘要篩選回傳空集合。熱門排序也只是把原先按建立時間取得的資料在前端重排，因此較舊但熱門的範本不會出現。畫面的總筆數與分頁只反映這個子集合。
 
@@ -130,7 +130,7 @@
 
 ## F06：快切篩選時會顯示過期結果
 
-位置：[usePromptGallery.ts](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/hooks/usePromptGallery.ts:35>)。
+位置：[usePromptGallery.ts](../../features/prompt-gallery/hooks/usePromptGallery.ts)。
 
 每個 fetch 完成後都直接更新 prompts／error／loading，沒有判斷是否仍是最新請求。測試先發 old，再發 new，先讓 new 完成、再讓 old 完成，畫面狀態最後是「篩選 new，但資料 old」。
 
@@ -140,7 +140,7 @@
 
 ## F07：前一次分享的計時器會關掉下一份草稿
 
-位置：[分享完成計時器](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/SharePromptDialog.tsx:205>)、[依開啟狀態重建表單](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/SharePromptDialog.tsx:81>)。
+位置：[分享完成計時器](../../features/prompt-gallery/components/SharePromptDialog.tsx)、[依開啟狀態重建表單](../../features/prompt-gallery/components/SharePromptDialog.tsx)。
 
 發布成功後的 1 秒計時器沒有清除或綁定開啟場次。重現：發布成功→立即取消關閉→重新開啟並編輯另一份→舊計時器到期，新的表單被關閉；再次打開只剩初始內容，新草稿消失。
 
@@ -150,7 +150,7 @@
 
 ## F08：摘要 Gallery 的新增分享預設用途錯誤
 
-位置：[SharePromptDialog initialType](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptGalleryDialog.tsx:426>)。
+位置：[SharePromptDialog initialType](../../features/prompt-gallery/components/PromptGalleryDialog.tsx)。
 
 標題列「分享範本」先清空 sharePrompt；initialType 隨即固定退回 chat，即使 Gallery 的 mode 是 summary。整合測試確認：從摘要 Gallery 開始分享，只填標題與內容，最後寫入 `types: ['chat']`、`category: 'other'`。原本摘要篩選因此看不到剛建立的範本。
 
@@ -170,7 +170,7 @@
 
 ## F10：卡片需要真正可用的鍵盤入口
 
-位置：[PromptCard.tsx](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptCard.tsx:63>)。
+位置：[PromptCard.tsx](../../features/prompt-gallery/components/PromptCard.tsx)。
 
 卡片是只有 onClick 的 div，沒有可聚焦元素與鍵盤啟動行為。實際瀏覽器的無障礙樹只有文字；Tab 會跳過卡片。使用鍵盤者可操作篩選，卻無法開啟搜尋結果。
 
@@ -180,8 +180,8 @@
 
 ## 另外值得安排的操作改善
 
-1. **關閉的 Gallery 不應先抓完整列表。** 每個 Gallery 都建立全部／我的兩個 hook；測試確認 `open=false` 仍有兩次查詢。開啟條件與作用中分頁應控制載入，分享完成後只更新必要列表。位置：[PromptGalleryDialog.tsx](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptGalleryDialog.tsx:81>)。
-2. **補足已分享範本的維護流程。** 預覽接收 onShare prop 卻未使用；updateSharedPrompt 也沒有接到編輯 UI。可提供作者編輯，以及其他人「另存副本」，保留用途、格式與來源資訊。這是目前未完成的入口，不代表現有按鈕會成功執行再分享。位置：[PromptPreviewDialog.tsx](</Users/kuoyihsin/My Drive/2工作/VGH/FHIR/50cases/medical-note-smart-on-fhir/features/prompt-gallery/components/PromptPreviewDialog.tsx:51>)。
+1. **關閉的 Gallery 不應先抓完整列表。** 每個 Gallery 都建立全部／我的兩個 hook；測試確認 `open=false` 仍有兩次查詢。開啟條件與作用中分頁應控制載入，分享完成後只更新必要列表。位置：[PromptGalleryDialog.tsx](../../features/prompt-gallery/components/PromptGalleryDialog.tsx)。
+2. **補足已分享範本的維護流程。** 預覽接收 onShare prop 卻未使用；updateSharedPrompt 也沒有接到編輯 UI。可提供作者編輯，以及其他人「另存副本」，保留用途、格式與來源資訊。這是目前未完成的入口，不代表現有按鈕會成功執行再分享。位置：[PromptPreviewDialog.tsx](../../features/prompt-gallery/components/PromptPreviewDialog.tsx)。
 3. **長文草稿保留。** 目前關閉分享表單就重新建立狀態；除了 F07 的計時器缺陷，一般誤關也會失去尚未發布的編輯。建議當次工作保留草稿，並提供明確捨棄操作；若要跨重整保留，需選擇適合長文的儲存方式。
 
 格式流程的現況：純文字／Markdown／HTML 已寫入分享資料，預覽有格式標示，自訂摘要套用保留 outputFormat 與 languagePolicy。分享提示也明確寫出此格式用於自訂摘要。對話範本目前只保留標題與 prompt，因此不把「對話沒有獨立 HTML 顯示格式」列為本次確定缺陷；若要擴大至對話，需另外定義顯示行為。

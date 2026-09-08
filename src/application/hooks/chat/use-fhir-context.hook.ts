@@ -12,7 +12,7 @@ import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
  * disabled (it requires truthy `fhirServerUrl`) and local-mode chat history
  * is invisible even though auto-save writes it under a fallback key.
  *
- * UI components (e.g. ConnectionInfo) should detect this sentinel and show
+ * UI components (e.g. DisplaySettings) should detect this sentinel and show
  * a friendly label instead of leaking the raw string.
  */
 export const LOCAL_BUNDLE_FHIR_URL = 'local-bundle'

@@ -28,6 +28,7 @@
 /build
 /artifacts/
 /outputs/
+/output/
 /tmp/
 
 # misc

@@ -1,5 +1,7 @@
 # 使用行為記錄（Firebase Analytics / GA4）規劃 — 最終版
 
+> 文件分類（2026-09-08）：設計與實作時點紀錄。下列「未 commit」是原撰寫時狀態，不代表目前分支；現行功能見 [README](../README.md)，GA4 後台狀態未於本次清理核對。
+
 日期：2026-09-03　狀態：已實作於工作樹（未 commit）；GA4 custom dimensions 尚未登記
 
 ## 0. 結論

@@ -237,7 +237,7 @@ export const MedicalSummarySchema = z.object({
 - **左欄「評估」**：跨院病程摘要 → 安全警示（這病人是誰、有什麼危險——兩張必讀卡同欄）
 - **右欄「行動＋脈絡」**：需要你決定的事 → 跨院時間軸
 - 資料涵蓋卡 + 頁尾：全寬
-- **關鍵約束（2026-07-06 修正）**：欄內卡片順序必須讓單欄（< 52rem，手機/一般分割視圖，最常見）flatten 後為正確閱讀序 narrative→safety→decisions→timeline。nested column div 在單欄時 DOM 序＝左欄全部再右欄全部,故左欄=[敘事,安全]、右欄=[決定,時間軸](各半,依典型高度均衡)。初版誤把時間軸放左欄→單欄時時間軸跳到安全警示前面,已修正。配合分級密度 + 時間軸有界化,1080p 全寬四卡同屏。
+- **關鍵約束（2026-07-06 修正）**：欄內卡片順序必須讓單欄（< 52rem，手機/一般分割視圖，最常見）flatten 後為正確閱讀序 narrative→safety→decisions→timeline。nested column div 在單欄時 DOM 序＝左欄全部再右欄全部,故左欄=[敘事,安全]、右欄=〔決定,時間軸〕(各半,依典型高度均衡)。初版誤把時間軸放左欄→單欄時時間軸跳到安全警示前面,已修正。配合分級密度 + 時間軸有界化,1080p 全寬四卡同屏。
 
 細節：`@container mx-auto max-w-[84rem]`（ultrawide 兩欄各 ~666px ≈ 40 中文字/行，維持可讀行寬）；grid `items-start`（各欄依內容高度）；`grid-cols-1 @min-[52rem]:grid-cols-2`；< 52rem 完全不變（手機、一般分割視圖）。卡片元件本身零改動——純 Feature.tsx 佈局層。
 
