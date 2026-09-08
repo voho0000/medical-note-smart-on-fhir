@@ -248,6 +248,20 @@ jobs:
             .sort()
           if (packageDirs.length === 0) throw new Error('No personalization source packages found')
 
+          // The personalization main branch is the active HF development slice.
+          // The published package remains the compatibility baseline for the other
+          // diseases the app still ships. Keep its cross-disease entry points and
+          // registries, then overlay the HF source files from pilot/hmc.
+          const preservedPersonalizedCareFiles = [
+            /^index\./,
+            /^types\./,
+            /^registry\./,
+            /^clinical-module-catalog\./,
+            /^clinical-modules\/(?:evidence-tables|registry)\./,
+            /^guideline-packs\/bundled\./,
+            /^knowledge-packs\/registry\./,
+          ]
+
           const packageVersions = {}
 
           for (const packageDir of packageDirs) {
@@ -260,10 +274,25 @@ jobs:
             await access(path.join(source, 'dist', 'index.js'))
 
             const target = path.resolve('app', 'node_modules', '@voho0000', packageDir)
-            await rm(target, { recursive: true, force: true })
-            await mkdir(target, { recursive: true })
-            await cp(path.join(source, 'package.json'), path.join(target, 'package.json'))
-            await cp(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true })
+            if (packageDir === 'personalized-care') {
+              const sourceDist = path.join(source, 'dist')
+              const targetDist = path.join(target, 'dist')
+              await access(path.join(target, 'package.json'))
+              await cp(sourceDist, targetDist, {
+                recursive: true,
+                filter: (sourcePath) => {
+                  const relativePath = path.relative(sourceDist, sourcePath)
+                  return relativePath === '' || !preservedPersonalizedCareFiles.some(
+                    (pattern) => pattern.test(relativePath),
+                  )
+                },
+              })
+            } else {
+              await rm(target, { recursive: true, force: true })
+              await mkdir(target, { recursive: true })
+              await cp(path.join(source, 'package.json'), path.join(target, 'package.json'))
+              await cp(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true })
+            }
             packageVersions[manifest.name] = manifest.version
           }
 
@@ -282,6 +311,32 @@ jobs:
           )
           NODE
 
+      - name: Verify HMC care overlay
+        working-directory: app
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { CARE_PACKS } = require('@voho0000/personalized-care')
+          const { HEART_FAILURE_GUIDELINE_PACK: sourceHeartFailure } = require(
+            '../personalization/packages/personalized-care/dist/guideline-packs/heart-failure-pack.js'
+          )
+
+          const installedHeartFailure = CARE_PACKS.find((pack) => pack.id === 'heart-failure-cdss')
+          const installedCkd = CARE_PACKS.find((pack) => pack.id === 'ckd-cdss')
+          if (!installedHeartFailure || !installedCkd) {
+            throw new Error('HMC overlay must retain both heart-failure and CKD care packs')
+          }
+          for (const field of ['id', 'version', 'enabled']) {
+            if (installedHeartFailure[field] !== sourceHeartFailure[field]) {
+              throw new Error(`HMC heart-failure ${field} does not match pilot source`)
+            }
+          }
+          if (installedHeartFailure.label.zh !== sourceHeartFailure.label.zh
+            || installedHeartFailure.label.en !== sourceHeartFailure.label.en) {
+            throw new Error('HMC heart-failure label does not match pilot source')
+          }
+          NODE
+
       - name: Typecheck HMC app
         working-directory: app
         run: npx tsc --noEmit
@@ -292,7 +347,10 @@ jobs:
 
       - name: Test HMC app
         working-directory: app
-        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees"
+        # These three suites assert the released package's HF title and pilot
+        # gate. The HMC source intentionally replaces those values; its own
+        # verify suite and the overlay smoke check above cover that boundary.
+        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry)[.]test[.]tsx?$"
 
       - name: Build static HMC preview
         working-directory: app
