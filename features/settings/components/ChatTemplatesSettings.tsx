@@ -16,7 +16,6 @@ import {
   HardDrive,
   Library,
   Plus,
-  RotateCcw,
   Save,
   Star,
   Stethoscope,
@@ -25,9 +24,10 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
-import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
+import { getDefaultChatTemplates, useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { InfoHint } from "@/src/shared/components/InfoHint"
+import { TemplateRestore } from "@/src/shared/components/TemplateRestore"
 import { TemplateEditor } from "./TemplateEditor"
 import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
 import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
@@ -38,7 +38,7 @@ interface ChatTemplatesSettingsProps {
 }
 
 export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettingsProps = {}) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
   const {
@@ -46,7 +46,8 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     addTemplate,
     updateTemplate,
     removeTemplate,
-    resetTemplates,
+    applyTemplates,
+    isLoading,
     saveTemplates,
     maxTemplates,
     isSaving,
@@ -99,12 +100,26 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     if (user) window.setTimeout(() => void saveTemplates(), 200)
   }
 
+  const restoreControl = (
+    <TemplateRestore
+      key={`chat:${user?.uid ?? "guest"}:${audience}`}
+      storageKey={`mediprisma-template-backup:chat:${user?.uid ?? "guest"}:${audience}`}
+      scopeLabel={`${audienceLabel} · ${t.settings.chatTemplatesManagerTitle}`}
+      items={templates}
+      getDefaults={() => getDefaultChatTemplates(locale === "zh-TW" ? "zh-TW" : "en", audience)}
+      nameKey="label"
+      promptKey="content"
+      onApply={applyTemplates}
+      disabled={isLoading || isSaving}
+    />
+  )
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-primary shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-primary">
               <AudienceIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -196,10 +211,7 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
               <Library className="h-3.5 w-3.5 text-primary" />
               {t.promptGallery.browseGallery}
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground" onClick={() => void resetTemplates()}>
-              <RotateCcw className="h-3.5 w-3.5" />
-              {t.settings.resetToDefaults}
-            </Button>
+            {restoreControl}
           </div>
         </aside>
 
@@ -235,15 +247,12 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
           {user ? <Cloud className="h-3.5 w-3.5" /> : <HardDrive className="h-3.5 w-3.5" />}
           {user ? t.settings.templateAccountSync : t.settings.templateBrowserAutosave}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:hidden" onClick={() => setShowPromptGallery(true)} disabled={!canAddTemplate}>
             <Library className="h-3.5 w-3.5" />
             {t.promptGallery.browseGallery}
           </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground sm:hidden" onClick={() => void resetTemplates()}>
-            <RotateCcw className="h-3.5 w-3.5" />
-            {t.settings.resetToDefaults}
-          </Button>
+          <div className="sm:hidden">{restoreControl}</div>
           {user ? (
             <Button type="button" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => void saveTemplates()} disabled={isSaving}>
               <Save className="h-3.5 w-3.5" />

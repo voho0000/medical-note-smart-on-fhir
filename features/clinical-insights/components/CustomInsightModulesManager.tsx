@@ -25,6 +25,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
+  getDefaultClinicalInsightPanels,
   useClinicalInsightsConfig,
   type InsightPanelConfig,
 } from "@/src/application/providers/clinical-insights-config.provider"
@@ -39,6 +40,7 @@ import {
   useSetModelFor,
 } from "@/src/application/stores/model-prefs.store"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { TemplateRestore } from "@/src/shared/components/TemplateRestore"
 import { CustomInsightModuleEditor } from "./CustomInsightModuleEditor"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
 import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
@@ -52,7 +54,7 @@ interface CustomInsightModulesManagerProps {
 }
 
 export function CustomInsightModulesManager({ initialPanelId, guidedPreview = false, tourStep = null }: CustomInsightModulesManagerProps = {}) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
   const insightsModel = useModelPref("insights")
@@ -66,7 +68,8 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     addPanel,
     removePanel,
     restorePanel,
-    resetPanels,
+    applyPanels,
+    isSaving,
     savePanels,
     maxPanels,
     reorderPanels,
@@ -177,6 +180,20 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     if (action) void action()
   }
 
+  const restoreControl = (
+    <TemplateRestore
+      key={`summary:${user?.uid ?? "guest"}:${audience}`}
+      storageKey={`mediprisma-template-backup:summary:${user?.uid ?? "guest"}:${audience}`}
+      scopeLabel={`${audienceLabel} · ${t.settings.clinicalInsightsSettingsTitle}`}
+      items={panels}
+      getDefaults={() => getDefaultClinicalInsightPanels(locale === "zh-TW" ? "zh-TW" : "en", audience)}
+      nameKey="title"
+      promptKey="prompt"
+      onApply={applyPanels}
+      disabled={guidedPreview || isLoading || isSaving}
+    />
+  )
+
   if (isLoading) {
     return (
       <div
@@ -195,7 +212,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-violet-600 shadow-sm dark:text-violet-300">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-violet-600 dark:text-violet-300">
               <AudienceIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -335,10 +352,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
               <Library className="h-3.5 w-3.5 text-violet-500 dark:text-violet-300" />
               {t.promptGallery?.browseGallery || "Browse Gallery"}
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground" onClick={() => void requestCustomization(resetPanels)}>
-              <RotateCcw className="h-3.5 w-3.5" />
-              {t.settings.resetToDefaults}
-            </Button>
+            {restoreControl}
           </div>
         </aside>
 
@@ -377,15 +391,12 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t pt-3 sm:hidden">
+      <div className="flex flex-wrap items-center gap-2 border-t pt-3 sm:hidden">
         <Button data-tour="custom-summary-library" type="button" variant="outline" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs" onClick={() => setShowGalleryDialog(true)}>
           <Library className="h-3.5 w-3.5" />
           {t.promptGallery?.browseGallery || "Browse Gallery"}
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="min-h-11 flex-1 gap-1.5 text-xs text-muted-foreground" onClick={() => void requestCustomization(resetPanels)}>
-          <RotateCcw className="h-3.5 w-3.5" />
-          {t.settings.resetToDefaults}
-        </Button>
+        {restoreControl}
       </div>
 
       <SharePromptDialog

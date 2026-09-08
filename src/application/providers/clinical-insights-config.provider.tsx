@@ -378,7 +378,7 @@ type ClinicalInsightsConfigContextValue = {
   updatePanelAndSave: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => Promise<void>
   removePanel: (id: string) => void
   restorePanel: (panel: InsightPanelConfig) => void
-  resetPanels: () => Promise<void>
+  applyPanels: (panels: InsightPanelConfig[]) => Promise<boolean>
   savePanels: () => Promise<boolean>
   maxPanels: number
   reorderPanels: (orderedIds: string[]) => void
@@ -788,15 +788,22 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setCustomByAudience((prev) => ({ ...prev, [panel.audience]: true }))
   }
 
-  const resetPanels = async () => {
-    if (isLoading) return
-    const defaults = getDefaultsFor(currentLang, audience)
+  // Called after restore confirmation or an explicit recovery action.
+  const applyPanels = async (replacement: InsightPanelConfig[]): Promise<boolean> => {
+    if (isLoading) return false
+    const ownerId = user?.uid ?? null
+    if (savePromiseRef.current) await savePromiseRef.current
+    if (loadedOwnerRef.current !== ownerId) return false
     commitLocalPanels((current) => [
-      ...current.filter((panel) => panel.audience !== audience),
-      ...defaults,
+      ...current.filter(panel => panel.audience !== audience),
+      ...replacement.map((panel, order) => ({ ...panel, audience, order })),
     ])
-    setCustomByAudience((prev) => ({ ...prev, [audience]: false }))
-    if (user?.uid) await savePanels()
+    setCustomByAudience(previous => ({ ...previous, [audience]: true }))
+    if (!ownerId) {
+      setGuestEditingApproved(true)
+      return true
+    }
+    return savePanels()
   }
 
   const reorderPanels = (orderedIds: string[]) => {
@@ -832,7 +839,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     updatePanelAndSave,
     removePanel,
     restorePanel,
-    resetPanels,
+    applyPanels,
     savePanels,
     reorderPanels,
     maxPanels: MAX_PANELS,

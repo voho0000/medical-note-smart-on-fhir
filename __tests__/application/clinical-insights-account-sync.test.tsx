@@ -59,6 +59,21 @@ describe('ClinicalInsightsConfigProvider account sync', () => {
     })
   })
 
+  it('applies a restore only to the current audience and recovers all module settings', async () => {
+    const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
+    await waitFor(() => expect(mockSubscribe).toHaveBeenCalled())
+    const custom = { ...getDefaultClinicalInsightPanels('en', 'medical')[0], id: 'my-custom', title: 'My custom module', prompt: 'Do not lose me', autoGenerate: true }
+    act(() => accountListener?.([custom, ...getDefaultClinicalInsightPanels('en', 'patient')]))
+    await act(async () => {
+      expect(await result.current.applyPanels(getDefaultClinicalInsightPanels('en', 'medical'))).toBe(true)
+    })
+    const [, upserts, deleted] = mockApplyChanges.mock.calls.at(-1)
+    expect(upserts.every((panel: InsightPanelConfig) => panel.audience === 'medical')).toBe(true)
+    expect(deleted).toContain('my-custom')
+    await act(async () => { expect(await result.current.applyPanels([custom])).toBe(true) })
+    expect(result.current.panels).toEqual([expect.objectContaining(custom)])
+  })
+
   it('auto-saves edits to the signed-in account after its library loads', async () => {
     const { result } = renderHook(() => useClinicalInsightsConfig(), { wrapper })
 

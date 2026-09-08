@@ -26,7 +26,7 @@ type ChatTemplatesContextValue = {
   updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id" | "audience">>) => void
   removeTemplate: (id: string) => void
   moveTemplate: (fromIndex: number, toIndex: number) => void
-  resetTemplates: () => void
+  applyTemplates: (templates: ChatTemplate[]) => Promise<boolean>
   saveTemplates: () => Promise<void>
   maxTemplates: number
   isSaving: boolean
@@ -301,7 +301,7 @@ function generateTemplateId() {
 
 const ChatTemplatesContext = createContext<ChatTemplatesContextValue | null>(null)
 
-function getDefaultsFor(language: 'en' | 'zh-TW', audience: Audience): ChatTemplate[] {
+export function getDefaultChatTemplates(language: 'en' | 'zh-TW', audience: Audience): ChatTemplate[] {
   let base: Omit<ChatTemplate, "audience">[]
   if (language === 'zh-TW') {
     base = audience === 'medical' ? DEFAULT_TEMPLATES_ZH_MEDICAL : DEFAULT_TEMPLATES_ZH_PATIENT
@@ -313,18 +313,18 @@ function getDefaultsFor(language: 'en' | 'zh-TW', audience: Audience): ChatTempl
 
 function getAllDefaults(language: 'en' | 'zh-TW'): ChatTemplate[] {
   return [
-    ...getDefaultsFor(language, 'medical'),
-    ...getDefaultsFor(language, 'patient'),
+    ...getDefaultChatTemplates(language, 'medical'),
+    ...getDefaultChatTemplates(language, 'patient'),
   ]
 }
 
 function templatesEqualDefaults(templates: ChatTemplate[], language: 'en' | 'zh-TW', audience: Audience): boolean {
-  const defaults = getDefaultsFor(language, audience)
+  const defaults = getDefaultChatTemplates(language, audience)
   const current = templates.filter((t) => t.audience === audience).sort((a, b) => a.order - b.order)
   if (current.length !== defaults.length) return false
   return current.every((t, i) => {
     const d = defaults[i]
-    return d && t.id === d.id && t.label === d.label && t.content === d.content
+    return d && t.id === d.id && t.label === d.label && t.content === d.content && t.shortcut === d.shortcut
   })
 }
 
@@ -336,6 +336,8 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
 
   const [allTemplates, setAllTemplates] = useState<ChatTemplate[]>(() => getAllDefaults('en'))
   const allTemplatesRef = useRef<ChatTemplate[]>(allTemplates)
+  const activeOwnerRef = useRef(user?.uid)
+  useEffect(() => { activeOwnerRef.current = user?.uid }, [user?.uid])
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [customByAudience, setCustomByAudience] = useState<Record<Audience, boolean>>({ medical: false, patient: false })
   const [isSyncing, setIsSyncing] = useState(false)
@@ -355,6 +357,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       id: typeof c.id === "string" ? c.id : generateTemplateId(),
       label: typeof c.label === "string" ? c.label : "Untitled Template",
       content: typeof c.content === "string" ? c.content : "",
+      shortcut: typeof c.shortcut === "string" ? c.shortcut : undefined,
       order: typeof c.order === "number" ? c.order : fallbackOrder,
       audience: audienceValue,
     }
@@ -393,7 +396,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
           if (seen.has(aud)) {
             customMap[aud] = !templatesEqualDefaults(sanitized, currentLang, aud)
           } else {
-            merged.push(...getDefaultsFor(currentLang, aud))
+            merged.push(...getDefaultChatTemplates(currentLang, aud))
           }
         })
         setAllTemplates(merged)
@@ -452,7 +455,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
           if (seen.has(aud)) {
             customMap[aud] = !templatesEqualDefaults(updated, currentLang, aud)
           } else {
-            merged.push(...getDefaultsFor(currentLang, aud))
+            merged.push(...getDefaultChatTemplates(currentLang, aud))
           }
         })
         setAllTemplates(merged)
@@ -464,17 +467,19 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [user?.uid, hasLoadedFromStorage, isSyncing, currentLang])
 
+  const defaultsLanguageRef = useRef(currentLang)
+
   // When language changes, swap defaults for any audience that's not customized
   useEffect(() => {
-    if (!hasLoadedFromStorage) return
+    if (!hasLoadedFromStorage || defaultsLanguageRef.current === currentLang) return
+    defaultsLanguageRef.current = currentLang
     // Language is external preference state; replace only bundled defaults
     // while preserving each audience's customized templates.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllTemplates((prev) => {
       const next = prev.filter((t) => customByAudience[t.audience])
       ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
         if (!customByAudience[aud]) {
-          next.push(...getDefaultsFor(currentLang, aud))
+          next.push(...getDefaultChatTemplates(currentLang, aud))
         }
       })
       return next
@@ -553,23 +558,31 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }
 
-  const resetTemplates = async () => {
-    const defaults = getDefaultsFor(currentLang, audience)
-    setAllTemplates((prev) => [...prev.filter((t) => t.audience !== audience), ...defaults])
-    setCustomByAudience((prev) => ({ ...prev, [audience]: false }))
-
-    if (user?.uid) {
-      setIsSyncing(true)
-      try {
-        // Replace only the current audience's templates in Firestore
-        // We need to: delete current-audience docs, save new defaults, leave the other audience alone.
-        const other = allTemplatesRef.current.filter((t) => t.audience !== audience)
-        await replaceAllChatTemplates(user.uid, [...other, ...defaults])
-      } catch (error) {
-        console.error('[Chat Templates] Reset failed:', error)
-      } finally {
-        setIsSyncing(false)
+  // Called after restore confirmation or an explicit recovery action.
+  const applyTemplates = async (replacement: ChatTemplate[]): Promise<boolean> => {
+    if (isSaving || !hasLoadedFromStorage || (isLoading && user?.uid)) return false
+    const next = [
+      ...allTemplatesRef.current.filter(template => template.audience !== audience),
+      ...replacement.map((template, order) => ({ ...template, audience, order })),
+    ]
+    setIsSaving(true)
+    setIsSyncing(true)
+    try {
+      if (user?.uid) {
+        if (!await replaceAllChatTemplates(user.uid, next)) return false
+      } else {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       }
+      if (activeOwnerRef.current !== user?.uid) return false
+      allTemplatesRef.current = next
+      setAllTemplates(next)
+      setCustomByAudience(previous => ({ ...previous, [audience]: !templatesEqualDefaults(next, currentLang, audience) }))
+      return true
+    } catch {
+      return false
+    } finally {
+      setIsSaving(false)
+      setIsSyncing(false)
     }
   }
 
@@ -604,7 +617,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     updateTemplate,
     removeTemplate,
     moveTemplate,
-    resetTemplates,
+    applyTemplates,
     saveTemplates,
     maxTemplates: MAX_TEMPLATES,
     isSaving,
