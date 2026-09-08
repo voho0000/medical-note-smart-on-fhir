@@ -324,6 +324,7 @@ jobs:
     needs: [resolve, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: mediprisma-site-publish
     steps:
       - name: Download verified static preview
         uses: actions/download-artifact@v8
@@ -353,7 +354,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: voho0000/mediprisma-site
-          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main
 
