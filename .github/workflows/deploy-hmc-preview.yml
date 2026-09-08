@@ -1,0 +1,309 @@
+name: Deploy HMC pilot preview
+
+# The workflow definition lives on protected master. It builds source from the
+# two pilot/hmc branches without publishing the clinical packages to npm.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hmc-pilot-preview
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      app_sha: ${{ steps.revisions.outputs.app_sha }}
+      personalization_sha: ${{ steps.revisions.outputs.personalization_sha }}
+      changed: ${{ steps.freshness.outputs.changed }}
+    steps:
+      - name: Checkout HMC app source
+        uses: actions/checkout@v7
+        with:
+          ref: pilot/hmc
+          path: app
+          persist-credentials: false
+
+      - name: Checkout HMC personalization source
+        uses: actions/checkout@v7
+        with:
+          repository: voho0000/mediprisma-personalization
+          ref: pilot/hmc
+          token: ${{ secrets.PACKAGES_TOKEN }}
+          path: personalization
+          persist-credentials: false
+
+      - name: Resolve pilot revisions
+        id: revisions
+        shell: bash
+        run: |
+          echo "app_sha=$(git -C app rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "personalization_sha=$(git -C personalization rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether preview is current
+        id: freshness
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+          APP_SHA: ${{ steps.revisions.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ steps.revisions.outputs.personalization_sha }}
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          marker="$(gh api \
+            -H 'Accept: application/vnd.github.raw+json' \
+            'repos/voho0000/mediprisma-site/contents/static/app-hmc/hmc-build.json?ref=main' \
+            2>/dev/null || true)"
+          deployed_app="$(printf '%s' "$marker" | jq -r '.appSha // empty' 2>/dev/null || true)"
+          deployed_personalization="$(printf '%s' "$marker" | jq -r '.personalizationSha // empty' 2>/dev/null || true)"
+
+          if [ "$APP_SHA" = "$deployed_app" ] && [ "$PERSONALIZATION_SHA" = "$deployed_personalization" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report unchanged preview
+        if: steps.freshness.outputs.changed != 'true'
+        run: echo "HMC preview already matches both pilot branches."
+
+  build:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout pinned HMC app source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.app_sha }}
+          path: app
+          persist-credentials: false
+
+      - name: Checkout pinned HMC personalization source
+        uses: actions/checkout@v7
+        with:
+          repository: voho0000/mediprisma-personalization
+          ref: ${{ needs.resolve.outputs.personalization_sha }}
+          token: ${{ secrets.PACKAGES_TOKEN }}
+          path: personalization
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            personalization/package-lock.json
+
+      - name: Install personalization dependencies
+        working-directory: personalization
+        env:
+          NODE_AUTH_TOKEN: unused
+        run: npm ci --ignore-scripts
+
+      - name: Rebuild personalization dependencies without credentials
+        working-directory: personalization
+        run: npm rebuild
+
+      - name: Verify and build HMC personalization
+        working-directory: personalization
+        run: npm run verify
+
+      - name: Install app dependencies with a fixed registry
+        working-directory: app
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        shell: bash
+        run: |
+          cleanup_npmrc() {
+            rm -f .npmrc
+          }
+          trap cleanup_npmrc EXIT
+          rm -f .npmrc
+          cat > .npmrc <<'NPMRC'
+          registry=https://registry.npmjs.org/
+          @voho0000:registry=https://npm.pkg.github.com/
+          //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+          always-auth=true
+          NPMRC
+          npm ci --ignore-scripts
+
+      - name: Rebuild app dependencies without credentials
+        working-directory: app
+        run: npm rebuild
+
+      - name: Inject HMC personalization source packages
+        env:
+          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { access, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+          import path from 'node:path'
+
+          const packageDirs = [
+            'clinical-lab-normalization',
+            'personalization-sdk',
+            'personalized-care',
+            'personalized-care-fhir',
+            'personalized-education',
+          ]
+          const packageVersions = {}
+
+          for (const packageDir of packageDirs) {
+            const source = path.resolve('personalization', 'packages', packageDir)
+            const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'))
+            const expectedName = `@voho0000/${packageDir}`
+            if (manifest.name !== expectedName) {
+              throw new Error(`Unexpected package name at ${source}: ${manifest.name}`)
+            }
+            await access(path.join(source, 'dist', 'index.js'))
+
+            const target = path.resolve('app', 'node_modules', '@voho0000', packageDir)
+            await rm(target, { recursive: true, force: true })
+            await mkdir(target, { recursive: true })
+            await cp(path.join(source, 'package.json'), path.join(target, 'package.json'))
+            await cp(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true })
+            packageVersions[manifest.name] = manifest.version
+          }
+
+          const buildInfo = {
+            preview: 'HMC',
+            appRef: 'pilot/hmc',
+            appSha: process.env.APP_SHA,
+            personalizationRef: 'pilot/hmc',
+            personalizationSha: process.env.PERSONALIZATION_SHA,
+            packageVersions,
+            builtAt: new Date().toISOString(),
+          }
+          await writeFile(
+            path.resolve('app', 'public', 'hmc-build.json'),
+            `${JSON.stringify(buildInfo, null, 2)}\n`,
+          )
+          NODE
+
+      - name: Typecheck HMC app
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Lint HMC app
+        working-directory: app
+        run: npm run lint
+
+      - name: Test HMC app
+        working-directory: app
+        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees"
+
+      - name: Build static HMC preview
+        working-directory: app
+        env:
+          DEPLOY_BASE_PATH: "/app-hmc"
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_CLAUDE_URL: ${{ secrets.NEXT_PUBLIC_CLAUDE_URL }}
+          NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL: ${{ secrets.NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY }}
+          NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+        shell: bash
+        run: |
+          restore_api() {
+            if [ -d .api-stash-hmc-build ]; then
+              mv .api-stash-hmc-build app/api
+            fi
+          }
+          trap restore_api EXIT
+          if [ -d app/api ]; then
+            mv app/api .api-stash-hmc-build
+          fi
+          npx next build
+
+      - name: Upload static preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: hmc-preview-${{ needs.resolve.outputs.app_sha }}
+          path: app/out/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download verified static preview
+        uses: actions/download-artifact@v8
+        with:
+          name: hmc-preview-${{ needs.resolve.outputs.app_sha }}
+          path: preview
+
+      - name: Verify preview revisions
+        env:
+          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises'
+
+          const marker = JSON.parse(await readFile('preview/hmc-build.json', 'utf8'))
+          if (marker.appSha !== process.env.APP_SHA) {
+            throw new Error(`Preview app SHA mismatch: ${marker.appSha}`)
+          }
+          if (marker.personalizationSha !== process.env.PERSONALIZATION_SHA) {
+            throw new Error(`Preview personalization SHA mismatch: ${marker.personalizationSha}`)
+          }
+          NODE
+
+      - name: Checkout mediprisma.tw site
+        uses: actions/checkout@v7
+        with:
+          repository: voho0000/mediprisma-site
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-site
+          ref: main
+
+      - name: Publish /app-hmc to the site repository
+        env:
+          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+        working-directory: docs-site
+        shell: bash
+        run: |
+          rm -rf static/app-hmc
+          mkdir -p static/app-hmc
+          cp -R ../preview/. static/app-hmc/
+
+          git config user.name "mediprisma-hmc-preview[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/app-hmc
+          if git diff --cached --quiet; then
+            echo "HMC preview output is unchanged."
+            exit 0
+          fi
+
+          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
+          git push origin main
