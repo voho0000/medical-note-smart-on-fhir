@@ -538,6 +538,16 @@ describe('heart-failure board view', () => {
     expect(screen.queryByTestId('cdss-hf-pillar-detail-heart-failure-sglt2')).toBeNull()
   })
 
+  it('shows the classic module-first table for heart failure when the layout says so', () => {
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="classic" />)
+
+    expect(screen.queryByTestId('cdss-hf-board')).toBeNull()
+    expect(screen.getByTestId('cdss-clinical-summary')).toBeInTheDocument()
+    const row = screen.getByTestId('cdss-recommendation-trigger-heart-failure-ras-inhibition')
+    expect(row).toHaveAttribute('data-layout', 'module-first')
+    expect(screen.getByTestId('cdss-module-group-trigger-treatment')).toBeInTheDocument()
+  })
+
   it('leaves every other pack on the generic module table', () => {
     render(<ClinicalDecisionSupportView result={heartFailureResult({ packId: 'ckd-cdss' })} locale="zh-TW" />)
 

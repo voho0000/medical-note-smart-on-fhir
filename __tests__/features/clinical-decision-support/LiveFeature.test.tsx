@@ -34,13 +34,15 @@ jest.mock('@/src/application/providers/language.provider', () => ({
 jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView', () => ({
   ClinicalDecisionSupportView: ({
     result,
+    layout,
   }: {
     result: {
       title: string
       knowledgePacks?: Array<{ id: string }>
     }
+    layout?: string
   }) => (
-    <div data-testid="mock-cdss-result">
+    <div data-testid="mock-cdss-result" data-layout={layout}>
       <span>{result.title}</span>
       <span>{result.knowledgePacks?.map((source) => source.id).join(',')}</span>
     </div>
@@ -182,6 +184,21 @@ describe('Live personalized-guidance disease switch', () => {
       error: null,
       hasBlockingQueryIssues: false,
     })
+  })
+
+  it('offers the decision board and the classic table for heart failure, and remembers the choice', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-classic'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'classic')
+    expect(screen.getByTestId('cdss-layout-switch-classic')).toHaveAttribute('aria-pressed', 'true')
+    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
+      .toMatchObject({ state: { layout: 'classic' } })
+
+    // The switch belongs to heart failure; CKD has one face.
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
   it('switches from heart-failure guidance to CKD guidance and keeps sources separate', () => {

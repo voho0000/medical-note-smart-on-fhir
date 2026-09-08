@@ -50,6 +50,7 @@ import {
 } from './heart-failure-board'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import type { ClinicVitals } from '../stores/clinic-vitals.store'
+import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
 
@@ -66,6 +67,11 @@ interface ClinicalDecisionSupportViewProps {
    * prescription state from them when the pack produced no module for it.
    */
   profileFacts?: CdssPatientProfile['facts']
+  /**
+   * `classic` renders every pack the module-first way, board or not; `board`
+   * (the default) lets the heart-failure pack open with its status board.
+   */
+  layout?: CdssLayout
   /** Vitals the clinician measured in the room this visit; heart-failure board only. */
   clinicVitals?: ClinicVitals
   onSaveClinicVitals?: (vitals: ClinicVitals) => void
@@ -1887,6 +1893,7 @@ export function ClinicalDecisionSupportView({
   locale,
   patientId,
   profileFacts,
+  layout = 'board',
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
@@ -1923,8 +1930,8 @@ export function ClinicalDecisionSupportView({
   // clock read on every render would make the same value drift across ticks.
   const [now] = useState(() => new Date())
   const board = useMemo(
-    () => buildHeartFailureBoard(result, locale, now, profileFacts),
-    [locale, now, profileFacts, result],
+    () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
+    [layout, locale, now, profileFacts, result],
   )
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
   // whose wording is the same at every visit for every patient of this age and
