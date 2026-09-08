@@ -61,14 +61,19 @@ describe('useBetaFeatures', () => {
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
 
-  it('turns Beta on by itself on the hospital\'s unattended launch, with nothing stored', () => {
+  it('offers the switch on the hospital\'s unattended launch but turns nothing on by itself', () => {
     mockMedcloudLaunchRoute = true
     mockVghtpeUnattendedLaunch = true
     render(<Probe />)
 
-    expect(read('enabled')).toBe('true')
     expect(read('offered')).toBe('true')
-    expect(useBetaFeaturesStore.getState().enabledByUser).toEqual({})
+    expect(read('enabled')).toBe('false')
+
+    act(() => {
+      screen.getByRole('button', { name: 'turn on' }).click()
+    })
+
+    expect(read('enabled')).toBe('true')
   })
 
   it('lets a signed-out visitor with no session turn Beta on under the guest key', () => {

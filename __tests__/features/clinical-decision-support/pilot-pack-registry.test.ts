@@ -153,10 +153,12 @@ describe('care pack visibility', () => {
     expect(getClinicalGuidelinePack('heart-failure-cdss')).toBeUndefined()
   })
 
-  it('shows every listed pack on the hospital\'s own unattended launch, with no switch stored', () => {
+  it('follows the Beta switch on the hospital\'s own unattended launch, and turns nothing on by itself', () => {
     mockMedcloudLaunchRoute = true
     mockVghtpeUnattendedLaunch = true
 
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
+    enableBeta()
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
   })

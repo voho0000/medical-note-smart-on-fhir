@@ -92,12 +92,10 @@ export const HOST_CARE_PACKS = HOST_PACKS
 // the Beta switch is flipped, with no reload and no module-graph reset.
 function isVisible(pack: ClinicalGuidelinePack): boolean {
   if (pack.enabled) return true
-  // The hospital's own hand-off (medcloud2=auto&site=vghtpe) shows every
-  // listed pack: the clinician arriving that way is who the held-back
-  // guidance is for, and nobody is there to flip a switch. Any other
-  // unattended launch shows released guidance only.
-  if (isVghtpeUnattendedLaunch()) return true
-  if (isMedcloudLaunchRoute()) return false
+  // The hospital's own hand-off (medcloud2=auto&site=vghtpe) follows the
+  // Beta switch like a plain visit does; any other unattended launch shows
+  // released guidance only, whatever a tester left switched on.
+  if (isMedcloudLaunchRoute() && !isVghtpeUnattendedLaunch()) return false
   return isBetaFeaturesEnabledInBrowser() || isPilotPack(pack.id)
 }
 

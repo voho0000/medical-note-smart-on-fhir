@@ -118,11 +118,11 @@ export function isVghtpeLaunchUrl(value: string | URL): boolean {
  *
  * The unattended route hides every Beta surface, because a tester's switch
  * must not follow a clinician into a hand-off. The hospital's own launch is
- * the one place that rule is wrong the other way round: the clinician who
- * arrives this way is exactly who the personalized guidance is for, and no
- * one is there to flip a switch. So this launch carries Beta guidance by
- * itself — the tab, and the held-back packs behind it — without a stored
- * preference. Reads the current page when no URL is given.
+ * the one Medcloud route where Beta is allowed again: the switch in 設定 is
+ * offered and honoured exactly as on a plain visit, so a clinician who wants
+ * the personalized guidance turns it on once in that browser, and one who
+ * does not never sees it. Nothing turns on by itself. Reads the current page
+ * when no URL is given.
  */
 export function isVghtpeUnattendedLaunch(value?: string | URL): boolean {
   const resolved = value ?? (typeof window === 'undefined' ? '' : window.location.href)
