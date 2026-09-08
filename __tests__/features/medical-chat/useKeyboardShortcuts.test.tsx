@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react'
-import { useExpandedOverlay } from '@/src/shared/hooks/ui/use-expanded-overlay.hook'
+import { useKeyboardShortcuts } from '@/features/medical-chat/hooks/useKeyboardShortcuts'
 
-describe('useExpandedOverlay', () => {
+describe('useKeyboardShortcuts', () => {
   let onCollapse: jest.Mock
 
   beforeEach(() => {
@@ -14,17 +14,17 @@ describe('useExpandedOverlay', () => {
   })
 
   it('should set body overflow to hidden when expanded', () => {
-    renderHook(() => useExpandedOverlay({ isExpanded: true, onCollapse }))
+    renderHook(() => useKeyboardShortcuts(true, onCollapse))
     expect(document.body.style.overflow).toBe('hidden')
   })
 
   it('should not set body overflow when not expanded', () => {
-    renderHook(() => useExpandedOverlay({ isExpanded: false, onCollapse }))
+    renderHook(() => useKeyboardShortcuts(false, onCollapse))
     expect(document.body.style.overflow).toBe('')
   })
 
   it('should call onCollapse when Escape is pressed', () => {
-    renderHook(() => useExpandedOverlay({ isExpanded: true, onCollapse }))
+    renderHook(() => useKeyboardShortcuts(true, onCollapse))
     
     const event = new KeyboardEvent('keydown', { key: 'Escape' })
     document.dispatchEvent(event)
@@ -33,7 +33,7 @@ describe('useExpandedOverlay', () => {
   })
 
   it('should not call onCollapse when other keys are pressed', () => {
-    renderHook(() => useExpandedOverlay({ isExpanded: true, onCollapse }))
+    renderHook(() => useKeyboardShortcuts(true, onCollapse))
     
     const event = new KeyboardEvent('keydown', { key: 'Enter' })
     document.dispatchEvent(event)
@@ -42,7 +42,7 @@ describe('useExpandedOverlay', () => {
   })
 
   it('should not call onCollapse when Escape is pressed but not expanded', () => {
-    renderHook(() => useExpandedOverlay({ isExpanded: false, onCollapse }))
+    renderHook(() => useKeyboardShortcuts(false, onCollapse))
     
     const event = new KeyboardEvent('keydown', { key: 'Escape' })
     document.dispatchEvent(event)
@@ -51,7 +51,7 @@ describe('useExpandedOverlay', () => {
   })
 
   it('should cleanup on unmount', () => {
-    const { unmount } = renderHook(() => useExpandedOverlay({ isExpanded: true, onCollapse }))
+    const { unmount } = renderHook(() => useKeyboardShortcuts(true, onCollapse))
     
     unmount()
     

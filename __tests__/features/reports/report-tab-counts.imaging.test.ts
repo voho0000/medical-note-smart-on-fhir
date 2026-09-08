@@ -2,7 +2,8 @@
 // base64 in presentedForm by bridge v0.14.0+) carry no observations, no
 // conclusion and no note. They must still be counted as a report row — the
 // previous gate dropped them silently.
-import { calculateReportsRowCounts } from '@/src/shared/utils/reports-count.utils'
+import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
+import { calculateReportTabCounts } from '@/features/clinical-summary/reports/utils/report-tab-counts'
 
 const pureImageReport = {
   id: 'dr-xray-1',
@@ -15,38 +16,41 @@ const pureImageReport = {
   ],
 }
 
-describe('calculateReportsRowCounts — inline imaging', () => {
+describe('calculateReportTabCounts — inline imaging', () => {
   it('counts a category-less Health Bank chest X-ray in Imaging', () => {
-    const counts = calculateReportsRowCounts([{
+    const counts = calculateReportTabCounts([{
       id: 'sdk-r8-32001c',
       code: {
         coding: [{ system: 'nhi', code: '32001C' }],
         text: '胸腔檢查（包括各種角度部位之胸腔檢查）',
       },
       conclusion: 'Radiography of Chest A-P View(Supine)',
-    }], [], [])
+    }], [], [], [])
 
-    expect(counts.total).toBe(1)
+    expect(counts.all).toBe(1)
     expect(counts.imaging).toBe(1)
     expect(counts.lab).toBe(0)
   })
 
   it('counts a pure-image report (no obs / conclusion / note)', () => {
-    const counts = calculateReportsRowCounts([pureImageReport], [], [])
-    expect(counts.total).toBe(1)
+    const counts = calculateReportTabCounts([pureImageReport], [], [], [])
+    expect(counts.all).toBe(1)
     expect(counts.imaging).toBe(1)
     expect(counts.lab).toBe(0)
   })
 
-  it('still drops a truly empty report (no obs / conclusion / note / presentedForm)', () => {
+  it('keeps a metadata-only report and counts the same row shown in the list', () => {
     const emptyReport = {
       id: 'dr-empty',
       category: [{ coding: [{ code: 'RAD' }] }],
       code: { text: 'Nothing' },
       effectiveDateTime: '2026-05-25T00:00:00+08:00',
     }
-    const counts = calculateReportsRowCounts([emptyReport], [], [])
-    expect(counts.total).toBe(0)
+    const counts = calculateReportTabCounts([emptyReport], [], [], [])
+    const rows = buildReportsData([emptyReport]).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].rawTitle).toBe('Nothing')
+    expect(counts.all).toBe(rows.length)
   })
 
   it('counts a text+image report once', () => {
@@ -56,8 +60,8 @@ describe('calculateReportsRowCounts — inline imaging', () => {
       code: { text: 'CT Abdomen' },
       conclusion: 'No acute findings.',
     }
-    const counts = calculateReportsRowCounts([textPlusImage], [], [])
-    expect(counts.total).toBe(1)
+    const counts = calculateReportTabCounts([textPlusImage], [], [], [])
+    expect(counts.all).toBe(1)
     expect(counts.imaging).toBe(1)
   })
 })
