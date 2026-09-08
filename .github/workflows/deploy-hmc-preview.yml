@@ -179,15 +179,23 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          import { readFile, writeFile } from 'node:fs/promises'
+          import { readdir, readFile, writeFile } from 'node:fs/promises'
+          import path from 'node:path'
 
-          const localPackages = [
-            '@voho0000/clinical-lab-normalization',
-            '@voho0000/personalization-sdk',
-            '@voho0000/personalized-care',
-            '@voho0000/personalized-care-fhir',
-            '@voho0000/personalized-education',
-          ]
+          const sourcePackageRoot = path.resolve('..', 'personalization', 'packages')
+          const sourceDirectories = await readdir(sourcePackageRoot, { withFileTypes: true })
+          const localPackages = []
+
+          for (const directory of sourceDirectories.filter((entry) => entry.isDirectory())) {
+            const manifestPath = path.join(sourcePackageRoot, directory.name, 'package.json')
+            const sourceManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+            if (!sourceManifest.name?.startsWith('@voho0000/')) {
+              throw new Error(`Unexpected source package name at ${manifestPath}: ${sourceManifest.name}`)
+            }
+            localPackages.push(sourceManifest.name)
+          }
+          if (localPackages.length === 0) throw new Error('No personalization source packages found')
+
           const manifest = JSON.parse(await readFile('package.json', 'utf8'))
           const lockfile = JSON.parse(await readFile('package-lock.json', 'utf8'))
 
@@ -227,20 +235,20 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          import { access, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+          import { access, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
           import path from 'node:path'
 
-          const packageDirs = [
-            'clinical-lab-normalization',
-            'personalization-sdk',
-            'personalized-care',
-            'personalized-care-fhir',
-            'personalized-education',
-          ]
+          const packageRoot = path.resolve('personalization', 'packages')
+          const packageDirs = (await readdir(packageRoot, { withFileTypes: true }))
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name)
+            .sort()
+          if (packageDirs.length === 0) throw new Error('No personalization source packages found')
+
           const packageVersions = {}
 
           for (const packageDir of packageDirs) {
-            const source = path.resolve('personalization', 'packages', packageDir)
+            const source = path.join(packageRoot, packageDir)
             const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'))
             const expectedName = `@voho0000/${packageDir}`
             if (manifest.name !== expectedName) {
