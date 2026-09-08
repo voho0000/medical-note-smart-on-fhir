@@ -1,5 +1,7 @@
 # Deep-mode Agent eval loop
 
+> 文件分類（2026-09-08）：評測工作線紀錄；下列現況與數據適用於原標示日期，未於本次清理重新實測。保留原路徑供交接引用。
+
 > 評估規格與現況｜基準版本：v0.40.0｜最後核對：2026-07-14
 
 目標是用可重跑的 teacher–student eval 量化並降低 Medical Chat Agent 的錯誤率。這不是 fine-tuning；改進對象是 prompt、tools、context、lifecycle、verification 與 fallback 等 harness。

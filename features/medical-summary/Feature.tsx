@@ -313,7 +313,12 @@ export default function MedicalSummaryFeature() {
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    return [...failedCards, ...genericSummaryError]
+    const allCardsShareError = failedCards.length === MEDICAL_SUMMARY_CARD_IDS.length &&
+      new Set(failedCards.map((item) => item.message)).size === 1
+    return [
+      ...(allCardsShareError ? [{ label: ms.title, message: failedCards[0].message }] : failedCards),
+      ...genericSummaryError,
+    ]
   }, [
     cardErrors,
     cardLabels,
@@ -491,9 +496,9 @@ export default function MedicalSummaryFeature() {
     (cardId: GeneratedCardId) => Boolean(
       result &&
       (!result.completedCardIds || result.completedCardIds.includes(cardId)) &&
-      !cardErrors[cardId]
+      !result.cardErrors?.[cardId]
     ),
-    [cardErrors, result],
+    [result],
   )
   // A failed safety scan has to stay visible: it is the ONE card whose absence
   // reads as "nothing to worry about". The banner above never listed
@@ -726,8 +731,6 @@ export default function MedicalSummaryFeature() {
           error={safetyCardError}
           hasPatient={hasPatient}
           renderSources={renderSafetySources}
-          onRetry={() => void retryFailed()}
-          retryLabel={t.errors.retry}
           title={ms.careSafetyTitle}
         />
       </div>
@@ -881,6 +884,7 @@ export default function MedicalSummaryFeature() {
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
+              preserveSelection
               fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
               onSelect={setModel}
               tooltip={t.safetyAlerts.modelTooltip}
@@ -1163,7 +1167,13 @@ export default function MedicalSummaryFeature() {
                   icon: <Settings2 className="h-3 w-3" />,
                   variant: "outline" as const,
                 }] : []),
-              ] : undefined}
+              ] : [
+                { label: ms.configureModel, onClick: () => setActiveTab("settings", "ai") },
+                ...(model !== MEDICAL_SUMMARY_MODEL_ID ? [{
+                  label: ms.useDefaultModel,
+                  onClick: () => setModel(MEDICAL_SUMMARY_MODEL_ID),
+                }] : []),
+              ]}
             />
           ) : null}
 

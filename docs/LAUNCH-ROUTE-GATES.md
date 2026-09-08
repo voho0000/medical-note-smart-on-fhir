@@ -40,6 +40,12 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
+## Shared clinical action visibility
+
+| Where | Kind | Behaviour | Owner decision |
+|---|---|---|---|
+| `features/medical-summary/components/CareRemindersSafetyCard.tsx` | 不顯示 | Standard Medical Summary on `/` and its launch-query variants: no duplicate Retry inside the safety card. Error text, safety content, and the summary-level Retry remain. Other `SafetyAlertsPanel` consumers retain their configured retry actions. | Explicit chat approval, 2026-09-09 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.

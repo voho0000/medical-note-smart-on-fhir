@@ -66,7 +66,7 @@ export function useSafetyAlerts(summary: UseMedicalSummaryReturn): UseSafetyAler
     resultOwnerModelId: result ? summary.resultOwnerModelId : null,
     resultOwnerRuntimeId: result ? summary.resultOwnerRuntimeId : null,
     isScanning: summary.isGenerating,
-    error: summary.result?.cardErrors?.safety ?? null,
+    error: readGenerationSlot(summary.generationSlotKey).error,
     issue: null,
     hasPatient: summary.hasPatient,
     generationSlotKey: summary.generationSlotKey,

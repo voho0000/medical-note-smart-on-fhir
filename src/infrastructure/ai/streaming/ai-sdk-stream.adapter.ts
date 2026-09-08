@@ -13,7 +13,7 @@ import { Output, streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
-  gateModel,
+  modelRequiresUserKey,
   isProxyEligibleModel,
   isCustomOpenAiModelId,
   resolveModelTemperature,
@@ -53,19 +53,17 @@ export class AiSdkStreamAdapter {
   ) {}
 
   async stream(config: StreamConfig): Promise<void> {
-    // Central safety net: every AI feature streams through here. If the picked
-    // model needs the user's own key but none was supplied, downgrade to the
-    // provider's free, proxy-eligible base model so the call rides the proxy
-    // instead of dead-ending on a missing key (e.g. a model that used to be free
-    // and became key-gated). No caller can bypass this.
+    // A credential may disappear after UI preflight. Never substitute a
+    // different model at the final network boundary.
     const isCustom = isCustomOpenAiModelId(config.model)
     getModelDefinitionOrThrow(config.model)
     if (isCustom && !isOpenAiCompatibleRuntimeReady(config.openAiCompatible)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
     }
-    const modelId = isCustom
-      ? config.model
-      : gateModel(config.model, !!config.apiKey)
+    if (!isCustom && modelRequiresUserKey(config.model) && !config.apiKey?.trim()) {
+      throw new AiError('The selected model requires an API key', AiErrorCode.API_KEY_MISSING)
+    }
+    const modelId = config.model
     const definition = getModelDefinitionOrThrow(modelId)
     const useProxy = this.shouldUseProxy(config.apiKey, modelId)
     let modelExecution = createModelExecution(config.requestedModelId ?? config.model, modelId, config.openAiCompatible?.modelId)

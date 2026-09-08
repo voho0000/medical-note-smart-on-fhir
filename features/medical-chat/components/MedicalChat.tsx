@@ -227,9 +227,6 @@ export default function MedicalChat() {
     enabled: cloudChatHistoryEnabled,
   })
 
-  // AI smart title generation (after first response)
-  useSmartTitleGeneration({ enabled: cloudChatHistoryEnabled })
-
   // Temporary / incognito chat mode (ChatGPT-style)
   const isTemporaryMode = useIsTemporaryMode()
   const setIsTemporaryMode = useSetIsTemporaryMode()
@@ -288,6 +285,12 @@ export default function MedicalChat() {
     forceSave,
     chatDataScope,
   )
+
+  // Wait for the full first response and a persisted session before naming it.
+  useSmartTitleGeneration({
+    enabled: cloudChatHistoryEnabled && !isTemporaryMode,
+    isStreaming: chat.isLoading,
+  })
 
   // "Next step" suggestion chips, generated after each answer completes.
   const {

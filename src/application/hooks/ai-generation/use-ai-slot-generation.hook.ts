@@ -234,7 +234,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => resolveOpenAiCompatibleProfile(selectedModelId, openAiCompatibleProfiles),
     [selectedModelId, openAiCompatibleProfiles],
   )
-  const resolvedModelId = useMemo(() => gateModelForKeys(
+  const availableModelId = useMemo(() => gateModelForKeys(
     selectedModelId,
     {
       openAiKey: apiKey,
@@ -244,6 +244,16 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     },
     defaultModelId,
   ), [selectedModelId, apiKey, geminiKey, claudeKey, selectedOpenAiCompatible, defaultModelId])
+  // Keep the selected model's identity even when its credential is unavailable.
+  const resolvedModelId = selectedModelId
+  const modelUnavailable = availableModelId !== selectedModelId ||
+    (getModelDefinition(selectedModelId)?.provider === 'custom' &&
+      !isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible))
+  const modelAccessError = modelUnavailable
+    ? locale === 'zh-TW'
+      ? '所選模型的金鑰或連線設定尚未就緒。請重新設定，或明確選擇改用預設模型；本次未送出。'
+      : 'The selected model’s key or connection is unavailable. Update its settings or choose the default model. No request was sent.'
+    : null
 
   const openAiCompatible = useMemo(
     () => resolveOpenAiCompatibleProfile(resolvedModelId, openAiCompatibleProfiles),
@@ -299,8 +309,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
-  const selectedModelReady = selectedModelProvider !== 'custom' ||
-    isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible)
+  const selectedModelReady = !modelUnavailable && (selectedModelProvider !== 'custom' ||
+    isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible))
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds a provider connection). This identity deliberately
   // describes all available access, not the selected model: moving the picker
@@ -473,7 +483,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // consent gate, results are cached 12h per patient, and the 50/day free quota
   // is still enforced server-side.
   const generate = useCallback(async () => {
-    if (!slotKey) return
+    if (modelUnavailable || !slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
@@ -533,7 +543,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
+  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -722,7 +732,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resultOwnerRuntimeId,
     isRunning,
     isAnyRunning,
-    error,
+    error: modelAccessError ?? error,
     issue,
     contextLimit: resolvedContextLimit,
     contextAdaptation,

@@ -2,7 +2,8 @@
 // model is actually used (chat toolbar, custom-module manager, medical-summary
 // header) and wires it to its own persisted preference.
 //
-// The trigger and the checkmark always show the EFFECTIVE model — the raw
+// With preserveSelection, the feature owns the unavailable-model prompt.
+// Otherwise the trigger and checkmark show the effective model — the raw
 // preference run through the same key-gate as the runtime
 // (gateModelForKeys) — so what the user sees is what the call will use. A
 // premium pick whose provider key is gone (e.g. session-scoped keys after a
@@ -41,6 +42,8 @@ import {
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
   modelId: string
+  /** Keep an unavailable selection visible when the feature blocks fallback. */
+  preserveSelection?: boolean
   /** The feature's free default — where the gate lands without a key. */
   fallbackModelId: string
   onSelect: (id: string) => void
@@ -57,6 +60,7 @@ interface ModelPickerProps {
 
 export function ModelPicker({
   modelId,
+  preserveSelection = false,
   fallbackModelId,
   onSelect,
   tooltip,
@@ -91,7 +95,7 @@ export function ModelPicker({
     },
     fallbackModelId,
   )
-  const effectiveModelId = agentModeActive
+  const effectiveModelId = preserveSelection ? modelId : agentModeActive
     ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
     : keyGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)

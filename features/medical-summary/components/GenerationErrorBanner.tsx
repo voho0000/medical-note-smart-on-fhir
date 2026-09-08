@@ -45,10 +45,10 @@ export function GenerationErrorBanner({
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-rose-500/10 dark:text-rose-300"
+      className="@container flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-rose-500/10 dark:text-rose-300"
     >
       <AlertCircle className="h-4 w-4 shrink-0" />
-      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 @min-[36rem]:flex-row @min-[36rem]:items-start">
         <div className="min-w-0 flex-1">
           <p className="font-medium">{title}</p>
           {errors.map((item) => (
@@ -70,7 +70,7 @@ export function GenerationErrorBanner({
               disabled={isBusy}
               size="sm"
               variant={action.variant ?? "outline"}
-              className="h-7 gap-1 px-2 text-xs"
+              className="min-h-11 gap-1 px-2 text-xs @min-[36rem]:min-h-7 @min-[36rem]:h-7"
             >
               {action.icon}
               {action.label}
@@ -82,7 +82,7 @@ export function GenerationErrorBanner({
               onClick={onRetry}
               size="sm"
               variant={hasActions ? "ghost" : "outline"}
-              className="h-7 shrink-0 gap-1 px-2 text-xs"
+              className="min-h-11 shrink-0 gap-1 px-2 text-xs @min-[36rem]:min-h-7 @min-[36rem]:h-7"
             >
               <RefreshCw className="h-3 w-3" />
               {retryLabel}

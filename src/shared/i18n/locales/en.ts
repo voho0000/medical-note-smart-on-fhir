@@ -173,6 +173,8 @@ export const en = {
     generatingHint: 'Compiling cross-hospital records…',
     loadingData: 'Loading patient data…',
     loadingSavedSummary: 'Loading the saved summary…',
+    configureModel: 'Configure model',
+    useDefaultModel: 'Use default model',
     partialGenerationError: 'Some summary content could not be completed',
     contextOverflowTitle: 'The input exceeds this model’s usable context; affected items were not sent',
     contextOverflowInputLabel: 'Input budget',

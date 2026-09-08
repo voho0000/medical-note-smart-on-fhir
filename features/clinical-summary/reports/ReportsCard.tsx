@@ -323,6 +323,7 @@ export function ReportsCard() {
     cumulativePrepared ? cumulativeSource.observations : EMPTY_RESOURCES,
     cumulativePrepared ? cumulativeSource.procedures : EMPTY_RESOURCES,
     !rawReportsEnabled,
+    compositions,
   )
 
   const { reportRows, seenIds } = useReportsData(

@@ -4,6 +4,8 @@ import {
   type ReportTabCounts,
 } from '../utils/report-tab-counts'
 
+const EMPTY_COMPOSITIONS: any[] = []
+
 /**
  * Deferred lightweight Reports tab counts.
  *
@@ -18,11 +20,13 @@ export function useReportTabCounts(
   observations: any[] = [],
   procedures: any[] = [],
   enabled = true,
+  compositions: any[] = EMPTY_COMPOSITIONS,
 ): ReportTabCounts | null {
   const [snapshot, setSnapshot] = useState<{
     diagnosticReports: any[]
     imagingStudies: any[]
     observations: any[]
+    compositions: any[]
     procedures: any[]
     counts: ReportTabCounts
   } | null>(null)
@@ -47,6 +51,7 @@ export function useReportTabCounts(
         imagingStudies,
         observations,
         procedures,
+        compositions,
       )
       if (cancelled) return
       startTransition(() => setSnapshot({
@@ -54,6 +59,7 @@ export function useReportTabCounts(
         imagingStudies,
         observations,
         procedures,
+        compositions,
         counts: nextCounts,
       }))
     }
@@ -71,12 +77,13 @@ export function useReportTabCounts(
       if (timer !== undefined) window.clearTimeout(timer)
       if (idleId !== undefined) browserWindow.cancelIdleCallback?.(idleId)
     }
-  }, [diagnosticReports, enabled, imagingStudies, observations, procedures])
+  }, [diagnosticReports, enabled, imagingStudies, observations, procedures, compositions])
 
   const snapshotMatchesSources = snapshot
     && snapshot.diagnosticReports === diagnosticReports
     && snapshot.imagingStudies === imagingStudies
     && snapshot.observations === observations
     && snapshot.procedures === procedures
+    && snapshot.compositions === compositions
   return enabled && snapshotMatchesSources ? snapshot.counts : null
 }
