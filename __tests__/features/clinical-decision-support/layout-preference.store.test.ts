@@ -6,14 +6,14 @@ import { CDSS_LAYOUT_STORAGE_KEY, useCdssLayoutStore } from '@/features/clinical
 describe('guidance layout preference', () => {
   beforeEach(() => {
     localStorage.clear()
-    useCdssLayoutStore.setState({ layout: 'board' })
+    useCdssLayoutStore.setState({ layout: 'c' })
   })
 
-  it('opens on the board and remembers a switch to the classic table in this browser', () => {
+  it('opens on direction C and remembers a switch to the original board in this browser', () => {
+    expect(useCdssLayoutStore.getState().layout).toBe('c')
+    useCdssLayoutStore.getState().setLayout('board')
     expect(useCdssLayoutStore.getState().layout).toBe('board')
-    useCdssLayoutStore.getState().setLayout('classic')
-    expect(useCdssLayoutStore.getState().layout).toBe('classic')
     expect(JSON.parse(localStorage.getItem(CDSS_LAYOUT_STORAGE_KEY) ?? '{}'))
-      .toMatchObject({ state: { layout: 'classic' } })
+      .toMatchObject({ state: { layout: 'board' } })
   })
 })

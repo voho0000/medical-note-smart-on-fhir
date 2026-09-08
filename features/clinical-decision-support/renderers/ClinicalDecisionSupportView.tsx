@@ -127,6 +127,19 @@ interface ModuleGroupPresentation {
  * by workflow stage: the board above it already carries the treatment
  * decisions, so what remains is ordered do → fetch → judge → done.
  */
+/**
+ * Direction C groups the remaining rows by the kind of work, in the words of
+ * the mockup: 藥物 (an actionable prescribing or safety decision), 檢驗與量測
+ * (data to fetch), 需判斷 (a judgement the record cannot make), and the done
+ * rows folded. Same four statuses as the board, named for the desk they land on.
+ */
+const HEART_FAILURE_C_GROUPS: Readonly<Record<CdssStatus, ModuleGroupPresentation>> = {
+  actionable: { id: 'actionable', zh: '藥物與處置', en: 'Medication & actions', ...GROUP_TONES.indigo },
+  'needs-data': { id: 'needs-data', zh: '檢驗與量測', en: 'Tests & measurements', ...GROUP_TONES.orange },
+  review: { id: 'review', zh: '需判斷', en: 'Judgement', ...GROUP_TONES.blue },
+  'no-action': { id: 'no-action', zh: '目前無需處理', en: 'No action needed', ...GROUP_TONES.teal },
+}
+
 const HEART_FAILURE_STATUS_GROUPS: Readonly<Record<CdssStatus, ModuleGroupPresentation>> = {
   actionable: { id: 'actionable', zh: '可立即處理', en: 'Actionable now', ...GROUP_TONES.indigo },
   'needs-data': { id: 'needs-data', zh: '需先補資料', en: 'Data needed', ...GROUP_TONES.orange },
@@ -2013,7 +2026,7 @@ export function ClinicalDecisionSupportView({
       return [
         {
           kind: 'group',
-          group: HEART_FAILURE_STATUS_GROUPS[status],
+          group: (layout === 'c' ? HEART_FAILURE_C_GROUPS : HEART_FAILURE_STATUS_GROUPS)[status],
           count: items.length,
           isCollapsed,
           summary: isCollapsed ? items.map(moduleNameOf).join(' · ') : undefined,
@@ -2215,6 +2228,7 @@ export function ClinicalDecisionSupportView({
           now={now}
           expandedId={expandedId}
           onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          variant={layout === 'c' ? 'summary' : 'board'}
           clinicVitals={clinicVitals}
           onSaveClinicVitals={onSaveClinicVitals}
           onClearClinicVitals={onClearClinicVitals}
@@ -2321,6 +2335,13 @@ export function ClinicalDecisionSupportView({
 
           const recommendation = row.recommendation
           const isExpanded = expandedId === recommendation.id
+          // Direction C numbers every listed row, continuing after the headline
+          // sentences, so a 依據 entry can be read against its 處置 by number.
+          const rowNumber = layout === 'c' && board
+            ? board.headlines.length + heartFailureRows
+              .filter((item): item is Extract<ModuleDisplayRow, { kind: 'recommendation' }> => item.kind === 'recommendation')
+              .findIndex((item) => item.recommendation.id === recommendation.id) + 1
+            : undefined
           const isRiskStratification = recommendation.kind === 'risk-stratification'
           const moduleName = recommendation.moduleName ?? clinicalModuleLabel(
             recommendation.id,
@@ -2424,6 +2445,14 @@ export function ClinicalDecisionSupportView({
                             <StatusIcon status={recommendation.status} />
                             {label[recommendation.status]}
                           </Badge>
+                        ) : null}
+                        {rowNumber !== undefined ? (
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold tabular-nums text-primary"
+                            data-testid={`cdss-row-number-${recommendation.id}`}
+                          >
+                            {rowNumber}
+                          </span>
                         ) : null}
                         <span
                           className="min-w-0 text-sm font-semibold leading-snug text-foreground"

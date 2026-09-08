@@ -166,19 +166,19 @@ function LayoutSwitcher({
   const isEnglish = locale === 'en'
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
     {
-      id: 'board',
+      id: 'c',
       // The letter is how pilot users name this layout in feedback (direction C).
       label: isEnglish ? 'Decision board C' : '決策看板 C',
       title: isEnglish
-        ? "Today's sentences, safety inputs, the four pillars, then action-first rows"
-        : '今天要做的事、安全數據、四支柱，再列處置優先的模組',
+        ? "One line of inputs, today's numbered sentences, then actions and their basis side by side"
+        : '一行決策所需資訊、編號的今日結論，再是處置與依據對號並列',
     },
     {
-      id: 'classic',
-      label: isEnglish ? 'Module table' : '原版模組表',
+      id: 'board',
+      label: isEnglish ? 'Original board' : '原版模組表',
       title: isEnglish
-        ? 'The clinical summary and the module-first table, as the other packs show'
-        : '臨床摘要加模組優先的表格，和其他疾病相同',
+        ? 'The status board: safety inputs, the four pillars, then the module rows'
+        : '原本的看板：安全數據、四支柱，再列模組',
     },
   ]
   return (

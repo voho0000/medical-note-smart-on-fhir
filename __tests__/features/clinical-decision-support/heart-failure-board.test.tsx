@@ -206,6 +206,19 @@ function hfpefResult(): CdssResult {
   }
 }
 
+/**
+ * Neither pathway opened — no diagnosis, LVEF above the HFrEF line — so the
+ * pack produced the phenotype card and nothing else.
+ */
+function phenotypeOnlyResult(): CdssResult {
+  const result = heartFailureResult()
+  return {
+    ...result,
+    recommendations: result.recommendations.filter((item) => item.id === 'heart-failure-phenotype'),
+    automatedChecks: [],
+  }
+}
+
 const HFPEF_FACTS = {
   arniTherapy: { zh: '目前未使用', en: 'Not currently taking' },
   aceArbTherapy: {
@@ -216,6 +229,27 @@ const HFPEF_FACTS = {
   hfEvidenceBetaBlockerTherapy: { zh: '目前未使用', en: 'Not currently taking' },
   mraTherapy: { zh: '目前未使用（最近一筆處方 2026-03-01 結束）', en: 'Not currently taking (latest prescription ended 2026-03-01)' },
   sglt2Therapy: { zh: '目前用藥中：Dapagliflozin 10mg', en: 'Currently taking: Dapagliflozin 10mg' },
+}
+
+/** A patient outside the HFrEF pathway: the laboratory ran the panel, no module read it. */
+const RECORD_ONLY_FACTS = {
+  ...HFPEF_FACTS,
+  potassium: {
+    zh: '2.8 mmol/L（2026-08-20）',
+    en: '2.8 mmol/L (2026-08-20)',
+    numericValue: 2.8,
+    unit: 'mmol/L',
+    date: '2026-08-20',
+    sources: [{ resourceType: 'Observation' as const, resourceId: 'obs-k', date: '2026-08-20' }],
+  },
+  sodium: {
+    zh: '142 mmol/L（2026-08-20）',
+    en: '142 mmol/L (2026-08-20)',
+    numericValue: 142,
+    unit: 'mmol/L',
+    date: '2026-08-20',
+    sources: [{ resourceType: 'Observation' as const, resourceId: 'obs-na', date: '2026-08-20' }],
+  },
 }
 
 describe('heart-failure board model', () => {
@@ -319,6 +353,33 @@ describe('heart-failure board model', () => {
     expect(board.pillars).toEqual([])
     expect(board.gdmt).toBeUndefined()
     expect(board.consumedIds.has('heart-failure-hfref-gdmt')).toBe(false)
+  })
+
+  it('reads a safety input no module carried straight from the record, and says so', () => {
+    const board = buildHeartFailureBoard(phenotypeOnlyResult(), 'zh-TW', NOW, RECORD_ONLY_FACTS)!
+
+    const potassium = board.metrics.find((metric) => metric.factKey === 'potassium')!
+    expect(potassium.value).toBe('2.8')
+    expect(potassium.unit).toBe('mmol/L')
+    expect(potassium.date).toBe('2026-08-20')
+    expect(potassium.ageDays).toBe(16)
+    expect(potassium.evaluated).toBe(false)
+    expect(potassium.stale).toBe(false)
+    expect(potassium.evidence?.sources?.[0]?.resourceId).toBe('obs-k')
+    expect(board.metrics.find((metric) => metric.factKey === 'sodium')?.evaluated).toBe(false)
+    // The phenotype card still carries LVEF and NT-proBNP itself.
+    expect(board.lvef?.value).toBe('32%')
+    // Nothing in the record either: still absent, not invented.
+    expect(board.metrics.find((metric) => metric.factKey === 'heartRate')?.value).toBeUndefined()
+    expect(board.metrics.find((metric) => metric.factKey === 'eGFR')?.value).toBeUndefined()
+  })
+
+  it('prefers the module\'s own evidence over the record when a module did read the value', () => {
+    // The HFpEF result keeps the safety module, which carries potassium 4.9.
+    const board = buildHeartFailureBoard(hfpefResult(), 'zh-TW', NOW, RECORD_ONLY_FACTS)!
+    const potassium = board.metrics.find((metric) => metric.factKey === 'potassium')!
+    expect(potassium.value).toBe('4.9')
+    expect(potassium.evaluated).toBe(true)
   })
 
   it('reads unevaluated pillars from the therapy facts, taking class first', () => {
@@ -562,6 +623,37 @@ describe('heart-failure board view', () => {
 
     fireEvent.click(sglt2)
     expect(screen.queryByTestId('cdss-hf-pillar-detail-heart-failure-sglt2')).toBeNull()
+  })
+
+  it('shows a laboratory value no module read as a number with 未判定, not as 未取得', () => {
+    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" profileFacts={RECORD_ONLY_FACTS} />)
+
+    const potassium = screen.getByTestId('cdss-hf-metric-potassium')
+    expect(potassium).not.toHaveAttribute('data-missing')
+    expect(potassium).toHaveAttribute('data-evaluated', 'false')
+    expect(potassium).toHaveTextContent('2.8')
+    expect(potassium).toHaveTextContent('本次未判定')
+    expect(potassium).not.toHaveTextContent('未取得')
+    expect(potassium).toHaveAttribute('title', expect.stringContaining('本次無模組判定'))
+    // An absent value is still 未取得, without the note.
+    const heartRate = screen.getByTestId('cdss-hf-metric-heartRate')
+    expect(heartRate).toHaveAttribute('data-missing', 'true')
+    expect(heartRate).not.toHaveAttribute('data-evaluated')
+    expect(heartRate).not.toHaveTextContent('未判定')
+  })
+
+  it('renders direction C: one line of inputs, counts under the sentences, numbered rows by kind of work', () => {
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="c" />)
+
+    expect(screen.getByTestId('cdss-hf-status')).toHaveAttribute('data-variant', 'summary')
+    const line = screen.getByTestId('cdss-hf-inputs-line')
+    expect(line).toHaveTextContent('LVEF 32%')
+    expect(within(line).getByTestId('cdss-hf-metric-NTproBNP')).toHaveTextContent('紀錄無值')
+    expect(screen.getByTestId('cdss-hf-headlines-counts')).toHaveTextContent('可立即處理 3 · 需先補資料 1 · 需臨床確認 3 · 目前無需處理 4')
+    // Three sentences take 1–3; the first listed row is 4.
+    expect(screen.getByTestId('cdss-row-number-heart-failure-congestion-diuretic')).toHaveTextContent('4')
+    expect(screen.getByTestId('cdss-module-group-trigger-needs-data')).toHaveTextContent('檢驗與量測')
+    expect(screen.getByTestId('cdss-module-group-trigger-review')).toHaveTextContent('需判斷')
   })
 
   it('shows the classic module-first table for heart failure when the layout says so', () => {

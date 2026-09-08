@@ -12,7 +12,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type CdssLayout = 'board' | 'classic'
+/**
+ * `c` is direction C — the decision summary: one line of inputs, numbered
+ * sentences, then 處置 and 依據 side by side with matching numbers. `board`
+ * is the status board that shipped first (the strip, the pillars, action-first
+ * rows), which pilot users call 原版. `classic` is the module-first table the
+ * other packs use; it is kept for them and is not offered in the switch.
+ */
+export type CdssLayout = 'c' | 'board' | 'classic'
 
 export const CDSS_LAYOUT_STORAGE_KEY = 'cdss-layout-preference'
 
@@ -24,7 +31,7 @@ interface LayoutPreferenceState {
 export const useCdssLayoutStore = create<LayoutPreferenceState>()(
   persist(
     (set) => ({
-      layout: 'board',
+      layout: 'c',
       setLayout: (layout) => set({ layout }),
     }),
     { name: CDSS_LAYOUT_STORAGE_KEY },

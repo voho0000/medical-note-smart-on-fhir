@@ -24,6 +24,12 @@ interface HeartFailureStatusBoardProps {
   onToggle: (id: string) => void
   /** The same decision detail the module list opens, so nothing is repeated here. */
   renderDetail: (recommendation: CdssRecommendation) => ReactNode
+  /**
+   * `board` is the status strip with one cell per input; `summary` (direction
+   * C) folds the inputs into one line and numbers today's sentences so the
+   * 處置／依據 rows below can be read against them.
+   */
+  variant?: 'board' | 'summary'
   /** What the clinician measured in the room this visit, if anything. */
   clinicVitals?: ClinicVitals
   /** Absent when this surface cannot take measurements (no patient to attach them to). */
@@ -69,11 +75,16 @@ function MetricCell({
         className,
       )}
       style={missing ? MISSING_PATTERN_STYLE : undefined}
-      title={metric.fullValue}
+      title={
+        !missing && !metric.evaluated
+          ? `${metric.fullValue ?? ''}${isEnglish ? ' · in the record, read by no module this visit' : ' · 病歷有此值，本次無模組判定'}`
+          : metric.fullValue
+      }
       data-testid={`cdss-hf-metric-${metric.factKey}`}
       data-missing={missing ? 'true' : undefined}
       data-stale={metric.stale ? 'true' : undefined}
       data-entered={metric.entered ? 'true' : undefined}
+      data-evaluated={!missing && !metric.evaluated ? 'false' : undefined}
     >
       <div className="truncate text-[11px] font-medium leading-4 text-muted-foreground">
         {metric.label}
@@ -103,6 +114,13 @@ function MetricCell({
           >
             {ageLabel(metric, isEnglish, now) ?? (metric.stale ? (isEnglish ? 'Past window' : '已超過窗期') : '')}
           </div>
+          {metric.evaluated ? null : (
+            // The record holds the value but no module read it this visit;
+            // said on its own line so the tile's width cannot swallow it.
+            <div className="truncate text-[11px] leading-4 text-muted-foreground">
+              {isEnglish ? 'Not assessed' : '本次未判定'}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -345,11 +363,13 @@ export function HeartFailureStatusBoard({
   expandedId,
   onToggle,
   renderDetail,
+  variant = 'board',
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
 }: HeartFailureStatusBoardProps) {
   const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
+  const summary = variant === 'summary'
   const lvefAge = board.lvef ? ageLabel(board.lvef, isEnglish, now) : undefined
   const expandedPillar = board.pillars.find((pillar) => pillar.id === expandedId)
   const gdmtExpanded = board.gdmt !== undefined && expandedId === board.gdmt.id
@@ -362,7 +382,42 @@ export function HeartFailureStatusBoard({
         className="overflow-hidden rounded-lg border border-border bg-card"
         aria-label={isEnglish ? 'Patient status' : '病人狀態'}
         data-testid="cdss-hf-status"
+        data-variant={variant}
       >
+        {summary ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-3.5 py-2 text-xs"
+            data-testid="cdss-hf-inputs-line"
+          >
+            <span className="text-[11px] font-semibold text-indigo-700 dark:text-secondary-foreground/80">
+              {isEnglish ? 'Inputs' : '決策所需臨床資訊'}
+            </span>
+            <span className="text-muted-foreground">
+              LVEF{' '}
+              {board.lvef?.value
+                ? <strong className="font-semibold tabular-nums text-foreground" title={board.lvef.fullValue}>{board.lvef.value}</strong>
+                : <span className="font-medium text-amber-700 dark:text-amber-300">{isEnglish ? 'not available' : '未取得'}</span>}
+              {board.phenotype ? <span className="ml-1.5 text-muted-foreground" data-testid="cdss-hf-phenotype-title">{board.phenotype.title}</span> : null}
+            </span>
+            {board.metrics.map((metric) => (
+              <span key={metric.factKey} className="text-muted-foreground" data-testid={`cdss-hf-metric-${metric.factKey}`} data-missing={metric.value === undefined ? 'true' : undefined} data-stale={metric.stale ? 'true' : undefined} data-entered={metric.entered ? 'true' : undefined} title={metric.fullValue}>
+                {metric.label}{' '}
+                {metric.value === undefined
+                  ? <span className="font-medium text-amber-700 dark:text-amber-300">{isEnglish ? 'not available' : '紀錄無值'}</span>
+                  : (
+                    <>
+                      <strong className="font-semibold tabular-nums text-foreground">{metric.value}</strong>
+                      {metric.stale || metric.entered ? (
+                        <span className={cn('ml-1 text-[11px] font-medium tabular-nums', metric.entered ? 'text-primary' : 'text-amber-700 dark:text-amber-300')}>
+                          {ageLabel(metric, isEnglish, now)}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+              </span>
+            ))}
+          </div>
+        ) : (
         <div className="grid @min-[40rem]:grid-cols-[10.5rem_minmax(0,1fr)]">
           <div className="flex flex-col justify-center gap-0.5 border-b border-border px-3.5 py-2.5 @min-[40rem]:border-b-0 @min-[40rem]:border-r">
             <span className="text-[11px] font-medium text-muted-foreground">
@@ -409,6 +464,7 @@ export function HeartFailureStatusBoard({
             ))}
           </div>
         </div>
+        )}
         {onSaveClinicVitals ? (
           vitalsFormOpen ? (
             <ClinicVitalsForm
@@ -546,6 +602,15 @@ export function HeartFailureStatusBoard({
                   ? `Today: ${board.headlines.length} thing${board.headlines.length === 1 ? '' : 's'}`
                   : `今天要做的 ${board.headlines.length} 件事`}
               </span>
+              {summary ? (
+                <span className="ml-auto text-[11px] tabular-nums text-muted-foreground" data-testid="cdss-hf-headlines-counts">
+                  {(['actionable', 'needs-data', 'review', 'no-action'] as const).map((status) => {
+                    const count = board.statusCounts[status]
+                    const labelText = { actionable: isEnglish ? 'actionable' : '可立即處理', 'needs-data': isEnglish ? 'data needed' : '需先補資料', review: isEnglish ? 'review' : '需臨床確認', 'no-action': isEnglish ? 'done' : '目前無需處理' }[status]
+                    return `${labelText} ${count}`
+                  }).join(' · ')}
+                </span>
+              ) : null}
               <span className="text-xs text-muted-foreground">
                 {isEnglish ? "Each sentence is the pack's own next step; open the module for its basis." : '每一句都是 pack 的下一步原文；點開模組看依據。'}
               </span>

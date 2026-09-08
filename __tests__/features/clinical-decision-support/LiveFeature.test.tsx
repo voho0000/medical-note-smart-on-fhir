@@ -189,12 +189,13 @@ describe('Live personalized-guidance disease switch', () => {
   it('offers the decision board and the classic table for heart failure, and remembers the choice', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'c')
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-classic'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'classic')
-    expect(screen.getByTestId('cdss-layout-switch-classic')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
     expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
-      .toMatchObject({ state: { layout: 'classic' } })
+      .toMatchObject({ state: { layout: 'board' } })
+    expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
 
     // The switch belongs to heart failure; CKD has one face.
     fireEvent.click(screen.getByTestId('cdss-disease-switch-ckd-cdss'))

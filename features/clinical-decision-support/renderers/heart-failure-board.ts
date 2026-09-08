@@ -97,6 +97,15 @@ export interface HeartFailureMetric {
   stale: boolean
   /** Entered in the room this visit rather than read from the record. */
   entered: boolean
+  /**
+   * A pack module carried this value this visit. `false` when the record holds
+   * the value but no module ran that reads it — a patient outside the HFrEF
+   * pathway gets the phenotype card alone, which names LVEF and NT-proBNP and
+   * nothing else — so the tile shows the measurement without a judgement
+   * behind it. The distinction matters: 「未取得」 asks the clinician to order
+   * a test the laboratory already ran.
+   */
+  evaluated: boolean
   /** Where the value came from, for the source link. */
   evidence?: ClinicalEvidence
 }
@@ -147,6 +156,8 @@ export interface HeartFailureBoardModel {
   headlines: readonly HeartFailureHeadline[]
   /** How many modules the pack judged this visit, for the silent line. */
   evaluatedCount: number
+  /** Modules per status, for the counts line under today's sentences. */
+  statusCounts: Readonly<Record<CdssStatus, number>>
   lvef?: HeartFailureMetric
   metrics: readonly HeartFailureMetric[]
   fmtSafety?: CdssRecommendation
@@ -226,7 +237,7 @@ function metricFromEvidence(
 ): HeartFailureMetric {
   const label = isEnglish ? config.en : config.zh
   if (!evidence) {
-    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false }
+    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false, evaluated: false }
   }
   const compact = compactValue(evidence.value)
   const date = latestSourceDate(evidence) ?? compact.inlineDate
@@ -241,6 +252,7 @@ function metricFromEvidence(
     ageDays: date ? daysBetween(date, now) : undefined,
     stale: compact.stale,
     entered: CLINIC_ENTRY_PATTERN.test(evidence.value),
+    evaluated: true,
     evidence,
   }
 }
@@ -270,6 +282,7 @@ function metricFromEvidenceTable(
         ageDays: date ? daysBetween(date, now) : undefined,
         stale: compact.stale,
         entered: CLINIC_ENTRY_PATTERN.test(item.value),
+        evaluated: true,
         evidence: {
           label: isEnglish ? item.label.en : item.label.zh,
           value: item.value,
@@ -280,6 +293,46 @@ function metricFromEvidenceTable(
     }
   }
   return undefined
+}
+
+/**
+ * A safety input no module carried, read from the adapter's fact. The fact's
+ * own wording — 「2.8 mmol/L（2026-08-20）」 — is kept as the value so the
+ * tooltip and source link read the same as a module-carried one; only
+ * `evaluated` says that no rule looked at it this visit.
+ */
+function metricFromFact(
+  config: (typeof STATUS_METRICS)[number],
+  facts: CdssPatientProfile['facts'] | undefined,
+  isEnglish: boolean,
+  now: Date,
+): HeartFailureMetric | undefined {
+  const fact = facts?.[config.factKey] as CdssFact | undefined
+  if (!fact) return undefined
+  const text = isEnglish ? fact.en : fact.zh
+  if (!text?.trim()) return undefined
+  const compact = compactValue(text)
+  const evidence: ClinicalEvidence = {
+    label: isEnglish ? config.en : config.zh,
+    value: text,
+    factKeys: [config.factKey],
+    sources: fact.sources,
+  }
+  const date = fact.date ?? latestSourceDate(evidence) ?? compact.inlineDate
+  return {
+    factKey: config.factKey,
+    label: isEnglish ? config.en : config.zh,
+    kind: config.kind,
+    value: compact.value,
+    fullValue: text,
+    unit: compact.unit ?? fact.unit,
+    date,
+    ageDays: date ? daysBetween(date, now) : undefined,
+    stale: compact.stale,
+    entered: CLINIC_ENTRY_PATTERN.test(text),
+    evaluated: false,
+    evidence,
+  }
 }
 
 function pillarFromRecommendation(
@@ -358,7 +411,10 @@ export function buildHeartFailureBoard(
   result: CdssResult,
   locale: CdssLocale,
   now: Date = new Date(),
-  /** The profile the pack read, for pillars the pack produced no module for. */
+  /**
+   * The profile the pack read, for pillars the pack produced no module for and
+   * safety inputs no module carried.
+   */
   profileFacts?: CdssPatientProfile['facts'],
 ): HeartFailureBoardModel | undefined {
   if (result.packId !== HEART_FAILURE_PACK_ID) return undefined
@@ -381,6 +437,7 @@ export function buildHeartFailureBoard(
     const evidence = findEvidence(recommendations, config.factKey)
     if (evidence) return metricFromEvidence(config, evidence, isEnglish, now)
     return metricFromEvidenceTable(config, recommendations, isEnglish, now)
+      ?? metricFromFact(config, profileFacts, isEnglish, now)
       ?? metricFromEvidence(config, undefined, isEnglish, now)
   })
 
@@ -421,10 +478,14 @@ export function buildHeartFailureBoard(
     ...(evaluatedPillars.length > 0 && byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
   ])
 
+  const statusCounts: Record<CdssStatus, number> = { actionable: 0, 'needs-data': 0, review: 0, 'no-action': 0 }
+  recommendations.forEach((item) => { statusCounts[item.status] += 1 })
+
   return {
     phenotype,
     headlines,
     evaluatedCount: recommendations.length,
+    statusCounts,
     lvef,
     metrics,
     fmtSafety: byId.get(FMT_SAFETY_MODULE_ID),
