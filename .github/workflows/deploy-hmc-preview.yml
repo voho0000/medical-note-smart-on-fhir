@@ -119,9 +119,47 @@ jobs:
             app/package-lock.json
             personalization/package-lock.json
 
-      - name: Install personalization dependencies
+      - name: Align personalization source workspace versions
         working-directory: personalization
-        run: npm ci --ignore-scripts --registry=https://registry.npmjs.org/
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readdir, readFile, writeFile } from 'node:fs/promises'
+          import path from 'node:path'
+
+          const packageRoot = path.resolve('packages')
+          const directories = await readdir(packageRoot, { withFileTypes: true })
+          const manifests = []
+          const versions = new Map()
+
+          for (const directory of directories.filter((entry) => entry.isDirectory())) {
+            const manifestPath = path.join(packageRoot, directory.name, 'package.json')
+            const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+            manifests.push({ manifestPath, manifest })
+            versions.set(manifest.name, manifest.version)
+          }
+
+          for (const { manifestPath, manifest } of manifests) {
+            for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
+              for (const dependency of Object.keys(manifest[section] ?? {})) {
+                if (versions.has(dependency)) manifest[section][dependency] = versions.get(dependency)
+              }
+            }
+            await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+          }
+          NODE
+
+      - name: Install personalization dependencies from source workspaces
+        working-directory: personalization
+        shell: bash
+        run: |
+          cleanup_npmrc() {
+            rm -f .npmrc
+          }
+          trap cleanup_npmrc EXIT
+          rm -f .npmrc
+          printf '%s\n' 'registry=https://registry.npmjs.org/' > .npmrc
+          npm install --ignore-scripts --package-lock=false
 
       - name: Rebuild personalization dependencies
         working-directory: personalization
