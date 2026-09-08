@@ -11,7 +11,7 @@ const mockUpdateSession = jest.fn()
 const mockSetIsTitleGenerating = jest.fn()
 const mockCaptureAiRuntimeConfig = jest.fn(() => ({ model: 'cloud-model' }))
 
-let mockMessages: Array<{ role: 'user' | 'assistant'; content: string }> = []
+let mockMessages: Array<{ id: string; role: 'user' | 'assistant'; content: string }> = []
 let mockCurrentSessionId: string | null = 'session-1'
 
 jest.mock('@/src/application/providers/auth.provider', () => ({
@@ -80,15 +80,15 @@ jest.mock('@/src/application/composition.ai', () => ({
 }))
 
 const firstExchange = [
-  { role: 'user' as const, content: 'private custom-endpoint question' },
-  { role: 'assistant' as const, content: 'private custom-endpoint answer' },
+  { id: 'user-1', role: 'user' as const, content: 'private custom-endpoint question' },
+  { id: 'assistant-1', role: 'assistant' as const, content: 'private custom-endpoint answer' },
 ]
 
 describe('useSmartTitleGeneration privacy gate', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockMessages = []
-    mockCurrentSessionId = 'session-1'
+    mockCurrentSessionId = null
   })
 
   it('does not enter the cloud title pipeline while disabled', () => {
@@ -119,6 +119,8 @@ describe('useSmartTitleGeneration privacy gate', () => {
 
     mockMessages = firstExchange
     rerender({ enabled: true })
+    mockCurrentSessionId = 'session-1'
+    rerender({ enabled: true })
     await waitFor(() => expect(mockExecute).toHaveBeenCalledTimes(1))
 
     // Model selection closes the gate before the old async title resolves.
@@ -141,15 +143,78 @@ describe('useSmartTitleGeneration privacy gate', () => {
     )
 
     mockMessages = [
-      { role: 'user', content: '請整理王小明 A123456789 的病歷' },
-      { role: 'assistant', content: '王小明目前狀況穩定' },
+      { id: 'user-1', role: 'user', content: '請整理王小明 A123456789 的病歷' },
+      { id: 'assistant-1', role: 'assistant', content: '王小明目前狀況穩定' },
     ]
     rerender({ enabled: true })
 
+    mockCurrentSessionId = 'session-1'
+    rerender({ enabled: true })
     await waitFor(() => expect(mockExecute).toHaveBeenCalledTimes(1))
     const outbound = mockExecute.mock.calls[0][0]
     expect(outbound.userMessage).not.toContain('王小明')
     expect(outbound.userMessage).not.toContain('A123456789')
     expect(outbound.assistantMessage).not.toContain('王小明')
+  })
+})
+
+
+describe('new conversation lifecycle', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockMessages = []
+    mockCurrentSessionId = null
+    mockExecute.mockResolvedValue('完整智慧標題')
+  })
+
+  it.each([true, false])('waits for streaming and persistence (save first: %s)', async (saveFirst) => {
+    const { rerender } = renderHook(
+      ({ isStreaming }) => useSmartTitleGeneration({ isStreaming }),
+      { initialProps: { isStreaming: false } },
+    )
+    mockMessages = [firstExchange[0]]
+    rerender({ isStreaming: true })
+    mockMessages = [firstExchange[0], { ...firstExchange[1], content: '' }]
+    rerender({ isStreaming: true })
+    if (saveFirst) mockCurrentSessionId = 'session-1'
+    mockMessages = [firstExchange[0], { ...firstExchange[1], content: 'partial' }]
+    rerender({ isStreaming: true })
+    expect(mockExecute).not.toHaveBeenCalled()
+    mockMessages = firstExchange
+    rerender({ isStreaming: false })
+    if (!saveFirst) {
+      expect(mockExecute).not.toHaveBeenCalled()
+      mockCurrentSessionId = 'session-1'
+      rerender({ isStreaming: false })
+    }
+    await waitFor(() => expect(mockUpdateTitle).toHaveBeenCalledWith('session-1', 'doctor-1', '完整智慧標題'))
+    expect(mockExecute).toHaveBeenCalledWith(expect.objectContaining({ assistantMessage: firstExchange[1].content }))
+    rerender({ isStreaming: false })
+    expect(mockExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not rename a loaded conversation on mount or history switch', () => {
+    mockCurrentSessionId = 'saved-1'
+    mockMessages = firstExchange
+    const { rerender } = renderHook(() => useSmartTitleGeneration())
+    mockCurrentSessionId = 'saved-2'
+    mockMessages = firstExchange.map(m => ({ ...m, id: m.id + '-other' }))
+    rerender()
+    expect(mockExecute).not.toHaveBeenCalled()
+  })
+
+  it('discards a title when the user switches conversations during generation', async () => {
+    let resolveTitle!: (title: string) => void
+    mockExecute.mockImplementationOnce(() => new Promise<string>(resolve => { resolveTitle = resolve }))
+    const { rerender } = renderHook(() => useSmartTitleGeneration())
+    mockMessages = firstExchange
+    rerender()
+    mockCurrentSessionId = 'session-1'
+    rerender()
+    expect(mockExecute).toHaveBeenCalledTimes(1)
+    mockCurrentSessionId = 'saved-other'
+    rerender()
+    await act(async () => { resolveTitle('stale title') })
+    expect(mockUpdateTitle).not.toHaveBeenCalled()
   })
 })
