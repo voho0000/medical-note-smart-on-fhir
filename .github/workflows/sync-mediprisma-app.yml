@@ -6,12 +6,9 @@ name: Sync app to mediprisma.tw/app
 # identical (AI, Firebase, etc.) — then push it into the docs site repo
 # (voho0000/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
 # to redeploy mediprisma.tw/app automatically.
-#
-# One-time setup required: add a secret DOCS_REPO_TOKEN to THIS repo
-# (Settings → Secrets and variables → Actions) — a GitHub token that can push to
-# voho0000/mediprisma-site (fine-grained PAT with Contents: Read and write on
-# that repo, or a classic PAT with `repo` scope). Until it is set, this workflow
-# skips gracefully (green run with a warning).
+# Publishing uses a write-enabled deploy key stored only in the
+# mediprisma-site-publish environment. That environment accepts protected
+# branches, so pilot branch workflows cannot read the key.
 
 on:
   workflow_run:
@@ -30,38 +27,26 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    environment: mediprisma-site-publish
     # Only run when CI actually succeeded (workflow_run fires on failure too),
     # or when triggered manually.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Require DOCS_REPO_TOKEN (skip gracefully if missing)
-        env:
-          TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::DOCS_REPO_TOKEN not set — skipping /app sync. Add it in Settings → Secrets and variables → Actions to enable auto-sync."
-            echo "SKIP=true" >> "$GITHUB_ENV"
-          fi
-
       - name: Checkout app
-        if: ${{ env.SKIP != 'true' }}
         uses: actions/checkout@v7
 
       - name: Setup Node
-        if: ${{ env.SKIP != 'true' }}
         uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
       - name: Install deps
-        if: ${{ env.SKIP != 'true' }}
         run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
       - name: Build static export for /app (basePath /app, same env as gh-pages)
-        if: ${{ env.SKIP != 'true' }}
         run: npm run build:mediprisma
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
@@ -83,23 +68,20 @@ jobs:
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
 
       - name: Checkout docs site (mediprisma-site)
-        if: ${{ env.SKIP != 'true' }}
         uses: actions/checkout@v7
         with:
           repository: voho0000/mediprisma-site
-          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main
 
       - name: Copy build into docs static/app
-        if: ${{ env.SKIP != 'true' }}
         run: |
           rm -rf docs-site/static/app
           mkdir -p docs-site/static/app
           cp -r out/. docs-site/static/app/
 
       - name: Commit & push if changed
-        if: ${{ env.SKIP != 'true' }}
         working-directory: docs-site
         run: |
           git config user.name "mediprisma-app-sync[bot]"
