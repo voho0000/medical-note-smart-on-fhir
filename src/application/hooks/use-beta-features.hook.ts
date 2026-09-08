@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
+import { isVghtpeUnattendedLaunch } from '@/src/application/launch/medcloud-launch-context'
 import {
   resolveBetaFeaturesKey,
   useBetaFeaturesStore,
@@ -48,16 +49,21 @@ export function useBetaFeatures(): BetaFeaturesPreference {
   const setBetaFeaturesEnabled = useBetaFeaturesStore((state) => state.setBetaFeaturesEnabled)
   // One state object, one commit: "the client is running" and "this route
   // allows Beta" are decided together and are never separately true.
-  const [route, setRoute] = useState<{ resolved: boolean; allowsBeta: boolean }>({
+  const [route, setRoute] = useState<{ resolved: boolean; allowsBeta: boolean; inHospital: boolean }>({
     resolved: false,
     allowsBeta: false,
+    inHospital: false,
   })
 
   useEffect(() => {
     // Resolving client-only state after hydration is exactly what this effect
     // is for; it cannot run during render without diverging from the server.
+    // The hospital's own unattended launch (medcloud2=auto&site=vghtpe) is
+    // the one Medcloud route that carries Beta guidance, and it carries it
+    // without a switch: the clinician arriving that way is who it is for.
+    const inHospital = isVghtpeUnattendedLaunch()
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRoute({ resolved: true, allowsBeta: !isMedcloudLaunchRoute() })
+    setRoute({ resolved: true, allowsBeta: !isMedcloudLaunchRoute() || inHospital, inHospital })
   }, [])
 
   const setEnabled = useCallback((enabled: boolean) => {
@@ -65,7 +71,7 @@ export function useBetaFeatures(): BetaFeaturesPreference {
   }, [setBetaFeaturesEnabled, storageKey])
 
   return {
-    enabled: route.resolved && route.allowsBeta && storedEnabled,
+    enabled: route.resolved && (route.inHospital || (route.allowsBeta && storedEnabled)),
     offered: route.resolved && route.allowsBeta,
     storageKey,
     syncError,

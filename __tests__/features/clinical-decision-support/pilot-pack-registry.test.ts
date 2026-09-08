@@ -12,9 +12,15 @@
  * unattended Medcloud hand-off is outside both and gets released guidance only.
  */
 let mockMedcloudLaunchRoute = false
+let mockVghtpeUnattendedLaunch = false
 
 jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
   isMedcloudLaunchRoute: () => mockMedcloudLaunchRoute,
+}))
+
+jest.mock('@/src/application/launch/medcloud-launch-context', () => ({
+  ...jest.requireActual('@/src/application/launch/medcloud-launch-context'),
+  isVghtpeUnattendedLaunch: () => mockVghtpeUnattendedLaunch,
 }))
 
 import {
@@ -56,6 +62,7 @@ function enableBeta(): void {
 describe('care pack visibility', () => {
   beforeEach(() => {
     mockMedcloudLaunchRoute = false
+    mockVghtpeUnattendedLaunch = false
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
@@ -145,11 +152,20 @@ describe('care pack visibility', () => {
     expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
     expect(getClinicalGuidelinePack('heart-failure-cdss')).toBeUndefined()
   })
+
+  it('shows every listed pack on the hospital\'s own unattended launch, with no switch stored', () => {
+    mockMedcloudLaunchRoute = true
+    mockVghtpeUnattendedLaunch = true
+
+    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
+  })
 })
 
 describe('care pack default', () => {
   beforeEach(() => {
     mockMedcloudLaunchRoute = false
+    mockVghtpeUnattendedLaunch = false
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })

@@ -1,5 +1,6 @@
 import { webcrypto } from 'crypto'
 import {
+  isVghtpeUnattendedLaunch,
   createVghtpeTvghbrainRuntimeProfile,
   decryptVghtpeMedcloudCredential,
   isMedcloudAutoLaunchUrl,
@@ -213,5 +214,16 @@ describe('medcloud launch context', () => {
       agentCapabilityTestedAt: null,
     })
     expect(resolveOpenAiCompatibleConversationMode(profile)).toBe('deep-agent')
+  })
+})
+
+describe('isVghtpeUnattendedLaunch', () => {
+  it('is true only for medcloud2=auto together with site=vghtpe on the app origin', () => {
+    expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe')).toBe(true)
+    expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto')).toBe(true)
+    expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?medcloud2=auto')).toBe(false)
+    expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?site=vghtpe')).toBe(false)
+    expect(isVghtpeUnattendedLaunch('https://example.com/app/?medcloud2=auto&site=vghtpe')).toBe(false)
+    expect(isVghtpeUnattendedLaunch('')).toBe(false)
   })
 })

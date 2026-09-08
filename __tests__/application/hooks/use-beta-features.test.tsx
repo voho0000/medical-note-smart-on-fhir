@@ -21,6 +21,7 @@ let mockAuth: { user: { uid: string } | null; anonymousUid: string | null } = {
   anonymousUid: null,
 }
 let mockMedcloudLaunchRoute = false
+let mockVghtpeUnattendedLaunch = false
 
 jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => mockAuth,
@@ -28,6 +29,11 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
 
 jest.mock('@/src/application/launch/medcloud-launch-route', () => ({
   isMedcloudLaunchRoute: () => mockMedcloudLaunchRoute,
+}))
+
+jest.mock('@/src/application/launch/medcloud-launch-context', () => ({
+  ...jest.requireActual('@/src/application/launch/medcloud-launch-context'),
+  isVghtpeUnattendedLaunch: () => mockVghtpeUnattendedLaunch,
 }))
 
 function Probe() {
@@ -50,8 +56,19 @@ describe('useBetaFeatures', () => {
   beforeEach(() => {
     mockAuth = { user: null, anonymousUid: null }
     mockMedcloudLaunchRoute = false
+    mockVghtpeUnattendedLaunch = false
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
+  })
+
+  it('turns Beta on by itself on the hospital\'s unattended launch, with nothing stored', () => {
+    mockMedcloudLaunchRoute = true
+    mockVghtpeUnattendedLaunch = true
+    render(<Probe />)
+
+    expect(read('enabled')).toBe('true')
+    expect(read('offered')).toBe('true')
+    expect(useBetaFeaturesStore.getState().enabledByUser).toEqual({})
   })
 
   it('lets a signed-out visitor with no session turn Beta on under the guest key', () => {

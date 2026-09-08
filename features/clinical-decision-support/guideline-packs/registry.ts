@@ -34,6 +34,7 @@ import { PersonalizationSdkError } from '@voho0000/personalization-sdk'
 import { registerCarePacks } from '@voho0000/personalized-care/registry'
 import { CARE_PACKS } from '@voho0000/personalized-care'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
+import { isVghtpeUnattendedLaunch } from '@/src/application/launch/medcloud-launch-context'
 import { isBetaFeaturesEnabledInBrowser } from '@/src/application/stores/beta-features.store'
 import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
@@ -91,6 +92,11 @@ export const HOST_CARE_PACKS = HOST_PACKS
 // the Beta switch is flipped, with no reload and no module-graph reset.
 function isVisible(pack: ClinicalGuidelinePack): boolean {
   if (pack.enabled) return true
+  // The hospital's own hand-off (medcloud2=auto&site=vghtpe) shows every
+  // listed pack: the clinician arriving that way is who the held-back
+  // guidance is for, and nobody is there to flip a switch. Any other
+  // unattended launch shows released guidance only.
+  if (isVghtpeUnattendedLaunch()) return true
   if (isMedcloudLaunchRoute()) return false
   return isBetaFeaturesEnabledInBrowser() || isPilotPack(pack.id)
 }

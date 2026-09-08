@@ -113,6 +113,24 @@ export function isVghtpeLaunchUrl(value: string | URL): boolean {
   return parseMedcloudLaunchOptions(value)?.site === 'vghtpe'
 }
 
+/**
+ * The in-hospital hand-off: `medcloud2=auto` together with `site=vghtpe`.
+ *
+ * The unattended route hides every Beta surface, because a tester's switch
+ * must not follow a clinician into a hand-off. The hospital's own launch is
+ * the one place that rule is wrong the other way round: the clinician who
+ * arrives this way is exactly who the personalized guidance is for, and no
+ * one is there to flip a switch. So this launch carries Beta guidance by
+ * itself — the tab, and the held-back packs behind it — without a stored
+ * preference. Reads the current page when no URL is given.
+ */
+export function isVghtpeUnattendedLaunch(value?: string | URL): boolean {
+  const resolved = value ?? (typeof window === 'undefined' ? '' : window.location.href)
+  if (!resolved) return false
+  const options = parseMedcloudLaunchOptions(resolved)
+  return options?.auto === true && options.site === 'vghtpe'
+}
+
 /** The launcher-supplied workstation / clinic-room code, or null. Null also
  *  covers an invalid launch URL — a rejected URL has no trustworthy code. */
 export function getLaunchWorkstation(value: string | URL): string | null {
