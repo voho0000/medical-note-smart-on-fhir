@@ -11,6 +11,8 @@ const observation = (text: string, loinc?: string, specimen?: string) => ({
 })
 
 const cases = [
+  { obs: observation('Protein,total 總蛋白', '2885-2'), label: 'TP' },
+  { obs: observation('PTH-i 副甲狀腺素', '2731-8'), label: 'iPTH' },
   { obs: observation('鎂', '2601-3'), label: 'Mg' },
   { obs: observation('Magnesium'), label: 'Mg' },
   { obs: observation('FINGER SUGAR', '1558-6'), label: 'Finger sugar' },

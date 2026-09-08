@@ -238,6 +238,41 @@ function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
 // because some hospitals bill finger sugar under fasting NHI codes.
 const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 
+// Compatibility mappings missing from clinical-lab-normalization 1.1.1.
+// LOINC remains authoritative: these are verified bridge-emitted analytes,
+// not display-string guesses. Remove each entry after the shared package ships
+// the same mapping and this app upgrades to that release.
+const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
+  '2885-2': 'TP',   // Total protein [Mass/volume] in Serum or Plasma
+  '2731-8': 'IPTH',  // Parathyrin.intact [Mass/volume] in Serum or Plasma
+  '14866-8': 'IPTH', // Parathyrin.intact [Moles/volume] in Serum or Plasma
+}
+
+const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
+  'PROTEIN,TOTAL': 'TP',
+  '總蛋白': 'TP',
+  '血清總蛋白': 'TP',
+  '總蛋白質': 'TP',
+  'PTH-I': 'IPTH',
+  IPTH: 'IPTH',
+  'I-PTH': 'IPTH',
+  'INTACT PTH': 'IPTH',
+  '副甲狀腺素': 'PTH',
+}
+
+const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
+  TP: 'TP',
+  PTH: 'PTH',
+  IPTH: 'iPTH',
+}
+
+/** Canonical labels supplied by the app while the shared normalization
+ * package catches up with bridge-emitted LOINC codes. Display consumers must
+ * consult this before falling back to the source hospital label. */
+export function getLabCompatibilityCanonicalDisplay(testKey: string): string | undefined {
+  return APP_CANONICAL_DISPLAY[testKey]
+}
+
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
 function canonicalTestKey(obs: any): string {
@@ -246,6 +281,17 @@ function canonicalTestKey(obs: any): string {
   //    not in app-side display-string heuristics.
   const fromLoinc = canonicalKeyFromLoinc(obs)
   if (fromLoinc) return fromLoinc
+
+  // The package's LOINC table currently lags the bridge for TP/PTH. Resolve
+  // these codes before consulting display text so a contradictory source label
+  // can never overrule a recognized LOINC.
+  const compatibilityLoinc = obs?.code?.coding?.find(
+    (coding: { system?: string; code?: string }) =>
+      coding.system === FHIR_SYSTEMS.LOINC
+      && !!coding.code
+      && !!APP_LOINC_TO_CANONICAL[coding.code],
+  )?.code
+  if (compatibilityLoinc) return APP_LOINC_TO_CANONICAL[compatibilityLoinc]
 
   // Compatibility with clinical-lab-normalization 1.1.1: it only maps the
   // mass-concentration magnesium code (19123-9). NHI also emits 2601-3,
@@ -265,7 +311,8 @@ function canonicalTestKey(obs: any): string {
   if (!raw) return 'UNKNOWN'
   // These category allowlist names are not yet aliases in the package.
   if (['鎂', 'MAGNESIUM'].includes(raw.trim().toUpperCase())) return 'MG'
-  return canonicalTestKeyFromString(raw)
+  const fromText = canonicalTestKeyFromString(raw)
+  return APP_TEXT_TO_CANONICAL[fromText] ?? fromText
 }
 
 // Returns { mapKey, testKey, displayName } for one observation.
@@ -359,8 +406,8 @@ export function getLabPivotTestIdentity(
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
   const candidateDisplay = nhiDisplay || rawDisplay
-  const isCanonical = CANONICAL_KEYS.has(testKey)
-  const canonicalDisplay = CANONICAL_DISPLAY[testKey] || testKey
+  const isCanonical = CANONICAL_KEYS.has(testKey) || !!APP_CANONICAL_DISPLAY[testKey]
+  const canonicalDisplay = APP_CANONICAL_DISPLAY[testKey] || CANONICAL_DISPLAY[testKey] || testKey
   const displayName = nameMode === 'original'
     ? raw
     : displayOverride || (isCanonical ? canonicalDisplay : candidateDisplay)

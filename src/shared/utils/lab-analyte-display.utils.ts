@@ -7,7 +7,11 @@ import {
   type DisplayLang,
 } from '@voho0000/clinical-lab-normalization/display'
 import { categorizeObservation } from './lab-categories'
-import { getLabPivotTestIdentity, type LabRow } from './lab-pivot.utils'
+import {
+  getLabCompatibilityCanonicalDisplay,
+  getLabPivotTestIdentity,
+  type LabRow,
+} from './lab-pivot.utils'
 
 type DisplayRow = Pick<LabRow, 'testKey' | 'displayName' | 'displaySource'>
 
@@ -23,6 +27,8 @@ export function getLabRowDisplayParts(
   mode: AnalyteNameMode = 'standardized',
 ): { name: string; abbr: string | null } {
   if (mode === 'original') return { name: row.displayName, abbr: null }
+  const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
+  if (compatibilityDisplay) return { name: compatibilityDisplay, abbr: null }
   if (CANONICAL_KEYS.has(row.testKey)) {
     return getAnalyteDisplayParts(row.testKey, audience, language)
   }

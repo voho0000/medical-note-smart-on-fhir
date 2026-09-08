@@ -16,6 +16,7 @@ import {
 } from '@/src/shared/utils/lab-categories'
 
 const cbc = LAB_CATEGORIES.find((c) => c.id === 'cbc')!
+const chem = LAB_CATEGORIES.find((c) => c.id === 'chem')!
 const serology = LAB_CATEGORIES.find((c) => c.id === 'serology')!
 
 describe('static laboratory vocabulary performance', () => {
@@ -397,5 +398,31 @@ describe('microbiology and the 其他 catch-all', () => {
   it('still routes the routine panels to their own category', () => {
     expect(categorizeObservation(lab('CREA', declaredLab))?.id).toBe('chem')
     expect(categorizeObservation(lab('HB', declaredLab))?.id).toBe('cbc')
+  })
+})
+
+describe('categorizeObservation — total protein and PTH', () => {
+  it.each([
+    ['Protein,total 總蛋白', '2885-2', 'chem'],
+    ['PTH-i 副甲狀腺素', '2731-8', 'endocrine'],
+  ])('%s with LOINC %s categorises as %s', (text, loinc, categoryId) => {
+    expect(categorizeObservation(makeObs(text, loinc))?.id).toBe(categoryId)
+  })
+
+  it.each([
+    ['Protein,total 總蛋白', 'chem'],
+    ['Protein,total', 'chem'],
+    ['總蛋白', 'chem'],
+    ['PTH-i 副甲狀腺素', 'endocrine'],
+    ['PTH-i', 'endocrine'],
+    ['iPTH', 'endocrine'],
+    ['副甲狀腺素', 'endocrine'],
+  ])('%s still categorises as %s when LOINC is absent', (text, categoryId) => {
+    const obs = { code: { text, coding: [] }, valueQuantity: { value: 1, unit: 'x' } }
+    expect(categorizeObservation(obs)?.id).toBe(categoryId)
+  })
+
+  it('keeps TP as a standard chemistry column even when no result is present', () => {
+    expect(chem.pinnedColumns).toContain('TP')
   })
 })
