@@ -1,0 +1,25 @@
+name: HMC preview change signal
+
+# This workflow is intentionally unprivileged. HMC can edit pilot/hmc, so the
+# protected deployment workflow on master only treats this run as a signal and
+# checks out and verifies both pilot branches itself.
+on:
+  push:
+    branches:
+      - pilot/hmc
+    tags:
+      - hmc-personalization-trigger
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record preview change
+        env:
+          SIGNAL_REF: ${{ github.ref }}
+          SIGNAL_SHA: ${{ github.sha }}
+        run: echo "HMC preview source changed at ${SIGNAL_REF} (${SIGNAL_SHA})."

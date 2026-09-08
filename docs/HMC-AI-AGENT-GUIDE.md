@@ -21,9 +21,9 @@ HMC 的 pilot 由兩個 repository 組成：
 
 只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
 
-**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後，仍必須先執行 `git push origin pilot/hmc`，把新 commit 推到 GitHub。push 是更新 preview 來源的必要步驟，但不會直接啟動部署；受保護 `master` 上的 workflow 每 15 分鐘抓取上述兩個 `pilot/hmc`，發現任一 branch 的 commit 改變後才開始 build。因此一般會在 push 後 0–15 分鐘自動更新。
+**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後執行 `git push origin pilot/hmc`；push 到上述任一 repository 的 `pilot/hmc` 都會直接送出無權限訊號，並立即啟動受保護 `master` 上的部署流程。GitHub Actions 通常會在數秒內出現新 run，網站則在完整驗證與 build 通過後更新。
 
-若要立即更新，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+若自動流程未出現或需要強制重跑，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署或跨 repository 轉送憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
 
 可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
 
@@ -92,7 +92,7 @@ HMC 自備的 AI provider key 只能透過產品既有設定介面輸入，不�
 
 ## 完成修改
 
-依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `Deploy HMC preview`；成功後用 `hmc-build.json` 確認兩個 SHA，並在 `app-hmc` 檢查實際 CDSS 畫面。
+依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `HMC preview change signal` 與接續的 `Deploy HMC pilot preview`；成功後用 `hmc-build.json` 確認兩個 SHA，並在 `app-hmc` 檢查實際 CDSS 畫面。
 
 提交正式版時建立 PR，清楚寫出：改了什麼、使用者會看到什麼、如何驗證，以及是否改變任何資料寫入或外部網路請求。不得自行 merge PR。
 
