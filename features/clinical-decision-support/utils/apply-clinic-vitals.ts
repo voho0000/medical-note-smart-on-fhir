@@ -82,10 +82,22 @@ export const EVIDENCE_ROW_SIGN_TERMS: Readonly<Record<string, string>> = {
   'congestion:pitting-edema': 'pitting-edema',
   'congestion:ascites': 'ascites',
   'congestion:hepatomegaly': 'hepatomegaly',
+  // Termless in the published table; the pack completes them on the way out,
+  // so an answer here does reach the reading.
+  'congestion:bendopnea': 'bendopnea',
+  'congestion:hepatojugular-reflux': 'hepatojugular-reflux',
   // The LV filling-pressure table asks two of the same signs under its own ids.
   'filling-pressure:orthopnea': 'orthopnea',
   'filling-pressure:jvp': 'jvp',
 }
+
+/** The term each NYHA class is written as, matching the pack's own map. */
+export const NYHA_CLASS_TERMS = {
+  I: 'nyha-i',
+  II: 'nyha-ii',
+  III: 'nyha-iii',
+  IV: 'nyha-iv',
+} as const
 
 export const CLINIC_ENTRY_NOTE = { zh: '門診輸入', en: 'entered in clinic' } as const
 
@@ -165,6 +177,20 @@ export function applyClinicVitals(
         direction: matched.size > 0 ? 'supports' : 'against',
         matchedTerms: Array.from(matched),
         ...(negated.size > 0 ? { negatedTerms: Array.from(negated) } : {}),
+      },
+    }
+  }
+
+  if (vitals.nyhaClass) {
+    facts.physicianNyhaClass = {
+      zh: `NYHA ${vitals.nyhaClass}（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
+      en: `NYHA ${vitals.nyhaClass} (${date}, ${CLINIC_ENTRY_NOTE.en})`,
+      date,
+      textEvidence: {
+        // A grade is a finding whichever class it is; whether it argues for the
+        // symptoms criterion is the pack's reading, not the host's.
+        direction: 'supports',
+        matchedTerms: [NYHA_CLASS_TERMS[vitals.nyhaClass]],
       },
     }
   }

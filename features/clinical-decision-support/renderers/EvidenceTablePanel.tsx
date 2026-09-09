@@ -5,7 +5,11 @@ import { isEvidenceItemEnabled } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { EVIDENCE_ROW_SIGN_TERMS } from '../utils/apply-clinic-vitals'
-import { todayIsoDate, type ClinicVitals } from '../stores/clinic-vitals.store'
+import { todayIsoDate, type ClinicVitals, type NyhaClass } from '../stores/clinic-vitals.store'
+
+/** The row the published congestion table carries the NYHA class on. */
+const NYHA_ROW_ID = 'congestion:nyha'
+const NYHA_CLASSES: readonly NyhaClass[] = ['I', 'II', 'III', 'IV']
 
 /** What a clinician can say about one sign in the room. */
 export type SignAnswer = 'present' | 'absent'
@@ -181,6 +185,61 @@ const RESOURCE_TYPE_LABELS: Record<CdssFactSource['resourceType'], { zh: string;
   DocumentReference: { zh: '病歷文件', en: 'Clinical document' },
 }
 
+/**
+ * NYHA class on its own row.
+ *
+ * 有／無 is the wrong question for a grade, which is why this row carried a
+ * switch that could not be answered at all. The clinician picks the class; what
+ * it means for the symptoms criterion is the pack's reading — II to IV is a
+ * patient with current symptoms, and class I argues nothing, because ESC 2026
+ * §5.2.2 asks for 「current **or prior**」 symptoms.
+ */
+function NyhaClassControl({
+  itemId,
+  label,
+  isEnglish,
+  value,
+  onSelect,
+}: {
+  itemId: string
+  label: string
+  isEnglish: boolean
+  value?: NyhaClass
+  onSelect: (next: NyhaClass | undefined) => void
+}) {
+  return (
+    <div
+      className="mt-0.5 flex shrink-0 overflow-hidden rounded-md border border-border"
+      role="group"
+      aria-label={isEnglish ? `${label}` : `「${label}」`}
+      data-testid={`cdss-evidence-nyha-${itemId}`}
+    >
+      {NYHA_CLASSES.map((option) => {
+        const isSelected = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={isSelected}
+            className={cn(
+              'min-h-8 min-w-[2rem] px-1.5 text-[11px] font-medium tabular-nums transition-colors',
+              'border-r border-border last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              isSelected
+                ? 'bg-primary/10 text-primary'
+                : 'bg-card text-muted-foreground hover:bg-muted/40',
+            )}
+            onClick={() => onSelect(isSelected ? undefined : option)}
+            data-testid={`cdss-evidence-nyha-${itemId}-${option}`}
+          >
+            {option}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function pick(label: { zh: string; en: string }, isEnglish: boolean): string {
   return isEnglish ? label.en : label.zh
 }
@@ -293,6 +352,8 @@ function EvidenceRow({
   onNavigate,
   answer,
   onAnswer,
+  nyhaClass,
+  onSelectNyha,
 }: {
   item: EvidenceItem
   isEnglish: boolean
@@ -303,6 +364,9 @@ function EvidenceRow({
   answer?: SignAnswer
   /** Absent where this row is not a sign a clinician can answer in the room. */
   onAnswer?: (answer: SignAnswer | undefined) => void
+  /** The graded class, on the one row that carries a grade instead of a sign. */
+  nyhaClass?: NyhaClass
+  onSelectNyha?: (next: NyhaClass | undefined) => void
 }) {
   const physicianEntered = item.derivability === 'physician-entered'
   const label = pick(item.label, isEnglish)
@@ -317,7 +381,15 @@ function EvidenceRow({
       data-testid={`cdss-evidence-row-${item.id}`}
       data-enabled={enabled ? 'true' : 'false'}
     >
-      {onAnswer ? (
+      {onSelectNyha ? (
+        <NyhaClassControl
+          itemId={item.id}
+          label={label}
+          isEnglish={isEnglish}
+          value={nyhaClass}
+          onSelect={onSelectNyha}
+        />
+      ) : onAnswer ? (
         <SignAnswerControl
           itemId={item.id}
           label={label}
@@ -478,12 +550,24 @@ export function EvidenceTablePanel({
                 // A row the clinician can answer in the room takes the
                 // 有／無／未評估 control; everything else keeps the switch.
                 const term = EVIDENCE_ROW_SIGN_TERMS[item.id]
-                const answerProps = term && answerSign
+                const answerProps = item.id === NYHA_ROW_ID && onSaveClinicVitals
                   ? {
-                    answer: signAnswers[term],
-                    onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                    nyhaClass: clinicVitals?.nyhaClass,
+                    onSelectNyha: (next: NyhaClass | undefined) => {
+                      const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
+                      onSaveClinicVitals({
+                        ...(clinicVitals ?? { measuredOn }),
+                        measuredOn,
+                        nyhaClass: next,
+                      })
+                    },
                   }
-                  : {}
+                  : term && answerSign
+                    ? {
+                      answer: signAnswers[term],
+                      onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                    }
+                    : {}
                 return (
                   <EvidenceRow
                     key={item.id}

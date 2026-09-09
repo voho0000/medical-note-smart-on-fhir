@@ -393,9 +393,59 @@ export function HeartFailureStatusBoard({
   const expandedPillar = board.pillars.find((pillar) => pillar.id === expandedId)
   const gdmtExpanded = board.gdmt !== undefined && expandedId === board.gdmt.id
   const actionablePillars = board.pillars.filter((pillar) => pillar.status === 'actionable').length
+  const selectedSymptomGroups = CONGESTION_SIGN_GROUPS
+    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
+  const toggleSymptomGroup = onSaveClinicVitals
+    ? (id: string, selected: boolean) => {
+        onSaveClinicVitals({
+          ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
+          measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
+          signAnswers: toggleCongestionGroup(
+            clinicVitals?.signAnswers,
+            id as CongestionSignsAnswer,
+            selected,
+          ),
+        })
+      }
+    : undefined
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-board">
+      {/*
+        DP-00 first, above everything, because it gates everything: until a
+        clinician says they are asking about heart failure, the pack produces
+        the phenotype card and nothing else. Buried in a collapsed card body it
+        was a question nobody could find, which reads as a system with nothing
+        to say rather than one waiting to be asked.
+      */}
+      {board.phenotype && onAnswerPhenotype
+        && physicianInputRequestsOf(board.phenotype).length > 0 ? (
+        <section
+          className="rounded-lg border border-border bg-card px-3 py-2.5"
+          aria-label={isEnglish ? 'Heart-failure assessment' : '心衰竭評估'}
+          data-testid="cdss-hf-phenotype-input"
+        >
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
+              {isEnglish ? 'Clinical judgement' : '臨床判斷'}
+            </span>
+            <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-phenotype-input-title">
+              {board.phenotype.title}
+            </span>
+          </div>
+          <PhysicianInputRequestPanel
+            requests={physicianInputRequestsOf(board.phenotype)}
+            recommendationId={board.phenotype.id}
+            isEnglish={isEnglish}
+            answer={phenotypeAnswer}
+            onAnswer={onAnswerPhenotype}
+            selectedSymptoms={selectedSymptomGroups}
+            onToggleSymptom={toggleSymptomGroup}
+            now={now}
+          />
+        </section>
+      ) : null}
+
       {/* Phenotype and the safety inputs every FMT decision reads. */}
       <section
         className="overflow-hidden rounded-lg border border-border bg-card"

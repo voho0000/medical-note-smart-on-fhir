@@ -114,9 +114,8 @@ describe('the sign answer control', () => {
         defaultEnabled: false,
       },
       {
-        // No canonical term in the published table, so no answer can land.
-        id: 'congestion:bendopnea',
-        label: { zh: 'Bendopnea', en: 'Bendopnea' },
+        id: 'congestion:nyha',
+        label: { zh: 'NYHA class', en: 'NYHA class' },
         category: 'examination',
         derivability: 'physician-entered',
         direction: 'unknown',
@@ -172,10 +171,25 @@ describe('the sign answer control', () => {
     )
   })
 
-  it('leaves the plain switch on a row whose answer would have nowhere to land', () => {
-    renderPanel()
+  it('grades NYHA on its own row, because 有／無 is the wrong question for a class', () => {
+    const onSave = renderPanel()
 
-    expect(screen.queryByTestId('cdss-evidence-answer-congestion:bendopnea')).toBeNull()
-    expect(screen.getByTestId('cdss-evidence-switch-congestion:bendopnea')).toBeInTheDocument()
+    // Not a 有／無 control, and not a switch that cannot be answered.
+    expect(screen.queryByTestId('cdss-evidence-answer-congestion:nyha')).toBeNull()
+    expect(screen.queryByTestId('cdss-evidence-switch-congestion:nyha')).toBeNull()
+    const control = screen.getByTestId('cdss-evidence-nyha-congestion:nyha')
+    expect(within(control).getAllByRole('button')).toHaveLength(4)
+
+    fireEvent.click(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-III'))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ nyhaClass: 'III' }))
+  })
+
+  it('clears the NYHA grade when the selected class is tapped again', () => {
+    const onSave = renderPanel(jest.fn(), { measuredOn: '2026-09-09', nyhaClass: 'II' })
+
+    expect(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-II'))
+      .toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-II'))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ nyhaClass: undefined }))
   })
 })
