@@ -9,6 +9,7 @@ import {
 } from "react"
 import { ChevronsLeft, ChevronsRight } from "lucide-react"
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useVisualViewport } from "@/src/shared/hooks/layout/use-visual-viewport.hook"
 
@@ -215,26 +216,46 @@ export function ClinicalWorkspaceDivider({
 
       {showCollapseActions && (
         <div className="absolute z-10 flex flex-col gap-0.5 rounded-full border border-border/70 bg-panel/95 p-0.5 shadow-sm backdrop-blur-sm">
-          <button
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onCollapseLeft}
-            title={leftCollapseLabel}
-            aria-label={leftCollapseLabel}
-            className={actionClasses}
-          >
-            <ChevronsLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onCollapseRight}
-            title={rightCollapseLabel}
-            aria-label={rightCollapseLabel}
-            className={actionClasses}
-          >
-            <ChevronsRight className="h-3.5 w-3.5" />
-          </button>
+          {/* Two chevrons cannot say what they will do, and what they DO is
+              stateful: the first press re-centres a lopsided split, the next
+              collapses that side (the labels come from the shell and change
+              with it). A permanent caption is not an option — the divider is
+              8px wide between two dense panels — so the wording rides a real
+              tooltip rather than `title`, which appears only after a delay and
+              is invisible to keyboard users. `delayDuration={150}`: this is
+              read while reaching for the control, not hovered by accident. */}
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={onCollapseLeft}
+                aria-label={leftCollapseLabel}
+                className={actionClasses}
+              >
+                <ChevronsLeft className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6} className="text-xs">
+              {leftCollapseLabel}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={onCollapseRight}
+                aria-label={rightCollapseLabel}
+                className={actionClasses}
+              >
+                <ChevronsRight className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6} className="text-xs">
+              {rightCollapseLabel}
+            </TooltipContent>
+          </Tooltip>
         </div>
       )}
     </div>
