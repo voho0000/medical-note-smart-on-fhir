@@ -27,7 +27,11 @@ const CONGESTION_SIGN_GROUPS: readonly CongestionSignsAnswer[] = [
   'jvp-rales',
 ]
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
-import { physicianInputRequestsOf } from '../physician-input-contract'
+import {
+  diagnosticSummaryOf,
+  physicianInputRequestsOf,
+  type CriterionSummary,
+} from '../physician-input-contract'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 
 interface HeartFailureStatusBoardProps {
@@ -52,6 +56,72 @@ interface HeartFailureStatusBoardProps {
   /** The clinician's answers, so the board can surface the one action DP-01b asks for. */
   phenotypeAnswer?: PhenotypeAnswer
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+}
+
+/**
+ * How far the diagnosis has got, criterion by criterion.
+ *
+ * The clinician's own conclusion leads when they have reached one — it is the
+ * answer to the question the card asks, and it outranks anything the record
+ * added up to. Below it, ESC 2026's own reading of 「有多少把握」: where each
+ * §5.2.2 criterion stands, and how many Table 10 parameters support the third.
+ * Every word is the pack's; state is carried by text and an icon as well as
+ * colour, because colour alone is not a state.
+ */
+function DiagnosisReading({
+  summary,
+  isEnglish,
+}: {
+  summary: ReturnType<typeof diagnosticSummaryOf>
+  isEnglish: boolean
+}) {
+  if (!summary) return null
+  const stateStyle: Record<CriterionSummary['state'], string> = {
+    met: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
+    refuted: 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200',
+    undetermined: 'border-border bg-muted/40 text-muted-foreground',
+  }
+  const stateText: Record<CriterionSummary['state'], string> = {
+    met: isEnglish ? 'met' : '成立',
+    refuted: isEnglish ? 'contradicted' : '有反證',
+    undetermined: isEnglish ? 'undetermined' : '無法判定',
+  }
+  return (
+    <div className="space-y-1.5" data-testid="cdss-hf-diagnosis-reading">
+      <p
+        className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+        data-testid="cdss-hf-diagnosis-verdict"
+        data-confirmed={summary.confirmedByClinician ? 'true' : undefined}
+      >
+        {summary.confirmedByClinician ? (
+          <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+        ) : null}
+        {summary.verdict}
+      </p>
+      <ul className="flex flex-wrap gap-1.5" data-testid="cdss-hf-diagnosis-criteria">
+        {summary.criteria.map((criterion) => (
+          <li
+            key={criterion.id}
+            className={cn(
+              'inline-flex items-baseline gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-4',
+              stateStyle[criterion.state],
+            )}
+            data-testid={`cdss-hf-diagnosis-criterion-${criterion.id}`}
+            data-state={criterion.state}
+          >
+            <span className="font-medium">{criterion.label}</span>
+            <span>{stateText[criterion.state]}</span>
+            {criterion.detail ? (
+              <span className="tabular-nums opacity-80">{criterion.detail}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
+        {summary.basis}
+      </p>
+    </div>
+  )
 }
 
 const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pattern)' } as const
@@ -666,6 +736,10 @@ export function HeartFailureStatusBoard({
               {board.hfpEfDiagnosis.title}
             </span>
           </div>
+          <DiagnosisReading
+            summary={diagnosticSummaryOf(board.hfpEfDiagnosis)}
+            isEnglish={isEnglish}
+          />
           <PhysicianInputRequestPanel
             requests={physicianInputRequestsOf(board.hfpEfDiagnosis)}
             recommendationId={board.hfpEfDiagnosis.id}

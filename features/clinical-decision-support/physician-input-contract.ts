@@ -78,6 +78,72 @@ export const PHYSICIAN_HF_SUSPICION_TERMS = {
   'not-suspected': 'hf-not-suspected',
 } as const
 
+/** Mirrors `CdssCriterionSummary` in the pack. */
+export interface CriterionSummary {
+  id: string
+  label: string
+  state: 'met' | 'refuted' | 'undetermined'
+  detail?: string
+}
+
+/**
+ * Mirrors `CdssDiagnosticSummary`.
+ *
+ * Deliberately not a probability. ESC 2026 §5.2.2 (PDF p.25) advises a
+ * pragmatic approach and cautions that more complicated scoring systems should
+ * be interpreted with caution; what it states under Table 10 is that the
+ * probability rises with the number of parameters met. The pack counts, and
+ * this host displays that count where it can be seen.
+ */
+export interface DiagnosticSummary {
+  verdict: string
+  basis: string
+  criteria: readonly CriterionSummary[]
+  supportingParameterCount?: number
+  confirmedByClinician?: boolean
+}
+
+function toCriterion(value: unknown): CriterionSummary | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  const state = record.state
+  if (typeof record.id !== 'string' || typeof record.label !== 'string') return undefined
+  if (state !== 'met' && state !== 'refuted' && state !== 'undetermined') return undefined
+  return {
+    id: record.id,
+    label: record.label,
+    state,
+    ...(typeof record.detail === 'string' ? { detail: record.detail } : {}),
+  }
+}
+
+/**
+ * The criterion-by-criterion reading a recommendation carries, if any.
+ *
+ * Validated rather than cast, for the same reason as the input requests: on the
+ * published package the field is simply absent.
+ */
+export function diagnosticSummaryOf(
+  recommendation: CdssRecommendation,
+): DiagnosticSummary | undefined {
+  const raw = (recommendation as { diagnosticSummary?: unknown }).diagnosticSummary
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  if (typeof record.verdict !== 'string' || typeof record.basis !== 'string') return undefined
+  const criteria = Array.isArray(record.criteria)
+    ? record.criteria.map(toCriterion).filter((item): item is CriterionSummary => Boolean(item))
+    : []
+  return {
+    verdict: record.verdict,
+    basis: record.basis,
+    criteria,
+    ...(typeof record.supportingParameterCount === 'number'
+      ? { supportingParameterCount: record.supportingParameterCount }
+      : {}),
+    ...(record.confirmedByClinician === true ? { confirmedByClinician: true } : {}),
+  }
+}
+
 const REQUEST_KINDS: readonly PhysicianInputRequestKind[] = [
   'hf-suspicion',
   'hf-symptoms',
