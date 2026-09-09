@@ -686,7 +686,7 @@ describe('heart-failure board view', () => {
 
     const pillars = screen.getByTestId('cdss-hf-pillars')
     expect(pillars).toHaveAttribute('data-pillar-scope', 'lvef-independent')
-    expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('不分 LVEF 的 FMT')
+    expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('HFpEF 的 FMT')
     expect(within(pillars).getByTestId('cdss-hf-pillars-unassessed-note')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-hf-gdmt-trigger')).toBeNull()
 

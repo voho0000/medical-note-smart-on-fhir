@@ -120,25 +120,26 @@ function DiagnosisReading({
       <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
         {summary.basis}
       </p>
-      {summary.score ? (
+      {(summary.scores ?? []).map((score) => (
         <div
+          key={score.name}
           className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
-          data-testid="cdss-hf-diagnosis-score"
-          data-floor={summary.score.isFloor ? 'true' : undefined}
+          data-testid={`cdss-hf-diagnosis-score-${score.name}`}
+          data-floor={score.isFloor ? 'true' : undefined}
         >
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-            <span className="font-semibold text-foreground">{summary.score.name}</span>
+            <span className="font-semibold text-foreground">{score.name}</span>
             <span className="font-semibold tabular-nums text-foreground">
-              {/* A floor is never shown as a bare number: the missing
-                  parameters can only have raised it. */}
-              {summary.score.isFloor ? '≥' : ''}
-              {summary.score.value} / {summary.score.maximum}
+              {/* A floor is never shown as a bare number: the variables the
+                  record could not supply can only have raised it. */}
+              {score.isFloor ? '≥' : ''}
+              {score.value} / {score.maximum}
             </span>
-            <span className="text-muted-foreground">{summary.score.bandLabel}</span>
+            <span className="text-muted-foreground">{score.bandLabel}</span>
           </p>
-          {summary.score.components && summary.score.components.length > 0 ? (
+          {score.components && score.components.length > 0 ? (
             <ul className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
-              {summary.score.components.map((component) => (
+              {score.components.map((component) => (
                 <li key={component.label}>
                   <span className="font-medium text-foreground">{component.label}</span>
                   {' · '}
@@ -147,21 +148,19 @@ function DiagnosisReading({
               ))}
             </ul>
           ) : null}
-          {summary.score.isFloor && summary.score.unmeasured ? (
+          {score.isFloor && score.unmeasured ? (
             <p
               className="mt-1 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
-              data-testid="cdss-hf-diagnosis-score-unmeasured"
+              data-testid={`cdss-hf-diagnosis-score-unmeasured-${score.name}`}
             >
               {isEnglish
-                ? `Reported as a minimum: this record cannot supply ${summary.score.unmeasured.join('; ')}. A missing parameter can only have raised the score.`
-                : `以下限呈現：本紀錄無法提供 ${summary.score.unmeasured.join('、')}。缺的參數只會讓分數更高，不會更低。`}
+                ? `Reported as a minimum: this record cannot supply ${score.unmeasured.join('; ')}. A missing variable can only have raised the score.`
+                : `以下限呈現：本紀錄無法提供 ${score.unmeasured.join('、')}。缺的項目只會讓分數更高，不會更低。`}
             </p>
           ) : null}
-          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-            {summary.score.source}
-          </p>
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{score.source}</p>
         </div>
-      ) : null}
+      ))}
     </div>
   )
 }
@@ -947,15 +946,15 @@ export function HeartFailureStatusBoard({
             </span>
             <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-pillars-title">
               {board.gdmt?.title ?? (board.pillarScope === 'lvef-independent'
-                ? (isEnglish ? 'FMT recommended independent of LVEF' : '不分 LVEF 的 FMT')
+                ? (isEnglish ? 'HFpEF foundational therapy' : 'HFpEF 的 FMT')
                 : (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱'))}
             </span>
             {board.pillars.every((pillar) => !pillar.evaluated) ? (
               <span className="text-xs text-muted-foreground" data-testid="cdss-hf-pillars-unassessed-note">
                 {board.pillarScope === 'lvef-independent'
                   ? (isEnglish
-                    ? 'Prescription state only — ESC recommends these two independent of LVEF; the HFpEF card carries the recommendation.'
-                    : '僅顯示用藥狀態；ESC 這兩類不分 LVEF 建議，建議內容在下方 HFpEF 治療卡。')
+                    ? 'Prescription state only this time; ESC recommends these two independent of LVEF.'
+                    : '本次僅顯示用藥狀態；ESC 這兩類不分 LVEF 建議。')
                   : (isEnglish
                     ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
                     : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。')}
