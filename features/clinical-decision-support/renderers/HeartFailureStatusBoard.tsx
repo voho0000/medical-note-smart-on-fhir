@@ -709,25 +709,38 @@ export function HeartFailureStatusBoard({
         </section>
       ) : null}
 
-      {/* The four pillars as a board: what the patient is on, what is missing, what next. */}
+      {/*
+        The foundational classes as a board: what the patient is on, what is
+        missing, what next. Which classes those are is the phenotype's business
+        — ESC 2026 Recommendation Table 5 recommends an SGLT2 inhibitor and an
+        MRA independent of LVEF, and names 「symptomatic HFrEF」 for the other
+        two — so the strip follows `pillarScope` rather than always showing four.
+      */}
       {board.pillars.length > 0 ? (
         <section
           className="overflow-hidden rounded-lg border border-border bg-card"
-          aria-label={isEnglish ? 'Foundational medical therapy' : 'HFrEF 四大 FMT 支柱'}
+          aria-label={isEnglish ? 'Foundational medical therapy' : 'FMT 支柱'}
           data-testid="cdss-hf-pillars"
+          data-pillar-scope={board.pillarScope}
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
             <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
               {isEnglish ? 'Treatment decisions' : '治療決策'}
             </span>
             <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-pillars-title">
-              {board.gdmt?.title ?? (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱')}
+              {board.gdmt?.title ?? (board.pillarScope === 'lvef-independent'
+                ? (isEnglish ? 'FMT recommended independent of LVEF' : '不分 LVEF 的 FMT')
+                : (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱'))}
             </span>
             {board.pillars.every((pillar) => !pillar.evaluated) ? (
               <span className="text-xs text-muted-foreground" data-testid="cdss-hf-pillars-unassessed-note">
-                {isEnglish
-                  ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
-                  : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。'}
+                {board.pillarScope === 'lvef-independent'
+                  ? (isEnglish
+                    ? 'Prescription state only — ESC recommends these two independent of LVEF; the HFpEF card carries the recommendation.'
+                    : '僅顯示用藥狀態；ESC 這兩類不分 LVEF 建議，建議內容在下方 HFpEF 治療卡。')
+                  : (isEnglish
+                    ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
+                    : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。')}
               </span>
             ) : null}
             {actionablePillars > 0 ? (
