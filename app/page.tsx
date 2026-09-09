@@ -9,6 +9,9 @@ import { FirstRunOnboardingDialog } from "./_components/FirstRunOnboardingDialog
 import { HeaderOverflowMenu } from "@/src/shared/components/HeaderOverflowMenu"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
+import { OVERVIEW_WIDE_PANEL_PX } from "@/features/clinical-summary/overview/overview.types"
+import { WorkspacePanelsProvider } from "@/src/application/providers/workspace-panels.provider"
+import { hasUnseenSummary, useSummaryActivityStore } from "@/src/application/stores/summary-activity.store"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import { WelcomeOnboarding } from "./_components/WelcomeOnboarding"
 import { RightDetailPane } from "./_components/RightDetailPane"
@@ -55,7 +58,13 @@ function PageContent() {
   const { leftWidth, containerRef, handleMouseDown } = useResizableLayout({
     initialWidth: 50,
     minWidth: 30,
-    maxWidth: 70
+    maxWidth: 70,
+    // 總覽 lays its four sections out as a 2×2 grid once its container reaches
+    // OVERVIEW_WIDE_BREAKPOINT_PX; an even split leaves most displays a few
+    // pixels short of it, so the landing view falls back to the stacked list
+    // for want of ~30px. Ask for just enough on mount. A display that cannot
+    // reach it inside the 70% cap keeps the even split (see the hook).
+    preferLeftContentPx: OVERVIEW_WIDE_PANEL_PX,
   })
 
   // Responsive view logic (extracted to custom hook)
@@ -71,6 +80,20 @@ function PageContent() {
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
+
+  // A summary that finished while the feature panel was collapsed has no way
+  // to announce itself — the panel IS its only surface. The rail says so, and
+  // opening it acknowledges the run. Nothing here starts a generation:
+  // `autoGenerate` stays false by default, so this is silent unless the
+  // clinician turned auto-generate on or pressed 產生摘要 themselves.
+  const summaryCompletedAt = useSummaryActivityStore((state) => state.completedAt)
+  const summaryAcknowledgedAt = useSummaryActivityStore((state) => state.acknowledgedAt)
+  const acknowledgeSummary = useSummaryActivityStore((state) => state.acknowledge)
+  const summaryReady = collapsed === 'right'
+    && hasUnseenSummary({ completedAt: summaryCompletedAt, acknowledgedAt: summaryAcknowledgedAt })
+  useEffect(() => {
+    if (collapsed !== 'right') acknowledgeSummary()
+  }, [acknowledgeSummary, collapsed])
   const leftTourActive = useLeftBrowserTourStore((state) => state.active)
   const rightTourActive = useRightFeatureTourStore((state) => state.active)
   const tourLauncherOpen = useRightFeatureTourStore((state) => state.launcherOpen)
@@ -518,6 +541,7 @@ function PageContent() {
         onChange={setMobileView}
       />
 
+      <WorkspacePanelsProvider collapsed={collapsed} setCollapsed={setCollapsed}>
       <ClinicalWorkspaceMain ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
@@ -630,17 +654,21 @@ function PageContent() {
           </ClinicalWorkspaceRail>
         )}
 
-        {/* Right collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
+        {/* Right collapsed rail (lg only) — the WHOLE strip is clickable to
+            expand. While it is the only thing standing in for the feature
+            panel, it also reports a summary that finished out of sight. */}
         {collapsed === 'right' && (
           <ClinicalWorkspaceRail
             onClick={() => setCollapsed(null)}
-            label={t.header.expandFeatures}
+            label={summaryReady ? t.header.summaryReadyExpand : t.header.expandFeatures}
             iconDirection="left"
+            badge={summaryReady}
           >
-            {t.header.features}
+            {summaryReady ? t.header.summaryReady : t.header.features}
           </ClinicalWorkspaceRail>
         )}
       </ClinicalWorkspaceMain>
+      </WorkspacePanelsProvider>
       </>
       )}
 

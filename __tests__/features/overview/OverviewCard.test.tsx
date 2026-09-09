@@ -1,0 +1,178 @@
+/**
+ * 總覽 rendered against the real demo bundle.
+ *
+ * The point of this suite is the contract the design brief insists on: the
+ * four header tiles and the four card headers must always report the SAME
+ * numbers, and narrowing the range must narrow them together. The clock is
+ * pinned so the assertions do not decay as the demo bundle ages.
+ */
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import bundle from '@/public/demo/demo-bundle.json'
+import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
+import { OverviewCard } from '@/features/clinical-summary/overview'
+
+// 2026-06-15 — the one anchor where the demo bundle has all four data kinds
+// inside the default 3-month window AND strictly fewer inside the 1-month one.
+// Pinned so these assertions do not decay as real time moves past the fixture.
+const FIXED_NOW = new Date('2026-06-15T09:00:00+08:00').getTime()
+
+jest.mock('@/src/shared/hooks/use-now.hook', () => ({
+  useNow: () => new Date('2026-06-15T09:00:00+08:00').getTime(),
+}))
+
+jest.mock('@/src/application/providers/language.provider', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { zhTW: translations } = require('@/src/shared/i18n/locales/zh-TW')
+  return { useLanguage: () => ({ t: translations, locale: 'zh-TW' }) }
+})
+
+jest.mock('@/src/application/providers/audience.provider', () => ({
+  useAudience: () => ({ audience: 'medical' }),
+}))
+
+const mockUseClinicalData = jest.fn()
+jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
+  useClinicalData: () => mockUseClinicalData(),
+}))
+
+const resources: any[] = (bundle as any).entry.map((entry: any) => entry.resource)
+const byType = (type: string) => resources.filter((resource) => resource.resourceType === type)
+const observations = byType('Observation')
+// The live hook re-attaches member Observations when `_include` came back
+// empty; mirror that so report rows carry their results here too.
+const diagnosticReports = byType('DiagnosticReport').map((report: any) => ({
+  ...report,
+  _observations: (report.result ?? [])
+    .map((reference: any) => observations.find((o: any) => `Observation/${o.id}` === reference.reference))
+    .filter(Boolean),
+}))
+
+const clinicalData = {
+  encounters: byType('Encounter'),
+  medications: byType('MedicationRequest'),
+  diagnosticReports,
+  imagingStudies: [],
+  observations,
+  procedures: byType('Procedure'),
+  conditions: byType('Condition'),
+  documentReferences: byType('DocumentReference'),
+  compositions: byType('Composition'),
+  resourceReady: new Proxy({}, { get: () => true }) as Record<string, boolean>,
+  error: null,
+}
+
+/** Number carried by a header tile (e.g. 42 in "42 項 · 異常 6"). */
+function tileValue(section: string): number {
+  const tile = document.querySelector(`[data-overview-tile="${section}"]`)
+  expect(tile).toBeTruthy()
+  const digits = tile!.textContent?.match(/\d+/)
+  return digits ? Number(digits[0]) : Number.NaN
+}
+
+/** First number in a section card's header count (e.g. 42 in "42 項 · 5 次採檢"). */
+function sectionHeaderValue(sectionId: string): number {
+  const card = document.getElementById(`overview-section-${sectionId}`)
+  expect(card).toBeTruthy()
+  const header = card!.querySelector('[data-slot="card-title"]')
+  const digits = header?.textContent?.match(/\d+/)
+  return digits ? Number(digits[0]) : Number.NaN
+}
+
+describe('OverviewCard (demo bundle)', () => {
+  beforeEach(() => {
+    mockUseClinicalData.mockReturnValue(clinicalData)
+  })
+
+  it('renders the four sections with the default 3-month window', () => {
+    render(<OverviewCard />)
+
+    expect(screen.getByText('近3個月總覽')).toBeInTheDocument()
+    // 2026/03/15 – 2026/06/15 in the zh-TW Intl format.
+    expect(screen.getByText(/2026\/03\/15/)).toBeInTheDocument()
+
+    for (const section of ['labs', 'reports', 'meds', 'visits']) {
+      expect(document.getElementById(`overview-section-${section}`)).toBeInTheDocument()
+    }
+    for (const title of [
+      zhTW.overview.sections.labs,
+      zhTW.overview.sections.reports,
+      zhTW.overview.sections.meds,
+      zhTW.overview.sections.visits,
+    ]) {
+      expect(screen.getAllByText(title).length).toBeGreaterThan(0)
+    }
+    // No ResizeObserver in jsdom, so the card stays in its stacked, scrollable
+    // presentation and every row renders.
+    expect(screen.getByTestId('overview-card')).toHaveAttribute('data-overview-layout', 'stacked')
+  })
+
+  it('reports the same counts on the jump tiles and the card headers', () => {
+    render(<OverviewCard />)
+
+    for (const section of ['labs', 'reports', 'meds', 'visits']) {
+      expect(tileValue(section)).toBe(sectionHeaderValue(section))
+    }
+  })
+
+  it('finds real data in this window rather than rendering four empty cards', () => {
+    render(<OverviewCard />)
+
+    expect(tileValue('visits')).toBeGreaterThan(0)
+    expect(tileValue('meds')).toBeGreaterThan(0)
+    expect(tileValue('labs')).toBeGreaterThan(0)
+    expect(tileValue('reports')).toBeGreaterThan(0)
+  })
+
+  it('narrows every count when the range chip drops to 1 month', () => {
+    render(<OverviewCard />)
+
+    const before = {
+      labs: tileValue('labs'),
+      reports: tileValue('reports'),
+      meds: tileValue('meds'),
+      visits: tileValue('visits'),
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: zhTW.overview.ranges[1] }))
+
+    expect(screen.getByText('近1個月總覽')).toBeInTheDocument()
+    for (const section of ['labs', 'reports', 'meds', 'visits'] as const) {
+      expect(tileValue(section)).toBeLessThanOrEqual(before[section])
+      // Tiles and headers stay in lockstep after a range change too.
+      expect(tileValue(section)).toBe(sectionHeaderValue(section))
+    }
+    // A narrower window must actually remove something from this bundle.
+    expect(tileValue('visits')).toBeLessThan(before.visits)
+  })
+
+  it('keeps every section anchored while the chart holds no data at all', () => {
+    mockUseClinicalData.mockReturnValue({
+      ...clinicalData,
+      encounters: [],
+      medications: [],
+      diagnosticReports: [],
+      observations: [],
+      procedures: [],
+      conditions: [],
+      documentReferences: [],
+      compositions: [],
+    })
+    render(<OverviewCard />)
+
+    for (const section of ['labs', 'reports', 'meds', 'visits']) {
+      const card = document.getElementById(`overview-section-${section}`)
+      expect(card).toBeInTheDocument()
+      expect(within(card as HTMLElement).getByText(zhTW.overview.empty)).toBeInTheDocument()
+    }
+  })
+
+  it('pins the clock used by the window so the assertions above are stable', () => {
+    // Guards the fixture assumption rather than the component: if the demo
+    // bundle stops carrying labs around this date, this test says so first.
+    const labDays = observations
+      .map((observation: any) => observation.effectiveDateTime)
+      .filter(Boolean)
+      .map((value: string) => new Date(value).getTime())
+    expect(labDays.some((time: number) => time <= FIXED_NOW)).toBe(true)
+  })
+})

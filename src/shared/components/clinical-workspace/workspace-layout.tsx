@@ -245,6 +245,8 @@ interface ClinicalWorkspaceRailProps {
   label: string
   iconDirection: "left" | "right"
   onClick: () => void
+  /** Draw attention to something waiting inside the collapsed panel. */
+  badge?: boolean
   children?: ReactNode
 }
 
@@ -252,6 +254,7 @@ export function ClinicalWorkspaceRail({
   label,
   iconDirection,
   onClick,
+  badge = false,
   children,
 }: ClinicalWorkspaceRailProps) {
   const Icon = iconDirection === "left" ? ChevronsLeft : ChevronsRight
@@ -260,13 +263,28 @@ export function ClinicalWorkspaceRail({
     <button
       type="button"
       data-slot="clinical-workspace-rail"
+      data-badge={badge ? "true" : undefined}
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden"
+      className={cn(
+        "group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden",
+        // A finished run is information, not an alarm: the rail takes the
+        // selected-control treatment the rest of the shell already uses.
+        badge && "border-primary/45 bg-primary/5 text-primary",
+      )}
     >
+      {badge && (
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+        />
+      )}
       <Icon className="h-4 w-4" />
-      <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
+      <span className={cn(
+        "select-none text-xs [writing-mode:vertical-rl]",
+        badge ? "font-semibold" : "font-medium",
+      )}>
         {children ?? label}
       </span>
     </button>

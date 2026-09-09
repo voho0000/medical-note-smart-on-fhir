@@ -21,6 +21,7 @@ import {
   ListChecks,
   FileOutput,
   Calculator,
+  LayoutDashboard,
   BookOpenCheck,
   GraduationCap,
   type LucideIcon
@@ -194,6 +195,13 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
 // ============================================================================
 
 export const LEFT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
+  // 總覽 uses the four-pane dashboard glyph — it is the only left tab that
+  // shows several data kinds at once.
+  'overview': {
+    id: 'overview',
+    icon: LayoutDashboard,
+    colorKey: 'clinical',
+  },
   'patient': {
     id: 'patient',
     icon: Stethoscope,
@@ -228,6 +236,7 @@ export const LEFT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
 // ============================================================================
 
 export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: keyof typeof UI_COLORS }> = {
+  'overview': { icon: LayoutDashboard, colorKey: 'clinical' },
   'patient-info': { icon: User, colorKey: 'clinical' },
   'vitals': { icon: Activity, colorKey: 'clinical' },
   'diagnosis': { icon: ClipboardList, colorKey: 'clinical' },
