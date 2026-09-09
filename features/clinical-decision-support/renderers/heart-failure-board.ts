@@ -30,22 +30,38 @@ export const HEART_FAILURE_PACK_ID = 'heart-failure-cdss'
 const PHENOTYPE_MODULE_ID = 'heart-failure-phenotype'
 const FMT_SAFETY_MODULE_ID = 'heart-failure-fmt-safety'
 const GDMT_MODULE_ID = 'heart-failure-hfref-gdmt'
+const HFPEF_TREATMENT_MODULE_ID = 'heart-failure-hfpef-treatment'
 
 /**
  * The four foundational classes, in the order the guideline lists them.
  *
  * `therapyFactKeys` are the adapter's medication-class facts for the pillar,
- * read when the pack produced no module for it — outside the HFrEF pathway
- * the pack evaluates none of the four, but the clinician still wants to see
- * what the patient is on. A tile built that way carries no judgement and
- * says so.
+ * read when the pack produced no module for it — on the HFrEF pathway the pack
+ * can leave a pillar unevaluated while the clinician still wants to see what
+ * the patient is on. A tile built that way carries no judgement and says so.
+ *
+ * `lvefIndependent` marks the two ESC 2026 Recommendation Table 5 recommends
+ * 「independent of LVEF」 — an SGLT2 inhibitor and an MRA. The other two name
+ * 「symptomatic HFrEF」, so they are not the HFpEF patient's checklist and are
+ * not shown on that pathway: a strip of four tiles headed 「四大 FMT 支柱」
+ * reads as a list of what is missing, whatever caveat sits above it.
  */
 const PILLAR_MODULES = [
-  { id: 'heart-failure-ras-inhibition', zh: 'ARNI／ACEI／ARB', en: 'ARNI / ACEI / ARB', therapyFactKeys: ['arniTherapy', 'aceArbTherapy'] },
-  { id: 'heart-failure-beta-blocker', zh: '實證 β 阻斷劑', en: 'Evidence-based β-blocker', therapyFactKeys: ['hfEvidenceBetaBlockerTherapy'] },
-  { id: 'heart-failure-mra', zh: 'MRA', en: 'MRA', therapyFactKeys: ['mraTherapy'] },
-  { id: 'heart-failure-sglt2', zh: 'SGLT2i', en: 'SGLT2i', therapyFactKeys: ['sglt2Therapy'] },
+  { id: 'heart-failure-ras-inhibition', zh: 'ARNI／ACEI／ARB', en: 'ARNI / ACEI / ARB', therapyFactKeys: ['arniTherapy', 'aceArbTherapy'], lvefIndependent: false },
+  { id: 'heart-failure-beta-blocker', zh: '實證 β 阻斷劑', en: 'Evidence-based β-blocker', therapyFactKeys: ['hfEvidenceBetaBlockerTherapy'], lvefIndependent: false },
+  { id: 'heart-failure-mra', zh: 'MRA', en: 'MRA', therapyFactKeys: ['mraTherapy'], lvefIndependent: true },
+  { id: 'heart-failure-sglt2', zh: 'SGLT2i', en: 'SGLT2i', therapyFactKeys: ['sglt2Therapy'], lvefIndependent: true },
 ] as const
+
+/**
+ * Which set of foundational classes this patient's pathway is read against.
+ *
+ * `none` is not an empty board: it is a patient the pack opened no treatment
+ * pathway for — nobody has said they suspect heart failure, or the phenotype
+ * is not settled — and a therapy checklist for them would be answering a
+ * question that was never asked.
+ */
+export type HeartFailurePillarScope = 'hfref-four' | 'lvef-independent' | 'none'
 
 export type HeartFailureMetricKind = 'lab' | 'measure'
 
@@ -164,6 +180,8 @@ export interface HeartFailureBoardModel {
   /** Safety modules the pack marked actionable: read before anything else. */
   alerts: readonly CdssRecommendation[]
   gdmt?: CdssRecommendation
+  /** Which foundational classes the tiles below stand for, and why. */
+  pillarScope: HeartFailurePillarScope
   pillars: readonly HeartFailurePillar[]
   /** Module ids the board renders itself, so the list does not repeat them. */
   consumedIds: ReadonlySet<string>
@@ -461,7 +479,20 @@ export function buildHeartFailureBoard(
       reason: item.title,
       moduleName: item.moduleName ?? item.id,
     }))
-  const pillars = PILLAR_MODULES.flatMap((config) => {
+  // Which pathway the pack actually opened, read from the modules it built
+  // rather than from the phenotype card's wording: a board that matched on
+  // 「HFrEF」 in a title would break the first time the title is reworded.
+  const pillarScope: HeartFailurePillarScope = byId.has(GDMT_MODULE_ID)
+    ? 'hfref-four'
+    : byId.has(HFPEF_TREATMENT_MODULE_ID)
+      ? 'lvef-independent'
+      : 'none'
+  const pillarConfigs = pillarScope === 'hfref-four'
+    ? PILLAR_MODULES
+    : pillarScope === 'lvef-independent'
+      ? PILLAR_MODULES.filter((config) => config.lvefIndependent)
+      : []
+  const pillars = pillarConfigs.flatMap((config) => {
     const recommendation = byId.get(config.id)
     const pillar = recommendation
       ? pillarFromRecommendation(config, recommendation, isEnglish)
@@ -491,6 +522,7 @@ export function buildHeartFailureBoard(
     fmtSafety: byId.get(FMT_SAFETY_MODULE_ID),
     alerts,
     gdmt: evaluatedPillars.length > 0 ? byId.get(GDMT_MODULE_ID) : undefined,
+    pillarScope,
     pillars,
     consumedIds,
   }
