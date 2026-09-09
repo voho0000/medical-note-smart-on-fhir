@@ -15,6 +15,9 @@ import {
   type HeartFailurePillar,
 } from './heart-failure-board'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
+import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
+import { physicianInputRequestsOf } from '../physician-input-contract'
+import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 
 interface HeartFailureStatusBoardProps {
   board: HeartFailureBoardModel
@@ -35,6 +38,9 @@ interface HeartFailureStatusBoardProps {
   /** Absent when this surface cannot take measurements (no patient to attach them to). */
   onSaveClinicVitals?: (vitals: ClinicVitals) => void
   onClearClinicVitals?: () => void
+  /** The clinician's answers, so the board can surface the one action DP-01b asks for. */
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
 }
 
 const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pattern)' } as const
@@ -367,6 +373,8 @@ export function HeartFailureStatusBoard({
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
 }: HeartFailureStatusBoardProps) {
   const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
   const summary = variant === 'summary'
@@ -575,6 +583,39 @@ export function HeartFailureStatusBoard({
       })}
 
       {/* What to do today, in the pack's words — or one quiet line when nothing is needed. */}
+      {/*
+        DP-01b asks the clinician for one thing — whether this is HFpEF — and it
+        is the reason they opened this screen. The criteria stay on the card
+        below, in full and row by row; the action sits here, above the fold,
+        because a confirm button at the foot of an unexpanded card is a button
+        nobody finds.
+      */}
+      {board.hfpEfDiagnosis && onAnswerPhenotype
+        && physicianInputRequestsOf(board.hfpEfDiagnosis).length > 0 ? (
+        <section
+          className="rounded-lg border border-border bg-card px-3 py-2.5"
+          aria-label={isEnglish ? 'HFpEF diagnosis' : 'HFpEF 診斷'}
+          data-testid="cdss-hf-hfpef-confirm"
+        >
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
+              {isEnglish ? 'Diagnosis' : '診斷決策'}
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {board.hfpEfDiagnosis.title}
+            </span>
+          </div>
+          <PhysicianInputRequestPanel
+            requests={physicianInputRequestsOf(board.hfpEfDiagnosis)}
+            recommendationId={board.hfpEfDiagnosis.id}
+            isEnglish={isEnglish}
+            answer={phenotypeAnswer}
+            onAnswer={onAnswerPhenotype}
+            now={now}
+          />
+        </section>
+      ) : null}
+
       <section
         className="overflow-hidden rounded-lg border border-border bg-card"
         aria-label={isEnglish ? 'Today' : '今天要做的事'}

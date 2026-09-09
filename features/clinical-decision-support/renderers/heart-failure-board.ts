@@ -31,6 +31,7 @@ const PHENOTYPE_MODULE_ID = 'heart-failure-phenotype'
 const FMT_SAFETY_MODULE_ID = 'heart-failure-fmt-safety'
 const GDMT_MODULE_ID = 'heart-failure-hfref-gdmt'
 const HFPEF_TREATMENT_MODULE_ID = 'heart-failure-hfpef-treatment'
+const HFPEF_DIAGNOSIS_MODULE_ID = 'heart-failure-hfpef-diagnosis'
 
 /**
  * The four foundational classes, in the order the guideline lists them.
@@ -180,6 +181,13 @@ export interface HeartFailureBoardModel {
   /** Safety modules the pack marked actionable: read before anything else. */
   alerts: readonly CdssRecommendation[]
   gdmt?: CdssRecommendation
+  /**
+   * DP-01b, when the pack built it. The board reads it for the one action a
+   * clinician came to this screen to take — confirming the diagnosis — and puts
+   * that action where it can be seen. The card itself stays in the list, so it
+   * is not in `consumedIds`: the criteria are read there, in full.
+   */
+  hfpEfDiagnosis?: CdssRecommendation
   /** Which foundational classes the tiles below stand for, and why. */
   pillarScope: HeartFailurePillarScope
   pillars: readonly HeartFailurePillar[]
@@ -522,6 +530,7 @@ export function buildHeartFailureBoard(
     fmtSafety: byId.get(FMT_SAFETY_MODULE_ID),
     alerts,
     gdmt: evaluatedPillars.length > 0 ? byId.get(GDMT_MODULE_ID) : undefined,
+    hfpEfDiagnosis: byId.get(HFPEF_DIAGNOSIS_MODULE_ID),
     pillarScope,
     pillars,
     consumedIds,
