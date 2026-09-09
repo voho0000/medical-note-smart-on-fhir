@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
 import {
   MEDCLOUD_AUTO_LAUNCH_URL,
+  VGTPE_HMC_MEDCLOUD_LAUNCH_URL,
+  VGTPE_HMC_SITE_LAUNCH_URL,
   VGTPE_MEDCLOUD_LAUNCH_URL,
   VGTPE_SITE_LAUNCH_URL,
 } from '@/src/application/launch/medcloud-launch-context'
@@ -41,6 +43,8 @@ describe('isMedcloudLaunchRoute', () => {
   it('follows only the independent medcloud2=auto control', () => {
     expect(isMedcloudLaunchRoute(MEDCLOUD_AUTO_LAUNCH_URL)).toBe(true)
     expect(isMedcloudLaunchRoute(VGTPE_MEDCLOUD_LAUNCH_URL)).toBe(true)
+    expect(isMedcloudLaunchRoute(VGTPE_HMC_MEDCLOUD_LAUNCH_URL)).toBe(true)
+    expect(isMedcloudLaunchRoute(VGTPE_HMC_SITE_LAUNCH_URL)).toBe(false)
     expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto')).toBe(true)
     expect(isMedcloudLaunchRoute(VGTPE_SITE_LAUNCH_URL)).toBe(false)
     expect(isMedcloudLaunchRoute('https://mediprisma.tw/app/')).toBe(false)
