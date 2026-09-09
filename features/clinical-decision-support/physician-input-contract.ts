@@ -95,12 +95,65 @@ export interface CriterionSummary {
  * probability rises with the number of parameters met. The pack counts, and
  * this host displays that count where it can be seen.
  */
+/**
+ * A published score the pack computed, beside the guideline's own reading.
+ *
+ * `isFloor` is the field that matters clinically: it says the record could not
+ * supply every parameter, so the total can only be an underestimate. The low
+ * bands are the ones that would talk a clinician out of a diagnosis, so a floor
+ * is never shown as a bare number.
+ */
+export interface DiagnosticScore {
+  name: string
+  source: string
+  value: number
+  maximum: number
+  bandLabel: string
+  isFloor: boolean
+  unmeasured?: readonly string[]
+  components?: readonly { label: string; detail: string }[]
+}
+
 export interface DiagnosticSummary {
   verdict: string
   basis: string
   criteria: readonly CriterionSummary[]
   supportingParameterCount?: number
   confirmedByClinician?: boolean
+  score?: DiagnosticScore
+}
+
+function toScore(value: unknown): DiagnosticScore | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.name !== 'string' || typeof record.source !== 'string') return undefined
+  if (typeof record.value !== 'number' || typeof record.maximum !== 'number') return undefined
+  if (typeof record.bandLabel !== 'string') return undefined
+  const strings = (input: unknown): readonly string[] | undefined => (
+    Array.isArray(input) && input.every((item) => typeof item === 'string')
+      ? (input as string[])
+      : undefined
+  )
+  const components = Array.isArray(record.components)
+    ? record.components
+      .filter((item): item is { label: string; detail: string } => (
+        Boolean(item)
+        && typeof item === 'object'
+        && typeof (item as Record<string, unknown>).label === 'string'
+        && typeof (item as Record<string, unknown>).detail === 'string'
+      ))
+    : undefined
+  const unmeasured = strings(record.unmeasured)
+  return {
+    name: record.name,
+    source: record.source,
+    value: record.value,
+    maximum: record.maximum,
+    bandLabel: record.bandLabel,
+    isFloor: record.isFloor === true,
+    ...(unmeasured && unmeasured.length > 0 ? { unmeasured } : {}),
+    ...(components && components.length > 0 ? { components } : {}),
+  }
 }
 
 function toCriterion(value: unknown): CriterionSummary | undefined {
@@ -141,6 +194,7 @@ export function diagnosticSummaryOf(
       ? { supportingParameterCount: record.supportingParameterCount }
       : {}),
     ...(record.confirmedByClinician === true ? { confirmedByClinician: true } : {}),
+    ...(toScore(record.score) ? { score: toScore(record.score) } : {}),
   }
 }
 
