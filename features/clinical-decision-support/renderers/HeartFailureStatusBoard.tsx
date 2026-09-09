@@ -120,6 +120,48 @@ function DiagnosisReading({
       <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
         {summary.basis}
       </p>
+      {summary.score ? (
+        <div
+          className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
+          data-testid="cdss-hf-diagnosis-score"
+          data-floor={summary.score.isFloor ? 'true' : undefined}
+        >
+          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+            <span className="font-semibold text-foreground">{summary.score.name}</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {/* A floor is never shown as a bare number: the missing
+                  parameters can only have raised it. */}
+              {summary.score.isFloor ? '≥' : ''}
+              {summary.score.value} / {summary.score.maximum}
+            </span>
+            <span className="text-muted-foreground">{summary.score.bandLabel}</span>
+          </p>
+          {summary.score.components && summary.score.components.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
+              {summary.score.components.map((component) => (
+                <li key={component.label}>
+                  <span className="font-medium text-foreground">{component.label}</span>
+                  {' · '}
+                  {component.detail}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {summary.score.isFloor && summary.score.unmeasured ? (
+            <p
+              className="mt-1 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
+              data-testid="cdss-hf-diagnosis-score-unmeasured"
+            >
+              {isEnglish
+                ? `Reported as a minimum: this record cannot supply ${summary.score.unmeasured.join('; ')}. A missing parameter can only have raised the score.`
+                : `以下限呈現：本紀錄無法提供 ${summary.score.unmeasured.join('、')}。缺的參數只會讓分數更高，不會更低。`}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+            {summary.score.source}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -304,6 +304,21 @@ describe('the diagnosis reading the host shows', () => {
     expect(summary?.verdict).toContain('醫師已確認')
   })
 
+  it('carries the published score as a floor, with what could not be measured', () => {
+    const score = diagnosticSummaryOf(diagnosisCard(suspectedHfpEf))?.score
+
+    expect(score?.name).toBe('HFA-PEFF')
+    expect(score?.maximum).toBe(6)
+    // This profile holds no echocardiographic measurement and no natriuretic
+    // peptide, so the score is 0 — and a floor, never a rule-out.
+    expect(score?.value).toBe(0)
+    expect(score?.isFloor).toBe(true)
+    expect(score?.unmeasured?.length).toBeGreaterThan(0)
+    // Attributed to the body that published it, not to the guideline that
+    // merely cites it.
+    expect(score?.source).toContain('Heart Failure Association')
+  })
+
   it('reads nothing from a recommendation the published package built', () => {
     expect(diagnosticSummaryOf({ id: 'x' } as CdssRecommendation)).toBeUndefined()
   })
