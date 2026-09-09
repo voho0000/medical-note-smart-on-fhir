@@ -2319,6 +2319,8 @@ export function ClinicalDecisionSupportView({
           clinicVitals={clinicVitals}
           onSaveClinicVitals={onSaveClinicVitals}
           onClearClinicVitals={onClearClinicVitals}
+          phenotypeAnswer={phenotypeAnswer}
+          onAnswerPhenotype={onAnswerPhenotype}
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
