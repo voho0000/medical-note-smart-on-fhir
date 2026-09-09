@@ -12,6 +12,9 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
 }))
+jest.mock('@/features/prompt-gallery/hooks/useDemoExampleOutput', () => ({
+  useDemoExampleOutput: () => jest.fn(async () => '試用病人自動產生的輸出範例'),
+}))
 jest.mock('@/src/shared/config/firebase.config', () => ({ db: {} }))
 // Exercise the real share service up to the database boundary; never publish.
 jest.mock('firebase/firestore', () => ({

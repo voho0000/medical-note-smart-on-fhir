@@ -15,6 +15,7 @@ import type { PromptGallerySort, SharedPrompt } from '../types/prompt.types'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
 import { FavoriteButton } from './FavoriteButton'
 import { PromptSourceBadge } from './PromptSourceBadge'
+import { PromptVisibilityBadge } from './PromptVisibilityBadge'
 
 const POPULAR_THRESHOLD = 10
 const TYPE_STYLES = {
@@ -62,10 +63,12 @@ interface PromptTableProps {
   /** Prompt ids whose gallery source is newer than the saved copy. */
   updatedIds?: ReadonlySet<string>
   showSource?: boolean
+  /** Show public/private state while managing the user's own templates. */
+  showVisibility?: boolean
 }
 
 export function PromptTable({
-  prompts, currentUserId, sort, onSortChange, isFavorite, onToggleFavorite, onPreview, onUse, updatedIds, showSource = true,
+  prompts, currentUserId, sort, onSortChange, isFavorite, onToggleFavorite, onPreview, onUse, updatedIds, showSource = true, showVisibility = false,
 }: PromptTableProps) {
   const { t } = useLanguage()
   const typeLabel = (type: string) => type === 'chat' ? t.promptGallery.typeChat : type === 'summary' ? t.promptGallery.typeSummary : type
@@ -129,6 +132,7 @@ export function PromptTable({
                       {t.promptGallery.sourceUpdated}
                     </Badge>
                   )}
+                  {showVisibility && <PromptVisibilityBadge isPublic={prompt.isPublic} />}
                   {isPopular && <Flame className="h-3 w-3 shrink-0 text-orange-500 dark:text-orange-300" aria-hidden="true" />}
                 </div>
                 <p className="truncate text-[0.6875rem] leading-tight text-muted-foreground">{prompt.description || prompt.prompt}</p>

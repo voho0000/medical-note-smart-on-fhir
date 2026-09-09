@@ -60,7 +60,7 @@ Collection：
 sharedPrompts/{promptId}
 ```
 
-寫入時使用 Firestore `Timestamp`，usage 以 atomic `increment(1)` 增加。Gallery service 提供：
+每筆共享範本都有 `isPublic`。`true` 會出現在「所有範本」，`false` 只有原作者可在「我的範本」讀取；原作者可在編輯範本時切換。寫入時使用 Firestore `Timestamp`，usage 以 atomic `increment(1)` 增加。Gallery service 提供：
 
 - `getSharedPrompts(filter?, sort?)`
 - `getMySharedPrompts(userId, filter?, sort?)`
@@ -76,6 +76,8 @@ sharedPrompts/{promptId}
 
 Firestore 一個 query 只能使用一個 `array-contains`。目前策略：
 
+- 「所有範本」固定查詢 `isPublic == true`；「我的範本」固定查詢 `authorId == userId`，因此包含公開與私人範本。
+- 分享時若未填寫輸出範例，系統會以內建試用病人資料自動產生；手動填寫的內容則直接保存。
 - 一般 type 優先在 server filter。
 - `summary` 為了相容舊 `insight` 與 upgraded built-ins，先廣泛讀取再 client filter。
 - type 已占用 `array-contains` 時，specialty 在 client filter。
@@ -83,6 +85,7 @@ Firestore 一個 query 只能使用一個 `array-contains`。目前策略：
 
 舊資料規則：
 
+- `isPublic` 缺漏時，資料轉換層視為公開；部署新 Rules 與前端前，後端 migration 會先補成 `true`，讓 Firestore 公開查詢可以繼續找到舊範本。
 - `types: ['insight']` 讀成 `summary`。
 - 缺少／空的 audience 讀成 `['medical']`。
 - 一組早期內建 patient prompts 會依 id 補上 `summary`，不需先做 production migration。
@@ -99,13 +102,13 @@ Firestore 一個 query 只能使用一個 `array-contains`。目前策略：
 
 自訂摘要管理 drawer 以 `mode="summary"` 開啟。選取 prompt 後建立 custom module，使用者可控制名稱、順序、auto-generate 與是否顯示在 summary。
 
-Gallery 的 shared prompt 與使用者自己的 module 是不同資料：前者是公開目錄，後者儲存在使用者 collection／localStorage，修改 module 不會回寫 shared prompt。
+Gallery 的 shared prompt 與使用者自己的 module 是不同資料：前者包含公開與作者私人的 Gallery 範本，後者儲存在使用者 collection／localStorage，修改 module 不會回寫 shared prompt。
 
 ## 權限與安全
 
 前端 login guard 只改善 UX，不是存取控制。正式 Firestore Rules 必須：
 
-- 公開 read 的範圍符合產品政策。
+- 公開查詢必須限制 `isPublic == true`；私人範本與其大型文字 body 只有原作者可讀。
 - create 時 `authorId == request.auth.uid`。
 - update／delete 僅允許原作者或管理者。
 - 限制可寫欄位、型別、字串長度、array 大小與 usageCount 變更方式。

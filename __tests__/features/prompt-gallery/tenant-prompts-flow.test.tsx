@@ -10,6 +10,9 @@ jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ t: jest.requireActual('@/src/shared/i18n/locales/zh-TW').zhTW }) }))
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: jest.fn() }))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
+jest.mock('@/features/prompt-gallery/hooks/useDemoExampleOutput', () => ({
+  useDemoExampleOutput: () => jest.fn(async () => '試用病人自動產生的輸出範例'),
+}))
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
 jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({
   createSharedPrompt: jest.fn(), getSharedPrompts: jest.fn(), getMySharedPrompts: jest.fn(),
