@@ -36,20 +36,23 @@ import type {
   CdssRecommendation,
   CdssResult,
   CdssSourceAssessmentStatus,
-  CdssStatus,
   DcsiSummary,
   GuidelineReference,
+  PhysicianDecision,
 } from '../types'
 import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-card'
 import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/build-rationale-copy-text'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
-import {
-  buildHeartFailureBoard,
-  HEART_FAILURE_LIST_STATUS_ORDER,
-} from './heart-failure-board'
+import { buildHeartFailureBoard } from './heart-failure-board'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
-import type { ClinicVitals } from '../stores/clinic-vitals.store'
+import type {
+  ClinicMetricKey,
+  ClinicSymptomInputs,
+  ClinicValueInputs,
+  ClinicVitals,
+} from '../stores/clinic-vitals.store'
+import type { ClinicEntryContextMap } from '../utils/apply-clinic-vitals'
 import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
@@ -67,15 +70,33 @@ interface ClinicalDecisionSupportViewProps {
    * prescription state from them when the pack produced no module for it.
    */
   profileFacts?: CdssPatientProfile['facts']
+  /** The adapter's freshness contexts, so a value no module read still shows its age. */
+  profileFreshness?: CdssPatientProfile['freshnessContexts']
   /**
    * `classic` renders every pack the module-first way, board or not; `board`
    * (the default) lets the heart-failure pack open with its status board.
    */
   layout?: CdssLayout
-  /** Vitals the clinician measured in the room this visit; heart-failure board only. */
+  /** Vitals and symptoms the clinician entered in the room; heart-failure board only. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (vitals: ClinicVitals) => void
-  onClearClinicVitals?: () => void
+  /** 「修改今日數值」 — every value on the status line, saved together. */
+  onSaveClinicValues?: (values: ClinicValueInputs) => void
+  /** The symptom chip strip's save, made on every tap. */
+  onSaveClinicSymptoms?: (symptoms: ClinicSymptomInputs) => void
+  /**
+   * Which values on the status line the physician entered, and what each one
+   * replaced. The value itself already reached the pack through the profile.
+   */
+  clinicEntries?: ClinicEntryContextMap
+  /** 「撤銷」 — one entered value, back to the record's own; board only. */
+  onClearMetric?: (factKey: ClinicMetricKey) => void
+  /**
+   * What the physician decided about a module. A decision is evidence the
+   * physician entered, so it travels to the pack through the profile and the
+   * card recomputes; nothing here patches a rendered row.
+   */
+  onRecordDecision?: (moduleId: string, decision: PhysicianDecision) => void
+  onWithdrawDecision?: (moduleId: string) => void
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -120,31 +141,6 @@ interface ModuleGroupPresentation {
   en: string
   toneClass: string
   dividerClass: string
-}
-
-/**
- * The heart-failure list groups by what the clinician has to do rather than
- * by workflow stage: the board above it already carries the treatment
- * decisions, so what remains is ordered do → fetch → judge → done.
- */
-/**
- * Direction C groups the remaining rows by the kind of work, in the words of
- * the mockup: 藥物 (an actionable prescribing or safety decision), 檢驗與量測
- * (data to fetch), 需判斷 (a judgement the record cannot make), and the done
- * rows folded. Same four statuses as the board, named for the desk they land on.
- */
-const HEART_FAILURE_C_GROUPS: Readonly<Record<CdssStatus, ModuleGroupPresentation>> = {
-  actionable: { id: 'actionable', zh: '藥物與處置', en: 'Medication & actions', ...GROUP_TONES.indigo },
-  'needs-data': { id: 'needs-data', zh: '檢驗與量測', en: 'Tests & measurements', ...GROUP_TONES.orange },
-  review: { id: 'review', zh: '需判斷', en: 'Judgement', ...GROUP_TONES.blue },
-  'no-action': { id: 'no-action', zh: '目前無需處理', en: 'No action needed', ...GROUP_TONES.teal },
-}
-
-const HEART_FAILURE_STATUS_GROUPS: Readonly<Record<CdssStatus, ModuleGroupPresentation>> = {
-  actionable: { id: 'actionable', zh: '可立即處理', en: 'Actionable now', ...GROUP_TONES.indigo },
-  'needs-data': { id: 'needs-data', zh: '需先補資料', en: 'Data needed', ...GROUP_TONES.orange },
-  review: { id: 'review', zh: '需臨床確認', en: 'Clinical review', ...GROUP_TONES.blue },
-  'no-action': { id: 'no-action', zh: '目前無需處理', en: 'No action needed', ...GROUP_TONES.teal },
 }
 
 type ModuleDisplayRow =
@@ -1335,6 +1331,44 @@ function DcsiModuleDetail({
   )
 }
 
+/**
+ * The guideline's own words, in the language they were written in, with a
+ * copy button. A translated summary is for reading; what a clinician pastes
+ * into a note or a slide has to be the original sentence, so it is shown
+ * visibly and copied verbatim rather than left inside a collapsed toggle.
+ */
+function CitedStatementQuote({
+  statement,
+  isEnglish,
+}: {
+  statement: { label: string; text: string }
+  isEnglish: boolean
+}) {
+  const { copied, copy } = useCopyToClipboard()
+  return (
+    <figure
+      className="rounded-md border border-border/60 bg-muted/30 px-3 py-2"
+      data-testid="guideline-cited-statement"
+    >
+      <blockquote lang="en" className="whitespace-pre-line leading-relaxed text-foreground">
+        {statement.text}
+      </blockquote>
+      <figcaption className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span>{statement.label}</span>
+        <button
+          type="button"
+          onClick={() => { void copy(statement.text) }}
+          className="inline-flex min-h-6 items-center gap-1 rounded-sm font-medium text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={isEnglish ? 'Copy the original wording' : '複製英文原文'}
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? (isEnglish ? 'Copied' : '已複製') : (isEnglish ? 'Copy original' : '複製原文')}
+        </button>
+      </figcaption>
+    </figure>
+  )
+}
+
 function SourceGuidelineReference({
   reference,
   isEnglish,
@@ -1353,8 +1387,18 @@ function SourceGuidelineReference({
 
   if (citedStatements.length > 0) {
     return (
+      <div className="border-t border-border/60 first:border-t-0">
+      <div className="space-y-1.5 py-1.5">
+        {citedStatements.map((statement) => (
+          <CitedStatementQuote
+            key={`${reference.id}-${statement.label}`}
+            statement={statement}
+            isEnglish={isEnglish}
+          />
+        ))}
+      </div>
       <details
-        className="group/reference border-t border-border/60 first:border-t-0"
+        className="group/reference"
         data-testid={`guideline-statement-toggle-${reference.id}`}
       >
         <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 py-1.5 text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
@@ -1370,16 +1414,9 @@ function SourceGuidelineReference({
           <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open/reference:rotate-180" />
         </summary>
         <div className="space-y-2 border-t border-border/60 py-2">
-          <dl className="space-y-2">
-            {citedStatements.map((statement) => (
-              <div key={`${reference.id}-${statement.label}`}>
-                <dt className="font-semibold text-foreground">{statement.label}</dt>
-                <dd className="mt-0.5 whitespace-pre-line leading-relaxed text-foreground">
-                  {statement.text}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {reference.summary ? (
+            <p className="leading-relaxed text-muted-foreground">{reference.summary}</p>
+          ) : null}
           <a
             href={reference.url}
             target="_blank"
@@ -1391,6 +1428,7 @@ function SourceGuidelineReference({
           </a>
         </div>
       </details>
+      </div>
     )
   }
 
@@ -1662,6 +1700,17 @@ function RecommendationDetail({
         <p className="mt-1.5 text-sm font-medium leading-relaxed text-foreground">
           {primaryGuidelineSummary}
         </p>
+        {(primaryGuidelineRule?.reference.citedStatements ?? []).length > 0 ? (
+          <div className="mt-2 space-y-1.5 text-xs" data-testid="cdss-primary-guideline-original">
+            {(primaryGuidelineRule?.reference.citedStatements ?? []).map((statement) => (
+              <CitedStatementQuote
+                key={`${primaryGuidelineRule?.reference.id}-${statement.label}`}
+                statement={statement}
+                isEnglish={isEnglish}
+              />
+            ))}
+          </div>
+        ) : null}
 
       </section>
 
@@ -1859,6 +1908,17 @@ function RecommendationDetail({
                         ? ` · ${isEnglish ? 'Grade' : '等級'} ${rule.reference.evidenceGrade}`
                         : ''}
                     </p>
+                    {(rule.reference.citedStatements ?? []).length > 0 ? (
+                      <div className="mt-1 space-y-1.5">
+                        {(rule.reference.citedStatements ?? []).map((statement) => (
+                          <CitedStatementQuote
+                            key={`${rule.reference.id}-${statement.label}`}
+                            statement={statement}
+                            isEnglish={isEnglish}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                     <p className="mt-0.5 text-muted-foreground">{rule.reference.summary}</p>
                     <a
                       href={rule.reference.url}
@@ -1906,10 +1966,15 @@ export function ClinicalDecisionSupportView({
   locale,
   patientId,
   profileFacts,
+  profileFreshness,
   layout = 'board',
   clinicVitals,
-  onSaveClinicVitals,
-  onClearClinicVitals,
+  onSaveClinicValues,
+  onSaveClinicSymptoms,
+  clinicEntries,
+  onClearMetric,
+  onRecordDecision,
+  onWithdrawDecision,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -1943,8 +2008,10 @@ export function ClinicalDecisionSupportView({
   // clock read on every render would make the same value drift across ticks.
   const [now] = useState(() => new Date())
   const board = useMemo(
-    () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
-    [layout, locale, now, profileFacts, result],
+    () => (layout === 'classic'
+      ? undefined
+      : buildHeartFailureBoard(result, locale, now, profileFacts, profileFreshness, clinicEntries)),
+    [clinicEntries, layout, locale, now, profileFacts, profileFreshness, result],
   )
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
   // whose wording is the same at every visit for every patient of this age and
@@ -2003,45 +2070,10 @@ export function ClinicalDecisionSupportView({
   const standaloneAutomatedChecks = restoredModules.standaloneChecks
   const hasCompleteModuleGrouping = displayRecommendations.length > 0
     && displayRecommendations.every((item) => item.moduleGroup !== undefined)
-  const moduleNameOf = (recommendation: CdssRecommendation): string => (
-    recommendation.moduleName ?? clinicalModuleLabel(
-      recommendation.id,
-      locale,
-      recommendation.title,
-      recommendation.domain,
-    )
-  )
-  const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = {
-    high: 0,
-    medium: 1,
-    routine: 2,
-  }
-  const heartFailureRows: ModuleDisplayRow[] = board
-    ? HEART_FAILURE_LIST_STATUS_ORDER.flatMap((status): ModuleDisplayRow[] => {
-      const items = displayRecommendations
-        .filter((item) => !board.consumedIds.has(item.id) && item.status === status)
-        .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority])
-      if (items.length === 0) return []
-      const isCollapsed = collapsedModuleGroups.has(status)
-      return [
-        {
-          kind: 'group',
-          group: (layout === 'c' ? HEART_FAILURE_C_GROUPS : HEART_FAILURE_STATUS_GROUPS)[status],
-          count: items.length,
-          isCollapsed,
-          summary: isCollapsed ? items.map(moduleNameOf).join(' · ') : undefined,
-        },
-        ...(isCollapsed
-          ? []
-          : items.map((recommendation): ModuleDisplayRow => ({
-            kind: 'recommendation',
-            recommendation,
-          }))),
-      ]
-    })
-    : []
+  // The heart-failure board renders its own three blocks, list included, so
+  // the generic module table below belongs to every other pathway.
   const moduleDisplayRows: ModuleDisplayRow[] = board
-    ? heartFailureRows
+    ? []
     : hasCompleteModuleGrouping
     ? MODULE_GROUPS.flatMap((group): ModuleDisplayRow[] => {
       const groupRecommendations = displayRecommendations.filter(
@@ -2228,10 +2260,12 @@ export function ClinicalDecisionSupportView({
           now={now}
           expandedId={expandedId}
           onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
-          variant={layout === 'c' ? 'summary' : 'board'}
           clinicVitals={clinicVitals}
-          onSaveClinicVitals={onSaveClinicVitals}
-          onClearClinicVitals={onClearClinicVitals}
+          onSaveClinicValues={onSaveClinicValues}
+          onSaveClinicSymptoms={onSaveClinicSymptoms}
+          onClearMetric={onClearMetric}
+          onRecordDecision={onRecordDecision}
+          onWithdrawDecision={onWithdrawDecision}
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
@@ -2246,22 +2280,11 @@ export function ClinicalDecisionSupportView({
       ) : null}
 
       <section
-        className="overflow-hidden rounded-lg border border-border"
+        className={cn('overflow-hidden rounded-lg border border-border', board && 'hidden')}
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}
+        hidden={board !== undefined}
       >
-        {board ? (
-          // Action first: the heart-failure list reads 處置 → 依據, the way the
-          // board's headlines do, so a reader who came from a sentence above
-          // lands on the same words.
-          <div
-            className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_2.75rem] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground @min-[40rem]:grid"
-            aria-hidden="true"
-          >
-            <span>{isEnglish ? 'Action' : '處置'}</span>
-            <span>{isEnglish ? 'Basis' : '依據'}</span>
-            <span />
-          </div>
-        ) : (
+        {board ? null : (
         <div
           className="hidden grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground @min-[40rem]:grid"
           aria-hidden="true"
@@ -2335,13 +2358,7 @@ export function ClinicalDecisionSupportView({
 
           const recommendation = row.recommendation
           const isExpanded = expandedId === recommendation.id
-          // Direction C numbers every listed row, continuing after the headline
-          // sentences, so a 依據 entry can be read against its 處置 by number.
-          const rowNumber = layout === 'c' && board
-            ? board.headlines.length + heartFailureRows
-              .filter((item): item is Extract<ModuleDisplayRow, { kind: 'recommendation' }> => item.kind === 'recommendation')
-              .findIndex((item) => item.recommendation.id === recommendation.id) + 1
-            : undefined
+          const rowNumber: number | undefined = undefined
           const isRiskStratification = recommendation.kind === 'risk-stratification'
           const moduleName = recommendation.moduleName ?? clinicalModuleLabel(
             recommendation.id,

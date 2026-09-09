@@ -186,20 +186,13 @@ describe('Live personalized-guidance disease switch', () => {
     })
   })
 
-  it('offers the decision board and the classic table for heart failure, and remembers the choice', () => {
+  it('offers heart failure one page, with no layout switch to choose between', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'c')
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
-    expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
-    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
-      .toMatchObject({ state: { layout: 'board' } })
-    expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
-
-    // The switch belongs to heart failure; CKD has one face.
-    fireEvent.click(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+    // The two directions were a pilot's A/B; the approved design is one page,
+    // so the header carries the disease switch and nothing else.
     expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-disease-switch')).toBeInTheDocument()
   })
 
   it('switches from heart-failure guidance to CKD guidance and keeps sources separate', () => {

@@ -109,7 +109,12 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         <ClinicalDecisionSupportView result={result} locale={locale} />,
       )
 
-      const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"]')
+      // A pack with its own page (heart failure) renders therapy and list
+      // rows; every other pack renders the generic module table. Both are
+      // checked the same way: no cell the reader can see is blank.
+      const cells = container.querySelectorAll(
+        '[data-testid^="cdss-module-cell-"], [data-testid^="cdss-hf-row-heart-"], [data-testid^="cdss-hf-therapy-heart-"]',
+      )
       expect(cells.length).toBeGreaterThan(0)
 
       cells.forEach((cell) => {
@@ -128,6 +133,8 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         const row = container
           .querySelector(`[data-testid="cdss-module-cell-${recommendation.id}"]`)
           ?.closest('[id^="cdss-trigger-"]')
+          ?? container.querySelector(`[data-testid="cdss-hf-row-${recommendation.id}"]`)
+          ?? container.querySelector(`[data-testid="cdss-hf-therapy-${recommendation.id}"]`)
         if (!row) continue
 
         // The subtraction rules may move a phrase from the title into the

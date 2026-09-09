@@ -19,9 +19,12 @@ import {
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
 import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
-import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
-import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
-import { applyClinicVitals } from './utils/apply-clinic-vitals'
+import {
+  usePhysicianDecisions,
+  usePhysicianDecisionsStore,
+} from './stores/physician-decisions.store'
+import { useCdssLayoutStore } from './stores/layout-preference.store'
+import { applyClinicVitals, clinicEntryContexts } from './utils/apply-clinic-vitals'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -149,72 +152,6 @@ function DiseaseSwitcher({
   )
 }
 
-/**
- * The two faces of the heart-failure guidance, side by side in the header so
- * a pilot user can flip between them on the same patient. Same pack, same
- * result; only the placement differs.
- */
-function LayoutSwitcher({
-  locale,
-  layout,
-  onSelect,
-}: {
-  locale: CdssLocale
-  layout: CdssLayout
-  onSelect: (layout: CdssLayout) => void
-}) {
-  const isEnglish = locale === 'en'
-  const options: readonly { id: CdssLayout; label: string; title: string }[] = [
-    {
-      id: 'c',
-      // The letter is how pilot users name this layout in feedback (direction C).
-      label: isEnglish ? 'Decision board C' : '決策看板 C',
-      title: isEnglish
-        ? "One line of inputs, today's numbered sentences, then actions and their basis side by side"
-        : '一行決策所需資訊、編號的今日結論，再是處置與依據對號並列',
-    },
-    {
-      id: 'board',
-      label: isEnglish ? 'Original board' : '原版模組表',
-      title: isEnglish
-        ? 'The status board: safety inputs, the four pillars, then the module rows'
-        : '原本的看板：安全數據、四支柱，再列模組',
-    },
-  ]
-  return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
-      <span className="text-xs font-medium text-muted-foreground">
-        {isEnglish ? 'View' : '畫面'}
-      </span>
-      <div
-        className="inline-flex rounded-md border border-border bg-muted/30 p-0.5"
-        role="group"
-        aria-label={isEnglish ? 'Choose the guidance layout' : '選擇指引畫面'}
-      >
-        {options.map((option) => {
-          const selected = option.id === layout
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={[
-                'inline-flex items-center rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              ].join(' ')}
-              aria-pressed={selected}
-              title={option.title}
-              data-testid={`cdss-layout-switch-${option.id}`}
-              onClick={() => onSelect(option.id)}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export default function LiveClinicalDecisionSupportFeature() {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
@@ -227,16 +164,33 @@ export default function LiveClinicalDecisionSupportFeature() {
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clinicVitals = useClinicVitals(patientId)
-  const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
-  const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
+  const hydrateClinicVitals = useClinicVitalsStore((state) => state.hydrate)
+  const recordClinicValues = useClinicVitalsStore((state) => state.recordValues)
+  const recordClinicSymptoms = useClinicVitalsStore((state) => state.recordSymptoms)
+  const clearClinicEntry = useClinicVitalsStore((state) => state.clearEntry)
+  const physicianDecisions = usePhysicianDecisions(patientId)
+  const hydratePhysicianDecisions = usePhysicianDecisionsStore((state) => state.hydrate)
+  const recordPhysicianDecision = usePhysicianDecisionsStore((state) => state.record)
+  const withdrawPhysicianDecision = usePhysicianDecisionsStore((state) => state.withdraw)
   const layout = useCdssLayoutStore((state) => state.layout)
-  const setLayout = useCdssLayoutStore((state) => state.setLayout)
 
   // The switches this physician set on this chart survive a reload, so they are
   // read back before the pack runs rather than after.
   useEffect(() => {
     if (patientId) hydrateEvidenceOverrides(patientId)
   }, [hydrateEvidenceOverrides, patientId])
+
+  // A decision the physician pressed on this chart survives a reload the same
+  // way the evidence switches do, so it is read back before the pack runs.
+  useEffect(() => {
+    if (patientId) hydratePhysicianDecisions(patientId)
+  }, [hydratePhysicianDecisions, patientId])
+
+  // A value the physician corrected on this chart survives a reload the same
+  // way, so it is read back before the pack runs rather than after.
+  useEffect(() => {
+    if (patientId) hydrateClinicVitals(patientId)
+  }, [hydrateClinicVitals, patientId])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -275,11 +229,24 @@ export default function LiveClinicalDecisionSupportFeature() {
   // follows what the physician left standing. Nothing patches a rendered card.
   // The vitals measured in the room travel the same way: as facts on the
   // profile, so every module that reads them recomputes.
+  // A physician decision travels the same way: as profile input, so the card
+  // that owned the gap recomputes with the decision's own outcome.
   const profile = useMemo(() => (
     recordProfile
-      ? applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals)
+      ? applyClinicVitals(
+        { ...recordProfile, evidenceOverrides, physicianDecisions },
+        clinicVitals,
+      )
       : null
-  ), [clinicVitals, evidenceOverrides, recordProfile])
+  ), [clinicVitals, evidenceOverrides, physicianDecisions, recordProfile])
+
+  // What each entered value replaced only exists on the record profile, so the
+  // status line's 「門診輸入」 tag, its undo and its 「紀錄：…」 hover are read
+  // from here rather than from the provenance note in a printed string.
+  const clinicEntries = useMemo(
+    () => clinicEntryContexts(recordProfile, clinicVitals, cdssLocale),
+    [cdssLocale, clinicVitals, recordProfile],
+  )
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -394,9 +361,6 @@ export default function LiveClinicalDecisionSupportFeature() {
             selectedPackId={selectedPack.id}
             onSelect={setRequestedPackId}
           />
-          {result.packId === HEART_FAILURE_PACK_ID ? (
-            <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
-          ) : null}
           <div className="flex shrink-0 items-center gap-1.5">
             <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
               {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
@@ -416,10 +380,25 @@ export default function LiveClinicalDecisionSupportFeature() {
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
+        profileFreshness={profile.freshnessContexts}
         layout={layout}
         clinicVitals={clinicVitals}
-        onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
-        onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
+        onSaveClinicValues={patientId
+          ? (values) => recordClinicValues(patientId, values)
+          : undefined}
+        onSaveClinicSymptoms={patientId
+          ? (symptoms) => recordClinicSymptoms(patientId, symptoms)
+          : undefined}
+        clinicEntries={clinicEntries}
+        onClearMetric={patientId
+          ? (factKey) => clearClinicEntry(patientId, factKey)
+          : undefined}
+        onRecordDecision={patientId
+          ? (moduleId, decision) => recordPhysicianDecision(patientId, moduleId, decision)
+          : undefined}
+        onWithdrawDecision={patientId
+          ? (moduleId) => withdrawPhysicianDecision(patientId, moduleId)
+          : undefined}
       />
     </div>
   )

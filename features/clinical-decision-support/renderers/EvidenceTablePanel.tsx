@@ -79,6 +79,18 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string 
     zh: 'HF 應避免的藥物',
     en: 'Medications to avoid in heart failure',
   },
+  // ESC 2026 §5.2.2 with Table 10: the table that decides whether the HFpEF
+  // pathway opens. It shipped with the pack before this map learned its name,
+  // so the panel rendered it with a blank heading.
+  'hfpef-criteria': { zh: 'HFpEF 條件（§5.2.2）', en: 'HFpEF criteria (Section 5.2.2)' },
+  // The hypertension pack's tables. Its pathway lives on another branch and is
+  // not registered here, but the concept union is the package's, so the map has
+  // to be total or the panel type-checks with a hole in it.
+  'htn-treatment-threshold-risk': { zh: '降壓治療門檻的風險條件', en: 'Risk conditions moving the treatment threshold' },
+  'htn-resistant-pseudoresistance': { zh: '頑固型高血壓與假性頑固', en: 'Resistant hypertension and pseudoresistance' },
+  'htn-secondary-screening-indication': { zh: '次發性高血壓篩檢適應症', en: 'Indications for secondary hypertension screening' },
+  'htn-target-individualization': { zh: '血壓目標個人化', en: 'Individualizing the blood-pressure goal' },
+  'htn-sleep-apnea': { zh: '阻塞性睡眠呼吸中止', en: 'Obstructive sleep apnoea' },
 }
 
 const DIRECTION_LABELS: Record<EvidenceDirection, { zh: string; en: string }> = {
