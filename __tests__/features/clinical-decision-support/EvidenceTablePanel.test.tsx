@@ -496,6 +496,10 @@ describe('EvidenceTablePanel with the heart-failure diagnosis table', () => {
       diagnosticReports: [],
     })
 
+    // Unchanged by DP-00/DP-01: nothing here supports heart failure, so the
+    // card answers the question and stops. What it gained is the route out —
+    // 「您懷疑這位病人有心衰竭嗎？」 — which opens the pathway on a yes and is
+    // asserted in `phenotype-gate-wiring.test.tsx`.
     expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
       id: 'heart-failure-phenotype',
