@@ -596,21 +596,63 @@ describe('heart-failure board view', () => {
     expect(signs).toHaveTextContent('預設未回答')
     fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
     expect(onSave).toHaveBeenCalledTimes(1)
-    expect(onSave.mock.calls[0][0]).toMatchObject({ congestionSigns: ['edema'] })
+    // The chip states the signs of its group in the one record every control
+    // shares, so nothing has to be reconciled between two fields later.
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      signAnswers: { 'pitting-edema': 'present' },
+    })
     unmount()
 
     render(
       <ClinicalDecisionSupportView
         result={heartFailureResult()}
         locale="zh-TW"
-        clinicVitals={{ measuredOn: '2026-09-08', congestionSigns: ['edema'] }}
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { 'pitting-edema': 'present' } }}
         onSaveClinicVitals={onSave}
       />,
     )
     expect(screen.getByTestId('cdss-hf-congestion-sign-edema')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-hf-congestion-signs')).toHaveTextContent('已寫進鬱血證據表')
+    // Untapping returns the sign to 未評估 rather than asserting 「無」: a chip
+    // nobody tapped and one someone untapped both mean it was not stated.
     fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
-    expect(onSave.mock.calls[1][0].congestionSigns).toBeUndefined()
+    expect(onSave.mock.calls[1][0].signAnswers).toBeUndefined()
+  })
+
+  it('lights the chip for a sign answered on the evidence row below it', () => {
+    // The complaint this holds: a clinician answered 「Orthopnea：有」 on the row
+    // and the strip above still read 「預設未回答」 about the same patient. One
+    // record, so the chip for the group that sign belongs to is lit.
+    render(
+      <ClinicalDecisionSupportView
+        result={heartFailureResult()}
+        locale="zh-TW"
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'present' } }}
+        onSaveClinicVitals={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('cdss-hf-congestion-sign-orthopnea-pnd'))
+      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-hf-congestion-sign-edema'))
+      .toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('cdss-hf-congestion-signs')).toHaveTextContent('已寫進鬱血證據表')
+  })
+
+  it('leaves the chip unlit for a sign answered 「無」 on the row', () => {
+    // 「看了，沒有」 is a finding, but it is not 「有」: the chip asks whether a
+    // sign was seen, and the answer was no.
+    render(
+      <ClinicalDecisionSupportView
+        result={heartFailureResult()}
+        locale="zh-TW"
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'absent' } }}
+        onSaveClinicVitals={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('cdss-hf-congestion-sign-orthopnea-pnd'))
+      .toHaveAttribute('aria-pressed', 'false')
   })
 
   it('refuses half a blood pressure and offers no entry without a save handler', () => {

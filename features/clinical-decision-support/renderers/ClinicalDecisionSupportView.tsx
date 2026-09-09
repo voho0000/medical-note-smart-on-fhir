@@ -52,6 +52,10 @@ import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import {
+  isCongestionGroupPresent,
+  toggleCongestionGroup,
+} from '../utils/apply-clinic-vitals'
+import {
   todayIsoDate,
   type ClinicVitals,
   type CongestionSignsAnswer,
@@ -1517,21 +1521,21 @@ function RecommendationDetail({
   const actionRequests = physicianInputRequests.filter(
     (request) => request.kind === 'hfpef-diagnosis-confirmation',
   )
-  // A sign ticked on this card is the same examination the congestion card
-  // offers, so it is written to the same place rather than to a second store.
-  const selectedSymptoms = clinicVitals?.congestionSigns ?? []
+  // A sign ticked on this card is the same examination the congestion card and
+  // the board's chips offer, so all three read and write one record.
+  const selectedSymptoms = (['edema', 'orthopnea-pnd', 'jvp-rales'] as const)
+    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
   const toggleSymptom = onSaveClinicVitals
     ? (id: string, selected: boolean) => {
-        const sign = id as CongestionSignsAnswer
-        const current = clinicVitals?.congestionSigns ?? []
-        const next = selected
-          ? [...current.filter((item) => item !== sign), sign]
-          : current.filter((item) => item !== sign)
         const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
         onSaveClinicVitals({
           ...(clinicVitals ?? { measuredOn }),
           measuredOn,
-          congestionSigns: next.length > 0 ? next : undefined,
+          signAnswers: toggleCongestionGroup(
+            clinicVitals?.signAnswers,
+            id as CongestionSignsAnswer,
+            selected,
+          ),
         })
       }
     : undefined

@@ -69,15 +69,11 @@ describe('answering a sign in the room', () => {
     expect(absent?.defaultEnabled).toBe(true)
   })
 
-  it('lets a row answer win over the three-group tap for the same sign', () => {
-    // The tap said 「有水腫」; the row then said 「pitting edema：無」, which is
-    // the more specific statement about the same examination.
+  it('lets the row and the group chip state the same examination once', () => {
+    // The chip and the row write the same record, so the last answer given for
+    // a sign is the one that stands — there is no second field to disagree.
     const row = congestionRow(
-      {
-        measuredOn: '2026-09-09',
-        congestionSigns: ['edema'],
-        signAnswers: { 'pitting-edema': 'absent' },
-      },
+      { measuredOn: '2026-09-09', signAnswers: { 'pitting-edema': 'absent' } },
       'congestion:pitting-edema',
     )
 
