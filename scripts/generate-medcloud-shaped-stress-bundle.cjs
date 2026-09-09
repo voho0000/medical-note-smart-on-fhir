@@ -13,7 +13,7 @@ const path = require('node:path')
 const { createHash } = require('node:crypto')
 const {
   dischargeSummaryLines, REASONS, LABS, ORGANIZATIONS, ORGANIZATION_DEPARTMENTS,
-  labValue, estimateTokens, validateBundleReferences,
+  estimateTokens, validateBundleReferences,
 } = require('./generate-oncology-stress-bundle.cjs')
 const { reportBody } = require('./generate-cloud-oncology-stress-bundle.cjs')
 
@@ -59,24 +59,107 @@ const MODULE_SCOPES = {
 const PAGE_TYPE_ORDER = ['encounters', 'observations', 'medications', 'diagnostic_reports',
   'procedures', 'document_references', 'service_requests']
 
-// Volume knobs. Every clinical resource costs its own JSON *plus* ~400 tokens of
-// bridge Provenance, so these are tuned against that tax, not against a flat
-// bundle. ADMISSIONS matches the storyline helper's 32-day admission grid.
-const ADMISSIONS = 96
-const DUPLICATE_DISCHARGES = 24
-const CHRONIC_CLINIC_VISITS = 60
-const ONCOLOGY_FOLLOW_UPS = 32
-const EMERGENCY_VISITS = 8
-const LAB_DRAWS = 12
-const INPATIENT_CXR_PER_ADMISSION = 1
-const RESTAGING_ROUNDS = 26
-const DENTAL_PROCEDURES = 12
-const REHAB_PROCEDURES = 8
-const PREVENTIVE_EVENTS = 3
-// Refills switch from a real 28/30-day cadence to a 182-day sampling this many
-// days before the drug's last row, so the multi-year history stays visible
-// without every chronic order costing its own ~1.2K tokens of bridge JSON.
-const CHRONIC_DENSE_WINDOW_DAYS = 620
+// ------------------------------------------------------------ volume scaling
+// Two different token numbers matter and they do NOT track each other:
+//
+//   * the bundle's own JSON tokens — every clinical resource costs its own JSON
+//     *plus* ~400 tokens of bridge Provenance;
+//   * the CLINICAL CONTEXT the application can put in front of a model (the
+//     harness "all-data ceiling" — every category, every version, all time).
+//     Provenance, ServiceRequests and the bridge's meta/extension scaffolding
+//     never reach it, so a bridge-shaped bundle spends most of its bytes on
+//     text the model never sees.
+//
+// The profiles below are tuned against the CEILING, which is what "a >1M-token
+// patient" means to a user watching the app's token meter. `small` reproduces
+// the original shape-regression size (fast, in-memory, ~2.3K entries); `large`
+// is the default and drives the ceiling past a million tokens by growing the
+// things that actually render: visits and their per-visit medications and
+// procedures, per-panel lab analytes, imaging reports and discharge summaries.
+const SCALE_PROFILES = {
+  small: {
+    admissions: 96,
+    duplicateDischarges: 24,
+    chronicClinicVisits: 60,
+    treatmentVisits: 0,
+    oncologyFollowUps: 32,
+    emergencyVisits: 8,
+    // null = each panel keeps its original narrow analyte list.
+    panelAnalytes: null,
+    standaloneLabDraws: 12,
+    admissionLabDraws: 0,
+    treatmentLabEvery: 0,
+    chronicLabEvery: 0,
+    inpatientCxrPerAdmission: 1,
+    treatmentImagingEvery: 0,
+    restagingRounds: 26,
+    inpatientProceduresPerAdmission: 0,
+    treatmentProcedureEvery: 0,
+    dentalProcedures: 12,
+    rehabProcedures: 8,
+    preventiveEvents: 3,
+    cancerScreenings: 8,
+    supportiveDrugsPerTreatmentVisit: 0,
+    dischargeCourseEntries: 0,
+    chronicDenseWindowDays: 620,
+  },
+  large: {
+    admissions: 96,
+    duplicateDischarges: 24,
+    // 28-day chronic clinic + weekly day-ward treatment across the 8 years.
+    chronicClinicVisits: 105,
+    treatmentVisits: 1100,
+    oncologyFollowUps: 96,
+    emergencyVisits: 24,
+    panelAnalytes: 20,
+    standaloneLabDraws: 0,
+    admissionLabDraws: 1,
+    treatmentLabEvery: 8,
+    chronicLabEvery: 1,
+    inpatientCxrPerAdmission: 6,
+    treatmentImagingEvery: 1,
+    restagingRounds: 176,
+    inpatientProceduresPerAdmission: 3,
+    treatmentProcedureEvery: 4,
+    dentalProcedures: 24,
+    rehabProcedures: 24,
+    preventiveEvents: 8,
+    cancerScreenings: 16,
+    supportiveDrugsPerTreatmentVisit: 12,
+    dischargeCourseEntries: 80,
+    chronicDenseWindowDays: 620,
+  },
+}
+const DEFAULT_SCALE = 'large'
+
+/**
+ * `scale` is a profile name, or an object of overrides (optionally with
+ * `base: '<name>'`) so a measurement run can move one knob without editing the
+ * generator. Unknown keys are rejected: a typo must not silently produce a
+ * differently-sized fixture that still claims to be the large profile.
+ */
+function resolveScaleProfile(scale) {
+  if (scale === undefined || scale === null) scale = DEFAULT_SCALE
+  const named = (name) => {
+    const profile = SCALE_PROFILES[name]
+    if (!profile) {
+      throw new Error(`Unknown scale "${name}". Known scales: ${Object.keys(SCALE_PROFILES).join(', ')}`)
+    }
+    return profile
+  }
+  if (typeof scale === 'string') return { ...named(scale), scale }
+  if (typeof scale !== 'object') throw new Error('scale must be a profile name or an overrides object')
+  const { base = DEFAULT_SCALE, ...overrides } = scale
+  const profile = { ...named(base) }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!(key in profile)) throw new Error(`Unknown scale knob "${key}"`)
+    if (value !== null && (!Number.isInteger(value) || value < 0)) {
+      throw new Error(`Scale knob "${key}" must be a non-negative integer or null`)
+    }
+    profile[key] = value
+  }
+  return { ...profile, scale: base, overridden: Object.keys(overrides).sort() }
+}
 
 // ------------------------------------------------------------------ helpers
 const stableId = (...parts) => createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 32)
@@ -124,6 +207,38 @@ const ACUTE_DRUGS = [
   ['H02AB02', 'AC01234100', 'DEXAMETHASONE 4MG TABLET', '得胖美松錠４毫克', 'DEXAMETHASONE', 5],
   ['A06AB06', 'AC11223100', 'SENNOSIDE 12MG TABLET', '番瀉苷錠１２毫克', 'SENNOSIDE A+B', 14],
 ]
+// Day-ward supportive-care prescriptions written at systemic-treatment visits.
+// Same claims shape as the acute list; kept separate so the medication mix has
+// a bucket that scales with visit volume rather than with admissions.
+const SUPPORTIVE_DRUGS = [
+  ['A04AA02', 'AC12312100', 'GRANISETRON 1MG TABLET', '康您適錠１毫克', 'GRANISETRON HCL', 3],
+  ['H02AB06', 'AC23423100', 'PREDNISOLONE 5MG TABLET', '培尼皮質醇錠５毫克', 'PREDNISOLONE', 5],
+  ['N02AX02', 'AC34534100', 'TRAMADOL 50MG CAPSULE', '舒敏錠５０毫克', 'TRAMADOL HCL', 7],
+  ['B03BB01', 'AC45645100', 'FOLIC ACID 5MG TABLET', '葉酸錠５毫克', 'FOLIC ACID', 28],
+  ['A02BC01', 'AC56756100', 'OMEPRAZOLE 20MG CAPSULE', '奧美拉唑腸溶膠囊２０毫克', 'OMEPRAZOLE', 14],
+  ['J02AC01', 'AC67867100', 'FLUCONAZOLE 100MG CAPSULE', '泰復肯膠囊１００毫克', 'FLUCONAZOLE', 7],
+  ['A03FA01', 'AC78978100', 'METOCLOPRAMIDE 10MG TABLET', '腸胃寧錠１０毫克', 'METOCLOPRAMIDE HCL', 5],
+  ['N05CF02', 'AC89089100', 'ZOLPIDEM 10MG TABLET', '使蒂諾斯錠１０毫克', 'ZOLPIDEM TARTRATE', 14],
+  ['A06AD15', 'AC90190100', 'MACROGOL 10G POWDER', '腸見樂散劑１０公克', 'MACROGOL 4000', 14],
+  ['B03BA03', 'AC10201100', 'HYDROXOCOBALAMIN 500MCG TABLET', '維生素Ｂ１２錠５００微公克', 'HYDROXOCOBALAMIN', 28],
+  ['A11CC05', 'AC21312100', 'CHOLECALCIFEROL 800IU TABLET', '維生素Ｄ３錠８００單位', 'COLECALCIFEROL', 28],
+  ['M05BA08', 'AC32423100', 'ZOLEDRONIC ACID 4MG TABLET SUBSTITUTE', '骨力強錠４毫克', 'ZOLEDRONIC ACID', 28],
+  ['N06AB03', 'AC43534100', 'FLUOXETINE 20MG CAPSULE', '百憂解膠囊２０毫克', 'FLUOXETINE HCL', 28],
+  ['R05CB01', 'AC54645100', 'ACETYLCYSTEINE 600MG TABLET', '愛克痰發泡錠６００毫克', 'ACETYLCYSTEINE', 7],
+  ['A03BA01', 'AC65756100', 'HYOSCINE 10MG TABLET', '補斯可伴錠１０毫克', 'HYOSCINE BUTYLBROMIDE', 5],
+  ['C03CA01', 'AC76867100', 'FUROSEMIDE 40MG TABLET', '來適泄錠４０毫克', 'FUROSEMIDE', 7],
+]
+// Invasive NHI items recorded against inpatient stays and day-ward visits. They
+// carry explicit surgical/biopsy wording, so the outbound AI domain filter keeps
+// them (unlike the dental and rehabilitation rows further down, which it drops
+// by design).
+const INVASIVE_PROCEDURES = [
+  ['47029C', '中心靜脈導管置入術'],
+  ['47075C', '胸腔穿刺引流術'],
+  ['48015C', '骨髓穿刺併切片術'],
+  ['64084B', '超音波導引經皮穿刺切片術'],
+  ['47081C', '腹腔穿刺引流術'],
+]
 // Long-running orders (90/120-day chronic-illness refills) — the "long-running
 // order" bucket that must stay current on days-supply alone, not on `status`.
 const LONG_RUNNING_DRUGS = [
@@ -131,13 +246,109 @@ const LONG_RUNNING_DRUGS = [
   ['H03AA01', 'AC33445100', 'LEVOTHYROXINE 75MCG TABLET', '昂特欣錠７５微公克', 'LEVOTHYROXINE SODIUM', 120],
 ]
 
-// NHI lab panels: order code + Chinese panel name + member analytes (indices into
-// the shared LABS table) + the HIS-local item name the bridge keeps alongside.
+// A real NHI panel bills one order code and returns 15-25 analytes; the shared
+// LABS table only carries 18 in total, so the widths below extend it. Same
+// 7-tuple shape ([LOINC, display, unit, generator low, generator high,
+// reference low, reference high]) and every LOINC is distinct, or the lab pivot
+// would merge two analytes into one series.
+const EXTRA_ANALYTES = [
+  // CBC / DC (indices 18-32)
+  ['787-2', 'Erythrocyte mean corpuscular volume', 'fL', 78, 102, 80, 100],
+  ['785-6', 'Erythrocyte mean corpuscular hemoglobin', 'pg', 24, 34, 27, 33],
+  ['786-4', 'Erythrocyte mean corpuscular hemoglobin concentration', 'g/dL', 30, 36, 32, 36],
+  ['788-0', 'Erythrocyte distribution width', '%', 12, 19, 11.5, 14.5],
+  ['789-8', 'Erythrocytes', '10*6/uL', 2.8, 4.8, 4, 5.2],
+  ['32623-1', 'Platelet mean volume', 'fL', 7.5, 12.5, 7.5, 11.5],
+  ['736-9', 'Lymphocytes/100 leukocytes', '%', 5, 45, 20, 40],
+  ['5905-5', 'Monocytes/100 leukocytes', '%', 2, 14, 2, 10],
+  ['713-8', 'Eosinophils/100 leukocytes', '%', 0, 9, 0, 5],
+  ['706-2', 'Basophils/100 leukocytes', '%', 0, 2, 0, 1],
+  ['770-8', 'Neutrophils/100 leukocytes', '%', 30, 88, 40, 75],
+  ['764-1', 'Band form neutrophils/100 leukocytes', '%', 0, 12, 0, 5],
+  ['17849-1', 'Reticulocytes/100 erythrocytes', '%', 0.3, 3.4, 0.5, 2.5],
+  ['58413-6', 'Nucleated erythrocytes/100 leukocytes', '%', 0, 4, 0, 0],
+  ['30376-8', 'Blasts/100 leukocytes', '%', 0, 3, 0, 0],
+  // Renal function and electrolytes (indices 33-47)
+  ['33914-3', 'Glomerular filtration rate estimated', 'mL/min/1.73m2', 22, 78, 60, 150],
+  ['19123-9', 'Magnesium', 'mg/dL', 1.4, 2.8, 1.7, 2.4],
+  ['2777-1', 'Phosphate', 'mg/dL', 2.2, 5.8, 2.5, 4.5],
+  ['3084-1', 'Urate', 'mg/dL', 3.1, 9.4, 2.6, 6],
+  ['2028-9', 'Carbon dioxide total', 'mmol/L', 16, 30, 22, 29],
+  ['1863-0', 'Anion gap', 'mmol/L', 6, 22, 8, 16],
+  ['2692-2', 'Osmolality', 'mOsm/kg', 272, 312, 275, 295],
+  ['1994-3', 'Calcium ionized', 'mmol/L', 0.94, 1.36, 1.12, 1.32],
+  ['33863-2', 'Cystatin C', 'mg/L', 0.7, 2.4, 0.5, 1],
+  ['2890-2', 'Protein urine', 'mg/dL', 0, 180, 0, 15],
+  ['2161-8', 'Creatinine urine', 'mg/dL', 30, 220, 20, 320],
+  ['2955-3', 'Sodium urine', 'mmol/L', 15, 145, 40, 220],
+  ['2828-2', 'Potassium urine', 'mmol/L', 8, 72, 25, 125],
+  ['2078-4', 'Chloride urine', 'mmol/L', 20, 180, 110, 250],
+  ['1834-1', 'Beta-2-microglobulin', 'mg/L', 1.2, 5.8, 0.8, 2.2],
+  // Liver function and nutrition (indices 48-62)
+  ['6768-6', 'Alkaline phosphatase', 'U/L', 55, 340, 40, 130],
+  ['2324-2', 'Gamma glutamyl transferase', 'U/L', 18, 290, 8, 61],
+  ['1968-7', 'Bilirubin direct', 'mg/dL', 0.1, 1.6, 0, 0.3],
+  ['2885-2', 'Protein total', 'g/dL', 5.1, 8.1, 6.4, 8.3],
+  ['10834-0', 'Globulin', 'g/dL', 1.9, 4.2, 2, 3.5],
+  ['2532-0', 'Lactate dehydrogenase', 'U/L', 150, 690, 140, 271],
+  ['3034-6', 'Transferrin', 'mg/dL', 150, 340, 200, 360],
+  ['1798-8', 'Amylase', 'U/L', 22, 160, 28, 100],
+  ['3040-3', 'Lipase', 'U/L', 10, 180, 13, 60],
+  ['5902-2', 'Prothrombin time', 's', 10.4, 17.8, 9.4, 12.5],
+  ['6301-6', 'INR in platelet poor plasma', '{INR}', 0.9, 1.9, 0.8, 1.2],
+  ['3173-2', 'aPTT', 's', 24, 48, 25, 35],
+  ['3255-7', 'Fibrinogen', 'mg/dL', 150, 620, 200, 400],
+  ['2614-6', 'Ammonia', 'umol/L', 18, 96, 11, 32],
+  ['2276-4', 'Ferritin', 'ng/mL', 60, 1800, 13, 150],
+  // Inflammation, metabolic and tumour markers (indices 63-80)
+  ['33959-8', 'Procalcitonin', 'ng/mL', 0.05, 8.4, 0, 0.5],
+  ['4537-7', 'Erythrocyte sedimentation rate', 'mm/h', 8, 92, 0, 20],
+  ['4548-4', 'Hemoglobin A1c/Hemoglobin total', '%', 5.6, 10.4, 4, 5.6],
+  ['2571-8', 'Triglyceride', 'mg/dL', 70, 420, 0, 150],
+  ['2085-9', 'Cholesterol in HDL', 'mg/dL', 24, 72, 40, 90],
+  ['13457-7', 'Cholesterol in LDL', 'mg/dL', 58, 196, 0, 130],
+  ['3016-3', 'Thyrotropin', 'uIU/mL', 0.2, 7.4, 0.4, 4],
+  ['3024-7', 'Thyroxine free', 'ng/dL', 0.6, 2.1, 0.8, 1.8],
+  ['2039-6', 'Carcinoembryonic antigen', 'ng/mL', 1.2, 42, 0, 5],
+  ['6875-9', 'Cancer antigen 15-3', 'U/mL', 12, 180, 0, 31],
+  ['2498-4', 'Iron', 'ug/dL', 18, 180, 50, 170],
+  ['2500-7', 'Iron binding capacity', 'ug/dL', 180, 420, 250, 450],
+  ['2132-9', 'Cobalamin', 'pg/mL', 160, 980, 200, 900],
+  ['2284-8', 'Folate', 'ng/mL', 2.1, 18, 3.1, 20],
+  ['48065-7', 'Fibrin D-dimer FEU', 'ug/mL', 0.3, 8.4, 0, 0.5],
+  ['10839-9', 'Troponin I cardiac', 'ng/mL', 0.01, 0.42, 0, 0.04],
+  ['33762-6', 'Natriuretic peptide B prohormone N-Terminal', 'pg/mL', 60, 2400, 0, 125],
+  ['2524-7', 'Lactate', 'mmol/L', 0.7, 5.6, 0.5, 2.2],
+]
+const ANALYTES = [...LABS, ...EXTRA_ANALYTES]
+// Same deterministic curve `labValue` applies to the shared table, extended over
+// the wider analyte list; identical output for the original 18 indices.
+const analyteValue = (admission, dateIndex, index) => {
+  const [, , , low, high] = ANALYTES[index]
+  const phase = ((admission * 37 + dateIndex * 19 + index * 11) % 101) / 100
+  return Number((low + phase * (high - low)).toFixed(index < 5 ? 1 : 2))
+}
+
+// NHI lab panels: order code + Chinese panel name + member analytes (indices
+// into ANALYTES) + the HIS-local item name the bridge keeps alongside.
+// `baseAnalytes` is the narrow original width the `small` profile keeps.
 const LAB_PANELS = [
-  { code: '08011C', name: '全套血液計數檢查 (CBC/DC)', loinc: '58410-2', analytes: [0, 1, 2, 3, 4] },
-  { code: '09021C', name: '生化學檢查 (腎功能及電解質)', loinc: '24362-6', analytes: [5, 6, 7, 8, 9] },
-  { code: '09029C', name: '生化學檢查 (肝功能及營養)', loinc: '24325-3', analytes: [10, 11, 12, 13, 14] },
-  { code: '09040C', name: '生化學檢查 (發炎及代謝)', loinc: '24323-8', analytes: [15, 16, 17] },
+  {
+    code: '08011C', name: '全套血液計數檢查 (CBC/DC)', loinc: '58410-2', baseAnalytes: 5,
+    analytes: [0, 1, 2, 3, 4, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+  },
+  {
+    code: '09021C', name: '生化學檢查 (腎功能及電解質)', loinc: '24362-6', baseAnalytes: 5,
+    analytes: [5, 6, 7, 8, 9, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+  },
+  {
+    code: '09029C', name: '生化學檢查 (肝功能及營養)', loinc: '24325-3', baseAnalytes: 5,
+    analytes: [10, 11, 12, 13, 14, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62],
+  },
+  {
+    code: '09040C', name: '生化學檢查 (發炎及代謝)', loinc: '24323-8', baseAnalytes: 3,
+    analytes: [15, 16, 17, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80],
+  },
 ]
 const IMAGING_ORDERS = {
   CXR: ['32001C', '胸部Ｘ光攝影（單張）', 'RAD', '放射線診療普通檢查'],
@@ -145,6 +356,41 @@ const IMAGING_ORDERS = {
   MRI: ['33084B', '磁振造影檢查－有／無造影劑', 'RAD', '放射線診療特殊檢查'],
   US: ['19009C', '腹部超音波檢查', 'RAD', '超音波檢查'],
 }
+// A real 出院病摘 for a two-week oncology admission records the stay day by day,
+// and 住院治療經過 / 出院衛教 are exactly the sections the application's
+// key-section extractor keeps. Growing them is therefore both the honest way to
+// make the document realistic and, per byte of bundle, by far the densest
+// clinical context in the fixture (Chinese text costs ~6 bundle bytes per
+// estimated token; a lab Observation costs ~1,000). Every sentence is invented.
+const COURSE_EVENTS = [
+  (v) => `體溫最高 ${v.temp} 度，畏寒感較前減輕，血液培養兩套持續無菌生長`,
+  (v) => `主訴噁心與食慾不佳，給予止吐藥後可進食約 ${v.intake} 成，未再嘔吐`,
+  (v) => `疼痛評分 ${v.pain} 分，依固定時程給予止痛藥並保留備用劑量`,
+  (v) => `白血球 ${v.wbc} 10*3/uL、絕對嗜中性球 ${v.anc} 10*3/uL，暫緩全身性治療並每日追蹤`,
+  (v) => `血色素 ${v.hb} g/dL，無黑便或明顯出血徵象，暫不輸血並持續觀察`,
+  (v) => `血中肌酸酐 ${v.cr} mg/dL，調整點滴速率並記錄每日出入量`,
+  () => '下肢無凹陷性水腫，可於病室內自行行走，物理治療師評估跌倒風險為中度',
+  () => '人工血管周圍皮膚無紅腫熱痛，抽回血順暢，換藥後保持乾燥',
+  () => '胸部Ｘ光顯示雙側肺底輕微塌陷，與前次比較無明顯變化，鼓勵深呼吸訓練',
+  () => '與病人及家屬說明本次治療目標與後續門診安排，家屬表示了解並同意計畫',
+  () => '營養師會診建議高蛋白高熱量飲食，並提供口服營養補充品每日兩份',
+  () => '夜間睡眠品質不佳，短效安眠藥後改善，白天精神狀況尚可、意識清楚',
+  () => '解便型態正常，暫停軟便劑後觀察一日，未再出現腹脹或腹痛',
+  (v) => `飯前血糖 ${v.glucose} mg/dL，依血糖值調整胰島素劑量並衛教低血糖處理`,
+  () => '會診感染科建議依培養結果調整抗生素；目前無新增感染徵象',
+  () => '心理師訪視，病人對疾病進展表達焦慮，已安排後續心理支持與家屬會談',
+]
+const DISCHARGE_EDUCATION = [
+  '返家後每日量測體溫兩次並記錄；體溫超過攝氏三十八度或出現寒顫，請立即至急診就醫。',
+  '人工血管每四週需回診沖洗一次；若周圍出現紅腫、疼痛、滲液或發燒，請提前回診。',
+  '飲食以高蛋白、少量多餐為原則，避免生食與未充分加熱的食物；每日飲水量依門診指示調整。',
+  '如出現連續兩日無法進食或服藥、明顯體重下降、新發生呼吸困難或無法控制的疼痛，請提前回診。',
+  '止痛藥請依固定時程服用，勿等疼痛難忍才使用；備用劑量使用後請記錄時間與效果。',
+  '返家後維持日常活動並避免跌倒；如需協助請使用助行器並由家屬陪同。',
+  '本次住院之檢驗與影像結果均已於門診說明；後續治療是否恢復由門診依當日檢驗結果決定。',
+  '本文件為合成測試資料，不得作為任何臨床判讀、用藥或治療依據。',
+]
+
 // Nine 成人預防保健 sections, in the bridge's fixed order.
 const PREVENTIVE_SECTIONS = [
   ['general-examination', '一般檢查', [['身高', 'cm'], ['體重', 'kg'], ['腰圍', 'cm'], ['身體質量指數', 'kg/m2']]],
@@ -159,10 +405,27 @@ const PREVENTIVE_SECTIONS = [
 ]
 
 // -------------------------------------------------------------- the builder
-function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
+function buildMedcloudShapedBundle({ extraRestagingRounds = 0, scale } = {}) {
   if (!Number.isInteger(extraRestagingRounds) || extraRestagingRounds < 0 || extraRestagingRounds > 200) {
     throw new Error('extraRestagingRounds must be an integer between 0 and 200')
   }
+  const profile = resolveScaleProfile(scale)
+  const ADMISSIONS = profile.admissions
+  const DUPLICATE_DISCHARGES = profile.duplicateDischarges
+  const CHRONIC_CLINIC_VISITS = profile.chronicClinicVisits
+  const TREATMENT_VISITS = profile.treatmentVisits
+  const ONCOLOGY_FOLLOW_UPS = profile.oncologyFollowUps
+  const EMERGENCY_VISITS = profile.emergencyVisits
+  const LAB_DRAWS = profile.standaloneLabDraws
+  const INPATIENT_CXR_PER_ADMISSION = profile.inpatientCxrPerAdmission
+  const RESTAGING_ROUNDS = profile.restagingRounds
+  const DENTAL_PROCEDURES = profile.dentalProcedures
+  const REHAB_PROCEDURES = profile.rehabProcedures
+  const PREVENTIVE_EVENTS = profile.preventiveEvents
+  const CHRONIC_DENSE_WINDOW_DAYS = profile.chronicDenseWindowDays
+  const panelAnalytes = (panel) => panel.analytes.slice(
+    0, profile.panelAnalytes === null ? panel.baseAnalytes : Math.min(profile.panelAnalytes, panel.analytes.length),
+  )
   const byPageType = Object.fromEntries(PAGE_TYPE_ORDER.map((key) => [key, []]))
   const provenances = []
   const counts = {}
@@ -338,6 +601,34 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
     })
   }
 
+  // Day-ward systemic-treatment visits: the weekly cadence that dominates an
+  // oncology chart. They share one ICD set per institution, so the app's
+  // encounter grouping collapses them into one block per institution and the
+  // per-visit medications / procedures below are what the context actually
+  // spends its tokens on.
+  const treatmentVisits = []
+  for (let t = 0; t < TREATMENT_VISITS; t++) {
+    const institution = t % 3
+    const start = day(spread(t, TREATMENT_VISITS, 45, 3058))
+    const id = stableId(PATIENT_ID, start, INSTITUTIONS[institution].id, 'treatment', `tseq:${t}`)
+    treatmentVisits.push({ t, id, start, institution })
+    emit('encounters', 'IMUE0008', {
+      resourceType: 'Encounter',
+      id,
+      status: 'finished',
+      class: { system: V3_ACT, code: 'AMB', display: 'ambulatory' },
+      type: [encounterKind('門診', 'outpatient'), encounterChannel()],
+      serviceType: { text: INSTITUTIONS[institution].department },
+      subject: SUBJECT,
+      period: { start, end: start },
+      serviceProvider: orgRef(institution),
+      reasonCode: [
+        reasonCode('C50.919', 'Breast carcinoma with metastatic recurrence', 'C50919 乳房惡性腫瘤併轉移復發'),
+        reasonCode('Z51.11', 'Encounter for antineoplastic chemotherapy', 'Z5111 抗腫瘤化學治療'),
+      ],
+    })
+  }
+
   const emergencies = []
   for (let e = 0; e < EMERGENCY_VISITS; e++) {
     const institution = e % 3
@@ -360,7 +651,7 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
 
   // ---------------------------------------------------- MedicationRequests
   const basics = []
-  const medicationCounts = { chronicRefills: 0, acuteCourses: 0, longRunningOrders: 0 }
+  const medicationCounts = { chronicRefills: 0, acuteCourses: 0, supportiveCourses: 0, longRunningOrders: 0 }
   const addMedication = (options) => {
     const { module, drug, authoredOn, days, encounterId, institution, setting, indication, remainingDays, basicId } = options
     const [atc7, nhiCode, english, chinese, ingredient] = drug
@@ -512,6 +803,20 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
     medicationCounts.acuteCourses++
   })
 
+  // Supportive-care rows written at every day-ward treatment visit. In a real
+  // MediCloud pull these are the bulk of the medication feed, and they are what
+  // makes the per-visit medication lines dominate the visit history.
+  treatmentVisits.forEach(({ t, id, institution, start }) => {
+    for (let s = 0; s < profile.supportiveDrugsPerTreatmentVisit; s++) {
+      const drug = SUPPORTIVE_DRUGS[(t * 3 + s) % SUPPORTIVE_DRUGS.length]
+      addMedication({
+        module: 'IMUE0008', drug, authoredOn: start, days: drug[5], encounterId: id, institution,
+        setting: '門診', indication: s % 2 === 0 ? ONC_DX : CKD_DX, remainingDays: 0,
+      })
+      medicationCounts.supportiveCourses++
+    }
+  })
+
   // Long-running 90/120-day orders across the last four years.
   LONG_RUNNING_DRUGS.forEach((drug, index) => {
     for (let cycle = 0; cycle < 8; cycle++) {
@@ -527,21 +832,14 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
   })
 
   // ------------------------------------------- Labs: ServiceRequest -> DR -> Obs
-  const drawDays = []
-  for (let d = 0; d < LAB_DRAWS; d++) {
-    // Alternate outpatient draws and inpatient day-1 draws across the 8 years.
-    // The last four draws cluster inside the final six months, so the default
-    // 6-month lab window is populated rather than only the 8-year history.
-    drawDays.push(d >= LAB_DRAWS - 4
-      ? { offset: [2905, 2960, 3010, 3060][d - (LAB_DRAWS - 4)], institution: 3, setting: 'outpatient' }
-      : d % 3 === 0
-        ? { offset: spread(d, LAB_DRAWS - 4, 20, 2860), institution: d % 3, setting: 'inpatient' }
-        : { offset: spread(d, LAB_DRAWS - 4, 20, 2860) + 9, institution: 3, setting: 'outpatient' })
-  }
-  drawDays.forEach((draw, drawIndex) => {
-    const date = day(draw.offset)
-    LAB_PANELS.forEach((panel, panelIndex) => {
-      const serviceRequestId = stableId(PATIENT_ID, 'service-request', `${date}:${panel.code}`)
+  // One draw = one ServiceRequest + one DiagnosticReport + one Observation per
+  // analyte, per ordered panel — the bridge's IMUE0010/IMUE0060 pairing.
+  let labDrawCount = 0
+  const addLabDraw = ({ date, institution, panels, seed, key = date }) => {
+    labDrawCount++
+    panels.forEach((panelIndex) => {
+      const panel = LAB_PANELS[panelIndex]
+      const serviceRequestId = stableId(PATIENT_ID, 'service-request', `${key}:${panel.code}`)
       emit('service_requests', 'IMUE0010', {
         resourceType: 'ServiceRequest',
         id: serviceRequestId,
@@ -554,18 +852,18 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
         },
         subject: SUBJECT,
         occurrenceDateTime: date,
-        performer: [orgRef(draw.institution)],
+        performer: [orgRef(institution)],
         reasonCode: [reasonCode('C50.919', 'Breast carcinoma with metastatic recurrence', 'C50919 乳房惡性腫瘤併轉移復發')],
         quantityQuantity: { value: 1 },
         extension: [{ url: SD('medcloud-source-local-occurrence-date-time'), valueString: `${date}T09:15` }],
       })
 
       const results = []
-      panel.analytes.forEach((labIndex) => {
-        const [loinc, display, unit, , , low, high] = LABS[labIndex]
-        const value = labValue(drawIndex * 7, panelIndex, labIndex)
+      panelAnalytes(panel).forEach((analyteIndex) => {
+        const [loinc, display, unit, , , low, high] = ANALYTES[analyteIndex]
+        const value = analyteValue(seed, panelIndex, analyteIndex)
         const abnormal = value < low || value > high
-        const observationId = stableId(PATIENT_ID, 'observation', `${date}:${panel.code}:${loinc}`)
+        const observationId = stableId(PATIENT_ID, 'observation', `${key}:${panel.code}:${loinc}`)
         results.push({ reference: `Observation/${observationId}` })
         emit('observations', 'IMUE0060', {
           resourceType: 'Observation',
@@ -583,7 +881,7 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
           },
           subject: SUBJECT,
           effectiveDateTime: date,
-          performer: [orgRef(draw.institution)],
+          performer: [orgRef(institution)],
           valueQuantity: { value, unit, system: UCUM, code: unit },
           referenceRange: [{ text: `${low}-${high}`, low: { value: low, unit }, high: { value: high, unit } }],
           interpretation: [{
@@ -594,7 +892,7 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
             }],
             text: abnormal ? '異常' : '正常',
           }],
-          specimen: { display: labIndex < 5 ? 'Whole blood' : 'Serum' },
+          specimen: { display: analyteIndex < 5 || (analyteIndex >= 18 && analyteIndex <= 32) ? 'Whole blood' : 'Serum' },
           method: { text: '合成測試分析方法' },
           extension: [{ url: SD('medcloud-source-report-instance-time'), valueString: '09:15' }],
         })
@@ -602,7 +900,7 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
 
       emit('diagnostic_reports', 'IMUE0060', {
         resourceType: 'DiagnosticReport',
-        id: stableId(PATIENT_ID, 'diagnostic-report', `${date}:${panel.code}`),
+        id: stableId(PATIENT_ID, 'diagnostic-report', `${key}:${panel.code}`),
         status: 'unknown',
         category: [{ coding: [{ system: V2_0074, code: 'LAB', display: 'Laboratory' }] }],
         code: {
@@ -615,10 +913,59 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
         subject: SUBJECT,
         result: results,
         effectiveDateTime: date,
-        performer: [orgRef(draw.institution)],
+        performer: [orgRef(institution)],
         basedOn: [{ reference: `ServiceRequest/${serviceRequestId}` }],
         extension: [{ url: SD('medcloud-source-report-instance-time'), valueString: '09:15' }],
       })
+    })
+  }
+
+  const ALL_PANELS = LAB_PANELS.map((_, index) => index)
+  // Inpatient day-1 / mid-stay / pre-discharge draws: the full panel set.
+  if (profile.admissionLabDraws > 0) {
+    admissions.forEach(({ a, institution }) => {
+      for (let d = 0; d < profile.admissionLabDraws; d++) {
+        addLabDraw({
+          date: day(a * 32 + 1 + Math.round((d * 11) / Math.max(1, profile.admissionLabDraws - 1 || 1))),
+          institution, panels: ALL_PANELS, seed: a * 7 + d, key: `inpatient:${a}:${d}`,
+        })
+      }
+    })
+  }
+  // Pre-treatment counts and chemistry before each day-ward visit.
+  if (profile.treatmentLabEvery > 0) {
+    treatmentVisits.forEach(({ t, institution, start }) => {
+      if (t % profile.treatmentLabEvery !== 0) return
+      // Full chemistry every fourth draw; counts-and-renal only in between.
+      const ordinal = t / profile.treatmentLabEvery
+      addLabDraw({
+        date: start, institution, panels: ordinal % 4 === 0 ? ALL_PANELS : [0, 1],
+        seed: 400 + t, key: `treatment:${t}`,
+      })
+    })
+  }
+  // Chronic-disease monitoring at the family-medicine clinic.
+  if (profile.chronicLabEvery > 0) {
+    clinicVisits.forEach(({ v, start }) => {
+      if (v % profile.chronicLabEvery !== 0) return
+      addLabDraw({ date: start, institution: 3, panels: [1, 2, 3], seed: 900 + v, key: `chronic:${v}` })
+    })
+  }
+
+  const drawDays = []
+  for (let d = 0; d < LAB_DRAWS; d++) {
+    // Alternate outpatient draws and inpatient day-1 draws across the 8 years.
+    // The last four draws cluster inside the final six months, so the default
+    // 6-month lab window is populated rather than only the 8-year history.
+    drawDays.push(d >= LAB_DRAWS - 4
+      ? { offset: [2905, 2960, 3010, 3060][d - (LAB_DRAWS - 4)], institution: 3, setting: 'outpatient' }
+      : d % 3 === 0
+        ? { offset: spread(d, LAB_DRAWS - 4, 20, 2860), institution: d % 3, setting: 'inpatient' }
+        : { offset: spread(d, LAB_DRAWS - 4, 20, 2860) + 9, institution: 3, setting: 'outpatient' })
+  }
+  drawDays.forEach((draw, drawIndex) => {
+    addLabDraw({
+      date: day(draw.offset), institution: draw.institution, panels: ALL_PANELS, seed: drawIndex * 7,
     })
   })
 
@@ -661,6 +1008,17 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
     for (let c = 0; c < INPATIENT_CXR_PER_ADMISSION; c++) addImagingReport('CXR', a, c, a * 32 + 1 + c * 2, institution)
     if (a % 3 === 0) addImagingReport('CT', a, 0, a * 32 + 4, institution)
   })
+  // Weekly chest films through systemic treatment, with an abdominal ultrasound
+  // at every sixth visit — the routine surveillance layer that makes an
+  // oncology chart carry thousands of reports rather than dozens.
+  if (profile.treatmentImagingEvery > 0) {
+    treatmentVisits.forEach(({ t, institution, start }) => {
+      if (t % profile.treatmentImagingEvery !== 0) return
+      const offset = Math.round((Date.parse(`${start}T00:00:00Z`) - EPOCH) / 86_400_000)
+      addImagingReport('CXR', 500 + t, 0, offset, institution)
+      if (t % 6 === 0) addImagingReport('US', 500 + t, 1, offset, institution)
+    })
+  }
   for (let r = 0; r < RESTAGING_ROUNDS + extraRestagingRounds; r++) {
     const institution = r % 3
     const base = spread(r, RESTAGING_ROUNDS + extraRestagingRounds, 40, 3046)
@@ -670,6 +1028,41 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
   }
 
   // ------------------------------------------------------------ Procedures
+  const addInvasiveProcedure = ({ index, date, institution, encounterId, setting, serial }) => {
+    const [code, name] = INVASIVE_PROCEDURES[index % INVASIVE_PROCEDURES.length]
+    emit('procedures', 'IMUE0030', {
+      resourceType: 'Procedure',
+      id: stableId(PATIENT_ID, 'medcloud-invasive-procedure', `${date}:${code}:${serial}`),
+      status: 'completed',
+      subject: SUBJECT,
+      // `code.text` is the NHI item label verbatim, exactly as the bridge
+      // carries it; the synthetic marker lives in `note`, not in the label the
+      // application renders and cites.
+      code: { coding: [{ system: NHI_PAYMENT, code, display: name }], text: name },
+      performedDateTime: date,
+      encounter: { reference: `Encounter/${encounterId}` },
+      performer: [{ actor: orgRef(institution) }],
+      note: [{ text: `合成${setting}處置紀錄：僅供載量測試，非真實手術或處置紀錄。` }],
+      extension: [{ url: SD('medcloud-procedure-quantity'), valueQuantity: { value: 1 } }],
+    })
+  }
+  admissions.forEach(({ a, id, institution }) => {
+    for (let p = 0; p < profile.inpatientProceduresPerAdmission; p++) {
+      addInvasiveProcedure({
+        index: a + p, date: day(a * 32 + 2 + p * 3), institution, encounterId: id,
+        setting: '住院', serial: `a${a}-${p}`,
+      })
+    }
+  })
+  if (profile.treatmentProcedureEvery > 0) {
+    treatmentVisits.forEach(({ t, id, institution, start }) => {
+      if (t % profile.treatmentProcedureEvery !== 0) return
+      addInvasiveProcedure({
+        index: t + 2, date: start, institution, encounterId: id, setting: '門診', serial: `t${t}`,
+      })
+    })
+  }
+
   for (let d = 0; d < DENTAL_PROCEDURES; d++) {
     const date = day(spread(d, DENTAL_PROCEDURES, 120, 3000))
     emit('procedures', 'IMUE0030', {
@@ -700,8 +1093,44 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
 
   // ----------------------------------- IMUE0070 discharge summaries (documents)
   let dischargeCount = 0
+  /**
+   * Expand 住院治療經過 into a day-by-day course and add a 出院衛教與追蹤計畫
+   * block. Both land inside key sections the extractor keeps, so the growth is
+   * visible in the reduced document view rather than only in the raw text.
+   */
+  const enrichDischargeLines = (admissionIndex, lines) => {
+    const entries = profile.dischargeCourseEntries
+    if (entries === 0) return lines
+    const start = Date.parse(`${day(admissionIndex * 32)}T00:00:00Z`)
+    const course = []
+    for (let index = 0; index < entries; index++) {
+      const stayDay = 1 + Math.floor((index * 13) / Math.max(1, entries))
+      const date = new Date(start + stayDay * 86_400_000).toISOString().slice(0, 10)
+      const seed = noise('course', admissionIndex, index)
+      const values = {
+        temp: (36.4 + ((seed >>> 3) % 26) / 10).toFixed(1),
+        intake: 2 + (seed % 8),
+        pain: 1 + ((seed >>> 5) % 9),
+        wbc: analyteValue(admissionIndex, index, 1),
+        anc: analyteValue(admissionIndex, index, 2),
+        hb: analyteValue(admissionIndex, index, 0),
+        cr: analyteValue(admissionIndex, index, 8),
+        glucose: analyteValue(admissionIndex, index, 16),
+      }
+      const first = COURSE_EVENTS[seed % COURSE_EVENTS.length](values)
+      const second = COURSE_EVENTS[(seed >>> 7) % COURSE_EVENTS.length](values)
+      course.push(`住院第 ${stayDay} 日（${date}）：${first}。${second}。`)
+    }
+    const anchor = lines.indexOf('合併症與併發症')
+    const output = [...lines]
+    output.splice(anchor < 0 ? output.length : anchor, 0, ...course)
+    output.push('出院衛教與追蹤計畫', ...DISCHARGE_EDUCATION.map(
+      (line, index) => `${index + 1}. ${line}`,
+    ))
+    return output
+  }
   const addDischargeSummary = (admission, custodian, suffix) => {
-    const lines = dischargeSummaryLines(admission.a)
+    const lines = enrichDischargeLines(admission.a, dischargeSummaryLines(admission.a))
     narrativeTokens += estimateTokens(lines.join('\n'))
     const html = `<div xmlns="http://www.w3.org/1999/xhtml">${lines.map((line) => `<p>${escapeXml(line)}</p>`).join('')}</div>`
     const bytes = Buffer.from(html, 'utf8')
@@ -827,8 +1256,8 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
   }
 
   // ------------------------------------------- IMUE0150 cancer screening
-  for (let s = 0; s < 8; s++) {
-    const date = day(spread(s, 8, 260, 2960))
+  for (let s = 0; s < profile.cancerScreenings; s++) {
+    const date = day(spread(s, profile.cancerScreenings, 260, 2960))
     emit('observations', 'IMUE0150', {
       resourceType: 'Observation',
       id: stableId(PATIENT_ID, 'cancer-screening', date),
@@ -887,8 +1316,16 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
     shapeReference: 'docs/testing/medcloud-bridge-bundle-shape.md',
     modules: Object.keys(MODULE_SCOPES),
     institutions: INSTITUTIONS.map(({ id, name }) => ({ id, name })),
+    scale: profile.scale,
+    ...(profile.overridden ? { scaleOverrides: profile.overridden } : {}),
+    scaleProfile: Object.fromEntries(
+      Object.keys(SCALE_PROFILES[profile.scale]).map((key) => [key, profile[key]]),
+    ),
     resourceCounts: counts,
     admissions: ADMISSIONS,
+    treatmentVisits: TREATMENT_VISITS,
+    labDraws: labDrawCount,
+    analytesPerPanel: LAB_PANELS.map((panel) => panelAnalytes(panel).length),
     dischargeSummaries: dischargeCount,
     duplicateDischargeSummaries: DUPLICATE_DISCHARGES,
     imagingCounts,
@@ -909,9 +1346,20 @@ function buildMedcloudShapedBundle({ extraRestagingRounds = 0 } = {}) {
 
 // ------------------------------------------------------------------ CLI
 if (require.main === module) {
-  const extraRestagingRounds = process.argv[2] === undefined ? 0 : Number(process.argv[2])
+  // `--scale=<name>` / MEDCLOUD_SCALE choose the volume profile (default
+  // `large`); `--extra-restaging=<n>` still nudges one knob without a profile
+  // edit. A bare numeric first argument keeps the original CLI working.
+  const args = process.argv.slice(2)
+  const flag = (name) => {
+    const match = args.find((argument) => argument.startsWith(`--${name}=`))
+    return match === undefined ? undefined : match.slice(name.length + 3)
+  }
+  const positional = args.find((argument) => !argument.startsWith('--'))
+  const extraRaw = flag('extra-restaging') ?? positional
+  const extraRestagingRounds = extraRaw === undefined ? 0 : Number(extraRaw)
+  const scale = flag('scale') ?? process.env.MEDCLOUD_SCALE ?? DEFAULT_SCALE
   const startedAt = Date.now()
-  const { bundle, manifest } = buildMedcloudShapedBundle({ extraRestagingRounds })
+  const { bundle, manifest } = buildMedcloudShapedBundle({ extraRestagingRounds, scale })
   manifest.referenceValidation = validateBundleReferences(bundle)
   const json = JSON.stringify(bundle, null, 2) + '\n'
   manifest.jsonBytes = Buffer.byteLength(json)
@@ -931,4 +1379,6 @@ if (require.main === module) {
   console.log(JSON.stringify({ output, ...manifest }, null, 2))
 }
 
-module.exports = { buildMedcloudShapedBundle, INSTITUTIONS, MODULE_SCOPES }
+module.exports = {
+  buildMedcloudShapedBundle, INSTITUTIONS, MODULE_SCOPES, SCALE_PROFILES, DEFAULT_SCALE,
+}

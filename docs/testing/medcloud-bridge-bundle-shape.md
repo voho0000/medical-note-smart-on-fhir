@@ -149,6 +149,62 @@ lowercased)` + the **first ICD** of `extractEncounterIcds(encounter)`
 (`src/core/utils/clinical-documents.utils.ts:65`) — both halves must exist or
 the document stays distinct.
 
+## Volume scaling (`--scale`)
+
+The generator takes a volume profile; the shape above is identical in both.
+
+```sh
+node scripts/generate-medcloud-shaped-stress-bundle.cjs                # large (default)
+node scripts/generate-medcloud-shaped-stress-bundle.cjs --scale=small  # fast shape fixture
+MEDCLOUD_SCALE=small node scripts/generate-medcloud-shaped-stress-bundle.cjs
+```
+
+`__tests__/scripts/medcloud-shaped-stress-bundle.test.ts` measures `small` in the
+default run (~2 s) and the shipped `large` profile only under
+`MEDCLOUD_LARGE_FIXTURE_TEST=1` (~13 s).
+
+`buildMedcloudShapedBundle({ scale })` also accepts an overrides object
+(`{ base: 'small', treatmentVisits: 6 }`) so a measurement run can move one knob;
+an unknown profile or knob name throws rather than silently resizing the fixture.
+
+| | `small` | `large` (default) |
+| --- | ---: | ---: |
+| Bundle entries | 2,301 | 82,115 |
+| Pretty-printed JSON | 8.3 MB | 270 MB (257.6 MiB) |
+| Encounters | 196 | 1,421 |
+| MedicationRequests | 263 | 13,479 |
+| Observations | 251 | 20,988 |
+| DiagnosticReports (lab / imaging) | 48 / 193 | 1,045 / 2,332 |
+| Procedures | 20 | 611 |
+| DocumentReferences (出院病摘) | 120 | 120 |
+| Provenance | 1,148 | 41,055 |
+| Harness all-data ceiling | 128,327 | **1,048,200** |
+
+Admissions stay at 96 with their 24 cross-institution duplicate 出院病摘 in both
+profiles — that pair is the deduplication contract, not a volume knob. What
+`large` grows is the clinical *story*: weekly day-ward treatment visits with a
+dozen NHI dispensing rows each, 20-analyte panels drawn at every visit and three
+times per admission, weekly chest films plus quarterly restaging, and a
+day-by-day 住院治療經過 in each 出院病摘.
+
+**The two token numbers are not the same number.** `manifest.estimatedTokens`
+counts the pretty-printed bundle JSON (67M for `large`); the harness *all-data
+ceiling* is what the application can actually put in front of a model (1,048,200).
+Provenance, ServiceRequests and the bridge's extension scaffolding are half the
+bytes and none of the context. Per estimated context token, the bundle costs
+roughly:
+
+| Source | bundle bytes per context token |
+| --- | ---: |
+| 出院病摘 narrative (Chinese) | ~6 |
+| imaging DiagnosticReport | ~230 |
+| MedicationRequest | ~330 |
+| Encounter (grouped outpatient) | ~420 |
+| lab Observation | ~1,050 |
+
+So a bridge-shaped chart cannot be sized from its JSON: a million *context*
+tokens needs hundreds of megabytes of bundle unless most of it is document text.
+
 ## Deviation notes for the synthetic fixture
 
 - The golden's MedicationRequest carries `groupIdentifier` on

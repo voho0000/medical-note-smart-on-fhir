@@ -9,8 +9,12 @@ import { isMedicationCurrentlyInUse, medicationExpectedEnd } from '@/src/core/ut
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const generator = require('../../scripts/generate-medcloud-shaped-stress-bundle.cjs') as {
-  buildMedcloudShapedBundle: (options?: { extraRestagingRounds?: number }) => { bundle: any; manifest: any }
+  buildMedcloudShapedBundle: (
+    options?: { extraRestagingRounds?: number; scale?: string | Record<string, unknown> },
+  ) => { bundle: any; manifest: any }
   MODULE_SCOPES: Record<string, string>
+  SCALE_PROFILES: Record<string, Record<string, number | null>>
+  DEFAULT_SCALE: string
 }
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { validateBundleReferences } = require('../../scripts/generate-oncology-stress-bundle.cjs')
@@ -18,13 +22,17 @@ const { validateBundleReferences } = require('../../scripts/generate-oncology-st
 const AS_OF_MS = Date.parse('2026-09-03T00:00:00Z')
 const DAY_MS = 86_400_000
 
-describe('Medcloud-bridge-shaped synthetic oncology fixture', () => {
+// The default run measures the `small` profile: same shape contract, ~2.3K
+// entries, ~1.5 s. The `large` profile is the shipped fixture (82K entries,
+// 270 MB of pretty-printed JSON) and takes about a minute to build and parse in
+// jsdom, so it is gated behind MEDCLOUD_LARGE_FIXTURE_TEST=1.
+describe('Medcloud-bridge-shaped synthetic oncology fixture (small profile)', () => {
   let fixture: ReturnType<typeof generator.buildMedcloudShapedBundle>
   let parsed: NonNullable<ReturnType<typeof LocalBundleService.parse>>
   let documents: ReturnType<typeof listClinicalDocuments>
 
   beforeAll(() => {
-    fixture = generator.buildMedcloudShapedBundle()
+    fixture = generator.buildMedcloudShapedBundle({ scale: 'small' })
     const result = LocalBundleService.parse(fixture.bundle)
     if (!result) throw new Error('Application importer rejected the bridge-shaped fixture')
     parsed = result
@@ -147,7 +155,7 @@ describe('Medcloud-bridge-shaped synthetic oncology fixture', () => {
     expect(keySections.text.length).toBeLessThan((discharges[0].text ?? '').length)
   })
 
-  it('keeps the bridge lab / imaging / preventive conventions and exceeds a million tokens', () => {
+  it('keeps the bridge lab / imaging / preventive conventions and exceeds a million JSON tokens', () => {
     const resources = fixture.bundle.entry.map(({ resource }: any) => resource)
     const labObservation = resources.find((resource: any) =>
       resource.resourceType === 'Observation'
@@ -184,4 +192,114 @@ describe('Medcloud-bridge-shaped synthetic oncology fixture', () => {
       })
     }
   })
+})
+
+describe('volume scaling', () => {
+  it('defaults to the large profile and rejects an unknown scale or knob', () => {
+    expect(generator.DEFAULT_SCALE).toBe('large')
+    expect(Object.keys(generator.SCALE_PROFILES).sort()).toEqual(['large', 'small'])
+    // Every knob exists in both profiles, so an override can never silently
+    // apply to one shape and not the other.
+    expect(Object.keys(generator.SCALE_PROFILES.small).sort())
+      .toEqual(Object.keys(generator.SCALE_PROFILES.large).sort())
+    expect(() => generator.buildMedcloudShapedBundle({ scale: 'medium' })).toThrow(/Unknown scale/)
+    expect(() => generator.buildMedcloudShapedBundle({ scale: { base: 'small', typo: 4 } }))
+      .toThrow(/Unknown scale knob/)
+    expect(() => generator.buildMedcloudShapedBundle({ scale: { base: 'small', treatmentVisits: -1 } }))
+      .toThrow(/non-negative integer/)
+  })
+
+  it('grows visits, per-visit medications, lab width and document narrative on demand', () => {
+    const base = generator.buildMedcloudShapedBundle({ scale: 'small' })
+    const grown = generator.buildMedcloudShapedBundle({
+      scale: {
+        base: 'small',
+        treatmentVisits: 6,
+        supportiveDrugsPerTreatmentVisit: 3,
+        panelAnalytes: 20,
+        dischargeCourseEntries: 16,
+      },
+    })
+    expect(grown.manifest.scale).toBe('small')
+    expect(grown.manifest.scaleOverrides).toEqual([
+      'dischargeCourseEntries', 'panelAnalytes', 'supportiveDrugsPerTreatmentVisit', 'treatmentVisits',
+    ])
+    expect(grown.manifest.resourceCounts.Encounter)
+      .toBe(base.manifest.resourceCounts.Encounter + 6)
+    expect(grown.manifest.medicationMix.supportiveCourses).toBe(18)
+    // Wider panels are more analytes per draw, not more draws.
+    expect(grown.manifest.labDraws).toBe(base.manifest.labDraws)
+    expect(grown.manifest.analytesPerPanel).toEqual([20, 20, 20, 20])
+    expect(base.manifest.analytesPerPanel).toEqual([5, 5, 5, 3])
+    expect(grown.manifest.resourceCounts.Observation)
+      .toBeGreaterThan(base.manifest.resourceCounts.Observation * 3)
+    // The day-by-day 住院治療經過 lands inside a section the key-section
+    // extractor keeps, so the reduced document view grows with it.
+    const keptText = (fixture: any) => {
+      const document = listClinicalDocuments(
+        LocalBundleService.parse(fixture.bundle)!.collection,
+      ).find((entry) => entry.isDischargeSummary)!
+      return extractDocumentKeySections(document.text ?? '').text
+    }
+    const grownKept = keptText(grown)
+    expect(grownKept.length).toBeGreaterThan(keptText(base).length * 1.5)
+    expect(grownKept).toContain('住院第 1 日')
+    expect(grownKept).toContain('出院衛教與追蹤計畫')
+    expect(grownKept).not.toContain('理學檢查發現')
+    expect(validateBundleReferences(grown.bundle).resourceCount)
+      .toBe(grown.bundle.entry.length)
+  }, 60_000)
+})
+
+// The shipped fixture. Building and parsing 82K entries in jsdom costs about a
+// minute, so it only runs on request:
+//   MEDCLOUD_LARGE_FIXTURE_TEST=1 npx jest __tests__/scripts/medcloud-shaped
+const describeLarge = process.env.MEDCLOUD_LARGE_FIXTURE_TEST === '1' ? describe : describe.skip
+describeLarge('Medcloud-bridge-shaped synthetic oncology fixture (large profile)', () => {
+  let fixture: ReturnType<typeof generator.buildMedcloudShapedBundle>
+  let parsed: NonNullable<ReturnType<typeof LocalBundleService.parse>>
+
+  beforeAll(() => {
+    fixture = generator.buildMedcloudShapedBundle({ scale: 'large' })
+    const result = LocalBundleService.parse(fixture.bundle)
+    if (!result) throw new Error('Application importer rejected the large bridge-shaped fixture')
+    parsed = result
+  }, 600_000)
+
+  it('carries the volume the >1M-token clinical context needs', () => {
+    expect(fixture.manifest.scale).toBe('large')
+    expect(fixture.bundle.entry).toHaveLength(82_115)
+    expect(fixture.manifest.resourceCounts).toMatchObject({
+      Encounter: 1_421,
+      MedicationRequest: 13_479,
+      Observation: 20_988,
+      DiagnosticReport: 3_377,
+      Procedure: 611,
+      DocumentReference: 120,
+      Provenance: 41_055,
+    })
+    // Admissions and their 出院病摘 stay at the documented size; the growth is
+    // in visits, per-visit medications, panel width and imaging.
+    expect(fixture.manifest.admissions).toBe(96)
+    expect(fixture.manifest.dischargeSummaries).toBe(120)
+    expect(fixture.manifest.duplicateDischargeSummaries).toBe(24)
+    const imagingTotal = Object.values(fixture.manifest.imagingCounts as Record<string, number>)
+      .reduce((sum, value) => sum + value, 0)
+    expect(imagingTotal).toBeGreaterThanOrEqual(2_000)
+    expect(fixture.manifest.medicationMix).toMatchObject({
+      chronicRefills: 186, acuteCourses: 77, supportiveCourses: 13_200, longRunningOrders: 16,
+    })
+    expect(validateBundleReferences(fixture.bundle))
+      .toEqual({ resourceCount: 82_115, resolvedReferences: 172_995 })
+  }, 600_000)
+
+  it('still deduplicates the cross-institution 出院病摘 into 24 admission groups', () => {
+    const documents = listClinicalDocuments(parsed.collection)
+    expect(documents.filter((document) => document.isDischargeSummary)).toHaveLength(120)
+    expect(resolveSelectedDocuments(documents, 'deduplicatedAdmissions', [])).toHaveLength(24)
+    const medications = parsed.collection.medications as any[]
+    expect(medications.every((medication) => medication.status === 'unknown')).toBe(true)
+    expect(medications.filter((medication) => isMedicationCurrentlyInUse(medication, AS_OF_MS)).length)
+      .toBeGreaterThanOrEqual(6)
+  }, 600_000)
 })

@@ -189,32 +189,51 @@ npx jest --runInBand __tests__/scripts/context-reduction-report.test.ts --silent
 
 ---
 
-## Medcloud-bridge-shaped 1M+ token 合成病歷（2026-09-04 追加）
+## Medcloud-bridge-shaped 1M-token clinical context 合成病歷（2026-09-09 更新）
 
 `docs/testing/medcloud-bridge-bundle-shape.md` 記錄 bridge 實際輸出形狀；
-`scripts/generate-medcloud-shaped-stress-bundle.cjs` 依該形狀產生確定性 fixture：
-8.3 MB／2,301 entries／**2,171,424 estimated tokens**（heuristic 跑在 pretty-print 後的 JSON 上），
-2018-04 至 2026-08 共 96 次住院、120 份 IMUE0070 出院病摘（含 24 份跨院重複，去重後 24 組）、
-193 份 IMUE0130 影像報告、263 筆 `status: unknown` 的 MedicationRequest、每個 clinical resource 一筆 Provenance。
+`scripts/generate-medcloud-shaped-stress-bundle.cjs` 依該形狀產生確定性 fixture，
+並提供 `--scale=small|large`（預設 `large`，也可用 `MEDCLOUD_SCALE`）。
+
+**`large`（出貨用）**：270 MB／82,115 entries／manifest `estimatedTokens` 67,293,853（JSON 指標），
+2018-04 至 2026-08：96 次住院、1,100 次化療日間病房、105 次慢性病門診、96 次腫瘤門診追蹤、24 次急診（共 1,421 Encounter）、
+13,479 筆 `status: unknown` MedicationRequest、20,988 筆 Observation（四個 panel 各 20 項）、
+2,332 份 IMUE0130 影像報告、1,045 份檢驗 DiagnosticReport、611 筆處置、
+120 份 IMUE0070 出院病摘（含 24 份跨院重複，去重後仍 24 組；每份含逐日住院治療經過）、
+每個 clinical resource 一筆 Provenance（41,055 筆）。
+**`small`** 維持原本 8.3 MB／2,301 entries 的形狀回歸尺寸，預設測試跑這一份。
 
 重新產生（輸出在 gitignore 的 `artifacts/synthetic-medcloud/`，Downloads 那份是手動複製）：
 
 ```powershell
-node scripts/generate-medcloud-shaped-stress-bundle.cjs
-Copy-Item artifacts/synthetic-medcloud/synthetic-medcloud-oncology-v1-2171424.fhir.json $HOME/Downloads/
+$env:NODE_OPTIONS='--max-old-space-size=12288'
+node scripts/generate-medcloud-shaped-stress-bundle.cjs            # large，約 3 秒
+node scripts/generate-medcloud-shaped-stress-bundle.cjs --scale=small
+Copy-Item artifacts/synthetic-medcloud/synthetic-medcloud-oncology-v1-67293853.fhir.json $HOME/Downloads/
 ```
 
-量測（外部 fixture 路徑；`CONTEXT_REDUCTION_WIDEN=1` 會另外寫 `-widened.md`）：
+量測（外部 fixture 路徑；`CONTEXT_REDUCTION_WIDEN=1` 會另外寫 `-widened.md`；每次約 3 分鐘）：
 
 ```powershell
-$env:TZ='Asia/Taipei'; $env:CONTEXT_REDUCTION_REPORT='1'
-$env:CONTEXT_REDUCTION_FIXTURE="$HOME/Downloads/synthetic-medcloud-oncology-v1-2171424.fhir.json"
+$env:TZ='Asia/Taipei'; $env:CONTEXT_REDUCTION_REPORT='1'; $env:NODE_OPTIONS='--max-old-space-size=12288'
+$env:CONTEXT_REDUCTION_FIXTURE="$HOME/Downloads/synthetic-medcloud-oncology-v1-67293853.fhir.json"
 $env:CONTEXT_REDUCTION_AS_OF='2026-09-03'; $env:CONTEXT_REDUCTION_OUT_DIR='<repo 外目錄>'
 npx jest --runInBand __tests__/scripts/context-reduction-report.test.ts --silent=false
 ```
 
-結果：`all-data` 128,327 → `full` 25,568 tokens（Documents 佔 21,016），100K／150K 預算下皆選 `full`，
-4K 預算才降到 `tight`。**2.17M 的 JSON 只換到 25.6K 的預設 context** —— bridge 形狀有近 50% 是
-Provenance／meta，永遠不會進 context，所以「病歷 token 數」不能直接拿 JSON 大小推估。
+結果（asOf 2026-09-03）：**`all-data` 1,048,200 tokens**（前一版只有 128,327）→ `full`（預設 filters）145,053。
+`full` 的分區成本：Documents 111,925／Visits & Treatment History 17,401／Patient's Medications 5,419／
+Procedures 4,830／Lab Reports 4,347／Imaging Reports 320。
+100K 預算（截字與否皆同）選 `prioritized` 96,949（`full` 145,053 已超標）；150K 預算選 `full`；
+4K 預算選 `prioritized` 3,978（4 passes，head 3,751＋tail 11,231 字元）。
+chosen tier 的 key-fact 遺失：100K 時 729 項中只掉 10 項（都是出院病摘），4K 時掉大半。
+`CONTEXT_REDUCTION_WIDEN=1` 的 widened profile（labDepth 16／labs 3y／all imaging 3y）＝168,692，
+其中 Imaging Reports 從 320 漲到 21,438（826 items）、Lab Reports 4,347 → 6,867。
+
+**兩個 token 數字不是同一件事**：manifest 的 67M 是 pretty-print JSON 的 heuristic；
+能真正送進模型的 all-data ceiling 是 1.05M。bridge 形狀有一半位元組是 Provenance／extension，
+永遠不會進 context。每個 context token 要付的 bundle 位元組：出院病摘中文敘述約 6、影像報告約 230、
+用藥約 330、門診 Encounter 約 420、檢驗 Observation 約 1,050 —— 所以「病歷 token 數」不能拿 JSON 大小推估，
+而 1M context 的代價就是 270 MB 的 bundle。這是載量 fixture，就診密度不是真實利用率。
 
 > Commit `7f508c18` 的 subject 行開頭多了一個 `@`（`@ docs(handoff): …`），合併前請在下一台機器 amend 掉。
