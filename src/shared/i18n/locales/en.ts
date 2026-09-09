@@ -71,6 +71,7 @@ export const en = {
     expandClinicalSummary: 'Expand clinical summary panel',
     collapseFeatures: 'Collapse features panel',
     expandFeatures: 'Expand features panel',
+    evenSplit: 'Back to an even split',
     summaryReady: 'AI summary ready',
     summaryReadyExpand: 'AI summary ready — expand to read it',
     focusOverview: 'Focus overview',

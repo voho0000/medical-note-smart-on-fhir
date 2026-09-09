@@ -72,6 +72,7 @@ export const zhTW = {
     expandClinicalSummary: '展開臨床摘要面板',
     collapseFeatures: '收合功能面板',
     expandFeatures: '展開功能面板',
+    evenSplit: '回到左右各半',
     summaryReady: 'AI 摘要已完成',
     summaryReadyExpand: 'AI 摘要已完成，展開查看',
     focusOverview: '專注總覽',

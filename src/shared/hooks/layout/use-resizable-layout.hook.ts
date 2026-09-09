@@ -111,10 +111,18 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
     }
   }, [isDragging, minWidth, maxWidth])
 
+  // `setLeftWidth` is exported so the divider's controls can move the split to
+  // a named stop (see the shell's step-then-collapse handlers) rather than
+  // only ever jumping to a collapsed panel.
+  const setWidth = useCallback((percent: number) => {
+    setLeftWidth(Math.min(maxWidth, Math.max(minWidth, percent)))
+  }, [maxWidth, minWidth])
+
   return {
     leftWidth,
     isDragging,
     containerRef,
     handleMouseDown,
+    setLeftWidth: setWidth,
   }
 }

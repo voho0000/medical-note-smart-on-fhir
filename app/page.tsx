@@ -51,11 +51,16 @@ import {
 const StableClinicalSummaryFeature = memo(ClinicalSummaryFeature)
 const StableRightPanelFeature = memo(RightPanelFeature)
 
+// The split's centre stop, and the slack that keeps a divider dragged to
+// 49.7% from reading as "not centred".
+const EVEN_SPLIT_PCT = 50
+const SPLIT_EPSILON_PCT = 1
+
 function PageContent() {
   const { t } = useLanguage()
 
   // Resizable layout logic (extracted to custom hook)
-  const { leftWidth, containerRef, handleMouseDown } = useResizableLayout({
+  const { leftWidth, containerRef, handleMouseDown, setLeftWidth } = useResizableLayout({
     initialWidth: 50,
     minWidth: 30,
     maxWidth: 70,
@@ -80,6 +85,30 @@ function PageContent() {
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
+
+  // Divider controls step, they do not jump. Once the split opens wider than
+  // half (the overview asks for ~64% so its 2×2 fits), a single click that
+  // went straight to a collapsed panel skipped the one position most people
+  // actually want next — the even split. So each control first travels back to
+  // centre, and only collapses that side on the click after. Coming from the
+  // far side there is no centre left to travel to, so it collapses at once.
+  const stepsToCentre = (direction: 'left' | 'right') => (
+    direction === 'left'
+      ? leftWidth > EVEN_SPLIT_PCT + SPLIT_EPSILON_PCT
+      : leftWidth < EVEN_SPLIT_PCT - SPLIT_EPSILON_PCT
+  )
+  const stepLeft = () => (
+    stepsToCentre('left') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsed('left')
+  )
+  const stepRight = () => (
+    stepsToCentre('right') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsed('right')
+  )
+  const stepLeftLabel = stepsToCentre('left')
+    ? t.header.evenSplit
+    : t.header.collapseClinicalSummary
+  const stepRightLabel = stepsToCentre('right')
+    ? t.header.evenSplit
+    : t.header.collapseFeatures
 
   // A summary that finished while the feature panel was collapsed has no way
   // to announce itself — the panel IS its only surface. The rail says so, and
@@ -583,10 +612,10 @@ function PageContent() {
           <ClinicalWorkspaceDivider
             label={t.header.resizePanels}
             onDragStart={handleMouseDown}
-            onCollapseLeft={() => setCollapsed('left')}
-            onCollapseRight={() => setCollapsed('right')}
-            leftCollapseLabel={t.header.collapseClinicalSummary}
-            rightCollapseLabel={t.header.collapseFeatures}
+            onCollapseLeft={stepLeft}
+            onCollapseRight={stepRight}
+            leftCollapseLabel={stepLeftLabel}
+            rightCollapseLabel={stepRightLabel}
             showCollapseActions={!detailVisible}
           />
         )}
