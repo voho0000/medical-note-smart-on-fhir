@@ -304,19 +304,27 @@ describe('the diagnosis reading the host shows', () => {
     expect(summary?.verdict).toContain('醫師已確認')
   })
 
-  it('carries the published score as a floor, with what could not be measured', () => {
-    const score = diagnosticSummaryOf(diagnosisCard(suspectedHfpEf))?.score
+  it('carries both published scores as floors, with what could not be measured', () => {
+    const scores = diagnosticSummaryOf(diagnosisCard(suspectedHfpEf))?.scores ?? []
+    const byName = (name: string) => scores.find((item) => item.name === name)
 
-    expect(score?.name).toBe('HFA-PEFF')
-    expect(score?.maximum).toBe(6)
+    expect(scores.map((item) => item.name)).toEqual(['HFA-PEFF', 'H2FPEF'])
+
     // This profile holds no echocardiographic measurement and no natriuretic
-    // peptide, so the score is 0 — and a floor, never a rule-out.
-    expect(score?.value).toBe(0)
-    expect(score?.isFloor).toBe(true)
-    expect(score?.unmeasured?.length).toBeGreaterThan(0)
+    // peptide, so HFA-PEFF is 0 — and a floor, never a rule-out.
+    expect(byName('HFA-PEFF')).toMatchObject({ value: 0, maximum: 6, isFloor: true })
+    expect(byName('HFA-PEFF')?.unmeasured?.length).toBeGreaterThan(0)
     // Attributed to the body that published it, not to the guideline that
     // merely cites it.
-    expect(score?.source).toContain('Heart Failure Association')
+    expect(byName('HFA-PEFF')?.source).toContain('Heart Failure Association')
+
+    // H2FPEF: age 68 is its one point here, and BMI, PASP and E/e-prime are all
+    // unmeasured, so it is a floor too.
+    expect(byName('H2FPEF')).toMatchObject({ value: 1, maximum: 9, isFloor: true })
+    expect(byName('H2FPEF')?.source).toContain('Circulation 2018')
+    // The paper maps score to probability in a figure, so no percentage is
+    // printed and no rule-in cut-off is invented.
+    expect(byName('H2FPEF')?.bandLabel).not.toMatch(/%/)
   })
 
   it('reads nothing from a recommendation the published package built', () => {

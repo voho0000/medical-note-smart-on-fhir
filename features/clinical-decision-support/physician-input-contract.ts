@@ -120,7 +120,7 @@ export interface DiagnosticSummary {
   criteria: readonly CriterionSummary[]
   supportingParameterCount?: number
   confirmedByClinician?: boolean
-  score?: DiagnosticScore
+  scores?: readonly DiagnosticScore[]
 }
 
 function toScore(value: unknown): DiagnosticScore | undefined {
@@ -194,7 +194,14 @@ export function diagnosticSummaryOf(
       ? { supportingParameterCount: record.supportingParameterCount }
       : {}),
     ...(record.confirmedByClinician === true ? { confirmedByClinician: true } : {}),
-    ...(toScore(record.score) ? { score: toScore(record.score) } : {}),
+    ...(Array.isArray(record.scores)
+      ? (() => {
+        const scores = record.scores
+          .map(toScore)
+          .filter((item): item is DiagnosticScore => Boolean(item))
+        return scores.length > 0 ? { scores } : {}
+      })()
+      : {}),
   }
 }
 
