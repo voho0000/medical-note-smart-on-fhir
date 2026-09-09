@@ -354,17 +354,16 @@ describe('MedicationItem audience-aware compact terminology', () => {
         .not.toHaveClass('font-semibold', 'text-foreground/80')
       expect(context).not.toHaveTextContent('新北市聯合醫院')
       expect(classification).toHaveTextContent('新北市聯合醫院')
-      // Institution remains its own classification element. On phone-sized
-      // containers it stays inline; at 456px+ it becomes the second-column
-      // row directly below ICD without a JavaScript resize path.
+      // Narrow panels use a dedicated third line for classification.
       expect(schedule).toContainElement(classification)
-      expect(schedule).toHaveClass('@min-[456px]:contents')
+      expect(schedule).toHaveClass('contents')
       expect(container.querySelector('[data-medication-regimen]')).toHaveClass(
-        '@min-[456px]:col-start-1',
-        '@min-[456px]:row-start-2',
+        'col-start-1',
+        'row-start-2',
       )
       expect(classification).toHaveClass(
-        '@min-[456px]:col-start-2',
+        'col-start-2',
+        'row-start-3',
         '@min-[456px]:row-start-2',
       )
       expect(container.querySelector('[data-medication-total-quantity]'))
@@ -372,23 +371,16 @@ describe('MedicationItem audience-aware compact terminology', () => {
       expect(container.querySelector('[data-medication-supply-days]'))
         .toHaveTextContent('（30 天）')
       expect(dateText()).toHaveAttribute('title', '2026/08/05 → 2026/09/04（30 天）')
-      expect(dateText()).toHaveClass('overflow-hidden', 'whitespace-nowrap')
-      expect(dateText()).not.toHaveClass('truncate')
+      expect(dateText()).toHaveClass('truncate')
+      expect(container.querySelector('[data-medication-schedule-end]')).toHaveTextContent('→ 26/09/04')
       // The date yields first on constrained rows so frequency and total
       // quantity remain visible; the full range stays in the title.
       expect(dateText().parentElement).toHaveClass('shrink')
       expect(screen.getByText('1 錠').parentElement).toHaveClass('shrink-0')
-      // The identity wrapper dissolves at every width now, so the regimen line
-      // spans columns 1-2 instead of being trapped beside the clinical lane.
+      // The identity wrapper dissolves into the two-line grid.
       expect(container.querySelector('[data-medication-cell="identity"]'))
         .toHaveClass('contents')
-      expect(schedule).toHaveClass(
-        'col-span-2',
-        'row-start-3',
-        // Leaves column 3 to the supply lane, which now spans both lines.
-        '@min-[312px]:col-span-2',
-        '@min-[312px]:row-start-2',
-      )
+      expect(schedule).toHaveClass('contents')
       // ICD remains a single flex line while classification independently
       // occupies the same column's second grid row on wide containers.
       expect(context).toHaveClass('flex-1')
@@ -406,14 +398,16 @@ describe('MedicationItem audience-aware compact terminology', () => {
       expect(container.querySelector('[data-medication-total-quantity]')).toBeNull()
       expect(container.querySelector('[data-medication-supply-days]')).toBeNull()
       expect(dateText()).toHaveTextContent('26/07/22 → 26/08/12')
+      expect(container.querySelector('[data-medication-schedule-end]')).not.toHaveClass('hidden')
     })
 
     it('keeps the complete coverage range for a stopped medication', () => {
       mockAudience = 'medical'
       const medication = { ...medicationRow('AMOXICILLIN 500 MG'), isInactive: true }
-      render(<MedicationItem medication={medication} />)
+      const { container } = render(<MedicationItem medication={medication} />)
 
       expect(dateText()).toHaveTextContent('26/07/22 → 26/08/12（21 天）')
+      expect(container.querySelector('[data-medication-schedule-end]')).not.toHaveClass('hidden')
     })
 
     it('keeps both years when a medication range crosses New Year', () => {
@@ -457,20 +451,10 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const category = screen.getByText('生殖泌尿道平滑肌鬆弛劑').parentElement!
     const icd = screen.getByLabelText('N40.0 良性攝護腺增生未伴有下泌尿道症狀')
 
-    // Thresholds are px, not rem: the root font-size is 12px here, so a rem
-    // threshold would shift with the reader's font-size setting. The values are
-    // the ones this layout has always used in practice. The source/diagnosis
-    // column gets the larger flexible share, while the prescription date is
-    // the flexible segment in the left lane.
+    // The medication column gets more width than ICD at every panel size.
     expect(container.firstElementChild).toHaveClass(
-      '@min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem]',
-      '@min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem]',
-      '@min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem]',
-      '@min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.1fr)_4.75rem]',
+      'grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.75rem]',
     )
-    // The clinical lane carries ICD alone. At wide widths classification is a
-    // separate grid item immediately below it; on phones it stays inline with
-    // the regimen, preserving the compact mobile row.
     expect(clinicalLane).toHaveClass('h-4')
     expect(clinicalLane).not.toHaveClass('grid-rows-2')
     expect(category).toHaveClass('max-w-full')
@@ -482,7 +466,8 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(classificationLine).toHaveTextContent('長庚嘉義')
     expect(classificationLine).toContainElement(category)
     expect(classificationLine).toHaveClass(
-      '@min-[456px]:col-start-2',
+      'col-start-2',
+      'row-start-3',
       '@min-[456px]:row-start-2',
     )
     expect(clinicalLane).toContainElement(icd)

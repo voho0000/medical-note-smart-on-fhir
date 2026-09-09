@@ -1,0 +1,27 @@
+{
+  "baselineCommit": "1d133bd4",
+  "syntheticRows": 1000,
+  "sourceHashes": {
+    "features/clinical-summary/medications/components/MedicationItem.tsx": "6a2ace2362f340cd5eb41cd9af9f433101c3b78cac857a2ffbfb8988cd2a08c9",
+    "features/clinical-summary/medications/hooks/useMedicationEndDateFit.ts": "3f0158f235f20657efa3776970b8778e52ef2d397b73b746c55e9e0859fdf9d1"
+  },
+  "scope": "Production React rendering of 100/1000 simultaneously mounted MedicationItem rows, not full FHIR ingestion, grouping, or network loading.",
+  "environment": {
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memoryGiB": 32,
+    "darwin": "25.6.0",
+    "node": "24.12.0",
+    "react": "19.2.8",
+    "next": "16.2.12",
+    "chrome": "152.0.7977.83",
+    "workstation": "Live user workstation; no CPU throttling configured; other apps not closed",
+    "observedLoadAverages": [
+      8.72,
+      9.28,
+      9.48
+    ],
+    "observedLoadLocalTime": "2026-09-09 12:29 Asia/Taipei"
+  },
+  "variant": "visible rows, shared observers, cached glyph widths"
+}

@@ -1,0 +1,21 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+const here=path.dirname(fileURLToPath(import.meta.url))
+const root=path.resolve(here,'../../..')
+const out=path.join(root,'tmp/medication-perf-app')
+await fs.mkdir(path.join(out,'app'),{recursive:true})
+for(const file of ['page.tsx','measurement-control.tsx'])await fs.copyFile(path.join(here,file),path.join(out,'app',file))
+await fs.mkdir(path.join(out,'app/visual'),{recursive:true})
+await fs.copyFile(path.join(here,'visual.tsx'),path.join(out,'app/visual/page.tsx'))
+let source=await fs.readFile(path.join(root,'features/clinical-summary/medications/components/MedicationItem.tsx'),'utf8')
+source=source.replace(/from (['"])\.\.\/([^'"]+)\1/g,(_,q,p)=>`from ${q}@/features/clinical-summary/medications/${p}${q}`)
+source=source.replace(/from (['"])\.\/([^'"]+)\1/g,(_,q,p)=>`from ${q}@/features/clinical-summary/medications/components/${p}${q}`)
+source=source.replace("from '@/features/clinical-summary/medications/hooks/useMedicationEndDateFit'","from './measurement-control'")
+await fs.writeFile(path.join(out,'app/BenchMedicationItem.tsx'),source)
+await fs.writeFile(path.join(out,'app/layout.tsx'),`import '@/app/globals.css'\nexport default function Layout({children}:{children:React.ReactNode}){return <html lang="zh-TW"><body>{children}</body></html>}\n`)
+await fs.copyFile(path.join(root,'postcss.config.mjs'),path.join(out,'postcss.config.mjs'))
+await fs.writeFile(path.join(out,'package.json'),JSON.stringify({name:'medication-perf-local',private:true,dependencies:{next:'16.2.12',react:'19.2.8','react-dom':'19.2.8'}}))
+await fs.writeFile(path.join(out,'tsconfig.json'),JSON.stringify({compilerOptions:{target:'ES2017',lib:['dom','dom.iterable','esnext'],skipLibCheck:true,strict:true,noEmit:true,esModuleInterop:true,module:'esnext',moduleResolution:'bundler',resolveJsonModule:true,isolatedModules:true,jsx:'react-jsx',paths:{'@/*':['../../*']}},include:['app/**/*.tsx','.next/types/**/*.ts'],exclude:['node_modules']}))
+await fs.writeFile(path.join(out,'next.config.mjs'),'export default '+JSON.stringify({turbopack:{root},outputFileTracingRoot:root,typescript:{ignoreBuildErrors:true}}))
+console.log('Prepared tmp/medication-perf-app. Build with: ./node_modules/.bin/next build tmp/medication-perf-app')
