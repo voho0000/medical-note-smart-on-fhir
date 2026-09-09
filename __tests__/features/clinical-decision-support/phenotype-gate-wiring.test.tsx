@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { HEART_FAILURE_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import { PhysicianInputRequestPanel } from '@/features/clinical-decision-support/renderers/PhysicianInputRequestPanel'
-import { physicianInputRequestsOf } from '@/features/clinical-decision-support/physician-input-contract'
+import {
+  diagnosticSummaryOf,
+  physicianInputRequestsOf,
+} from '@/features/clinical-decision-support/physician-input-contract'
 import { applyPhenotypeAnswer } from '@/features/clinical-decision-support/utils/apply-phenotype-answer'
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type { CdssPatientProfile, CdssRecommendation } from '@/features/clinical-decision-support/types'
@@ -266,6 +269,43 @@ describe('PhysicianInputRequestPanel', () => {
     expect(onAnswer).toHaveBeenLastCalledWith(
       expect.objectContaining({ hfpEfConfirmed: false }),
     )
+  })
+})
+
+describe('the diagnosis reading the host shows', () => {
+  const suspectedHfpEf = { ...SUSPECTED, choice: 'preserved' as const }
+
+  function diagnosisCard(answer: PhenotypeAnswer) {
+    const card = cardsFor(answer).find((item) => item.id === 'heart-failure-hfpef-diagnosis')
+    if (!card) throw new Error('the diagnosis module did not build')
+    return card
+  }
+
+  it('carries the criteria and a parameter count rather than a score', () => {
+    const summary = diagnosticSummaryOf(diagnosisCard(suspectedHfpEf))
+
+    expect(summary?.criteria.map((item) => item.id))
+      .toEqual(['symptoms-signs', 'lvef', 'objective-abnormality'])
+    // Nothing was measured for this patient, so the criteria that need a study
+    // are undetermined — never 「不符合」.
+    expect(summary?.criteria.find((item) => item.id === 'lvef')?.state).toBe('met')
+    expect(summary?.criteria.find((item) => item.id === 'objective-abnormality')?.state)
+      .toBe('undetermined')
+    expect(summary?.supportingParameterCount).toBe(0)
+    // ESC's own answer to 「有多少把握」, cited to the page it is on.
+    expect(summary?.basis).toContain('p.25')
+    expect(summary?.confirmedByClinician).toBeUndefined()
+  })
+
+  it('leads with the clinician’s conclusion once they have confirmed', () => {
+    const summary = diagnosticSummaryOf(diagnosisCard({ ...suspectedHfpEf, hfpEfConfirmed: true }))
+
+    expect(summary?.confirmedByClinician).toBe(true)
+    expect(summary?.verdict).toContain('醫師已確認')
+  })
+
+  it('reads nothing from a recommendation the published package built', () => {
+    expect(diagnosticSummaryOf({ id: 'x' } as CdssRecommendation)).toBeUndefined()
   })
 })
 
