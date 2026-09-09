@@ -23,12 +23,12 @@ describe('medication end date fit', () => {
 
   const flush = () => act(() => { jest.advanceTimersByTime(20) })
   const show = (elements = screen.getAllByTestId('regimen'), visible = true) => {
-    act(() => intersect(elements.map(target => ({ target, isIntersecting: visible })) as IntersectionObserverEntry[], {} as IntersectionObserver))
+    act(() => intersect(elements.map(target => ({ target, isIntersecting: visible })) as unknown as IntersectionObserverEntry[], {} as IntersectionObserver))
     flush()
   }
   const changeWidth = (next: number) => {
     width = next
-    act(() => resize(screen.getAllByTestId('regimen').map(target => ({ target })) as ResizeObserverEntry[], {} as ResizeObserver))
+    act(() => resize(screen.getAllByTestId('regimen').map(target => ({ target })) as unknown as ResizeObserverEntry[], {} as ResizeObserver))
     flush()
   }
 
@@ -143,7 +143,7 @@ describe('medication end date fit', () => {
 
   it('cancels queued work and releases observers on unmount', () => {
     const { unmount } = render(<Regimen />)
-    act(() => intersect([{ target: screen.getByTestId('regimen'), isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
+    act(() => intersect([{ target: screen.getByTestId('regimen'), isIntersecting: true }] as unknown as IntersectionObserverEntry[], {} as IntersectionObserver))
     unmount()
     flush()
     expect(measure).not.toHaveBeenCalled()

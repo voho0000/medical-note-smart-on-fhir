@@ -14,7 +14,7 @@ const rows: MedicationRow[] = Array.from({length:1000},(_,i)=>({
  daysRemaining:22,isInactive:false,isChronic:i%2===0,refillCount:3,icdCode:'S72.002A',icdText:'左側股骨頸未明示部位閉鎖性骨折之初期照護',
  pharmacy:'合成測試醫院 門診',category:'合成測試藥理分類',searchHaystack:'',
 }))
-const List = memo(({count}:{count:number})=><div className="@container divide-y border rounded-md">{rows.slice(0,count).map(row=><MedicationItem key={row.id} medication={row} grouped />)}</div>)
+const List = memo(function MedicationBenchmarkList({count}:{count:number}) { return <div className="@container divide-y border rounded-md">{rows.slice(0,count).map(row=><MedicationItem key={row.id} medication={row} grouped />)}</div> })
 const frame = () => new Promise<number>(resolve=>requestAnimationFrame(resolve))
 const settle=async()=>{await frame();await frame();await frame()}
 const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))

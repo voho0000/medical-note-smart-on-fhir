@@ -18,6 +18,8 @@ Latest optimized results: [RESULTS-OPTIMIZED.md](./RESULTS-OPTIMIZED.md). Origin
 - Records frame intervals and browser long tasks (>50ms). The stress sequences are much faster than typical repeated user clicks on the font settings.
 - Uses a production Next/React build, not development mode. Build-time TypeScript checking is disabled only for this isolated benchmark because its imports reach the shared project; this does not change React's runtime production mode.
 
+The `.tsx.template` files are standalone fixture inputs, not application modules. `prepare.mjs` materializes them and their generated `BenchMedicationItem` import inside the temporary app before building.
+
 ## Reproduce
 
 From the repository root, using the already installed dependencies:
