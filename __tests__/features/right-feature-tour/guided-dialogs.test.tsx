@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { PromptGalleryDialog } from '@/features/prompt-gallery/components/PromptGalleryDialog'
 import { SharePromptDialog } from '@/features/prompt-gallery/components/SharePromptDialog'
+
+jest.mock('@/features/prompt-gallery/hooks/useDemoExampleOutput', () => ({
+  useDemoExampleOutput: () => jest.fn(async () => '試用病人自動產生的輸出範例'),
+}))
 import { createSharedPrompt, deleteSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import { usePromptGallery } from '@/features/prompt-gallery/hooks/usePromptGallery'
 import type { SharedPrompt } from '@/features/prompt-gallery/types/prompt.types'

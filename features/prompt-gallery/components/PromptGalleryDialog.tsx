@@ -526,6 +526,7 @@ export function PromptGalleryDialog({
                       onUse={handleQuickUse}
                       updatedIds={updatedFavoriteIds}
                       showSource={activeTab !== 'system' && activeTab !== 'tenant'}
+                      showVisibility={activeTab === 'my'}
                     />
                   </div>
                 ) : (
@@ -539,6 +540,7 @@ export function PromptGalleryDialog({
                         isFavorite={favoritesHook.isFavorite(prompt.id)}
                         onToggleFavorite={canFavorite ? handleToggleFavorite : undefined}
                         sourceUpdated={updatedFavoriteIds.has(prompt.id)}
+                        showVisibility={activeTab === 'my'}
                       />
                     ))}
                   </div>
@@ -572,11 +574,18 @@ export function PromptGalleryDialog({
       <SharePromptDialog
         open={!guidedPreview && shareOpen}
         onOpenChange={setShareOpen}
+        editingPromptId={sharePrompt && user?.uid && sharePrompt.authorId === user.uid && !sharePrompt.tenantId ? sharePrompt.id : undefined}
         initialTitle={sharePrompt?.title}
         initialDescription={sharePrompt?.description}
         initialPrompt={sharePrompt?.prompt}
         initialExampleOutput={sharePrompt?.exampleOutput}
         initialType={sharePrompt?.types[0] || (mode === 'summary' ? 'summary' : 'chat')}
+        initialTypes={sharePrompt?.types}
+        initialCategory={sharePrompt?.category}
+        initialSpecialties={sharePrompt?.specialty}
+        initialTags={sharePrompt?.tags}
+        initialIsAnonymous={sharePrompt?.isAnonymous}
+        initialIsPublic={sharePrompt?.isPublic !== false}
         initialOutputFormat={sharePrompt?.outputFormat}
         initialLanguagePolicy={sharePrompt?.languagePolicy}
         memberships={memberships}

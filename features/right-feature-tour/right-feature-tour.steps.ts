@@ -134,8 +134,8 @@ const ALL_STEPS: TourStep[] = [
     fallbackTarget: '[data-tour="custom-summary-manager"] [data-tour="custom-summary-add"]',
     title: { 'zh-TW': '從編輯器右上方分享模板', en: 'Share from the top of the template editor' },
     body: {
-      'zh-TW': '這個「分享範本」按鈕會帶入目前模板，讓你確認後發布到範本庫。分享需要登入；訪客會看到鎖頭。分享的是可重複使用的模板，不是這位病人的摘要，導覽不會替你登入或發布。',
-      en: 'Share template opens the current template for review before publishing to the library. Sign-in is required; guests see a lock. Share a reusable template, not this patient’s summary. The tour never signs in or publishes for you.',
+      'zh-TW': '這個「分享範本」按鈕會帶入目前模板，讓你確認後選擇只自己使用或公開到範本庫。分享需要登入；訪客會看到鎖頭。儲存的是可重複使用的模板，不是這位病人的摘要，導覽不會替你登入或發布。',
+      en: 'Share template opens the current template for review, then lets you keep it private or publish it to the gallery. Sign-in is required; guests see a lock. This saves a reusable template, not this patient’s summary. The tour never signs in or publishes for you.',
     },
     fallbackBody: {
       'zh-TW': '新增或選好模板後，編輯器右上方會出現分享入口。需登入才能發布；請勿在模板文字中包含病人個資。',
@@ -149,8 +149,8 @@ const ALL_STEPS: TourStep[] = [
     authenticatedOnly: true,
     title: { 'zh-TW': '發布前，先確認分享內容', en: 'Review what you will publish' },
     body: {
-      'zh-TW': '已打開真正的分享表單。先核對標題、說明與 Prompt，再設定用途、分類等資訊；最後才按下方「分享範本」。系統不會附帶病人 FHIR 資料，但文字內若含姓名或病歷號仍須移除。導覽不會送出。',
-      en: 'This is the real sharing form. Review the title, description, and prompt, then set its purpose and categories before selecting Share template below. Patient FHIR data is not attached, but remove identifiers from the text. The tour never submits this form.',
+      'zh-TW': '已打開真正的分享表單。先核對標題、說明與 Prompt，再設定用途、分類與是否公開；最後才按下方按鈕。系統不會附帶病人 FHIR 資料，但文字內若含姓名或病歷號仍須移除。導覽不會送出。',
+      en: 'This is the real sharing form. Review the title, description, and prompt, then set its purpose, categories, and visibility before saving. Patient FHIR data is not attached, but remove identifiers from the text. The tour never submits this form.',
     },
     fallbackBody: {
       'zh-TW': '目前沒有可分享的模板。先新增或選擇模板，再從「分享範本」檢查發布內容；導覽不會建立或發布任何資料。',
@@ -171,8 +171,8 @@ const ALL_STEPS: TourStep[] = [
     target: '[data-tour="custom-summary-gallery"] [data-tour="gallery-tabs"]',
     title: { 'zh-TW': '「所有範本」就在這裡', en: 'Find shared templates under All Prompts' },
     body: {
-      'zh-TW': '已進入範本庫的「所有範本」，可瀏覽符合目前使用身份的分享內容。「我的範本」則是自己已分享的範本，需要登入；它不是管理模組裡尚未分享的私人模板清單。',
-      en: 'The library is now on All Prompts, showing shared templates for your current role. My Prompts contains templates you have shared and requires sign-in; it is not the list of private, unshared modules in the manager.',
+      'zh-TW': '已進入範本庫的「所有範本」，可瀏覽符合目前使用身份的公開內容。「我的範本」包含自己儲存的公開與私人範本，需要登入；它與管理模組裡的個人模板清單分開。',
+      en: 'The library is now on All Prompts, showing public templates for your current role. My Prompts contains your public and private gallery templates and requires sign-in; it stays separate from the personal module list in the manager.',
     },
   },
   {

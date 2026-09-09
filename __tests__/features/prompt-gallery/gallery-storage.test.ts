@@ -11,7 +11,7 @@ jest.mock('firebase/firestore', () => jest.requireActual('./fixtures/firestore-m
 const largeText = 'START\n' + '中😀'.repeat(180000) + '\nTAIL needle-at-the-end'
 const prompt = (overrides = {}): Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt'> => ({
   title: 'Test template', prompt: 'Source', types: ['summary'], category: 'summary', specialty: ['general'],
-  audience: ['medical'], tags: [], authorId: 'alice', outputFormat: 'html', languagePolicy: 'follow-template', ...overrides,
+  audience: ['medical'], tags: [], authorId: 'alice', outputFormat: 'html', languagePolicy: 'follow-template', isPublic: true, ...overrides,
 })
 beforeEach(() => memory.reset())
 
@@ -53,6 +53,18 @@ it('gives same-title prompts distinct ids and keeps their updates, counters, and
   await deleteSharedPrompt(longId)
   expect(await getSharedPrompt(longId)).toBeNull()
   expect(await getSharedPrompt(shortId)).toMatchObject({ id: shortId, title: 'Same title', prompt: 'Edited short content' })
+})
+
+it('keeps private templates in the author gallery and allows the author to publish them later', async () => {
+  const publicId = await createSharedPrompt(prompt({ title: 'Public' }))
+  const privateId = await createSharedPrompt(prompt({ title: 'Private', isPublic: false }))
+
+  expect((await getSharedPrompts()).map(item => item.id)).toEqual([publicId])
+  expect(new Set((await getMySharedPrompts('alice')).map(item => item.id))).toEqual(new Set([publicId, privateId]))
+  expect(await getSharedPrompt(privateId)).toMatchObject({ isPublic: false })
+
+  await updateSharedPrompt(privateId, { isPublic: true })
+  expect(new Set((await getSharedPrompts()).map(item => item.id))).toEqual(new Set([publicId, privateId]))
 })
 
 it('does not publish a partial prompt when chunk writing fails', async () => {

@@ -13,6 +13,7 @@ import { getPromptSource } from '../constants/prompt-source'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
 import { FavoriteButton } from './FavoriteButton'
 import { PromptSourceBadge } from './PromptSourceBadge'
+import { PromptVisibilityBadge } from './PromptVisibilityBadge'
 
 interface PromptCardProps {
   prompt: SharedPrompt
@@ -23,6 +24,8 @@ interface PromptCardProps {
   onToggleFavorite?: (prompt: SharedPrompt) => void
   /** The gallery source is newer than this saved copy. */
   sourceUpdated?: boolean
+  /** Show public/private state while managing the user's own templates. */
+  showVisibility?: boolean
 }
 
 // Type color configurations (supports light/dark mode)
@@ -40,7 +43,7 @@ const TYPE_COLORS = {
 // Popular threshold
 const POPULAR_THRESHOLD = 10
 
-export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onToggleFavorite, sourceUpdated }: PromptCardProps) {
+export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onToggleFavorite, sourceUpdated, showVisibility = false }: PromptCardProps) {
   const { t } = useLanguage()
   const source = getPromptSource(prompt, currentUserId)
   const isPopular = (prompt.usageCount || 0) >= POPULAR_THRESHOLD
@@ -102,6 +105,7 @@ export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onTog
             )
           })}
           <PromptSourceBadge source={source} tenantName={prompt.tenantName} />
+          {showVisibility && <PromptVisibilityBadge isPublic={prompt.isPublic} />}
           {sourceUpdated && (
             <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
               {t.promptGallery.sourceUpdated}
