@@ -75,14 +75,16 @@ export function normalizeSharedReportNarrative(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-/**
- * A report is eligible only when every boundary is explicit in the source.
- * Local imports may add a date-matched encounter for visit navigation; the
- * `_encounterInferred` marker prevents that convenience link from becoming
- * evidence that two separately billed reports came from the same encounter.
- */
-export function sharedReportGroupingKey(report: any): string | null {
-  const reportGroup = inferReportDisplayGroup(report)
+type SharedReportBoundary = {
+  subject: string
+  encounter: string
+  date: string
+  institution: string
+  sourceProgram: string
+  status: string
+}
+
+function sharedReportBoundary(report: any): SharedReportBoundary | null {
   const subject = explicitReference(report?.subject?.reference)
   const encounter = report?._encounterInferred
     ? null
@@ -102,7 +104,6 @@ export function sharedReportGroupingKey(report: any): string | null {
       && value.getUTCDate() === day
   })()
   const institution = normalizeSharedReportNarrative(reportInstitution(report) ?? '')
-  const narrative = normalizeSharedReportNarrative(sharedReportNarrative(report))
   const status = typeof report?.status === 'string' ? report.status.trim().toLowerCase() : ''
   const sourceProgram = report?.meta?.tag?.some((tag: any) => tag?.code === 'adult-preventive')
     ? 'adult-preventive'
@@ -114,11 +115,62 @@ export function sharedReportGroupingKey(report: any): string | null {
     || !date
     || !dateIsValid
     || !institution
-    || !narrative
-    || (reportGroup !== 'imaging' && reportGroup !== 'pathology')
     || status === 'entered-in-error'
   ) return null
-  return JSON.stringify([subject, encounter, date, institution, sourceProgram, status, narrative])
+
+  return { subject, encounter, date, institution, sourceProgram, status }
+}
+
+/**
+ * A report is eligible only when every boundary is explicit in the source.
+ * Local imports may add a date-matched encounter for visit navigation; the
+ * `_encounterInferred` marker prevents that convenience link from becoming
+ * evidence that two separately billed reports came from the same encounter.
+ */
+export function sharedReportGroupingKey(report: any): string | null {
+  const reportGroup = inferReportDisplayGroup(report)
+  const boundary = sharedReportBoundary(report)
+  const narrative = normalizeSharedReportNarrative(sharedReportNarrative(report))
+
+  if (
+    !boundary
+    || !narrative
+    || (reportGroup !== 'imaging' && reportGroup !== 'pathology')
+  ) return null
+  return JSON.stringify([
+    boundary.subject,
+    boundary.encounter,
+    boundary.date,
+    boundary.institution,
+    boundary.sourceProgram,
+    boundary.status,
+    narrative,
+  ])
+}
+
+/**
+ * Boundary shared by the separately billed 18005C/18007C parts of one echo.
+ * Unlike sharedReportGroupingKey this intentionally omits narrative, allowing
+ * viewer-only companion records to be attached after an exact-text pair has
+ * already proved that the two procedures share one written report.
+ */
+export function sharedEchoReportFamilyKey(report: any): string | null {
+  const codes = new Set(
+    (report?.code?.coding ?? [])
+      .map((coding: any) => typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : '')
+      .filter(Boolean),
+  )
+  if (!codes.has('18005C') && !codes.has('18007C')) return null
+  const boundary = sharedReportBoundary(report)
+  if (!boundary || inferReportDisplayGroup(report) !== 'imaging') return null
+  return JSON.stringify([
+    boundary.subject,
+    boundary.encounter,
+    boundary.date,
+    boundary.institution,
+    boundary.sourceProgram,
+    boundary.status,
+  ])
 }
 
 export function reportSource(report: any): SharedReportSource {
@@ -172,6 +224,37 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
       .filter(([, identities]) => identities.size > 1)
       .map(([key]) => key),
   )
+}
+
+/**
+ * Map an unambiguous echo-family boundary to its exact shared narrative key.
+ * If the same encounter contains more than one distinct paired narrative, the
+ * family is deliberately omitted because viewer-only records cannot be safely
+ * assigned to either report.
+ */
+export function qualifyingSharedEchoFamilyKeys(reports: any[]): Map<string, string> {
+  const qualifyingKeys = qualifyingSharedReportKeys(reports)
+  const candidates = new Map<string, Map<string, Set<string>>>()
+
+  for (const report of reports) {
+    const sharedKey = sharedReportGroupingKey(report)
+    const familyKey = sharedEchoReportFamilyKey(report)
+    if (!sharedKey || !familyKey || !qualifyingKeys.has(sharedKey)) continue
+    const byNarrative = candidates.get(familyKey) ?? new Map<string, Set<string>>()
+    const codes = byNarrative.get(sharedKey) ?? new Set<string>()
+    for (const code of reportSource(report).codes) codes.add(code.toUpperCase())
+    byNarrative.set(sharedKey, codes)
+    candidates.set(familyKey, byNarrative)
+  }
+
+  const owners = new Map<string, string>()
+  for (const [familyKey, byNarrative] of candidates) {
+    const pairedNarratives = [...byNarrative.entries()].filter(([, codes]) =>
+      codes.has('18005C') && codes.has('18007C'),
+    )
+    if (pairedNarratives.length === 1) owners.set(familyKey, pairedNarratives[0][0])
+  }
+  return owners
 }
 
 export function sharedReportTitle(

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ReportRow } from '@/features/clinical-summary/reports/components/ReportRow'
 import type { Row } from '@/features/clinical-summary/reports/types'
+import { requestNhiViewerOpen } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
 import { RightDetailProvider } from '@/src/application/providers/right-detail.provider'
@@ -9,6 +10,11 @@ jest.mock('@/features/report-interpretation', () => ({
   ReportInterpretationButton: () => null,
   ReportInterpretationLauncher: () => null,
   ReportInterpretationPanel: () => null,
+}))
+
+jest.mock('@/features/clinical-summary/reports/utils/nhi-viewer-request', () => ({
+  ...jest.requireActual('@/features/clinical-summary/reports/utils/nhi-viewer-request'),
+  requestNhiViewerOpen: jest.fn(),
 }))
 
 const renderRow = (row: Row) => render(
@@ -69,11 +75,22 @@ describe('ReportRow NHI DICOM viewer actions', () => {
       { kind: 'legacy', contentType: 'text/html', url: 'https://viewer-new.nhi.gov.tw/v2/whatever', title: 'Future' },
       { kind: 'legacy', contentType: 'text/html', url: 'https://medvpnimg.nhi.gov.tw.evil.example/ZFP#pl=bad', title: 'Bad' },
     ]
+    const openSpy = jest.spyOn(window, 'open').mockReturnValue(null)
     renderRow(row)
 
+    const primary = screen.getByRole('button', { name: '開啟健保影像 1，共 3 筆中的第 1 筆' })
     const trigger = screen.getByRole('button', { name: '選擇健保影像，共 3 筆' })
-    expect(trigger).toHaveTextContent('健保影像 3')
+    expect(primary).toHaveTextContent('健保影像 3')
+    expect(trigger).not.toHaveTextContent('健保影像 3')
     expect(screen.queryByRole('link', { name: /開啟/ })).not.toBeInTheDocument()
+
+    fireEvent.click(primary)
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://medvpnimg.nhi.gov.tw/ZFP?ticket=one#pl=one',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
 
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     const links = screen.getAllByRole('menuitem', { name: /開啟 健保影像/ })
@@ -89,9 +106,10 @@ describe('ReportRow NHI DICOM viewer actions', () => {
       expect(link).toHaveAttribute('referrerpolicy', 'no-referrer')
     })
     expect(document.body.innerHTML).not.toContain('evil.example')
+    openSpy.mockRestore()
   })
 
-  it('keeps a long report title readable and waits for a wide container before using one line', () => {
+  it('opens the first live viewer by default and keeps the full list behind the chevron', async () => {
     const row = baseRow()
     row.title = '這是一個很長的影像檢查名稱，用來確認 Viewer 動作不會再把標題擠到完全消失'
     row.obs[0].valueString = 'A long report narrative that keeps this report in the expandable text layout for responsive testing.'
@@ -109,16 +127,24 @@ describe('ReportRow NHI DICOM viewer actions', () => {
         feeYm: '',
       },
     }))
+    const requestMock = requestNhiViewerOpen as jest.MockedFunction<typeof requestNhiViewerOpen>
+    requestMock.mockResolvedValue({ ok: true })
     renderRow(row)
 
+    const primary = screen.getByRole('button', { name: '開啟健保影像 1，共 3 筆中的第 1 筆' })
     const trigger = screen.getByRole('button', { name: '選擇健保影像，共 3 筆' })
-    expect(trigger).toHaveTextContent('健保影像 3')
-    expect(screen.queryByRole('button', { name: /健保影像 1/ })).not.toBeInTheDocument()
+    expect(primary).toHaveTextContent('健保影像 3')
+    expect(trigger).toHaveAccessibleName('選擇健保影像，共 3 筆')
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
+    fireEvent.click(primary)
+    await waitFor(() => expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ iplCaseSeqNo: 'CASE-1' })))
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
     const titleContainer = screen.getByText(row.title).parentElement
     expect(titleContainer).toHaveClass('basis-0', '@min-[520px]:w-auto', '@min-[520px]:min-w-[12rem]')
     expect(titleContainer?.parentElement).toHaveClass('flex-col', '@min-[520px]:flex-nowrap')
     expect(screen.getByText(row.title)).toHaveClass('min-w-0', 'flex-1', 'truncate')
     expect(screen.getByRole('button', { name: '在右側面板展開全文' })).toBeInTheDocument()
+    requestMock.mockReset()
   })
 
   it('keeps the action inside a multi-item header instead of adding a separate row', () => {
