@@ -1,4 +1,5 @@
 import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
+import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 
 const REPORT_TEXT = 'DOPPLER & ECHOCARDIOGRAPHIC REPORT:\nNormal wall motion with adequate LV systolic function.'
 
@@ -31,6 +32,18 @@ function dopplerReport(overrides: Record<string, any> = {}) {
   })
 }
 
+function viewerExtension(caseNo: string) {
+  return {
+    url: NHI_VIEWER_REQUEST_EXTENSION_URL,
+    extension: [
+      { url: 'version', valueInteger: 1 },
+      { url: 'proc-id', valueCode: 'IMUE0130' },
+      { url: 'patient-context-hash', valueString: 'b'.repeat(64) },
+      { url: 'ipl-case-seq-no', valueString: caseNo },
+    ],
+  }
+}
+
 describe('buildReportsData shared narratives across source procedures', () => {
   it('shows one localized echo report while retaining every source identity', () => {
     const { reportRows } = buildReportsData(
@@ -50,6 +63,67 @@ describe('buildReportsData shared narratives across source procedures', () => {
     ])
     expect(reportRows[0].obs[0]?.valueString).toBe(REPORT_TEXT)
     expect(reportRows[0].bridgeDupCount).toBeUndefined()
+  })
+
+  it('attaches viewer-only echo and Doppler records to their proven shared report', () => {
+    const echoViewer = echoReport({
+      id: 'echo-viewer-1',
+      conclusion: undefined,
+      extension: [viewerExtension('ECHO-1')],
+    })
+    const secondEchoViewer = echoReport({
+      id: 'echo-viewer-2',
+      conclusion: undefined,
+      extension: [viewerExtension('ECHO-2')],
+    })
+    const dopplerViewer = dopplerReport({
+      id: 'doppler-viewer-1',
+      conclusion: undefined,
+      extension: [viewerExtension('DOPPLER-1')],
+    })
+    const secondDopplerViewer = dopplerReport({
+      id: 'doppler-viewer-2',
+      conclusion: undefined,
+      extension: [viewerExtension('DOPPLER-2')],
+    })
+
+    const { reportRows } = buildReportsData([
+      dopplerViewer,
+      dopplerReport(),
+      echoViewer,
+      secondEchoViewer,
+      echoReport(),
+      secondDopplerViewer,
+    ])
+
+    expect(reportRows).toHaveLength(1)
+    expect(reportRows[0].title).toBe('Echocardiography (including Doppler)')
+    expect(reportRows[0].obs[0]?.valueString).toBe(REPORT_TEXT)
+    expect(reportRows[0].viewerActions).toHaveLength(4)
+    expect(reportRows[0].diagnosticReportIds).toEqual([
+      'doppler-viewer-1',
+      'doppler',
+      'echo-viewer-1',
+      'echo-viewer-2',
+      'echo',
+      'doppler-viewer-2',
+    ])
+    expect(reportRows[0].sharedReportSources).toHaveLength(2)
+  })
+
+  it('does not attach viewer-only records across distinct echo narratives', () => {
+    const { reportRows } = buildReportsData([
+      echoReport(),
+      dopplerReport({ conclusion: `${REPORT_TEXT}\nAdditional finding.` }),
+      echoReport({
+        id: 'echo-viewer',
+        conclusion: undefined,
+        extension: [viewerExtension('ECHO-1')],
+      }),
+    ])
+
+    expect(reportRows).toHaveLength(2)
+    expect(reportRows.some((row) => row.sharedReportSources)).toBe(false)
   })
 
   it('uses the Chinese combined echo title only for the patient audience in zh-TW', () => {
