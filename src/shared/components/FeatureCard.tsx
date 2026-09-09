@@ -6,6 +6,7 @@ import { ErrorMessage } from './ErrorMessage'
 import { EmptyState } from './EmptyState'
 import { FEATURE_CARD_THEMES, UI_COLORS } from '@/src/shared/config/ui-theme.config'
 import type { LucideIcon } from 'lucide-react'
+import { cn } from '@/src/shared/utils/cn.utils'
 
 interface FeatureCardProps {
   /** Card header text. Pass empty string / undefined to render without a
@@ -20,6 +21,7 @@ interface FeatureCardProps {
   emptyMessage?: string
   titleAccessory?: ReactNode
   headerAction?: ReactNode
+  className?: string
   children: ReactNode
 }
 
@@ -33,6 +35,7 @@ export function FeatureCard({
   emptyMessage = "No data available",
   titleAccessory,
   headerAction,
+  className,
   children
 }: FeatureCardProps) {
   // Get theme from registry or use defaults
@@ -47,7 +50,7 @@ export function FeatureCard({
   // spacing so real clinical content starts earlier, while md+ preserves the
   // established desktop rhythm. A neutral boundary replaces accent stripes:
   // clinical color is reserved for status, severity, and selected state.
-    <Card className="gap-2 rounded-lg border-border bg-card py-2 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none md:py-3">
+    <Card className={cn("gap-2 rounded-lg border-border bg-card py-2 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none md:py-3", className)}>
       {hasTitle && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

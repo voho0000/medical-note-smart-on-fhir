@@ -277,6 +277,7 @@ export function MedListCard() {
       // active concern; a separate redundant header would only burn space.
       title=""
       featureId="medications"
+      className="pt-1 shadow-none hover:shadow-none md:pt-1"
       isLoading={isLoading}
       error={error}
       isEmpty={isEmpty}
@@ -285,7 +286,7 @@ export function MedListCard() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full gap-0">
         <TabsList
           data-tour="medication-tabs"
-          className={cn(SUBTAB_LIST_CLASSES, "!flex !justify-start mb-1 w-full min-w-0 shrink-0 !flex-nowrap gap-0 overflow-x-auto max-md:!min-h-[36px]")}
+          className={cn(SUBTAB_LIST_CLASSES, "!flex !justify-start mb-1 w-full min-w-0 shrink-0 !flex-nowrap gap-0 overflow-x-auto !min-h-[32px] [@media(pointer:coarse)]:!min-h-[44px]")}
         >
           {tabConfigs.map((c) => (
             <TabsTrigger
@@ -293,7 +294,7 @@ export function MedListCard() {
               value={c.value}
               className={cn(
                 SUBTAB_TRIGGER_CLASSES,
-                '!flex-1 !min-w-fit inline-flex items-center gap-1 whitespace-nowrap max-md:!min-h-[36px]',
+                '!h-auto !flex-1 !min-w-fit inline-flex items-center gap-1 whitespace-nowrap !min-h-[32px] [@media(pointer:coarse)]:!min-h-[44px]',
               )}
             >
               {c.label}
@@ -304,7 +305,7 @@ export function MedListCard() {
           ))}
         </TabsList>
 
-        <TabsContent value="medications" className="mt-0 space-y-2 md:space-y-3">
+        <TabsContent value="medications" className="mt-0 space-y-2">
           <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <div className="inline-flex h-[36px] min-w-0 rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">

@@ -1,4 +1,5 @@
 // Custom Hook: Medication Rows Processing
+import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo } from 'react'
 import type { MedicationRow } from '../types'
 import {
@@ -303,9 +304,7 @@ export function useMedicationRows(
       // is a clinical concept, not a technical pharmacology identifier.
       // The leading code prefix ("N400 ...") is stripped below.
       const rawIcdText = pickByLocale(med?.reasonCode?.[0], locale)
-      const icdText = rawIcdText
-        ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
-        : undefined
+      const icdText = stripLeadingIcdCode(rawIcdText, icdCode ?? '')
 
       // Bilingual search blob — collects BOTH languages of every field so the
       // 用藥 search matches whether the user types 中文 or English, regardless
