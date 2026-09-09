@@ -10,6 +10,8 @@ import {
   parseMedcloudLaunchOptions,
   parseMedcloudLaunchContext,
   VGTPE_SITE_LAUNCH_URL,
+  VGTPE_HMC_MEDCLOUD_LAUNCH_URL,
+  VGTPE_HMC_SITE_LAUNCH_URL,
   VGTPE_MEDCLOUD_LAUNCH_URL,
   VGTPE_TVGHBRAIN_BASE_URL,
   VGTPE_TVGHBRAIN_MODEL_ID,
@@ -47,6 +49,16 @@ describe('medcloud launch context', () => {
     })
     expect(parseMedcloudLaunchOptions(VGTPE_MEDCLOUD_LAUNCH_URL)).toEqual({
       auto: true,
+      site: 'vghtpe',
+      workstation: null,
+    })
+    expect(parseMedcloudLaunchOptions(VGTPE_HMC_MEDCLOUD_LAUNCH_URL)).toEqual({
+      auto: true,
+      site: 'vghtpe',
+      workstation: null,
+    })
+    expect(parseMedcloudLaunchOptions(VGTPE_HMC_SITE_LAUNCH_URL)).toEqual({
+      auto: false,
       site: 'vghtpe',
       workstation: null,
     })
@@ -221,6 +233,7 @@ describe('isVghtpeUnattendedLaunch', () => {
   it('is true only for medcloud2=auto together with site=vghtpe on the app origin', () => {
     expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe')).toBe(true)
     expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?site=vghtpe&medcloud2=auto')).toBe(true)
+    expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app-hmc/?medcloud2=auto&site=vghtpe')).toBe(true)
     expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?medcloud2=auto')).toBe(false)
     expect(isVghtpeUnattendedLaunch('https://mediprisma.tw/app/?site=vghtpe')).toBe(false)
     expect(isVghtpeUnattendedLaunch('https://example.com/app/?medcloud2=auto&site=vghtpe')).toBe(false)

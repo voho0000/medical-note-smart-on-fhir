@@ -22,7 +22,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | Route | Meaning |
 |---|---|
 | `?medcloud2=auto` | Unattended Medcloud hand-off: the 雲端懷爾抓抓 extension opens the app, hands the patient over, runs the summary. No one is at the keyboard. `isMedcloudLaunchRoute()`. |
-| `?medcloud2=auto&site=vghtpe` (app origin only) | The hospital's own hand-off. Same silence; the Beta switch is offered and honoured like a plain visit. `isVghtpeUnattendedLaunch()`. |
+| `?medcloud2=auto&site=vghtpe` (`/app/` or `/app-hmc/` on the app origin) | The hospital's own hand-off. Same silence; the Beta switch is offered and honoured like a plain visit. `isVghtpeUnattendedLaunch()`. |
 | `?site=vghtpe` alone | Hospital routing only; not a launch route. |
 
 ## Gates in force
@@ -30,7 +30,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
 | `app/page.tsx` (tour launcher) | 不打斷 | Guided-tour offer never opens | e5374e97, 2026-08-20 |
-| `app/_components/FirstRunOnboardingDialog.tsx` | 不打斷 | First-run onboarding never opens | e5374e97 |
+| `app/_components/FirstRunOnboardingDialog.tsx` | 不打斷 | First-run onboarding never opens on either `/app/` or `/app-hmc/` when `medcloud2=auto`; the vghtpe hospital hand-off is covered on both paths | e5374e97; `/app-hmc/` confirmed by owner, 2026-09-09 |
 | `src/application/providers/ai-demographics-gate.provider.tsx` | 不打斷 | Demographics prompt is not raised; the hand-off decides | e5374e97 |
 | `src/application/providers/audience.provider.tsx` | 不打斷 | Opens in clinician mode; a stored 民眾 choice is not restored (storage untouched) | e5374e97 |
 | `src/application/hooks/ai-generation/use-ai-slot-generation.hook.ts` | 不打斷 | The launch owns the automatic summary run; the browser's auto-generate switch does not fire a second one | e5374e97 |
