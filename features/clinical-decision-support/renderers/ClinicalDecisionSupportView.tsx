@@ -1766,6 +1766,8 @@ function RecommendationDetail({
           locale={isEnglish ? 'en' : 'zh-TW'}
           patientId={patientId}
           onNavigate={onNavigate}
+          clinicVitals={clinicVitals}
+          onSaveClinicVitals={onSaveClinicVitals}
         />
       ))}
 

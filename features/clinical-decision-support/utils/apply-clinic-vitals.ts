@@ -21,6 +21,32 @@ export const CONGESTION_SIGN_TERMS: Readonly<Record<CongestionSignsAnswer, reado
   'jvp-rales': ['jvp', 'rales'],
 }
 
+/**
+ * The evidence-table rows a clinician can answer in the room, and the term
+ * each one is matched on.
+ *
+ * Named here rather than read off the row, because an `EvidenceItem` carries
+ * its matched terms only once something matched — a row nobody has answered
+ * has none, which is exactly the row that needs the control. The ids and terms
+ * are the published congestion table's own; a row missing from this map
+ * (bendopnea, hepatojugular reflux, NYHA class) is one that table gives no
+ * term to, so an answer would have nowhere to land and the row keeps the plain
+ * include-or-exclude switch.
+ */
+export const EVIDENCE_ROW_SIGN_TERMS: Readonly<Record<string, string>> = {
+  'congestion:orthopnea': 'orthopnea',
+  'congestion:pnd': 'paroxysmal-nocturnal-dyspnea',
+  'congestion:jvp': 'jvp',
+  'congestion:s3': 'third-heart-sound',
+  'congestion:rales': 'rales',
+  'congestion:pitting-edema': 'pitting-edema',
+  'congestion:ascites': 'ascites',
+  'congestion:hepatomegaly': 'hepatomegaly',
+  // The LV filling-pressure table asks two of the same signs under its own ids.
+  'filling-pressure:orthopnea': 'orthopnea',
+  'filling-pressure:jvp': 'jvp',
+}
+
 export const CLINIC_ENTRY_NOTE = { zh: '門診輸入', en: 'entered in clinic' } as const
 
 /** Recognises a fact this file wrote, wherever the pack prints it. */
@@ -73,14 +99,35 @@ export function applyClinicVitals(
       date,
     }
   }
+  // Two ways in, one fact out. The three-group tap on the board is the quick
+  // answer; the evidence table's rows answer 「有」/「無」 one sign at a time, and
+  // a row answer wins for a term both name — it is the more specific statement
+  // about the same examination. A sign answered 「無」 becomes a negated term,
+  // which is how the pack tells 「看了，沒有」 from 「沒問」.
   const signs = vitals.congestionSigns ?? []
-  if (signs.length > 0) {
-    const matchedTerms = Array.from(new Set(signs.flatMap((sign) => CONGESTION_SIGN_TERMS[sign] ?? [])))
+  const matched = new Set(signs.flatMap((sign) => CONGESTION_SIGN_TERMS[sign] ?? []))
+  const negated = new Set<string>()
+  for (const [term, answer] of Object.entries(vitals.signAnswers ?? {})) {
+    if (answer === 'present') {
+      negated.delete(term)
+      matched.add(term)
+    } else {
+      matched.delete(term)
+      negated.add(term)
+    }
+  }
+  if (matched.size > 0 || negated.size > 0) {
     facts.clinicCongestionExam = {
       zh: `門診理學檢查（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
       en: `Clinic examination (${date}, ${CLINIC_ENTRY_NOTE.en})`,
       date,
-      textEvidence: { direction: 'supports', matchedTerms },
+      textEvidence: {
+        // The reading of the examination as a whole: anything seen makes it
+        // support, and only negations make it argue against.
+        direction: matched.size > 0 ? 'supports' : 'against',
+        matchedTerms: Array.from(matched),
+        ...(negated.size > 0 ? { negatedTerms: Array.from(negated) } : {}),
+      },
     }
   }
 
