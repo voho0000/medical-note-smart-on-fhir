@@ -28,16 +28,15 @@ export interface ClinicVitals {
   diastolic?: number
   heartRate?: number
   bodyWeight?: number
-  /** Signs seen in the room this visit; absent means unanswered, never "none". */
-  congestionSigns?: readonly CongestionSignsAnswer[]
   /**
    * One answer per sign, keyed by the canonical term the evidence table's rows
    * are matched on: 「有」, 「無」, or absent for 「未評估」.
    *
-   * The three-group tap above is the quick answer for the board; this is the
-   * row-by-row one from the evidence table, and it wins for a term both name —
-   * a physician who says 「orthopnea：無」 on the row has answered more
-   * precisely than a group tap that did not mention it.
+   * The single record of what was examined this visit, whichever control stated
+   * it. The board's three-group chips write the terms of a group; the evidence
+   * rows write one term at a time and can also say 「無」. Keeping the group
+   * answer in a second field is what let a row ticked 「有」 sit beside a chip
+   * still reading 「預設未回答」 about the same patient.
    */
   signAnswers?: Readonly<Record<string, 'present' | 'absent'>>
   /** The day the measurements were taken, as YYYY-MM-DD. */

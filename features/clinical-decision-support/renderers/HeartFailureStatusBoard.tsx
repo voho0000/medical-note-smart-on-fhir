@@ -15,6 +15,17 @@ import {
   type HeartFailurePillar,
 } from './heart-failure-board'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
+import {
+  isCongestionGroupPresent,
+  toggleCongestionGroup,
+} from '../utils/apply-clinic-vitals'
+
+/** The three one-tap groups, in the order the strip offers them. */
+const CONGESTION_SIGN_GROUPS: readonly CongestionSignsAnswer[] = [
+  'edema',
+  'orthopnea-pnd',
+  'jvp-rales',
+]
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
@@ -708,7 +719,7 @@ export function HeartFailureStatusBoard({
               ['orthopnea-pnd', isEnglish ? 'Orthopnea / PND' : '有：orthopnea／PND'],
               ['jvp-rales', isEnglish ? 'JVP / rales' : '有：JVP／rales'],
             ] as const).map(([value, text]) => {
-              const selected = (clinicVitals?.congestionSigns ?? []).includes(value)
+              const selected = isCongestionGroupPresent(clinicVitals?.signAnswers, value)
               return (
                 <button
                   key={value}
@@ -721,14 +732,14 @@ export function HeartFailureStatusBoard({
                       : 'border-border bg-card text-foreground hover:bg-muted/40',
                   )}
                   onClick={() => {
-                    const current = clinicVitals?.congestionSigns ?? []
-                    const next: CongestionSignsAnswer[] = selected
-                      ? current.filter((sign) => sign !== value)
-                      : [...current, value]
                     onSaveClinicVitals({
                       ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
                       measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
-                      ...(next.length > 0 ? { congestionSigns: next } : { congestionSigns: undefined }),
+                      signAnswers: toggleCongestionGroup(
+                        clinicVitals?.signAnswers,
+                        value,
+                        !selected,
+                      ),
                     })
                   }}
                   data-testid={`cdss-hf-congestion-sign-${value}`}
@@ -739,7 +750,7 @@ export function HeartFailureStatusBoard({
             })}
           </div>
           <span className="text-[11px] leading-4 text-muted-foreground">
-            {(clinicVitals?.congestionSigns?.length ?? 0) > 0
+            {CONGESTION_SIGN_GROUPS.some((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
               ? (isEnglish
                 ? 'Written into the congestion table as today\'s examination; the modules above recomputed.'
                 : '已寫進鬱血證據表作為今天的檢查，上方判定已重算。')

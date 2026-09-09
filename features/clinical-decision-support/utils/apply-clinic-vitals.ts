@@ -21,6 +21,46 @@ export const CONGESTION_SIGN_TERMS: Readonly<Record<CongestionSignsAnswer, reado
   'jvp-rales': ['jvp', 'rales'],
 }
 
+/** One answer per sign, keyed by the term the evidence rows are matched on. */
+export type SignAnswers = Readonly<Record<string, 'present' | 'absent'>>
+
+/**
+ * Whether a one-tap group reads as answered 「有」.
+ *
+ * The group chips and the evidence rows are two ways of stating the same
+ * examination, so they share one store and one reading: a chip is lit when any
+ * sign it stands for has been answered 「有」, wherever that answer was given.
+ * Without this the clinician ticks 「Orthopnea：有」 on the row below and the
+ * chip above still says 「預設未回答」 about the same patient.
+ */
+export function isCongestionGroupPresent(
+  answers: SignAnswers | undefined,
+  group: CongestionSignsAnswer,
+): boolean {
+  return (CONGESTION_SIGN_TERMS[group] ?? []).some((term) => answers?.[term] === 'present')
+}
+
+/**
+ * The answers after tapping one group on or off.
+ *
+ * Tapping on says 「有」 for every sign in the group; tapping off returns them
+ * to 未評估 rather than asserting 「無」, because a chip nobody tapped and a
+ * chip someone untapped both mean the same thing — it was not stated. Saying
+ * 「無」 stays with the row control, where it is one sign at a time.
+ */
+export function toggleCongestionGroup(
+  answers: SignAnswers | undefined,
+  group: CongestionSignsAnswer,
+  present: boolean,
+): SignAnswers | undefined {
+  const next: Record<string, 'present' | 'absent'> = { ...(answers ?? {}) }
+  for (const term of CONGESTION_SIGN_TERMS[group] ?? []) {
+    if (present) next[term] = 'present'
+    else delete next[term]
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
 /**
  * The evidence-table rows a clinician can answer in the room, and the term
  * each one is matched on.
@@ -99,13 +139,11 @@ export function applyClinicVitals(
       date,
     }
   }
-  // Two ways in, one fact out. The three-group tap on the board is the quick
-  // answer; the evidence table's rows answer 「有」/「無」 one sign at a time, and
-  // a row answer wins for a term both name — it is the more specific statement
-  // about the same examination. A sign answered 「無」 becomes a negated term,
-  // which is how the pack tells 「看了，沒有」 from 「沒問」.
-  const signs = vitals.congestionSigns ?? []
-  const matched = new Set(signs.flatMap((sign) => CONGESTION_SIGN_TERMS[sign] ?? []))
+  // One fact out, however it was entered. The board's three-group chips and the
+  // evidence table's rows both write `signAnswers`, so a sign stated once is
+  // stated everywhere. A sign answered 「無」 becomes a negated term, which is
+  // how the pack tells 「看了，沒有」 from 「沒問」.
+  const matched = new Set<string>()
   const negated = new Set<string>()
   for (const [term, answer] of Object.entries(vitals.signAnswers ?? {})) {
     if (answer === 'present') {
