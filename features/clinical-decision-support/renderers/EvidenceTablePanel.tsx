@@ -4,6 +4,73 @@ import { ChevronDown, ListChecks, Quote } from 'lucide-react'
 import { isEvidenceItemEnabled } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { EVIDENCE_ROW_SIGN_TERMS } from '../utils/apply-clinic-vitals'
+import { todayIsoDate, type ClinicVitals } from '../stores/clinic-vitals.store'
+
+/** What a clinician can say about one sign in the room. */
+export type SignAnswer = 'present' | 'absent'
+
+/**
+ * 有／無／未評估 for a sign the record cannot settle.
+ *
+ * It replaces the include-or-exclude switch on these rows because the switch
+ * answered the wrong question: it decided whether an *undetermined* row was
+ * counted, so a clinician who turned on 「Orthopnea」 to say they had seen it
+ * still read 「紀錄中沒有這一項 · 無法判定」 next to their own answer. 「無」 is a
+ * finding too — the pack keeps it apart from 「沒問」 — and an answer here
+ * recomputes the module rather than nudging a count.
+ */
+function SignAnswerControl({
+  itemId,
+  label,
+  isEnglish,
+  answer,
+  onAnswer,
+}: {
+  itemId: string
+  label: string
+  isEnglish: boolean
+  answer?: SignAnswer
+  onAnswer: (answer: SignAnswer | undefined) => void
+}) {
+  const options: readonly { id: SignAnswer | 'unassessed'; text: string }[] = [
+    { id: 'present', text: isEnglish ? 'Yes' : '有' },
+    { id: 'absent', text: isEnglish ? 'No' : '無' },
+    { id: 'unassessed', text: isEnglish ? 'Not assessed' : '未評估' },
+  ]
+  const selected: SignAnswer | 'unassessed' = answer ?? 'unassessed'
+  return (
+    <div
+      className="mt-0.5 flex shrink-0 overflow-hidden rounded-md border border-border"
+      role="group"
+      aria-label={isEnglish ? `${label}: seen in the room?` : `「${label}」：門診是否看到？`}
+      data-testid={`cdss-evidence-answer-${itemId}`}
+    >
+      {options.map((option) => {
+        const isSelected = selected === option.id
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={isSelected}
+            className={cn(
+              'min-h-8 min-w-[2.5rem] px-2 text-[11px] font-medium transition-colors',
+              'border-r border-border last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              isSelected
+                ? 'bg-primary/10 text-primary'
+                : 'bg-card text-muted-foreground hover:bg-muted/40',
+            )}
+            onClick={() => onAnswer(option.id === 'unassessed' ? undefined : option.id)}
+            data-testid={`cdss-evidence-answer-${itemId}-${option.id}`}
+          >
+            {option.text}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
@@ -224,12 +291,18 @@ function EvidenceRow({
   enabled,
   onToggle,
   onNavigate,
+  answer,
+  onAnswer,
 }: {
   item: EvidenceItem
   isEnglish: boolean
   enabled: boolean
   onToggle: (enabled: boolean) => void
   onNavigate: (target: ResourceNavTarget) => void
+  /** 「有」/「無」 already recorded for this sign, where the row takes one. */
+  answer?: SignAnswer
+  /** Absent where this row is not a sign a clinician can answer in the room. */
+  onAnswer?: (answer: SignAnswer | undefined) => void
 }) {
   const physicianEntered = item.derivability === 'physician-entered'
   const label = pick(item.label, isEnglish)
@@ -244,18 +317,28 @@ function EvidenceRow({
       data-testid={`cdss-evidence-row-${item.id}`}
       data-enabled={enabled ? 'true' : 'false'}
     >
-      <Switch
-        checked={enabled}
-        onCheckedChange={onToggle}
-        // The track is dense on purpose; the thumb is not the touch target. The
-        // pseudo-element grows the hit area into the row's own padding, so a
-        // thumb tapped on a phone lands without loosening the table.
-        className="relative mt-0.5 shrink-0 after:absolute after:-inset-2 after:content-['']"
-        aria-label={isEnglish
-          ? `Include ${label} in the reading`
-          : `將「${label}」納入判定`}
-        data-testid={`cdss-evidence-switch-${item.id}`}
-      />
+      {onAnswer ? (
+        <SignAnswerControl
+          itemId={item.id}
+          label={label}
+          isEnglish={isEnglish}
+          answer={answer}
+          onAnswer={onAnswer}
+        />
+      ) : (
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          // The track is dense on purpose; the thumb is not the touch target. The
+          // pseudo-element grows the hit area into the row's own padding, so a
+          // thumb tapped on a phone lands without loosening the table.
+          className="relative mt-0.5 shrink-0 after:absolute after:-inset-2 after:content-['']"
+          aria-label={isEnglish
+            ? `Include ${label} in the reading`
+            : `將「${label}」納入判定`}
+          data-testid={`cdss-evidence-switch-${item.id}`}
+        />
+      )}
 
       <div className="min-w-0 flex-1 @min-[46rem]:flex @min-[46rem]:items-start @min-[46rem]:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 @min-[46rem]:w-[13rem] @min-[46rem]:shrink-0">
@@ -323,16 +406,35 @@ export function EvidenceTablePanel({
   locale,
   patientId,
   onNavigate,
+  clinicVitals,
+  onSaveClinicVitals,
 }: {
   table: EvidenceTable
   recommendationId: string
   locale: CdssLocale
   patientId?: string
   onNavigate: (target: ResourceNavTarget) => void
+  /** Today's examination. Absent leaves every row on the plain switch. */
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (vitals: ClinicVitals) => void
 }) {
   const isEnglish = locale === 'en'
   const overrides = useEvidenceOverrides(patientId)
   const setOverride = useEvidenceOverridesStore((state) => state.setOverride)
+  const signAnswers = clinicVitals?.signAnswers ?? {}
+  const answerSign = onSaveClinicVitals
+    ? (term: string, answer: SignAnswer | undefined) => {
+        const next = { ...signAnswers }
+        if (answer) next[term] = answer
+        else delete next[term]
+        const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
+        onSaveClinicVitals({
+          ...(clinicVitals ?? { measuredOn }),
+          measuredOn,
+          signAnswers: Object.keys(next).length > 0 ? next : undefined,
+        })
+      }
+    : undefined
 
   const groups = CATEGORY_ORDER
     .map((category) => ({
@@ -372,19 +474,31 @@ export function EvidenceTablePanel({
               {pick(CATEGORY_LABELS[group.category], isEnglish)}
             </h6>
             <div className="divide-y divide-border/40">
-              {group.items.map((item) => (
-                <EvidenceRow
-                  key={item.id}
-                  item={item}
-                  isEnglish={isEnglish}
-                  enabled={isEvidenceItemEnabled(item, overrides)}
-                  onToggle={(enabled) => {
-                    if (!patientId) return
-                    setOverride(patientId, item.id, enabled)
-                  }}
-                  onNavigate={onNavigate}
-                />
-              ))}
+              {group.items.map((item) => {
+                // A row the clinician can answer in the room takes the
+                // 有／無／未評估 control; everything else keeps the switch.
+                const term = EVIDENCE_ROW_SIGN_TERMS[item.id]
+                const answerProps = term && answerSign
+                  ? {
+                    answer: signAnswers[term],
+                    onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                  }
+                  : {}
+                return (
+                  <EvidenceRow
+                    key={item.id}
+                    item={item}
+                    isEnglish={isEnglish}
+                    enabled={isEvidenceItemEnabled(item, overrides)}
+                    onToggle={(enabled) => {
+                      if (!patientId) return
+                      setOverride(patientId, item.id, enabled)
+                    }}
+                    onNavigate={onNavigate}
+                    {...answerProps}
+                  />
+                )
+              })}
             </div>
           </div>
         ))}
