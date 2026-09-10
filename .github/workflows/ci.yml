@@ -37,6 +37,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gallery-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/checkout@v7
+        with:
+          repository: voho0000/firebase-smart-on-fhir
+          ref: 2771a3aad9f302cf2e7df1273d6b71ed4cd9f7fe
+          path: .gallery-backend
+      - run: npm ci --prefix .gallery-backend
+      - run: npm ci --prefix .gallery-backend/functions
+      - run: npx playwright install --with-deps chromium
+      - name: Migration and gallery browser regression
+        working-directory: .gallery-backend
+        run: npx firebase emulators:exec --config firebase.gallery-test.json --only auth,firestore --project demo-mediprisma "node --test tests/prompt-visibility-migration.test.mjs && cd .. && npx playwright test -c playwright.gallery.config.ts"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gallery-regression-results
+          path: test-results/
   ci:
     runs-on: ubuntu-latest
     steps:
