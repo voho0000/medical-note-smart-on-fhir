@@ -287,8 +287,75 @@ function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
  * render identically to a normal paragraph — so callers can use this
  * unconditionally without first sniffing for structure.
  */
+/**
+ * Undo XML escaping the source system left in the report body.
+ *
+ * Bridge captures deliver some narratives with their XML entities intact, so a
+ * knee X-ray reads "XLE05L&apos;t knee" and an echo reports "LA 4.8 cm&apos;".
+ * That is not clinical content — it is transport encoding that never got
+ * decoded, and it survives into anything copied into a note.
+ *
+ * `&amp;` is decoded LAST on purpose: doing it first would turn a literal
+ * "&amp;apos;" (an escaped ampersand followed by the word) into an apostrophe,
+ * inventing a character the source never wrote. A bare "&" — "CT without&with
+ * contrast" — is left exactly as it is, since only known entity names match.
+ */
+export function decodeReportEntities(raw: string): string {
+  if (!raw || !raw.includes('&')) return raw
+  return raw
+    .replace(/&apos;/g, "'")
+    .replace(/&#0*39;/g, "'")
+    .replace(/&#x0*27;/gi, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*34;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+}
+
+/**
+ * Put a separator between the NHI order code and the study description the
+ * source ran together — "XCH01Chest PA" → "XCH01 Chest PA".
+ *
+ * Unlike entity decoding, every character here is content the reporting system
+ * actually wrote; what is missing is only the space. So this INSERTS and never
+ * deletes: the code stays visible, because it is what the clinician matches
+ * against the order and what a bridge report would have to quote.
+ *
+ * Deliberately narrow, and anchored to the very start of the report:
+ *   • lettered codes need ≥2 uppercase letters AND ≥2 digits (XCH01, XLE18),
+ *     which no English word can satisfy;
+ *   • bare numeric codes must be exactly six digits (090170, 221070, 330272)
+ *     or the five-digits-plus-letter NHI shape (18005C, 12193C), so
+ *     "12mm nodule" and "2024 follow-up" are left alone;
+ *   • the character after the code must be a letter, so "500000 units" and
+ *     "1000000IU" never match.
+ * Anything mid-text is untouched — a code only ever prefixes the first line.
+ *
+ * KNOWN LIMIT: the LETTERED form claims no trailing letter, because "XCH01C"
+ * and "XCH01" + "Chest" are the same characters. Where a code genuinely ends
+ * in a letter it is the numeric five-plus-letter shape, which is matched. A
+ * wrong guess here costs a misplaced space and never a lost character — which
+ * is the reason this inserts rather than deletes.
+ */
+const GLUED_ORDER_CODE_RE =
+  /^([A-Z]{2,5}\d{2,4}|\d{6}|\d{5}[A-Z])(?=[A-Za-z\u4e00-\u9fff])/
+
+export function separateGluedOrderCode(raw: string): string {
+  if (!raw) return raw
+  return raw.replace(/^\s*[^\n]*/, (firstLine) => (
+    firstLine.replace(GLUED_ORDER_CODE_RE, '$1 ')
+  ))
+}
+
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []
+
+  // 0) Decode transport-level XML escaping before anything reads the text:
+  //    heading detection, measurement parsing and the clipboard all see the
+  //    characters the reporting system actually wrote.
+  raw = separateGluedOrderCode(decodeReportEntities(raw))
 
   const isMicrobiologyBlob = isFlattenedMicrobiologyReport(raw)
 
