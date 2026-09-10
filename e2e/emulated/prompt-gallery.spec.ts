@@ -48,7 +48,7 @@ test('summary entry can discover and import a public chat-only HMC template afte
     await page.getByLabel('Email', { exact: true }).fill(email)
     await page.getByLabel('密碼', { exact: true }).fill(password)
     await page.getByRole('button', { name: '登入', exact: true }).click()
-    await expect(manager.getByRole('status')).toContainText('已同步至帳號')
+    await expect(manager.getByRole('status').filter({ hasText: '已同步至帳號' })).toBeVisible()
     await manager.getByRole('button', { name: '瀏覽範本庫', exact: true }).click()
     const gallery = page.getByRole('dialog', { name: 'Prompt 範本庫', exact: true })
     await expect(gallery.getByRole('button', { name: 'E2E legacy summary', exact: true })).toBeVisible()
