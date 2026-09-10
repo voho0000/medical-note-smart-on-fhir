@@ -28,8 +28,14 @@ export const OVERVIEW_SECTION_DOM_ID: Record<OverviewSectionId, string> = {
 /**
  * Container width at which 總覽 switches from the stacked list to the 2×2
  * grid, measured on the OverviewCard root.
+ *
+ * 880, not 960: the split is capped at 70%, so 960 put the grid out of reach
+ * of any window narrower than ~1468 CSS px — which a 1512px laptop becomes the
+ * moment the reader zooms to 110%, and browser zoom is normal here rather than
+ * exceptional. 880 gives each cell ~440px, still wide enough for the lab pivot
+ * at five date columns, and brings 110% back within reach.
  */
-export const OVERVIEW_WIDE_BREAKPOINT_PX = 960
+export const OVERVIEW_WIDE_BREAKPOINT_PX = 880
 
 /**
  * The same threshold expressed as a LEFT PANEL width, for the page shell's

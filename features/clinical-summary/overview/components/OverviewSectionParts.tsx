@@ -5,8 +5,14 @@
 // state. All navigation goes through the existing resource-navigation store —
 // the same channel a cited source in the AI summary uses — so the left panel
 // switches tabs and scroll-flashes the record with no new plumbing.
-import { ExternalLink } from 'lucide-react'
-import { useCallback } from 'react'
+import { Maximize2 } from 'lucide-react'
+import { useCallback, type ReactNode } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -57,20 +63,78 @@ export function useOverviewNavigate() {
   )
 }
 
-export function OverviewOpenTabButton({ target }: { target: OverviewNavigationTarget }) {
-  const { t } = useLanguage()
-  const navigateTo = useOverviewNavigate()
-  if (!target.resourceId) return null
+/**
+ * Opens the card's CURRENT list at full length.
+ *
+ * Not a route to the owning tab — the footer link is that, in words. This is
+ * the same rows the card is already showing, minus the height limit: a card
+ * that fits seven of ten current medications can show all ten without the
+ * reader leaving 總覽. Anything richer (a timeline, search, trends, the full
+ * prescription history) is what the tab is for, and duplicating it here would
+ * only produce a worse copy that drifts.
+ */
+export function OverviewExpandButton({
+  label,
+  onClick,
+  disabled = false,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  if (disabled) return null
   return (
     <button
       type="button"
       className={OVERVIEW_ICON_ACTION_CLASS}
-      title={t.overview.openInTab.replace('{tab}', target.tabLabel)}
-      aria-label={t.overview.openInTab.replace('{tab}', target.tabLabel)}
-      onClick={() => navigateTo(target)}
+      title={label}
+      aria-label={label}
+      aria-haspopup="dialog"
+      onClick={onClick}
     >
-      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
     </button>
+  )
+}
+
+/** The full-length list itself. Scrolls; the card behind it does not move. */
+export function OverviewFullListDialog({
+  open,
+  onOpenChange,
+  title,
+  subtitle,
+  filters,
+  children,
+}: {
+  open: boolean
+  onOpenChange: (next: boolean) => void
+  title: string
+  subtitle?: string
+  /** The card's own filter controls, driving the same state — changing the
+   *  filter here re-renders this list rather than making the reader close the
+   *  dialog, change it on the card, and open it again. */
+  filters?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-baseline gap-2 text-base">
+            <span>{title}</span>
+            {subtitle && (
+              <span className="text-xs font-normal text-muted-foreground">{subtitle}</span>
+            )}
+          </DialogTitle>
+          {filters && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">{filters}</div>
+          )}
+        </DialogHeader>
+        <div className="max-h-[68vh] min-w-0 overflow-y-auto">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -78,18 +142,26 @@ export function OverviewOpenTabButton({ target }: { target: OverviewNavigationTa
 export function OverviewTruncationNote({
   hiddenCount,
   target,
+  always = false,
   className,
 }: {
   hiddenCount: number
   target: OverviewNavigationTarget
+  /** Show the link even when nothing was truncated. */
+  always?: boolean
   className?: string
 }) {
   const { t } = useLanguage()
   const navigateTo = useOverviewNavigate()
-  if (hiddenCount <= 0) return null
+  // `always`: the route out stays offered even when nothing was cut — 檢驗's
+  // 常用 view is a deliberate short list, so "nothing hidden by the fit" does
+  // not mean "you are seeing everything".
+  if (hiddenCount <= 0 && !always) return null
   return (
     <div className={cn(OVERVIEW_TRUNCATION_CLASS, className)}>
-      <span>{t.overview.moreItems.replace('{count}', String(hiddenCount))}</span>
+      {hiddenCount > 0 && (
+        <span>{t.overview.moreItems.replace('{count}', String(hiddenCount))}</span>
+      )}
       <button
         type="button"
         className="cursor-pointer text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"

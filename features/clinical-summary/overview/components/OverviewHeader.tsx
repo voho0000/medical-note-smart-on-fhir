@@ -1,7 +1,7 @@
 "use client"
 
 // Title + date range + the 1／3／6 個月 range chips + 專注總覽.
-import { PanelRightClose } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useWorkspacePanels } from '@/src/application/providers/workspace-panels.provider'
 import { formatDate } from '@/src/shared/utils/date.utils'
@@ -23,10 +23,14 @@ export function OverviewHeader({
   const strings = t.overview
   const ranges = strings.ranges as Record<string, string>
   // Absent outside the workspace shell (and in unit tests) — then the control
-  // simply is not offered. It is also pointless once either side is already
-  // collapsed, and the split it acts on does not exist below md.
+  // simply is not offered. The split it acts on does not exist below md.
   const panels = useWorkspacePanels()
-  const canFocus = !!panels && panels.collapsed === null
+  // A TOGGLE, not a one-way door. On a display too narrow for the 2×2 the
+  // shell collapses the feature panel by itself, and a control that merely
+  // disappeared at that point would leave the AI summary with no visible way
+  // back — the collapsed rail alone is easy to miss on the far edge.
+  const featuresHidden = panels?.collapsed === 'right'
+  const showToggle = !!panels && (panels.collapsed === null || featuresHidden)
 
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -56,16 +60,19 @@ export function OverviewHeader({
             {ranges[String(months)]}
           </button>
         ))}
-        {canFocus && (
+        {showToggle && (
           <button
             type="button"
-            title={t.header.focusOverviewHint}
-            aria-label={t.header.focusOverviewHint}
-            onClick={() => panels?.setCollapsed('right')}
-            className={`${overviewChipClass(false)} hidden items-center gap-1 md:inline-flex`}
+            title={featuresHidden ? t.header.showFeaturesHint : t.header.focusOverviewHint}
+            aria-label={featuresHidden ? t.header.showFeaturesHint : t.header.focusOverviewHint}
+            aria-pressed={featuresHidden}
+            onClick={() => panels?.setCollapsed(featuresHidden ? null : 'right')}
+            className={`${overviewChipClass(featuresHidden)} hidden items-center gap-1 md:inline-flex`}
           >
-            <PanelRightClose className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {t.header.focusOverview}
+            {featuresHidden
+              ? <PanelRightOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              : <PanelRightClose className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+            {featuresHidden ? t.header.showFeatures : t.header.focusOverview}
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/components/clinical-metadata-styles'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -9,27 +9,37 @@ import type { MedicationRow } from '../types'
 interface MedicationTerminologyTooltipProps {
   medication: Pick<MedicationRow, 'drugTerminology'>
   enabled: boolean
+  /** Facts about THIS prescription — dose, frequency, days supplied — shown
+   *  under the drug-master rows. The card above describes the drug; this
+   *  describes the fill, and 總覽 needs both in one place because its row has
+   *  no space for either. Callers with nothing to add omit it and the card is
+   *  exactly what it was. */
+  extra?: ReactNode
   children: ReactElement
 }
 
 export function MedicationTerminologyTooltip({
   medication,
   enabled,
+  extra,
   children,
 }: MedicationTerminologyTooltipProps) {
   const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const terminology = medication.drugTerminology
 
-  if (!enabled || !terminology) return children
+  // `extra` alone is worth a card: a drug missing from the NHI master still
+  // has a dose and a supply, and dropping the tooltip would make those rows
+  // silently behave differently from their neighbours.
+  if (!enabled || (!terminology && !extra)) return children
 
   const atcNames = [
-    terminology.atcNameEn,
-    terminology.atcNameZh,
+    terminology?.atcNameEn,
+    terminology?.atcNameZh,
   ].filter((value, index, values): value is string =>
     Boolean(value) && values.indexOf(value) === index,
   )
-  const rows = [
+  const rows = !terminology ? [] : [
     [mt.terminologyIngredientLabel ?? 'Ingredient / strength', terminology.ingredientText],
     [mt.terminologyOfficialNameZhLabel ?? 'Chinese product name', terminology.officialNameZh],
     [mt.terminologyOfficialNameEnLabel ?? 'English product name', terminology.officialNameEn],
@@ -77,11 +87,21 @@ export function MedicationTerminologyTooltip({
               </div>
             ))}
           </dl>
-          <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1 text-[0.6875rem] text-secondary-foreground/70">
-            {mt.terminologySource ?? 'NHI drug master'}
-            {' · '}
-            {mt.terminologySnapshotLabel ?? 'Version'}: {terminology.snapshotId}
-          </div>
+          {extra && (
+            <div className={rows.length > 0
+              ? 'mt-1.5 border-t border-secondary-foreground/15 pt-1.5'
+              : undefined}
+            >
+              {extra}
+            </div>
+          )}
+          {terminology && (
+            <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1 text-[0.6875rem] text-secondary-foreground/70">
+              {mt.terminologySource ?? 'NHI drug master'}
+              {' · '}
+              {mt.terminologySnapshotLabel ?? 'Version'}: {terminology.snapshotId}
+            </div>
+          )}
         </>
       )}
     >

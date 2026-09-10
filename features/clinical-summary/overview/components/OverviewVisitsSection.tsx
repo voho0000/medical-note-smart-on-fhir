@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useOptionalRightDetail } from '@/src/application/providers/right-detail.provider'
 import { formatDate } from '@/src/shared/utils/date.utils'
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
+import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/components/clinical-metadata-styles'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   CLINICAL_ABNORMAL_TONE,
@@ -25,11 +27,12 @@ import type { VisitRecord } from '@/features/clinical-summary/visit-history/hook
 import type { OverviewVisitItem, OverviewVisitsData } from '../hooks/useOverviewData'
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
-import { fitRows, type OverviewWindow } from '../utils/overview-selectors'
+import type { OverviewWindow } from '../utils/overview-selectors'
 import { OverviewSectionCard } from './OverviewSectionCard'
 import {
   OverviewEmptyRow,
-  OverviewOpenTabButton,
+  OverviewExpandButton,
+  OverviewFullListDialog,
   OverviewTruncationNote,
 } from './OverviewSectionParts'
 import {
@@ -43,9 +46,7 @@ import { VisitTimeline } from './VisitTimeline'
 type VisitFilter = 'all' | 'emergency' | 'inpatient' | 'outpatient'
 
 /** Single-line row: 26px of content, the row's 2px border, the 4px stack gap. */
-const OVERVIEW_VISIT_ROW_PX = 32
 /** Compact timeline strip (32px) plus the 8px gap that follows it. */
-const OVERVIEW_VISIT_TIMELINE_PX = 40
 
 const TYPE_TONE: Record<string, string> = {
   emergency: CLINICAL_ABNORMAL_TONE,
@@ -104,6 +105,7 @@ export function OverviewVisitsSection({
   const rightDetail = useOptionalRightDetail()
   const [filter, setFilter] = useState<VisitFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [listOpen, setListOpen] = useState(false)
   const badges = t.visitHistory.badges as Record<string, string>
   const target = {
     resourceType: 'Encounter',
@@ -116,17 +118,10 @@ export function OverviewVisitsSection({
     [data.items, filter],
   )
 
-  const shown = useMemo(() => {
-    if (!fit.bounded || fit.availablePx === undefined) return matched
-    return matched.slice(0, fitRows(
-      fit.availablePx,
-      OVERVIEW_VISIT_ROW_PX,
-      OVERVIEW_VISIT_TIMELINE_PX,
-      matched.length,
-    ))
-  }, [fit.availablePx, fit.bounded, matched])
-
-  const hidden = matched.length - shown.length
+  // Every matched row renders; the card scrolls. See the meds section — the
+  // row budget only ever existed to avoid a scrollbar the reader wanted.
+  const shown = matched
+  const hidden = 0
   const compact = fit.bounded
 
   const chips: { id: VisitFilter; label: string; enabled: boolean }[] = [
@@ -159,6 +154,180 @@ export function OverviewVisitsSection({
     })
   }
 
+  // One renderer for the card and the full-length dialog (see
+  // OverviewExpandButton): two copies of a clinical row would drift.
+  const renderRows = (items: OverviewVisitItem[]) => (
+  <div className={cn('flex min-w-0 shrink-0 flex-col', compact ? 'gap-1' : 'gap-1.5')}>
+    {items.map((item) => {
+      const { visit } = item
+      const primaryIcd = visit.icdCodes[0]
+      const extraIcdCount = Math.max(0, visit.icdCodes.length - 1)
+      const showRange = !!visit.endDate
+        && visit.endDate.slice(0, 10) !== visit.date.slice(0, 10)
+      const dateLabel = showRange
+        ? `${formatDate(visit.date, locale)} ~ ${formatDate(visit.endDate, locale)}`
+        : formatDate(visit.date, locale)
+      const selected = selectedId === visit.id
+      const isRightActive = rightDetail?.detail?.sourceId === visit.id
+      // Only the abnormal count survives on the overview row.
+      // 診斷／檢驗／處置／用藥 are inventory: they say a visit HAS
+      // records without saying anything about the patient, and at
+      // this width they crowded — and visibly overlapped — the one
+      // thing the row exists to show, the diagnosis. The full counts
+      // are one click away on 就診紀錄. Abnormal stays because it is
+      // the only one that carries a finding rather than a tally.
+      const stats = item.abnormalCount > 0 ? (
+        <span className="flex shrink-0 items-center gap-1">
+          <VisitStat
+            label={(t.visitHistory as any).abnormal ?? 'Abnormal'}
+            count={item.abnormalCount}
+            attention
+          />
+        </span>
+      ) : null
+      const icdChip = primaryIcd && (
+        <span
+          className={cn(clinicalIcdChipClass, 'min-w-0 flex-1', compact && 'h-[18px] max-w-none text-[0.6875rem]')}
+          title={primaryIcd.description
+            ? `${primaryIcd.code} ${primaryIcd.description}`
+            : primaryIcd.code}
+        >
+          <span className={clinicalIcdCodeClass}>{primaryIcd.code}</span>
+          {primaryIcd.description && (
+            <span className={clinicalIcdDescriptionClass}>{primaryIcd.description}</span>
+          )}
+        </span>
+      )
+      // Same behaviour as the 就診 tab's +N: the remaining diagnoses are read
+      // on hover / tap / focus rather than being a count with nothing behind
+      // it. Same list shape too (code in mono, description beside it), so the
+      // two surfaces read alike.
+      const moreIcd = extraIcdCount > 0 && (
+        <TapTooltip
+          asChild
+          aria-label={strings.visits.moreIcd.replace('{count}', String(extraIcdCount))}
+          contentClassName={cn(
+            clinicalTooltipSurfaceClass,
+            'max-h-[min(20rem,60vh)] max-w-[min(90vw,32rem)] overflow-y-auto p-2.5 text-xs leading-relaxed',
+          )}
+          content={(
+            <div className="space-y-1.5">
+              {visit.icdCodes.slice(1).map((icd, index) => (
+                <div
+                  key={`${icd.code}-${index}`}
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2"
+                >
+                  <span className="font-mono font-semibold text-secondary-foreground">
+                    {icd.code}
+                  </span>
+                  {icd.description && (
+                    <span className="whitespace-normal break-words text-secondary-foreground/80">
+                      {icd.description}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        >
+          <span
+            tabIndex={0}
+            className={cn(
+              OVERVIEW_META_BADGE_CLASS,
+              'cursor-help',
+              compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]',
+            )}
+          >
+            +{extraIcdCount}
+          </span>
+        </TapTooltip>
+      )
+
+      return (
+        <div
+          key={visit.id}
+          data-overview-visit={visit.id}
+          className={cn(
+            OVERVIEW_LIST_ROW_CLASS,
+            (selected || isRightActive) && 'border-primary/40 bg-primary/5',
+          )}
+        >
+          <div className={cn(
+            'flex min-w-0 items-center gap-1.5 px-2',
+            compact ? 'h-[26px]' : 'py-1',
+          )}>
+            <Badge
+              variant="outline"
+              className={cn(
+                'shrink-0 border-transparent px-1.5 py-0',
+                compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]',
+                TYPE_TONE[visit.type] ?? CLINICAL_CATEGORY_TONE,
+              )}
+            >
+              {badges[visit.type] ?? badges.other}
+            </Badge>
+            {/* `VisitRecord.department` is the bridge's SOURCE
+                CHANNEL — 「IC卡資料」/「申報資料」/「雲端病歷」 —
+                and only falls back to a real department on legacy
+                bundles. Every row therefore repeated the same word
+                while taking width from the institution and the
+                diagnosis. Provenance belongs on 就診紀錄, where a
+                row has space to say it once and mean it. */}
+            {visit.institution && (
+              <ReportInstitutionLabel
+                institution={visit.institution}
+                locale={locale}
+                className={cn('shrink text-[0.6875rem]', compact ? 'max-w-[7rem]' : 'max-w-[9rem]')}
+              />
+            )}
+            <span className={cn(
+              'shrink-0 whitespace-nowrap font-medium tabular-nums text-foreground',
+              compact ? 'text-xs' : 'text-[0.8125rem]',
+            )}>
+              {dateLabel}
+            </span>
+            {compact && icdChip}
+            {compact && moreIcd}
+            {compact && stats}
+            {!compact && rightDetail && (
+              <button
+                type="button"
+                className={cn(OVERVIEW_ICON_ACTION_CLASS, 'ml-auto')}
+                title={t.visitHistory.openRight}
+                aria-label={t.visitHistory.openRight}
+                onClick={() => openInRightPane(item)}
+              >
+                <PanelRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {!compact && (primaryIcd || item.diagnosisCount > 0) && (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-2 pb-1">
+              {icdChip}
+              {moreIcd}
+              <span className="ml-auto flex items-center gap-1">{stats}</span>
+            </div>
+          )}
+        </div>
+      )
+    })}
+  </div>
+  )
+
+  // One definition, two places: the card header and the expanded dialog, both
+  // driving the same `filter` state.
+        const filterChips = chips.filter((chip) => chip.enabled).map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            aria-pressed={filter === chip.id}
+            className={overviewChipClass(filter === chip.id)}
+            onClick={() => setFilter(chip.id)}
+          >
+            {chip.label}
+          </button>
+      ))
+
   return (
     <OverviewSectionCard
       id={OVERVIEW_SECTION_DOM_ID.visits}
@@ -170,18 +339,12 @@ export function OverviewVisitsSection({
       headingRef={headingRef}
       actions={(
         <>
-          {chips.filter((chip) => chip.enabled).map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              aria-pressed={filter === chip.id}
-              className={overviewChipClass(filter === chip.id)}
-              onClick={() => setFilter(chip.id)}
-            >
-              {chip.label}
-            </button>
-          ))}
-          <OverviewOpenTabButton target={target} />
+          {filterChips}
+          <OverviewExpandButton
+            label={t.overview.expandList}
+            onClick={() => setListOpen(true)}
+            disabled={matched.length === 0}
+          />
         </>
       )}
     >
@@ -199,134 +362,19 @@ export function OverviewVisitsSection({
           <OverviewEmptyRow />
         ) : (
           <>
-            <div className={cn('flex min-w-0 shrink-0 flex-col', compact ? 'gap-1' : 'gap-1.5')}>
-              {shown.map((item) => {
-                const { visit } = item
-                const primaryIcd = visit.icdCodes[0]
-                const extraIcdCount = Math.max(0, visit.icdCodes.length - 1)
-                const showRange = !!visit.endDate
-                  && visit.endDate.slice(0, 10) !== visit.date.slice(0, 10)
-                const dateLabel = showRange
-                  ? `${formatDate(visit.date, locale)} ~ ${formatDate(visit.endDate, locale)}`
-                  : formatDate(visit.date, locale)
-                const selected = selectedId === visit.id
-                const isRightActive = rightDetail?.detail?.sourceId === visit.id
-                const stats = (
-                  <span className="flex shrink-0 items-center gap-1">
-                    {item.diagnosisCount > 0 && (
-                      <VisitStat label={t.visitHistory.diagnoses} count={item.diagnosisCount} />
-                    )}
-                    {item.testCount > 0 && (
-                      <VisitStat label={t.visitHistory.tests} count={item.testCount} />
-                    )}
-                    {item.abnormalCount > 0 && (
-                      <VisitStat
-                        label={(t.visitHistory as any).abnormal ?? 'Abnormal'}
-                        count={item.abnormalCount}
-                        attention
-                      />
-                    )}
-                    {!compact && item.medicationCount > 0 && (
-                      <VisitStat label={t.visitHistory.medications} count={item.medicationCount} />
-                    )}
-                    {item.reportCount > 0 && (
-                      <VisitStat label={t.visitHistory.examReportsShort} count={item.reportCount} />
-                    )}
-                  </span>
-                )
-                const icdChip = primaryIcd && (
-                  <span
-                    className={cn(clinicalIcdChipClass, 'min-w-0 flex-1', compact && 'h-[18px] max-w-none text-[0.6875rem]')}
-                    title={primaryIcd.description
-                      ? `${primaryIcd.code} ${primaryIcd.description}`
-                      : primaryIcd.code}
-                  >
-                    <span className={clinicalIcdCodeClass}>{primaryIcd.code}</span>
-                    {primaryIcd.description && (
-                      <span className={clinicalIcdDescriptionClass}>{primaryIcd.description}</span>
-                    )}
-                  </span>
-                )
-                const moreIcd = extraIcdCount > 0 && (
-                  <span className={cn(
-                    OVERVIEW_META_BADGE_CLASS,
-                    compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]',
-                  )}>
-                    +{extraIcdCount}
-                  </span>
-                )
-
-                return (
-                  <div
-                    key={visit.id}
-                    data-overview-visit={visit.id}
-                    className={cn(
-                      OVERVIEW_LIST_ROW_CLASS,
-                      (selected || isRightActive) && 'border-primary/40 bg-primary/5',
-                    )}
-                  >
-                    <div className={cn(
-                      'flex min-w-0 items-center gap-1.5 px-2',
-                      compact ? 'h-[26px]' : 'py-1',
-                    )}>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'shrink-0 border-transparent px-1.5 py-0',
-                          compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]',
-                          TYPE_TONE[visit.type] ?? CLINICAL_CATEGORY_TONE,
-                        )}
-                      >
-                        {badges[visit.type] ?? badges.other}
-                      </Badge>
-                      {visit.department && (
-                        <span className={cn(
-                          OVERVIEW_META_BADGE_CLASS,
-                          compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]',
-                        )}>
-                          {visit.department}
-                        </span>
-                      )}
-                      {visit.institution && (
-                        <ReportInstitutionLabel
-                          institution={visit.institution}
-                          locale={locale}
-                          className={cn('shrink text-[0.6875rem]', compact ? 'max-w-[7rem]' : 'max-w-[9rem]')}
-                        />
-                      )}
-                      <span className={cn(
-                        'shrink-0 whitespace-nowrap font-medium tabular-nums text-foreground',
-                        compact ? 'text-xs' : 'text-[0.8125rem]',
-                      )}>
-                        {dateLabel}
-                      </span>
-                      {compact && icdChip}
-                      {compact && moreIcd}
-                      {compact && stats}
-                      {!compact && rightDetail && (
-                        <button
-                          type="button"
-                          className={cn(OVERVIEW_ICON_ACTION_CLASS, 'ml-auto')}
-                          title={t.visitHistory.openRight}
-                          aria-label={t.visitHistory.openRight}
-                          onClick={() => openInRightPane(item)}
-                        >
-                          <PanelRight className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                    {!compact && (primaryIcd || item.diagnosisCount > 0) && (
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-2 pb-1">
-                        {icdChip}
-                        {moreIcd}
-                        <span className="ml-auto flex items-center gap-1">{stats}</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+            <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
+              {renderRows(shown)}
             </div>
-            {fit.bounded && <OverviewTruncationNote hiddenCount={hidden} target={target} />}
+            <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+            <OverviewFullListDialog
+              open={listOpen}
+              onOpenChange={setListOpen}
+              title={strings.sections.visits}
+              subtitle={strings.counts.visits.replace('{count}', String(matched.length))}
+              filters={filterChips}
+            >
+              {renderRows(matched)}
+            </OverviewFullListDialog>
           </>
         )}
       </div>
