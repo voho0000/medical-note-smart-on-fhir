@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 
 import { BundleFileInput } from '@/features/import-bundle/components/BundleFileInput'
@@ -12,9 +12,15 @@ describe('BundleFileInput', () => {
     expect(html).not.toContain('import-bundle-input')
   })
 
-  it('publishes the handoff target after the client mounts', async () => {
+  it('publishes the handoff target only after the client stability window', () => {
+    jest.useFakeTimers()
     render(<BundleFileInput testId="import-bundle-input" importFile={jest.fn()} />)
 
-    expect(await screen.findByTestId('import-bundle-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('import-bundle-input')).not.toBeInTheDocument()
+    act(() => jest.advanceTimersByTime(999))
+    expect(screen.queryByTestId('import-bundle-input')).not.toBeInTheDocument()
+    act(() => jest.advanceTimersByTime(1))
+    expect(screen.getByTestId('import-bundle-input')).toBeInTheDocument()
+    jest.useRealTimers()
   })
 })

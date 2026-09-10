@@ -16,6 +16,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
  *  exports are JSON; some sources ship the same JSON with a `.txt` extension,
  *  so we accept both. Import detects and validates by content. */
 export const BUNDLE_FILE_ACCEPT = '.json,.txt,application/json,text/plain'
+const HANDOFF_INPUT_STABILITY_DELAY_MS = 1_000
 
 export interface BundleFileInputHandle {
   /** Open the OS file picker. */
@@ -33,15 +34,23 @@ interface BundleFileInputProps {
 export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInputProps>(
   function BundleFileInput({ testId, importFile }, ref) {
     const inputRef = useRef<HTMLInputElement>(null)
-    const [mounted, setMounted] = useState(false)
+    const [handoffReady, setHandoffReady] = useState(false)
 
     // The Medcloud extension waits for this input before handing the Bundle to
-    // the app. Rendering it into the server HTML lets the extension find a
-    // non-hydrated (or soon-to-be-replaced) node and dispatch a change event
-    // that React never receives. Publish the bridge target only after the
-    // client has mounted; the extension's MutationObserver then resumes on the
-    // live input whose onChange handler is ready.
-    useEffect(() => setMounted(true), [])
+    // the app. Exposing its selector in the server HTML lets the extension find
+    // a non-hydrated node; exposing it immediately after mount is still too
+    // early on the static /app deployment, whose hydration recovery can replace
+    // the node just after first paint. Insert the extension-facing input only
+    // after a short stable-client window; the extension observes added nodes.
+    // Inputs without a test id are manual-only and can mount immediately.
+    useEffect(() => {
+      if (!testId) return
+      const timer = window.setTimeout(
+        () => setHandoffReady(true),
+        HANDOFF_INPUT_STABILITY_DELAY_MS,
+      )
+      return () => window.clearTimeout(timer)
+    }, [testId])
 
     useImperativeHandle(ref, () => ({ open: () => inputRef.current?.click() }), [])
 
@@ -60,7 +69,7 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
       [importFile],
     )
 
-    if (!mounted) return null
+    if (testId && !handoffReady) return null
 
     return (
       <input
