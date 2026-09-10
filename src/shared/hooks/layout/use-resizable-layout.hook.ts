@@ -53,17 +53,47 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
 
   const [leftWidth, setLeftWidth] = useState(initialWidth)
   const [isDragging, setIsDragging] = useState(false)
-  const containerRef = useRef<HTMLElement>(null)
+  const containerRef = useRef<HTMLElement | null>(null)
+  // A split the reader chose is theirs; nothing recomputes it afterwards.
+  const userAdjustedRef = useRef(false)
+  // The workspace does not exist until a patient is loaded, so a plain ref
+  // object is still null when the effects below first run — and nothing would
+  // ever tell them it had arrived. This callback ref re-renders on attach,
+  // which is what actually starts the measuring.
+  const [containerEl, setContainerEl] = useState<HTMLElement | null>(null)
+  // null until measured. `false` means even `maxWidth` leaves the left panel
+  // short of `preferLeftContentPx` — the caller decides what to do about a
+  // display that simply cannot show the layout the split exists for.
+  const [preferredWidthReachable, setPreferredWidthReachable] =
+    useState<boolean | null>(null)
+  const attachContainer = useCallback((element: HTMLElement | null) => {
+    // A width the reader chose belongs to the workspace they chose it in, not
+    // to the browser session. Clearing the patient unmounts the workspace and
+    // importing another mounts a fresh one, which is a new reading task and
+    // should start from the default split again — otherwise a single visit to
+    // 「回到左右各半」 silently disables the preferred width for every patient
+    // loaded afterwards.
+    if (element && element !== containerRef.current) userAdjustedRef.current = false
+    containerRef.current = element
+    setContainerEl(element)
+  }, [])
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true)
   }, [])
 
   // Measured, not guessed: the panels size against the container's CONTENT
-  // box, so the container's own padding is already excluded from this rect's
-  // usable width only after subtracting it. Runs before paint so the split
-  // never visibly jumps from 50%.
-  useIsomorphicLayoutEffect(() => {
+  // box, so its padding has to come off this rect. Runs before paint so the
+  // split never visibly jumps from 50%.
+  //
+  // Re-measured on every container resize, not just on mount. Browser zoom
+  // changes the viewport in CSS pixels without remounting anything, so a
+  // mount-only version silently left the split at a percentage computed for
+  // the old size — at 110% zoom the panel fell back under the target and the
+  // layout it was widened for never appeared. `userAdjustedRef` is what keeps
+  // that from fighting the reader: the moment they drag the divider or use its
+  // controls, this stops touching the split for the rest of the session.
+  const applyPreferredWidth = useCallback(() => {
     if (!preferLeftContentPx) return
     const container = containerRef.current
     if (!container) return
@@ -72,11 +102,26 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
       - parseFloat(style.paddingLeft || '0')
       - parseFloat(style.paddingRight || '0')
     if (!(usable > 0)) return
+    // Reachability is a property of the DISPLAY, not of the reader's choices,
+    // so it is measured even after they have set their own width.
+    const reachable = preferredSplitPercent(usable, preferLeftContentPx, minWidth, maxWidth)
+    setPreferredWidthReachable(reachable !== null)
+    if (userAdjustedRef.current) return
     setLeftWidth((current) => (
       preferredSplitPercent(usable, preferLeftContentPx, current, maxWidth) ?? current
     ))
-    // Mount-only by design (see preferLeftContentPx above).
-  }, [])
+  }, [maxWidth, minWidth, preferLeftContentPx])
+
+  useIsomorphicLayoutEffect(() => {
+    if (!preferLeftContentPx || !containerEl) return
+    if (typeof ResizeObserver === 'undefined') return
+    applyPreferredWidth()
+    // Setting the split changes a CHILD's width, never this container's, so
+    // this observer cannot feed itself.
+    const observer = new ResizeObserver(() => applyPreferredWidth())
+    observer.observe(containerEl)
+    return () => observer.disconnect()
+  }, [applyPreferredWidth, containerEl, preferLeftContentPx])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -88,6 +133,7 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
       
       // Limit between min and max
       if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
+        userAdjustedRef.current = true
         setLeftWidth(newLeftWidth)
       }
     }
@@ -115,14 +161,26 @@ export function useResizableLayout(options: UseResizableLayoutOptions = {}) {
   // a named stop (see the shell's step-then-collapse handlers) rather than
   // only ever jumping to a collapsed panel.
   const setWidth = useCallback((percent: number) => {
+    userAdjustedRef.current = true
     setLeftWidth(Math.min(maxWidth, Math.max(minWidth, percent)))
   }, [maxWidth, minWidth])
+
+  // Forget the reader's manual split and measure again. The caller decides
+  // when the current reading task has ended — loading a DIFFERENT patient does
+  // not remount the workspace (only its data changes), so the container-attach
+  // reset above never fires on that path, which is the common one.
+  const resetPreferredWidth = useCallback(() => {
+    userAdjustedRef.current = false
+    applyPreferredWidth()
+  }, [applyPreferredWidth])
 
   return {
     leftWidth,
     isDragging,
-    containerRef,
+    containerRef: attachContainer,
     handleMouseDown,
     setLeftWidth: setWidth,
+    resetPreferredWidth,
+    preferredWidthReachable,
   }
 }

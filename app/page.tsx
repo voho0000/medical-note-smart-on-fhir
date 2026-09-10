@@ -12,6 +12,7 @@ import { HeaderAuthButton } from "@/features/auth"
 import { OVERVIEW_WIDE_PANEL_PX } from "@/features/clinical-summary/overview/overview.types"
 import { WorkspacePanelsProvider } from "@/src/application/providers/workspace-panels.provider"
 import { hasUnseenSummary, useSummaryActivityStore } from "@/src/application/stores/summary-activity.store"
+import { elapsedSeconds, useSecondTick } from "@/src/shared/hooks/use-second-tick.hook"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import { WelcomeOnboarding } from "./_components/WelcomeOnboarding"
 import { RightDetailPane } from "./_components/RightDetailPane"
@@ -60,7 +61,10 @@ function PageContent() {
   const { t } = useLanguage()
 
   // Resizable layout logic (extracted to custom hook)
-  const { leftWidth, containerRef, handleMouseDown, setLeftWidth } = useResizableLayout({
+  const {
+    leftWidth, containerRef, handleMouseDown, setLeftWidth,
+    resetPreferredWidth, preferredWidthReachable,
+  } = useResizableLayout({
     initialWidth: 50,
     minWidth: 30,
     maxWidth: 70,
@@ -84,7 +88,23 @@ function PageContent() {
   // Panel collapse (lg only): collapse either side to give the other full width.
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
-  const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
+  // The reader's own choice, and nothing else. Whether a panel is actually
+  // collapsed right now is derived below — keeping the two apart is what lets
+  // the automatic behaviour switch itself off permanently the moment they
+  // express a preference, without a second state to keep in step.
+  const [chosenCollapse, setChosenCollapse] = useState<'left' | 'right' | null>(null)
+  const [collapseChosen, setCollapseChosen] = useState(false)
+  const setCollapsedByUser = useCallback((panel: 'left' | 'right' | null) => {
+    setCollapseChosen(true)
+    setChosenCollapse(panel)
+  }, [])
+
+  // A display too small to fit 總覽's 2×2 even at the split's maximum gets the
+  // whole width instead of a layout that cannot appear — and gets it back the
+  // moment the window (or the zoom level) makes the split viable again.
+  // Derived rather than stored: an effect that wrote this into state would
+  // cascade a second render on every resize, and would have to be unwound
+  // correctly when the reader overrode it.
 
   // Divider controls step, they do not jump. Once the split opens wider than
   // half (the overview asks for ~64% so its 2×2 fits), a single click that
@@ -98,10 +118,10 @@ function PageContent() {
       : leftWidth < EVEN_SPLIT_PCT - SPLIT_EPSILON_PCT
   )
   const stepLeft = () => (
-    stepsToCentre('left') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsed('left')
+    stepsToCentre('left') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsedByUser('left')
   )
   const stepRight = () => (
-    stepsToCentre('right') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsed('right')
+    stepsToCentre('right') ? setLeftWidth(EVEN_SPLIT_PCT) : setCollapsedByUser('right')
   )
   const stepLeftLabel = stepsToCentre('left')
     ? t.header.evenSplit
@@ -115,14 +135,11 @@ function PageContent() {
   // opening it acknowledges the run. Nothing here starts a generation:
   // `autoGenerate` stays false by default, so this is silent unless the
   // clinician turned auto-generate on or pressed 產生摘要 themselves.
+  const summaryGenerating = useSummaryActivityStore((state) => state.isGenerating)
+  const summaryStartedAt = useSummaryActivityStore((state) => state.startedAt)
   const summaryCompletedAt = useSummaryActivityStore((state) => state.completedAt)
   const summaryAcknowledgedAt = useSummaryActivityStore((state) => state.acknowledgedAt)
   const acknowledgeSummary = useSummaryActivityStore((state) => state.acknowledge)
-  const summaryReady = collapsed === 'right'
-    && hasUnseenSummary({ completedAt: summaryCompletedAt, acknowledgedAt: summaryAcknowledgedAt })
-  useEffect(() => {
-    if (collapsed !== 'right') acknowledgeSummary()
-  }, [acknowledgeSummary, collapsed])
   const leftTourActive = useLeftBrowserTourStore((state) => state.active)
   const rightTourActive = useRightFeatureTourStore((state) => state.active)
   const tourLauncherOpen = useRightFeatureTourStore((state) => state.launcherOpen)
@@ -139,13 +156,15 @@ function PageContent() {
     if (anyTourActive) {
       if (!tourWasActiveRef.current) {
         tourWasActiveRef.current = true
-        preTourLayoutRef.current = { mobileView, collapsed }
+        // The reader's CHOICE is what a tour must give back; the automatic
+        // narrow-display collapse re-derives itself either way.
+        preTourLayoutRef.current = { mobileView, collapsed: chosenCollapse }
       }
       setMobileView(rightTourActive ? 'right' : 'left')
       // Tour state is an external store event; revealing its panel is the
       // synchronization this effect owns.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCollapsed(null)
+      setChosenCollapse(null)
       return
     }
     if (tourWasActiveRef.current) {
@@ -154,10 +173,10 @@ function PageContent() {
       preTourLayoutRef.current = null
       if (previous) {
         setMobileView(previous.mobileView)
-        setCollapsed(previous.collapsed)
+        setChosenCollapse(previous.collapsed)
       }
     }
-  }, [anyTourActive, collapsed, mobileView, rightTourActive, setMobileView])
+  }, [anyTourActive, chosenCollapse, mobileView, rightTourActive, setMobileView])
 
   // Resource navigation (cited source clicked in the Medical Summary tab): the
   // target lives in the LEFT panel, so make sure it's visible BEFORE its
@@ -169,8 +188,10 @@ function PageContent() {
     setMobileView('left')
     // Resource-navigation requests come from an external store and must make
     // the target panel visible before anchor scrolling runs.
+    // Only the reader's own choice can hide the clinical panel, so clearing
+    // that choice is enough here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCollapsed((c) => (c === 'left' ? null : c))
+    setChosenCollapse((c) => (c === 'left' ? null : c))
   }, [navPending, navSeq, setMobileView])
 
   // Header collapse: tuck the title/toolbar away into a slim strip so the
@@ -205,6 +226,33 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+
+  // What is actually collapsed right now. Derived, never stored: an effect
+  // writing this into state would cascade a render on every resize and would
+  // have to be unwound when the reader overrode it.
+  //
+  // A display too small to fit 總覽's 2×2 even at the split's maximum gets the
+  // whole width instead of a layout that cannot appear, and gets it back the
+  // moment the window or the zoom level makes the split viable again. Two
+  // things switch that off: the reader choosing a collapse state themselves,
+  // and a detail pane, which needs the right column to be there at all.
+  const collapsed: 'left' | 'right' | null = collapseChosen
+    ? chosenCollapse
+    : (preferredWidthReachable === false && !detailVisible ? 'right' : chosenCollapse)
+
+  const summaryReady = collapsed === 'right'
+    && hasUnseenSummary({ completedAt: summaryCompletedAt, acknowledgedAt: summaryAcknowledgedAt })
+  const summaryBusy = collapsed === 'right' && summaryGenerating
+
+  // Seconds since the run began, ticking only while a collapsed rail is the
+  // one thing that can report it — the open panel shows its own progress, and
+  // nothing ticks when no run is in flight.
+  //
+  const summaryTick = useSecondTick(summaryBusy && !!summaryStartedAt)
+  const summaryElapsed = elapsedSeconds(summaryBusy ? summaryStartedAt : null, summaryTick)
+  useEffect(() => {
+    if (collapsed !== 'right') acknowledgeSummary()
+  }, [acknowledgeSummary, collapsed])
   const detailOverlayRef = useRef<HTMLDivElement | null>(null)
   const leftPanelRef = useRef<HTMLElement | null>(null)
   const detailOriginScrollRef = useRef<{
@@ -416,13 +464,27 @@ function PageContent() {
   useEffect(() => {
     if (!detail || !isLargeScreen) return
     const timer = window.setTimeout(() => {
-      setCollapsed((current) => (current === 'right' ? null : current))
+      setChosenCollapse((current) => (current === 'right' ? null : current))
     }, 0)
     return () => window.clearTimeout(timer)
   }, [detail, isLargeScreen])
   useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
+  // A new patient is a new reading task, so the split goes back to the width
+  // the landing view wants — even though importing over an open chart never
+  // unmounts the workspace. Without this, one visit to 「回到左右各半」 kept
+  // every patient loaded afterwards at half width.
+  useEffect(() => {
+    // Same shape as the resource-navigation effect above: an identity change
+    // arriving from outside React resets layout choices exactly once. There is
+    // nothing to derive this from — the previous patient's chosen split is not
+    // a function of the new patient's props.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapseChosen(false)
+    setChosenCollapse(null)
+    resetPreferredWidth()
+  }, [patient?.id, resetPreferredWidth])
   useEffect(() => {
     if (rightTourActive) clearDetail()
   }, [clearDetail, rightTourActive])
@@ -570,12 +632,12 @@ function PageContent() {
         onChange={setMobileView}
       />
 
-      <WorkspacePanelsProvider collapsed={collapsed} setCollapsed={setCollapsed}>
+      <WorkspacePanelsProvider collapsed={collapsed} setCollapsed={setCollapsedByUser}>
       <ClinicalWorkspaceMain ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
           <ClinicalWorkspaceRail
-            onClick={() => setCollapsed(null)}
+            onClick={() => setCollapsedByUser(null)}
             label={t.header.expandClinicalSummary}
             iconDirection="right"
           >
@@ -688,12 +750,20 @@ function PageContent() {
             panel, it also reports a summary that finished out of sight. */}
         {collapsed === 'right' && (
           <ClinicalWorkspaceRail
-            onClick={() => setCollapsed(null)}
-            label={summaryReady ? t.header.summaryReadyExpand : t.header.expandFeatures}
+            onClick={() => setCollapsedByUser(null)}
+            label={summaryBusy
+              ? t.header.summaryRunning
+              : summaryReady ? t.header.summaryReadyExpand : t.header.expandFeatures}
             iconDirection="left"
             badge={summaryReady}
+            busy={summaryBusy}
+            note={summaryBusy
+              ? t.header.summaryElapsed.replace('{seconds}', String(summaryElapsed))
+              : undefined}
           >
-            {summaryReady ? t.header.summaryReady : t.header.features}
+            {summaryBusy
+              ? t.header.summaryRunning
+              : summaryReady ? t.header.summaryReady : t.header.features}
           </ClinicalWorkspaceRail>
         )}
       </ClinicalWorkspaceMain>

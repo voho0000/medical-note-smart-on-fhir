@@ -23,9 +23,20 @@ describe('useSummaryActivityStore', () => {
   beforeEach(() => {
     useSummaryActivityStore.setState({
       isGenerating: false,
+      startedAt: null,
       completedAt: null,
       acknowledgedAt: null,
     })
+  })
+
+  it('starts a clock on the transition into a run, and only then', () => {
+    useSummaryActivityStore.getState().setGenerating(true)
+    const first = useSummaryActivityStore.getState().startedAt
+    expect(typeof first).toBe('number')
+    useSummaryActivityStore.getState().setGenerating(true)
+    expect(useSummaryActivityStore.getState().startedAt).toBe(first)
+    useSummaryActivityStore.getState().setGenerating(false)
+    expect(useSummaryActivityStore.getState().startedAt).toBeNull()
   })
 
   it('records a completion and clears the running flag', () => {
@@ -41,7 +52,7 @@ describe('useSummaryActivityStore', () => {
     useSummaryActivityStore.getState().markCompleted()
     expect(Object.keys(useSummaryActivityStore.getState()).sort()).toEqual([
       'acknowledge', 'acknowledgedAt', 'completedAt', 'isGenerating',
-      'markCompleted', 'setGenerating',
+      'markCompleted', 'setGenerating', 'startedAt',
     ])
   })
 })

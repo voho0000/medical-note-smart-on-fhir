@@ -13,6 +13,9 @@ import { create } from 'zustand'
 
 interface SummaryActivityStore {
   isGenerating: boolean
+  /** Date.now() when the current run began, so a collapsed rail can say how
+   *  long it has been waiting. Cleared when the run ends. */
+  startedAt: number | null
   /** Date.now() of the last completed run, or null if none this session. */
   completedAt: number | null
   /** Set while the feature panel is hidden, so the rail knows what is new. */
@@ -24,12 +27,17 @@ interface SummaryActivityStore {
 
 export const useSummaryActivityStore = create<SummaryActivityStore>((set) => ({
   isGenerating: false,
+  startedAt: null,
   completedAt: null,
   acknowledgedAt: null,
   setGenerating: (value) => set((state) => (
-    state.isGenerating === value ? state : { isGenerating: value }
+    state.isGenerating === value
+      ? state
+      // Keep the original start across the re-renders of a single run; only a
+      // transition into `true` begins the clock.
+      : { isGenerating: value, startedAt: value ? Date.now() : null }
   )),
-  markCompleted: () => set({ isGenerating: false, completedAt: Date.now() }),
+  markCompleted: () => set({ isGenerating: false, startedAt: null, completedAt: Date.now() }),
   acknowledge: () => set({ acknowledgedAt: Date.now() }),
 }))
 

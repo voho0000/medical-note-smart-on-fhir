@@ -7,7 +7,7 @@ import {
   type MouseEventHandler,
   type ReactNode,
 } from "react"
-import { ChevronsLeft, ChevronsRight } from "lucide-react"
+import { ChevronsLeft, ChevronsRight, LoaderCircle } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -268,6 +268,11 @@ interface ClinicalWorkspaceRailProps {
   onClick: () => void
   /** Draw attention to something waiting inside the collapsed panel. */
   badge?: boolean
+  /** Work is running inside the collapsed panel right now. */
+  busy?: boolean
+  /** Short status shown horizontally under the label — an elapsed time reads
+   *  as nonsense rotated 90° with the rest of the vertical text. */
+  note?: ReactNode
   children?: ReactNode
 }
 
@@ -276,9 +281,12 @@ export function ClinicalWorkspaceRail({
   iconDirection,
   onClick,
   badge = false,
+  busy = false,
+  note,
   children,
 }: ClinicalWorkspaceRailProps) {
   const Icon = iconDirection === "left" ? ChevronsLeft : ChevronsRight
+  const active = badge || busy
 
   return (
     <button
@@ -290,24 +298,35 @@ export function ClinicalWorkspaceRail({
       aria-label={label}
       className={cn(
         "group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden",
-        // A finished run is information, not an alarm: the rail takes the
-        // selected-control treatment the rest of the shell already uses.
-        badge && "border-primary/45 bg-primary/5 text-primary",
+        // Two different things, so two different colours. Work in flight uses
+        // the shell's own interaction blue; a FINISHED run uses teal — the
+        // colour 醫療摘要 already carries in the right panel — so the rail is
+        // tinted like the thing it is pointing at. Neither is an alarm tone:
+        // this is information, not a warning.
+        busy && "border-primary/45 bg-primary/5 text-primary",
+        badge && !busy && "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
       )}
     >
-      {badge && (
+      {busy ? (
+        <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+      ) : badge && (
         <span
           aria-hidden="true"
-          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600 dark:bg-teal-400"
         />
       )}
       <Icon className="h-4 w-4" />
       <span className={cn(
         "select-none text-xs [writing-mode:vertical-rl]",
-        badge ? "font-semibold" : "font-medium",
+        active ? "font-semibold" : "font-medium",
       )}>
         {children ?? label}
       </span>
+      {note && (
+        <span className="select-none text-[0.625rem] font-medium tabular-nums">
+          {note}
+        </span>
+      )}
     </button>
   )
 }
