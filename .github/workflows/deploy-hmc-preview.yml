@@ -201,7 +201,7 @@ jobs:
 
           for (const name of localPackages) {
             // The HF-only source slice is overlaid on this published package so
-            // the app retains CKD and the other released disease packs.
+            // the app retains the other released disease packs.
             if (name === '@voho0000/personalized-care') continue
             delete manifest.dependencies?.[name]
             delete manifest.devDependencies?.[name]
@@ -325,9 +325,8 @@ jobs:
           )
 
           const installedHeartFailure = CARE_PACKS.find((pack) => pack.id === 'heart-failure-cdss')
-          const installedCkd = CARE_PACKS.find((pack) => pack.id === 'ckd-cdss')
-          if (!installedHeartFailure || !installedCkd) {
-            throw new Error('HMC overlay must retain both heart-failure and CKD care packs')
+          if (!installedHeartFailure) {
+            throw new Error('HMC overlay must retain the heart-failure care pack')
           }
           for (const field of ['id', 'version', 'enabled']) {
             if (installedHeartFailure[field] !== sourceHeartFailure[field]) {
