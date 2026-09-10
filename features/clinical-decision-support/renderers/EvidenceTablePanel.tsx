@@ -150,6 +150,39 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string 
     zh: 'HF 應避免的藥物',
     en: 'Medications to avoid in heart failure',
   },
+  // The three ESC 2026 section 5.2.2 criteria, each read on its own.
+  'hfpef-symptoms-signs': {
+    zh: 'HFpEF (i) 症狀／徵象',
+    en: 'HFpEF (i) symptoms and signs',
+  },
+  'hfpef-lvef-criterion': {
+    zh: 'HFpEF (ii) LVEF 條件',
+    en: 'HFpEF (ii) LVEF criterion',
+  },
+  'hfpef-objective-abnormality': {
+    zh: 'HFpEF (iii) 客觀結構／功能異常',
+    en: 'HFpEF (iii) objective structural or functional abnormality',
+  },
+  // Concepts the package declares for pathways this host does not list. They
+  // are here because the map is exhaustive over the package's union, not
+  // because a reader can reach them.
+  'htn-treatment-threshold-risk': {
+    zh: '高血壓治療門檻與風險',
+    en: 'Hypertension treatment threshold and risk',
+  },
+  'htn-resistant-pseudoresistance': {
+    zh: '頑固性高血壓與假性頑固',
+    en: 'Resistant hypertension and pseudoresistance',
+  },
+  'htn-secondary-screening-indication': {
+    zh: '次發性高血壓篩檢指徵',
+    en: 'Secondary hypertension screening indication',
+  },
+  'htn-target-individualization': {
+    zh: '血壓目標個人化',
+    en: 'Blood-pressure target individualization',
+  },
+  'htn-sleep-apnea': { zh: '睡眠呼吸中止', en: 'Sleep apnea' },
 }
 
 const DIRECTION_LABELS: Record<EvidenceDirection, { zh: string; en: string }> = {

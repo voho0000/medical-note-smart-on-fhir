@@ -28,11 +28,21 @@ function recommendation(
   }
 }
 
+/**
+ * A pack-neutral fixture.
+ *
+ * This suite covers the generic classic table — the module-first layout the
+ * view renders for any pack's `CdssResult`. The heart-failure board is a second
+ * layout the same component switches to on `packId: 'heart-failure-cdss'`, and
+ * it has its own suite (`heart-failure-board.test.tsx`), so the fixture here
+ * carries a pack id no pack uses rather than borrowing a real one and silently
+ * testing the board instead.
+ */
 function result(): CdssResult {
   return {
-    title: '慢性腎臟病個人化照護指引',
-    summary: '本次產生 5 項 CKD 決策提示。',
-    packId: 'ckd-cdss',
+    title: '個人化照護指引（測試資料）',
+    summary: '本次產生 5 項決策提示。',
+    packId: 'cdss-classic-table-fixture',
     packVersion: 'test',
     recommendations: [
       recommendation('high', {
@@ -137,10 +147,13 @@ describe('clinical decision summary', () => {
   })
 
   it('restores completed modules to their original list positions with a green background', () => {
-    const completed = recommendation('ckd-monitoring', {
+    // A module the catalog knows, so the row shows the catalog's module name
+    // above the pack's own assessment sentence — the two-line shape this test
+    // is about only exists when those two strings differ.
+    const completed = recommendation('heart-failure-monitoring', {
       priority: 'routine',
       status: 'no-action',
-      title: '最近兩次 eGFR 變化 -3.0%，未超過 20%',
+      title: '症狀、容量狀態與生命徵象皆已完成監測',
       recommendation: '目前資料已完成核對。',
     })
     const orderedResult: CdssResult = {
@@ -166,25 +179,25 @@ describe('clinical decision summary', () => {
     )
     expect(moduleIds).toEqual([
       'cdss-recommendation-first',
-      'cdss-recommendation-ckd-monitoring',
+      'cdss-recommendation-heart-failure-monitoring',
       'cdss-recommendation-third',
     ])
-    expect(screen.getByTestId('cdss-recommendation-ckd-monitoring')).toHaveClass('bg-emerald-50/50')
-    const completedRow = screen.getByTestId('cdss-recommendation-trigger-ckd-monitoring')
-    const moduleCell = screen.getByTestId('cdss-module-cell-ckd-monitoring')
-    const evidencePreview = screen.getByTestId('cdss-evidence-preview-ckd-monitoring')
-    const nextStepPreview = screen.getByTestId('cdss-next-step-preview-ckd-monitoring')
-    expect(completedRow).toHaveTextContent('腎功能趨勢')
-    expect(completedRow).toHaveTextContent('最近兩次 eGFR 變化 -3.0%，未超過 20%')
+    expect(screen.getByTestId('cdss-recommendation-heart-failure-monitoring')).toHaveClass('bg-emerald-50/50')
+    const completedRow = screen.getByTestId('cdss-recommendation-trigger-heart-failure-monitoring')
+    const moduleCell = screen.getByTestId('cdss-module-cell-heart-failure-monitoring')
+    const evidencePreview = screen.getByTestId('cdss-evidence-preview-heart-failure-monitoring')
+    const nextStepPreview = screen.getByTestId('cdss-next-step-preview-heart-failure-monitoring')
+    expect(completedRow).toHaveTextContent('心衰竭追蹤')
+    expect(completedRow).toHaveTextContent('症狀、容量狀態與生命徵象皆已完成監測')
     expect(within(moduleCell).queryByText('目前無需處理')).not.toBeInTheDocument()
     expect(within(nextStepPreview).getByText('目前無需處理')).toBeInTheDocument()
     expect(within(evidencePreview).queryByText('目前無需處理')).not.toBeInTheDocument()
-    expect(within(moduleCell).getByText('最近兩次 eGFR 變化 -3.0%，未超過 20%')).toHaveClass(
+    expect(within(moduleCell).getByText('症狀、容量狀態與生命徵象皆已完成監測')).toHaveClass(
       'truncate',
       'whitespace-nowrap',
     )
     const nextStepTooltipTrigger = within(nextStepPreview).getByTestId(
-      'cdss-next-step-tooltip-trigger-ckd-monitoring',
+      'cdss-next-step-tooltip-trigger-heart-failure-monitoring',
     )
     expect(nextStepTooltipTrigger).toHaveClass('line-clamp-2', 'cursor-help')
     expect(nextStepTooltipTrigger).not.toHaveAttribute('title')
@@ -193,11 +206,11 @@ describe('clinical decision summary', () => {
     expect(completedRow).not.toHaveTextContent('接續檢視')
 
     fireEvent.click(completedRow)
-    expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).not.toHaveTextContent(
+    expect(screen.getByTestId('cdss-semantic-card-heart-failure-monitoring')).not.toHaveTextContent(
       '目前資料已完成核對。',
     )
-    expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).not.toHaveTextContent(
-      '最近兩次 eGFR 變化 -3.0%，未超過 20%',
+    expect(screen.getByTestId('cdss-semantic-card-heart-failure-monitoring')).not.toHaveTextContent(
+      '症狀、容量狀態與生命徵象皆已完成監測',
     )
   })
 
@@ -229,19 +242,19 @@ describe('clinical decision summary', () => {
     const deduplicatedResult: CdssResult = {
       ...result(),
       recommendations: [
-        recommendation('ckd-kidney-failure-risk', {
+        recommendation('heart-failure-fmt-safety', {
           status: 'needs-data',
-          title: 'KFRE｜G3b：缺少定量 UACR 或數值無法使用',
-          overviewEvidenceFactKey: 'urineAlbuminOverview',
+          title: 'FMT 安全檢核｜缺少可判讀的血鉀',
+          overviewEvidenceFactKey: 'potassium',
           patientEvidence: [{
-            label: '尿白蛋白',
-            value: '1+ (80) · 2026-01-14',
-            factKeys: ['urineAlbuminOverview'],
+            label: 'K',
+            value: '無可用結果 · 最近 2026-01-14',
+            factKeys: ['potassium'],
           }],
-          missingData: ['大於 0 的定量 UACR（mg/g）'],
-          nextActions: ['查找或補做必要輸入；資料完整且腎功能穩定後再計算。'],
+          missingData: ['近期血鉀（mmol/L）'],
+          nextActions: ['查找或補做必要輸入；資料完整後再完成 FMT 安全檢核。'],
         }),
-        recommendation('ckd-blood-pressure-volume', {
+        recommendation('heart-failure-congestion-diuretic', {
           status: 'needs-data',
           title: '缺少近期可判讀的血壓與體液狀態',
           overviewEvidenceFactKey: 'bloodPressure',
@@ -252,9 +265,9 @@ describe('clinical decision summary', () => {
           }],
           missingData: ['標準化診間血壓與量測日期'],
         }),
-        recommendation('ckd-rasi-strategy', {
+        recommendation('heart-failure-ras-inhibition', {
           status: 'review',
-          title: 'A2 白蛋白尿符合 ACEI／ARB 條件',
+          title: 'HFrEF 適用 ARNI，目前僅見 ACEI／ARB',
           overviewEvidenceFactKey: 'aceArbTherapy',
           patientEvidence: [{
             label: 'ACEI／ARB',
@@ -270,41 +283,44 @@ describe('clinical decision summary', () => {
 
     render(<ClinicalDecisionSupportView result={deduplicatedResult} locale="zh-TW" />)
 
-    const kfreRow = screen.getByTestId('cdss-recommendation-trigger-ckd-kidney-failure-risk')
-    const bloodPressureRow = screen.getByTestId('cdss-recommendation-trigger-ckd-blood-pressure-volume')
-    const rasRow = screen.getByTestId('cdss-recommendation-trigger-ckd-rasi-strategy')
-    const rasModuleCell = screen.getByTestId('cdss-module-cell-ckd-rasi-strategy')
-    const rasEvidencePreview = screen.getByTestId('cdss-evidence-preview-ckd-rasi-strategy')
+    const safetyRow = screen.getByTestId('cdss-recommendation-trigger-heart-failure-fmt-safety')
+    const congestionRow = screen.getByTestId('cdss-recommendation-trigger-heart-failure-congestion-diuretic')
+    const rasRow = screen.getByTestId('cdss-recommendation-trigger-heart-failure-ras-inhibition')
+    const rasModuleCell = screen.getByTestId('cdss-module-cell-heart-failure-ras-inhibition')
+    const rasEvidencePreview = screen.getByTestId('cdss-evidence-preview-heart-failure-ras-inhibition')
 
-    expect(kfreRow).toHaveTextContent('缺少定量 UACR')
-    expect(kfreRow).not.toHaveTextContent('缺：大於 0 的定量 UACR')
-    const kfreAssessmentTooltip = within(kfreRow).getByTestId(
-      'cdss-assessment-tooltip-trigger-ckd-kidney-failure-risk',
+    // 血鉀 is already named in the assessment, so the collapsed row does not
+    // print it a second time as a 缺 item.
+    expect(safetyRow).toHaveTextContent('缺少可判讀的血鉀')
+    expect(safetyRow).not.toHaveTextContent('缺：近期血鉀')
+    const safetyAssessmentTooltip = within(safetyRow).getByTestId(
+      'cdss-assessment-tooltip-trigger-heart-failure-fmt-safety',
     )
-    expect(kfreAssessmentTooltip).toHaveTextContent('KFRE｜G3b：缺少定量 UACR 或數值無法使用')
-    expect(kfreAssessmentTooltip).not.toHaveAttribute('title')
-    expect(bloodPressureRow).toHaveTextContent('缺少近期可判讀的血壓與體液狀態')
-    expect(bloodPressureRow).not.toHaveTextContent('缺：標準化診間血壓與量測日期')
-    expect(rasModuleCell).toHaveTextContent('A2 白蛋白尿符合 ACEI／ARB 條件')
+    expect(safetyAssessmentTooltip).toHaveTextContent('FMT 安全檢核｜缺少可判讀的血鉀')
+    expect(safetyAssessmentTooltip).not.toHaveAttribute('title')
+    expect(congestionRow).toHaveTextContent('缺少近期可判讀的血壓與體液狀態')
+    expect(congestionRow).not.toHaveTextContent('缺：標準化診間血壓與量測日期')
+    expect(rasModuleCell).toHaveTextContent('HFrEF 適用 ARNI，目前僅見 ACEI／ARB')
     expect(rasModuleCell).not.toHaveTextContent('歷史處方')
     expect(rasEvidencePreview).toHaveTextContent('歷史處方')
     const rasEvidenceTooltip = within(rasEvidencePreview).getByTestId(
-      'cdss-evidence-tooltip-trigger-ckd-rasi-strategy',
+      'cdss-evidence-tooltip-trigger-heart-failure-ras-inhibition',
     )
     expect(rasEvidenceTooltip).toHaveTextContent(
       'ACEI／ARB：歷史處方：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
     )
     expect(rasEvidenceTooltip).not.toHaveAttribute('title')
+    // Nothing in the RAS assessment names it, so this one is still printed.
     expect(rasRow).toHaveTextContent('缺：續方適應症與既往停藥原因')
-    expect(within(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy')).getByTestId(
-      'cdss-next-step-tooltip-trigger-ckd-rasi-strategy',
+    expect(within(screen.getByTestId('cdss-next-step-preview-heart-failure-ras-inhibition')).getByTestId(
+      'cdss-next-step-tooltip-trigger-heart-failure-ras-inhibition',
     )).toHaveTextContent('依最後處方日期與目前適應症評估是否續方。')
 
-    fireEvent.click(kfreRow)
-    const kfreActionPlan = screen.getByTestId('cdss-action-plan-ckd-kidney-failure-risk')
-    expect(kfreActionPlan).not.toHaveTextContent('尚待確認')
-    expect(kfreActionPlan).toHaveTextContent(
-      '查找或補做大於 0 的定量 UACR（mg/g）；資料完整且腎功能穩定後再計算。',
+    fireEvent.click(safetyRow)
+    const safetyActionPlan = screen.getByTestId('cdss-action-plan-heart-failure-fmt-safety')
+    expect(safetyActionPlan).not.toHaveTextContent('尚待確認')
+    expect(safetyActionPlan).toHaveTextContent(
+      '查找或補做近期血鉀（mmol/L）；資料完整後再完成 FMT 安全檢核。',
     )
   })
 
@@ -641,15 +657,17 @@ describe('clinical decision summary', () => {
     expect(medicationSupporting).toHaveTextContent('本項是臨床照護問題，不屬於藥品給付判定。')
   })
 
-  it('uses type-specific headings inside CKD semantic cards', () => {
+  it('uses type-specific headings inside semantic cards', () => {
+    // The heading follows the module's presentation type, which the package's
+    // module catalog derives from the module's group. One module per type.
     const groupedResult: CdssResult = {
       ...result(),
       recommendations: [
-        recommendation('ckd-classification', { domain: 'diagnosis' }),
-        recommendation('ckd-rasi-strategy', { domain: 'medication' }),
-        recommendation('ckd-monitoring', { domain: 'monitoring' }),
-        recommendation('ckd-medication-safety', { domain: 'safety' }),
-        recommendation('ckd-nutrition', { domain: 'target' }),
+        recommendation('heart-failure-phenotype', { domain: 'diagnosis' }),
+        recommendation('heart-failure-ras-inhibition', { domain: 'medication' }),
+        recommendation('heart-failure-monitoring', { domain: 'monitoring' }),
+        recommendation('heart-failure-medication-safety', { domain: 'safety' }),
+        recommendation('cardiac-rehabilitation', { domain: 'care-gap' }),
       ],
       automatedChecks: [],
     }
@@ -657,11 +675,11 @@ describe('clinical decision summary', () => {
     render(<ClinicalDecisionSupportView result={groupedResult} locale="zh-TW" />)
 
     const cases = [
-      ['ckd-classification', '分級／風險依據'],
-      ['ckd-rasi-strategy', '指引用藥條件'],
-      ['ckd-monitoring', '監測依據／門檻'],
-      ['ckd-medication-safety', '監測依據／門檻'],
-      ['ckd-nutrition', '指引建議'],
+      ['heart-failure-phenotype', '分級／風險依據'],
+      ['heart-failure-ras-inhibition', '指引用藥條件'],
+      ['heart-failure-monitoring', '監測依據／門檻'],
+      ['heart-failure-medication-safety', '監測依據／門檻'],
+      ['cardiac-rehabilitation', '指引建議'],
     ] as const
 
     cases.forEach(([id, guidelineHeading]) => {
