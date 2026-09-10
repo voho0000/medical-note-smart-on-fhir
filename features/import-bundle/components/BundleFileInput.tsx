@@ -10,7 +10,7 @@
 // `open()` on its ref.
 'use client'
 
-import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
 /** File types the local-import picker offers. FHIR Bundles and Health Bank SDK
  *  exports are JSON; some sources ship the same JSON with a `.txt` extension,
@@ -33,6 +33,15 @@ interface BundleFileInputProps {
 export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInputProps>(
   function BundleFileInput({ testId, importFile }, ref) {
     const inputRef = useRef<HTMLInputElement>(null)
+    const [mounted, setMounted] = useState(false)
+
+    // The Medcloud extension waits for this input before handing the Bundle to
+    // the app. Rendering it into the server HTML lets the extension find a
+    // non-hydrated (or soon-to-be-replaced) node and dispatch a change event
+    // that React never receives. Publish the bridge target only after the
+    // client has mounted; the extension's MutationObserver then resumes on the
+    // live input whose onChange handler is ready.
+    useEffect(() => setMounted(true), [])
 
     useImperativeHandle(ref, () => ({ open: () => inputRef.current?.click() }), [])
 
@@ -50,6 +59,8 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
       },
       [importFile],
     )
+
+    if (!mounted) return null
 
     return (
       <input
