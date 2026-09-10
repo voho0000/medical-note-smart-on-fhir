@@ -5,7 +5,7 @@
 // a FHIR bundle. The React layer (hooks/useOverviewData.ts) only adapts the
 // existing feature hooks into these shapes.
 
-export const OVERVIEW_RANGE_MONTHS = [1, 3, 6] as const
+export const OVERVIEW_RANGE_MONTHS = [1, 3, 6, 12] as const
 export type OverviewRangeMonths = (typeof OVERVIEW_RANGE_MONTHS)[number]
 export const DEFAULT_OVERVIEW_RANGE_MONTHS: OverviewRangeMonths = 3
 

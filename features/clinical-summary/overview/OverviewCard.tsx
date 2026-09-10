@@ -28,6 +28,7 @@ import { LoadingSkeleton } from '@/src/shared/components/LoadingSkeleton'
 import { ErrorMessage } from '@/src/shared/components/ErrorMessage'
 import { useOverviewWindow } from './hooks/useOverviewWindow'
 import { useOverviewData } from './hooks/useOverviewData'
+import type { OverviewRangeMonths } from './utils/overview-selectors'
 import { OverviewHeader } from './components/OverviewHeader'
 import { OverviewNavTiles } from './components/OverviewNavTiles'
 import { OverviewLabsSection } from './components/OverviewLabsSection'
@@ -55,12 +56,33 @@ export function OverviewCard() {
   const strings = t.overview
   const { window: overviewWindow, setMonths } = useOverviewWindow()
   const data = useOverviewData(overviewWindow)
+  const rangeChosenByUserRef = useRef(false)
 
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cellRefs = useRef<Partial<Record<OverviewSectionId, HTMLDivElement | null>>>({})
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [cellHeights, setCellHeights] = useState<Partial<Record<OverviewSectionId, number>>>({})
   const [flashed, setFlashed] = useState<OverviewSectionId | null>(null)
+
+  // Start with the compact three-month view when it contains any of the
+  // clinician's common analytes. Otherwise widen progressively to six months,
+  // then one year, stopping as soon as a common result appears. A later
+  // explicit range choice is authoritative despite an empty 常用 set.
+  useEffect(() => {
+    if (
+      rangeChosenByUserRef.current
+      || data.isLoading
+      || data.error
+      || data.labs.pinnedRowCount > 0
+    ) return
+    if (overviewWindow.months === 3) setMonths(6)
+    else if (overviewWindow.months === 6) setMonths(12)
+  }, [data.error, data.isLoading, data.labs.pinnedRowCount, overviewWindow.months, setMonths])
+
+  const handleRangeChange = useCallback((months: OverviewRangeMonths) => {
+    rangeChosenByUserRef.current = true
+    setMonths(months)
+  }, [setMonths])
 
   useIsomorphicLayoutEffect(() => {
     const element = rootRef.current
@@ -168,7 +190,7 @@ export function OverviewCard() {
       data-overview-layout={isWide ? 'grid' : 'stacked'}
       className="flex h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden"
     >
-      <OverviewHeader window={overviewWindow} onRangeChange={setMonths} />
+      <OverviewHeader window={overviewWindow} onRangeChange={handleRangeChange} />
 
       {/* Nothing in range in any of the four sections: name the newest record
           the chart holds so the clinician knows to widen rather than wondering

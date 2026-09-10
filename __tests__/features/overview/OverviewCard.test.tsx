@@ -6,7 +6,7 @@
  * numbers, and narrowing the range must narrow them together. The clock is
  * pinned so the assertions do not decay as the demo bundle ages.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import bundle from '@/public/demo/demo-bundle.json'
 import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { OverviewCard } from '@/features/clinical-summary/overview'
@@ -175,6 +175,73 @@ describe('OverviewCard (demo bundle)', () => {
     // No ResizeObserver in jsdom, so the card stays in its stacked, scrollable
     // presentation and every row renders.
     expect(screen.getByTestId('overview-card')).toHaveAttribute('data-overview-layout', 'stacked')
+  })
+
+  it('starts at 6 months when the first 3 months contain no common lab result', async () => {
+    const lab = (id: string, day: string, code: string, display: string, value: number) => ({
+      resourceType: 'Observation', id, status: 'final',
+      category: [{ coding: [{
+        system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+        code: 'laboratory',
+      }] }],
+      code: { coding: [{ system: 'http://loinc.org', code, display }] },
+      effectiveDateTime: `${day}T09:00:00+08:00`,
+      valueQuantity: { value, unit: code === '6690-2' ? 'K/uL' : 'U/L' },
+    })
+    mockUseClinicalData.mockReturnValue({
+      ...clinicalData,
+      observations: [
+        // AST is in range but is not part of the 常用 short list.
+        lab('recent-ast', '2026-06-01', '1920-8', 'Aspartate aminotransferase', 24),
+        // WBC is a 常用 analyte, just outside 3 months and inside 6 months.
+        lab('older-wbc', '2026-02-15', '6690-2', 'Leukocytes', 5.5),
+      ],
+    })
+
+    render(<OverviewCard />)
+
+    await waitFor(() => expect(screen.getByText('近6個月總覽')).toBeInTheDocument())
+    expect(screen.getByText(/2025\/12\/15/)).toBeInTheDocument()
+    expect(screen.getByText('5.5')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: zhTW.overview.ranges[3] }))
+    await waitFor(() => expect(screen.getByText('近3個月總覽')).toBeInTheDocument())
+    expect(screen.queryByText('近6個月總覽')).not.toBeInTheDocument()
+  })
+
+  it('continues to 1 year when 6 months still contain no common lab result', async () => {
+    const lab = (id: string, day: string, code: string, display: string, value: number) => ({
+      resourceType: 'Observation', id, status: 'final',
+      category: [{ coding: [{
+        system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+        code: 'laboratory',
+      }] }],
+      code: { coding: [{ system: 'http://loinc.org', code, display }] },
+      effectiveDateTime: `${day}T09:00:00+08:00`,
+      valueQuantity: { value, unit: code === '6690-2' ? 'K/uL' : 'U/L' },
+    })
+    mockUseClinicalData.mockReturnValue({
+      ...clinicalData,
+      observations: [
+        lab('recent-ast', '2026-05-01', '1920-8', 'Aspartate aminotransferase', 24),
+        // Ten months old: outside 6 months, but inside the one-year fallback.
+        lab('older-wbc', '2025-08-15', '6690-2', 'Leukocytes', 4.8),
+      ],
+    })
+
+    render(<OverviewCard />)
+
+    await waitFor(() => expect(screen.getByText('近1年總覽')).toBeInTheDocument())
+    expect(screen.getByText(/2025\/06\/15/)).toBeInTheDocument()
+    expect(screen.getByText('4.8')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: zhTW.overview.ranges[12] })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: zhTW.overview.ranges[6] }))
+    await waitFor(() => expect(screen.getByText('近6個月總覽')).toBeInTheDocument())
+    expect(screen.queryByText('近1年總覽')).not.toBeInTheDocument()
   })
 
   it('reports the same counts on the jump tiles and the card headers', () => {
