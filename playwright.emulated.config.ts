@@ -10,6 +10,8 @@ import { defineConfig, devices } from '@playwright/test'
 // tests live in e2e/emulated so the main playwright.config.ts never runs them.
 export default defineConfig({
   testDir: './e2e/emulated',
+  // The gallery suite owns dedicated emulator ports via its separate config.
+  testIgnore: 'prompt-gallery.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
