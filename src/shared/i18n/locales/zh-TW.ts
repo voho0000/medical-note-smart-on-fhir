@@ -119,11 +119,13 @@ export const zhTW = {
   },
   overview: {
     title: '近{months}個月總覽',
+    yearTitle: '近1年總覽',
     rangeLabel: '{start} – {end}',
     ranges: {
       1: '1 個月',
       3: '3 個月',
       6: '6 個月',
+      12: '1 年',
     },
     rangeAriaLabel: '總覽時間範圍',
     sections: {

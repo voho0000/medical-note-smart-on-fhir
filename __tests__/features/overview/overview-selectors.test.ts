@@ -35,6 +35,14 @@ describe('buildOverviewWindow', () => {
       endDay: '2026-02-15',
     })
   })
+
+  it('supports a one-year range', () => {
+    expect(buildOverviewWindow(12, at('2026-09-09T09:00:00+08:00'))).toEqual({
+      months: 12,
+      startDay: '2025-09-09',
+      endDay: '2026-09-09',
+    })
+  })
 })
 
 describe('toDayKey', () => {

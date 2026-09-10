@@ -118,11 +118,13 @@ export const en = {
   },
   overview: {
     title: 'Last {months}-month overview',
+    yearTitle: 'Past-year overview',
     rangeLabel: '{start} – {end}',
     ranges: {
       1: '1 month',
       3: '3 months',
       6: '6 months',
+      12: '1 year',
     },
     rangeAriaLabel: 'Overview time range',
     sections: {

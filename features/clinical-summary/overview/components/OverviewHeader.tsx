@@ -1,6 +1,6 @@
 "use client"
 
-// Title + date range + the 1／3／6 個月 range chips + 專注總覽.
+// Title + date range + the 1／3／6 個月／1 年 range chips + 專注總覽.
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useWorkspacePanels } from '@/src/application/providers/workspace-panels.provider'
@@ -36,7 +36,9 @@ export function OverviewHeader({
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-baseline gap-2">
         <span className="text-[0.9375rem] font-semibold text-foreground">
-          {strings.title.replace('{months}', String(window.months))}
+          {window.months === 12
+            ? strings.yearTitle
+            : strings.title.replace('{months}', String(window.months))}
         </span>
         <span className="truncate text-xs tabular-nums text-muted-foreground">
           {strings.rangeLabel
