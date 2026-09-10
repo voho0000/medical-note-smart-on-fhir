@@ -28,9 +28,34 @@ import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
 // ============================================================================
-const TabFeatureContent = memo(function TabFeatureContent({ tabId }: { tabId: string }) {
+const TabFeatureContent = memo(function TabFeatureContent({
+  tabId,
+  fillHeight = false,
+}: {
+  tabId: string
+  /** The tab's feature owns the available height and its own overflow (總覽's
+   *  wide 2×2 grid must fit one screen without any scrollbar). Every other tab
+   *  keeps the shared vertical ScrollArea. */
+  fillHeight?: boolean
+}) {
   const features = getFeaturesForTab(tabId)
-  
+
+  if (fillHeight) {
+    return (
+      <div className="h-full min-h-0 overflow-hidden" data-testid={`clinical-tab-content-${tabId}`}>
+        <ClinicalTabContentFrame
+          className="flex h-full min-h-0 flex-col overflow-hidden pb-3 pt-0 md:pt-2"
+          style={{ contain: 'inline-size' }}
+        >
+          {features.map(feature => {
+            const Component = feature.component
+            return <Component key={feature.id} />
+          })}
+        </ClinicalTabContentFrame>
+      </div>
+    )
+  }
+
   return (
     <ScrollArea className="h-full min-h-0" data-testid={`clinical-tab-content-${tabId}`}>
       {/*
@@ -41,7 +66,7 @@ const TabFeatureContent = memo(function TabFeatureContent({ tabId }: { tabId: st
         pushing absolute-positioned UI like the expand button off-screen.
       */}
       <ClinicalTabContentFrame
-        className="space-y-2 pb-3 pt-0 md:space-y-3 md:pt-2"
+        className="space-y-2 pb-3 pt-1 md:space-y-3"
         style={{ contain: 'inline-size' }}
       >
         {features.map(feature => {
@@ -228,7 +253,7 @@ export default function ClinicalSummaryFeature() {
           setActiveTab(value)
           clearDetail()
         }}
-        className="flex min-h-0 flex-1 flex-col xl:gap-0"
+        className="flex min-h-0 flex-1 flex-col gap-0"
       >
         {/* Grid columns are driven by the registered tab count so adding /
             removing tabs in feature-registry.ts doesn't need a layout edit.
@@ -268,11 +293,11 @@ export default function ClinicalSummaryFeature() {
             key={tab.id}
             value={tab.id}
             forceMount={mountedTabs.has(tab.id) || undefined}
-            className="mt-0 min-h-0 flex-1 overflow-hidden md:mt-1 xl:mt-0"
+            className="mt-0 min-h-0 flex-1 overflow-hidden"
           >
             {mountedTabs.has(tab.id) ? (
               <ClinicalTabActivityProvider active={activeTab === tab.id}>
-                <TabFeatureContent tabId={tab.id} />
+                <TabFeatureContent tabId={tab.id} fillHeight={tab.fillHeight} />
               </ClinicalTabActivityProvider>
             ) : activeTab === tab.id ? (
               <div

@@ -11,7 +11,7 @@ function normalizeIcdCodeToken(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
-function stripLeadingIcdCode(description: string | undefined, code: string): string | undefined {
+export function stripLeadingIcdCode(description: string | undefined, code: string): string | undefined {
   const clean = description?.trim()
   if (!clean || !code) return clean || undefined
 

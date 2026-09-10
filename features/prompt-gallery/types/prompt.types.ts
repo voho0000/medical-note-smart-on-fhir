@@ -126,6 +126,8 @@ export interface SharedPrompt {
   languagePolicy?: InsightLanguagePolicy
   /** Author-supplied sample output generated from de-identified data. */
   exampleOutput?: string
+  /** Public templates appear in the shared gallery. Private templates remain visible only to their author in My Prompts. */
+  isPublic?: boolean
   /** Set on department templates (tenantPrompts); absent on public gallery prompts. */
   tenantId?: string
   /** Display name of the department, resolved from the viewer's membership. */

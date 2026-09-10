@@ -2,7 +2,7 @@
  * A local development server may list the packs of the rules branch it was
  * started on, ahead of the host's own. The list is read once, at module load,
  * from `NEXT_PUBLIC_HMC_DEV_EXTRA_PACKS`, and only when NODE_ENV is
- * development — a deployed build lists exactly heart failure then CKD whatever
+ * development — a deployed build lists exactly the host's own packs whatever
  * the variable says. An extra pack is still subject to the visibility rule:
  * unreleased guidance needs Beta, and the unattended Medcloud hand-off shows
  * released guidance only.
@@ -21,7 +21,7 @@ jest.mock('@/src/application/launch/medcloud-launch-context', () => ({
 type Registry = typeof import('@/features/clinical-decision-support/guideline-packs/registry')
 type BetaStore = typeof import('@/src/application/stores/beta-features.store')
 
-const HOST_PACK_IDS = ['heart-failure-cdss', 'ckd-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss']
 
 /** A fresh module graph loaded under the given environment. */
 function load(nodeEnv: string, extraPacks?: string): { registry: Registry; beta: BetaStore } {
@@ -88,7 +88,7 @@ describe('development-only extra care packs', () => {
   })
 
   it('never lists a pack twice', () => {
-    const { registry } = load('development', 'ckd-cdss,hypertension-cdss,hypertension-cdss')
+    const { registry } = load('development', 'heart-failure-cdss,hypertension-cdss,hypertension-cdss')
 
     expect(hostIds(registry)).toEqual(['hypertension-cdss', ...HOST_PACK_IDS])
   })

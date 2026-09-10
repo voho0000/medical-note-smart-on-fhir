@@ -1,17 +1,9 @@
-// Medication Item Component — a dense, container-responsive three-lane row.
-// Wide: medication/prescription | source/classification | status/refills.
-// Each lane has two aligned lines; narrow containers keep the same information
-// order while allowing source/diagnosis context to use a full-width line.
-//
-// Container-query thresholds are in **px**, not rem: the app's root font-size
-// is 12px, so a rem threshold silently shifts with the reader's font-size
-// setting. The values are the ones the three-lane layout has always used in
-// practice (312/336/384/456), now stated literally.
-//
-// The title keeps the route beside the medication name. Its second line reads
-// coverage dates (supply days) → dose → frequency → total quantity. The
-// middle lane pairs diagnosis above institution, ATC3, and prescription state.
+// Wide panels use two lines. Below 456px, give the medication name and
+// regimen their own lines, then align ICD / source / refills on a third.
+// Text within each line remains single-line and truncates with ellipses.
 import type { ReactNode } from 'react'
+import { useMedicationEndDateFit } from '../hooks/useMedicationEndDateFit'
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
@@ -162,8 +154,8 @@ export function MedicationItem({
     : undefined
 
   // The prescription lane follows the agreed scan order: coverage window,
-  // dose, frequency, then dispensed quantity. The coverage date is the flexible
-  // segment that yields space first when the middle column narrows.
+  // dose, frequency, then dispensed quantity. Dates yield with an ellipsis
+  // before the dose, frequency and quantity lose their space.
   const scheduleParts: Array<{
     key: string
     node: React.ReactNode
@@ -180,6 +172,12 @@ export function MedicationItem({
   const durationSuffix = durationLabel
     ? (locale.startsWith('zh') ? `（${durationLabel}）` : ` (${durationLabel})`)
     : ''
+
+  const { regimenRef, compactEndDate } = useMedicationEndDateFit(
+    Boolean(durationLabel && !medication.isInactive && !executionPeriods?.length),
+    [locale, medication.startedOn, medication.endDate, durationSuffix,
+      medication.dose, medication.frequency, medication.totalQuantity].join('|'),
+  )
 
   const normalizedExecutionPeriods = (executionPeriods ?? [])
     .filter((period) => period.start || period.end)
@@ -241,19 +239,19 @@ export function MedicationItem({
         node: (
           <span
             data-testid="medication-schedule-date"
-            className="block min-w-0 overflow-hidden whitespace-nowrap tabular-nums"
+            className="block min-w-0 truncate tabular-nums"
             title={dateTitle}
           >
-            {/* Narrow rows show the start date only. The end date is
-                recoverable from start + supply days, so dropping it there
-                buys the width this lane needs instead of truncating the
-                supply window away. The threshold is measured, not guessed: a
-                430pt phone renders this row 384px wide, so it has to sit
-                ABOVE that. The title and the expanded detail keep the full
-                range. */}
+            {/* Only a known supply duration makes the end date redundant.
+                Measure the complete regimen, including this end date, before
+                compacting. Invisible text retains its measurable glyph width. */}
             {displayStart || displayEnd}
             {displayStart && displayEnd && (
-              <span data-medication-schedule-end className="hidden @min-[456px]:inline">
+              <span
+                data-medication-schedule-end
+                aria-hidden={compactEndDate || undefined}
+                className={compactEndDate ? 'absolute invisible pointer-events-none' : undefined}
+              >
                 {` → ${displayEnd}`}
               </span>
             )}
@@ -355,7 +353,7 @@ export function MedicationItem({
         onRowToggle()
       } : undefined}
       className={cn(
-        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 @min-[312px]:grid-cols-[minmax(0,1fr)_minmax(7.5rem,1fr)_4.75rem] @min-[336px]:grid-cols-[minmax(0,1fr)_minmax(8.5rem,1.1fr)_4.75rem] @min-[384px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,1.15fr)_4.75rem] @min-[456px]:grid-cols-[minmax(0,1fr)_minmax(14rem,1.1fr)_4.75rem] @min-[456px]:gap-x-3 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
         onRowToggle && "cursor-pointer",
         grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
@@ -374,7 +372,7 @@ export function MedicationItem({
         data-medication-cell="identity"
         className="contents"
       >
-        <div className="col-start-1 row-start-1 flex h-4 min-w-0 items-center">
+        <div className="col-span-2 col-start-1 row-start-1 flex h-4 min-w-0 items-center @min-[456px]:col-span-1">
           <MedicationTerminologyTooltip medication={medication} enabled>
             <span
               className={cn(
@@ -405,11 +403,12 @@ export function MedicationItem({
 
         <div
           data-medication-schedule
-          className="col-span-2 col-start-1 row-start-3 flex h-4 min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[0.6875rem] text-muted-foreground @min-[312px]:col-span-2 @min-[312px]:row-start-2 @min-[456px]:contents"
+          className="contents whitespace-nowrap text-[0.6875rem] text-muted-foreground"
         >
           <div
+            ref={regimenRef}
             data-medication-regimen
-            className="flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-start-1 @min-[456px]:row-start-2"
+            className="relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1"
           >
             {scheduleParts.map((part, index) => (
               <span
@@ -452,7 +451,7 @@ export function MedicationItem({
           </div>
           <div
             data-medication-classification
-            className="flex h-4 min-w-0 shrink items-center gap-1 overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-2"
+            className="col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2"
           >
             {medication.pharmacy && (
               <TruncatedRevealLabel
@@ -514,12 +513,11 @@ export function MedicationItem({
         </div>
       </div>
 
-      {/* Diagnosis lane: on wide rows the institution/classification grid item
-          above lands in this same column on row 2, directly below the ICD.
-          Narrow rows keep it inline with the regimen to preserve phone density. */}
+      {/* ICD has a smaller flexible column; long descriptions must never
+          establish a minimum width that squeezes the medication name. */}
       <div
         data-medication-cell="clinical"
-        className="col-span-2 row-start-2 flex h-4 min-w-0 items-center overflow-hidden @min-[312px]:col-span-1 @min-[312px]:col-start-2 @min-[312px]:row-start-1"
+        className="col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1"
       >
         <div
           data-medication-context
@@ -527,31 +525,28 @@ export function MedicationItem({
           className="flex h-4 min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         >
           {isMedical && medication.icdCode && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  aria-label={billingIcdTitle}
-                  tabIndex={0}
-                  className={medicationIcdChipClass}
-                >
-                  <span className={medicationIcdCodeClass}>{medication.icdCode}</span>
-                  {medication.icdText && (
-                    <span className={medicationIcdDescriptionClass}>
-                      {medication.icdText}
-                    </span>
-                  )}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent
-                data-testid="medication-icd-tooltip"
-                className={cn(
-                  clinicalTooltipSurfaceClass,
-                  "max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed",
-                )}
+            <TapTooltip
+              asChild
+              content={billingIcdTitle}
+              contentTestId="medication-icd-tooltip"
+              contentClassName={cn(
+                clinicalTooltipSurfaceClass,
+                'max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed',
+              )}
+            >
+              <button
+                type="button"
+                aria-label={billingIcdTitle}
+                className={cn(medicationIcdChipClass, 'overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50')}
               >
-                {billingIcdTitle}
-              </TooltipContent>
-            </Tooltip>
+                <span className={cn(medicationIcdCodeClass, 'max-w-full truncate')}>{medication.icdCode}</span>
+                {medication.icdText && (
+                  <span className={medicationIcdDescriptionClass}>
+                    {medication.icdText}
+                  </span>
+                )}
+              </button>
+            </TapTooltip>
           )}
         </div>
 
@@ -562,9 +557,9 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-2 row-start-1 flex w-[4.75rem] min-w-0 flex-col items-stretch @min-[312px]:col-start-3 @min-[312px]:row-span-2"
+        className="col-start-3 row-start-1 row-span-2 contents w-[4.75rem] min-w-0 flex-col items-stretch @min-[456px]:flex"
       >
-        <div className="flex h-4 items-center">
+        <div className="col-start-3 row-start-1 flex h-4 items-center">
           <Badge
             variant={badge.variant}
             className={cn(
@@ -579,7 +574,7 @@ export function MedicationItem({
             <span className="truncate">{badge.label}</span>
           </Badge>
         </div>
-        <div className="flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
+        <div className="col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
           {refillCompact && (
             <Tooltip>
               <TooltipTrigger asChild>

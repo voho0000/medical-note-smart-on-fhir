@@ -36,12 +36,24 @@ import {
 } from '../utils/nhi-viewer-request'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import {
+  qualifyingSharedEchoFamilyKeys,
   qualifyingSharedReportKeys,
   reportSource,
+  sharedEchoReportFamilyKey,
   sharedReportGroupingKey,
+  sharedReportNarrative,
   sharedReportTitle,
   type SharedReportSource,
 } from '@/src/shared/utils/shared-report-grouping'
+
+function isViewerOnlySharedEchoCompanion(report: any): boolean {
+  return getNhiViewerActions(report).length > 0
+    && sharedReportNarrative(report).length === 0
+    && (report?.result?.length ?? 0) === 0
+    && (report?._observations?.length ?? 0) === 0
+    && (report?.presentedForm?.length ?? 0) === 0
+    && (report?.imagingStudy?.length ?? 0) === 0
+}
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -236,6 +248,7 @@ export function buildReportsData(
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
     const qualifyingSharedKeys = qualifyingSharedReportKeys(diagnosticReports)
+    const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
       const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -243,8 +256,17 @@ export function buildReportsData(
       const inst = (getDrInstitution(dr) || '').trim()
       const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
       const sharedKey = sharedReportGroupingKey(dr)
-      const key = sharedKey && qualifyingSharedKeys.has(sharedKey)
-        ? `shared-report|${sharedKey}`
+      const ownSharedKey = sharedKey && qualifyingSharedKeys.has(sharedKey)
+        ? sharedKey
+        : null
+      const echoFamilyKey = sharedEchoReportFamilyKey(dr)
+      const companionSharedKey = !ownSharedKey
+        && echoFamilyKey
+        && isViewerOnlySharedEchoCompanion(dr)
+        ? sharedEchoFamilyOwners.get(echoFamilyKey)
+        : null
+      const key = ownSharedKey || companionSharedKey
+        ? `shared-report|${ownSharedKey || companionSharedKey}`
         : `${text}|${date}|${inst}|${sourceProgram}`
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
@@ -303,14 +325,24 @@ export function buildReportsData(
     for (const key of naturalOrder) {
       const grp = naturalGroups.get(key)!
       if (key.startsWith('shared-report|')) {
-        groups.set(key, grp)
+        // Viewer-only 18005C/18007C companions join this bucket so their
+        // actions and source ids survive, but they do not become duplicate
+        // written-report sources or empty clinical-content members.
+        const sharedNarrativeKey = key.slice('shared-report|'.length)
+        const contentReports = grp.filter((report) =>
+          sharedReportGroupingKey(report) === sharedNarrativeKey,
+        )
+        groups.set(key, contentReports.length > 0 ? contentReports : grp)
         viewerReportsByKey.set(key, grp)
         diagnosticReportIdsByKey.set(
           key,
           grp.flatMap((report) => report.id ? [report.id] : []),
         )
         sharedReportKeys.add(key)
-        sharedReportSourcesByKey.set(key, grp.map(reportSource))
+        sharedReportSourcesByKey.set(
+          key,
+          (contentReports.length > 0 ? contentReports : grp).map(reportSource),
+        )
         groupOrder.push(key)
         continue
       }

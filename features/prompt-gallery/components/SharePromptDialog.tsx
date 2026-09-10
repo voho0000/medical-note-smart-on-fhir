@@ -47,9 +47,10 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { guidedPreviewEvents, GUIDED_PREVIEW_DIALOG_CLASSES } from '@/features/right-feature-tour/guided-preview'
-import { createSharedPrompt, EXAMPLE_OUTPUT_MAX_LENGTH } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { createSharedPrompt, EXAMPLE_OUTPUT_MAX_LENGTH, updateSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { PromptCategory, PromptSpecialty, PromptType, TenantMembership } from '../types/prompt.types'
 import { createTenantPrompt } from '@/features/prompt-gallery/services/tenant-prompts.service'
+import { useDemoExampleOutput } from '@/features/prompt-gallery/hooks/useDemoExampleOutput'
 import { PromptSpecialtyPicker } from './PromptSpecialtyPicker'
 import {
   coerceInsightOutputFormat,
@@ -71,8 +72,16 @@ interface SharePromptDialogProps {
   initialExampleOutput?: string
   initialPrompt?: string
   initialType?: PromptType
+  initialTypes?: PromptType[]
+  initialCategory?: PromptCategory
+  initialSpecialties?: PromptSpecialty[]
+  initialTags?: string[]
+  initialIsAnonymous?: boolean
+  initialIsPublic?: boolean
   initialOutputFormat?: InsightOutputFormat
   initialLanguagePolicy?: InsightLanguagePolicy
+  /** Existing personal gallery template. When set, save updates this record instead of creating another copy. */
+  editingPromptId?: string
   onSuccess?: () => void
   guidedPreview?: boolean
   /** Departments the user may publish to; when non-empty a publish-target picker appears. */
@@ -94,8 +103,15 @@ function SharePromptDialogForm({
   initialExampleOutput,
   initialPrompt,
   initialType = 'chat',
+  initialTypes,
+  initialCategory,
+  initialSpecialties,
+  initialTags,
+  initialIsAnonymous,
+  initialIsPublic = true,
   initialOutputFormat,
   initialLanguagePolicy,
+  editingPromptId,
   onSuccess,
   guidedPreview = false,
   memberships = [],
@@ -104,6 +120,7 @@ function SharePromptDialogForm({
   const { t } = useLanguage()
   const { audience } = useAudience()
   const { user } = useAuth()
+  const generateDemoExampleOutput = useDemoExampleOutput()
 
   const [title, setTitle] = useState(initialTitle || '')
   const [description, setDescription] = useState(initialDescription || '')
@@ -112,19 +129,21 @@ function SharePromptDialogForm({
   const [outputFormat, setOutputFormat] = useState<InsightOutputFormat>(() =>
     coerceInsightOutputFormat(initialOutputFormat),
   )
-  const [selectedTypes, setSelectedTypes] = useState<PromptType[]>([initialType])
+  const [selectedTypes, setSelectedTypes] = useState<PromptType[]>(initialTypes?.length ? initialTypes : [initialType])
   const [category, setCategory] = useState<PromptCategory>(
-    initialType === 'summary' ? 'summary' : 'other',
+    initialCategory ?? (initialType === 'summary' ? 'summary' : 'other'),
   )
-  const [selectedSpecialties, setSelectedSpecialties] = useState<PromptSpecialty[]>(['general'])
+  const [selectedSpecialties, setSelectedSpecialties] = useState<PromptSpecialty[]>(initialSpecialties ?? ['general'])
   const [tagInput, setTagInput] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [isAnonymous, setIsAnonymous] = useState(!user?.displayName?.trim())
+  const [tags, setTags] = useState<string[]>(initialTags ?? [])
+  const [isAnonymous, setIsAnonymous] = useState(initialIsAnonymous ?? !user?.displayName?.trim())
+  const [isPublic, setIsPublic] = useState(initialIsPublic)
   const publishTargets = memberships.filter((membership) => membership.canPublish)
   const [publishTarget, setPublishTarget] = useState<string>(() =>
     initialTenantId && publishTargets.some((membership) => membership.tenantId === initialTenantId) ? initialTenantId : 'public')
   const targetMembership = publishTargets.find((membership) => membership.tenantId === publishTarget)
   const [loading, setLoading] = useState(false)
+  const [generatingExample, setGeneratingExample] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const categories: PromptCategory[] = [
@@ -195,6 +214,26 @@ function SharePromptDialogForm({
     setError(null)
 
     try {
+      let resolvedExampleOutput = exampleOutput.trim()
+      if (!resolvedExampleOutput) {
+        setGeneratingExample(true)
+        try {
+          resolvedExampleOutput = await generateDemoExampleOutput({
+            prompt,
+            outputFormat,
+            languagePolicy: initialLanguagePolicy,
+          })
+          // Preserve the generated copy in the form. If the database write
+          // fails, retrying will not make a second AI request.
+          setExampleOutput(resolvedExampleOutput)
+        } catch {
+          setError(t.promptGallery.exampleGenerationError)
+          return
+        } finally {
+          setGeneratingExample(false)
+        }
+      }
+
       const payload = {
         title: title.trim(),
         description: description.trim() || undefined,
@@ -209,13 +248,23 @@ function SharePromptDialogForm({
         isAnonymous,
         outputFormat,
         languagePolicy: initialLanguagePolicy,
-        exampleOutput: exampleOutput.trim() || undefined,
+        exampleOutput: resolvedExampleOutput,
+        isPublic,
       }
-      if (targetMembership) await createTenantPrompt({ ...payload, tenantId: targetMembership.tenantId })
-      else await createSharedPrompt(payload)
+      if (editingPromptId) {
+        const { authorId: _authorId, ...updates } = payload
+        await updateSharedPrompt(editingPromptId, updates)
+      } else if (targetMembership) {
+        const { isPublic: _isPublic, ...tenantPayload } = payload
+        await createTenantPrompt({ ...tenantPayload, tenantId: targetMembership.tenantId })
+      } else await createSharedPrompt(payload)
 
       onSuccess?.()
-      toast.success(targetMembership ? t.promptGallery.tenantShareSuccess : t.promptGallery.shareSuccess)
+      toast.success(editingPromptId
+        ? t.promptGallery.updateSuccess
+        : targetMembership
+          ? t.promptGallery.tenantShareSuccess
+          : isPublic ? t.promptGallery.shareSuccess : t.promptGallery.privateSaveSuccess)
       onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.promptGallery.shareError)
@@ -240,19 +289,11 @@ function SharePromptDialogForm({
         {...guidedPreviewEvents(guidedPreview)}
       >
         <DialogHeader className="border-b px-5 py-4 pr-12">
-          <DialogTitle>{t.promptGallery.sharePrompt}</DialogTitle>
-          <DialogDescription>{t.promptGallery.shareDescription}</DialogDescription>
+          <DialogTitle>{editingPromptId ? t.promptGallery.editTemplate : t.promptGallery.sharePrompt}</DialogTitle>
+          <DialogDescription>{editingPromptId ? t.promptGallery.editDescription : t.promptGallery.shareDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <Alert data-tour="template-share-review" className="mb-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-500/25 dark:bg-blue-500/10">
-            <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertTitle className="mb-0.5 text-sm">{t.promptGallery.sharePrivacyTitle}</AlertTitle>
-            <AlertDescription className="text-xs leading-relaxed">
-              {t.promptGallery.sharePrivacyDescription}
-            </AlertDescription>
-          </Alert>
-
           <div className={cn("grid items-start gap-4", !guidedPreview && "lg:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]")}>
           <section className="space-y-3">
             <div className="space-y-2">
@@ -339,6 +380,25 @@ function SharePromptDialogForm({
             </Dialog>
 
             <div className="space-y-2">
+              <Label htmlFor="share-template-output-format">{t.promptGallery.outputFormatLabel}</Label>
+              <Select value={outputFormat} onValueChange={(value) => setOutputFormat(coerceInsightOutputFormat(value))}>
+                <SelectTrigger id="share-template-output-format" aria-describedby="share-template-output-format-hint" className="w-full shadow-none max-md:min-h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INSIGHT_OUTPUT_FORMATS.map((format) => (
+                    <SelectItem key={format} value={format} className="max-md:min-h-11">
+                      {outputFormatLabels[format]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p id="share-template-output-format-hint" className="text-xs leading-relaxed text-muted-foreground">
+                {t.promptGallery.outputFormatHint}
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="share-template-example-output">{t.promptGallery.exampleOutputLabel}</Label>
                 <span className="text-xs tabular-nums text-muted-foreground">
@@ -356,25 +416,6 @@ function SharePromptDialogForm({
               />
               <p id="share-template-example-output-hint" className="text-xs leading-relaxed text-muted-foreground">
                 {t.promptGallery.exampleOutputHint}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="share-template-output-format">{t.promptGallery.outputFormatLabel}</Label>
-              <Select value={outputFormat} onValueChange={(value) => setOutputFormat(coerceInsightOutputFormat(value))}>
-                <SelectTrigger id="share-template-output-format" aria-describedby="share-template-output-format-hint" className="w-full shadow-none max-md:min-h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INSIGHT_OUTPUT_FORMATS.map((format) => (
-                    <SelectItem key={format} value={format} className="max-md:min-h-11">
-                      {outputFormatLabels[format]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p id="share-template-output-format-hint" className="text-xs leading-relaxed text-muted-foreground">
-                {t.promptGallery.outputFormatHint}
               </p>
             </div>
           </section>
@@ -466,7 +507,7 @@ function SharePromptDialogForm({
           <section className="space-y-3 rounded-xl border p-3">
             <h3 className="text-sm font-medium">{t.promptGallery.publishingOptions}</h3>
 
-            {publishTargets.length > 0 && (
+            {!editingPromptId && publishTargets.length > 0 && (
               <div className="space-y-1.5">
                 <Label htmlFor="share-template-target">{t.promptGallery.publishTarget}</Label>
                 <Select value={publishTarget} onValueChange={setPublishTarget}>
@@ -485,6 +526,25 @@ function SharePromptDialogForm({
                 <p id="share-template-target-hint" className="text-xs leading-relaxed text-muted-foreground">
                   {t.promptGallery.publishTenantHint}
                 </p>
+              </div>
+            )}
+
+            {!targetMembership && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border bg-background p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="share-template-public" className="text-sm font-medium">
+                    {t.promptGallery.publicVisibilityLabel}
+                  </Label>
+                  <p id="share-template-public-hint" className="text-xs leading-relaxed text-muted-foreground">
+                    {isPublic ? t.promptGallery.publicVisibilityOn : t.promptGallery.publicVisibilityOff}
+                  </p>
+                </div>
+                <Switch
+                  id="share-template-public"
+                  checked={isPublic}
+                  onCheckedChange={setIsPublic}
+                  aria-describedby="share-template-public-hint"
+                />
               </div>
             )}
 
@@ -566,6 +626,14 @@ function SharePromptDialogForm({
 
           </div>
           </div>
+
+          <Alert data-tour="template-share-review" className="mt-4 border-blue-200 bg-blue-50/70 py-2.5 dark:border-blue-500/25 dark:bg-blue-500/10">
+            <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="mb-0.5 text-sm">{t.promptGallery.sharePrivacyTitle}</AlertTitle>
+            <AlertDescription className="text-xs leading-relaxed">
+              {t.promptGallery.sharePrivacyDescription}
+            </AlertDescription>
+          </Alert>
         </div>
 
         <DialogFooter className="border-t bg-muted/20 px-5 py-3">
@@ -574,7 +642,13 @@ function SharePromptDialogForm({
           </Button>
           <Button onClick={handleShare} disabled={guidedPreview || loading || !title.trim() || !prompt.trim()}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {loading ? t.promptGallery.sharing : t.promptGallery.sharePrompt}
+            {loading
+              ? generatingExample
+                ? t.promptGallery.generatingExampleOutput
+                : editingPromptId ? t.promptGallery.savingChanges : t.promptGallery.savingTemplate
+              : editingPromptId
+                ? t.promptGallery.saveChanges
+                : isPublic ? t.promptGallery.sharePrompt : t.promptGallery.savePrivateTemplate}
           </Button>
         </DialogFooter>
       </DialogContent>

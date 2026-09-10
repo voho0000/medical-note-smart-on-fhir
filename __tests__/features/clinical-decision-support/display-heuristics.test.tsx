@@ -19,14 +19,7 @@ const profile: CdssPatientProfile = {
   id: 'display-heuristics',
   evaluatedAt: '2026-06-10T00:00:00+08:00',
   demographics: { sex: 'male' },
-  eligibleDiseasePackIds: [
-    'dm-poc',
-    'ckd-poc',
-    'hypertension-poc',
-    'hyperlipidemia-poc',
-    'heart-failure-poc',
-    'cirrhosis-poc',
-  ],
+  eligibleDiseasePackIds: ['heart-failure-poc'],
   facts: {
     age: { zh: '74 歲', en: '74 years', numericValue: 74 },
     eGFR: {
@@ -59,6 +52,8 @@ const profile: CdssPatientProfile = {
       numericValue: 11.4,
       date: '2026-06-02',
     },
+    LVEF: { zh: '32%（2026-05-20）', en: '32% (2026-05-20)', numericValue: 32, date: '2026-05-20' },
+    heartFailureDiagnosis: { zh: 'I50.22 慢性收縮性心衰竭', en: 'I50.22 chronic systolic heart failure', date: '2026-05-20' },
     HbA1c: { zh: '7.4%（2026-05-20）', en: '7.4% (2026-05-20)', numericValue: 7.4, date: '2026-05-20' },
     LDL: { zh: '126 mg/dL（2026-05-01）', en: '126 mg/dL (2026-05-01)', numericValue: 126, date: '2026-05-01' },
     bloodPressure: {
@@ -147,14 +142,37 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
 
 describe('evidence preview heuristics', () => {
   it('still shows the analytes a module declares as its overview evidence', () => {
-    const ckd = CARE_PACKS.find((pack) => pack.id === 'ckd-cdss')!
-    const result = ckd.build({ profile, locale: 'zh-TW' })
-    render(<ClinicalDecisionSupportView result={result} locale="zh-TW" />)
+    // FMT safety is the module that declares more than one overview analyte, so
+    // it is the one that proves the preview keeps every declared key rather
+    // than the first. The facts below are the four it names.
+    const safetyProfile: CdssPatientProfile = {
+      ...profile,
+      id: 'display-heuristics-fmt-safety',
+      eligibleDiseasePackIds: ['heart-failure-poc'],
+      facts: {
+        ...profile.facts,
+        heartRate: {
+          zh: '78 bpm（2026-06-02）',
+          en: '78 bpm (2026-06-02)',
+          numericValue: 78,
+          date: '2026-06-02',
+        },
+      },
+    }
+    const heartFailure = CARE_PACKS.find((pack) => pack.id === 'heart-failure-cdss')!
+    const result = heartFailure.build({ profile: safetyProfile, locale: 'zh-TW' })
+    // The classic table is the layout that carries a key-evidence column; the
+    // heart-failure board moves the same facts into its own header, so the
+    // preview these heuristics act on only exists here.
+    render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="classic" />)
 
-    const preview = screen.queryByTestId('cdss-evidence-preview-ckd-potassium-acidosis')
+    const preview = screen.queryByTestId('cdss-evidence-preview-heart-failure-fmt-safety')
     expect(preview).not.toBeNull()
-    // The module declares overviewEvidenceFactKeys: ['potassium', 'bicarbonate'].
+    // The module declares
+    // overviewEvidenceFactKeys: ['bloodPressure', 'heartRate', 'eGFR', 'potassium'].
+    expect(within(preview!).getByText(/154\/88/)).toBeInTheDocument()
+    expect(within(preview!).getByText(/78/)).toBeInTheDocument()
+    expect(within(preview!).getByText(/32（2026-06-02）/)).toBeInTheDocument()
     expect(within(preview!).getByText(/3\.7/)).toBeInTheDocument()
-    expect(within(preview!).getByText(/23\.6/)).toBeInTheDocument()
   })
 })

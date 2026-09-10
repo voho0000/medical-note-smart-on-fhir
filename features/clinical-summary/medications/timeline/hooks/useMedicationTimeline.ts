@@ -5,6 +5,7 @@
 // ATC labels are consumed from the pinned hierarchy, either through official
 // drug-master terminology or the strict source-WHO-ATC fallback; this hook
 // never invents level 2-4 labels by slicing a full ingredient code.
+import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
@@ -453,9 +454,7 @@ export function useMedicationTimeline(
       const icdCoding = med.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
       const rawIcdText = pickByLocale(med.reasonCode?.[0], locale)
-      const icdText = rawIcdText
-        ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
-        : undefined
+      const icdText = stripLeadingIcdCode(rawIcdText, icdCode ?? '')
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const frequency = displayDosageInstruction(dosage)
       const requesterDisplay = med.requester?.display

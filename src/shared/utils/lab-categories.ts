@@ -114,17 +114,25 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // NA·K·CL·CO2 set + magnesium); NT-PROBNP tails with the cardiac markers
     // (heart-failure marker, 生化室 assay). Canonical keys only here — text
     // variants live in `codes` — per feedback_canonical_only_in_preferredorder.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'CK', 'CKMB', 'NT-PROBNP'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'CK', 'CKMB', 'NT-PROBNP'],
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
-    // ships this for NHI 09099C 心肌旋轉蛋白Ｉ. The high-sensitivity LOINCs
-    // (49563-0 hs-cTnI, 6598-7 cTnT, 67151-1 hs-cTnT) are intentionally
-    // omitted until we see a real bridge bundle using them, so the
-    // LOINC_TO_CANONICAL map stays in lock-step.
+    // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
+    // 89579-7 = Troponin I.cardiac [Mass/volume] in Serum or Plasma by High
+    // sensitivity method — verified at loinc.org (2026-09-10). This is the
+    // real bridge bundle the note below was waiting for: a 2026-09 medcloud
+    // capture ships code.text "hs-Troponin I" with coding 89579-7 + NHI
+    // 09099C, and without this the result fell through to 其他 instead of 生化.
+    // It is deliberately NOT folded into the TROP canonical row: LOINC's own
+    // guidance is that quantitative results from different troponin assays
+    // must not be compared, so hs-cTnI keeps its own row and its own range.
+    // The remaining high-sensitivity LOINCs (49563-0 hs-cTnI, 67151-1 hs-cTnT)
+    // stay omitted on the same rule — add each when a real bundle uses it, so
+    // LOINC_TO_CANONICAL stays in lock-step.
     // 2157-6 = Creatine kinase [Enzymatic activity/volume] in Serum or Plasma
     // (CK total) and 13969-1 = Creatine kinase.MB [Mass/volume] in Serum or
     // Plasma (CK-MB) — both verified at loinc.org (2026-06-16).
@@ -134,7 +142,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // (CO2 / MG / NT-PROBNP); added here so they categorise into 生化 instead
     // of falling to 其他 (user report 2026-07-07; live loinc.org re-check was
     // classifier-blocked, mappings reused from the verified in-repo table).
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6'],
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG'] },
@@ -143,7 +151,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
       // user's reading order. CK + CK-MB join TROP under 心肌酵素; NT-proBNP
       // (heart-failure marker) tails the cardiac group.
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
-      { id: 'cardiac',     members: ['TROP', 'CK', 'CKMB', 'NT-PROBNP'] },
+      // 'HS-TROPONIN I' is the canonical key the normalization package returns
+      // for the source name (canonicalKeyFromLoinc has no entry for 89579-7),
+      // so it sits BESIDE TROP rather than inside it — same panel, adjacent
+      // row, separate assay and separate reference range.
+      { id: 'cardiac',     members: ['TROP', 'HS-TROPONIN I', 'CK', 'CKMB', 'NT-PROBNP'] },
     ],
     // 直式 splits 生化 in two so neither table needs a horizontal scroll on a
     // half-width panel: 腎功能＋電解質 (the routine renal/lyte draw) and
