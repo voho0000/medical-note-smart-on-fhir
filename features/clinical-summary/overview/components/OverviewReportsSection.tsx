@@ -119,7 +119,7 @@ export function OverviewReportsSection({
   // One renderer for the card and the full-length dialog (see
   // OverviewExpandButton): two copies of a clinical row would drift.
   const renderRows = (items: OverviewReportItem[]) => (
-  <div className={cn('flex min-w-0 shrink-0 flex-col', fit.bounded ? 'gap-1' : 'gap-1.5')}>
+  <div className={cn('flex min-w-0 shrink-0 flex-col', 'gap-1')}>
     {items.map((item) => {
       const hasText = !!item.fullText || !!item.reports?.length
       return (
@@ -138,10 +138,10 @@ export function OverviewReportsSection({
             setOpenedId(item.id)
           }}
         >
-          <div className={cn('min-w-0 px-2', fit.bounded ? 'py-0' : 'py-1')}>
+          <div className={cn('min-w-0 px-2', 'py-0')}>
             <div className={cn(
               'flex min-w-0 items-center gap-1.5',
-              fit.bounded && 'h-[26px]',
+              'h-[26px]',
             )}>
               <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-foreground">
                 {item.day ? formatDate(item.day, locale) : '—'}
@@ -152,7 +152,7 @@ export function OverviewReportsSection({
                   // The exam name outranks the institution and the
                   // one-line conclusion for space on a crowded row.
                   'truncate text-xs font-semibold text-foreground',
-                  fit.bounded ? 'max-w-[40%] shrink-0' : 'shrink',
+                  'max-w-[40%] shrink-0',
                 )}
                 title={item.title}
               >
@@ -169,7 +169,7 @@ export function OverviewReportsSection({
                   className="max-w-[8rem] shrink text-[0.6875rem]"
                 />
               )}
-              {fit.bounded && item.summary && (
+              {item.summary && (
                 <span className="min-w-0 flex-1 truncate text-[0.6875rem] text-foreground/75">
                   {item.summary}
                 </span>
@@ -202,11 +202,7 @@ export function OverviewReportsSection({
                 />
               )}
             </div>
-            {!fit.bounded && item.summary && (
-              <div className="min-w-0 truncate text-xs text-foreground/75">
-                {item.summary}
-              </div>
-            )}
+
           </div>
         </div>
       )
@@ -261,7 +257,7 @@ export function OverviewReportsSection({
       )}
     >
       {shown.length === 0 ? (
-        <OverviewEmptyRow />
+        <OverviewEmptyRow hasWindowData={data.items.length > 0} />
       ) : (
         <>
           <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>

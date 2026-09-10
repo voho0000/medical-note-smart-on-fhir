@@ -173,7 +173,7 @@ export function OverviewTruncationNote({
   )
 }
 
-export function OverviewEmptyRow() {
+export function OverviewEmptyRow({ hasWindowData = false }: { hasWindowData?: boolean }) {
   const { t } = useLanguage()
-  return <div className={OVERVIEW_EMPTY_CLASS}>{t.overview.empty}</div>
+  return <div className={OVERVIEW_EMPTY_CLASS}>{hasWindowData ? t.overview.empty : t.overview.emptyWindow}</div>
 }

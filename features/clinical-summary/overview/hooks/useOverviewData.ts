@@ -44,9 +44,6 @@ import {
   type OverviewWindow,
 } from '../utils/overview-selectors'
 
-/** Collection days shown as pivot columns. Older days stay in the 報告 tab. */
-export const OVERVIEW_LAB_COLUMN_LIMIT = 5
-
 export interface OverviewLabColumn {
   day: string
   /** Short institution label under the date, when the source named one. */
@@ -351,14 +348,10 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
     for (const category of LAB_CATEGORIES) {
       for (const day of pivots[category.id]?.dates ?? []) allDays.add(day)
     }
-    // Newest-first decides WHICH days survive the column limit — a bounded
-    // card must keep the most recent draws, never the oldest. The kept days
-    // are then reversed for display so time runs left → right across the
-    // pivot, the way a trend reads. (The 累積報告 itself is transposed —
-    // dates are rows, newest at the top — so there is no left/right
-    // convention there to match.)
-    const sortedDays = [...allDays].sort((a, b) => b.localeCompare(a))
-    const shownDays = sortedDays.slice(0, OVERVIEW_LAB_COLUMN_LIMIT).reverse()
+    // Keep every collection day for the expanded list. The card applies its
+    // own width budget; cutting dates here would also
+    // discard older-only analytes and undercount the window's results.
+    const shownDays = [...allDays].sort((a, b) => a.localeCompare(b))
     const columns: OverviewLabColumn[] = shownDays.map((day) => {
       const counts = dayInstitutionCounts.get(day)
       let best: string | undefined
@@ -426,7 +419,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       columns,
       rows,
       pinnedRowCount,
-      hiddenDayCount: Math.max(0, sortedDays.length - shownDays.length),
+      hiddenDayCount: 0,
       resultCount,
       abnormalCount,
       unpivotedCount,

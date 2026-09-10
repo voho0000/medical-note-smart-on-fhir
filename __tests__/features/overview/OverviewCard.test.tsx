@@ -79,8 +79,67 @@ function sectionHeaderValue(sectionId: string): number {
 }
 
 describe('OverviewCard (demo bundle)', () => {
+  const originalResizeObserver = globalThis.ResizeObserver
+  beforeAll(() => {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+  })
+  afterAll(() => { globalThis.ResizeObserver = originalResizeObserver })
   beforeEach(() => {
     mockUseClinicalData.mockReturnValue(clinicalData)
+  })
+
+  it('keeps all seven collection days and an older-only analyte in the expanded list', () => {
+    const days = ['2026-04-01', '2026-04-08', '2026-04-15', '2026-05-01', '2026-05-08', '2026-06-01', '2026-06-08']
+    const draws = days.map((day, index) => ({
+      resourceType: 'Observation', id: `seven-days-${index}`, status: 'final',
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
+      code: { coding: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] },
+      effectiveDateTime: `${day}T09:00:00+08:00`,
+      valueQuantity: { value: 11 + index / 10, unit: 'g/dL' },
+    }))
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, observations: [
+      ...draws,
+      { ...draws[0], id: 'culture-only-day', effectiveDateTime: '2026-04-02T09:00:00+08:00',
+        code: { coding: [{ system: 'http://loinc.org', code: '600-7', display: 'Blood culture' }] },
+        valueQuantity: undefined, valueString: 'No growth',
+      },
+      { ...draws[0], id: 'older-only-potassium',
+        code: { coding: [{ system: 'http://loinc.org', code: '2823-3', display: 'Potassium' }] },
+        valueQuantity: { value: 6.7, unit: 'mmol/L' },
+      },
+    ] })
+    render(<OverviewCard />)
+    expect(sectionHeaderValue('labs')).toBe(9)
+    const card = document.getElementById('overview-section-labs')!
+    fireEvent.click(within(card).getByRole('button', { name: zhTW.overview.expandList }))
+    const dialog = within(screen.getByRole('dialog'))
+    for (const day of days) expect(dialog.getByText(day.slice(5).replace('-', '/'))).toBeInTheDocument()
+    expect(dialog.getByText('6.7')).toBeInTheDocument()
+    expect(dialog.queryByText('04/02')).not.toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '全部' }))
+    expect(dialog.getByText('04/02')).toBeInTheDocument()
+    expect(dialog.getByText('No growth')).toBeInTheDocument()
+  })
+
+  it('exposes the complete narrative laboratory result on click', async () => {
+    const narrative = 'Synthetic culture result\n' + 'Organism and susceptibility details. '.repeat(30)
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, observations: [{
+      resourceType: 'Observation', id: 'synthetic-culture', status: 'final',
+      code: { coding: [{ system: 'http://loinc.org', code: '600-7', display: 'Blood culture' }] },
+      effectiveDateTime: '2026-06-01T09:00:00+08:00', valueString: narrative,
+    }] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-labs')!
+    fireEvent.click(within(card).getByRole('button', { name: zhTW.overview.expandList }))
+    const dialog = screen.getByRole('dialog')
+    const trigger = [...dialog.querySelectorAll('span[tabindex="0"]')].find(element => element.textContent === narrative)!
+    expect(trigger).toBeInTheDocument()
+    fireEvent.click(trigger)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Organism and susceptibility details.')
   })
 
   it('renders the four sections with the default 3-month window', () => {
@@ -162,7 +221,7 @@ describe('OverviewCard (demo bundle)', () => {
     for (const section of ['labs', 'reports', 'meds', 'visits']) {
       const card = document.getElementById(`overview-section-${section}`)
       expect(card).toBeInTheDocument()
-      expect(within(card as HTMLElement).getByText(zhTW.overview.empty)).toBeInTheDocument()
+      expect(within(card as HTMLElement).getByText(zhTW.overview.emptyWindow)).toBeInTheDocument()
     }
   })
 

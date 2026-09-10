@@ -174,6 +174,7 @@ export const en = {
       reportIndex: 'Report {index} of {total}',
     },
     meds: {
+      prescribedDays: '{days}-day supply',
       current: 'Current',
       all: 'All',
       changed: 'Changed',
@@ -209,6 +210,7 @@ export const en = {
     expandList: 'Show the full list',
     moreItems: '{count} more',
     seeAllIn: 'See all in {tab} →',
+    emptyWindow: 'No data in the selected time range',
     empty: 'No records in this range',
     emptyAll: 'Latest record on file: {date}',
     footnote: 'Coverage depends on when each institution uploaded; cloud records usually only span the last year.',

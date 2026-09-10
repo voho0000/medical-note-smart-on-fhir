@@ -176,7 +176,8 @@ export function OverviewMedsSection({
   // honest about it.
   const shown = matched
   const hidden = 0
-  const compact = fit.bounded
+  // Keep each record on one line in both stacked and side-by-side layouts.
+  const compact = true
 
   const chips: { id: MedFilter; label: string; enabled: boolean }[] = [
     { id: 'current', label: strings.meds.current, enabled: true },
@@ -187,7 +188,7 @@ export function OverviewMedsSection({
   // One renderer, two surfaces: the card shows what fits, the dialog shows
   // the same rows at full length. Divergence between them would be a bug
   // nobody notices, so there is only ever one copy of this markup.
-  const renderRows = (items: OverviewMedItem[]) => (
+  const renderRows = (items: OverviewMedItem[], expanded = false) => (
   <div className={cn('flex min-w-0 shrink-0 flex-col', compact ? 'gap-[3px]' : 'gap-1.5')}>
     {items.map((item) => {
       const dose = item.change?.kind === 'adjusted' && item.change.previousDose
@@ -261,6 +262,11 @@ export function OverviewMedsSection({
                 locale={locale}
                 className="min-w-0 flex-1 shrink-[4] text-[0.6875rem]"
               />
+            )}
+            {(!fit.bounded || expanded) && item.row.durationDays !== undefined && (
+              <span className="shrink-0 whitespace-nowrap text-[0.6875rem] tabular-nums text-muted-foreground">
+                {strings.meds.prescribedDays.replace('{days}', String(item.row.durationDays))}
+              </span>
             )}
             {item.day && (
               <span className="shrink-0 whitespace-nowrap text-[0.6875rem] tabular-nums text-muted-foreground">
@@ -351,7 +357,7 @@ export function OverviewMedsSection({
       )}
     >
       {shown.length === 0 ? (
-        <OverviewEmptyRow />
+        <OverviewEmptyRow hasWindowData={data.items.length > 0} />
       ) : (
         <>
           <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
@@ -368,7 +374,7 @@ export function OverviewMedsSection({
             subtitle={strings.counts.meds.replace('{count}', String(matched.length))}
             filters={filterChips}
           >
-            {renderRows(matched)}
+            {renderRows(matched, true)}
           </OverviewFullListDialog>
         </>
       )}

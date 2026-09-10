@@ -47,11 +47,11 @@ export function OverviewSectionCard({
         bounded && 'min-h-0 flex-1 overflow-hidden',
       )}
     >
-      <CardHeader className="gap-2 px-3.5 sm:px-5">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2 px-3.5 sm:px-5">
         <CardTitle
           ref={headingRef}
           className={cn(
-            'flex min-w-0 items-center gap-2 text-base',
+            'flex min-w-0 flex-auto items-center gap-1.5 text-base',
             flash && 'resource-flash',
           )}
         >
@@ -69,7 +69,7 @@ export function OverviewSectionCard({
           )}
         </CardTitle>
         {actions && (
-          <CardAction className="flex items-center gap-1.5">{actions}</CardAction>
+          <CardAction className="ml-auto flex max-w-full flex-wrap items-center gap-1.5">{actions}</CardAction>
         )}
       </CardHeader>
       <CardContent

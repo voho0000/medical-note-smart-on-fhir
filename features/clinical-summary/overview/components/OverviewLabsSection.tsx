@@ -8,7 +8,7 @@
 // LabPivot model (buildLabPivots) and reuses the cell tones — no second pivot
 // builder, and no app-side abnormal determiner: `cell.isAbnormal` comes from
 // the source's own interpretation / reference range.
-import { useMemo, useState, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { FlaskConical } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
@@ -69,10 +69,44 @@ function CellText({ text, className }: { text: string; className?: string }) {
       content={text}
       aria-label={text}
       asChild
-      contentClassName="max-w-[min(90vw,24rem)] whitespace-normal break-words text-xs leading-relaxed"
+      contentClassName="max-h-[60vh] max-w-[min(90vw,24rem)] overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed"
     >
       <span tabIndex={0} className={className}>{text}</span>
     </TapTooltip>
+  )
+}
+
+/** Keep the newest (rightmost) dates visible when the viewport changes. */
+function LabScrollRegion({ children, dateKey }: { children: ReactNode; dateKey: string }) {
+  const { t, locale } = useLanguage()
+  const ref = useRef<HTMLDivElement>(null)
+  const [overflow, setOverflow] = useState(false)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const measure = () => {
+      setOverflow(element.scrollWidth > element.clientWidth + 1)
+      element.scrollLeft = element.scrollWidth
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    if (element.firstElementChild) observer.observe(element.firstElementChild)
+    return () => observer.disconnect()
+  }, [dateKey])
+  return (
+    <div className="min-w-0 max-w-full shrink-0">
+      {overflow && (
+        <p className="mb-1 text-xs text-muted-foreground">
+          {locale === 'zh-TW' ? '左右捲動查看其他日期' : 'Scroll horizontally for other dates'}
+        </p>
+      )}
+      <div ref={ref} role="region" aria-label={t.overview.sections.labs} tabIndex={0}
+        className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        {children}
+      </div>
+    </div>
   )
 }
 
@@ -92,6 +126,18 @@ export function OverviewLabsSection({
   const [mode, setMode] = useState<LabMode>('pinned')
   const [abnormalOnly, setAbnormalOnly] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [cardWidth, setCardWidth] = useState(0)
+  useEffect(() => {
+    const element = cardRef.current
+    if (!element) return
+    const measure = () => setCardWidth(element.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [data.rows.length, mode, abnormalOnly])
   // 「常用」 only makes sense while the standard panels actually have rows in
   // range; otherwise the card would look empty for a filter the patient's data
   // cannot satisfy.
@@ -112,7 +158,7 @@ export function OverviewLabsSection({
   const shown = matched
   const hidden = 0
   const columns = data.columns
-  const gridTemplate = `minmax(88px, 118px) repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))`
+  const cardColumnCount = Math.max(1, Math.floor((cardWidth - 112) / 72))
 
 
   // Zebra striping is derived up-front so the JSX stays a pure map (no
@@ -143,13 +189,23 @@ export function OverviewLabsSection({
   // matched analyte, and neither can drift from the other.
   const showCategories = effectiveMode === 'all'
 
-  const renderPivot = (rows: OverviewLabRow[]) => (
-  <div className="min-w-0 shrink-0 overflow-hidden rounded-md border border-border">
-    <div className="grid" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="flex items-center overflow-hidden border-b border-r border-border bg-muted px-2 py-[3px] text-[0.6875rem] font-semibold leading-3 tracking-wide text-foreground">
+  const renderPivot = (rows: OverviewLabRow[], expanded = false) => {
+    // Filter before applying the card's date budget so empty pinned days
+    // cannot displace older days that actually contain common results.
+    const eligibleIndexes = columns.map((_, index) => index).filter(index =>
+      effectiveMode !== 'pinned' || rows.some(row => Boolean(row.cells[index])),
+    )
+    const visibleIndexes = expanded ? eligibleIndexes : eligibleIndexes.slice(-cardColumnCount)
+    const visibleColumns = visibleIndexes.map(index => columns[index])
+    const gridTemplate = expanded
+      ? `7rem repeat(${Math.max(1, visibleColumns.length)}, minmax(4.5rem, 1fr))`
+      : `7rem repeat(${Math.max(1, visibleColumns.length)}, minmax(0, 1fr))`
+    const grid = (
+    <div className="grid w-full" style={{ gridTemplateColumns: gridTemplate, minWidth: expanded ? `${7 + visibleColumns.length * 4.5}rem` : undefined }}>
+      <div className="sticky left-0 z-10 flex items-center overflow-hidden border-b border-r border-border bg-muted px-2 py-[3px] text-[0.6875rem] font-semibold leading-3 tracking-wide text-foreground">
         {strings.labs.analyte}
       </div>
-      {columns.map((column, index) => (
+      {visibleColumns.map((column, index) => (
         <div
           key={column.day}
           className={cn(
@@ -162,7 +218,7 @@ export function OverviewLabsSection({
           </span>
           {column.institution && (
             <span
-              className="block max-w-full truncate text-[0.5625rem] font-medium leading-[11px]"
+              className="block w-16 max-w-full truncate text-[0.5625rem] font-medium leading-[11px]"
               title={column.institution}
             >
               {column.institution}
@@ -182,7 +238,7 @@ export function OverviewLabsSection({
               key={`group-${row.categoryId}`}
               className="col-span-full overflow-hidden bg-muted/70 px-2 py-px text-[0.6875rem] font-bold leading-3 tracking-wide text-muted-foreground"
             >
-              {row.categoryLabel}
+              <span className="sticky left-0 inline-block bg-muted px-2">{row.categoryLabel}</span>
             </div>,
           )
         }
@@ -190,8 +246,8 @@ export function OverviewLabsSection({
           <div
             key={`${row.mapKey}-name`}
             className={cn(
-              'flex items-baseline gap-1 overflow-hidden border-r border-border px-2 py-0.5 leading-[14px]',
-              zebra,
+              'sticky left-0 z-10 flex max-w-48 flex-wrap items-baseline gap-x-1 border-r border-border px-2 py-0.5 leading-[14px]',
+              'bg-card',
             )}
           >
             <CellText
@@ -205,8 +261,9 @@ export function OverviewLabsSection({
             )}
           </div>,
         )
-        row.cells.forEach((cell, index) => {
-          const key = `${row.mapKey}-${columns[index]?.day ?? index}`
+        visibleIndexes.forEach((sourceIndex, index) => {
+          const cell = row.cells[sourceIndex]
+          const key = `${row.mapKey}-${visibleColumns[index]?.day ?? index}`
           if (!cell) {
             nodes.push(
               <div
@@ -222,11 +279,15 @@ export function OverviewLabsSection({
             return
           }
           const { shown, total } = summariseCellValue(cell)
+          // Narrative microbiology results must not size an entire date column.
+          // Numeric values keep their intrinsic width and are never truncated.
+          const numeric = /^[<>≤≥]?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
+          const valueText = `${shown}${cell.isAbnormal && cell.interpretationCode?.startsWith('H') ? ' ↑' : ''}${cell.isAbnormal && cell.interpretationCode?.startsWith('L') ? ' ↓' : ''}`
           nodes.push(
             <div
               key={key}
               className={cn(
-                'flex items-center justify-center overflow-hidden px-1 py-0.5 text-center text-xs leading-[14px] tabular-nums',
+                'min-w-0 flex items-center justify-center px-2 py-0.5 text-center text-xs leading-[14px] tabular-nums',
                 index > 0 && 'border-l border-border',
                 cell.isAbnormal
                   ? 'bg-clinical-abnormal/[0.06] font-bold text-clinical-abnormal'
@@ -234,11 +295,11 @@ export function OverviewLabsSection({
               )}
               title={cell.unit ? `${cell.value} ${cell.unit}` : cell.value}
             >
-              <span className="min-w-0 truncate">
-                {shown}
-                {cell.isAbnormal && cell.interpretationCode?.startsWith('H') && ' ↑'}
-                {cell.isAbnormal && cell.interpretationCode?.startsWith('L') && ' ↓'}
-              </span>
+              {numeric ? (
+                <span className="whitespace-nowrap">{valueText}</span>
+              ) : (
+                <CellText text={valueText} className="block min-w-0 max-w-full truncate" />
+              )}
               {total > 1 && (
                 // One character, so the value keeps the column. "+1"
                 // cost twice this and pushed 37.87 into an ellipsis.
@@ -255,8 +316,13 @@ export function OverviewLabsSection({
         return nodes
       })}
     </div>
-  </div>
-  )
+    )
+    return expanded ? (
+      <LabScrollRegion dateKey={columns.map(column => column.day).join('|')}>{grid}</LabScrollRegion>
+    ) : (
+      <div className="min-w-0 overflow-hidden rounded-md border border-border">{grid}</div>
+    )
+  }
 
   // One definition, two places: the card header and the expanded dialog, both
   // driving the same mode / abnormal-only state.
@@ -312,10 +378,10 @@ export function OverviewLabsSection({
       )}
     >
       {shown.length === 0 || columns.length === 0 ? (
-        <OverviewEmptyRow />
+        <OverviewEmptyRow hasWindowData={data.rows.length > 0 || data.unpivotedCount > 0} />
       ) : (
         <>
-          <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
+          <div ref={cardRef} className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]')}>
             {renderPivot(shown)}
           </div>
           {/* The same footer the other three cards use. 「常用」 is a chosen
@@ -331,7 +397,7 @@ export function OverviewLabsSection({
               .replace('{results}', String(data.resultCount))
               .replace('{days}', String(columns.length + data.hiddenDayCount))}
           >
-            {renderPivot(matched)}
+            {renderPivot(matched, true)}
           </OverviewFullListDialog>
         </>
       )}

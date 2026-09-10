@@ -122,7 +122,8 @@ export function OverviewVisitsSection({
   // row budget only ever existed to avoid a scrollbar the reader wanted.
   const shown = matched
   const hidden = 0
-  const compact = fit.bounded
+  // Keep each record on one line in both stacked and side-by-side layouts.
+  const compact = true
 
   const chips: { id: VisitFilter; label: string; enabled: boolean }[] = [
     { id: 'all', label: strings.visits.all, enabled: true },
@@ -359,7 +360,7 @@ export function OverviewVisitsSection({
           />
         )}
         {shown.length === 0 ? (
-          <OverviewEmptyRow />
+          <OverviewEmptyRow hasWindowData={data.items.length > 0} />
         ) : (
           <>
             <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>

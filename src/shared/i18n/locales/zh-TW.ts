@@ -175,6 +175,7 @@ export const zhTW = {
       reportIndex: '報告 {index} / {total}',
     },
     meds: {
+      prescribedDays: '開立 {days} 天',
       current: '使用中',
       all: '全部',
       changed: '異動',
@@ -210,6 +211,7 @@ export const zhTW = {
     expandList: '展開完整清單',
     moreItems: '另 {count} 項',
     seeAllIn: '在{tab}分頁看全部 →',
+    emptyWindow: '所選時間範圍內無資料',
     empty: '此範圍內無符合的紀錄',
     emptyAll: '最近一筆資料：{date}',
     footnote: '資料範圍依各院上傳時間為準；雲端資料通常僅含最近一年。',
