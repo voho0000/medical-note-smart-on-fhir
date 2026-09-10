@@ -26,6 +26,18 @@ export type CongestionSignsAnswer = 'edema' | 'orthopnea-pnd' | 'jvp-rales'
 /** NYHA functional class, as the clinician grades it. */
 export type NyhaClass = 'I' | 'II' | 'III' | 'IV'
 
+/**
+ * Whether the patient is compensated in the room today, as the clinician
+ * judges it.
+ *
+ * A judgement, not a code: the record's own `decompensatedHeartFailure` is read
+ * from an HF admission inside a 90-day window, which answers 「最近住過院嗎」
+ * rather than 「今天穩不穩」. The two are kept apart on purpose — a patient
+ * admitted eleven weeks ago can walk in compensated, and one who has never been
+ * admitted can walk in decompensated.
+ */
+export type CompensationStatus = 'compensated' | 'decompensated'
+
 export interface ClinicVitals {
   systolic?: number
   diastolic?: number
@@ -44,6 +56,8 @@ export interface ClinicVitals {
   signAnswers?: Readonly<Record<string, 'present' | 'absent'>>
   /** The NYHA class graded in the room, where one was graded. */
   nyhaClass?: NyhaClass
+  /** The compensation state judged in the room, where one was judged. */
+  compensationStatus?: CompensationStatus
   /** The day the measurements were taken, as YYYY-MM-DD. */
   measuredOn: string
 }

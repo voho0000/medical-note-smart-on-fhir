@@ -24,6 +24,7 @@ import type {
   ClinicalEvidence,
 } from '../types'
 import { CLINIC_ENTRY_PATTERN } from '../utils/apply-clinic-vitals'
+import { buildCareTimeline, type CareTimelineModel } from './care-timeline'
 
 export const HEART_FAILURE_PACK_ID = 'heart-failure-cdss'
 
@@ -188,6 +189,12 @@ export interface HeartFailureBoardModel {
    * is not in `consumedIds`: the criteria are read there, in full.
    */
   hfpEfDiagnosis?: CdssRecommendation
+  /**
+   * The course behind today: the LVEF trajectory, when HF was coded, and what
+   * the patient was prescribed across it. Absent when the record dates fewer
+   * than two of them — one point is a label, not a trajectory.
+   */
+  timeline?: CareTimelineModel
   /** Which foundational classes the tiles below stand for, and why. */
   pillarScope: HeartFailurePillarScope
   pillars: readonly HeartFailurePillar[]
@@ -531,6 +538,7 @@ export function buildHeartFailureBoard(
     alerts,
     gdmt: evaluatedPillars.length > 0 ? byId.get(GDMT_MODULE_ID) : undefined,
     hfpEfDiagnosis: byId.get(HFPEF_DIAGNOSIS_MODULE_ID),
+    timeline: buildCareTimeline(profileFacts, isEnglish),
     pillarScope,
     pillars,
     consumedIds,

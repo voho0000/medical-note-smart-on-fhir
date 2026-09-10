@@ -67,4 +67,39 @@ describe('applyClinicVitals', () => {
     // No answer, no fact: the default is silence, not a negative finding.
     expect(applyClinicVitals(profile, { measuredOn: '2026-09-08', signAnswers: {} }).facts.clinicCongestionExam).toBeUndefined()
   })
+
+  it('writes the compensation judgement under its own key, not the admission fact', () => {
+    const next = applyClinicVitals(profile, {
+      compensationStatus: 'decompensated',
+      measuredOn: '2026-09-08',
+    })
+
+    expect(next.facts.physicianCompensationStatus).toEqual({
+      zh: '失代償（2026-09-08 門診輸入）',
+      en: 'Decompensated (2026-09-08, entered in clinic)',
+      date: '2026-09-08',
+      textEvidence: { direction: 'supports', matchedTerms: ['decompensated'] },
+    })
+    // `decompensatedHeartFailure` is the adapter's, read from an admission
+    // inside a 90-day window. A clinic judgement never touches it: saying
+    // 「今天穩定」 must not erase a real admission, and saying 「今天失代償」
+    // must not reclassify exercise risk from the host.
+    expect(next.facts.decompensatedHeartFailure).toBeUndefined()
+  })
+
+  it('records a compensated judgement as a finding of its own', () => {
+    const next = applyClinicVitals(profile, {
+      compensationStatus: 'compensated',
+      measuredOn: '2026-09-08',
+    })
+
+    expect(next.facts.physicianCompensationStatus).toMatchObject({
+      zh: '代償（2026-09-08 門診輸入）',
+      textEvidence: { matchedTerms: ['compensated'] },
+    })
+    // No judgement, no fact: unanswered stays unanswered.
+    expect(
+      applyClinicVitals(profile, { measuredOn: '2026-09-08' }).facts.physicianCompensationStatus,
+    ).toBeUndefined()
+  })
 })

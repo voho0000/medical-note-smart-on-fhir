@@ -99,6 +99,22 @@ export const NYHA_CLASS_TERMS = {
   IV: 'nyha-iv',
 } as const
 
+/**
+ * The term each compensation judgement is written as.
+ *
+ * Deliberately not `decompensatedHeartFailure`: that fact is the adapter's, read
+ * from an HF admission or emergency visit inside a 90-day window, and the
+ * cardiac-rehabilitation safety module raises its priority from it. Writing a
+ * clinic judgement into the same key would let 「今天看起來穩定」 erase a real
+ * admission, and 「今天失代償」 silently reclassify exercise risk from the host.
+ * The judgement travels under its own key; what the pack should make of it is
+ * the pack's to decide.
+ */
+export const COMPENSATION_STATUS_TERMS = {
+  compensated: 'compensated',
+  decompensated: 'decompensated',
+} as const
+
 export const CLINIC_ENTRY_NOTE = { zh: '門診輸入', en: 'entered in clinic' } as const
 
 /** Recognises a fact this file wrote, wherever the pack prints it. */
@@ -191,6 +207,22 @@ export function applyClinicVitals(
         // symptoms criterion is the pack's reading, not the host's.
         direction: 'supports',
         matchedTerms: [NYHA_CLASS_TERMS[vitals.nyhaClass]],
+      },
+    }
+  }
+
+  if (vitals.compensationStatus) {
+    const decompensated = vitals.compensationStatus === 'decompensated'
+    facts.physicianCompensationStatus = {
+      zh: `${decompensated ? '失代償' : '代償'}（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
+      en: `${decompensated ? 'Decompensated' : 'Compensated'} (${date}, ${CLINIC_ENTRY_NOTE.en})`,
+      date,
+      textEvidence: {
+        // A judgement is a finding whichever way it went; the term says which,
+        // and whether it argues for any criterion is the pack's reading, not
+        // the host's — the same stance the NYHA grade above takes.
+        direction: 'supports',
+        matchedTerms: [COMPENSATION_STATUS_TERMS[vitals.compensationStatus]],
       },
     }
   }

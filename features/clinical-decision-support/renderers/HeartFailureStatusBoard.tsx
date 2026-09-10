@@ -7,7 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../types'
-import { type ClinicVitals, type CongestionSignsAnswer, todayIsoDate } from '../stores/clinic-vitals.store'
+import {
+  type ClinicVitals,
+  type CompensationStatus,
+  type CongestionSignsAnswer,
+  todayIsoDate,
+} from '../stores/clinic-vitals.store'
+import { CareTimeline } from './CareTimeline'
+import { HeartFailureBanner } from './HeartFailureBanner'
 import {
   formatMetricDate,
   type HeartFailureBoardModel,
@@ -386,6 +393,67 @@ function ClinicVitalsForm({
   )
 }
 
+/** The two states the clinician grades, in the order the strip offers them. */
+const COMPENSATION_OPTIONS: readonly CompensationStatus[] = ['compensated', 'decompensated']
+
+/**
+ * 代償 or 失代償, as judged in the room.
+ *
+ * The same segmented control the NYHA row uses, for the same reason: this is a
+ * state with named levels, not a 有／無 question, and a switch cannot say which
+ * one was seen. Tapping the selected option again clears it — an answer someone
+ * gave and withdrew has to be able to return to 未評估, because 「代償」 and
+ * 「沒問」 are different things to record.
+ *
+ * Written to the same `ClinicVitals` record as the NYHA grade and the congestion
+ * signs, so what was examined this visit is one record however it was stated.
+ */
+function CompensationStatusControl({
+  isEnglish,
+  value,
+  onSelect,
+}: {
+  isEnglish: boolean
+  value?: CompensationStatus
+  onSelect: (next: CompensationStatus | undefined) => void
+}) {
+  const optionText: Record<CompensationStatus, string> = {
+    compensated: isEnglish ? 'Compensated' : '代償',
+    decompensated: isEnglish ? 'Decompensated' : '失代償',
+  }
+  return (
+    <div
+      className="flex shrink-0 overflow-hidden rounded-md border border-border"
+      role="group"
+      aria-label={isEnglish ? 'Compensation state today' : '今天的代償狀態'}
+      data-testid="cdss-hf-compensation-control"
+    >
+      {COMPENSATION_OPTIONS.map((option) => {
+        const isSelected = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={isSelected}
+            className={cn(
+              'min-h-8 px-3 text-xs font-medium transition-colors',
+              'border-r border-border last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              isSelected
+                ? 'bg-primary/10 text-primary'
+                : 'bg-card text-muted-foreground hover:bg-muted/40',
+            )}
+            onClick={() => onSelect(isSelected ? undefined : option)}
+            data-testid={`cdss-hf-compensation-${option}`}
+          >
+            {optionText[option]}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function ExpandChevron({ expanded }: { expanded: boolean }) {
   return (
     <ChevronDown
@@ -556,6 +624,21 @@ export function HeartFailureStatusBoard({
           />
         </section>
       ) : null}
+
+      {/*
+        Below DP-00 and above everything else. DP-00 keeps the top because it
+        gates the whole pack — until it is answered there is nothing for a
+        summary to count — and this then says, in one line, whether the rest of
+        the screen needs reading today. It blocks nothing either way.
+      */}
+      <HeartFailureBanner
+        alerts={board.alerts}
+        headlines={board.headlines}
+        isEnglish={isEnglish}
+        // Opens, never closes: a reader who pressed 「開啟模組」 asked to see it,
+        // and a toggle would shut the card they just asked for.
+        onOpen={(id) => { if (expandedId !== id) onToggle(id) }}
+      />
 
       {/* Phenotype and the safety inputs every FMT decision reads. */}
       <section
@@ -927,6 +1010,44 @@ export function HeartFailureStatusBoard({
       ) : null}
 
       {/*
+        代償還是失代償 — the judgement the room can make and the record cannot.
+        Kept beside the congestion signs because both are 「今天看到什麼」, and
+        written to the same `ClinicVitals` record, so there is one account of
+        this visit's examination rather than two that can disagree.
+      */}
+      {onSaveClinicVitals ? (
+        <section
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2"
+          aria-label={isEnglish ? 'Compensation state today' : '今天的代償狀態'}
+          data-testid="cdss-hf-compensation"
+        >
+          <span className="text-sm font-semibold text-foreground">
+            {isEnglish ? 'Compensated today?' : '今天是代償還是失代償？'}
+          </span>
+          <CompensationStatusControl
+            isEnglish={isEnglish}
+            value={clinicVitals?.compensationStatus}
+            onSelect={(next) => {
+              onSaveClinicVitals({
+                ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
+                measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
+                compensationStatus: next,
+              })
+            }}
+          />
+          <span className="text-[11px] leading-4 text-muted-foreground">
+            {clinicVitals?.compensationStatus
+              ? (isEnglish
+                ? 'Recorded as this visit\'s clinical judgement, separately from any admission in the record.'
+                : '已記錄為本次的臨床判斷，與紀錄中的住院史分開存放。')
+              : (isEnglish
+                ? 'Unanswered by default; a recent admission in the record is not read as today\'s state.'
+                : '預設未回答；紀錄中的住院史不會被當成今天的狀態。')}
+          </span>
+        </section>
+      ) : null}
+
+      {/*
         The foundational classes as a board: what the patient is on, what is
         missing, what next. Which classes those are is the phenotype's business
         — ESC 2026 Recommendation Table 5 recommends an SGLT2 inhibitor and an
@@ -1020,6 +1141,16 @@ export function HeartFailureStatusBoard({
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {/*
+        Last, and closed: the course is what today's decision is read against,
+        not the decision. A clinician who needs to know whether the ejection
+        fraction was already recovering when the β-blocker started opens it;
+        everyone else scrolls past one line.
+      */}
+      {board.timeline ? (
+        <CareTimeline timeline={board.timeline} isEnglish={isEnglish} />
       ) : null}
     </div>
   )
