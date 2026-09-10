@@ -1,4 +1,4 @@
-import { getDocs, where } from 'firebase/firestore'
+import { getDocs, orderBy, where } from 'firebase/firestore'
 import { getMySharedPrompts, getSharedPrompts } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import { PROMPT_SPECIALTY_GROUPS } from '@/features/prompt-gallery/constants/prompt-specialties'
 import { en } from '@/src/shared/i18n/locales/en'
@@ -29,6 +29,7 @@ const fetchers = [
 
 describe.each(fetchers)('%s specialty filtering', (_name, fetchPrompts) => {
   beforeEach(() => {
+    jest.clearAllMocks()
     jest.mocked(getDocs).mockResolvedValue({ docs: [
       record('legacy-internal', ['internal']),
       record('heart', ['cardiology']),
@@ -42,31 +43,36 @@ describe.each(fetchers)('%s specialty filtering', (_name, fetchPrompts) => {
     ] } as unknown as Awaited<ReturnType<typeof getDocs>>)
   })
 
-  it.each([undefined, 'summary'] as const)('expands the server query for internal medicine with type %s', async (type) => {
-    await fetchPrompts({ specialty: 'internal', type })
-    expect(where).toHaveBeenCalledWith('specialty', 'array-contains-any', [
-      'internal', 'cardiology', 'gastroenterology', 'pulmonology', 'nephrology',
-      'rheumatology', 'immunology', 'hematology', 'medical_oncology',
-      'endocrinology', 'infectious_diseases',
+  const expectIndexSafeScope = () => {
+    expect(where).toHaveBeenCalledTimes(1)
+    expect(where).toHaveBeenCalledWith(
+      _name === 'my templates' ? 'authorId' : 'isPublic',
+      '==',
+      _name === 'my templates' ? 'test-author' : true,
+    )
+    expect(orderBy).not.toHaveBeenCalled()
+  }
+
+  it.each([undefined, 'summary'] as const)('expands internal medicine in memory with type %s', async (type) => {
+    const prompts = await fetchPrompts({ specialty: 'internal', type })
+    expect(prompts.map((prompt) => prompt.id)).toEqual([
+      'legacy-internal', 'heart', 'renal', 'rheumatology', 'immunology', 'blood', 'cancer',
     ])
-    // Firestore may not combine this with a second array predicate for type.
-    expect(where).not.toHaveBeenCalledWith('types', 'array-contains', expect.anything())
+    expectIndexSafeScope()
   })
 
-  it('includes subspecialties and legacy internal tags when chat uses the array query slot', async () => {
+  it('includes subspecialties and legacy internal tags for chat without adding an indexed predicate', async () => {
     const prompts = await fetchPrompts({ specialty: 'internal', type: 'chat' })
     expect(prompts.map((prompt) => prompt.id)).toEqual([
       'legacy-internal', 'heart', 'renal', 'rheumatology', 'immunology', 'blood', 'cancer',
     ])
-    expect(where).toHaveBeenCalledWith('types', 'array-contains', 'chat')
-    expect(jest.mocked(where).mock.calls.filter(([field]) => field === 'specialty')).toEqual([])
+    expectIndexSafeScope()
   })
 
   it('does not interpret a broad internal tag as a specific subspecialty', async () => {
     const prompts = await fetchPrompts({ specialty: 'nephrology', type: 'chat' })
     expect(prompts.map((prompt) => prompt.id)).toEqual(['renal'])
-    await fetchPrompts({ specialty: 'nephrology' })
-    expect(where).toHaveBeenCalledWith('specialty', 'array-contains', 'nephrology')
+    expectIndexSafeScope()
   })
 
   it('keeps old insight summaries discoverable alongside the expanded specialty query', async () => {
@@ -76,16 +82,12 @@ describe.each(fetchers)('%s specialty filtering', (_name, fetchPrompts) => {
     ] } as unknown as Awaited<ReturnType<typeof getDocs>>)
     const prompts = await fetchPrompts({ specialty: 'internal', type: 'summary' })
     expect(prompts.map((prompt) => prompt.id)).toEqual(['legacy-summary'])
+    expectIndexSafeScope()
   })
 
-  it('retains author scoping and expands pathology consistently', async () => {
+  it('retains authorization scoping when expanding pathology', async () => {
     await fetchPrompts({ specialty: 'pathology' })
-    expect(where).toHaveBeenCalledWith('specialty', 'array-contains-any', [
-      'pathology', 'anatomic_pathology', 'clinical_pathology',
-    ])
-    if (_name === 'my templates') {
-      expect(where).toHaveBeenCalledWith('authorId', '==', 'test-author')
-    }
+    expectIndexSafeScope()
   })
 })
 

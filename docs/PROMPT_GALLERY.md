@@ -74,14 +74,13 @@ sharedPrompts/{promptId}
 
 ## 查詢限制與相容層
 
-Firestore 一個 query 只能使用一個 `array-contains`。目前策略：
+Firestore 查詢只負責建立 Rules 可驗證的讀取範圍；互動式篩選與排序在完整分頁讀取後於前端完成。這避免每一種篩選組合都依賴另一個正式環境複合索引：
 
 - 「所有範本」固定查詢 `isPublic == true`；「我的範本」固定查詢 `authorId == userId`，因此包含公開與私人範本。
 - 分享時若未填寫輸出範例，系統會以內建試用病人資料自動產生；手動填寫的內容則直接保存。
-- 一般 type 優先在 server filter。
-- `summary` 為了相容舊 `insight` 與 upgraded built-ins，先廣泛讀取再 client filter。
-- type 已占用 `array-contains` 時，specialty 在 client filter。
-- audience、search、tags 在 client filter。
+- type、category、specialty、audience、search、tags 與顯示排序都在 client filter／sort。
+- `summary` client filter 同時相容舊 `insight` 與 upgraded built-ins。
+- 分頁 cursor 使用 Firestore 預設文件順序；所有頁面讀完後才套用使用者選擇的排序，避免只排序第一頁。
 
 舊資料規則：
 
