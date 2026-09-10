@@ -92,6 +92,50 @@ describe('OverviewCard (demo bundle)', () => {
     mockUseClinicalData.mockReturnValue(clinicalData)
   })
 
+  it('shows ongoing medication before finished medication in card and dialog', () => {
+    const medication = (id: string, title: string, start: string, days: number) => ({
+      resourceType: 'MedicationRequest', id, status: 'active', intent: 'order',
+      authoredOn: start,
+      medicationCodeableConcept: { text: title },
+      dispenseRequest: { expectedSupplyDuration: { value: days, unit: 'days', code: 'd' } },
+    })
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, medications: [
+      medication('finished', 'Synthetic finished medication', '2026-06-01', 7),
+      medication('ongoing', 'Synthetic ongoing medication', '2026-06-01', 28),
+    ] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-meds')!
+    const expectOngoingFirst = (container: HTMLElement) => {
+      const ongoing = within(container).getByText('Synthetic ongoing medication')
+      const finished = within(container).getByText('Synthetic finished medication')
+      expect(ongoing.compareDocumentPosition(finished) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    expectOngoingFirst(card)
+    expect(within(card).getByText('已用完 7 天')).toBeInTheDocument()
+    fireEvent.click(within(card).getByRole('button', { name: zhTW.overview.expandList }))
+    expectOngoingFirst(screen.getByRole('dialog'))
+  })
+
+  it('does not call an ingredient-equivalent brand switch a new therapy', () => {
+    const medication = (id: string, code: string, title: string, start: string) => ({
+      resourceType: 'MedicationRequest', id, status: 'active', intent: 'order', authoredOn: start,
+      medicationCodeableConcept: { text: title, coding: [
+        { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code', code },
+        { system: 'http://www.whocc.no/atc', code: 'M04AA03', display: 'febuxostat' },
+      ] },
+      drugTerminology: { ingredientText: ' Febuxostat ' },
+      dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days', code: 'd' } },
+    })
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, medications: [
+      medication('old-brand', 'BC25427100', 'Feburic 80 mg', '2026-03-01'),
+      medication('new-brand', 'AC61850100', 'Fekuton 80 mg', '2026-06-01'),
+    ] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-meds')!
+    expect(within(card).getByText('Febuxostat')).toBeInTheDocument()
+    expect(within(card).queryByText(zhTW.overview.meds.added)).not.toBeInTheDocument()
+  })
+
   it('keeps all seven collection days and an older-only analyte in the expanded list', () => {
     const days = ['2026-04-01', '2026-04-08', '2026-04-15', '2026-05-01', '2026-05-08', '2026-06-01', '2026-06-08']
     const draws = days.map((day, index) => ({
