@@ -142,6 +142,18 @@ describe('OverviewCard (demo bundle)', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Organism and susceptibility details.')
   })
 
+  it('keeps a prescription started before the window when its supply extends into it', () => {
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, medications: [{
+      resourceType: 'MedicationRequest', id: 'long-supply', status: 'active', intent: 'order',
+      authoredOn: '2026-03-01',
+      medicationCodeableConcept: { text: 'Synthetic long supply medication' },
+      dispenseRequest: { expectedSupplyDuration: { value: 120, unit: 'days', code: 'd' } },
+    }] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-meds')!
+    expect(within(card).getByText('Synthetic long supply medication')).toBeInTheDocument()
+  })
+
   it('renders the four sections with the default 3-month window', () => {
     render(<OverviewCard />)
 

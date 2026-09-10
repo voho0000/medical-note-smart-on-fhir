@@ -18,6 +18,7 @@ import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-ca
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
 import { medicationClinicalIdentityKey } from '@/src/shared/utils/fhir-display-helpers'
+import { computeDurationDays } from '@/features/clinical-summary/medications/utils/duration-helpers'
 import { humanDoseAmount, displayDosageInstruction } from '@/features/clinical-summary/medications/utils/dose-helpers'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
@@ -237,19 +238,28 @@ function medicationWindowDays(
   const status = knownStatus ?? (typeof medication?.status === 'string'
     ? medication.status.toLowerCase()
     : '')
+  const start = medication?.authoredOn
+    ?? medication?.effectiveDateTime
+    ?? medication?.dispenseRequest?.validityPeriod?.start
+  let end = medication?.dispenseRequest?.validityPeriod?.end
+    ?? dosage?.timing?.repeat?.boundsPeriod?.end
+  if (!end && start && (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration)) {
+    const days = computeDurationDays({
+      expectedDuration: medication?.dispenseRequest?.expectedSupplyDuration,
+      boundsDuration: dosage?.timing?.repeat?.boundsDuration,
+    })
+    const date = new Date(start)
+    if (days && !Number.isNaN(date.getTime())) {
+      // Match the medication tab's source-duration coverage calculation.
+      date.setDate(date.getDate() + days)
+      end = date.toISOString()
+    }
+  }
   return {
-    startDay: toDayKey(
-      medication?.authoredOn
-      ?? medication?.effectiveDateTime
-      ?? medication?.dispenseRequest?.validityPeriod?.start,
-    ),
-    endDay: toDayKey(
-      medication?.dispenseRequest?.validityPeriod?.end
-      ?? dosage?.timing?.repeat?.boundsPeriod?.end
-      ?? (MEDICATION_INACTIVE_STATUSES.has(status)
-        ? medication?.effectiveDateTime ?? medication?.authoredOn
-        : undefined),
-    ),
+    startDay: toDayKey(start),
+    endDay: toDayKey(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
+      ? medication?.effectiveDateTime ?? medication?.authoredOn
+      : undefined)),
   }
 }
 
@@ -557,12 +567,12 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         // Prefer the row model's verdict — it already folds in an elapsed
         // supply window — and fall back to the raw status when a raw record
         // has no matching row (defensive; ids come from the same array).
-        isActive: row ? !row.isInactive : !inactiveStatuses.has(status),
+        isActive: row ? !row.isInactive : !inactiveStatuses.has(status) && (!endDay || endDay >= window.endDay),
         doseSignature: signature || undefined,
       } satisfies OverviewMedFact
     })
     return { medicationFacts: facts, medicationDaysByRowId: days }
-  }, [identifiedMedications, medicationRows])
+  }, [identifiedMedications, medicationRows, window.endDay])
 
   const medChanges = useMemo(
     () => classifyMedicationChanges(medicationFacts, window),

@@ -108,7 +108,7 @@ import type {
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
 import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-execution-diagnostics.store"
-import { useSummaryActivityStore } from "@/src/application/stores/summary-activity.store"
+import { useSummaryActivity } from "@/src/application/hooks/medical-summary/use-summary-activity.hook"
 import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
 import { AiExecutionDiagnosticsDialog } from "@/src/shared/components/AiExecutionDiagnosticsDialog"
 import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
@@ -250,14 +250,12 @@ export default function MedicalSummaryFeature() {
   // Mirror the run's start/finish into the workspace-level activity store so a
   // COLLAPSED feature panel can announce a finished summary. Content never
   // travels — only the fact that a run ended.
-  const setSummaryGenerating = useSummaryActivityStore((state) => state.setGenerating)
-  const markSummaryCompleted = useSummaryActivityStore((state) => state.markCompleted)
-  const wasBusyRef = useRef(false)
-  useEffect(() => {
-    setSummaryGenerating(isBusy)
-    if (wasBusyRef.current && !isBusy && hasAnyResult) markSummaryCompleted()
-    wasBusyRef.current = isBusy
-  }, [hasAnyResult, isBusy, markSummaryCompleted, setSummaryGenerating])
+  useSummaryActivity({
+    busy: isBusy,
+    scope: summaryGenerationSlotKey,
+    completedAt: result?.generation?.source === 'live' ? result.generation.completedAt : undefined,
+    failed: !!summaryError || !!safetyError,
+  })
 
   const allAiDiagnostics = useAiExecutionDiagnosticsStore((state) => state.records)
   const visibleAiDiagnostics = useMemo(() => {
