@@ -3,6 +3,8 @@ name: Deploy HMC pilot preview
 # The workflow definition lives on protected master. An unprivileged signal
 # workflow fires after either pilot branch changes. Source access, pilot code
 # execution, and site publishing remain separate so pilot code sees no secrets.
+# That separation also means a pilot author is never the actor of the run that
+# builds their commit, so the `report` job at the bottom tells them itself.
 on:
   workflow_run:
     workflows:
@@ -455,3 +457,85 @@ jobs:
 
           git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
           git push origin main
+
+  report:
+    # A pilot push never learns its own fate, so the deploy says it itself.
+    #
+    # Two mechanics conspire. The concurrency group above cancels the run an
+    # HMC push starts, because the personalization relay tag fires seconds
+    # later and supersedes it; and that superseding run is attributed to the
+    # relay's token, not to the person whose commit is being built. GitHub's
+    # failure mail follows the triggering actor, so it reaches the app owner
+    # and never the pilot author. Runs #25, #27 and #29 were all HMC pushes:
+    # two cancelled, one green, none ever reported to whoever pushed them.
+    #
+    # One issue, kept current with a comment while the preview stays red and
+    # closed once a build publishes. Its point is the part a pilot author
+    # cannot see from their own branch: /app-hmc is not showing what they
+    # pushed.
+    needs: [resolve, build, publish]
+    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Say whether the preview moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+          PILOT_AUTHOR: hmcheng0913
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          title='HMC pilot preview is not deploying'
+          number="$(gh issue list --state open --limit 100 --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
+
+          if [ "$BUILD_RESULT" = 'success' ] && [ "$PUBLISH_RESULT" = 'success' ]; then
+            if [ -n "$number" ]; then
+              cat > green.md <<EOF
+          Green again. \`/app-hmc\` now serves app \`${APP_SHA:0:7}\` with personalization \`${PERSONALIZATION_SHA:0:7}\`.
+
+          ${RUN_URL}
+          EOF
+              gh issue comment "$number" --body-file green.md
+              gh issue close "$number"
+            fi
+            exit 0
+          fi
+
+          cat > red.md <<EOF
+          @${PILOT_AUTHOR} **The HMC preview did not publish, so https://mediprisma.tw/app-hmc is still serving an older build.**
+
+          | | |
+          | --- | --- |
+          | pilot app | \`${APP_SHA}\` |
+          | pilot personalization | \`${PERSONALIZATION_SHA}\` |
+          | build | \`${BUILD_RESULT}\` |
+          | publish | \`${PUBLISH_RESULT}\` |
+
+          The run says which step failed: ${RUN_URL}
+
+          Until it is green, every push to either \`pilot/hmc\` branch stops here and nothing reaches the preview URL.
+
+          One failure mode is worth naming, because a development machine cannot reproduce it: \`Test HMC app\` runs the pilot Jest suite against the **published** \`@voho0000/personalized-care\`, with only the heart-failure files overlaid from the pilot source. A test that asserts on anything else the rules branch carries passes there and fails here.
+
+          _Posted by the deploy workflow because GitHub's own failure mail does not reach the pilot author: the relay tag supersedes the run your push starts, so the notification follows the relay's token instead._
+          EOF
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file red.md
+            exit 0
+          fi
+
+          created="$(gh issue create --title "$title" --body-file red.md)"
+          echo "$created"
+          gh issue edit "${created##*/}" --add-assignee "$PILOT_AUTHOR" || true

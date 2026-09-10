@@ -25,6 +25,10 @@ HMC 的 pilot 由兩個 repository 組成：
 
 若自動流程未出現或需要強制重跑，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署或跨 repository 轉送憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
 
+**push 之後不要只看自己那一個 run。** 兩個 repository 都推的時候，personalization 側的轉送會在數十秒後送出第二個訊號，並依 `concurrency` 取消前一個 run；被取消的那個常常正是 HMC push 觸發的。要看的是清單最上面那一個 run，它抓的是兩邊最新的 `pilot/hmc`，結論才算數。也因為取消與轉送的關係，GitHub 內建的失敗通知寄給的是轉送者而不是 push 的人，所以部署失敗時 workflow 會自行在 app repository 開一個標題為 `HMC pilot preview is not deploying` 的 issue 並 @ HMC；同一個 issue 會持續留言直到重新成功部署才自動關閉。看到那個 issue 就表示 `/app-hmc` 停在舊版本。
+
+**preview 的測試環境和開發機不一樣。** `Test HMC app` 跑的是 published 的 `@voho0000/personalized-care`，只把 pilot source 的 heart-failure 檔案覆蓋上去；`index`、`registry`、`bundled` 一律保留 published 版本。因此 rules branch 上獨有、還沒發布的 pack 或 export，在 preview build 裡並不存在——針對那些東西寫的測試在開發機會綠、在這裡一定紅。要在 preview 驗證的行為，測試必須自備 stub，不能依賴本機 `node_modules` 剛好裝了哪一份 build。
+
 可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
 
 兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
