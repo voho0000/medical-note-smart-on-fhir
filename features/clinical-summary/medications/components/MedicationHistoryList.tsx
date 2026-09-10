@@ -331,6 +331,11 @@ export function MedicationHistoryDetails({
               .replace('{n}', formatCompactNumber(medication.totalQuantity)),
           })
         }
+        // A therapy group can span brand/package switches. Keep each fill's
+        // actual product visible in the expanded history even when the group
+        // heading uses the shared ingredient name.
+        const productName = medication.secondaryTitle || medication.title
+        if (productName) metadataParts.push(productName)
         if (medication.pharmacy) metadataParts.push(medication.pharmacy)
         if (isMedical && medication.icdCode) {
           metadataParts.push(

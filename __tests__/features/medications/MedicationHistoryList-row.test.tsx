@@ -52,6 +52,7 @@ jest.mock('@/src/application/stores/resource-navigation.store', () => ({
 const latestMedication = {
   id: 'history-latest',
   title: 'LEVOTHYROXINE SODIUM 0.05 MG',
+  secondaryTitle: 'ELTROXIN TABLETS 50 MCG',
   status: 'completed',
   isInactive: true,
   isChronic: false,
@@ -70,6 +71,7 @@ const latestMedication = {
 const olderMedication = {
   ...latestMedication,
   id: 'history-older',
+  secondaryTitle: 'SYNTHROID TABLETS 50 MCG',
   startedOn: '2026/7/6',
   endDate: '2026/8/5',
 } as MedicationRow
@@ -132,10 +134,10 @@ describe('MedicationHistoryList row parity', () => {
     const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
     expect(details).toBeInTheDocument()
     expect(details).toHaveTextContent(
-      '26/08/05 → 26/09/04（30 天）QOD 總量 15 · 新北市聯合醫院',
+      '26/08/05 → 26/09/04（30 天）QOD 總量 15 · ELTROXIN TABLETS 50 MCG · 新北市聯合醫院',
     )
     expect(details).toHaveTextContent(
-      '26/07/06 → 26/08/05（30 天）QOD 總量 15 · 新北市聯合醫院',
+      '26/07/06 → 26/08/05（30 天）QOD 總量 15 · SYNTHROID TABLETS 50 MCG · 新北市聯合醫院',
     )
   })
 
