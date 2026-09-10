@@ -280,6 +280,7 @@ function HistoryRow({
         <MedicationHistoryDetails
           id={detailsId}
           medications={group.medications}
+          nameMode={nameMode}
           className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
         />
       )}
@@ -289,10 +290,12 @@ function HistoryRow({
 
 export function MedicationHistoryDetails({
   medications,
+  nameMode = 'ingredient',
   className,
   id,
 }: {
   medications: MedicationRow[]
+  nameMode?: MedicationNameMode
   className?: string
   id?: string
 }) {
@@ -331,11 +334,13 @@ export function MedicationHistoryDetails({
               .replace('{n}', formatCompactNumber(medication.totalQuantity)),
           })
         }
-        // A therapy group can span brand/package switches. Keep each fill's
-        // actual product visible in the expanded history even when the group
-        // heading uses the shared ingredient name.
-        const productName = medication.secondaryTitle || medication.title
-        if (productName) metadataParts.push(productName)
+        // Keep each fill aligned with the same ingredient/product switch as
+        // the group heading. Product mode still preserves brand/package
+        // switches between fills; missing names fall back to the available one.
+        const medicationName = nameMode === 'product'
+          ? medication.secondaryTitle || medication.title
+          : medication.title || medication.secondaryTitle
+        if (medicationName) metadataParts.push(medicationName)
         if (medication.pharmacy) metadataParts.push(medication.pharmacy)
         if (isMedical && medication.icdCode) {
           metadataParts.push(

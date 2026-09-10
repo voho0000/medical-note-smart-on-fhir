@@ -134,6 +134,35 @@ describe('MedicationHistoryList row parity', () => {
     const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
     expect(details).toBeInTheDocument()
     expect(details).toHaveTextContent(
+      '26/08/05 → 26/09/04（30 天）QOD 總量 15 · LEVOTHYROXINE SODIUM 0.05 MG · 新北市聯合醫院',
+    )
+    expect(details).toHaveTextContent(
+      '26/07/06 → 26/08/05（30 天）QOD 總量 15 · LEVOTHYROXINE SODIUM 0.05 MG · 新北市聯合醫院',
+    )
+    expect(details).not.toHaveTextContent('ELTROXIN TABLETS 50 MCG')
+    expect(details).not.toHaveTextContent('SYNTHROID TABLETS 50 MCG')
+  })
+
+  it('uses each historical fill product name in product-name mode', () => {
+    render(
+      <MedicationHistoryList
+        nameMode="product"
+        groups={[{
+          key: 'levothyroxine',
+          name: latestMedication.title,
+          count: 2,
+          medications: [latestMedication, olderMedication],
+        }]}
+      />,
+    )
+
+    const toggle = screen.getByRole('button', {
+      name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
+    })
+    fireEvent.click(toggle)
+
+    const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
+    expect(details).toHaveTextContent(
       '26/08/05 → 26/09/04（30 天）QOD 總量 15 · ELTROXIN TABLETS 50 MCG · 新北市聯合醫院',
     )
     expect(details).toHaveTextContent(
