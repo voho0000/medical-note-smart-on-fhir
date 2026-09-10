@@ -20,6 +20,9 @@
  * reachable. The package carries ten written packs; this app currently shows
  * heart failure and CKD, in that order. A pack the package adds does not appear
  * here until it is named in that list — the package proposes, the host decides.
+ * The one exception is a local development server, which may list the packs of
+ * the rules branch it was started on (`DEV_EXTRA_PACK_IDS` below); no deployed
+ * build does.
  *
  * WHETHER a listed pack shows: the Beta switch. The 個人化照護指引 tab is
  * already `beta: true`, so the only people who reach this list are visitors who
@@ -48,6 +51,23 @@ import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 const HOST_PACK_ORDER = ['heart-failure-cdss', 'ckd-cdss'] as const
 
 /**
+ * Local development only: the packs a disease-branch start-of-session script
+ * asks this dev server to list ahead of the host's own, so a pathway still on
+ * its own mediprisma-personalization branch can be reviewed on localhost. The
+ * HMC scripts set `NEXT_PUBLIC_HMC_DEV_EXTRA_PACKS` from that branch's build;
+ * nothing sets it for app-hmc or /app, and a production build ignores it
+ * anyway. An id the package does not ship is skipped rather than thrown on —
+ * the variable names whatever the local build happens to carry. Visibility
+ * still goes through `isVisible`, so an unreleased pack needs Beta like any
+ * other.
+ */
+const DEV_EXTRA_PACK_IDS: readonly string[] = process.env.NODE_ENV === 'development'
+  ? [...new Set(
+      (process.env.NEXT_PUBLIC_HMC_DEV_EXTRA_PACKS ?? '').split(',').map((id) => id.trim()).filter(Boolean),
+    )]
+  : []
+
+/**
  * The default the package validates against. It must be a released pack, and
  * heart failure is still `enabled: false`, so CKD carries that role — what the
  * switcher actually opens on is decided by `getDefaultClinicalGuidelinePack`
@@ -63,7 +83,7 @@ registerCarePacks(CARE_PACKS, {
   defaultPackId: HOST_DEFAULT_PACK_ID,
 })
 
-const HOST_PACKS: readonly ClinicalGuidelinePack[] = HOST_PACK_ORDER.map((id) => {
+const LISTED_PACKS: readonly ClinicalGuidelinePack[] = HOST_PACK_ORDER.map((id) => {
   const pack = CARE_PACKS.find((candidate) => candidate.id === id)
   if (!pack) {
     // A listed pack the package no longer carries is a wiring mistake, and a
@@ -76,6 +96,14 @@ const HOST_PACKS: readonly ClinicalGuidelinePack[] = HOST_PACK_ORDER.map((id) =>
   }
   return pack
 })
+
+const DEV_EXTRA_PACKS: readonly ClinicalGuidelinePack[] = DEV_EXTRA_PACK_IDS
+  .filter((id) => !LISTED_PACKS.some((pack) => pack.id === id))
+  .flatMap((id) => CARE_PACKS.filter((candidate) => candidate.id === id))
+
+// Branch packs lead on a dev server, so the switcher opens on the pathway
+// under review once Beta shows it.
+const HOST_PACKS: readonly ClinicalGuidelinePack[] = [...DEV_EXTRA_PACKS, ...LISTED_PACKS]
 
 /** The packs this host lists, in switcher order, before the visibility gate. */
 export const HOST_CARE_PACKS = HOST_PACKS
