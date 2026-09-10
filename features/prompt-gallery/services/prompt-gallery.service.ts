@@ -1,6 +1,6 @@
 import {
   collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, deleteField,
-  query, where, orderBy, limit, startAfter, increment, Timestamp,
+  query, where, limit, startAfter, increment, Timestamp,
   type QueryConstraint, type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
@@ -88,17 +88,12 @@ async function fetchPrompts(filter: PromptGalleryFilter = {}, sort?: PromptGalle
   const constraints: QueryConstraint[] = []
   if (userId) constraints.push(where('authorId', '==', userId))
   else constraints.push(where('isPublic', '==', true))
-  if (filter.type && filter.type !== 'summary') constraints.push(where('types', 'array-contains', filter.type))
-  if (filter.category) constraints.push(where('category', '==', filter.category))
   const selectedSpecialties = filter.specialty ? getPromptSpecialtyFilterValues(filter.specialty) : undefined
-  if (filter.specialty && (!filter.type || filter.type === 'summary')) {
-    constraints.push(selectedSpecialties!.length === 1
-      ? where('specialty', 'array-contains', filter.specialty)
-      : where('specialty', 'array-contains-any', selectedSpecialties))
-  }
-  // Stable cursor ordering also includes legacy records missing usageCount.
-  // Filter and sort the complete set, never just the first page.
-  constraints.push(orderBy('createdAt', 'desc'))
+  // Keep the server query to the single predicate required by Firestore Rules.
+  // Combining visibility/ownership with filters or createdAt ordering requires a
+  // separate composite index for every UI-filter combination. The gallery must
+  // keep working even when those optional indexes have not reached production,
+  // so page the complete authorized set and filter/sort it in memory.
   const prompts: SharedPrompt[] = []
   let cursor: QueryDocumentSnapshot | undefined
   do {
