@@ -41,6 +41,9 @@ test('summary entry can discover and import a public chat-only HMC template afte
       expect(response.ok(), await response.text()).toBe(true)
     }
     await importBundle(page)
+    // The overview gives the default desktop-test viewport to the clinical
+    // panel. Enter the summary through the same restore control as a reader.
+    await page.getByRole('button', { name: '展開右側 AI 功能面板', exact: true }).click()
     await page.getByRole('tab', { name: '自訂摘要', exact: true }).click()
     await page.getByRole('button', { name: '管理模組', exact: true }).click()
     const manager = page.getByRole('dialog', { name: '管理自訂摘要模組', exact: true })

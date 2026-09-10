@@ -633,7 +633,8 @@ export function ReportsCard() {
         || r.obs.some((o) => o?.id === navPending.resourceId),
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
-    const preferredTabValue = hit.group === 'cancer-screening' ? 'cancer-screening' : undefined
+    const preferredTabValue = navPending.reportTab
+      ?? (hit.group === 'cancer-screening' ? 'cancer-screening' : undefined)
     const containsHit = (candidate: Row) => candidate.id === hit.id
       || candidate.groupedRows?.some((member) => member.id === hit.id)
     const tab = tabConfigs.find((c) => (

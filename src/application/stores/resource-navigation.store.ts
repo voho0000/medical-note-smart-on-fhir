@@ -22,6 +22,11 @@ export interface ResourceNavTarget {
   evidenceQuote?: string
   /** Reports-card destination beyond the owning top-level tab. */
   reportView?: 'cumulative'
+  /** Preferred sub-tab inside the reports card ('imaging', 'pathology', …).
+   *  Without it the card lands on the first non-cumulative tab that contains
+   *  the row, which is always 「全部」 — a flat index the reader has to search
+   *  again. Honoured only when that tab actually holds the target row. */
+  reportTab?: string
   /** Cumulative lab sub-panel (cbc, chem, tumor, …). */
   cumulativeCategoryId?: string
   /** Canonical cumulative column to reveal after the panel opens. */
