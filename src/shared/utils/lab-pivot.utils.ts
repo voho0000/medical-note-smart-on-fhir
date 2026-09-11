@@ -423,7 +423,7 @@ export function getLabPivotTestIdentity(
 
 export function buildLabPivots(
   observations: any[],
-  options: { nameMode?: AnalyteNameMode } = {},
+  options: { nameMode?: AnalyteNameMode; preferInstitutionEgfr?: boolean } = {},
 ): Record<string, LabPivot> {
   const nameMode = options.nameMode ?? 'standardized'
   const result: Record<string, LabPivot> = {}
@@ -448,12 +448,41 @@ export function buildLabPivots(
   // even when the patient has no data for any test in that category.
   for (const cat of LAB_CATEGORIES) {
     const obsList = buckets[cat.id]
+    const institutionEgfrKeys = new Set<string>()
+    const calculatedEgfrKeys = new Set<string>()
+    const egfrKey = (obs: any): string | undefined => {
+      const date = dateKey(obs.effectiveDateTime)
+      const identity = getLabPivotTestIdentity(obs, cat.id, nameMode)
+      return date && /^EGFR(?:\(|$)/.test(identity.testKey)
+        ? `${date}|${identity.mapKey}` : undefined
+    }
+    const isNhiCalculated = (obs: any) => /健保署\s*計算/.test(obs.method?.text ?? '')
+    if (options.preferInstitutionEgfr) {
+      for (const obs of obsList) {
+        const key = egfrKey(obs)
+        const value = formatValue(obs).numericValue
+        if (key && isNhiCalculated(obs) && value !== undefined && Number.isFinite(value)) calculatedEgfrKeys.add(key)
+        if (key && !isNhiCalculated(obs) && value !== undefined && Number.isFinite(value)
+          && !INVALID_TREND_STATUSES.has(obs.status?.trim().toLowerCase())) institutionEgfrKeys.add(key)
+      }
+    }
 
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
     const trendAvailability = new Map<string, TrendAvailabilityStats>()
 
     for (const obs of obsList) {
+      // Cumulative display preference only. Preserve every original resource;
+      // never equate assays or remove records by numeric equality.
+      if (options.preferInstitutionEgfr && isNhiCalculated(obs)) {
+        const key = egfrKey(obs)
+        if (key && institutionEgfrKeys.has(key)) continue
+      }
+      if (options.preferInstitutionEgfr && !isNhiCalculated(obs)) {
+        const key = egfrKey(obs)
+        const value = formatValue(obs).numericValue
+        if (key && calculatedEgfrKeys.has(key) && (value === undefined || !Number.isFinite(value))) continue
+      }
       const date = dateKey(obs.effectiveDateTime)
       if (!date) continue
       dateSet.add(date)

@@ -18,5 +18,5 @@ export function useLabPivot(
   observations: any[],
   nameMode: AnalyteNameMode = 'standardized',
 ): Record<string, LabPivot> {
-  return useMemo(() => buildLabPivots(observations, { nameMode }), [observations, nameMode])
+  return useMemo(() => buildLabPivots(observations, { nameMode, preferInstitutionEgfr: true }), [observations, nameMode])
 }
