@@ -989,7 +989,7 @@ export default function MedicalSummaryFeature() {
             <PopoverContent align="end" className="w-64 space-y-1 p-2">
               {activeView === "standard" ? (
                 <label
-                  className="flex min-h-[44px] cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                  className="flex min-h-[44px] cursor-pointer select-text items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
                   title={ms.autoGenerateTooltip}
                 >
                   <span className="font-medium text-foreground">{ms.autoGenerate}</span>

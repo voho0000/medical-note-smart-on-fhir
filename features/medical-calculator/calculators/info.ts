@@ -9,6 +9,14 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'h2fpef': {
+    useWhen: { en: 'Unexplained exertional dyspnea in adults with preserved EF.', zh: '成人射出分率保留，且有原因未明的活動性呼吸困難。' },
+    caveats: { en: 'AF uses diagnosis codes first, then ECG history; a negative reflects available records only. Antihypertensives use deduplicated ingredients in valid prescriptions; confirm actual use. Auto-filled echo values come from one report; review its date, technique and source. A preserved EF alone does not establish HFpEF.', zh: 'AF 先查診斷碼，再查 EKG；「否」僅表示目前紀錄未見 AF，請核對病史。降壓藥按有效處方成分去重推算，請核對實際使用情形。心超值取自同一份報告，請核對日期、測量方式與原文；EF 保留本身不能確診 HFpEF。' },
+  },
+  'hfa-peff': {
+    useWhen: { en: 'Step E in the HFA-PEFF diagnostic workup of stable symptomatic patients with preserved EF.', zh: '穩定、有症狀且 EF 保留者之 HFA-PEFF 診斷流程 Step E。' },
+    caveats: { en: 'Confirm age, sex and rhythm. Use averaged E/e′; E and both e′ values are only needed when the average ratio is not provided. Enter NT-proBNP or BNP with a confirmed assay. Missing values are unknown, not normal. Appcardio omits age and sex inputs; this implementation follows consensus-specific thresholds.', zh: '請確認年齡、性別與心律（由最近 EKG 帶入，需核對是否代表評估時心律）。E/e′ 應取平均值；若報告已有平均比值，不必再填 E 波以推算。NT-proBNP 或 BNP 擇已確認的檢驗填入。缺值不視為正常。Appcardio 未提供年齡、性別輸入，本計算機依原始共識門檻判讀。' },
+  },
   'egfr-ckd-epi-2021': {
     useWhen: { en: 'Staging and monitoring CKD in stable adults (≥18 y).', zh: '穩定成人（≥18 歲）之慢性腎臟病分期與追蹤。' },
     caveats: { en: 'Assumes steady-state creatinine — unreliable in AKI / rapidly changing renal function; less accurate at extremes of muscle mass, in pregnancy, or amputees.', zh: '假設肌酸酐處於穩定狀態 — 急性腎損傷或腎功能快速變化時不可靠；肌肉量極端、懷孕或截肢者較不準。' },

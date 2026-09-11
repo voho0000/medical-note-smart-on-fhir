@@ -79,6 +79,10 @@ export type ConvertDim =
 export type VitalKind = 'sbp' | 'weight' | 'height'
 
 export type AutofillSource =
+  | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey }
+  | { kind: 'echo'; key: import('./echo-autofill').EchoKey }
+  | { kind: 'bmi' }
+  | { kind: 'natriuretic'; assay: 'BNP' | 'NT-PROBNP' }
   | { kind: 'lab'; keys: string[] }
   /** `vital` optionally carries a semantic id enabling a display-name fallback
    *  (for FHIR that omits the vital's LOINC); the name match is unit-gated. */
@@ -146,6 +150,7 @@ export interface CalcResult {
   extra?: { label: L; value: string }[]
   /** Clinical guidance / what-to-do / caveats, shown as a highlighted note
    *  under the result (MDCalc "Next Steps"-style). Keep to 1–3 sentences. */
+  scoreRanges?: { range: string; meaning: L }[]
   notes?: L
 }
 

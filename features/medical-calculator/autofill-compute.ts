@@ -34,7 +34,7 @@ export interface ResolvedInput {
   /** True when the source unit differs and could NOT be converted → real ⚠. */
   unconvertible: boolean
   /** Source-report provenance for the "來源" line (only set when filled). */
-  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string }
+  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string; resourceType?: 'Condition' | 'Encounter' | 'Observation' | 'DiagnosticReport' | 'MedicationRequest' | 'MedicationStatement' }
 }
 
 const EMPTY: ResolvedInput = {
@@ -48,6 +48,13 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     // Sex from patient demographics counts as data-backed (filled) so a
     // sex-dependent formula can still be shown inline; a manual/clinical select
     // stays unfilled (its default is not "from the patient").
+    if (input.source?.kind === 'hfpefClinical') {
+      const hit = autofill.clinicalSelects?.[input.source.key]
+      if (hit && input.options.some(option => option.value === hit.value)) return {
+        ...EMPTY, value: hit.value, filled: true, date: hit.date,
+        source: { testName: hit.testName, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType },
+      }
+    }
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
@@ -68,7 +75,9 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     }
   }
 
-  const prov = { testName: hit.testName, loinc: hit.loinc, facility: hit.facility, obsId: hit.obsId }
+  // Preserve HFpEF threshold precision (e.g. RWT 0.424 must not become 0.42).
+  const formatted = input.source && ['echo', 'bmi', 'natriuretic'].includes(input.source.kind) ? String(hit.value) : formatNum(hit.value)
+  const prov = { testName: hit.testName, loinc: hit.loinc, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType }
   const conv = convertToBase(hit.value, hit.unit, input.dimension)
   if (conv && conv.changed) {
     // Genuine numeric conversion — the box now holds an expected-unit value.
@@ -77,14 +86,14 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
   if (conv) {
     // Equivalent unit (factor 1) — keep the source value AND show the source
     // unit, since that's what the chart actually reported.
-    return { value: formatNum(hit.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected, changed: false, origValue: hit.value, unconvertible: false, source: prov }
+    return { value: formatted, date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected, changed: false, origValue: hit.value, unconvertible: false, source: prov }
   }
   // No conversion rule — keep the raw value and show its real unit; flag it
   // only when the units genuinely differ (never cry wolf on a unitless input
   // or a unit that matches the expected one).
   const sameUnit = normUnit(hit.unit) === normUnit(expected)
   return {
-    value: formatNum(hit.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected,
+    value: formatted, date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected,
     changed: false, origValue: hit.value, unconvertible: !sameUnit && !!hit.unit && !!input.unit, source: prov,
   }
 }
@@ -94,7 +103,7 @@ export function resolveValue(input: CalcInput, autofill: Autofill): string {
   return resolveInput(input, autofill).value
 }
 
-const DATA_SOURCE_KINDS: AutofillSource['kind'][] = ['lab', 'labSpecimen', 'labLoinc', 'vital', 'age', 'sex']
+const DATA_SOURCE_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'lab', 'labSpecimen', 'labLoinc', 'vital', 'age', 'sex']
 
 /**
  * True only when EVERY required input is backed by patient data (a lab/vital/
@@ -162,7 +171,7 @@ export interface Readiness {
 // Lab/vital sources only — the data a patient may actually lack. Age/sex are
 // demographics (always available, and `sex` never reports `filled`), so they
 // don't gate how "ready" a calculator is for the loaded patient.
-const LAB_VITAL_KINDS: AutofillSource['kind'][] = ['lab', 'labSpecimen', 'labLoinc', 'vital']
+const LAB_VITAL_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic', 'lab', 'labSpecimen', 'labLoinc', 'vital']
 
 /** How "ready to use for THIS patient" a calculator is, from the loaded data. */
 export function calcReadiness(calc: CalculatorDef, autofill: Autofill): Readiness {
