@@ -193,15 +193,18 @@ describe('Live personalized-guidance pathway list', () => {
   it('offers both faces of the heart-failure guidance, and remembers the choice', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'c')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
     fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
     expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
     expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
       .toMatchObject({ state: { layout: 'board' } })
-    // The switcher offers direction C and the original board; there is no
-    // third "classic" face in the header.
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-flow'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
+    // The switcher offers the visit flow and the original board; neither the
+    // retired direction C nor the module-first 「classic」 face is in the header.
     expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
   })
 
   it('lists heart failure alone and no pack the package does not ship', () => {

@@ -20,6 +20,10 @@ import {
 } from './stores/evidence-overrides.store'
 import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from './stores/phenotype-answer.store'
+import {
+  usePhysicianDecisions,
+  usePhysicianDecisionsStore,
+} from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
@@ -168,16 +172,15 @@ function LayoutSwitcher({
   const isEnglish = locale === 'en'
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
     {
-      id: 'c',
-      // The letter is how pilot users name this layout in feedback (direction C).
-      label: isEnglish ? 'Decision board C' : '決策看板 C',
+      id: 'flow',
+      label: isEnglish ? 'Visit flow' : '新版流程',
       title: isEnglish
-        ? "One line of inputs, today's numbered sentences, then actions and their basis side by side"
-        : '一行決策所需資訊、編號的今日結論，再是處置與依據對號並列',
+        ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
+        : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
     },
     {
       id: 'board',
-      label: isEnglish ? 'Original board' : '原版模組表',
+      label: isEnglish ? 'Original board' : '原版看板',
       title: isEnglish
         ? 'The status board: safety inputs, the four pillars, then the module rows'
         : '原本的看板：安全數據、四支柱，再列模組',
@@ -231,6 +234,11 @@ export default function LiveClinicalDecisionSupportFeature() {
   const clinicVitals = useClinicVitals(patientId)
   const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
   const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
+  const hydrateClinicVitals = useClinicVitalsStore((state) => state.hydrate)
+  const physicianDecisions = usePhysicianDecisions(patientId)
+  const recordPhysicianDecision = usePhysicianDecisionsStore((state) => state.recordDecision)
+  const clearPhysicianDecision = usePhysicianDecisionsStore((state) => state.clearDecision)
+  const hydratePhysicianDecisions = usePhysicianDecisionsStore((state) => state.hydrate)
   const phenotypeAnswer = usePhenotypeAnswer(patientId)
   const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
@@ -249,6 +257,16 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => {
     if (patientId) hydratePhenotypeAnswer(patientId)
   }, [hydratePhenotypeAnswer, patientId])
+
+  // Last visit's measurements, answers and decisions, for the same reason: an
+  // answer read back after the cards were built is an answer the cards ignored.
+  useEffect(() => {
+    if (patientId) hydrateClinicVitals(patientId)
+  }, [hydrateClinicVitals, patientId])
+
+  useEffect(() => {
+    if (patientId) hydratePhysicianDecisions(patientId)
+  }, [hydratePhysicianDecisions, patientId])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -382,6 +400,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
+  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
 
@@ -423,7 +442,11 @@ export default function LiveClinicalDecisionSupportFeature() {
         </div>
       </header>
 
-      {result.clinicalHandoff ? (
+      {/*
+        The visit flow carries the handoff inside 紀錄與追蹤, where the copy
+        button for it sits beside the one for this visit's summary.
+      */}
+      {result.clinicalHandoff && !isVisitFlow ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <ClinicalDecisionSupportView
@@ -433,11 +456,18 @@ export default function LiveClinicalDecisionSupportFeature() {
         profileFacts={profile.facts}
         layout={layout}
         clinicVitals={clinicVitals}
-        onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
+        onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
         phenotypeAnswer={phenotypeAnswer}
         onAnswerPhenotype={patientId
           ? (answer) => setPhenotypeAnswer(patientId, answer)
+          : undefined}
+        physicianDecisions={physicianDecisions}
+        onRecordDecision={patientId
+          ? (moduleId, input) => recordPhysicianDecision(patientId, moduleId, input)
+          : undefined}
+        onClearDecision={patientId
+          ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
           : undefined}
       />
     </div>

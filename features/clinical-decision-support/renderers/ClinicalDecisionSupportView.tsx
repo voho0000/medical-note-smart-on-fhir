@@ -47,20 +47,25 @@ import { EvidenceTablePanel } from './EvidenceTablePanel'
 import {
   buildHeartFailureBoard,
   HEART_FAILURE_LIST_STATUS_ORDER,
+  HEART_FAILURE_PACK_ID,
 } from './heart-failure-board'
+import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
+import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
+import { isCongestionGroupPresent } from '../utils/apply-clinic-vitals'
 import {
-  isCongestionGroupPresent,
-  toggleCongestionGroup,
-} from '../utils/apply-clinic-vitals'
-import {
-  todayIsoDate,
+  congestionGroupPatch,
   type ClinicVitals,
+  type ClinicVitalsPatch,
   type CongestionSignsAnswer,
 } from '../stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
+import type {
+  PhysicianDecisionInput,
+  PhysicianDecisionMap,
+} from '../stores/physician-decisions.store'
 import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
@@ -85,7 +90,7 @@ interface ClinicalDecisionSupportViewProps {
   layout?: CdssLayout
   /** Vitals the clinician measured in the room this visit; heart-failure board only. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
   onClearClinicVitals?: () => void
   /**
    * What the clinician answered on a card's structured question — the DP-01
@@ -95,6 +100,14 @@ interface ClinicalDecisionSupportViewProps {
    */
   phenotypeAnswer?: PhenotypeAnswer
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+  /**
+   * What this physician decided about each recommendation. The visit flow puts
+   * a decision on every row; nothing re-enters the pack, so the other layouts
+   * neither read nor need them.
+   */
+  physicianDecisions?: PhysicianDecisionMap
+  onRecordDecision?: (moduleId: string, input: PhysicianDecisionInput) => void
+  onClearDecision?: (moduleId: string) => void
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -1484,6 +1497,8 @@ function RecommendationDetail({
   onAnswerPhenotype,
   clinicVitals,
   onSaveClinicVitals,
+  physicianRowsReadOnly = false,
+  onEditPhysicianRow,
 }: {
   recommendation: CdssRecommendation
   isEnglish: boolean
@@ -1494,7 +1509,13 @@ function RecommendationDetail({
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
   /** Today's examination, so a sign ticked here is the one the pack reads. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  /**
+   * The visit flow owns the congestion and NYHA questions, so the evidence
+   * rows inside a detail echo the answer instead of offering a second control.
+   */
+  physicianRowsReadOnly?: boolean
+  onEditPhysicianRow?: (question: 'nyha' | 'congestion') => void
   /** Names the pack in the copied rationale; absent when the result has no version. */
   copyProvenance?: RationaleCopyProvenance
   label: {
@@ -1524,19 +1545,15 @@ function RecommendationDetail({
   // A sign ticked on this card is the same examination the congestion card and
   // the board's chips offer, so all three read and write one record.
   const selectedSymptoms = (['edema', 'orthopnea-pnd', 'jvp-rales'] as const)
-    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
-  const toggleSymptom = onSaveClinicVitals
+    .filter((group) => isCongestionGroupPresent(clinicVitals, group))
+  // The visit flow asks this once, in 本次評估; a second tick-list inside a
+  // card is the duplication this restructure removed.
+  const toggleSymptom = onSaveClinicVitals && !physicianRowsReadOnly
     ? (id: string, selected: boolean) => {
-        const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
-        onSaveClinicVitals({
-          ...(clinicVitals ?? { measuredOn }),
-          measuredOn,
-          signAnswers: toggleCongestionGroup(
-            clinicVitals?.signAnswers,
-            id as CongestionSignsAnswer,
-            selected,
-          ),
-        })
+        onSaveClinicVitals(congestionGroupPatch(
+          id as CongestionSignsAnswer,
+          selected ? 'present' : null,
+        ))
       }
     : undefined
   const { copied: rationaleCopied, copy: copyToClipboard } = useCopyToClipboard()
@@ -1772,6 +1789,8 @@ function RecommendationDetail({
           onNavigate={onNavigate}
           clinicVitals={clinicVitals}
           onSaveClinicVitals={onSaveClinicVitals}
+          physicianRowsReadOnly={physicianRowsReadOnly}
+          onEditPhysicianRow={onEditPhysicianRow}
         />
       ))}
 
@@ -1995,12 +2014,15 @@ export function ClinicalDecisionSupportView({
   locale,
   patientId,
   profileFacts,
-  layout = 'board',
+  layout = 'flow',
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
   phenotypeAnswer,
   onAnswerPhenotype,
+  physicianDecisions,
+  onRecordDecision,
+  onClearDecision,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -2037,6 +2059,26 @@ export function ClinicalDecisionSupportView({
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
   )
+  // The visit flow is the heart-failure default. Every other pack, and the
+  // original board, take the paths they always took — not a line of them moves.
+  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
+  const visitFlow = useMemo(() => (
+    isVisitFlow && board
+      ? buildHeartFailureVisitFlow({
+        board,
+        result,
+        isEnglish,
+        now,
+        clinicVitals,
+        phenotypeAnswer,
+        decisions: physicianDecisions ?? {},
+        patientId,
+      })
+      : undefined
+  ), [
+    board, clinicVitals, isEnglish, isVisitFlow, now, patientId, phenotypeAnswer,
+    physicianDecisions, result,
+  ])
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
   // whose wording is the same at every visit for every patient of this age and
   // stage. Left open they are read once and skipped thereafter, and they teach
@@ -2163,7 +2205,12 @@ export function ClinicalDecisionSupportView({
     ? null
     : displayRecommendations.some((item) => item.id === requestedExpandedId)
       ? requestedExpandedId
-      : (displayRecommendations[0]?.id ?? null)
+      // The visit flow manages its own rows: an id that is no longer in the
+      // result means the row is gone, and opening the first row instead would
+      // be the screen answering a question nobody asked.
+      : isVisitFlow
+        ? null
+        : (displayRecommendations[0]?.id ?? null)
   const clinicalSummary = buildClinicalDecisionSummary(result, locale)
   const copyProvenance: RationaleCopyProvenance | undefined = result.packId && result.packVersion
     ? { packId: result.packId, packVersion: result.packVersion }
@@ -2312,7 +2359,45 @@ export function ClinicalDecisionSupportView({
         </details>
       ) : null}
 
-      {board ? (
+      {isVisitFlow && visitFlow && board ? (
+        <HeartFailureVisitFlow
+          flow={visitFlow}
+          board={board}
+          isEnglish={isEnglish}
+          now={now}
+          expandedId={expandedId}
+          onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          clinicVitals={clinicVitals}
+          onSaveClinicVitals={onSaveClinicVitals}
+          onClearClinicVitals={onClearClinicVitals}
+          phenotypeAnswer={phenotypeAnswer}
+          onAnswerPhenotype={onAnswerPhenotype}
+          onRecordDecision={onRecordDecision}
+          onClearDecision={onClearDecision}
+          packVersion={result.packVersion}
+          renderDetail={(recommendation) => (
+            <RecommendationDetail
+              recommendation={recommendation}
+              isEnglish={isEnglish}
+              onNavigate={navigateToResource}
+              label={label}
+              patientId={patientId}
+              copyProvenance={copyProvenance}
+              phenotypeAnswer={phenotypeAnswer}
+              onAnswerPhenotype={onAnswerPhenotype}
+              clinicVitals={clinicVitals}
+              onSaveClinicVitals={onSaveClinicVitals}
+              physicianRowsReadOnly
+              onEditPhysicianRow={(question) => focusVisitFlowTarget({
+                kind: 'question',
+                questionId: question === 'nyha' ? 'nyha' : 'congestion',
+              })}
+            />
+          )}
+        />
+      ) : null}
+
+      {board && !isVisitFlow ? (
         <HeartFailureStatusBoard
           board={board}
           isEnglish={isEnglish}
@@ -2342,6 +2427,12 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
+      {/*
+        The visit flow draws its own list, grouped by what the clinician has to
+        do and carrying a decision on every row; a second copy of the same rows
+        underneath is the duplication it removed.
+      */}
+      {isVisitFlow ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}
@@ -2810,6 +2901,7 @@ export function ClinicalDecisionSupportView({
           )
         })}
       </section>
+      )}
 
       <details
         className="group border-t border-border pt-1"
