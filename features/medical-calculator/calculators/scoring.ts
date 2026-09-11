@@ -61,6 +61,27 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'h2fpef': {
+    formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
+    note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },
+  },
+  'hfa-peff': {
+    factors: [
+      { label: { en: 'Functional', zh: '功能領域' }, options: [
+        { points: '2', label: { en: 'Septal e′ <7 or lateral e′ <10 cm/s (age ≥75: <5 / <7); average E/e′ ≥15; or TR Vmax >2.8 m/s', zh: 'Septal e′ <7 或 lateral e′ <10 cm/s（≥75 歲：<5／<7）；平均 E/e′ ≥15；或 TR Vmax >2.8 m/s' } },
+        { points: '1', label: { en: 'Average E/e′ ≥9 and <15, or absolute GLS <16%', zh: '平均 E/e′ ≥9 且 <15，或 GLS 絕對值 <16%' } },
+      ] },
+      { label: { en: 'Morphological', zh: '結構領域' }, options: [
+        { points: '2', label: { en: 'LAVI >34 (AF >40); or LVMI ≥149 in men / ≥122 in women with RWT >0.42', zh: 'LAVI >34（AF >40）；或 LVMI 男 ≥149／女 ≥122，且 RWT >0.42' } },
+        { points: '1', label: { en: 'LAVI 29–34 (AF 34–40); LVMI men ≥115 / women ≥95; RWT >0.42; or LV wall ≥12 mm', zh: 'LAVI 29–34（AF 34–40）；LVMI 男 ≥115／女 ≥95；RWT >0.42；或 LV 壁厚 ≥12 mm' } },
+      ] },
+      { label: { en: 'Biomarker (pg/mL)', zh: '生物標記（pg/mL）' }, options: [
+        { points: '2', label: { en: 'NT-proBNP >220 (AF >660), or BNP >80 (AF >240)', zh: 'NT-proBNP >220（AF >660），或 BNP >80（AF >240）' } },
+        { points: '1', label: { en: 'NT-proBNP 125–220 (AF 365–660), or BNP 35–80 (AF 105–240)', zh: 'NT-proBNP 125–220（AF 365–660），或 BNP 35–80（AF 105–240）' } },
+      ] },
+    ],
+    note: { en: 'Maximum 2 points per domain. 0–1: unlikely; 2–4: functional testing; 5–6: supports HFpEF. Missing measurements yield a conservative range, not a validated complete score. The published E/e′ 9–14 band is implemented as 9 ≤ E/e′ <15 for decimal values.', zh: '每領域取最高分，最多 2 分。0–1：可能性低；2–4：功能性檢查；5–6：支持 HFpEF。缺值顯示保守範圍，並非已驗證的完整分數。文獻 E/e′ 9–14 區間以 9 ≤ E/e′ <15 處理小數。' },
+  },
   // Liver-cancer (HCC) risk — transcribed from the NHI 健保存摺 計算說明 table.
   'hcc-risk-reveal': {
     factors: [
