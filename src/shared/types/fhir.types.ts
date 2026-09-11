@@ -43,6 +43,7 @@ export interface Identifier {
 
 /** Minimal recursive FHIR R4 Extension shape used by imported resources. */
 export interface FhirExtension {
+  valueUri?: string
   url?: string
   extension?: FhirExtension[]
   valueQuantity?: Quantity
@@ -88,6 +89,7 @@ export interface ReferenceRange {
 }
 
 export interface Observation {
+  extension?: FhirExtension[]
   id?: string
   resourceType?: string
   meta?: {

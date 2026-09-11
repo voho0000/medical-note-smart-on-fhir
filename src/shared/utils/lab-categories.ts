@@ -254,7 +254,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // at the end so the full B 肝 panel reads contiguously before the
     // clinician's eye jumps to a different virus.
     preferredOrder: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'HBCAG', 'ANTI-HCV'],
-    codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV'],
+    codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV', 'B型肝炎表面抗原', 'C型肝炎抗體'],
     // HBsAg has 3 LOINCs — Presence(5195-3) / quantitative Units-vol(5196-1) /
     // RIA(5197-9); all three already resolve to HBSAG in LOINC_TO_CANONICAL, so
     // this loincCodes list must carry them all or a quantitative-HBsAg result
