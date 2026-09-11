@@ -229,9 +229,12 @@ function NhiViewerActionMenu({
   const allLegacy = actions.every((action) => action.kind === 'legacy')
   const count = actions.length
   const visibleLabel = locale === 'zh-TW' ? `健保影像 ${count}` : `NHI imaging ${count}`
-  const accessibleLabel = locale === 'zh-TW'
+  const menuAccessibleLabel = locale === 'zh-TW'
     ? `選擇健保影像，共 ${count} 筆`
     : `Choose NHI imaging, ${count} studies`
+  const primaryAccessibleLabel = locale === 'zh-TW'
+    ? `開啟健保影像 1，共 ${count} 筆中的第 1 筆`
+    : `Open NHI imaging 1, first of ${count} studies`
 
   const openLive = async (action: Extract<NhiViewerAction, { kind: 'live' }>, index: number) => {
     if (openingIndex !== null) return
@@ -244,46 +247,102 @@ function NhiViewerActionMenu({
     }
   }
 
-  const triggerContent = (
+  const openLegacy = (action: Extract<NhiViewerAction, { kind: 'legacy' }>) => {
+    const opened = window.open(action.url, '_blank', 'noopener,noreferrer')
+    if (opened) opened.opener = null
+  }
+
+  const openFirst = () => {
+    const firstAction = actions[0]
+    if (firstAction.kind === 'live') {
+      void openLive(firstAction, 0)
+    } else {
+      openLegacy(firstAction)
+    }
+  }
+
+  const primaryContent = (
     <>
       {openingIndex !== null
         ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         : <ExternalLink className="h-3 w-3" aria-hidden />}
       <span>{openingIndex !== null && locale === 'zh-TW' ? '開啟中…' : openingIndex !== null ? 'Opening…' : visibleLabel}</span>
-      <ChevronDown className="h-3 w-3" aria-hidden />
     </>
   )
-  const triggerClassName = allLegacy ? LEGACY_ACTION_CLASS : LIVE_ACTION_CLASS
-  const trigger = nestedInButton ? (
+  const actionClassName = allLegacy ? LEGACY_ACTION_CLASS : LIVE_ACTION_CLASS
+  const primaryClassName = cn(actionClassName, 'rounded-r-none border-r-0 pr-1.5')
+  const menuTriggerClassName = cn(actionClassName, 'rounded-l-none px-1.5')
+  const primary = nestedInButton ? (
     <span
       role="button"
       tabIndex={openingIndex === null ? 0 : -1}
       aria-disabled={openingIndex !== null}
-      aria-label={accessibleLabel}
-      className={triggerClassName}
+      aria-label={primaryAccessibleLabel}
+      className={primaryClassName}
       onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation()
+        openFirst()
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (openingIndex === null && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          openFirst()
+        }
+      }}
     >
-      {triggerContent}
+      {primaryContent}
     </span>
   ) : (
     <button
       type="button"
       disabled={openingIndex !== null}
-      aria-label={accessibleLabel}
-      className={triggerClassName}
+      aria-label={primaryAccessibleLabel}
+      className={primaryClassName}
+      onClick={(event) => {
+        event.stopPropagation()
+        openFirst()
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {primaryContent}
+    </button>
+  )
+
+  const menuTrigger = nestedInButton ? (
+    <span
+      role="button"
+      tabIndex={openingIndex === null ? 0 : -1}
+      aria-disabled={openingIndex !== null}
+      aria-label={menuAccessibleLabel}
+      title={menuAccessibleLabel}
+      className={menuTriggerClassName}
+      onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {triggerContent}
+      <ChevronDown className="h-3 w-3" aria-hidden />
+    </span>
+  ) : (
+    <button
+      type="button"
+      disabled={openingIndex !== null}
+      aria-label={menuAccessibleLabel}
+      title={menuAccessibleLabel}
+      className={menuTriggerClassName}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <ChevronDown className="h-3 w-3" aria-hidden />
     </button>
   )
 
   return (
     <span className={className} data-nhi-viewer-actions>
+      {primary}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild>{menuTrigger}</DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-[11rem]">
           {actions.map((action, index) => {
             const itemLabel = locale === 'zh-TW' ? `健保影像 ${index + 1}` : `NHI imaging ${index + 1}`

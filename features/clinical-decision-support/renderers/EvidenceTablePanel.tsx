@@ -4,6 +4,77 @@ import { ChevronDown, ListChecks, Quote } from 'lucide-react'
 import { isEvidenceItemEnabled } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { EVIDENCE_ROW_SIGN_TERMS } from '../utils/apply-clinic-vitals'
+import { todayIsoDate, type ClinicVitals, type NyhaClass } from '../stores/clinic-vitals.store'
+
+/** The row the published congestion table carries the NYHA class on. */
+const NYHA_ROW_ID = 'congestion:nyha'
+const NYHA_CLASSES: readonly NyhaClass[] = ['I', 'II', 'III', 'IV']
+
+/** What a clinician can say about one sign in the room. */
+export type SignAnswer = 'present' | 'absent'
+
+/**
+ * 有／無／未評估 for a sign the record cannot settle.
+ *
+ * It replaces the include-or-exclude switch on these rows because the switch
+ * answered the wrong question: it decided whether an *undetermined* row was
+ * counted, so a clinician who turned on 「Orthopnea」 to say they had seen it
+ * still read 「紀錄中沒有這一項 · 無法判定」 next to their own answer. 「無」 is a
+ * finding too — the pack keeps it apart from 「沒問」 — and an answer here
+ * recomputes the module rather than nudging a count.
+ */
+function SignAnswerControl({
+  itemId,
+  label,
+  isEnglish,
+  answer,
+  onAnswer,
+}: {
+  itemId: string
+  label: string
+  isEnglish: boolean
+  answer?: SignAnswer
+  onAnswer: (answer: SignAnswer | undefined) => void
+}) {
+  const options: readonly { id: SignAnswer | 'unassessed'; text: string }[] = [
+    { id: 'present', text: isEnglish ? 'Yes' : '有' },
+    { id: 'absent', text: isEnglish ? 'No' : '無' },
+    { id: 'unassessed', text: isEnglish ? 'Not assessed' : '未評估' },
+  ]
+  const selected: SignAnswer | 'unassessed' = answer ?? 'unassessed'
+  return (
+    <div
+      className="mt-0.5 flex shrink-0 overflow-hidden rounded-md border border-border"
+      role="group"
+      aria-label={isEnglish ? `${label}: seen in the room?` : `「${label}」：門診是否看到？`}
+      data-testid={`cdss-evidence-answer-${itemId}`}
+    >
+      {options.map((option) => {
+        const isSelected = selected === option.id
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={isSelected}
+            className={cn(
+              'min-h-8 min-w-[2.5rem] px-2 text-[11px] font-medium transition-colors',
+              'border-r border-border last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              isSelected
+                ? 'bg-primary/10 text-primary'
+                : 'bg-card text-muted-foreground hover:bg-muted/40',
+            )}
+            onClick={() => onAnswer(option.id === 'unassessed' ? undefined : option.id)}
+            data-testid={`cdss-evidence-answer-${itemId}-${option.id}`}
+          >
+            {option.text}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
@@ -79,6 +150,39 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string 
     zh: 'HF 應避免的藥物',
     en: 'Medications to avoid in heart failure',
   },
+  // The three ESC 2026 section 5.2.2 criteria, each read on its own.
+  'hfpef-symptoms-signs': {
+    zh: 'HFpEF (i) 症狀／徵象',
+    en: 'HFpEF (i) symptoms and signs',
+  },
+  'hfpef-lvef-criterion': {
+    zh: 'HFpEF (ii) LVEF 條件',
+    en: 'HFpEF (ii) LVEF criterion',
+  },
+  'hfpef-objective-abnormality': {
+    zh: 'HFpEF (iii) 客觀結構／功能異常',
+    en: 'HFpEF (iii) objective structural or functional abnormality',
+  },
+  // Concepts the package declares for pathways this host does not list. They
+  // are here because the map is exhaustive over the package's union, not
+  // because a reader can reach them.
+  'htn-treatment-threshold-risk': {
+    zh: '高血壓治療門檻與風險',
+    en: 'Hypertension treatment threshold and risk',
+  },
+  'htn-resistant-pseudoresistance': {
+    zh: '頑固性高血壓與假性頑固',
+    en: 'Resistant hypertension and pseudoresistance',
+  },
+  'htn-secondary-screening-indication': {
+    zh: '次發性高血壓篩檢指徵',
+    en: 'Secondary hypertension screening indication',
+  },
+  'htn-target-individualization': {
+    zh: '血壓目標個人化',
+    en: 'Blood-pressure target individualization',
+  },
+  'htn-sleep-apnea': { zh: '睡眠呼吸中止', en: 'Sleep apnea' },
 }
 
 const DIRECTION_LABELS: Record<EvidenceDirection, { zh: string; en: string }> = {
@@ -112,6 +216,61 @@ const RESOURCE_TYPE_LABELS: Record<CdssFactSource['resourceType'], { zh: string;
   CarePlan: { zh: '照護計畫', en: 'Care plan' },
   DiagnosticReport: { zh: '檢查報告', en: 'Diagnostic report' },
   DocumentReference: { zh: '病歷文件', en: 'Clinical document' },
+}
+
+/**
+ * NYHA class on its own row.
+ *
+ * 有／無 is the wrong question for a grade, which is why this row carried a
+ * switch that could not be answered at all. The clinician picks the class; what
+ * it means for the symptoms criterion is the pack's reading — II to IV is a
+ * patient with current symptoms, and class I argues nothing, because ESC 2026
+ * §5.2.2 asks for 「current **or prior**」 symptoms.
+ */
+function NyhaClassControl({
+  itemId,
+  label,
+  isEnglish,
+  value,
+  onSelect,
+}: {
+  itemId: string
+  label: string
+  isEnglish: boolean
+  value?: NyhaClass
+  onSelect: (next: NyhaClass | undefined) => void
+}) {
+  return (
+    <div
+      className="mt-0.5 flex shrink-0 overflow-hidden rounded-md border border-border"
+      role="group"
+      aria-label={isEnglish ? `${label}` : `「${label}」`}
+      data-testid={`cdss-evidence-nyha-${itemId}`}
+    >
+      {NYHA_CLASSES.map((option) => {
+        const isSelected = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={isSelected}
+            className={cn(
+              'min-h-8 min-w-[2rem] px-1.5 text-[11px] font-medium tabular-nums transition-colors',
+              'border-r border-border last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              isSelected
+                ? 'bg-primary/10 text-primary'
+                : 'bg-card text-muted-foreground hover:bg-muted/40',
+            )}
+            onClick={() => onSelect(isSelected ? undefined : option)}
+            data-testid={`cdss-evidence-nyha-${itemId}-${option}`}
+          >
+            {option}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function pick(label: { zh: string; en: string }, isEnglish: boolean): string {
@@ -224,12 +383,23 @@ function EvidenceRow({
   enabled,
   onToggle,
   onNavigate,
+  answer,
+  onAnswer,
+  nyhaClass,
+  onSelectNyha,
 }: {
   item: EvidenceItem
   isEnglish: boolean
   enabled: boolean
   onToggle: (enabled: boolean) => void
   onNavigate: (target: ResourceNavTarget) => void
+  /** 「有」/「無」 already recorded for this sign, where the row takes one. */
+  answer?: SignAnswer
+  /** Absent where this row is not a sign a clinician can answer in the room. */
+  onAnswer?: (answer: SignAnswer | undefined) => void
+  /** The graded class, on the one row that carries a grade instead of a sign. */
+  nyhaClass?: NyhaClass
+  onSelectNyha?: (next: NyhaClass | undefined) => void
 }) {
   const physicianEntered = item.derivability === 'physician-entered'
   const label = pick(item.label, isEnglish)
@@ -244,18 +414,36 @@ function EvidenceRow({
       data-testid={`cdss-evidence-row-${item.id}`}
       data-enabled={enabled ? 'true' : 'false'}
     >
-      <Switch
-        checked={enabled}
-        onCheckedChange={onToggle}
-        // The track is dense on purpose; the thumb is not the touch target. The
-        // pseudo-element grows the hit area into the row's own padding, so a
-        // thumb tapped on a phone lands without loosening the table.
-        className="relative mt-0.5 shrink-0 after:absolute after:-inset-2 after:content-['']"
-        aria-label={isEnglish
-          ? `Include ${label} in the reading`
-          : `將「${label}」納入判定`}
-        data-testid={`cdss-evidence-switch-${item.id}`}
-      />
+      {onSelectNyha ? (
+        <NyhaClassControl
+          itemId={item.id}
+          label={label}
+          isEnglish={isEnglish}
+          value={nyhaClass}
+          onSelect={onSelectNyha}
+        />
+      ) : onAnswer ? (
+        <SignAnswerControl
+          itemId={item.id}
+          label={label}
+          isEnglish={isEnglish}
+          answer={answer}
+          onAnswer={onAnswer}
+        />
+      ) : (
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          // The track is dense on purpose; the thumb is not the touch target. The
+          // pseudo-element grows the hit area into the row's own padding, so a
+          // thumb tapped on a phone lands without loosening the table.
+          className="relative mt-0.5 shrink-0 after:absolute after:-inset-2 after:content-['']"
+          aria-label={isEnglish
+            ? `Include ${label} in the reading`
+            : `將「${label}」納入判定`}
+          data-testid={`cdss-evidence-switch-${item.id}`}
+        />
+      )}
 
       <div className="min-w-0 flex-1 @min-[46rem]:flex @min-[46rem]:items-start @min-[46rem]:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 @min-[46rem]:w-[13rem] @min-[46rem]:shrink-0">
@@ -323,16 +511,35 @@ export function EvidenceTablePanel({
   locale,
   patientId,
   onNavigate,
+  clinicVitals,
+  onSaveClinicVitals,
 }: {
   table: EvidenceTable
   recommendationId: string
   locale: CdssLocale
   patientId?: string
   onNavigate: (target: ResourceNavTarget) => void
+  /** Today's examination. Absent leaves every row on the plain switch. */
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (vitals: ClinicVitals) => void
 }) {
   const isEnglish = locale === 'en'
   const overrides = useEvidenceOverrides(patientId)
   const setOverride = useEvidenceOverridesStore((state) => state.setOverride)
+  const signAnswers = clinicVitals?.signAnswers ?? {}
+  const answerSign = onSaveClinicVitals
+    ? (term: string, answer: SignAnswer | undefined) => {
+        const next = { ...signAnswers }
+        if (answer) next[term] = answer
+        else delete next[term]
+        const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
+        onSaveClinicVitals({
+          ...(clinicVitals ?? { measuredOn }),
+          measuredOn,
+          signAnswers: Object.keys(next).length > 0 ? next : undefined,
+        })
+      }
+    : undefined
 
   const groups = CATEGORY_ORDER
     .map((category) => ({
@@ -372,19 +579,43 @@ export function EvidenceTablePanel({
               {pick(CATEGORY_LABELS[group.category], isEnglish)}
             </h6>
             <div className="divide-y divide-border/40">
-              {group.items.map((item) => (
-                <EvidenceRow
-                  key={item.id}
-                  item={item}
-                  isEnglish={isEnglish}
-                  enabled={isEvidenceItemEnabled(item, overrides)}
-                  onToggle={(enabled) => {
-                    if (!patientId) return
-                    setOverride(patientId, item.id, enabled)
-                  }}
-                  onNavigate={onNavigate}
-                />
-              ))}
+              {group.items.map((item) => {
+                // A row the clinician can answer in the room takes the
+                // 有／無／未評估 control; everything else keeps the switch.
+                const term = EVIDENCE_ROW_SIGN_TERMS[item.id]
+                const answerProps = item.id === NYHA_ROW_ID && onSaveClinicVitals
+                  ? {
+                    nyhaClass: clinicVitals?.nyhaClass,
+                    onSelectNyha: (next: NyhaClass | undefined) => {
+                      const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
+                      onSaveClinicVitals({
+                        ...(clinicVitals ?? { measuredOn }),
+                        measuredOn,
+                        nyhaClass: next,
+                      })
+                    },
+                  }
+                  : term && answerSign
+                    ? {
+                      answer: signAnswers[term],
+                      onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                    }
+                    : {}
+                return (
+                  <EvidenceRow
+                    key={item.id}
+                    item={item}
+                    isEnglish={isEnglish}
+                    enabled={isEvidenceItemEnabled(item, overrides)}
+                    onToggle={(enabled) => {
+                      if (!patientId) return
+                      setOverride(patientId, item.id, enabled)
+                    }}
+                    onNavigate={onNavigate}
+                    {...answerProps}
+                  />
+                )
+              })}
             </div>
           </div>
         ))}

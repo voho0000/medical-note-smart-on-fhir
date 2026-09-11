@@ -198,11 +198,23 @@ function heartFailureResult(overrides: Partial<CdssResult> = {}): CdssResult {
   }
 }
 
+/**
+ * The HFpEF pathway: the pack evaluates none of the HFrEF pillars and builds
+ * its own treatment card instead.
+ */
 function hfpefResult(): CdssResult {
   const result = heartFailureResult()
   return {
     ...result,
-    recommendations: result.recommendations.filter((item) => !/ras-inhibition|beta-blocker|-mra$|sglt2|hfref-gdmt/.test(item.id)),
+    recommendations: [
+      ...result.recommendations.filter((item) => !/ras-inhibition|beta-blocker|-mra$|sglt2|hfref-gdmt/.test(item.id)),
+      recommendation('heart-failure-hfpef-treatment', 'HFpEF 治療', {
+        moduleGroup: 'treatment',
+        domain: 'medication',
+        status: 'review',
+        title: 'HFpEF（LVEF ≥50%）：核對 SGLT2 抑制劑與表型導向治療',
+      }),
+    ],
   }
 }
 
@@ -385,17 +397,31 @@ describe('heart-failure board model', () => {
   it('reads unevaluated pillars from the therapy facts, taking class first', () => {
     const board = buildHeartFailureBoard(hfpefResult(), 'zh-TW', NOW, HFPEF_FACTS)!
 
+    // On the HFpEF pathway the strip is the two classes ESC 2026
+    // Recommendation Table 5 recommends 「independent of LVEF」. The other two
+    // name 「symptomatic HFrEF」, and a tile for each of them here would read as
+    // a checklist of what this patient is missing.
+    expect(board.pillarScope).toBe('lvef-independent')
     expect(board.pillars.map((pillar) => [pillar.id, pillar.evaluated, pillar.taking, pillar.medicationNames])).toEqual([
-      ['heart-failure-ras-inhibition', false, true, 'Valsartan 80mg'],
-      ['heart-failure-beta-blocker', false, false, undefined],
       ['heart-failure-mra', false, false, undefined],
       ['heart-failure-sglt2', false, true, 'Dapagliflozin 10mg'],
     ])
-    expect(board.pillars[0].therapyEvidence?.factKeys).toEqual(['aceArbTherapy'])
-    expect(board.pillars[0].therapyDate).toBe('2026-08-20')
+    expect(board.pillars[0].therapyEvidence?.factKeys).toEqual(['mraTherapy'])
     expect(board.pillars[0].status).toBeUndefined()
     expect(board.gdmt).toBeUndefined()
     expect(board.consumedIds.has('heart-failure-hfref-gdmt')).toBe(false)
+    // The tiles the HFrEF pathway owns are not consumed here, so nothing the
+    // board hid goes missing from the module list either.
+    expect(board.consumedIds.has('heart-failure-ras-inhibition')).toBe(false)
+  })
+
+  it('shows no foundational-therapy strip where the pack opened no pathway', () => {
+    const board = buildHeartFailureBoard(phenotypeOnlyResult(), 'zh-TW', NOW, HFPEF_FACTS)!
+
+    // Nobody has said they suspect heart failure, so a therapy checklist would
+    // be answering a question that was never asked.
+    expect(board.pillarScope).toBe('none')
+    expect(board.pillars).toEqual([])
   })
 })
 
@@ -570,21 +596,63 @@ describe('heart-failure board view', () => {
     expect(signs).toHaveTextContent('預設未回答')
     fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
     expect(onSave).toHaveBeenCalledTimes(1)
-    expect(onSave.mock.calls[0][0]).toMatchObject({ congestionSigns: ['edema'] })
+    // The chip states the signs of its group in the one record every control
+    // shares, so nothing has to be reconciled between two fields later.
+    expect(onSave.mock.calls[0][0]).toMatchObject({
+      signAnswers: { 'pitting-edema': 'present' },
+    })
     unmount()
 
     render(
       <ClinicalDecisionSupportView
         result={heartFailureResult()}
         locale="zh-TW"
-        clinicVitals={{ measuredOn: '2026-09-08', congestionSigns: ['edema'] }}
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { 'pitting-edema': 'present' } }}
         onSaveClinicVitals={onSave}
       />,
     )
     expect(screen.getByTestId('cdss-hf-congestion-sign-edema')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-hf-congestion-signs')).toHaveTextContent('已寫進鬱血證據表')
+    // Untapping returns the sign to 未評估 rather than asserting 「無」: a chip
+    // nobody tapped and one someone untapped both mean it was not stated.
     fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
-    expect(onSave.mock.calls[1][0].congestionSigns).toBeUndefined()
+    expect(onSave.mock.calls[1][0].signAnswers).toBeUndefined()
+  })
+
+  it('lights the chip for a sign answered on the evidence row below it', () => {
+    // The complaint this holds: a clinician answered 「Orthopnea：有」 on the row
+    // and the strip above still read 「預設未回答」 about the same patient. One
+    // record, so the chip for the group that sign belongs to is lit.
+    render(
+      <ClinicalDecisionSupportView
+        result={heartFailureResult()}
+        locale="zh-TW"
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'present' } }}
+        onSaveClinicVitals={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('cdss-hf-congestion-sign-orthopnea-pnd'))
+      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-hf-congestion-sign-edema'))
+      .toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('cdss-hf-congestion-signs')).toHaveTextContent('已寫進鬱血證據表')
+  })
+
+  it('leaves the chip unlit for a sign answered 「無」 on the row', () => {
+    // 「看了，沒有」 is a finding, but it is not 「有」: the chip asks whether a
+    // sign was seen, and the answer was no.
+    render(
+      <ClinicalDecisionSupportView
+        result={heartFailureResult()}
+        locale="zh-TW"
+        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'absent' } }}
+        onSaveClinicVitals={jest.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('cdss-hf-congestion-sign-orthopnea-pnd'))
+      .toHaveAttribute('aria-pressed', 'false')
   })
 
   it('refuses half a blood pressure and offers no entry without a save handler', () => {
@@ -604,13 +672,26 @@ describe('heart-failure board view', () => {
     expect(screen.queryByTestId('cdss-hf-clinic-vitals-open')).toBeNull()
   })
 
-  it('keeps the four pillars on screen outside the HFrEF pathway, as plain prescription state', () => {
+  /**
+   * This case used to hold that all four pillars stayed on screen outside the
+   * HFrEF pathway, as plain prescription state. HMC reversed it on 2026-09-09:
+   * ESC 2026 Recommendation Table 5 names 「symptomatic HFrEF」 for the
+   * beta-blocker and for ACE-I/ARNI/ARB, so a strip headed 「四大 FMT 支柱」
+   * put an ARNI checklist in front of an HFpEF patient — a caveat above the
+   * tiles does not undo what four tiles marked 「目前未使用」 read as. The two
+   * classes ESC recommends independent of LVEF stay.
+   */
+  it('keeps only the LVEF-independent classes on the HFpEF pathway', () => {
     render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" profileFacts={HFPEF_FACTS} />)
 
     const pillars = screen.getByTestId('cdss-hf-pillars')
-    expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('四大 FMT 支柱')
+    expect(pillars).toHaveAttribute('data-pillar-scope', 'lvef-independent')
+    expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('HFpEF 的 FMT')
     expect(within(pillars).getByTestId('cdss-hf-pillars-unassessed-note')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-hf-gdmt-trigger')).toBeNull()
+
+    expect(within(pillars).queryByTestId('cdss-hf-pillar-heart-failure-ras-inhibition')).toBeNull()
+    expect(within(pillars).queryByTestId('cdss-hf-pillar-heart-failure-beta-blocker')).toBeNull()
 
     const sglt2 = within(pillars).getByTestId('cdss-hf-pillar-heart-failure-sglt2')
     expect(sglt2.tagName).toBe('DIV')
@@ -623,6 +704,12 @@ describe('heart-failure board view', () => {
 
     fireEvent.click(sglt2)
     expect(screen.queryByTestId('cdss-hf-pillar-detail-heart-failure-sglt2')).toBeNull()
+  })
+
+  it('shows no foundational-therapy strip where the pack opened no pathway', () => {
+    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" profileFacts={HFPEF_FACTS} />)
+
+    expect(screen.queryByTestId('cdss-hf-pillars')).toBeNull()
   })
 
   it('shows a laboratory value no module read as a number with 未判定, not as 未取得', () => {

@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Calendar, TrendingUp, Trash2, Loader2, Copy, RotateCcw } from 'lucide-react'
+import { Calendar, TrendingUp, Trash2, Loader2, Copy, RotateCcw, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { applyTemplateVariables, extractTemplateVariables, missingTemplateVariables } from '../utils/template-variables.utils'
@@ -53,6 +53,7 @@ import { useDesktopLayout } from '../hooks/useDesktopLayout'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
 import { FavoriteButton } from './FavoriteButton'
 import { PromptSourceBadge } from './PromptSourceBadge'
+import { PromptVisibilityBadge } from './PromptVisibilityBadge'
 
 interface PromptPreviewDialogProps {
   prompt: SharedPrompt | null
@@ -78,6 +79,7 @@ export function PromptPreviewDialog({
   onOpenChange,
   onUse,
   useMode = 'all',
+  onShare,
   onDelete,
   guidedPreview = false,
   onRestoreFocus,
@@ -122,6 +124,7 @@ export function PromptPreviewDialog({
 
   const isAuthor = !!user?.uid && prompt.authorId === user.uid
   const canDelete = isAuthor || (!!prompt.tenantId && canManage)
+  const canEdit = isAuthor && !prompt.tenantId && !!onShare
   const source = getPromptSource(prompt, user?.uid)
   const isPatientOnly = prompt.audience.includes('patient') && !prompt.audience.includes('medical')
   const outputFormat = coerceInsightOutputFormat(prompt.outputFormat)
@@ -380,6 +383,9 @@ export function PromptPreviewDialog({
           {/* Source is secondary information: it says where the prompt comes from, not that saving it grants editing. */}
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <PromptSourceBadge source={source} tenantName={prompt.tenantName} />
+            {isAuthor && !prompt.tenantId && (
+              <PromptVisibilityBadge isPublic={prompt.isPublic} />
+            )}
             {sourceUpdated && (
               <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
                 {t.promptGallery.sourceUpdated}
@@ -452,6 +458,20 @@ export function PromptPreviewDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t.common.close}
               </Button>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  disabled={guidedPreview || !resolved}
+                  onClick={() => {
+                    if (!resolved) return
+                    onShare(resolved)
+                    onOpenChange(false)
+                  }}
+                >
+                  <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {t.promptGallery.editTemplate}
+                </Button>
+              )}
               <Button variant="outline" disabled={guidedPreview || !resolved} onClick={handleCopy}>
                 <Copy className="h-4 w-4 mr-2" />
                 {t.promptGallery.copyPrompt}

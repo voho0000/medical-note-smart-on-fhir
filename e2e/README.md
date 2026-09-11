@@ -28,6 +28,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | Spec | Behavior |
 |---|---|
 | `smoke.spec.ts` | Import Bundle and render patient |
+| `medcloud-handoff.spec.ts` | Cloud Wildcatch observes the first stable import target, immediately transfers a Bundle with `DataTransfer`, receives the settled event, and renders the patient |
 | `demo-data.spec.ts` | Load／identify／exit built-in demo |
 | `medical-summary-cumulative-navigation.spec.ts` | AI summary → cumulative report navigation from every non-report clinical tab after Reports background pre-mount |
 | `problem-list.spec.ts` | Encounter diagnoses and resolved-status filter |

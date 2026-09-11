@@ -7,43 +7,49 @@ import { buildClinicalDecisionSummary } from '@/features/clinical-decision-suppo
  * honestly leaves nearly everything at `medium`, so sorting by priority is a
  * no-op and the slots fall to build order. This pins the rule that an item the
  * pack marked actionable outranks one it marked review.
+ *
+ * The pack is only the fixture — the rule under test is the host's ordering.
+ * Heart failure is what the package ships, so it is what the real output comes
+ * from.
  */
 
-const CKD_PACK = CARE_PACKS.find((candidate) => candidate.id === 'ckd-cdss')!
+const HEART_FAILURE_PACK = CARE_PACKS.find((candidate) => candidate.id === 'heart-failure-cdss')!
 
 function fact(value: number) {
   return { zh: String(value), en: String(value), numericValue: value, date: '2026-07-01' }
 }
 
-/** G3b A2, on no kidney-protective agent: three prescribing actions are open. */
+/** HFrEF on none of the four FMT pillars: several prescribing actions are open. */
 const profile = {
   id: 'summary-ordering',
   evaluatedAt: '2026-08-01',
   demographics: { sex: 'female' },
-  eligibleDiseasePackIds: ['ckd-poc'],
+  eligibleDiseasePackIds: ['heart-failure-poc'],
   facts: {
     age: fact(68),
-    eGFR: fact(38),
-    urineAlbuminRatioQuantitative: fact(180),
+    LVEF: fact(32),
+    eGFR: fact(48),
+    potassium: fact(4.6),
+    sodium: fact(138),
+    heartRate: fact(78),
+    bodyWeight: fact(74.5),
     bloodPressure: {
-      zh: '148/86',
-      en: '148/86',
+      zh: '118/72',
+      en: '118/72',
       date: '2026-07-01',
-      sources: [{ value: '148/86', unit: 'mmHg', date: '2026-07-01' }],
+      sources: [{ value: '118/72', unit: 'mmHg', date: '2026-07-01' }],
     },
-    potassium: fact(5.2),
-    hemoglobin: fact(10.8),
-    serumCreatinine: fact(1.4),
+    heartFailureDiagnosis: { zh: 'I50.22', en: 'I50.22', date: '2026-07-01' },
   },
   freshnessContexts: {
+    LVEF: { state: 'current' },
     eGFR: { state: 'current' },
-    quantitativeUacr: { state: 'current' },
     bloodPressure: { state: 'current' },
   },
 } as unknown as CdssPatientProfile
 
 describe('clinical decision summary ordering', () => {
-  const result = CKD_PACK.build({ profile, locale: 'zh-TW' })
+  const result = HEART_FAILURE_PACK.build({ profile, locale: 'zh-TW' })
   const summary = buildClinicalDecisionSummary(result, 'zh-TW')
 
   it('lists every actionable card before any review card', () => {

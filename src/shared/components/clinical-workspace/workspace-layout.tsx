@@ -7,8 +7,9 @@ import {
   type MouseEventHandler,
   type ReactNode,
 } from "react"
-import { ChevronsLeft, ChevronsRight } from "lucide-react"
+import { ChevronsLeft, ChevronsRight, LoaderCircle } from "lucide-react"
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useVisualViewport } from "@/src/shared/hooks/layout/use-visual-viewport.hook"
 
@@ -215,26 +216,46 @@ export function ClinicalWorkspaceDivider({
 
       {showCollapseActions && (
         <div className="absolute z-10 flex flex-col gap-0.5 rounded-full border border-border/70 bg-panel/95 p-0.5 shadow-sm backdrop-blur-sm">
-          <button
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onCollapseLeft}
-            title={leftCollapseLabel}
-            aria-label={leftCollapseLabel}
-            className={actionClasses}
-          >
-            <ChevronsLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onCollapseRight}
-            title={rightCollapseLabel}
-            aria-label={rightCollapseLabel}
-            className={actionClasses}
-          >
-            <ChevronsRight className="h-3.5 w-3.5" />
-          </button>
+          {/* Two chevrons cannot say what they will do, and what they DO is
+              stateful: the first press re-centres a lopsided split, the next
+              collapses that side (the labels come from the shell and change
+              with it). A permanent caption is not an option — the divider is
+              8px wide between two dense panels — so the wording rides a real
+              tooltip rather than `title`, which appears only after a delay and
+              is invisible to keyboard users. `delayDuration={150}`: this is
+              read while reaching for the control, not hovered by accident. */}
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={onCollapseLeft}
+                aria-label={leftCollapseLabel}
+                className={actionClasses}
+              >
+                <ChevronsLeft className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6} className="text-xs">
+              {leftCollapseLabel}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={onCollapseRight}
+                aria-label={rightCollapseLabel}
+                className={actionClasses}
+              >
+                <ChevronsRight className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6} className="text-xs">
+              {rightCollapseLabel}
+            </TooltipContent>
+          </Tooltip>
         </div>
       )}
     </div>
@@ -245,6 +266,13 @@ interface ClinicalWorkspaceRailProps {
   label: string
   iconDirection: "left" | "right"
   onClick: () => void
+  /** Draw attention to something waiting inside the collapsed panel. */
+  badge?: boolean
+  /** Work is running inside the collapsed panel right now. */
+  busy?: boolean
+  /** Short status shown horizontally under the label — an elapsed time reads
+   *  as nonsense rotated 90° with the rest of the vertical text. */
+  note?: ReactNode
   children?: ReactNode
 }
 
@@ -252,23 +280,53 @@ export function ClinicalWorkspaceRail({
   label,
   iconDirection,
   onClick,
+  badge = false,
+  busy = false,
+  note,
   children,
 }: ClinicalWorkspaceRailProps) {
   const Icon = iconDirection === "left" ? ChevronsLeft : ChevronsRight
+  const active = badge || busy
 
   return (
     <button
       type="button"
       data-slot="clinical-workspace-rail"
+      data-badge={badge ? "true" : undefined}
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden"
+      className={cn(
+        "group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden",
+        // Two different things, so two different colours. Work in flight uses
+        // the shell's own interaction blue; a FINISHED run uses teal — the
+        // colour 醫療摘要 already carries in the right panel — so the rail is
+        // tinted like the thing it is pointing at. Neither is an alarm tone:
+        // this is information, not a warning.
+        busy && "border-primary/45 bg-primary/5 text-primary",
+        badge && !busy && "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+      )}
     >
+      {busy ? (
+        <LoaderCircle className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+      ) : badge && (
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600 dark:bg-teal-400"
+        />
+      )}
       <Icon className="h-4 w-4" />
-      <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
+      <span className={cn(
+        "select-none text-xs [writing-mode:vertical-rl]",
+        active ? "font-semibold" : "font-medium",
+      )}>
         {children ?? label}
       </span>
+      {note && (
+        <span className="select-none text-[0.625rem] font-medium tabular-nums">
+          {note}
+        </span>
+      )}
     </button>
   )
 }

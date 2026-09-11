@@ -1,6 +1,6 @@
 import {
   collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, deleteField,
-  query, where, orderBy, limit, startAfter, increment, Timestamp,
+  query, where, limit, startAfter, increment, Timestamp,
   type QueryConstraint, type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
@@ -37,6 +37,7 @@ export function convertToSharedPrompt(id: string, data: Record<string, unknown>)
     for (const field of ['specialty', 'audience', 'tags'] as const) {
       if (data[field] !== undefined && !stringList(data[field])) return null
     }
+    if (data.isPublic !== undefined && typeof data.isPublic !== 'boolean') return null
     if (data.body !== undefined && !isTemplateTextReference(data.body)) return null
     const audience = data.audience as string[] | undefined
     return {
@@ -50,6 +51,8 @@ export function convertToSharedPrompt(id: string, data: Record<string, unknown>)
       outputFormat: data.outputFormat === undefined ? undefined : coerceInsightOutputFormat(data.outputFormat),
       languagePolicy: data.languagePolicy === undefined ? undefined : coerceInsightLanguagePolicy(data.languagePolicy),
       exampleOutput: typeof data.exampleOutput === 'string' && data.exampleOutput ? data.exampleOutput : undefined,
+      // Records published before visibility controls were introduced are public.
+      isPublic: data.isPublic !== false,
       tenantId: typeof data.tenantId === 'string' && data.tenantId ? data.tenantId : undefined,
       createdAt: dateValue(data.createdAt), updatedAt: dateValue(data.updatedAt),
       authorId: data.authorId as string | undefined,
@@ -84,17 +87,13 @@ async function fetchPrompts(filter: PromptGalleryFilter = {}, sort?: PromptGalle
   if (!db) return []
   const constraints: QueryConstraint[] = []
   if (userId) constraints.push(where('authorId', '==', userId))
-  if (filter.type && filter.type !== 'summary') constraints.push(where('types', 'array-contains', filter.type))
-  if (filter.category) constraints.push(where('category', '==', filter.category))
+  else constraints.push(where('isPublic', '==', true))
   const selectedSpecialties = filter.specialty ? getPromptSpecialtyFilterValues(filter.specialty) : undefined
-  if (filter.specialty && (!filter.type || filter.type === 'summary')) {
-    constraints.push(selectedSpecialties!.length === 1
-      ? where('specialty', 'array-contains', filter.specialty)
-      : where('specialty', 'array-contains-any', selectedSpecialties))
-  }
-  // Stable cursor ordering also includes legacy records missing usageCount.
-  // Filter and sort the complete set, never just the first page.
-  constraints.push(orderBy('createdAt', 'desc'))
+  // Keep the server query to the single predicate required by Firestore Rules.
+  // Combining visibility/ownership with filters or createdAt ordering requires a
+  // separate composite index for every UI-filter combination. The gallery must
+  // keep working even when those optional indexes have not reached production,
+  // so page the complete authorized set and filter/sort it in memory.
   const prompts: SharedPrompt[] = []
   let cursor: QueryDocumentSnapshot | undefined
   do {
@@ -154,22 +153,24 @@ export function validatePrompt(prompt: NewPrompt) {
     || (prompt.authorName !== undefined && (typeof prompt.authorName !== 'string' || prompt.authorName.length > 100))
     || (prompt.outputFormat !== undefined && !['plain-text', 'markdown', 'html'].includes(prompt.outputFormat))
     || (prompt.languagePolicy !== undefined && !['interface-language', 'follow-template'].includes(prompt.languagePolicy))
+    || (prompt.isPublic !== undefined && typeof prompt.isPublic !== 'boolean')
     || typeof prompt.authorId !== 'string' || !prompt.authorId) throw new Error('Invalid template data')
 }
 
 export async function createSharedPrompt(input: NewPrompt): Promise<string> {
   if (!db) throw new Error('Database unavailable')
-  // Public gallery prompts never carry a tenant; department templates go through createTenantPrompt.
+  // Personal gallery prompts never carry a tenant; department templates go through createTenantPrompt.
   const { tenantId: _tenantId, ...prompt } = input
-  validatePrompt(prompt)
+  const normalized = { ...prompt, isPublic: prompt.isPublic !== false }
+  validatePrompt(normalized)
   const now = Timestamp.now()
-  const data = Object.fromEntries(Object.entries({ ...prompt, usageCount: 0, createdAt: now, updatedAt: now,
-    authorName: prompt.isAnonymous ? undefined : prompt.authorName }).filter(([, value]) => value !== undefined))
-  if (splitTemplateText(prompt.prompt).length === 1) return (await addDoc(collection(db, COLLECTION_NAME), data)).id
+  const data = Object.fromEntries(Object.entries({ ...normalized, usageCount: 0, createdAt: now, updatedAt: now,
+    authorName: normalized.isAnonymous ? undefined : normalized.authorName }).filter(([, value]) => value !== undefined))
+  if (splitTemplateText(normalized.prompt).length === 1) return (await addDoc(collection(db, COLLECTION_NAME), data)).id
   const ref = doc(collection(db, COLLECTION_NAME))
-  const body = await writeTemplateText(prompt.prompt, prompt.authorId!, ref.id)
+  const body = await writeTemplateText(normalized.prompt, normalized.authorId!, ref.id)
   try {
-    await setDoc(ref, { ...data, prompt: prompt.prompt.slice(0, 180), body })
+    await setDoc(ref, { ...data, prompt: normalized.prompt.slice(0, 180), body })
     return ref.id
   } catch (error) {
     await removeTemplateText(body.id).catch(() => {})
@@ -187,7 +188,7 @@ export async function deleteSharedPrompt(id: string): Promise<void> {
 
 export async function updateSharedPrompt(id: string, updates: Partial<NewPrompt>): Promise<void> {
   if (!db) throw new Error('Database unavailable')
-  const allowed = ['title', 'description', 'prompt', 'types', 'category', 'specialty', 'audience', 'tags', 'isAnonymous', 'authorName', 'outputFormat', 'languagePolicy', 'exampleOutput']
+  const allowed = ['title', 'description', 'prompt', 'types', 'category', 'specialty', 'audience', 'tags', 'isAnonymous', 'authorName', 'outputFormat', 'languagePolicy', 'exampleOutput', 'isPublic']
   if (Object.keys(updates).some(key => !allowed.includes(key))) throw new Error('Cannot change template ownership or usage')
   const ref = doc(db, COLLECTION_NAME, id)
   const snapshot = await getDoc(ref)

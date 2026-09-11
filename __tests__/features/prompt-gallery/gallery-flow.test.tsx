@@ -5,17 +5,20 @@ import { PromptPreviewDialog } from '@/features/prompt-gallery/components/Prompt
 import { PromptCard } from '@/features/prompt-gallery/components/PromptCard'
 import { SharePromptDialog } from '@/features/prompt-gallery/components/SharePromptDialog'
 import { usePromptGallery } from '@/features/prompt-gallery/hooks/usePromptGallery'
-import { createSharedPrompt, getSharedPrompts, getMySharedPrompts, loadSharedPromptContent } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { createSharedPrompt, getSharedPrompts, getMySharedPrompts, loadSharedPromptContent, updateSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import type { SharedPrompt } from '@/features/prompt-gallery/types/prompt.types'
 
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ t: jest.requireActual('@/src/shared/i18n/locales/zh-TW').zhTW }) }))
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: jest.fn() }))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
+jest.mock('@/features/prompt-gallery/hooks/useDemoExampleOutput', () => ({
+  useDemoExampleOutput: () => jest.fn(async () => '試用病人自動產生的輸出範例'),
+}))
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
 jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({
   createSharedPrompt: jest.fn(), getSharedPrompts: jest.fn(), getMySharedPrompts: jest.fn(),
-  loadSharedPromptContent: jest.fn(), incrementPromptUsage: jest.fn(), EXAMPLE_OUTPUT_MAX_LENGTH: 20000,
+  loadSharedPromptContent: jest.fn(), updateSharedPrompt: jest.fn(), incrementPromptUsage: jest.fn(), EXAMPLE_OUTPUT_MAX_LENGTH: 20000,
 }))
 jest.mock('@/features/prompt-gallery/services/tenant-memberships.service', () => ({
   subscribeTenantMemberships: jest.fn((_userId: string, onUpdate: (memberships: never[]) => void) => { onUpdate([]); return jest.fn() }),
@@ -43,6 +46,7 @@ beforeEach(() => {
   jest.mocked(getSharedPrompts).mockResolvedValue([])
   jest.mocked(getMySharedPrompts).mockResolvedValue([])
   jest.mocked(createSharedPrompt).mockResolvedValue('created')
+  jest.mocked(updateSharedPrompt).mockResolvedValue()
   Element.prototype.scrollIntoView = jest.fn()
   Element.prototype.hasPointerCapture = jest.fn(() => false)
 })
@@ -108,6 +112,36 @@ it('never substitutes an account email for a missing public name', async () => {
   expect(screen.queryByText('private@example.test')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '分享範本' }))
   await waitFor(() => expect(createSharedPrompt).toHaveBeenCalledWith(expect.objectContaining({ isAnonymous: true, authorName: undefined })))
+})
+
+it('lets a user save a new gallery template for themselves only', async () => {
+  render(<SharePromptDialog open onOpenChange={jest.fn()} initialTitle="Private draft" initialPrompt="Source" />)
+  const visibility = screen.getByRole('switch', { name: '公開到範本庫' })
+  fireEvent.click(visibility)
+  expect(screen.getByText('只有您能在「我的範本」看到並使用。')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '儲存私人範本' }))
+
+  await waitFor(() => expect(createSharedPrompt).toHaveBeenCalledWith(expect.objectContaining({ isPublic: false })))
+})
+
+it('lets an author make a template private later from My Prompts', async () => {
+  jest.mocked(getMySharedPrompts).mockResolvedValue([{ ...template, authorId: 'alice', isPublic: true }])
+  render(<PromptGalleryDialog open onOpenChange={jest.fn()} onSelectPrompt={jest.fn()} />)
+
+  const myTab = screen.getByRole('tab', { name: /我的範本/ })
+  fireEvent.mouseDown(myTab)
+  fireEvent.click(myTab)
+  fireEvent.click(await screen.findByRole('button', { name: '範本' }))
+  fireEvent.click(screen.getByRole('button', { name: '編輯範本' }))
+
+  const edit = screen.getByRole('dialog', { name: '編輯範本' })
+  const visibility = within(edit).getByRole('switch', { name: '公開到範本庫' })
+  expect(visibility).toBeChecked()
+  fireEvent.click(visibility)
+  fireEvent.click(within(edit).getByRole('button', { name: '儲存變更' }))
+
+  await waitFor(() => expect(updateSharedPrompt).toHaveBeenCalledWith('source', expect.objectContaining({ isPublic: false })))
+  expect(createSharedPrompt).not.toHaveBeenCalled()
 })
 
 it('completes one share without a delayed callback closing the next draft', async () => {

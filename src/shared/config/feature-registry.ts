@@ -13,6 +13,7 @@ import { CarePlansCard } from '@/features/clinical-summary/care-plans/CarePlansC
 import { DocumentSummaryCard } from '@/features/clinical-summary/document-summary'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
+import { OverviewCard } from '@/features/clinical-summary/overview'
 
 // ============================================================================
 // TAB CONFIGURATION - Define available tabs in the left panel
@@ -25,9 +26,19 @@ export interface TabConfig {
   order: number
   /** Whether this tab is enabled */
   enabled: boolean
+  /**
+   * Hand the tab its own full height instead of the shared vertical scroller.
+   * Only for a tab whose feature lays itself out against the available height
+   * (總覽's wide 2×2 grid must not scroll); every other tab keeps the
+   * ScrollArea it has always had.
+   */
+  fillHeight?: boolean
 }
 
 export const LEFT_PANEL_TABS: TabConfig[] = [
+  // 總覽 sits first and is therefore the tab a loaded patient opens on. To keep
+  // 病人資訊 as the landing tab instead, change this order to 0.5.
+  { id: 'overview',  labelKey: 'overview',    order: -1, enabled: true, fillHeight: true },
   { id: 'patient',   labelKey: 'patient',     order: 0, enabled: true },
   { id: 'visits',    labelKey: 'visits',      order: 1, enabled: true },
   { id: 'reports',   labelKey: 'reports',     order: 2, enabled: true },
@@ -53,6 +64,17 @@ export interface FeatureConfig {
 }
 
 export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
+  // Overview Tab — one page gathering the last N months of labs, narrative
+  // reports, medications and visits. Owns its own layout (no FeatureCard
+  // frame) because it switches between a stacked and a 2×2 presentation.
+  {
+    id: 'overview',
+    name: 'Overview',
+    component: OverviewCard,
+    tab: 'overview',
+    order: 0,
+    enabled: true,
+  },
   // Patient Tab Features — display order:
   // 病人資訊 → 生命徵象 → 問題清單 → 預立醫療決定 → 醫療器材 → 照護計畫
   {

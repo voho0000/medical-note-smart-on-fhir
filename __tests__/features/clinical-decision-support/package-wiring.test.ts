@@ -30,19 +30,41 @@ const patient: PatientEntity = {
   age: 70,
 }
 
-const ckdEncounter: EncounterEntity = {
+const heartFailureEncounter: EncounterEntity = {
   id: 'wiring-encounter',
   status: 'finished',
   period: { start: '2026-06-25T00:00:00+08:00' },
   reasonCode: [{
     coding: [{
       system: ICD10_SYSTEM,
-      code: 'N18.32',
-      display: 'Chronic kidney disease, stage 3b',
+      code: 'I50.22',
+      display: 'Chronic systolic (congestive) heart failure',
     }],
   }],
 }
 
+/** HFrEF: the phenotype module opens the FMT pathway below 50%. */
+const lvef: ObservationEntity = {
+  id: 'wiring-lvef',
+  resourceType: 'Observation',
+  status: 'final',
+  effectiveDateTime: '2026-05-10',
+  code: {
+    coding: [{
+      system: LOINC_SYSTEM,
+      code: '10230-1',
+      display: 'Left ventricular ejection fraction',
+    }],
+  },
+  valueQuantity: {
+    value: 32,
+    unit: '%',
+    system: UCUM_SYSTEM,
+    code: '%',
+  },
+}
+
+/** Kidney function is a safety input every FMT module reads. */
 const egfr: ObservationEntity = {
   id: 'wiring-egfr',
   resourceType: 'Observation',
@@ -56,7 +78,7 @@ const egfr: ObservationEntity = {
     }],
   },
   valueQuantity: {
-    value: 34,
+    value: 48,
     unit: 'mL/min/1.73m2',
     system: UCUM_SYSTEM,
     code: 'mL/min/1.73m2',
@@ -67,8 +89,8 @@ function buildProfile() {
   return createFhirCdssPatientProfile({
     patient,
     conditions: [],
-    encounters: [ckdEncounter],
-    observations: [egfr],
+    encounters: [heartFailureEncounter],
+    observations: [lvef, egfr],
     medications: [],
     allergies: [],
     carePlans: [],
@@ -81,16 +103,17 @@ function buildProfile() {
 describe('CDSS package wiring', () => {
   it('registers the bundled care packs through the app composition root', () => {
     expect(getEnabledClinicalGuidelinePacks().length).toBeGreaterThan(0)
-    // The host picks its own default rather than the package's: this app lists
-    // heart failure and CKD, and CKD is the released one a plain browser gets.
-    expect(getDefaultClinicalGuidelinePack().id).toBe('ckd-cdss')
+    // The host picks its own default rather than the package's. The package now
+    // develops one pathway per branch and ships heart failure alone, so the
+    // host lists that one pack and every browser opens on it.
+    expect(getDefaultClinicalGuidelinePack().id).toBe('heart-failure-cdss')
   })
 
   it('turns app entities into a profile the default pack can build modules from', () => {
     const profile = buildProfile()
 
     expect(getApplicableClinicalGuidelinePacks(profile).map((pack) => pack.id))
-      .toContain('ckd-cdss')
+      .toContain('heart-failure-cdss')
 
     const result = getDefaultClinicalGuidelinePack().build({ profile, locale: 'zh-TW' })
     const moduleIds = [
@@ -98,6 +121,9 @@ describe('CDSS package wiring', () => {
       ...(result.automatedChecks ?? []).map((item) => item.id),
     ]
     expect(moduleIds.length).toBeGreaterThan(0)
+    // The ejection fraction travelled all the way from a FHIR Observation to
+    // the module that reads it, which is the wiring this test exists for.
+    expect(moduleIds).toContain('heart-failure-phenotype')
     expect(result.recommendations.every((item) => item.title.length > 0)).toBe(true)
   })
 })

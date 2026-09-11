@@ -101,8 +101,8 @@ if (typeof window !== 'undefined') {
   // so it can NEVER activate on a real deploy. See playwright.emulated.config.ts.
   if (process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === '1') {
     try {
-      connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
-      if (db) connectFirestoreEmulator(db, '127.0.0.1', 8080)
+      connectAuthEmulator(auth, `http://127.0.0.1:${process.env.NEXT_PUBLIC_AUTH_EMULATOR_PORT || '9099'}`, { disableWarnings: true })
+      if (db) connectFirestoreEmulator(db, '127.0.0.1', Number(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT || '8080'))
     } catch {
       // Already connected (Fast Refresh re-evaluated this module).
     }

@@ -49,7 +49,18 @@ import {
   HEART_FAILURE_LIST_STATUS_ORDER,
 } from './heart-failure-board'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
-import type { ClinicVitals } from '../stores/clinic-vitals.store'
+import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
+import { physicianInputRequestsOf } from '../physician-input-contract'
+import {
+  isCongestionGroupPresent,
+  toggleCongestionGroup,
+} from '../utils/apply-clinic-vitals'
+import {
+  todayIsoDate,
+  type ClinicVitals,
+  type CongestionSignsAnswer,
+} from '../stores/clinic-vitals.store'
+import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
@@ -76,6 +87,14 @@ interface ClinicalDecisionSupportViewProps {
   clinicVitals?: ClinicVitals
   onSaveClinicVitals?: (vitals: ClinicVitals) => void
   onClearClinicVitals?: () => void
+  /**
+   * What the clinician answered on a card's structured question — the DP-01
+   * phenotype gate, the HFpEF confirmation. Absent while the card is still
+   * asking; `onAnswerPhenotype` absent means the controls are not offered,
+   * which is the read-only case (no patient loaded).
+   */
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -1461,11 +1480,21 @@ function RecommendationDetail({
   label,
   patientId,
   copyProvenance,
+  phenotypeAnswer,
+  onAnswerPhenotype,
+  clinicVitals,
+  onSaveClinicVitals,
 }: {
   recommendation: CdssRecommendation
   isEnglish: boolean
   onNavigate: (target: ResourceNavTarget) => void
   patientId?: string
+  /** The clinician's answers to this card's structured questions, if any. */
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+  /** Today's examination, so a sign ticked here is the one the pack reads. */
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (vitals: ClinicVitals) => void
   /** Names the pack in the copied rationale; absent when the result has no version. */
   copyProvenance?: RationaleCopyProvenance
   label: {
@@ -1481,6 +1510,35 @@ function RecommendationDetail({
   }
 }) {
   const [isSupportingOpen, setIsSupportingOpen] = useState(false)
+  // A question and an action read in different places. 「這位病人的 LVEF 是
+  // 多少？」 is why the rows below cannot conclude, so it sits above them;
+  // 「確認 HFpEF 診斷」 is what a clinician does after reading them, so it sits
+  // at the foot of the card.
+  const physicianInputRequests = physicianInputRequestsOf(recommendation)
+  const questionRequests = physicianInputRequests.filter(
+    (request) => request.kind === 'lvef-phenotype',
+  )
+  const actionRequests = physicianInputRequests.filter(
+    (request) => request.kind === 'hfpef-diagnosis-confirmation',
+  )
+  // A sign ticked on this card is the same examination the congestion card and
+  // the board's chips offer, so all three read and write one record.
+  const selectedSymptoms = (['edema', 'orthopnea-pnd', 'jvp-rales'] as const)
+    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
+  const toggleSymptom = onSaveClinicVitals
+    ? (id: string, selected: boolean) => {
+        const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
+        onSaveClinicVitals({
+          ...(clinicVitals ?? { measuredOn }),
+          measuredOn,
+          signAnswers: toggleCongestionGroup(
+            clinicVitals?.signAnswers,
+            id as CongestionSignsAnswer,
+            selected,
+          ),
+        })
+      }
+    : undefined
   const { copied: rationaleCopied, copy: copyToClipboard } = useCopyToClipboard()
   const copyRationale = async () => {
     const ok = await copyToClipboard(buildRationaleCopyText(
@@ -1682,6 +1740,24 @@ function RecommendationDetail({
       ) : null}
 
       {/*
+        A question the card cannot answer from the record goes above the rows,
+        because it is the reason the rows are inconclusive: the phenotype gate
+        asks for an LVEF the cloud record never held. An answer is written to
+        the store and handed back as a fact, so the pack recomputes.
+      */}
+      {onAnswerPhenotype && questionRequests.length > 0 ? (
+        <PhysicianInputRequestPanel
+          requests={questionRequests}
+          recommendationId={recommendation.id}
+          isEnglish={isEnglish}
+          answer={phenotypeAnswer}
+          onAnswer={onAnswerPhenotype}
+          selectedSymptoms={selectedSymptoms}
+          onToggleSymptom={toggleSymptom}
+        />
+      ) : null}
+
+      {/*
         A module that concluded anything about 鬱血 or LV filling pressure ships
         the rows it concluded from, immediately under the evidence it summarised
         — switching one off recomputes the pack rather than editing this card.
@@ -1694,6 +1770,8 @@ function RecommendationDetail({
           locale={isEnglish ? 'en' : 'zh-TW'}
           patientId={patientId}
           onNavigate={onNavigate}
+          clinicVitals={clinicVitals}
+          onSaveClinicVitals={onSaveClinicVitals}
         />
       ))}
 
@@ -1728,6 +1806,17 @@ function RecommendationDetail({
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {/* Read the rows first, then act: the confirmation sits at the foot. */}
+      {onAnswerPhenotype && actionRequests.length > 0 ? (
+        <PhysicianInputRequestPanel
+          requests={actionRequests}
+          recommendationId={recommendation.id}
+          isEnglish={isEnglish}
+          answer={phenotypeAnswer}
+          onAnswer={onAnswerPhenotype}
+        />
       ) : null}
 
       <details
@@ -1910,6 +1999,8 @@ export function ClinicalDecisionSupportView({
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -2232,6 +2323,8 @@ export function ClinicalDecisionSupportView({
           clinicVitals={clinicVitals}
           onSaveClinicVitals={onSaveClinicVitals}
           onClearClinicVitals={onClearClinicVitals}
+          phenotypeAnswer={phenotypeAnswer}
+          onAnswerPhenotype={onAnswerPhenotype}
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
@@ -2240,6 +2333,10 @@ export function ClinicalDecisionSupportView({
               label={label}
               patientId={patientId}
               copyProvenance={copyProvenance}
+              phenotypeAnswer={phenotypeAnswer}
+              onAnswerPhenotype={onAnswerPhenotype}
+              clinicVitals={clinicVitals}
+              onSaveClinicVitals={onSaveClinicVitals}
             />
           )}
         />
@@ -2644,6 +2741,10 @@ export function ClinicalDecisionSupportView({
                     label={label}
                     patientId={patientId}
                     copyProvenance={copyProvenance}
+                    phenotypeAnswer={phenotypeAnswer}
+                    onAnswerPhenotype={onAnswerPhenotype}
+                    clinicVitals={clinicVitals}
+                    onSaveClinicVitals={onSaveClinicVitals}
                   />
                 </div>
               ) : null}

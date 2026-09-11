@@ -19,9 +19,11 @@ import {
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
 import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
+import { usePhenotypeAnswer, usePhenotypeAnswerStore } from './stores/phenotype-answer.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
+import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -229,6 +231,9 @@ export default function LiveClinicalDecisionSupportFeature() {
   const clinicVitals = useClinicVitals(patientId)
   const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
   const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
+  const phenotypeAnswer = usePhenotypeAnswer(patientId)
+  const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
+  const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
 
@@ -237,6 +242,13 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => {
     if (patientId) hydrateEvidenceOverrides(patientId)
   }, [hydrateEvidenceOverrides, patientId])
+
+  // What this physician answered on the phenotype gate for this chart, read
+  // back before the pack runs so the answer selects the pathway rather than
+  // arriving after the cards were built.
+  useEffect(() => {
+    if (patientId) hydratePhenotypeAnswer(patientId)
+  }, [hydratePhenotypeAnswer, patientId])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -277,9 +289,12 @@ export default function LiveClinicalDecisionSupportFeature() {
   // profile, so every module that reads them recomputes.
   const profile = useMemo(() => (
     recordProfile
-      ? applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals)
+      ? applyPhenotypeAnswer(
+          applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
+          phenotypeAnswer,
+        )
       : null
-  ), [clinicVitals, evidenceOverrides, recordProfile])
+  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -420,6 +435,10 @@ export default function LiveClinicalDecisionSupportFeature() {
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
+        phenotypeAnswer={phenotypeAnswer}
+        onAnswerPhenotype={patientId
+          ? (answer) => setPhenotypeAnswer(patientId, answer)
+          : undefined}
       />
     </div>
   )

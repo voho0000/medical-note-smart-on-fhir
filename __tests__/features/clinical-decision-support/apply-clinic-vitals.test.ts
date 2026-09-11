@@ -54,7 +54,7 @@ describe('applyClinicVitals', () => {
   })
 
   it('writes the signs seen today as a clinic examination the congestion table reads', () => {
-    const next = applyClinicVitals(profile, { congestionSigns: ['edema', 'jvp-rales'], measuredOn: '2026-09-08' })
+    const next = applyClinicVitals(profile, { signAnswers: { 'pitting-edema': 'present', jvp: 'present', rales: 'present' }, measuredOn: '2026-09-08' })
 
     expect(next.facts.clinicCongestionExam).toEqual({
       zh: '門診理學檢查（2026-09-08 門診輸入）',
@@ -65,6 +65,6 @@ describe('applyClinicVitals', () => {
     // Only the measured vitals get a freshness context; the examination is a fact alone.
     expect(next.freshnessContexts?.bloodPressure).toBe(profile.freshnessContexts?.bloodPressure)
     // No answer, no fact: the default is silence, not a negative finding.
-    expect(applyClinicVitals(profile, { measuredOn: '2026-09-08', congestionSigns: [] }).facts.clinicCongestionExam).toBeUndefined()
+    expect(applyClinicVitals(profile, { measuredOn: '2026-09-08', signAnswers: {} }).facts.clinicCongestionExam).toBeUndefined()
   })
 })

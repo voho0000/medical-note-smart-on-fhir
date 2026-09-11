@@ -17,14 +17,17 @@
  * Two host decisions live below, and they are separate questions.
  *
  * WHICH packs: `HOST_PACK_ORDER` is the switcher, and nothing outside it is
- * reachable. The package carries ten written packs; this app currently shows
- * heart failure and CKD, in that order. A pack the package adds does not appear
- * here until it is named in that list — the package proposes, the host decides.
+ * reachable. The package develops one pathway per branch and the released
+ * version ships the heart-failure pack alone, so that is the whole list. A pack
+ * the package adds does not appear here until it is named in that list — the
+ * package proposes, the host decides.
  *
- * WHETHER a listed pack shows: the Beta switch. The 個人化照護指引 tab is
- * already `beta: true`, so the only people who reach this list are visitors who
- * turned Beta features on in Settings — exactly the audience the unreleased
- * packs were written for. Signing in is not part of that gate (owner decision,
+ * WHETHER a listed pack shows: the Beta switch, for a pack the package ships
+ * `enabled: false`. Heart failure is released, so today the gate decides
+ * nothing and the list is the same for every browser; the machinery stays for
+ * the next unreleased pathway. The 個人化照護指引 tab is itself `beta: true`,
+ * so the people who reach this list are visitors who turned Beta features on
+ * in Settings either way. Signing in is not part of that gate (owner decision,
  * 2026-09); the switch is stored per browser under the account uid, the
  * anonymous uid, or a guest key. Making testers ask for a URL parameter on top
  * of the switch was a second lock on the same door, so Beta alone now opens it,
@@ -40,20 +43,24 @@ import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
 /**
- * The disease switcher: exactly these packs, in exactly this order. Heart
- * failure leads, CKD follows; every other pack the package ships — diabetes-CKD
- * included — is hidden here whatever the Beta switch, a pilot id, or the route
- * says.
+ * The disease switcher: exactly these packs, in exactly this order.
+ *
+ * Heart failure is the only one left. `@voho0000/personalized-care` develops
+ * one pathway per branch, and the released package now ships the heart-failure
+ * pack alone — it no longer carries `ckd-cdss`, and a listed pack the package
+ * does not carry throws below rather than silently shortening the switcher.
  */
-const HOST_PACK_ORDER = ['heart-failure-cdss', 'ckd-cdss'] as const
+const HOST_PACK_ORDER = ['heart-failure-cdss'] as const
 
 /**
- * The default the package validates against. It must be a released pack, and
- * heart failure is still `enabled: false`, so CKD carries that role — what the
- * switcher actually opens on is decided by `getDefaultClinicalGuidelinePack`
- * below, which follows the host order and the visibility rule instead.
+ * The default the package validates against. Heart failure carries that role
+ * now that it is the only pack the package ships, and the package ships it
+ * released. The 個人化照護指引 tab is itself Beta-only, so the readers who
+ * reach this list are still the ones the Beta switch admits; what the switcher
+ * opens on is decided by `getDefaultClinicalGuidelinePack` below, which
+ * follows the host order and the visibility rule instead.
  */
-const HOST_DEFAULT_PACK_ID = 'ckd-cdss'
+const HOST_DEFAULT_PACK_ID = 'heart-failure-cdss'
 
 // Every pack is registered, not just the listed ones: registration is what
 // validates each pack against the contract, and a pack that fails the contract
@@ -116,9 +123,10 @@ export function getApplicableClinicalGuidelinePacks(
 
 /**
  * What the switcher opens on when this record activates nothing: the first pack
- * the host lists that is visible. CKD is always released, so this always has an
- * answer. The applicable-first rule lives in the feature, which is the only
- * place that has a profile to test.
+ * the host lists that is visible. Heart failure is released, so this has an
+ * answer for every browser; the throw below is what a future all-unreleased
+ * list would hit rather than rendering an empty tab. The applicable-first rule
+ * lives in the feature, which is the only place that has a profile to test.
  */
 export function getDefaultClinicalGuidelinePack(): ClinicalGuidelinePack {
   const [first] = getEnabledClinicalGuidelinePacks()

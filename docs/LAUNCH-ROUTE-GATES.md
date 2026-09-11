@@ -41,6 +41,23 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
+## Prompt Gallery visibility
+
+| Where | Kind | Behaviour | Owner decision |
+|---|---|---|---|
+| `features/prompt-gallery/` | 不顯示 | A template marked private is omitted from「所有範本」and from other accounts; its author can still find and edit it under「我的範本」. | Explicit chat approval, 2026-09-08 |
+
+## Overview display rules (all launch routes)
+
+These are owner-requested presentation rules on the Overview tab at `/` and
+its launch-query variants; they do not depend on site, role, or sign-in state.
+
+| Surface | Compact presentation | Where the full content remains | Owner decision |
+|---|---|---|---|
+| Laboratory dates | The card shows only the newest dates that fit, without horizontal scrolling. Common mode omits dates with no matching common results. | Expanded list retains all eligible dates; All mode retains every collection day in the selected window. | Explicit chat approval, 2026-09-10 |
+| Medication duration | The 2×2 card omits prescribed supply days. | Stacked rows, expanded list, and medication hover details retain supply days. | Explicit chat approval, 2026-09-10 |
+| Report, medication, and visit rows | Stacked layouts also use single-line records; long text may be truncated. | Existing report dialogs, row tooltips, and destination tabs retain details. | Explicit chat approval, 2026-09-10 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.

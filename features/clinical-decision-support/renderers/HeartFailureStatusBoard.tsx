@@ -15,6 +15,24 @@ import {
   type HeartFailurePillar,
 } from './heart-failure-board'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
+import {
+  isCongestionGroupPresent,
+  toggleCongestionGroup,
+} from '../utils/apply-clinic-vitals'
+
+/** The three one-tap groups, in the order the strip offers them. */
+const CONGESTION_SIGN_GROUPS: readonly CongestionSignsAnswer[] = [
+  'edema',
+  'orthopnea-pnd',
+  'jvp-rales',
+]
+import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
+import {
+  diagnosticSummaryOf,
+  physicianInputRequestsOf,
+  type CriterionSummary,
+} from '../physician-input-contract'
+import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 
 interface HeartFailureStatusBoardProps {
   board: HeartFailureBoardModel
@@ -35,6 +53,116 @@ interface HeartFailureStatusBoardProps {
   /** Absent when this surface cannot take measurements (no patient to attach them to). */
   onSaveClinicVitals?: (vitals: ClinicVitals) => void
   onClearClinicVitals?: () => void
+  /** The clinician's answers, so the board can surface the one action DP-01b asks for. */
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+}
+
+/**
+ * How far the diagnosis has got, criterion by criterion.
+ *
+ * The clinician's own conclusion leads when they have reached one — it is the
+ * answer to the question the card asks, and it outranks anything the record
+ * added up to. Below it, ESC 2026's own reading of 「有多少把握」: where each
+ * §5.2.2 criterion stands, and how many Table 10 parameters support the third.
+ * Every word is the pack's; state is carried by text and an icon as well as
+ * colour, because colour alone is not a state.
+ */
+function DiagnosisReading({
+  summary,
+  isEnglish,
+}: {
+  summary: ReturnType<typeof diagnosticSummaryOf>
+  isEnglish: boolean
+}) {
+  if (!summary) return null
+  const stateStyle: Record<CriterionSummary['state'], string> = {
+    met: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
+    refuted: 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200',
+    undetermined: 'border-border bg-muted/40 text-muted-foreground',
+  }
+  const stateText: Record<CriterionSummary['state'], string> = {
+    met: isEnglish ? 'met' : '成立',
+    refuted: isEnglish ? 'contradicted' : '有反證',
+    undetermined: isEnglish ? 'undetermined' : '無法判定',
+  }
+  return (
+    <div className="space-y-1.5" data-testid="cdss-hf-diagnosis-reading">
+      <p
+        className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
+        data-testid="cdss-hf-diagnosis-verdict"
+        data-confirmed={summary.confirmedByClinician ? 'true' : undefined}
+      >
+        {summary.confirmedByClinician ? (
+          <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+        ) : null}
+        {summary.verdict}
+      </p>
+      <ul className="flex flex-wrap gap-1.5" data-testid="cdss-hf-diagnosis-criteria">
+        {summary.criteria.map((criterion) => (
+          <li
+            key={criterion.id}
+            className={cn(
+              'inline-flex items-baseline gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-4',
+              stateStyle[criterion.state],
+            )}
+            data-testid={`cdss-hf-diagnosis-criterion-${criterion.id}`}
+            data-state={criterion.state}
+          >
+            <span className="font-medium">{criterion.label}</span>
+            <span>{stateText[criterion.state]}</span>
+            {criterion.detail ? (
+              <span className="tabular-nums opacity-80">{criterion.detail}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
+        {summary.basis}
+      </p>
+      {(summary.scores ?? []).map((score) => (
+        <div
+          key={score.name}
+          className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
+          data-testid={`cdss-hf-diagnosis-score-${score.name}`}
+          data-floor={score.isFloor ? 'true' : undefined}
+        >
+          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+            <span className="font-semibold text-foreground">{score.name}</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {/* A floor is never shown as a bare number: the variables the
+                  record could not supply can only have raised it. */}
+              {score.isFloor ? '≥' : ''}
+              {score.value} / {score.maximum}
+            </span>
+            <span className="text-muted-foreground">{score.bandLabel}</span>
+          </p>
+          {score.components && score.components.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
+              {score.components.map((component) => (
+                <li key={component.label}>
+                  <span className="font-medium text-foreground">{component.label}</span>
+                  {' · '}
+                  {component.detail}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {score.isFloor && score.unmeasured ? (
+            <p
+              className="mt-1 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
+              data-testid={`cdss-hf-diagnosis-score-unmeasured-${score.name}`}
+            >
+              {isEnglish
+                ? `Reported as a minimum: this record cannot supply ${score.unmeasured.join('; ')}. A missing variable can only have raised the score.`
+                : `以下限呈現：本紀錄無法提供 ${score.unmeasured.join('、')}。缺的項目只會讓分數更高，不會更低。`}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{score.source}</p>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pattern)' } as const
@@ -367,6 +495,8 @@ export function HeartFailureStatusBoard({
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
 }: HeartFailureStatusBoardProps) {
   const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
   const summary = variant === 'summary'
@@ -374,9 +504,59 @@ export function HeartFailureStatusBoard({
   const expandedPillar = board.pillars.find((pillar) => pillar.id === expandedId)
   const gdmtExpanded = board.gdmt !== undefined && expandedId === board.gdmt.id
   const actionablePillars = board.pillars.filter((pillar) => pillar.status === 'actionable').length
+  const selectedSymptomGroups = CONGESTION_SIGN_GROUPS
+    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
+  const toggleSymptomGroup = onSaveClinicVitals
+    ? (id: string, selected: boolean) => {
+        onSaveClinicVitals({
+          ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
+          measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
+          signAnswers: toggleCongestionGroup(
+            clinicVitals?.signAnswers,
+            id as CongestionSignsAnswer,
+            selected,
+          ),
+        })
+      }
+    : undefined
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-board">
+      {/*
+        DP-00 first, above everything, because it gates everything: until a
+        clinician says they are asking about heart failure, the pack produces
+        the phenotype card and nothing else. Buried in a collapsed card body it
+        was a question nobody could find, which reads as a system with nothing
+        to say rather than one waiting to be asked.
+      */}
+      {board.phenotype && onAnswerPhenotype
+        && physicianInputRequestsOf(board.phenotype).length > 0 ? (
+        <section
+          className="rounded-lg border border-border bg-card px-3 py-2.5"
+          aria-label={isEnglish ? 'Heart-failure assessment' : '心衰竭評估'}
+          data-testid="cdss-hf-phenotype-input"
+        >
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
+              {isEnglish ? 'Clinical judgement' : '臨床判斷'}
+            </span>
+            <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-phenotype-input-title">
+              {board.phenotype.title}
+            </span>
+          </div>
+          <PhysicianInputRequestPanel
+            requests={physicianInputRequestsOf(board.phenotype)}
+            recommendationId={board.phenotype.id}
+            isEnglish={isEnglish}
+            answer={phenotypeAnswer}
+            onAnswer={onAnswerPhenotype}
+            selectedSymptoms={selectedSymptomGroups}
+            onToggleSymptom={toggleSymptomGroup}
+            now={now}
+          />
+        </section>
+      ) : null}
+
       {/* Phenotype and the safety inputs every FMT decision reads. */}
       <section
         className="overflow-hidden rounded-lg border border-border bg-card"
@@ -575,6 +755,43 @@ export function HeartFailureStatusBoard({
       })}
 
       {/* What to do today, in the pack's words — or one quiet line when nothing is needed. */}
+      {/*
+        DP-01b asks the clinician for one thing — whether this is HFpEF — and it
+        is the reason they opened this screen. The criteria stay on the card
+        below, in full and row by row; the action sits here, above the fold,
+        because a confirm button at the foot of an unexpanded card is a button
+        nobody finds.
+      */}
+      {board.hfpEfDiagnosis && onAnswerPhenotype
+        && physicianInputRequestsOf(board.hfpEfDiagnosis).length > 0 ? (
+        <section
+          className="rounded-lg border border-border bg-card px-3 py-2.5"
+          aria-label={isEnglish ? 'HFpEF diagnosis' : 'HFpEF 診斷'}
+          data-testid="cdss-hf-hfpef-confirm"
+        >
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
+              {isEnglish ? 'Diagnosis' : '診斷決策'}
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {board.hfpEfDiagnosis.title}
+            </span>
+          </div>
+          <DiagnosisReading
+            summary={diagnosticSummaryOf(board.hfpEfDiagnosis)}
+            isEnglish={isEnglish}
+          />
+          <PhysicianInputRequestPanel
+            requests={physicianInputRequestsOf(board.hfpEfDiagnosis)}
+            recommendationId={board.hfpEfDiagnosis.id}
+            isEnglish={isEnglish}
+            answer={phenotypeAnswer}
+            onAnswer={onAnswerPhenotype}
+            now={now}
+          />
+        </section>
+      ) : null}
+
       <section
         className="overflow-hidden rounded-lg border border-border bg-card"
         aria-label={isEnglish ? 'Today' : '今天要做的事'}
@@ -667,7 +884,7 @@ export function HeartFailureStatusBoard({
               ['orthopnea-pnd', isEnglish ? 'Orthopnea / PND' : '有：orthopnea／PND'],
               ['jvp-rales', isEnglish ? 'JVP / rales' : '有：JVP／rales'],
             ] as const).map(([value, text]) => {
-              const selected = (clinicVitals?.congestionSigns ?? []).includes(value)
+              const selected = isCongestionGroupPresent(clinicVitals?.signAnswers, value)
               return (
                 <button
                   key={value}
@@ -680,14 +897,14 @@ export function HeartFailureStatusBoard({
                       : 'border-border bg-card text-foreground hover:bg-muted/40',
                   )}
                   onClick={() => {
-                    const current = clinicVitals?.congestionSigns ?? []
-                    const next: CongestionSignsAnswer[] = selected
-                      ? current.filter((sign) => sign !== value)
-                      : [...current, value]
                     onSaveClinicVitals({
                       ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
                       measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
-                      ...(next.length > 0 ? { congestionSigns: next } : { congestionSigns: undefined }),
+                      signAnswers: toggleCongestionGroup(
+                        clinicVitals?.signAnswers,
+                        value,
+                        !selected,
+                      ),
                     })
                   }}
                   data-testid={`cdss-hf-congestion-sign-${value}`}
@@ -698,7 +915,7 @@ export function HeartFailureStatusBoard({
             })}
           </div>
           <span className="text-[11px] leading-4 text-muted-foreground">
-            {(clinicVitals?.congestionSigns?.length ?? 0) > 0
+            {CONGESTION_SIGN_GROUPS.some((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
               ? (isEnglish
                 ? 'Written into the congestion table as today\'s examination; the modules above recomputed.'
                 : '已寫進鬱血證據表作為今天的檢查，上方判定已重算。')
@@ -709,25 +926,38 @@ export function HeartFailureStatusBoard({
         </section>
       ) : null}
 
-      {/* The four pillars as a board: what the patient is on, what is missing, what next. */}
+      {/*
+        The foundational classes as a board: what the patient is on, what is
+        missing, what next. Which classes those are is the phenotype's business
+        — ESC 2026 Recommendation Table 5 recommends an SGLT2 inhibitor and an
+        MRA independent of LVEF, and names 「symptomatic HFrEF」 for the other
+        two — so the strip follows `pillarScope` rather than always showing four.
+      */}
       {board.pillars.length > 0 ? (
         <section
           className="overflow-hidden rounded-lg border border-border bg-card"
-          aria-label={isEnglish ? 'Foundational medical therapy' : 'HFrEF 四大 FMT 支柱'}
+          aria-label={isEnglish ? 'Foundational medical therapy' : 'FMT 支柱'}
           data-testid="cdss-hf-pillars"
+          data-pillar-scope={board.pillarScope}
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
             <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
               {isEnglish ? 'Treatment decisions' : '治療決策'}
             </span>
             <span className="text-sm font-semibold text-foreground" data-testid="cdss-hf-pillars-title">
-              {board.gdmt?.title ?? (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱')}
+              {board.gdmt?.title ?? (board.pillarScope === 'lvef-independent'
+                ? (isEnglish ? 'HFpEF foundational therapy' : 'HFpEF 的 FMT')
+                : (isEnglish ? 'Four FMT pillars' : '四大 FMT 支柱'))}
             </span>
             {board.pillars.every((pillar) => !pillar.evaluated) ? (
               <span className="text-xs text-muted-foreground" data-testid="cdss-hf-pillars-unassessed-note">
-                {isEnglish
-                  ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
-                  : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。'}
+                {board.pillarScope === 'lvef-independent'
+                  ? (isEnglish
+                    ? 'Prescription state only this time; ESC recommends these two independent of LVEF.'
+                    : '本次僅顯示用藥狀態；ESC 這兩類不分 LVEF 建議。')
+                  : (isEnglish
+                    ? 'Prescription state only — the pack evaluates these four on the HFrEF pathway.'
+                    : '僅顯示用藥狀態；四支柱的建議由 HFrEF 路徑判定，本次未產生。')}
               </span>
             ) : null}
             {actionablePillars > 0 ? (

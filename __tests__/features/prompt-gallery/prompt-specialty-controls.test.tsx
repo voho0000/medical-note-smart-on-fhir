@@ -15,6 +15,9 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => ({ user: { uid: 'test-author', displayName: 'Test author' } }),
 }))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: jest.fn() }))
+jest.mock('@/features/prompt-gallery/hooks/useDemoExampleOutput', () => ({
+  useDemoExampleOutput: () => jest.fn(async () => '試用病人自動產生的輸出範例'),
+}))
 jest.mock('@/features/prompt-gallery/services/prompt-gallery.service', () => ({ createSharedPrompt: jest.fn() }))
 jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ LoginRequiredDialog: () => null }))
 jest.mock('@/features/prompt-gallery/services/tenant-prompts.service', () => ({
