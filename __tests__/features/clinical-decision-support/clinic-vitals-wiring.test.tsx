@@ -92,7 +92,12 @@ describe('clinic vitals reach the pack through the profile', () => {
 
   it('is a fact on the profile for this patient only', async () => {
     useClinicVitalsStore.getState().setVitals('vitals-patient', {
-      systolic: 126, diastolic: 78, heartRate: 68, bodyWeight: 72, measuredOn: '2026-09-05',
+      entries: {
+        systolic: { value: 126, measuredOn: '2026-09-05' },
+        diastolic: { value: 78, measuredOn: '2026-09-05' },
+        heartRate: { value: 68, measuredOn: '2026-09-05' },
+        bodyWeight: { value: 72, measuredOn: '2026-09-05' },
+      },
     })
     const view = render(<LiveClinicalDecisionSupportFeature />)
     await waitFor(() => expect(packBuildSpy).toHaveBeenCalled())
@@ -102,6 +107,7 @@ describe('clinic vitals reach the pack through the profile', () => {
     expect(profile.facts.heartRate?.numericValue).toBe(68)
     expect(profile.facts.bodyWeight?.numericValue).toBe(72)
     expect(profile.freshnessContexts?.heartRate?.state).toBe('current')
+    expect(profile.freshnessContexts?.heartRate?.date).toBe('2026-09-05')
 
     view.unmount()
     packBuildSpy.mockClear()

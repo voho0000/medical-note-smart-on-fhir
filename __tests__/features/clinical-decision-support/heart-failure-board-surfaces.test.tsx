@@ -8,6 +8,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { HeartFailureStatusBoard } from '@/features/clinical-decision-support/renderers/HeartFailureStatusBoard'
 import type { HeartFailureBoardModel } from '@/features/clinical-decision-support/renderers/heart-failure-board'
+import { buildClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { CdssRecommendation, CdssStatus } from '@/features/clinical-decision-support/types'
 
 const NOW = new Date('2026-09-05T09:00:00+08:00')
@@ -151,34 +152,29 @@ describe('the compensation judgement', () => {
     expect(section).toHaveTextContent('預設未回答')
   })
 
-  it('writes into the same clinic record as the congestion signs, keeping what is there', () => {
+  it('states only its own field, so the store keeps everything else in the record', () => {
     const { onSaveClinicVitals } = renderBoard(board(), {
-      clinicVitals: {
-        measuredOn: '2026-09-05',
-        heartRate: 72,
+      clinicVitals: buildClinicVitals({
+        entries: { heartRate: { value: 72 } },
         signAnswers: { 'pitting-edema': 'present' },
-      },
+      }, NOW),
     })
 
     fireEvent.click(screen.getByTestId('cdss-hf-compensation-decompensated'))
-    expect(onSaveClinicVitals).toHaveBeenCalledWith({
-      measuredOn: '2026-09-05',
-      heartRate: 72,
-      signAnswers: { 'pitting-edema': 'present' },
-      compensationStatus: 'decompensated',
-    })
+    // A patch, not a whole record: the heart rate and the sign answered
+    // earlier in the same visit are not part of this statement and are not
+    // touched by it.
+    expect(onSaveClinicVitals).toHaveBeenCalledWith({ compensationStatus: 'decompensated' })
   })
 
   it('returns to unanswered when the selected state is tapped again', () => {
     const { onSaveClinicVitals } = renderBoard(board(), {
-      clinicVitals: { measuredOn: '2026-09-05', compensationStatus: 'compensated' },
+      clinicVitals: buildClinicVitals({ compensationStatus: 'compensated' }, NOW),
     })
 
     expect(screen.getByTestId('cdss-hf-compensation-compensated')).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByTestId('cdss-hf-compensation-compensated'))
-    expect(onSaveClinicVitals).toHaveBeenCalledWith(
-      expect.objectContaining({ compensationStatus: undefined }),
-    )
+    expect(onSaveClinicVitals).toHaveBeenCalledWith({ compensationStatus: null })
   })
 
   it('is absent where there is no patient to attach a measurement to', () => {

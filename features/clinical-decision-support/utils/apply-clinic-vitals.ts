@@ -1,64 +1,42 @@
 /**
- * Puts the vitals measured in the room into the profile the pack reads.
+ * Puts what was measured and answered in the room into the profile the pack
+ * reads.
  *
- * Each entered value replaces the record's fact for that key and is dated
- * today, so freshness windows read it as current. The wording follows the
- * adapter's own — `142/84 mmHg（2026-09-05）` — with a provenance note inside
- * the parenthesis, because a number nobody can trace to a record must say
- * where it came from wherever it is printed.
+ * Each entered value replaces the record's fact for that key and carries its
+ * own measurement date, so a freshness window reads it as what it is: a weight
+ * taken today is current, a weight carried over from last month is a month
+ * old. The wording follows the adapter's own — `142/84 mmHg（2026-09-05）` —
+ * with a provenance note inside the parenthesis, because a number nobody can
+ * trace to a record must say where it came from wherever it is printed.
+ *
+ * Nothing here judges. 「未評估」 and 「沒問」 both produce no fact, because the
+ * pack must not read either as a negative finding; only 「無」 is a negation,
+ * and it travels as a negated term.
  */
 import type { CdssFreshnessContext, CdssPatientProfile } from '../types'
-import type { ClinicVitals, CongestionSignsAnswer } from '../stores/clinic-vitals.store'
+import {
+  CONGESTION_SIGN_TERMS,
+  NOT_ASSESSED,
+  type ClinicVitals,
+  type ClinicVitalsEntryKey,
+  type CongestionSignsAnswer,
+} from '../stores/clinic-vitals.store'
 
-/**
- * The evidence-table terms each one-tap answer stands for. These are the
- * congestion table's own term ids (`congestion:<term>` rows), so a tap lands
- * on the rows the pack already reads; nothing is judged here.
- */
-export const CONGESTION_SIGN_TERMS: Readonly<Record<CongestionSignsAnswer, readonly string[]>> = {
-  edema: ['pitting-edema'],
-  'orthopnea-pnd': ['orthopnea', 'paroxysmal-nocturnal-dyspnea'],
-  'jvp-rales': ['jvp', 'rales'],
-}
-
-/** One answer per sign, keyed by the term the evidence rows are matched on. */
-export type SignAnswers = Readonly<Record<string, 'present' | 'absent'>>
+export { CONGESTION_SIGN_TERMS }
 
 /**
  * Whether a one-tap group reads as answered 「有」.
  *
- * The group chips and the evidence rows are two ways of stating the same
- * examination, so they share one store and one reading: a chip is lit when any
- * sign it stands for has been answered 「有」, wherever that answer was given.
- * Without this the clinician ticks 「Orthopnea：有」 on the row below and the
- * chip above still says 「預設未回答」 about the same patient.
+ * The group control and the evidence rows are two ways of stating the same
+ * examination, so they share one record and one reading: a group is 「有」 when
+ * any sign it stands for was answered 「有」, wherever that answer was given.
  */
 export function isCongestionGroupPresent(
-  answers: SignAnswers | undefined,
+  vitals: ClinicVitals | undefined,
   group: CongestionSignsAnswer,
 ): boolean {
-  return (CONGESTION_SIGN_TERMS[group] ?? []).some((term) => answers?.[term] === 'present')
-}
-
-/**
- * The answers after tapping one group on or off.
- *
- * Tapping on says 「有」 for every sign in the group; tapping off returns them
- * to 未評估 rather than asserting 「無」, because a chip nobody tapped and a
- * chip someone untapped both mean the same thing — it was not stated. Saying
- * 「無」 stays with the row control, where it is one sign at a time.
- */
-export function toggleCongestionGroup(
-  answers: SignAnswers | undefined,
-  group: CongestionSignsAnswer,
-  present: boolean,
-): SignAnswers | undefined {
-  const next: Record<string, 'present' | 'absent'> = { ...(answers ?? {}) }
-  for (const term of CONGESTION_SIGN_TERMS[group] ?? []) {
-    if (present) next[term] = 'present'
-    else delete next[term]
-  }
-  return Object.keys(next).length > 0 ? next : undefined
+  return (CONGESTION_SIGN_TERMS[group] ?? [])
+    .some((term) => vitals?.signAnswers?.[term]?.value === 'present')
 }
 
 /**
@@ -121,14 +99,25 @@ export const CLINIC_ENTRY_NOTE = { zh: '門診輸入', en: 'entered in clinic' }
 export const CLINIC_ENTRY_PATTERN = /門診輸入|entered in clinic/
 
 /** The windows the adapter attaches when the record holds the fact. */
-const DEFAULT_INTERVAL_DAYS: Readonly<Record<'bloodPressure' | 'heartRate' | 'bodyWeight', number>> = {
+const DEFAULT_INTERVAL_DAYS: Readonly<Record<string, number>> = {
   bloodPressure: 90,
   heartRate: 90,
   bodyWeight: 30,
 }
 
-function isFinitePositive(value: number | undefined): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
+function ageInDays(date: string, evaluatedAt: string | undefined): number | undefined {
+  const at = Date.parse(date.length === 10 ? `${date}T00:00:00` : date)
+  const now = evaluatedAt ? Date.parse(evaluatedAt) : Date.now()
+  if (Number.isNaN(at) || Number.isNaN(now)) return undefined
+  return Math.max(0, Math.floor((now - at) / 86_400_000))
+}
+
+function noteZh(date: string): string {
+  return `（${date} ${CLINIC_ENTRY_NOTE.zh}）`
+}
+
+function noteEn(date: string): string {
+  return ` (${date}, ${CLINIC_ENTRY_NOTE.en})`
 }
 
 export function applyClinicVitals(
@@ -136,45 +125,93 @@ export function applyClinicVitals(
   vitals: ClinicVitals | undefined,
 ): CdssPatientProfile {
   if (!vitals) return profile
-  const date = vitals.measuredOn
-  const noteZh = `（${date} ${CLINIC_ENTRY_NOTE.zh}）`
-  const noteEn = ` (${date}, ${CLINIC_ENTRY_NOTE.en})`
   const facts: Record<string, CdssPatientProfile['facts'][string]> = {}
+  /** The measurement date of each fact this file wrote, for the windows below. */
+  const factDates: Record<string, string> = {}
+  const entry = (key: ClinicVitalsEntryKey) => vitals.entries?.[key]
 
-  if (isFinitePositive(vitals.systolic) && isFinitePositive(vitals.diastolic)) {
+  const systolic = entry('systolic')
+  const diastolic = entry('diastolic')
+  if (systolic && diastolic) {
+    // Two numbers, one reading. The later of the two dates is the reading's:
+    // a half re-entered today makes the pair today's.
+    const date = systolic.measuredOn > diastolic.measuredOn ? systolic.measuredOn : diastolic.measuredOn
     facts.bloodPressure = {
-      zh: `${vitals.systolic}/${vitals.diastolic} mmHg${noteZh}`,
-      en: `${vitals.systolic}/${vitals.diastolic} mmHg${noteEn}`,
+      zh: `${systolic.value}/${diastolic.value} mmHg${noteZh(date)}`,
+      en: `${systolic.value}/${diastolic.value} mmHg${noteEn(date)}`,
       unit: 'mmHg',
       date,
     }
+    factDates.bloodPressure = date
   }
-  if (isFinitePositive(vitals.heartRate)) {
+
+  const heartRate = entry('heartRate')
+  if (heartRate) {
     facts.heartRate = {
-      zh: `${vitals.heartRate} bpm${noteZh}`,
-      en: `${vitals.heartRate} bpm${noteEn}`,
-      numericValue: vitals.heartRate,
+      zh: `${heartRate.value} bpm${noteZh(heartRate.measuredOn)}`,
+      en: `${heartRate.value} bpm${noteEn(heartRate.measuredOn)}`,
+      numericValue: heartRate.value,
       unit: 'bpm',
-      date,
+      date: heartRate.measuredOn,
     }
+    factDates.heartRate = heartRate.measuredOn
   }
-  if (isFinitePositive(vitals.bodyWeight)) {
+
+  const bodyWeight = entry('bodyWeight')
+  if (bodyWeight) {
     facts.bodyWeight = {
-      zh: `${vitals.bodyWeight} kg${noteZh}`,
-      en: `${vitals.bodyWeight} kg${noteEn}`,
-      numericValue: vitals.bodyWeight,
+      zh: `${bodyWeight.value} kg${noteZh(bodyWeight.measuredOn)}`,
+      en: `${bodyWeight.value} kg${noteEn(bodyWeight.measuredOn)}`,
+      numericValue: bodyWeight.value,
       unit: 'kg',
-      date,
+      date: bodyWeight.measuredOn,
+    }
+    factDates.bodyWeight = bodyWeight.measuredOn
+  }
+
+  const bodyHeight = entry('bodyHeight')
+  if (bodyHeight) {
+    facts.bodyHeight = {
+      zh: `${bodyHeight.value} cm${noteZh(bodyHeight.measuredOn)}`,
+      en: `${bodyHeight.value} cm${noteEn(bodyHeight.measuredOn)}`,
+      numericValue: bodyHeight.value,
+      unit: 'cm',
+      date: bodyHeight.measuredOn,
     }
   }
-  // One fact out, however it was entered. The board's three-group chips and the
-  // evidence table's rows both write `signAnswers`, so a sign stated once is
-  // stated everywhere. A sign answered 「無」 becomes a negated term, which is
-  // how the pack tells 「看了，沒有」 from 「沒問」.
+
+  // The BMI a rule reads is derived, not entered. The adapter derives it from
+  // the record's own height and weight before this file runs, so a height or a
+  // weight typed in the room would otherwise leave `bodyMassIndex` stating the
+  // record's pair — the H2FPEF score's heaviest component read off numbers the
+  // clinician has just replaced. Derived here on the adapter's own formula and
+  // dated by the weight, which is the half that moves.
+  const heightCm = bodyHeight?.value ?? (profile.facts.bodyHeight?.numericValue)
+  const weightKg = bodyWeight?.value ?? (profile.facts.bodyWeight?.numericValue)
+  if ((bodyHeight || bodyWeight) && heightCm && weightKg && heightCm > 0 && weightKg > 0) {
+    const rounded = Math.round((weightKg / ((heightCm / 100) ** 2)) * 10) / 10
+    const date = bodyWeight?.measuredOn ?? profile.facts.bodyWeight?.date
+    facts.bodyMassIndex = {
+      zh: `${rounded} kg/m²（身高 ${heightCm} cm、體重 ${weightKg} kg${date ? `；${date} ${CLINIC_ENTRY_NOTE.zh}` : ''}）`,
+      en: `${rounded} kg/m2 (height ${heightCm} cm, weight ${weightKg} kg${date ? `; ${date}, ${CLINIC_ENTRY_NOTE.en}` : ''})`,
+      numericValue: rounded,
+      unit: 'kg/m²',
+      ...(date ? { date } : {}),
+    }
+  }
+
+  // One fact out, however it was entered. The question row and the evidence
+  // table both write `signAnswers`, so a sign stated once is stated everywhere.
+  // A sign answered 「無」 becomes a negated term, which is how the pack tells
+  // 「看了，沒有」 from 「沒問」; 「未評估」 writes nothing at all.
   const matched = new Set<string>()
   const negated = new Set<string>()
+  let signDate: string | undefined
   for (const [term, answer] of Object.entries(vitals.signAnswers ?? {})) {
-    if (answer === 'present') {
+    if (answer.value === NOT_ASSESSED) continue
+    const day = answer.modifiedAt.slice(0, 10)
+    if (day && (!signDate || day > signDate)) signDate = day
+    if (answer.value === 'present') {
       negated.delete(term)
       matched.add(term)
     } else {
@@ -183,10 +220,11 @@ export function applyClinicVitals(
     }
   }
   if (matched.size > 0 || negated.size > 0) {
+    const date = signDate ?? ''
     facts.clinicCongestionExam = {
-      zh: `門診理學檢查（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
-      en: `Clinic examination (${date}, ${CLINIC_ENTRY_NOTE.en})`,
-      date,
+      zh: `門診理學檢查${date ? noteZh(date) : ''}`,
+      en: `Clinic examination${date ? noteEn(date) : ''}`,
+      ...(date ? { date } : {}),
       textEvidence: {
         // The reading of the examination as a whole: anything seen makes it
         // support, and only negations make it argue against.
@@ -197,49 +235,56 @@ export function applyClinicVitals(
     }
   }
 
-  if (vitals.nyhaClass) {
+  const nyha = vitals.nyhaClass
+  if (nyha && nyha.value !== NOT_ASSESSED) {
+    const date = nyha.modifiedAt.slice(0, 10)
     facts.physicianNyhaClass = {
-      zh: `NYHA ${vitals.nyhaClass}（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
-      en: `NYHA ${vitals.nyhaClass} (${date}, ${CLINIC_ENTRY_NOTE.en})`,
-      date,
+      zh: `NYHA ${nyha.value}${date ? noteZh(date) : ''}`,
+      en: `NYHA ${nyha.value}${date ? noteEn(date) : ''}`,
+      ...(date ? { date } : {}),
       textEvidence: {
         // A grade is a finding whichever class it is; whether it argues for the
         // symptoms criterion is the pack's reading, not the host's.
         direction: 'supports',
-        matchedTerms: [NYHA_CLASS_TERMS[vitals.nyhaClass]],
+        matchedTerms: [NYHA_CLASS_TERMS[nyha.value]],
       },
     }
   }
 
-  if (vitals.compensationStatus) {
-    const decompensated = vitals.compensationStatus === 'decompensated'
+  const compensation = vitals.compensationStatus
+  if (compensation && compensation.value !== NOT_ASSESSED) {
+    const date = compensation.modifiedAt.slice(0, 10)
+    const decompensated = compensation.value === 'decompensated'
     facts.physicianCompensationStatus = {
-      zh: `${decompensated ? '失代償' : '代償'}（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
-      en: `${decompensated ? 'Decompensated' : 'Compensated'} (${date}, ${CLINIC_ENTRY_NOTE.en})`,
-      date,
+      zh: `${decompensated ? '失代償' : '代償'}${date ? noteZh(date) : ''}`,
+      en: `${decompensated ? 'Decompensated' : 'Compensated'}${date ? noteEn(date) : ''}`,
+      ...(date ? { date } : {}),
       textEvidence: {
         // A judgement is a finding whichever way it went; the term says which,
         // and whether it argues for any criterion is the pack's reading, not
         // the host's — the same stance the NYHA grade above takes.
         direction: 'supports',
-        matchedTerms: [COMPENSATION_STATUS_TERMS[vitals.compensationStatus]],
+        matchedTerms: [COMPENSATION_STATUS_TERMS[compensation.value]],
       },
     }
   }
 
-  const factKeys = Object.keys(facts).filter(
-    (key): key is keyof typeof DEFAULT_INTERVAL_DAYS => key in DEFAULT_INTERVAL_DAYS,
-  )
   if (Object.keys(facts).length === 0) return profile
 
   const freshness: Record<string, CdssFreshnessContext> = {}
-  for (const factKey of factKeys) {
+  for (const [factKey, date] of Object.entries(factDates)) {
+    if (!(factKey in DEFAULT_INTERVAL_DAYS)) continue
+    const intervalDays = profile.freshnessContexts?.[factKey]?.intervalDays
+      ?? DEFAULT_INTERVAL_DAYS[factKey]
+    const age = ageInDays(date, profile.evaluatedAt)
     freshness[factKey] = {
       factKey,
       date,
-      ageDays: 0,
-      intervalDays: profile.freshnessContexts?.[factKey]?.intervalDays ?? DEFAULT_INTERVAL_DAYS[factKey],
-      state: 'current',
+      ...(age === undefined ? {} : { ageDays: age }),
+      intervalDays,
+      // A measurement carried over from an earlier visit is still the
+      // clinician's own number; the state labels its age and never withholds it.
+      state: age !== undefined && age > intervalDays ? 'overdue' : 'current',
     }
   }
 

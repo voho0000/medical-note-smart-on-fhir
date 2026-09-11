@@ -1,18 +1,19 @@
 "use client"
 
-import { type ReactNode, useId, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, ListChecks, PencilLine, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../types'
 import {
+  congestionGroupPatch,
+  NOT_ASSESSED,
   type ClinicVitals,
+  type ClinicVitalsPatch,
   type CompensationStatus,
   type CongestionSignsAnswer,
-  todayIsoDate,
 } from '../stores/clinic-vitals.store'
+import { ClinicVitalsForm } from './ClinicVitalsForm'
 import { CareTimeline } from './CareTimeline'
 import { HeartFailureBanner } from './HeartFailureBanner'
 import {
@@ -22,10 +23,7 @@ import {
   type HeartFailurePillar,
 } from './heart-failure-board'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
-import {
-  isCongestionGroupPresent,
-  toggleCongestionGroup,
-} from '../utils/apply-clinic-vitals'
+import { isCongestionGroupPresent } from '../utils/apply-clinic-vitals'
 
 /** The three one-tap groups, in the order the strip offers them. */
 const CONGESTION_SIGN_GROUPS: readonly CongestionSignsAnswer[] = [
@@ -37,8 +35,8 @@ import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import {
   diagnosticSummaryOf,
   physicianInputRequestsOf,
-  type CriterionSummary,
 } from '../physician-input-contract'
+import { DiagnosisReading } from './DiagnosisReading'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 
 interface HeartFailureStatusBoardProps {
@@ -58,118 +56,11 @@ interface HeartFailureStatusBoardProps {
   /** What the clinician measured in the room this visit, if anything. */
   clinicVitals?: ClinicVitals
   /** Absent when this surface cannot take measurements (no patient to attach them to). */
-  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
   onClearClinicVitals?: () => void
   /** The clinician's answers, so the board can surface the one action DP-01b asks for. */
   phenotypeAnswer?: PhenotypeAnswer
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
-}
-
-/**
- * How far the diagnosis has got, criterion by criterion.
- *
- * The clinician's own conclusion leads when they have reached one — it is the
- * answer to the question the card asks, and it outranks anything the record
- * added up to. Below it, ESC 2026's own reading of 「有多少把握」: where each
- * §5.2.2 criterion stands, and how many Table 10 parameters support the third.
- * Every word is the pack's; state is carried by text and an icon as well as
- * colour, because colour alone is not a state.
- */
-function DiagnosisReading({
-  summary,
-  isEnglish,
-}: {
-  summary: ReturnType<typeof diagnosticSummaryOf>
-  isEnglish: boolean
-}) {
-  if (!summary) return null
-  const stateStyle: Record<CriterionSummary['state'], string> = {
-    met: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
-    refuted: 'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200',
-    undetermined: 'border-border bg-muted/40 text-muted-foreground',
-  }
-  const stateText: Record<CriterionSummary['state'], string> = {
-    met: isEnglish ? 'met' : '成立',
-    refuted: isEnglish ? 'contradicted' : '有反證',
-    undetermined: isEnglish ? 'undetermined' : '無法判定',
-  }
-  return (
-    <div className="space-y-1.5" data-testid="cdss-hf-diagnosis-reading">
-      <p
-        className="flex items-center gap-1.5 text-sm font-semibold text-foreground"
-        data-testid="cdss-hf-diagnosis-verdict"
-        data-confirmed={summary.confirmedByClinician ? 'true' : undefined}
-      >
-        {summary.confirmedByClinician ? (
-          <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-        ) : null}
-        {summary.verdict}
-      </p>
-      <ul className="flex flex-wrap gap-1.5" data-testid="cdss-hf-diagnosis-criteria">
-        {summary.criteria.map((criterion) => (
-          <li
-            key={criterion.id}
-            className={cn(
-              'inline-flex items-baseline gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-4',
-              stateStyle[criterion.state],
-            )}
-            data-testid={`cdss-hf-diagnosis-criterion-${criterion.id}`}
-            data-state={criterion.state}
-          >
-            <span className="font-medium">{criterion.label}</span>
-            <span>{stateText[criterion.state]}</span>
-            {criterion.detail ? (
-              <span className="tabular-nums opacity-80">{criterion.detail}</span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
-        {summary.basis}
-      </p>
-      {(summary.scores ?? []).map((score) => (
-        <div
-          key={score.name}
-          className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
-          data-testid={`cdss-hf-diagnosis-score-${score.name}`}
-          data-floor={score.isFloor ? 'true' : undefined}
-        >
-          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-            <span className="font-semibold text-foreground">{score.name}</span>
-            <span className="font-semibold tabular-nums text-foreground">
-              {/* A floor is never shown as a bare number: the variables the
-                  record could not supply can only have raised it. */}
-              {score.isFloor ? '≥' : ''}
-              {score.value} / {score.maximum}
-            </span>
-            <span className="text-muted-foreground">{score.bandLabel}</span>
-          </p>
-          {score.components && score.components.length > 0 ? (
-            <ul className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
-              {score.components.map((component) => (
-                <li key={component.label}>
-                  <span className="font-medium text-foreground">{component.label}</span>
-                  {' · '}
-                  {component.detail}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {score.isFloor && score.unmeasured ? (
-            <p
-              className="mt-1 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
-              data-testid={`cdss-hf-diagnosis-score-unmeasured-${score.name}`}
-            >
-              {isEnglish
-                ? `Reported as a minimum: this record cannot supply ${score.unmeasured.join('; ')}. A missing variable can only have raised the score.`
-                : `以下限呈現：本紀錄無法提供 ${score.unmeasured.join('、')}。缺的項目只會讓分數更高，不會更低。`}
-            </p>
-          ) : null}
-          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{score.source}</p>
-        </div>
-      ))}
-    </div>
-  )
 }
 
 const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pattern)' } as const
@@ -262,136 +153,6 @@ function MetricCell({
   )
 }
 
-function parseNumber(raw: string): number | undefined {
-  const trimmed = raw.trim()
-  if (!trimmed) return undefined
-  const value = Number(trimmed)
-  return Number.isFinite(value) && value > 0 ? value : undefined
-}
-
-/**
- * The cuff, the pulse and the scale, typed in: a room's measurements are often
- * not synced to the record the pack reads, and the freshest numbers a titration
- * decision needs are the ones on the clinician's paper. Nothing is stored past
- * this tab; saving hands the values to the pack, which recomputes every module
- * that reads them.
- */
-function ClinicVitalsForm({
-  isEnglish,
-  now,
-  initial,
-  onSave,
-  onClear,
-  onClose,
-}: {
-  isEnglish: boolean
-  now: Date
-  initial?: ClinicVitals
-  onSave: (vitals: ClinicVitals) => void
-  onClear?: () => void
-  onClose: () => void
-}) {
-  const id = useId()
-  const [systolic, setSystolic] = useState(initial?.systolic?.toString() ?? '')
-  const [diastolic, setDiastolic] = useState(initial?.diastolic?.toString() ?? '')
-  const [heartRate, setHeartRate] = useState(initial?.heartRate?.toString() ?? '')
-  const [bodyWeight, setBodyWeight] = useState(initial?.bodyWeight?.toString() ?? '')
-  const parsed = {
-    systolic: parseNumber(systolic),
-    diastolic: parseNumber(diastolic),
-    heartRate: parseNumber(heartRate),
-    bodyWeight: parseNumber(bodyWeight),
-  }
-  // A blood pressure is two numbers or none; one half cannot be read.
-  const bpHalfEntered = (parsed.systolic === undefined) !== (parsed.diastolic === undefined)
-  const hasAnything = parsed.heartRate !== undefined
-    || parsed.bodyWeight !== undefined
-    || (parsed.systolic !== undefined && parsed.diastolic !== undefined)
-  const canSave = hasAnything && !bpHalfEntered
-
-  const fields: readonly {
-    key: 'systolic' | 'diastolic' | 'heartRate' | 'bodyWeight'
-    label: string
-    unit: string
-    value: string
-    set: (value: string) => void
-    step: string
-  }[] = [
-    { key: 'systolic', label: isEnglish ? 'Systolic' : '收縮壓', unit: 'mmHg', value: systolic, set: setSystolic, step: '1' },
-    { key: 'diastolic', label: isEnglish ? 'Diastolic' : '舒張壓', unit: 'mmHg', value: diastolic, set: setDiastolic, step: '1' },
-    { key: 'heartRate', label: isEnglish ? 'Heart rate' : '心率', unit: 'bpm', value: heartRate, set: setHeartRate, step: '1' },
-    { key: 'bodyWeight', label: isEnglish ? 'Weight' : '體重', unit: 'kg', value: bodyWeight, set: setBodyWeight, step: '0.1' },
-  ]
-
-  return (
-    <form
-      className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border bg-muted/20 px-3.5 py-2.5"
-      aria-label={isEnglish ? 'Measured in clinic' : '門診量測'}
-      data-testid="cdss-hf-clinic-vitals-form"
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (!canSave) return
-        onSave({
-          ...(parsed.systolic !== undefined && parsed.diastolic !== undefined
-            ? { systolic: parsed.systolic, diastolic: parsed.diastolic }
-            : {}),
-          ...(parsed.heartRate !== undefined ? { heartRate: parsed.heartRate } : {}),
-          ...(parsed.bodyWeight !== undefined ? { bodyWeight: parsed.bodyWeight } : {}),
-          measuredOn: todayIsoDate(now),
-        })
-        onClose()
-      }}
-    >
-      <span className="w-full text-xs text-muted-foreground @min-[40rem]:w-auto @min-[40rem]:self-center">
-        {isEnglish
-          ? 'Measured in clinic today. Kept for this tab only; every module recomputes from it.'
-          : '今日門診量測。只保留在這個分頁；各模組會依此重新判定。'}
-      </span>
-      {fields.map((field) => (
-        <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
-          <span>{field.label} <span className="font-normal">{field.unit}</span></span>
-          <Input
-            id={`${id}-${field.key}`}
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step={field.step}
-            value={field.value}
-            onChange={(event) => field.set(event.target.value)}
-            className="h-8 w-20 px-2 text-sm tabular-nums md:text-sm"
-            aria-invalid={bpHalfEntered && (field.key === 'systolic' || field.key === 'diastolic') ? true : undefined}
-            data-testid={`cdss-hf-clinic-vitals-${field.key}`}
-          />
-        </label>
-      ))}
-      <div className="flex items-center gap-1.5">
-        <Button type="submit" size="sm" className="h-8" disabled={!canSave} data-testid="cdss-hf-clinic-vitals-save">
-          {isEnglish ? 'Apply' : '套用'}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={onClose}>
-          {isEnglish ? 'Cancel' : '取消'}
-        </Button>
-        {initial && onClear ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 text-muted-foreground"
-            onClick={() => { onClear(); onClose() }}
-            data-testid="cdss-hf-clinic-vitals-clear"
-          >
-            {isEnglish ? 'Clear' : '清除'}
-          </Button>
-        ) : null}
-      </div>
-      {bpHalfEntered ? (
-        <span className="w-full text-[11px] text-amber-700 dark:text-amber-300" role="alert">
-          {isEnglish ? 'Enter both systolic and diastolic.' : '收縮壓與舒張壓要一起填。'}
-        </span>
-      ) : null}
-    </form>
-  )
-}
 
 /** The two states the clinician grades, in the order the strip offers them. */
 const COMPENSATION_OPTIONS: readonly CompensationStatus[] = ['compensated', 'decompensated']
@@ -573,18 +334,13 @@ export function HeartFailureStatusBoard({
   const gdmtExpanded = board.gdmt !== undefined && expandedId === board.gdmt.id
   const actionablePillars = board.pillars.filter((pillar) => pillar.status === 'actionable').length
   const selectedSymptomGroups = CONGESTION_SIGN_GROUPS
-    .filter((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
+    .filter((group) => isCongestionGroupPresent(clinicVitals, group))
   const toggleSymptomGroup = onSaveClinicVitals
     ? (id: string, selected: boolean) => {
-        onSaveClinicVitals({
-          ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
-          measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
-          signAnswers: toggleCongestionGroup(
-            clinicVitals?.signAnswers,
-            id as CongestionSignsAnswer,
-            selected,
-          ),
-        })
+        onSaveClinicVitals(congestionGroupPatch(
+          id as CongestionSignsAnswer,
+          selected ? 'present' : null,
+        ))
       }
     : undefined
 
@@ -748,9 +504,9 @@ export function HeartFailureStatusBoard({
                 data-testid="cdss-hf-clinic-vitals-open"
               >
                 <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-                {clinicVitals
+                {clinicVitals && Object.keys(clinicVitals.entries).length > 0
                   ? (isEnglish ? 'Edit clinic measurements' : '修改門診量測')
-                  : (isEnglish ? 'Enter clinic measurements (BP, HR, weight)' : '輸入門診量測（血壓、心率、體重）')}
+                  : (isEnglish ? 'Enter clinic measurements (BP, HR, weight, height)' : '輸入門診量測（血壓、心率、體重、身高）')}
               </button>
             </div>
           )
@@ -967,7 +723,7 @@ export function HeartFailureStatusBoard({
               ['orthopnea-pnd', isEnglish ? 'Orthopnea / PND' : '有：orthopnea／PND'],
               ['jvp-rales', isEnglish ? 'JVP / rales' : '有：JVP／rales'],
             ] as const).map(([value, text]) => {
-              const selected = isCongestionGroupPresent(clinicVitals?.signAnswers, value)
+              const selected = isCongestionGroupPresent(clinicVitals, value)
               return (
                 <button
                   key={value}
@@ -980,15 +736,7 @@ export function HeartFailureStatusBoard({
                       : 'border-border bg-card text-foreground hover:bg-muted/40',
                   )}
                   onClick={() => {
-                    onSaveClinicVitals({
-                      ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
-                      measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
-                      signAnswers: toggleCongestionGroup(
-                        clinicVitals?.signAnswers,
-                        value,
-                        !selected,
-                      ),
-                    })
+                    onSaveClinicVitals(congestionGroupPatch(value, selected ? null : 'present'))
                   }}
                   data-testid={`cdss-hf-congestion-sign-${value}`}
                 >
@@ -998,7 +746,7 @@ export function HeartFailureStatusBoard({
             })}
           </div>
           <span className="text-[11px] leading-4 text-muted-foreground">
-            {CONGESTION_SIGN_GROUPS.some((group) => isCongestionGroupPresent(clinicVitals?.signAnswers, group))
+            {CONGESTION_SIGN_GROUPS.some((group) => isCongestionGroupPresent(clinicVitals, group))
               ? (isEnglish
                 ? 'Written into the congestion table as today\'s examination; the modules above recomputed.'
                 : '已寫進鬱血證據表作為今天的檢查，上方判定已重算。')
@@ -1026,17 +774,15 @@ export function HeartFailureStatusBoard({
           </span>
           <CompensationStatusControl
             isEnglish={isEnglish}
-            value={clinicVitals?.compensationStatus}
+            value={clinicVitals?.compensationStatus?.value === NOT_ASSESSED
+              ? undefined
+              : clinicVitals?.compensationStatus?.value}
             onSelect={(next) => {
-              onSaveClinicVitals({
-                ...(clinicVitals ?? { measuredOn: todayIsoDate(now) }),
-                measuredOn: clinicVitals?.measuredOn ?? todayIsoDate(now),
-                compensationStatus: next,
-              })
+              onSaveClinicVitals({ compensationStatus: next ?? null })
             }}
           />
           <span className="text-[11px] leading-4 text-muted-foreground">
-            {clinicVitals?.compensationStatus
+            {clinicVitals?.compensationStatus && clinicVitals.compensationStatus.value !== NOT_ASSESSED
               ? (isEnglish
                 ? 'Recorded as this visit\'s clinical judgement, separately from any admission in the record.'
                 : '已記錄為本次的臨床判斷，與紀錄中的住院史分開存放。')
