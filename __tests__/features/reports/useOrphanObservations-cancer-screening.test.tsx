@@ -13,6 +13,32 @@ jest.mock('@/src/application/providers/language.provider', () => ({
 }))
 
 describe('useOrphanObservations — MediCloud cancer screening', () => {
+  it('does not assign the first institution or method to other same-day text results', () => {
+    const base = {
+      status: 'unknown', code: { text: 'HBsAg' },
+      effectiveDateTime: '2024-06-28T00:00:00+08:00',
+      valueCodeableConcept: { text: '陰性' },
+    }
+    const observations = [
+      { ...base, id: 'a', performer: [{ display: '甲院' }], method: { text: '方法一' } },
+      { ...base, id: 'b', performer: [{ display: '乙院' }], method: { text: '方法一' } },
+      { ...base, id: 'c', performer: [{ display: '甲院' }], method: { text: '方法二' } },
+    ]
+    const { result } = renderHook(() => useOrphanObservations(observations, new Set()))
+    expect(result.current).toHaveLength(3)
+    expect(result.current.map(row => row.institution)).toEqual(['甲院', '乙院', '甲院'])
+    expect(result.current.every(row => row.effectiveDate === base.effectiveDateTime)).toBe(true)
+  })
+
+  it('keeps missing and malformed source dates without throwing or borrowing a date', () => {
+    const observations = [undefined, 'not-a-date'].map((effectiveDateTime, index) => ({
+      id: String(index), effectiveDateTime, code: { text: 'Anti-HCV' },
+      status: 'unknown', valueCodeableConcept: { text: '陽性' },
+    }))
+    const { result } = renderHook(() => useOrphanObservations(observations, new Set()))
+    expect(result.current).toHaveLength(2)
+    expect(result.current.map(row => row.effectiveDate)).toEqual([undefined, 'not-a-date'])
+  })
   it('creates a dedicated cancer-screening row and renders source HTML as plain text', () => {
     const observation = {
       resourceType: 'Observation',

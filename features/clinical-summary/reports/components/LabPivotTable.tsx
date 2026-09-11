@@ -10,6 +10,7 @@
 import { memo, useEffect, useMemo, useState } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { TrendingUp } from "lucide-react"
+import { ReportSourceProgramBadge } from "./ReportSourceProgramBadge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
@@ -229,6 +230,13 @@ export const LabPivotTable = memo(function LabPivotTable({
           tables then read as one calm sheet instead of black stripes. */}
       <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
         {formatDateLabel(date)}
+        {flatTests.some(test => test.values.get(date)?.adultPreventive) && (
+          <span className="ml-1 inline-flex"
+            title={locale.startsWith('zh') ? '本日期包含成人健檢來源結果，不代表同日所有檢驗皆為成人健檢。' : 'This date includes adult preventive-care results; other same-day tests may have a different source.'}
+            aria-label={locale.startsWith('zh') ? '含成人健檢結果' : 'Includes adult preventive-care results'}>
+            <ReportSourceProgramBadge sourceProgram="adult-preventive" label={locale.startsWith('zh') ? '成健' : 'Preventive'} />
+          </span>
+        )}
       </td>
       {flatTests.map((test) => {
         const cell = test.values.get(date)

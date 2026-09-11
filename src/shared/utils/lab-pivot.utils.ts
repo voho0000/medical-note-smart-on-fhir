@@ -21,10 +21,11 @@ import {
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
-import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { isInferredObservationUnit, isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 
 export interface LabCell {
+  adultPreventive?: boolean
   value: string
   /** Every source value when multiple records share one analyte/day cell. */
   allValues?: string[]
@@ -309,6 +310,11 @@ function canonicalTestKey(obs: any): string {
   //    pathways can never drift.)
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
+  // MediCloud adult screening supplies source text without a LOINC. Keep
+  // these names in the existing pinned hepatitis columns, not extra columns.
+  const screeningName = raw.normalize('NFKC').replace(/\s+/g, '')
+  if (/^B型肝炎表面抗原(?:\(HBsAg\))?$/i.test(screeningName)) return 'HBSAG'
+  if (/^C型肝炎抗體(?:\(Anti-HCV\))?$/i.test(screeningName)) return 'ANTI-HCV'
   // These category allowlist names are not yet aliases in the package.
   if (['鎂', 'MAGNESIUM'].includes(raw.trim().toUpperCase())) return 'MG'
   const fromText = canonicalTestKeyFromString(raw)
@@ -581,6 +587,11 @@ export function buildLabPivots(
         })
       } else {
         row.values.set(date, cell)
+      }
+      // Keep source provenance through same-day value merging. The date badge
+      // means this panel includes preventive-care results, not that all do.
+      if (prev?.adultPreventive || isAdultPreventiveHealthExamResource(obs)) {
+        row.values.get(date)!.adultPreventive = true
       }
     }
 

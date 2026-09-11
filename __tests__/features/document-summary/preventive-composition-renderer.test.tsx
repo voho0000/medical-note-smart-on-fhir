@@ -82,10 +82,14 @@ describe('preventive-care Composition continuous document mode', () => {
     expect(visibleText.indexOf('成人預防保健總覽')).toBeLessThan(visibleText.indexOf('一般檢查'))
     expect(visibleText.indexOf('一般檢查')).toBeLessThan(visibleText.indexOf('血壓'))
     expect(visibleText.indexOf('血壓')).toBeLessThan(visibleText.indexOf('血脂肪'))
-    expect(sectionGrid!.children).toHaveLength(3)
-    expect(article!.querySelectorAll('[data-composition-section]')).toHaveLength(3)
+    expect(sectionGrid!.children).toHaveLength(5)
+    expect(article!.querySelectorAll('[data-composition-section]')).toHaveLength(5)
+    for (const title of ['B型肝炎檢查', 'C型肝炎檢查']) {
+      const section = screen.getByRole('heading', { name: title }).closest('section')!
+      expect(section.querySelector('td')).toBeEmptyDOMElement()
+    }
     const tableSection = within(sectionGrid as HTMLElement)
-      .getByRole('table')
+      .getByText('身高')
       .closest('[data-composition-section]')
     const tableNarrative = tableSection?.children.item(1)
     expect(tableNarrative?.className).toContain('[&_table]:w-full')
