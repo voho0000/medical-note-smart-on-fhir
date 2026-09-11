@@ -309,8 +309,8 @@ function LvefPhenotypeRequest({
 
       <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Kept for this tab only, and never written to the chart. Every module that reads an ejection fraction recomputes from the answer.'
-          : '只保留在這個分頁，不寫回病歷。回答後，所有讀 LVEF 的模組都會重新判定。'}
+          ? 'Kept in this browser only, and never written to the chart. Every module that reads an ejection fraction recomputes from the answer.'
+          : '只保留在這個瀏覽器，不寫回病歷。回答後，所有讀 LVEF 的模組都會重新判定。'}
       </p>
     </fieldset>
   )
@@ -375,8 +375,8 @@ function HfpEfConfirmationRequest({
       )}
       <span className="text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Kept for this tab only. Nothing is written to the chart or to any claim.'
-          : '只保留在這個分頁，不寫回病歷，也不做健保申報。'}
+          ? 'Kept in this browser only. Nothing is written to the chart or to any claim.'
+          : '只保留在這個瀏覽器，不寫回病歷，也不做健保申報。'}
       </span>
     </div>
   )

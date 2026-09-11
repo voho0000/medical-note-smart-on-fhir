@@ -1040,9 +1040,10 @@ function DecisionControls({
               )}
               onClick={() => {
                 record({ decision: option })
-                if (option !== 'contraindicated' && option !== 'deferred' && option !== 'dose-adjusted') {
-                  onEdit(false)
-                }
+                // A refusal and a deferral are only half a record without the
+                // reason, and a dose change without the new dose says nothing,
+                // so those three keep the editor open for the second half.
+                onEdit(option === 'contraindicated' || option === 'deferred' || option === 'dose-adjusted')
               }}
               data-testid={`cdss-hf-decision-${moduleId}-${option}`}
             >

@@ -538,7 +538,10 @@ export function buildHeartFailureVisitFlow(
     hint: isEnglish
       ? 'Kept in this browser only, never written to the chart; each field carries its own measurement date.'
       : '只保留在這個瀏覽器、不寫回病歷；每個欄位各自記量測日。',
-    counted: true,
+    // A nurse can weigh a patient before anyone decides this is a heart-failure
+    // visit, so this one is never locked — but it stops being part of
+    // 「還有 n 題」 once the clinician has said they are not asking about it.
+    counted: !notSuspected,
   })
 
   const countedQuestions = questions.filter((question) => question.counted)
@@ -557,6 +560,10 @@ export function buildHeartFailureVisitFlow(
     high: 0,
     medium: 1,
     routine: 2,
+  }
+  const pillarRank = (id: string): number => {
+    const index = PILLAR_MODULE_IDS.indexOf(id)
+    return index === -1 ? PILLAR_MODULE_IDS.length : index
   }
 
   const groupOf = (recommendation: CdssRecommendation): VisitActionGroupId => {
@@ -602,9 +609,9 @@ export function buildHeartFailureVisitFlow(
     const rows = visible
       .filter((item) => groupOf(item) === groupId)
       .sort((a, b) => (
-        (groupId === 'actionable'
-          ? PILLAR_MODULE_IDS.indexOf(a.id) - PILLAR_MODULE_IDS.indexOf(b.id)
-          : 0)
+        // The four pillars lead 藥物與處置 in the guideline's own order; the
+        // GDMT umbrella and anything else follow on the pack's priority.
+        (groupId === 'actionable' ? pillarRank(a.id) - pillarRank(b.id) : 0)
         || priorityRank[a.priority] - priorityRank[b.priority]
         || (a.moduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.moduleOrder ?? Number.MAX_SAFE_INTEGER)
       ))
@@ -691,16 +698,19 @@ export function buildHeartFailureVisitFlow(
         : (isEnglish ? `${openQuestionCount} left` : `還有 ${openQuestionCount} 題`)
 
   const actDone = decidableCount > 0 && decidedCount === decidableCount
+  // There is something to decide from the moment a row carries a decision —
+  // a safety alert is decidable before anyone has answered question 1 — so
+  // this step is 「進行中」 whenever a row is still undecided.
   const actState: VisitStepState = decidableCount === 0
-    ? (suspected || notSuspected ? 'done' : 'todo')
+    ? (suspicion ? 'done' : 'todo')
     : actDone
       ? 'done'
-      : suspected || notSuspected
-        ? 'current'
-        : 'todo'
+      : 'current'
   const safetyCount = actionGroups.find((group) => group.id === 'safety')?.rows.length ?? 0
   const actDetail = decidableCount === 0
-    ? (isEnglish ? 'Nothing to decide' : '本次無需處理')
+    ? (suspicion
+      ? (isEnglish ? 'Nothing to decide' : '本次無需處理')
+      : (isEnglish ? 'Waiting on question 1' : '等待第 1 題'))
     : actDone
       ? (isEnglish ? `${decidedCount} decided` : `${decidedCount} 項已決定`)
       : [
