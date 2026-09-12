@@ -52,7 +52,7 @@ test('physician NT-proBNP overrides old laboratory autofill in HFpEF scoring', (
 })
 
 describe('combined clinical values dialog', () => {
-  function setup() {
+  function setup(entry = 'cdss-hf-record-values-edit') {
     const board = buildHeartFailureBoard(result, 'zh-TW', now)!
     const flow = buildHeartFailureVisitFlow({ board, result, now, isEnglish: false, patientId: 'synthetic', decisions: {} })
     const metrics = specs.map(([key, value, unit]) => ({ factKey: key, label: key, value, unit, date: value ? '2024-09-09' : undefined, kind: 'measure', entered: true, stale: false, evaluated: true } as HeartFailureMetric))
@@ -61,12 +61,12 @@ describe('combined clinical values dialog', () => {
       expandedId={null} onToggle={() => {}} renderDetail={() => null} packVersion="test"
       phenotypeAnswer={{ hfSuspicion: 'suspected', hfpEfConfirmed: true, answeredOn: '2026-09-12' }}
       onSaveClinicVitals={save} onAnswerPhenotype={answer} onSaveHfpefInputs={hfpef} />)
-    fireEvent.click(screen.getByTestId('cdss-hf-record-values-edit'))
+    fireEvent.click(screen.getByTestId(entry))
     return { save, answer, hfpef }
   }
 
-  test('header directly opens all fields and saves multiple changes in one vitals patch', () => {
-    const { save, answer, hfpef } = setup()
+  test.each(['cdss-hf-record-values-edit', 'cdss-hf-flow-open-vitals'])('%s opens the shared editor and saves multiple changes in one patch', entry => {
+    const { save, answer, hfpef } = setup(entry)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     for (const [key] of specs) expect(screen.getByTestId(`record-values-${key}`)).toBeInTheDocument()
     expect(screen.getByLabelText('oxygenSaturation')).toBeInTheDocument()
@@ -84,7 +84,9 @@ describe('combined clinical values dialog', () => {
 
   test('restore all removes overrides without clearing clinical answers', () => {
     const { save, answer } = setup()
+    expect(screen.getAllByText('修改數值與日期後一次儲存；恢復預設會使用病歷原始值，無原始值則留空。')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: '全部恢復預設' }))
+    expect(screen.queryByText('儲存後恢復病歷原始值；沒有原始值則恢復為未填。')).not.toBeInTheDocument()
     expect(save).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     expect(save).toHaveBeenCalledTimes(1)

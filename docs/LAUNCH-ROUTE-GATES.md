@@ -67,6 +67,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 | HF「本次評估」at `/` and launch-query variants | Remove the introductory workflow paragraph in both languages; retain all questions and their behaviour. | Explicit owner request, 2026-09-12 |
 
+| HF record values at `/` and launch-query variants | Remove the explanatory footer and its current-time stamp in both languages; retain values, dates and edit controls. | Explicit owner request, 2026-09-12 |
+
+| HF question 5 at `/` and launch-query variants | Replace the embedded clinic measurement form with the shared ten-value editor; retain the question and editing entry point. | Explicit owner request, 2026-09-12 |
+
+| HF clinical values dialog at `/` and launch-query variants | After restoring defaults, show the explanation once in the dialog header rather than repeating it below every field; retain each field's undo control. | Explicit owner request, 2026-09-12 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.

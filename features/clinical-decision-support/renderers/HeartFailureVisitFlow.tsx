@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -48,7 +49,6 @@ import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { RecordMetricEditor } from './RecordMetricEditor'
 import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
-import { ClinicVitalsForm } from './ClinicVitalsForm'
 import { DiagnosisReading } from './DiagnosisReading'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
@@ -159,7 +159,6 @@ export function HeartFailureVisitFlow({
   renderDetail,
   clinicVitals,
   onSaveClinicVitals,
-  onClearClinicVitals,
   phenotypeAnswer,
   onAnswerPhenotype,
   onRecordDecision,
@@ -168,9 +167,7 @@ export function HeartFailureVisitFlow({
   onSaveHfpefInputs,
   packVersion,
 }: HeartFailureVisitFlowProps) {
-  const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
   const [calculatorOpen, setCalculatorOpen] = useState(false)
-  const [vitalsScopeNote, setVitalsScopeNote] = useState<string | undefined>(undefined)
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<VisitActionGroupId>>(
     () => new Set(flow.actionGroups
       .filter((group) => group.collapsedByDefault)
@@ -209,14 +206,6 @@ export function HeartFailureVisitFlow({
   }
   const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
 
-  const openVitalsForm = (scopeNote?: string) => {
-    setVitalsScopeNote(scopeNote)
-    setVitalsFormOpen(true)
-    if (typeof document !== 'undefined') {
-      document.getElementById(visitQuestionElementId('clinic-vitals'))
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }
-  }
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-visit-flow">
@@ -240,7 +229,6 @@ export function HeartFailureVisitFlow({
       <RecordCard
         metrics={allEditableMetrics}
         isEnglish={isEnglish}
-        now={now}
         onRefill={setEditingMetric}
         canEdit={Boolean(onSaveClinicVitals)}
         onOpenForm={() => setRecordValuesOpen(true)}
@@ -252,16 +240,12 @@ export function HeartFailureVisitFlow({
         now={now}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={onSaveClinicVitals}
-        onClearClinicVitals={onClearClinicVitals}
         phenotypeAnswer={phenotypeAnswer}
         onAnswerPhenotype={onAnswerPhenotype}
         board={board}
         hfpefReading={hfpefReading}
         onOpenCalculator={onSaveHfpefInputs ? () => setCalculatorOpen(true) : undefined}
-        vitalsFormOpen={vitalsFormOpen}
-        vitalsScopeNote={vitalsScopeNote}
-        onOpenVitalsForm={() => openVitalsForm()}
-        onCloseVitalsForm={() => { setVitalsFormOpen(false); setVitalsScopeNote(undefined) }}
+        onOpenVitalsForm={() => setRecordValuesOpen(true)}
       />
 
       <ActionsCard
@@ -496,14 +480,12 @@ function metricSourceLine(
 function RecordCard({
   metrics,
   isEnglish,
-  now,
   onRefill,
   canEdit,
   onOpenForm,
 }: {
   metrics: readonly HeartFailureMetric[]
   isEnglish: boolean
-  now: Date
   onRefill: (metric: HeartFailureMetric) => void
   canEdit: boolean
   onOpenForm: () => void
@@ -602,13 +584,6 @@ function RecordCard({
           )
         })}
       </div>
-      <p className="border-t border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'A missing value reads 「no value in the record」 and is never treated as normal. An entered value is encrypted and kept for this tab session, carries its measurement and modification dates, and is not carried to the next visit until phase 2.'
-          : '缺的值以「紀錄無值」顯示，不會被當成正常。補填的值加密保存於本分頁的工作階段，並記量測日與修改日；跨次就診沿用為第二階段。'}
-        {' '}
-        {formatStamp(now.toISOString(), now, isEnglish)}
-      </p>
     </section>
   )
 }
@@ -625,7 +600,7 @@ function SegmentedControl<T extends string>({
   equalWidth = false,
 }: {
   label: string
-  options: readonly { id: T; text: string }[]
+  options: readonly { id: T; text: string; description?: string }[]
   value: T | null
   onSelect: (next: T) => void
   testId: string
@@ -641,7 +616,7 @@ function SegmentedControl<T extends string>({
     >
       {options.map((option) => {
         const isSelected = value === option.id
-        return (
+        const button = (
           <button
             key={option.id}
             type="button"
@@ -662,6 +637,14 @@ function SegmentedControl<T extends string>({
             {option.text}
           </button>
         )
+        return option.description ? (
+          <Tooltip key={option.id}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6} className="max-w-72 leading-relaxed">
+              <span className="font-semibold">NYHA {option.text}</span><br />{option.description}
+            </TooltipContent>
+          </Tooltip>
+        ) : button
       })}
     </div>
   )
@@ -987,6 +970,7 @@ function QuestionShell({
   const open = question.state === 'open'
   const answered = question.state === 'answered'
   const sideBySide = ['hf-suspicion', 'lvef-phenotype', 'nyha', 'compensation'].includes(question.id)
+  const editingInline = sideBySide && Boolean(children)
   return (
     <li
       id={visitQuestionElementId(question.id)}
@@ -1010,7 +994,7 @@ function QuestionShell({
       >
         {answered ? <Check className="h-3 w-3" aria-hidden="true" /> : question.number}
       </span>
-      <div className={cn("min-w-0 flex-1", sideBySide && "@min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,1fr)_auto] @min-[64rem]:items-center @min-[64rem]:gap-x-6")}>
+      <div className={cn("min-w-0 flex-1", sideBySide && "@min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,34rem)_auto] @min-[64rem]:justify-start @min-[64rem]:items-center @min-[64rem]:gap-x-6")}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 @min-[64rem]:col-start-1">
           <span className={cn(
             'text-sm font-semibold leading-5',
@@ -1018,7 +1002,7 @@ function QuestionShell({
           )}>
             {question.label}
           </span>
-          {answered && question.answerText ? (
+          {answered && !editingInline && question.answerText ? (
             <span
               className="text-xs font-medium text-foreground"
               data-testid={`cdss-hf-question-answer-${question.id}`}
@@ -1032,7 +1016,7 @@ function QuestionShell({
               {isEnglish ? `last changed ${stamp}` : `最後修改 ${stamp}`}
             </span>
           ) : null}
-          {answered && onEdit ? (
+          {answered && !editingInline && onEdit ? (
             <button
               type="button"
               className="ml-auto min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1066,16 +1050,12 @@ function QuestionsCard({
   now,
   clinicVitals,
   onSaveClinicVitals,
-  onClearClinicVitals,
   phenotypeAnswer,
   onAnswerPhenotype,
   board,
   hfpefReading,
   onOpenCalculator,
-  vitalsFormOpen,
-  vitalsScopeNote,
   onOpenVitalsForm,
-  onCloseVitalsForm,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1088,10 +1068,7 @@ function QuestionsCard({
   board: HeartFailureBoardModel
   hfpefReading?: HfpefReading
   onOpenCalculator?: () => void
-  vitalsFormOpen: boolean
-  vitalsScopeNote?: string
   onOpenVitalsForm: () => void
-  onCloseVitalsForm: () => void
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
@@ -1158,6 +1135,7 @@ function QuestionsCard({
               >
                 {shows(question) && question.request && onAnswerPhenotype && question.recommendationId ? (
                   <PhysicianInputRequestPanel
+                    inline
                     requests={[question.request]}
                     recommendationId={question.recommendationId}
                     isEnglish={isEnglish}
@@ -1209,10 +1187,10 @@ function QuestionsCard({
                     equalWidth
                     label={question.label}
                     options={[
-                      { id: 'I', text: 'I' },
-                      { id: 'II', text: 'II' },
-                      { id: 'III', text: 'III' },
-                      { id: 'IV', text: 'IV' },
+                      { id: 'I', text: 'I', description: isEnglish ? 'Activity is unrestricted; usual daily exertion does not provoke undue fatigue, palpitations or breathlessness.' : '日常活動不受限制；一般活動不會引起明顯疲倦、心悸或呼吸困難。' },
+                      { id: 'II', text: 'II', description: isEnglish ? 'Mild activity restriction: comfortable at rest, but usual daily exertion brings on fatigue, palpitations or breathlessness.' : '活動輕度受限；休息時舒適，但一般日常活動會引起疲倦、心悸或呼吸困難。' },
+                      { id: 'III', text: 'III', description: isEnglish ? 'Substantial activity restriction: comfortable at rest, but symptoms develop with lighter-than-usual daily exertion.' : '活動明顯受限；休息時舒適，但低於一般日常活動的程度就會引起症狀。' },
+                      { id: 'IV', text: 'IV', description: isEnglish ? 'Heart failure symptoms occur at rest, and any physical exertion increases discomfort.' : '休息時也有心衰竭症狀，任何身體活動都會增加不適。' },
                       { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
                     ]}
                     value={value}
@@ -1287,17 +1265,6 @@ function QuestionsCard({
               onEdit={onSaveClinicVitals ? onOpenVitalsForm : undefined}
             >
               {onSaveClinicVitals ? (
-                vitalsFormOpen ? (
-                  <ClinicVitalsForm
-                    isEnglish={isEnglish}
-                    now={now}
-                    initial={clinicVitals}
-                    onSave={onSaveClinicVitals}
-                    onClear={onClearClinicVitals}
-                    onClose={onCloseVitalsForm}
-                    footnote={vitalsScopeNote}
-                  />
-                ) : (
                   <button
                     type="button"
                     className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1309,7 +1276,6 @@ function QuestionsCard({
                       ? (isEnglish ? 'Edit clinic measurements' : '修改門診量測')
                       : (isEnglish ? 'Enter clinic measurements' : '輸入門診量測')}
                   </button>
-                )
               ) : null}
             </QuestionShell>
           )

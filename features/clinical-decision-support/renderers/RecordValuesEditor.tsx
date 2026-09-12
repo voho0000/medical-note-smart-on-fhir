@@ -66,7 +66,6 @@ export function RecordValuesEditor({ metrics, isEnglish, now, onSave, onClose }:
                 <label className="flex flex-col gap-1 text-xs">{isEnglish ? 'Date' : '日期'}<Input type="date" aria-label={`${metric.label} ${isEnglish ? 'date' : '日期'}`} className="h-9 w-36 shadow-none" max={today} value={draft.date} disabled={draft.restore} onChange={event => patch(index, { date: event.target.value })} /></label>
                 <Button type="button" variant="outline" className="h-9 px-2 text-xs shadow-none" onClick={() => patch(index, { restore: !draft.restore })}>{draft.restore ? (isEnglish ? 'Undo restore' : '取消恢復') : (isEnglish ? 'Restore default' : '恢復預設')}</Button>
               </div>
-              {draft.restore ? <p className="mt-2 text-xs text-muted-foreground">{isEnglish ? 'The original record value will be used after saving.' : '儲存後恢復病歷原始值；沒有原始值則恢復為未填。'}</p> : null}
             </fieldset>
           })}
         </div>
