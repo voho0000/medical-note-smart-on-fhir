@@ -3,6 +3,8 @@ name: Deploy HMC pilot preview
 # The workflow definition lives on protected master. An unprivileged signal
 # workflow fires after either pilot branch changes. Source access, pilot code
 # execution, and site publishing remain separate so pilot code sees no secrets.
+# That separation also means a pilot author is never the actor of the run that
+# builds their commit, so the `report` job at the bottom tells them itself.
 on:
   workflow_run:
     workflows:
@@ -101,6 +103,9 @@ jobs:
     if: ${{ needs.resolve.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    outputs:
+      tests: ${{ steps.tests.outcome }}
+      test_summary: ${{ steps.test_summary.outputs.summary }}
     steps:
       - name: Download credential-free source snapshot
         uses: actions/download-artifact@v8
@@ -347,12 +352,52 @@ jobs:
         working-directory: app
         run: npm run lint
 
+      # Reported, not gating. What has to be true before a build reaches the
+      # clinic is that the preview runs at all, and the four steps around this
+      # one say so: typecheck, lint, the overlay smoke check and the build
+      # itself each fail on something genuinely broken. A red Jest run means
+      # the repository is not clean, which is worth knowing and is not the same
+      # claim.
+      #
+      # The difference is not academic here. A pilot author cannot see this
+      # suite before pushing, cannot fix what belongs to the app owner, and
+      # loses a day of clinical review when it goes red for a reason that has
+      # nothing to do with their pathway — which is exactly what happened on
+      # 2026-09-10. So the failure is carried into the `report` issue with the
+      # suites named, and the preview still publishes.
+      #
+      # The three ignored suites are separate: they assert the released
+      # package's HF title and pilot gate, which the HMC source intentionally
+      # replaces, and its own verify suite plus the overlay check cover that
+      # boundary. `dev-extra-pack-registry` is there until #79 lands on
+      # pilot/hmc, only to keep a known failure out of every issue body; the
+      # comment on that commit still holds — take the id out when it merges.
       - name: Test HMC app
+        id: tests
         working-directory: app
-        # These three suites assert the released package's HF title and pilot
-        # gate. The HMC source intentionally replaces those values; its own
-        # verify suite and the overlay smoke check above cover that boundary.
-        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry)[.]test[.]tsx?$"
+        continue-on-error: true
+        shell: bash
+        run: |
+          # `shell: bash` already runs with -eo pipefail, so the tee below does
+          # not swallow a failing run.
+          npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry|dev-extra-pack-registry)[.]test[.]tsx?$" 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+
+      - name: Summarise a failing test run
+        id: test_summary
+        if: steps.tests.outcome == 'failure'
+        shell: bash
+        run: |
+          # Jest colours its own output whether or not a terminal is attached,
+          # so strip the escapes before matching on line starts.
+          perl -pe 's/\e\[[0-9;]*m//g' "$RUNNER_TEMP/test-output.txt" > "$RUNNER_TEMP/test-plain.txt"
+          {
+            echo 'summary<<TEST_SUMMARY'
+            grep -E '^(Test Suites|Tests):' "$RUNNER_TEMP/test-plain.txt" || true
+            echo
+            # Coloured output leaves ` FAIL ` padded once the escapes are gone.
+            grep -E '^ *FAIL +' "$RUNNER_TEMP/test-plain.txt" | sed -E 's/^ *FAIL +/FAIL /' | sort -u | head -20 || true
+            echo TEST_SUMMARY
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build static HMC preview
         working-directory: app
@@ -455,3 +500,108 @@ jobs:
 
           git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
           git push origin main
+
+  report:
+    # A pilot push never learns its own fate, so the deploy says it itself.
+    #
+    # Two mechanics conspire. The concurrency group above cancels the run an
+    # HMC push starts, because the personalization relay tag fires seconds
+    # later and supersedes it; and that superseding run is attributed to the
+    # relay's token, not to the person whose commit is being built. GitHub's
+    # failure mail follows the triggering actor, so it reaches the app owner
+    # and never the pilot author. Runs #25, #27 and #29 were all HMC pushes:
+    # two cancelled, one green, none ever reported to whoever pushed them.
+    #
+    # One issue for three states, kept current with a comment and closed when
+    # there is nothing left to say. Its point is the part a pilot author cannot
+    # see from their own branch: whether /app-hmc is showing what they pushed,
+    # and — since the Jest run stopped gating — whether it published over a red
+    # suite.
+    needs: [resolve, build, publish]
+    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Say whether the preview moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          TESTS_RESULT: ${{ needs.build.outputs.tests }}
+          TEST_SUMMARY: ${{ needs.build.outputs.test_summary }}
+          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+          PILOT_AUTHOR: hmcheng0913
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          title='HMC pilot preview needs attention'
+          number="$(gh issue list --state open --limit 100 --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
+
+          published=no
+          if [ "$BUILD_RESULT" = 'success' ] && [ "$PUBLISH_RESULT" = 'success' ]; then
+            published=yes
+          fi
+
+          # Nothing to say: the preview is current and the suite is clean.
+          if [ "$published" = 'yes' ] && [ "$TESTS_RESULT" != 'failure' ]; then
+            if [ -n "$number" ]; then
+              cat > note.md <<EOF
+          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with personalization \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
+
+          ${RUN_URL}
+          EOF
+              gh issue comment "$number" --body-file note.md
+              gh issue close "$number"
+            fi
+            exit 0
+          fi
+
+          if [ "$published" = 'yes' ]; then
+            # Published over a red suite. Worth saying out loud, not worth
+            # holding a clinic preview for.
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, personalization \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
+
+          \`\`\`
+          ${TEST_SUMMARY:-see the run}
+          \`\`\`
+
+          ${RUN_URL}
+
+          The Jest run reports; it does not gate. Typecheck, lint, the overlay check and the build do — those failing means the preview would not run, and then it is not published at all. A red suite means the repository is not clean, which is a different claim and is not always yours to fix: it may belong to the app owner, or to the gap below.
+
+          One failure mode a development machine cannot reproduce: \`Test HMC app\` runs the pilot suite against the **published** \`@voho0000/personalized-care\`, with only the heart-failure files overlaid from the pilot source. A test that asserts on anything else the rules branch carries passes there and fails here.
+          EOF
+          else
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The HMC preview did not publish, so https://mediprisma.tw/app-hmc is still serving an older build.**
+
+          | | |
+          | --- | --- |
+          | pilot app | \`${APP_SHA}\` |
+          | pilot personalization | \`${PERSONALIZATION_SHA}\` |
+          | build | \`${BUILD_RESULT}\` |
+          | publish | \`${PUBLISH_RESULT}\` |
+
+          The run says which step failed: ${RUN_URL}
+
+          The Jest run is not what stopped this — it reports and does not gate. Typecheck, lint, the overlay check or the build did, and each of those failing means the preview would not run. Until one of them is fixed, every push to either \`pilot/hmc\` branch stops here and nothing reaches the preview URL.
+          EOF
+          fi
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file note.md
+            exit 0
+          fi
+
+          created="$(gh issue create --title "$title" --body-file note.md)"
+          echo "$created"
+          gh issue edit "${created##*/}" --add-assignee "$PILOT_AUTHOR" || true

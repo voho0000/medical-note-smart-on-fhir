@@ -76,6 +76,15 @@ describe('calculator autofill loading/error states', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('keeps calculator field titles selectable for copying', () => {
+    mockUseLabAutofill.mockReturnValue(state())
+    const { container } = renderDetail()
+    const labels = Array.from(container.querySelectorAll('label'))
+    expect(labels.length).toBeGreaterThan(0)
+    expect(labels.every((label) => label.classList.contains('select-text'))).toBe(true)
+    expect(labels.every((label) => !label.classList.contains('select-none'))).toBe(true)
+  })
+
   it('fills the inputs when the chart arrives after the calculator was opened', () => {
     // Opening a calculator mid-load used to seed from the empty autofill and
     // never revisit it, leaving the fields blank for the rest of the session.

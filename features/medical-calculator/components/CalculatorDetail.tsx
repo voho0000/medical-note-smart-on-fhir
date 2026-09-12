@@ -59,7 +59,7 @@ interface FilledInfo {
   /** True when the source unit differs and could NOT be converted → real ⚠. */
   unconvertible: boolean
   /** Source-report provenance (test name / LOINC / facility / obs id). */
-  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string }
+  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string; resourceType?: 'Condition' | 'Encounter' | 'Observation' | 'DiagnosticReport' | 'MedicationRequest' | 'MedicationStatement' }
 }
 
 /** Seed a calculator's inputs from patient data. Delegates the per-input
@@ -181,7 +181,7 @@ export function CalculatorDetail({
   const jumpToSource = useCallback((src: FilledInfo["source"], label: string, date: string) => {
     if (!src?.obsId) return
     useResourceNavigationStore.getState().navigate({
-      resourceType: "Observation",
+      resourceType: src.resourceType ?? "Observation",
       resourceId: src.obsId,
       display: src.testName || label,
       date: date || undefined,
@@ -344,6 +344,19 @@ export function CalculatorDetail({
                 ))}
               </div>
             )}
+            {result.scoreRanges && (
+              <section className="mt-3 border-t border-current/15 pt-3" aria-label={zh ? '分數判讀' : 'Score interpretation'}>
+                <h4 className="mb-2 text-xs font-semibold">{zh ? '分數判讀' : 'Score interpretation'}</h4>
+                <dl className="space-y-2 text-xs leading-relaxed">
+                  {result.scoreRanges.map(row => (
+                    <div key={row.range} className="flex items-baseline gap-4">
+                      <dt className="w-14 shrink-0 font-medium tabular-nums">{row.range} {zh ? '分' : 'pts'}</dt>
+                      <dd className="min-w-0">{tr(locale, row.meaning)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
             {result.notes && (
               <div className="pt-1 text-xs leading-relaxed opacity-90">
                 {tr(locale, result.notes)}
@@ -444,9 +457,9 @@ export function CalculatorDetail({
               {/* Source-report provenance: test name / LOINC / facility + a link
                   back to the original report in the left panel. */}
               {fill?.source && (fill.source.testName || fill.source.loinc || fill.source.facility || fill.source.obsId) && (
-                <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] leading-tight text-muted-foreground">
+                <div className={`flex flex-wrap items-center gap-x-1.5 text-muted-foreground ${input.source?.kind === "hfpefClinical" ? "text-xs leading-relaxed" : "text-[10px] leading-tight"}`}>
                   <span className="font-medium">{zh ? "來源" : "Source"}:</span>
-                  {fill.source.testName && <span className="truncate max-w-[45%]">{fill.source.testName}</span>}
+                  {fill.source.testName && <span className={input.source?.kind === "hfpefClinical" ? "break-words" : "truncate max-w-[45%]"}>{fill.source.testName}</span>}
                   {fill.source.loinc && <span>· LOINC {fill.source.loinc}</span>}
                   {fill.source.facility && <span className="truncate max-w-[35%]">· {fill.source.facility}</span>}
                   {fill.source.obsId && (
@@ -454,10 +467,10 @@ export function CalculatorDetail({
                       type="button"
                       onClick={() => jumpToSource(fill.source, tr(locale, input.label), fill.date)}
                       className="inline-flex items-center gap-0.5 text-sky-600 hover:underline dark:text-sky-400"
-                      title={zh ? "在左側報告中定位此數值" : "Locate this value in the left-panel report"}
+                      title={zh ? "在左側定位來源紀錄" : "Locate the source record in the left panel"}
                     >
                       <ExternalLink className="h-2.5 w-2.5" />
-                      {zh ? "查看原報告" : "View report"}
+                      {input.source?.kind === "hfpefClinical" ? (zh ? "查看來源" : "View source") : (zh ? "查看原報告" : "View report")}
                     </button>
                   )}
                 </div>

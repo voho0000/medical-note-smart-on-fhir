@@ -5,6 +5,8 @@ import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-p
 import { DEMO_FLAG_KEY } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import {
   MEDCLOUD_AUTO_LAUNCH_URL,
+  VGTPE_HMC_MEDCLOUD_LAUNCH_URL,
+  VGTPE_HMC_SITE_LAUNCH_URL,
   VGTPE_MEDCLOUD_LAUNCH_URL,
   VGTPE_SITE_LAUNCH_URL,
 } from '@/src/application/launch/medcloud-launch-context'
@@ -135,10 +137,18 @@ describe('FirstRunOnboardingDialog', () => {
     )
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    rerender(<FirstRunOnboardingDialog launchHref={VGTPE_HMC_MEDCLOUD_LAUNCH_URL} />)
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('keeps the normal onboarding flow for a site-only launch', () => {
-    render(<FirstRunOnboardingDialog launchHref={VGTPE_SITE_LAUNCH_URL} />)
+    const { rerender } = render(<FirstRunOnboardingDialog launchHref={VGTPE_SITE_LAUNCH_URL} />)
+
+    expect(screen.getByText('歡迎使用 MediPrisma')).toBeInTheDocument()
+
+    rerender(<FirstRunOnboardingDialog launchHref={VGTPE_HMC_SITE_LAUNCH_URL} />)
 
     expect(screen.getByText('歡迎使用 MediPrisma')).toBeInTheDocument()
   })

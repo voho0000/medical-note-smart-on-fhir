@@ -21,10 +21,11 @@ import {
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
-import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
+import { isInferredObservationUnit, isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 
 export interface LabCell {
+  adultPreventive?: boolean
   value: string
   /** Every source value when multiple records share one analyte/day cell. */
   allValues?: string[]
@@ -309,6 +310,11 @@ function canonicalTestKey(obs: any): string {
   //    pathways can never drift.)
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
+  // MediCloud adult screening supplies source text without a LOINC. Keep
+  // these names in the existing pinned hepatitis columns, not extra columns.
+  const screeningName = raw.normalize('NFKC').replace(/\s+/g, '')
+  if (/^B型肝炎表面抗原(?:\(HBsAg\))?$/i.test(screeningName)) return 'HBSAG'
+  if (/^C型肝炎抗體(?:\(Anti-HCV\))?$/i.test(screeningName)) return 'ANTI-HCV'
   // These category allowlist names are not yet aliases in the package.
   if (['鎂', 'MAGNESIUM'].includes(raw.trim().toUpperCase())) return 'MG'
   const fromText = canonicalTestKeyFromString(raw)
@@ -417,7 +423,7 @@ export function getLabPivotTestIdentity(
 
 export function buildLabPivots(
   observations: any[],
-  options: { nameMode?: AnalyteNameMode } = {},
+  options: { nameMode?: AnalyteNameMode; preferInstitutionEgfr?: boolean } = {},
 ): Record<string, LabPivot> {
   const nameMode = options.nameMode ?? 'standardized'
   const result: Record<string, LabPivot> = {}
@@ -442,12 +448,41 @@ export function buildLabPivots(
   // even when the patient has no data for any test in that category.
   for (const cat of LAB_CATEGORIES) {
     const obsList = buckets[cat.id]
+    const institutionEgfrKeys = new Set<string>()
+    const calculatedEgfrKeys = new Set<string>()
+    const egfrKey = (obs: any): string | undefined => {
+      const date = dateKey(obs.effectiveDateTime)
+      const identity = getLabPivotTestIdentity(obs, cat.id, nameMode)
+      return date && /^EGFR(?:\(|$)/.test(identity.testKey)
+        ? `${date}|${identity.mapKey}` : undefined
+    }
+    const isNhiCalculated = (obs: any) => /健保署\s*計算/.test(obs.method?.text ?? '')
+    if (options.preferInstitutionEgfr) {
+      for (const obs of obsList) {
+        const key = egfrKey(obs)
+        const value = formatValue(obs).numericValue
+        if (key && isNhiCalculated(obs) && value !== undefined && Number.isFinite(value)) calculatedEgfrKeys.add(key)
+        if (key && !isNhiCalculated(obs) && value !== undefined && Number.isFinite(value)
+          && !INVALID_TREND_STATUSES.has(obs.status?.trim().toLowerCase())) institutionEgfrKeys.add(key)
+      }
+    }
 
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
     const trendAvailability = new Map<string, TrendAvailabilityStats>()
 
     for (const obs of obsList) {
+      // Cumulative display preference only. Preserve every original resource;
+      // never equate assays or remove records by numeric equality.
+      if (options.preferInstitutionEgfr && isNhiCalculated(obs)) {
+        const key = egfrKey(obs)
+        if (key && institutionEgfrKeys.has(key)) continue
+      }
+      if (options.preferInstitutionEgfr && !isNhiCalculated(obs)) {
+        const key = egfrKey(obs)
+        const value = formatValue(obs).numericValue
+        if (key && calculatedEgfrKeys.has(key) && (value === undefined || !Number.isFinite(value))) continue
+      }
       const date = dateKey(obs.effectiveDateTime)
       if (!date) continue
       dateSet.add(date)
@@ -581,6 +616,11 @@ export function buildLabPivots(
         })
       } else {
         row.values.set(date, cell)
+      }
+      // Keep source provenance through same-day value merging. The date badge
+      // means this panel includes preventive-care results, not that all do.
+      if (prev?.adultPreventive || isAdultPreventiveHealthExamResource(obs)) {
+        row.values.get(date)!.adultPreventive = true
       }
     }
 
