@@ -707,6 +707,7 @@ describe('heart-failure board view', () => {
   it('keeps only the LVEF-independent classes on the HFpEF pathway', () => {
     render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" layout="board" profileFacts={HFPEF_FACTS} />)
 
+    expect(screen.queryByTestId('cdss-recommendation-heart-failure-hfpef-treatment')).toBeNull()
     const pillars = screen.getByTestId('cdss-hf-pillars')
     expect(pillars).toHaveAttribute('data-pillar-scope', 'lvef-independent')
     expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('HFpEF 的 FMT')

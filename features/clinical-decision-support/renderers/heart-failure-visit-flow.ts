@@ -757,6 +757,9 @@ export function buildHeartFailureVisitFlow(
     // The phenotype gate and the HFpEF confirmation are questions 1, 1b and 1c;
     // listing them again as things to do is the duplication this screen removes.
     item.id !== PHENOTYPE_MODULE_ID && item.id !== HFPEF_DIAGNOSIS_MODULE_ID
+    // The diagnosis question and HFpEF calculator already present the same
+    // eligibility evidence; a second read-only treatment card adds no action.
+    && item.id !== 'heart-failure-hfpef-treatment'
     && !isGenericMonitoringReminder(item)
     // Exercise clearance belongs to the rehabilitation assessment, not this HF visit.
     && item.id !== 'cardiac-rehabilitation-safety'

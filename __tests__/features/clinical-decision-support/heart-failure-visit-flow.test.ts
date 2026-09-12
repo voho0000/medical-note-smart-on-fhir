@@ -591,14 +591,36 @@ describe("today's actions", () => {
     expect(flow.decidableCount).toBe(7)
   })
 
-  it('never lists the phenotype gate or the HFpEF confirmation as something to do', () => {
-    // They are questions 1, 1b and 1c. A row that says 「answer the question」
-    // beside the question itself is the duplication this screen removed.
-    const flow = flowFor({ phenotypeAnswer: SUSPECTED })
+  it('keeps HFpEF in the assessment and omits its duplicate treatment card', () => {
+    // The diagnosis is answered in question 6 with the calculator evidence.
+    // Repeating the same evidence as a read-only treatment row adds no action.
+    const base = result()
+    const withHfpEf: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-hfpef-diagnosis', {
+          moduleGroup: 'assessment',
+          domain: 'diagnosis',
+          physicianInputRequests: [{
+            kind: 'hfpef-diagnosis-confirmation',
+            label: '確認 HFpEF 診斷？',
+          }],
+        } as Partial<CdssRecommendation>),
+        recommendation('heart-failure-hfpef-treatment', {
+          moduleName: 'HFpEF 治療',
+          status: 'no-action',
+          nextActions: ['由臨床人員確認分型與適應症後，再依完整病歷共同決策。'],
+        }),
+      ],
+    }
+    const flow = flowFor({ result: withHfpEf, phenotypeAnswer: SUSPECTED })
     const ids = flow.actionGroups.flatMap((group) => group.rows.map((row) => row.recommendation.id))
 
+    expect(flow.questions.some((question) => question.id === 'hfpef-confirmation')).toBe(true)
     expect(ids).not.toContain('heart-failure-phenotype')
     expect(ids).not.toContain('heart-failure-hfpef-diagnosis')
+    expect(ids).not.toContain('heart-failure-hfpef-treatment')
   })
 
   it('carries the basis from the pack\'s own overview evidence', () => {

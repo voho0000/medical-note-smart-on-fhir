@@ -75,6 +75,8 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 | HF clinical values dialog at `/` and launch-query variants | After restoring defaults, show the explanation once in the dialog header rather than repeating it below every field; retain each field's undo control. | Explicit owner request, 2026-09-12 |
 
+| HF views at `/` and launch-query variants | Hide the duplicate read-only `HFpEF 治療` card from both the new visit flow and original board; retain the HFpEF diagnosis panel, question 6, probability calculator, diagnostic evidence and confirmation controls. The source care-pack recommendation remains available internally to select the appropriate treatment pathway. | Explicit owner request, 2026-09-12 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.
