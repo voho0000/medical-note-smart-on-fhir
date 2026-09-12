@@ -1577,12 +1577,6 @@ function ActionsCard({
             : `已決定 ${flow.decidedCount} / ${flow.decidableCount}`}
         </span>
       </div>
-      <p className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? "Ordered by the rules' own priority. A decision is your record only: nothing is written to the chart or claimed, and 「prescribed」 does not close the row — if the rules find the same gap next visit it comes back, carrying today's decision."
-          : '排序＝規則的優先順序。處置只是你的紀錄，不寫回病歷、不申報；「已開立」不會永久關閉這一列，下次規則若再發現缺口會重新出現，並帶著這次的決定。'}
-      </p>
-
       {flow.actionGroups.length === 0 ? (
         <p className="px-3 py-2.5 text-xs text-muted-foreground" data-testid="cdss-hf-actions-empty">
           {isEnglish ? 'Nothing to decide this visit.' : '本次無需處理。'}

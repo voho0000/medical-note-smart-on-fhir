@@ -299,6 +299,7 @@ describe('the visit flow', () => {
     render(<Harness />)
     suspectHeartFailure()
 
+    expect(screen.queryByText(/排序＝規則的優先順序/)).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-hf-actions-decided')).toHaveTextContent('已決定 0 / 2')
     fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-mra-prescribed'))
 
