@@ -24,7 +24,7 @@ test.describe('medication + visit search (Phase 3)', () => {
     expect(rowHeight).toBeLessThan(60)
   })
 
-  test('keeps medication rows compact at a 125%-equivalent split width', async ({ page }) => {
+  test('keeps three readable medication lines at a 125%-equivalent split width', async ({ page }) => {
     await page.setViewportSize({ width: 1040, height: 900 })
     await openLeftTab(page, '用藥')
 
@@ -37,7 +37,37 @@ test.describe('medication + visit search (Phase 3)', () => {
 
     expect(surfaceWidth).toBeGreaterThanOrEqual(416)
     expect(surfaceWidth).toBeLessThan(448)
-    expect(rowHeight).toBeLessThan(60)
+    // Below the 456px container breakpoint the approved layout uses three
+    // lines: name/status, prescription, then diagnosis/institution/refill.
+    // Retain a tight height budget while checking that the extra line buys
+    // readable prescription space rather than overlap or accidental wrapping.
+    expect(rowHeight).toBeLessThanOrEqual(60)
+    const layout = await row.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      const rect = (selector: string) => {
+        const node = element.querySelector(selector)!
+        const box = node.getBoundingClientRect()
+        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right, height: box.height }
+      }
+      return {
+        bounds: { left: bounds.left, right: bounds.right, bottom: bounds.bottom },
+        name: rect('[data-medication-cell="identity"] > div:first-child'),
+        prescription: rect('[data-medication-regimen]'),
+        diagnosis: rect('[data-medication-diagnosis]'),
+        institution: rect('[data-medication-classification]'),
+      }
+    })
+    expect(layout.prescription.top).toBeGreaterThanOrEqual(layout.name.bottom)
+    expect(layout.diagnosis.top).toBeGreaterThanOrEqual(layout.prescription.bottom)
+    expect(layout.institution.top).toBe(layout.diagnosis.top)
+    expect(layout.diagnosis.right).toBeLessThanOrEqual(layout.institution.left)
+    for (const line of [layout.name, layout.prescription, layout.diagnosis, layout.institution]) {
+      expect(line.height).toBeGreaterThanOrEqual(16)
+      expect(line.left).toBeGreaterThanOrEqual(layout.bounds.left)
+      expect(line.right).toBeLessThanOrEqual(layout.bounds.right)
+      expect(line.bottom).toBeLessThanOrEqual(layout.bounds.bottom)
+    }
+    expect(layout.prescription.right).toBeGreaterThan(layout.name.right)
   })
 
   test('highlights current medication rows with an explicit timeline legend', async ({ page }) => {
