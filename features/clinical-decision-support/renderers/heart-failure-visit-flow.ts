@@ -480,7 +480,18 @@ export function buildHeartFailureVisitFlow(
 
   /* ---------------------------------------------------------- questions */
 
-  const suspicionRequest = requestOf(phenotypeCard, 'hf-suspicion')
+  // The visit always starts with this answer, even when the pack already
+  // knows the phenotype and therefore has no diagnostic question to ask.
+  // Keep that visit input usable without changing the pack's clinical gates.
+  const suspicionRequest: PhysicianInputRequest = requestOf(phenotypeCard, 'hf-suspicion') ?? {
+    kind: 'hf-suspicion',
+    label: isEnglish ? 'Do you suspect heart failure in this patient?' : '您懷疑這位病人有心衰竭嗎？',
+    selection: 'single',
+    options: [
+      { id: 'suspected', label: isEnglish ? 'Yes, heart failure is suspected' : '是，懷疑心衰竭' },
+      { id: 'not-suspected', label: isEnglish ? 'No, not suspected at this visit' : '否，本次不懷疑' },
+    ],
+  }
   const lvefRequest = requestOf(phenotypeCard, 'lvef-phenotype')
   const hfpEfRequest = requestOf(diagnosisCard, 'hfpef-diagnosis-confirmation')
 
@@ -512,8 +523,8 @@ export function buildHeartFailureVisitFlow(
       ? 'Answering 「no」 folds the rest away and leaves only the safety alerts.'
       : '答「否」後其餘題目與處置收起，只留安全警訊。',
     counted: true,
-    ...(suspicionRequest ? { request: suspicionRequest } : {}),
-    ...(phenotypeCard ? { recommendationId: phenotypeCard.id } : {}),
+    request: suspicionRequest,
+    recommendationId: PHENOTYPE_MODULE_ID,
   })
 
   // 1b and 1c appear only where the pack actually raised them. The host does
