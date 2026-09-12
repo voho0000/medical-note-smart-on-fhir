@@ -55,6 +55,7 @@ export function RecordValuesEditor({ metrics, isEnglish, now, onSave, onClose }:
           {orderedMetrics.map(({ metric, index }) => {
             const draft = drafts[index]
             const bp = metric.factKey === 'bloodPressure'
+            const dateInputId = `record-values-${metric.factKey}-date`
             return <fieldset key={metric.factKey} className="min-w-0 border-b border-border pb-2" data-testid={`record-values-${metric.factKey}`}>
               <legend className="mb-1 text-sm font-medium">{metric.label} {metric.unit ?? ({ LVEF: '%', bloodPressure: 'mmHg', heartRate: 'bpm', potassium: 'mmol/L', eGFR: 'mL/min/1.73m²', sodium: 'mmol/L', bodyWeight: 'kg', NTproBNP: 'pg/mL' } as Record<string, string>)[metric.factKey]}</legend>
               <div className="flex flex-wrap items-end gap-1.5">
@@ -63,7 +64,13 @@ export function RecordValuesEditor({ metrics, isEnglish, now, onSave, onClose }:
                   <Input type="number" inputMode="decimal" step="any" className="h-9 min-w-14 shadow-none" aria-label={bp ? (isEnglish ? 'Systolic' : '收縮壓') : metric.label} value={draft.first} disabled={draft.restore} onChange={event => patch(index, { first: event.target.value })} />
                 </label>
                 {bp ? <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">{isEnglish ? 'Diastolic' : '舒張壓'}<Input type="number" inputMode="decimal" step="any" className="h-9 min-w-14 shadow-none" value={draft.second} disabled={draft.restore} onChange={event => patch(index, { second: event.target.value })} /></label> : null}
-                <label className="flex flex-col gap-1 text-xs">{isEnglish ? 'Date' : '日期'}<Input type="date" aria-label={`${metric.label} ${isEnglish ? 'date' : '日期'}`} className="h-9 w-36 shadow-none" max={today} value={draft.date} disabled={draft.restore} onChange={event => patch(index, { date: event.target.value })} /></label>
+                <div className="flex w-36 flex-col gap-1 text-xs">
+                  <span className="flex items-center justify-between gap-2">
+                    <label htmlFor={dateInputId}>{isEnglish ? 'Date' : '日期'}</label>
+                    <button type="button" className="font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50" disabled={draft.restore || draft.date === today} onClick={() => patch(index, { date: today })}>{isEnglish ? 'Today' : '今天'}</button>
+                  </span>
+                  <Input id={dateInputId} type="date" aria-label={`${metric.label} ${isEnglish ? 'date' : '日期'}`} className="h-9 shadow-none" max={today} value={draft.date} disabled={draft.restore} onChange={event => patch(index, { date: event.target.value })} />
+                </div>
                 <Button type="button" variant="outline" className="h-9 px-2 text-xs shadow-none" onClick={() => patch(index, { restore: !draft.restore })}>{draft.restore ? (isEnglish ? 'Undo restore' : '取消恢復') : (isEnglish ? 'Restore default' : '恢復預設')}</Button>
               </div>
             </fieldset>

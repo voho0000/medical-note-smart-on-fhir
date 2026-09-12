@@ -97,6 +97,15 @@ describe('combined clinical values dialog', () => {
     expect(restored.facts.potassium?.numericValue).toBe(3.7)
   })
 
+  test('today shortcut updates a measurement date without opening the date picker', () => {
+    const { answer } = setup()
+    fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '55' } })
+    fireEvent.click(screen.getByTestId('record-values-LVEF').getElementsByTagName('button')[0])
+    expect(screen.getByLabelText('LVEF 日期')).toHaveValue('2026-09-12')
+    fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
+    expect(answer).toHaveBeenCalledWith(expect.objectContaining({ lvef: 55, measuredOn: '2026-09-12' }))
+  })
+
   test('cancel discards edits and invalid LVEF blocks saving', () => {
     const { save, answer } = setup()
     fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '150' } })
