@@ -1,11 +1,23 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { buildHeartFailureBoard } from '@/features/clinical-decision-support/renderers/heart-failure-board'
+import {
+  buildClinicVitals,
+  type ClinicVitals,
+} from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type {
   CdssRecommendation,
   CdssResult,
   ClinicalEvidence,
 } from '@/features/clinical-decision-support/types'
+
+const VISIT = new Date('2026-09-08T10:00:00+08:00')
+
+/** One statement about this visit, as the store would have recorded it. */
+function vitals(patch: Parameters<typeof buildClinicVitals>[0]): ClinicVitals {
+  return buildClinicVitals(patch, VISIT)
+}
+
 
 const NOW = new Date('2026-09-05T09:00:00+08:00')
 
@@ -427,7 +439,7 @@ describe('heart-failure board model', () => {
 
 describe('heart-failure board view', () => {
   it('puts status, the safety alert, and the four pillars ahead of the module list', () => {
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
 
     expect(screen.queryByTestId('cdss-clinical-summary')).toBeNull()
     const status = screen.getByTestId('cdss-hf-status')
@@ -456,7 +468,7 @@ describe('heart-failure board view', () => {
   it('reads today\'s sentences first, then lists rows action-first, and copies a rationale', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
 
     const headlines = screen.getByTestId('cdss-hf-headlines')
     expect(headlines).toHaveTextContent('今天要做的 3 件事')
@@ -486,14 +498,14 @@ describe('heart-failure board view', () => {
       ...result,
       recommendations: result.recommendations.filter((item) => item.status === 'no-action'),
     }
-    render(<ClinicalDecisionSupportView result={quiet} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={quiet} locale="zh-TW" layout="board" />)
     const headlines = screen.getByTestId('cdss-hf-headlines')
     expect(headlines).toHaveAttribute('data-silent', 'true')
     expect(headlines).toHaveTextContent('本次無需處理')
   })
 
   it('lists what the board did not consume by what the clinician has to do, with done modules folded but named', () => {
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
 
     // Pillars, the GDMT heading, and the alert live on the board, not in the list.
     expect(screen.queryByTestId('cdss-recommendation-heart-failure-ras-inhibition')).toBeNull()
@@ -518,7 +530,7 @@ describe('heart-failure board view', () => {
   })
 
   it('opens the same decision detail from a pillar tile and from the alert row', () => {
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
 
     fireEvent.click(screen.getByTestId('cdss-hf-pillar-heart-failure-mra'))
     const pillarDetail = screen.getByTestId('cdss-hf-pillar-detail-heart-failure-mra')
@@ -536,7 +548,7 @@ describe('heart-failure board view', () => {
       ...result,
       recommendations: result.recommendations.filter((item) => item.id === 'heart-failure-phenotype'),
     }
-    render(<ClinicalDecisionSupportView result={phenotypeOnly} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={phenotypeOnly} locale="zh-TW" layout="board" />)
 
     expect(screen.getByTestId('cdss-module-group-trigger-no-action')).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByTestId('cdss-recommendation-heart-failure-phenotype')).toBeInTheDocument()
@@ -560,7 +572,8 @@ describe('heart-failure board view', () => {
       <ClinicalDecisionSupportView
         result={withEntry}
         locale="zh-TW"
-        clinicVitals={{ systolic: 128, diastolic: 76, measuredOn: '2026-09-05' }}
+        layout="board"
+        clinicVitals={vitals({ entries: { systolic: { value: 128 }, diastolic: { value: 76 } } })}
         onSaveClinicVitals={onSave}
         onClearClinicVitals={onClear}
       />,
@@ -578,8 +591,15 @@ describe('heart-failure board view', () => {
     fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-save'))
 
     expect(onSave).toHaveBeenCalledTimes(1)
-    expect(onSave.mock.calls[0][0]).toMatchObject({ systolic: 128, diastolic: 76, heartRate: 72, bodyWeight: 73.5 })
-    expect(onSave.mock.calls[0][0].measuredOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    // A patch, not a whole record: saving the cuff must not erase the NYHA
+    // grade or the signs answered elsewhere in the same visit.
+    expect(onSave.mock.calls[0][0].entries).toMatchObject({
+      systolic: { value: 128 },
+      diastolic: { value: 76 },
+      heartRate: { value: 72 },
+      bodyWeight: { value: 73.5 },
+    })
+    expect(onSave.mock.calls[0][0].entries.systolic.measuredOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(screen.queryByTestId('cdss-hf-clinic-vitals-form')).toBeNull()
 
     fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-open'))
@@ -590,7 +610,7 @@ describe('heart-failure board view', () => {
   it('answers 今天有鬱血徵象嗎 with a tap, and stays unanswered by default', () => {
     const onSave = jest.fn()
     const { unmount } = render(
-      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" onSaveClinicVitals={onSave} />,
+      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" onSaveClinicVitals={onSave} />,
     )
     const signs = screen.getByTestId('cdss-hf-congestion-signs')
     expect(signs).toHaveTextContent('預設未回答')
@@ -598,7 +618,7 @@ describe('heart-failure board view', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
     // The chip states the signs of its group in the one record every control
     // shares, so nothing has to be reconciled between two fields later.
-    expect(onSave.mock.calls[0][0]).toMatchObject({
+    expect(onSave.mock.calls[0][0]).toEqual({
       signAnswers: { 'pitting-edema': 'present' },
     })
     unmount()
@@ -607,7 +627,8 @@ describe('heart-failure board view', () => {
       <ClinicalDecisionSupportView
         result={heartFailureResult()}
         locale="zh-TW"
-        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { 'pitting-edema': 'present' } }}
+        layout="board"
+        clinicVitals={vitals({ signAnswers: { 'pitting-edema': 'present' } })}
         onSaveClinicVitals={onSave}
       />,
     )
@@ -616,7 +637,7 @@ describe('heart-failure board view', () => {
     // Untapping returns the sign to 未評估 rather than asserting 「無」: a chip
     // nobody tapped and one someone untapped both mean it was not stated.
     fireEvent.click(screen.getByTestId('cdss-hf-congestion-sign-edema'))
-    expect(onSave.mock.calls[1][0].signAnswers).toBeUndefined()
+    expect(onSave.mock.calls[1][0].signAnswers).toEqual({ 'pitting-edema': null })
   })
 
   it('lights the chip for a sign answered on the evidence row below it', () => {
@@ -627,7 +648,8 @@ describe('heart-failure board view', () => {
       <ClinicalDecisionSupportView
         result={heartFailureResult()}
         locale="zh-TW"
-        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'present' } }}
+        layout="board"
+        clinicVitals={vitals({ signAnswers: { orthopnea: 'present' } })}
         onSaveClinicVitals={jest.fn()}
       />,
     )
@@ -646,7 +668,8 @@ describe('heart-failure board view', () => {
       <ClinicalDecisionSupportView
         result={heartFailureResult()}
         locale="zh-TW"
-        clinicVitals={{ measuredOn: '2026-09-08', signAnswers: { orthopnea: 'absent' } }}
+        layout="board"
+        clinicVitals={vitals({ signAnswers: { orthopnea: 'absent' } })}
         onSaveClinicVitals={jest.fn()}
       />,
     )
@@ -658,7 +681,7 @@ describe('heart-failure board view', () => {
   it('refuses half a blood pressure and offers no entry without a save handler', () => {
     const onSave = jest.fn()
     const { unmount } = render(
-      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" onSaveClinicVitals={onSave} />,
+      <ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" onSaveClinicVitals={onSave} />,
     )
     fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-open'))
     fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-systolic'), { target: { value: '130' } })
@@ -668,7 +691,7 @@ describe('heart-failure board view', () => {
     expect(screen.getByTestId('cdss-hf-clinic-vitals-save')).toBeEnabled()
     unmount()
 
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" />)
+    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
     expect(screen.queryByTestId('cdss-hf-clinic-vitals-open')).toBeNull()
   })
 
@@ -682,7 +705,7 @@ describe('heart-failure board view', () => {
    * classes ESC recommends independent of LVEF stay.
    */
   it('keeps only the LVEF-independent classes on the HFpEF pathway', () => {
-    render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" profileFacts={HFPEF_FACTS} />)
+    render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" layout="board" profileFacts={HFPEF_FACTS} />)
 
     const pillars = screen.getByTestId('cdss-hf-pillars')
     expect(pillars).toHaveAttribute('data-pillar-scope', 'lvef-independent')
@@ -707,13 +730,13 @@ describe('heart-failure board view', () => {
   })
 
   it('shows no foundational-therapy strip where the pack opened no pathway', () => {
-    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" profileFacts={HFPEF_FACTS} />)
+    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" layout="board" profileFacts={HFPEF_FACTS} />)
 
     expect(screen.queryByTestId('cdss-hf-pillars')).toBeNull()
   })
 
   it('shows a laboratory value no module read as a number with 未判定, not as 未取得', () => {
-    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" profileFacts={RECORD_ONLY_FACTS} />)
+    render(<ClinicalDecisionSupportView result={phenotypeOnlyResult()} locale="zh-TW" layout="board" profileFacts={RECORD_ONLY_FACTS} />)
 
     const potassium = screen.getByTestId('cdss-hf-metric-potassium')
     expect(potassium).not.toHaveAttribute('data-missing')

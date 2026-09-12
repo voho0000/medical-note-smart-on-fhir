@@ -18,12 +18,32 @@ import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
-import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
-import { usePhenotypeAnswer, usePhenotypeAnswerStore } from './stores/phenotype-answer.store'
+import {
+  useClinicVitals,
+  useClinicVitalsHydrated,
+  useClinicVitalsStore,
+} from './stores/clinic-vitals.store'
+import {
+  useHfpefInputs,
+  useHfpefInputsHydrated,
+  useHfpefInputsStore,
+} from './stores/hfpef-inputs.store'
+import {
+  usePhenotypeAnswer,
+  usePhenotypeAnswerHydrated,
+  usePhenotypeAnswerStore,
+} from './stores/phenotype-answer.store'
+import {
+  usePhysicianDecisions,
+  usePhysicianDecisionsHydrated,
+  usePhysicianDecisionsStore,
+} from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
+import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -168,16 +188,15 @@ function LayoutSwitcher({
   const isEnglish = locale === 'en'
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
     {
-      id: 'c',
-      // The letter is how pilot users name this layout in feedback (direction C).
-      label: isEnglish ? 'Decision board C' : '決策看板 C',
+      id: 'flow',
+      label: isEnglish ? 'Visit flow' : '新版流程',
       title: isEnglish
-        ? "One line of inputs, today's numbered sentences, then actions and their basis side by side"
-        : '一行決策所需資訊、編號的今日結論，再是處置與依據對號並列',
+        ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
+        : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
     },
     {
       id: 'board',
-      label: isEnglish ? 'Original board' : '原版模組表',
+      label: isEnglish ? 'Original board' : '原版看板',
       title: isEnglish
         ? 'The status board: safety inputs, the four pillars, then the module rows'
         : '原本的看板：安全數據、四支柱，再列模組',
@@ -220,6 +239,7 @@ function LayoutSwitcher({
 export default function LiveClinicalDecisionSupportFeature() {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
+  const { autofill } = useLabAutofill()
   const { locale } = useLanguage()
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
@@ -231,11 +251,31 @@ export default function LiveClinicalDecisionSupportFeature() {
   const clinicVitals = useClinicVitals(patientId)
   const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
   const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
+  const hydrateClinicVitals = useClinicVitalsStore((state) => state.hydrate)
+  const physicianDecisions = usePhysicianDecisions(patientId)
+  const recordPhysicianDecision = usePhysicianDecisionsStore((state) => state.recordDecision)
+  const clearPhysicianDecision = usePhysicianDecisionsStore((state) => state.clearDecision)
+  const hydratePhysicianDecisions = usePhysicianDecisionsStore((state) => state.hydrate)
+  const hfpefInputs = useHfpefInputs(patientId)
+  const setHfpefInputs = useHfpefInputsStore((state) => state.setInputs)
+  const hydrateHfpefInputs = useHfpefInputsStore((state) => state.hydrate)
   const phenotypeAnswer = usePhenotypeAnswer(patientId)
   const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
+
+  // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
+  // and 「還沒讀到」 render identically and mean opposite things, so the
+  // guidance waits here rather than drawing every question unanswered and
+  // jumping when the reads land. A chart with nothing stored resolves in the
+  // same tick, so a first visit never sees this.
+  const answersHydrated = [
+    useClinicVitalsHydrated(patientId),
+    usePhysicianDecisionsHydrated(patientId),
+    useHfpefInputsHydrated(patientId),
+    usePhenotypeAnswerHydrated(patientId),
+  ].every(Boolean)
 
   // The switches this physician set on this chart survive a reload, so they are
   // read back before the pack runs rather than after.
@@ -249,6 +289,20 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => {
     if (patientId) hydratePhenotypeAnswer(patientId)
   }, [hydratePhenotypeAnswer, patientId])
+
+  // Last visit's measurements, answers and decisions, for the same reason: an
+  // answer read back after the cards were built is an answer the cards ignored.
+  useEffect(() => {
+    if (patientId) hydrateClinicVitals(patientId)
+  }, [hydrateClinicVitals, patientId])
+
+  useEffect(() => {
+    if (patientId) hydratePhysicianDecisions(patientId)
+  }, [hydratePhysicianDecisions, patientId])
+
+  useEffect(() => {
+    if (patientId) hydrateHfpefInputs(patientId)
+  }, [hydrateHfpefInputs, patientId])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -287,7 +341,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   // follows what the physician left standing. Nothing patches a rendered card.
   // The vitals measured in the room travel the same way: as facts on the
   // profile, so every module that reads them recomputes.
-  const profile = useMemo(() => (
+  const answeredProfile = useMemo(() => (
     recordProfile
       ? applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
@@ -295,6 +349,26 @@ export default function LiveClinicalDecisionSupportFeature() {
         )
       : null
   ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+
+  // The HFpEF scores are computed here, once, by the host's own calculator —
+  // reading the echo report, the ECG and what the clinician typed — and handed
+  // to the pack as facts. The clinic measurements are applied first because the
+  // BMI H₂FPEF weighs most is derived from the height and weight taken in the
+  // room, and the phenotype answer because the LVEF decides whether the scores
+  // are read at all.
+  const hfpefReading = useMemo(() => (
+    answeredProfile
+      ? buildHfpefReading({
+        profile: answeredProfile,
+        autofill,
+        ...(hfpefInputs ? { inputs: hfpefInputs } : {}),
+      })
+      : undefined
+  ), [answeredProfile, autofill, hfpefInputs])
+
+  const profile = useMemo(() => (
+    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
+  ), [answeredProfile, hfpefReading])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -320,7 +394,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       : null
   }, [cdssLocale, profile, selectedPack])
 
-  if (patientLoading || clinicalData.isLoading || clinicalData.isFetching) {
+  if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
   }
 
@@ -382,6 +456,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
+  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
 
@@ -423,7 +498,11 @@ export default function LiveClinicalDecisionSupportFeature() {
         </div>
       </header>
 
-      {result.clinicalHandoff ? (
+      {/*
+        The visit flow carries the handoff inside 紀錄與追蹤, where the copy
+        button for it sits beside the one for this visit's summary.
+      */}
+      {result.clinicalHandoff && !isVisitFlow ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <ClinicalDecisionSupportView
@@ -433,11 +512,22 @@ export default function LiveClinicalDecisionSupportFeature() {
         profileFacts={profile.facts}
         layout={layout}
         clinicVitals={clinicVitals}
-        onSaveClinicVitals={patientId ? (vitals) => setClinicVitals(patientId, vitals) : undefined}
+        onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
         phenotypeAnswer={phenotypeAnswer}
         onAnswerPhenotype={patientId
           ? (answer) => setPhenotypeAnswer(patientId, answer)
+          : undefined}
+        physicianDecisions={physicianDecisions}
+        onRecordDecision={patientId
+          ? (moduleId, input) => recordPhysicianDecision(patientId, moduleId, input)
+          : undefined}
+        onClearDecision={patientId
+          ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
+          : undefined}
+        hfpefReading={hfpefReading}
+        onSaveHfpefInputs={patientId
+          ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
       />
     </div>

@@ -1,55 +1,45 @@
 /**
- * The structured-question contract, declared here because the pilot overlay
- * cannot deliver it from the package.
+ * The host's reading of the structured questions and the diagnostic summary a
+ * recommendation carries.
  *
- * The HMC preview builds `@voho0000/personalized-care` by overlaying the
- * pilot's compiled modules onto the published package, keeping the published
- * copy of its cross-disease entry points — `index.*`, `types.*`, `registry.*`,
- * `clinical-module-catalog.*`, `clinical-modules/evidence-tables.*`,
- * `guideline-packs/bundled.*` and `knowledge-packs/registry.*` — so the other
- * disease packs the app still ships keep working. The same list is applied by
- * `sync-packs.ps1` locally and by `deploy-hmc-preview.yml` in CI.
+ * The shapes are the pack's own. `@voho0000/personalized-care` 2.0.0 publishes
+ * `CdssPhysicianInputRequest`, `CdssDiagnosticSummary` and the rest, and the
+ * names below are aliases of them, so a rename in the pack is a compile error
+ * here rather than a control that quietly stops rendering.
  *
- * The consequence is exact: an overlaid module's **behaviour** reaches the app,
- * but a **type or export the pilot added** does not, because the declarations
- * come from the published baseline. `heart-failure-pack.js` is overlaid and
- * emits `physicianInputRequests` on its recommendations; the baseline
- * `types.d.ts` has never heard of the field.
+ * What is still the host's own work is the reading. `physicianInputRequestsOf`
+ * and `diagnosticSummaryOf` validate what arrives rather than casting it: both
+ * fields are optional on a recommendation, and the app runs against more than
+ * one build of the pack — the published package on `master`, and on `app-hmc`
+ * the HMC preview, which overlays the pilot's compiled modules onto the
+ * published package and keeps the published declarations. An overlaid module's
+ * behaviour reaches the app while a field the pilot added does not reach its
+ * types, so what actually arrives is checked. An unrecognised `kind` is
+ * dropped, which is how a pack newer than this host renders nothing instead of
+ * an empty control.
  *
- * So the host declares the shape it reads and the term ids it writes, and
- * validates what actually arrives. The precedent is `apply-clinic-vitals.ts`,
- * which names the congestion term ids (`pitting-edema`, `orthopnea`, …) the
- * same way. What stays with the pack is what matters clinically: every label
- * on screen is the pack's own wording, carried inside the recommendation.
- *
- * **Delete this file** when `@voho0000/personalized-care` is published with
- * `CdssPhysicianInputRequest` in its types, and import from the package.
+ * The term constants are the other direction: the ids the host writes back as
+ * facts. They are wire identifiers the pack matches on, never clinical
+ * wording, and the precedent is `apply-clinic-vitals.ts`, which names the
+ * congestion term ids (`pitting-edema`, `orthopnea`, …) the same way. What
+ * stays with the pack is what matters clinically: every label on screen is the
+ * pack's own wording, carried inside the recommendation.
  */
-import type { CdssRecommendation } from './types'
+import type {
+  CdssCriterionSummary,
+  CdssDiagnosticScore,
+  CdssDiagnosticSummary,
+  CdssPhysicianInputOption,
+  CdssPhysicianInputRequest,
+  CdssPhysicianInputRequestKind,
+  CdssRecommendation,
+} from './types'
 
-/** Mirrors `CdssPhysicianInputRequestKind` in the pack. */
-export type PhysicianInputRequestKind =
-  /** DP-00: whether this clinician suspects heart failure at all. */
-  | 'hf-suspicion'
-  /** DP-00: which HF symptoms and signs were seen in the room. */
-  | 'hf-symptoms'
-  | 'lvef-phenotype'
-  | 'hfpef-diagnosis-confirmation'
+export type PhysicianInputRequestKind = CdssPhysicianInputRequestKind
 
-export interface PhysicianInputOption {
-  id: string
-  label: string
-  /** Set where the choice invites a value, such as an LVEF and its study date. */
-  valueLabel?: string
-}
+export type PhysicianInputOption = CdssPhysicianInputOption
 
-export interface PhysicianInputRequest {
-  kind: PhysicianInputRequestKind
-  label: string
-  options?: readonly PhysicianInputOption[]
-  /** `multiple` renders checkboxes; anything else is one exclusive answer. */
-  selection?: 'single' | 'multiple'
-}
+export type PhysicianInputRequest = CdssPhysicianInputRequest
 
 /**
  * The canonical term each DP-01 answer is written as.
@@ -78,50 +68,11 @@ export const PHYSICIAN_HF_SUSPICION_TERMS = {
   'not-suspected': 'hf-not-suspected',
 } as const
 
-/** Mirrors `CdssCriterionSummary` in the pack. */
-export interface CriterionSummary {
-  id: string
-  label: string
-  state: 'met' | 'refuted' | 'undetermined'
-  detail?: string
-}
+export type CriterionSummary = CdssCriterionSummary
 
-/**
- * Mirrors `CdssDiagnosticSummary`.
- *
- * Deliberately not a probability. ESC 2026 §5.2.2 (PDF p.25) advises a
- * pragmatic approach and cautions that more complicated scoring systems should
- * be interpreted with caution; what it states under Table 10 is that the
- * probability rises with the number of parameters met. The pack counts, and
- * this host displays that count where it can be seen.
- */
-/**
- * A published score the pack computed, beside the guideline's own reading.
- *
- * `isFloor` is the field that matters clinically: it says the record could not
- * supply every parameter, so the total can only be an underestimate. The low
- * bands are the ones that would talk a clinician out of a diagnosis, so a floor
- * is never shown as a bare number.
- */
-export interface DiagnosticScore {
-  name: string
-  source: string
-  value: number
-  maximum: number
-  bandLabel: string
-  isFloor: boolean
-  unmeasured?: readonly string[]
-  components?: readonly { label: string; detail: string }[]
-}
+export type DiagnosticScore = CdssDiagnosticScore
 
-export interface DiagnosticSummary {
-  verdict: string
-  basis: string
-  criteria: readonly CriterionSummary[]
-  supportingParameterCount?: number
-  confirmedByClinician?: boolean
-  scores?: readonly DiagnosticScore[]
-}
+export type DiagnosticSummary = CdssDiagnosticSummary
 
 function toScore(value: unknown): DiagnosticScore | undefined {
   if (!value || typeof value !== 'object') return undefined
@@ -173,8 +124,8 @@ function toCriterion(value: unknown): CriterionSummary | undefined {
 /**
  * The criterion-by-criterion reading a recommendation carries, if any.
  *
- * Validated rather than cast, for the same reason as the input requests: on the
- * published package the field is simply absent.
+ * Validated rather than cast, for the same reason as the input requests: the
+ * field is optional, and what fills it has to be checked rather than trusted.
  */
 export function diagnosticSummaryOf(
   recommendation: CdssRecommendation,
@@ -230,10 +181,10 @@ function toOption(value: unknown): PhysicianInputOption | undefined {
 /**
  * The structured questions a recommendation carries, if any.
  *
- * Validating rather than casting: the app runs against the published package
- * on `master` and against the pilot overlay on `app-hmc`, and on the published
- * one this field is simply absent. An unrecognised `kind` is dropped so a pack
- * newer than this host renders nothing rather than an empty control.
+ * Validating rather than casting: the field is optional, and the pilot overlay
+ * on `app-hmc` can put a question on a card the published declarations have
+ * not described. An unrecognised `kind` is dropped so a pack newer than this
+ * host renders nothing rather than an empty control.
  */
 export function physicianInputRequestsOf(
   recommendation: CdssRecommendation,
