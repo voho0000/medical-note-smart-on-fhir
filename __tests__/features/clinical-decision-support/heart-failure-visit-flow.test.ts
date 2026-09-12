@@ -434,6 +434,56 @@ describe('the questions', () => {
     expect(flow.questions.find((item) => item.id === 'signs')?.state).toBe('open')
   })
 
+  it('puts the HFpEF confirmation last, counts it, and lets 「暫不確認」 finish it', () => {
+    // It reads questions ② and ④ to judge criterion (i), so it cannot be asked
+    // before them; and it belongs to 本次評估, not to the diagnosis step.
+    const asked = result()
+    const withConfirmation: CdssResult = {
+      ...asked,
+      recommendations: [
+        ...asked.recommendations,
+        recommendation('heart-failure-hfpef-diagnosis', {
+          moduleGroup: 'assessment',
+          domain: 'diagnosis',
+          status: 'review',
+          physicianInputRequests: [{
+            kind: 'hfpef-diagnosis-confirmation',
+            label: '確認 HFpEF 診斷？',
+          }],
+        } as Partial<CdssRecommendation>),
+      ],
+    }
+
+    const open = flowFor({ result: withConfirmation, phenotypeAnswer: SUSPECTED })
+    const last = open.questions.at(-1)
+    expect(last?.id).toBe('hfpef-confirmation')
+    expect(last?.number).toBe('7')
+    expect(last?.counted).toBe(true)
+    expect(last?.state).toBe('open')
+    // ① is settled by the suspicion and the LVEF gate alone.
+    expect(open.steps[0].state).toBe('done')
+
+    const deferred = flowFor({
+      result: withConfirmation,
+      phenotypeAnswer: { ...SUSPECTED, hfpEfConfirmed: 'not-assessed' },
+    })
+    expect(deferred.questions.at(-1)?.state).toBe('answered')
+    expect(deferred.questions.at(-1)?.answerText).toBe('暫不確認')
+
+    const confirmed = flowFor({
+      result: withConfirmation,
+      phenotypeAnswer: { ...SUSPECTED, hfpEfConfirmed: true },
+    })
+    expect(confirmed.questions.at(-1)?.answerText).toBe('HFpEF 已確認')
+
+    // 「取消確認」 on the original board returns the question to unanswered.
+    const undone = flowFor({
+      result: withConfirmation,
+      phenotypeAnswer: { ...SUSPECTED, hfpEfConfirmed: false },
+    })
+    expect(undone.questions.at(-1)?.state).toBe('open')
+  })
+
   it('asks the pack\'s own question in the pack\'s own words', () => {
     const flow = flowFor()
     const first = flow.questions[0]

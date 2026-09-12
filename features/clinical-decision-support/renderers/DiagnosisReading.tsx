@@ -17,9 +17,16 @@ import type { CriterionSummary, DiagnosticSummary } from '../physician-input-con
 export function DiagnosisReading({
   summary,
   isEnglish,
+  showScores = true,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
+  /**
+   * The visit flow prints the calculator's own score beside the criteria and
+   * turns this off: the pack reads the same numbers off the host's facts, and
+   * one score printed twice reads as two scores.
+   */
+  showScores?: boolean
 }) {
   if (!summary) return null
   const stateStyle: Record<CriterionSummary['state'], string> = {
@@ -66,7 +73,7 @@ export function DiagnosisReading({
       <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
         {summary.basis}
       </p>
-      {(summary.scores ?? []).map((score) => (
+      {(showScores ? summary.scores ?? [] : []).map((score) => (
         <div
           key={score.name}
           className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"

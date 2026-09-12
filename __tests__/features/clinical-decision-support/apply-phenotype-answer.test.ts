@@ -118,4 +118,13 @@ describe('applyPhenotypeAnswer', () => {
     expect(next.facts.physicianConfirmedHfpEf?.zh).toContain('醫師確認')
     expect(next.facts.physicianLvefPhenotype).toBeUndefined()
   })
+
+  it('writes nothing for 「暫不確認」, which is an answer with no finding in it', () => {
+    // The question was put and the clinician is not concluding today. The pack
+    // must read that as unknown — not as a refutation of HFpEF.
+    expect(applyPhenotypeAnswer(profile, {
+      hfpEfConfirmed: 'not-assessed',
+      answeredOn: '2026-09-09',
+    })).toBe(profile)
+  })
 })

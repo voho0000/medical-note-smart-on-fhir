@@ -132,10 +132,47 @@ function heartFailureResult(): CdssResult {
 }
 
 /**
+ * The HFpEF card, with criterion (i) in the state the test is about.
+ */
+function withHfpEfConfirmation(symptomsState: 'met' | 'undetermined'): CdssResult {
+  const base = heartFailureResult()
+  return {
+    ...base,
+    recommendations: [
+      ...base.recommendations,
+      recommendation('heart-failure-hfpef-diagnosis', {
+        moduleGroup: 'assessment',
+        domain: 'diagnosis',
+        status: 'review',
+        title: 'HFpEF 診斷（ESC 2026 §5.2.2）',
+        physicianInputRequests: [{
+          kind: 'hfpef-diagnosis-confirmation',
+          label: '確認 HFpEF 診斷？',
+        }],
+        diagnosticSummary: {
+          verdict: '三個條件皆成立，待醫師確認',
+          basis: 'ESC 2026 §5.2.2（PDF p.25）Table 10',
+          criteria: [
+            {
+              id: 'symptoms-signs',
+              label: '症狀／徵象',
+              state: symptomsState,
+              detail: symptomsState === 'met' ? '支持 1 項、反對 0 項' : '第 2、4 題未答',
+            },
+            { id: 'lvef', label: 'LVEF ≥50% 且未曾 <50%', state: 'met', detail: 'LVEF 58%' },
+            { id: 'objective-abnormality', label: '客觀結構／功能異常', state: 'met', detail: 'Table 10 支持 5 項' },
+          ],
+        },
+      } as Partial<CdssRecommendation>),
+    ],
+  }
+}
+
+/**
  * The host around the view: the real stores, and a switch between the two
  * faces, so what a clinician answers in one is what the other reads.
  */
-function Harness() {
+function Harness({ result = heartFailureResult() }: { result?: CdssResult } = {}) {
   const [layout, setLayout] = useState<CdssLayout>('flow')
   const clinicVitals = useClinicVitals(PATIENT)
   const setVitals = useClinicVitalsStore((state) => state.setVitals)
@@ -151,7 +188,7 @@ function Harness() {
         {layout}
       </button>
       <ClinicalDecisionSupportView
-        result={heartFailureResult()}
+        result={result}
         locale="zh-TW"
         layout={layout}
         patientId={PATIENT}
@@ -289,6 +326,35 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-decision-recorded-heart-failure-mra'))
       .toHaveTextContent('已開立')
     expect(screen.getByTestId('cdss-hf-questions-remaining')).toHaveTextContent('還有 4 題')
+  })
+
+  it('leads with 「前往第 2 題」 while criterion (i) is undetermined', () => {
+    render(<Harness result={withHfpEfConfirmation('undetermined')} />)
+    suspectHeartFailure()
+
+    // The useful action is not 「確認」: the symptoms are what would settle the
+    // criterion, so the confirmation is offered but does not lead.
+    expect(screen.getByTestId('cdss-hf-hfpef-go-to-symptoms')).toHaveTextContent('前往第 2 題')
+    expect(screen.getByTestId('cdss-hf-hfpef-confirm')).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-hf-hfpef-defer')).toHaveTextContent('暫不確認')
+  })
+
+  it('offers the confirmation first once criterion (i) is met, and can be deferred', () => {
+    render(<Harness result={withHfpEfConfirmation('met')} />)
+    suspectHeartFailure()
+
+    expect(screen.queryByTestId('cdss-hf-hfpef-go-to-symptoms')).toBeNull()
+    fireEvent.click(screen.getByTestId('cdss-hf-hfpef-defer'))
+
+    // 「暫不確認」 finishes the question without stating anything.
+    expect(screen.getByTestId('cdss-hf-question-answer-hfpef-confirmation'))
+      .toHaveTextContent('暫不確認')
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]?.hfpEfConfirmed)
+      .toBe('not-assessed')
+
+    fireEvent.click(screen.getByTestId('cdss-hf-question-edit-hfpef-confirmation'))
+    fireEvent.click(screen.getByTestId('cdss-hf-hfpef-confirm'))
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]?.hfpEfConfirmed).toBe(true)
   })
 
   it('draws the module list once, not twice', () => {

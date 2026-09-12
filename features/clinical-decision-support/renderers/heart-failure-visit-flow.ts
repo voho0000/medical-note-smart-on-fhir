@@ -34,7 +34,7 @@ import {
   type ClinicVitalsEntryKey,
   type SignAnswerValue,
 } from '../stores/clinic-vitals.store'
-import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
+import { HFPEF_NOT_CONFIRMED, type PhenotypeAnswer } from '../stores/phenotype-answer.store'
 import type { PhysicianDecision, PhysicianDecisionMap } from '../stores/physician-decisions.store'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
@@ -684,12 +684,15 @@ export function buildHeartFailureVisitFlow(
   // were in sent the clinician back up the page to answer them.
   if (hfpEfRequest && diagnosisCard) {
     const confirmation = phenotypeAnswer?.hfpEfConfirmed
+    // `false` is the original board's 「取消確認」, which returns the question
+    // to unanswered. Only 「暫不確認」 is an answer with no finding in it.
+    const answered = confirmation === true || confirmation === HFPEF_NOT_CONFIRMED
     questions.push({
       id: 'hfpef-confirmation',
       number: '7',
       label: hfpEfRequest.label,
-      state: gated(confirmation === undefined ? 'open' : 'answered'),
-      ...(confirmation === undefined
+      state: gated(answered ? 'answered' : 'open'),
+      ...(!answered
         ? {}
         : {
           answerText: confirmation === true

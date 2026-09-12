@@ -24,18 +24,19 @@ import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import type { CdssRecommendation } from '../types'
 import {
   NOT_ASSESSED,
+  todayIsoDate,
   type ClinicVitals,
   type ClinicVitalsPatch,
   type CompensationAnswerValue,
   type NyhaAnswerValue,
   type SignAnswerValue,
 } from '../stores/clinic-vitals.store'
-import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
+import { HFPEF_NOT_CONFIRMED, type PhenotypeAnswer } from '../stores/phenotype-answer.store'
 import type {
   PhysicianDecisionInput,
   PhysicianDecisionKind,
 } from '../stores/physician-decisions.store'
-import { diagnosticSummaryOf } from '../physician-input-contract'
+import { diagnosticSummaryOf, type DiagnosticSummary } from '../physician-input-contract'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { ClinicVitalsForm } from './ClinicVitalsForm'
@@ -720,6 +721,83 @@ function SignItemRows({
   )
 }
 
+/**
+ * Question ⑦: the HFpEF conclusion, with the three criteria beside it.
+ *
+ * Which button leads depends on what is missing. While criterion (i) is
+ * undetermined the useful action is not 「確認」 but 「去答第 2 題」, because the
+ * symptoms are what would settle it; a screen that led with the confirmation
+ * invited a conclusion drawn over an unread criterion. 「暫不確認」 is the third
+ * state and the reason this question can be finished at all: it says the
+ * question was put and no diagnosis was made today, and it writes no fact —
+ * 「先不確認」 is not a statement that the patient has no HFpEF.
+ */
+function HfpEfConfirmation({
+  summary,
+  isEnglish,
+  now,
+  answer,
+  onAnswer,
+}: {
+  summary: DiagnosticSummary | undefined
+  isEnglish: boolean
+  now: Date
+  answer?: PhenotypeAnswer
+  onAnswer: (answer: PhenotypeAnswer) => void
+}) {
+  const symptomsState = summary?.criteria
+    .find((criterion) => criterion.id === 'symptoms-signs')?.state
+  const symptomsUndetermined = symptomsState === 'undetermined'
+  const record = (value: true | typeof HFPEF_NOT_CONFIRMED) => onAnswer({
+    ...(answer ?? {}),
+    answeredOn: todayIsoDate(now),
+    hfpEfConfirmed: value,
+  })
+  return (
+    <div className="space-y-2" data-testid="cdss-hf-hfpef-confirmation">
+      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} />
+      <div className="flex flex-wrap items-center gap-2">
+        {symptomsUndetermined ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            onClick={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })}
+            data-testid="cdss-hf-hfpef-go-to-symptoms"
+          >
+            {isEnglish ? 'Go to question 2' : '前往第 2 題'}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant={symptomsUndetermined ? 'outline' : 'default'}
+          className="h-8"
+          onClick={() => record(true)}
+          data-testid="cdss-hf-hfpef-confirm"
+        >
+          {isEnglish ? 'Confirm the HFpEF diagnosis' : '確認 HFpEF 診斷'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8"
+          onClick={() => record(HFPEF_NOT_CONFIRMED)}
+          data-testid="cdss-hf-hfpef-defer"
+        >
+          {isEnglish ? 'Not confirming today' : '暫不確認'}
+        </Button>
+      </div>
+      <p className="text-[11px] leading-4 text-muted-foreground">
+        {isEnglish
+          ? 'Kept in this browser only; nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
+          : '只保留在這個瀏覽器，不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'}
+      </p>
+    </div>
+  )
+}
+
 function QuestionShell({
   question,
   isEnglish,
@@ -877,6 +955,16 @@ function QuestionsCard({
           ? 'Each question is asked here and nowhere else; 「not assessed」 is the default and is never read as a negative. Symptoms are what the patient says, signs are what you find — they are recorded apart. Answers re-enter the rules, and the actions below recompute.'
           : '每題只在這裡問一次；預設「未評估」，不會被當成陰性。症狀是病人說的，徵象是你檢查的，分開記。答案寫回規則後，下方處置會重算。'}
       </p>
+      {flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
+        <p
+          className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
+          data-testid="cdss-hf-questions-hfpef-note"
+        >
+          {isEnglish
+            ? 'A patient with an LVEF of 50% or more gets one more question at the end of this assessment. It reads the answers to questions 2 and 4 to judge criterion (i), which is why it comes last.'
+            : 'LVEF ≥50% 的病人在本次評估最後多一題。它讀第 2、4 題的答案判條件 (i)，所以排在後面。'}
+        </p>
+      ) : null}
       {flow.readOnly ? (
         <p
           className="px-3 py-2 text-xs text-muted-foreground"
@@ -922,23 +1010,14 @@ function QuestionsCard({
                 now={now}
                 onEdit={onEdit}
               >
-                {shows(question) && question.request && onAnswerPhenotype && question.recommendationId ? (
-                  <div className="space-y-2">
-                    {diagnosisCard ? (
-                      <DiagnosisReading
-                        summary={diagnosticSummaryOf(diagnosisCard)}
-                        isEnglish={isEnglish}
-                      />
-                    ) : null}
-                    <PhysicianInputRequestPanel
-                      requests={[question.request]}
-                      recommendationId={question.recommendationId}
-                      isEnglish={isEnglish}
-                      answer={phenotypeAnswer}
-                      onAnswer={onAnswerPhenotype}
-                      now={now}
-                    />
-                  </div>
+                {shows(question) && onAnswerPhenotype ? (
+                  <HfpEfConfirmation
+                    summary={diagnosisCard ? diagnosticSummaryOf(diagnosisCard) : undefined}
+                    isEnglish={isEnglish}
+                    now={now}
+                    answer={phenotypeAnswer}
+                    onAnswer={onAnswerPhenotype}
+                  />
                 ) : null}
               </QuestionShell>
             )
