@@ -37,7 +37,7 @@ function autofillWith(overrides: Partial<Record<string, number>> = {}): Autofill
     sex: 'female',
     clinicalSelects: {
       rhythm: { value: 'sr', date: '2026-05-25', testName: '最近 EKG：竇性心律' },
-      af: { value: 'no', date: '2026-05-25', testName: 'EKG' },
+      afHistory: { value: 'no', date: '2026-05-25', testName: 'EKG' },
       antihypertensives: { value: 'yes', date: '2026-09-12', testName: '目前有效用藥' },
     },
     resolve: (source): AutofillValue | undefined => {
