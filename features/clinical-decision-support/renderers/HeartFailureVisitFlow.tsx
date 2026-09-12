@@ -581,8 +581,8 @@ function RecordCard({
       </div>
       <p className="border-t border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'A missing value reads 「no value in the record」 and is never treated as normal. An entered value stays in this browser and carries its measurement and modification dates.'
-          : '缺的值以「紀錄無值」顯示，不會被當成正常。補填的值只保留在這個瀏覽器，並記量測日與修改日。'}
+          ? 'A missing value reads 「no value in the record」 and is never treated as normal. An entered value is encrypted and kept for this tab session, carries its measurement and modification dates, and is not carried to the next visit until phase 2.'
+          : '缺的值以「紀錄無值」顯示，不會被當成正常。補填的值加密保存於本分頁的工作階段，並記量測日與修改日；跨次就診沿用為第二階段。'}
         {' '}
         {formatStamp(now.toISOString(), now, isEnglish)}
       </p>
@@ -935,8 +935,8 @@ function HfpEfConfirmation({
       </div>
       <p className="text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Kept in this browser only; nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
-          : '只保留在這個瀏覽器，不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'}
+          ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2, and nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
+          : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'}
       </p>
     </div>
   )
@@ -1782,8 +1782,8 @@ function FollowUpCard({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
         <span data-testid="cdss-hf-storage-note">
           {isEnglish
-            ? `Saved in this browser ${formatStamp(now.toISOString(), now, isEnglish) ?? ''} · cloud sync is phase 2`
-            : `此瀏覽器已保存 ${formatStamp(now.toISOString(), now, isEnglish) ?? ''} · 雲端同步（第二階段）`}
+            ? `Encrypted for this tab session ${formatStamp(now.toISOString(), now, isEnglish) ?? ''} · carrying answers across visits is phase 2`
+            : `本分頁工作階段已加密保存 ${formatStamp(now.toISOString(), now, isEnglish) ?? ''} · 跨次就診沿用（第二階段）`}
         </span>
       </div>
 

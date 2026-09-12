@@ -109,8 +109,8 @@ export function ClinicVitalsForm({
     >
       <span className="w-full text-xs text-muted-foreground @min-[40rem]:w-auto @min-[40rem]:self-center">
         {isEnglish
-          ? 'Measured in clinic today. Kept in this browser only; every module recomputes from it.'
-          : '今日門診量測。只保留在這個瀏覽器；各模組會依此重新判定。'}
+          ? 'Measured in clinic today. Encrypted and kept for this tab session; every module recomputes from it.'
+          : '今日門診量測。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
       </span>
       {fields.map((field) => (
         <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">

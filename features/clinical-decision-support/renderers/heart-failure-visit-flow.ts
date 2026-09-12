@@ -669,8 +669,8 @@ export function buildHeartFailureVisitFlow(
     ...(vitalsText ? { answerText: vitalsText } : {}),
     ...(vitalsStamp ? { modifiedAt: vitalsStamp } : {}),
     hint: isEnglish
-      ? 'Kept in this browser only, never written to the chart; each field carries its own measurement date.'
-      : '只保留在這個瀏覽器、不寫回病歷；每個欄位各自記量測日。',
+      ? 'Encrypted and kept for this tab session, never written to the chart; each field carries its own measurement date.'
+      : '加密保存於本分頁的工作階段、不寫回病歷；每個欄位各自記量測日。',
     // A nurse can weigh a patient before anyone decides this is a heart-failure
     // visit, so this one is never locked — but it stops being part of
     // 「還有 n 題」 once the clinician has said they are not asking about it.
