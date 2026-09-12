@@ -1004,7 +1004,7 @@ function QuestionShell({
           </span>
           {answered && !editingInline && question.answerText ? (
             <span
-              className="text-xs font-medium text-foreground"
+              className="inline-flex min-h-6 items-center rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs font-semibold leading-4 text-primary"
               data-testid={`cdss-hf-question-answer-${question.id}`}
             >
               {question.answerText}
