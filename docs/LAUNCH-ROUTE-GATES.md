@@ -65,6 +65,8 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | HF「今日處置」at `/` and launch-query variants | Omit the `heart-failure-monitoring` row when its first action is the generic reminder to retrieve institutional notes and complete patient-reported/measurement data (Chinese or English). It adds no decision or pending count. Concrete testing/follow-up recommendations remain. The pack output and safety modules are unchanged. | Explicit screenshot-based removal request, 2026-09-12 |
 | HF「今日處置」at `/` and launch-query variants | Omit `cardiac-rehabilitation-safety` and its decision count: exercise clearance is outside this HF visit workflow. Keep `cardiac-rehabilitation` referral and other HF safety alerts. | Explicit owner request, 2026-09-12 |
 
+| HF「本次評估」at `/` and launch-query variants | Remove the introductory workflow paragraph in both languages; retain all questions and their behaviour. | Explicit owner request, 2026-09-12 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.

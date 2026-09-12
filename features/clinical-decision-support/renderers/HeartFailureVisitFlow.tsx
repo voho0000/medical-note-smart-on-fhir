@@ -1121,11 +1121,6 @@ function QuestionsCard({
             : (isEnglish ? 'Assessment complete' : '本次評估完成')}
         </span>
       </div>
-      <p className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'Each question is asked here and nowhere else; 「not assessed」 is the default and is never read as a negative. Symptoms are what the patient says, signs are what you find — they are recorded apart. Answers re-enter the rules, and the actions below recompute.'
-          : '每題只在這裡問一次；預設「未評估」，不會被當成陰性。症狀是病人說的，徵象是你檢查的，分開記。答案寫回規則後，下方處置會重算。'}
-      </p>
       {flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
           className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
