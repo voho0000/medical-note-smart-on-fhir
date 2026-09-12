@@ -645,3 +645,31 @@ describe('generic monitoring reminders', () => {
       .toBe('抽 NT-proBNP 作為基準；1 週後追蹤 K 與腎功能。')
   })
 })
+
+
+describe('English chart summary independent of the Chinese interface', () => {
+  it('uses English clinical labels and keeps findings, dates, doses and medication provenance', () => {
+    const flow = flowFor({ phenotypeAnswer: SUSPECTED, clinicVitals: answeredVitals(), decisions: {
+      'heart-failure-mra': { decision: 'dose-adjusted', reasons: [], note: '2.5 → 5 mg', recordedAt: NOW.toISOString(), packVersion: 'test' },
+      'heart-failure-monitoring': { decision: 'deferred', reasons: ['patient-refused'], recordedAt: NOW.toISOString(), packVersion: 'test' },
+    } })
+    expect(flow.englishSummaryText).not.toMatch(/[\u3400-\u9fff]/)
+    expect(flow.englishSummaryText).toContain('Heart-failure suspicion: Yes')
+    expect(flow.englishSummaryText).toContain('HFrEF')
+    expect(flow.englishSummaryText).toContain('LVEF 32% (2026/07/14)')
+    expect(flow.englishSummaryText).toContain('NYHA: II')
+    expect(flow.englishSummaryText).toContain('118/72')
+    expect(flow.englishSummaryText).toContain('SpO₂ 97%')
+    expect(flow.englishSummaryText).toContain('2.5 → 5 mg')
+    expect(flow.englishSummaryText).toContain('Patient declined')
+    expect(flow.englishSummaryText).toContain('from current medication record')
+    expect(flow.englishSummaryText).toContain('not assessed')
+  })
+
+  it('does not turn unanswered findings into normal findings or a negative diagnosis', () => {
+    const text = flowFor().englishSummaryText
+    expect(text).toContain('Heart-failure suspicion: Not assessed')
+    expect(text).toContain('NYHA: not assessed')
+    expect(text).toContain('Compensation: not assessed')
+  })
+})

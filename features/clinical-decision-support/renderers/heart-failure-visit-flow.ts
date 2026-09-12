@@ -20,6 +20,7 @@
  * when a step is done, what a locked question says — are the part worth
  * testing, and a test should not have to mount a tree to ask.
  */
+import { clinicalModuleLabel } from '@voho0000/personalized-care'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import type {
@@ -248,6 +249,7 @@ export interface HeartFailureVisitFlow {
   decidedCount: number
   decidableCount: number
   summaryText: string
+  englishSummaryText: string
   carriedFields: readonly CarriedField[]
   handoff?: CdssClinicalHandoff
   /** The pack's own follow-up sentence, where a monitoring module wrote one. */
@@ -1012,7 +1014,7 @@ export function buildHeartFailureVisitFlow(
       message: isEnglish
         ? `This visit is complete: copy the summary into the chart${followUpNote ? `, ${followUpNote}` : ''}`
         : `本次完成：複製摘要到病歷${followUpNote ? `，${followUpNote}` : ''}`,
-      actionLabel: isEnglish ? "Copy this visit's summary" : '複製本次摘要',
+      actionLabel: isEnglish ? "Copy English summary" : '複製英文摘要',
       target: { kind: 'copy' },
     }
   })()
@@ -1127,6 +1129,29 @@ export function buildHeartFailureVisitFlow(
     followUpNote,
   })
 
+  // Build chart text from structured answers, independently of the UI/pack language.
+  const englishSummaryText = buildVisitSummaryText({
+    board,
+    isEnglish: true,
+    now,
+    phenotypeTitle: phenotypeTitle?.match(/HF(?:imp|mr|p|r)EF/i)?.[0]
+      ? `${phenotypeTitle.match(/HF(?:imp|mr|p|r)EF/i)![0]} pathway` : undefined,
+    suspicionAnswerText: suspicion ? (suspected ? 'Yes' : 'No, not suspected at this visit') : 'Not assessed',
+    suspicionModifiedAt: phenotypeAnswer?.modifiedAt?.hfSuspicion,
+    nyhaText: nyha && nyha.value !== NOT_ASSESSED ? String(nyha.value) : 'not assessed',
+    symptomsText: signItemsText(VISIT_SYMPTOM_ITEMS, clinicVitals, true) ?? 'not assessed',
+    signsText: signItemsText(VISIT_EXAM_ITEMS, clinicVitals, true) ?? 'not assessed',
+    hfpEfText: phenotypeAnswer?.hfpEfConfirmed === true ? 'HFpEF confirmed'
+      : phenotypeAnswer?.hfpEfConfirmed === HFPEF_NOT_CONFIRMED ? 'HFpEF not confirmed this visit' : undefined,
+    compensationText: compensation && compensation.value !== NOT_ASSESSED ? compensation.value : 'not assessed',
+    vitalsText: entryText(clinicVitals, true),
+    decidableRows: decidableRows.map(row => ({
+      ...row,
+      moduleName: clinicalModuleLabel(row.recommendation.id, 'en', row.recommendation.id),
+    })),
+    decidedCount,
+  }).replace(/：/g, ': ').replace(/（/g, ' (').replace(/）/g, ')')
+
   return {
     steps,
     nextStep,
@@ -1139,6 +1164,7 @@ export function buildHeartFailureVisitFlow(
     decidedCount,
     decidableCount,
     summaryText,
+    englishSummaryText,
     carriedFields,
     ...(result.clinicalHandoff ? { handoff: result.clinicalHandoff } : {}),
     ...(followUpNote ? { followUpNote } : {}),
@@ -1289,7 +1315,7 @@ function buildVisitSummaryText(input: {
 
   const decided = decidableRows
     .flatMap((row) => (row.decision
-      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
+      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}${row.decision.reasons.length ? ` (${row.decision.reasons.map(reason => decisionReasonLabel(reason, isEnglish)).join('; ')})` : ''}${row.decision.note ? ` (${row.decision.note})` : ''}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
       : []))
   const undecided = decidableRows.length - decidedCount
   lines.push([

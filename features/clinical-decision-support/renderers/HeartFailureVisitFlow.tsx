@@ -214,7 +214,7 @@ export function HeartFailureVisitFlow({
           if (flow.nextStep.target.kind === 'copy') return
           focusVisitFlowTarget(flow.nextStep.target)
         }}
-        summaryText={flow.summaryText}
+        summaryText={flow.englishSummaryText}
       />
 
       <RecordCard
@@ -1778,7 +1778,7 @@ function FollowUpCard({
           variant="outline"
           className="ml-auto h-8"
           onClick={() => {
-            void copy(flow.summaryText).then((ok) => {
+            void copy(flow.englishSummaryText).then((ok) => {
               if (!ok) {
                 toast.error(isEnglish
                   ? 'Could not copy — the clipboard is unavailable in this context.'
@@ -1792,7 +1792,7 @@ function FollowUpCard({
           <span aria-live="polite">
             {copied
               ? (isEnglish ? 'Copied' : '已複製')
-              : (isEnglish ? "Copy this visit's summary" : '複製本次摘要')}
+              : (isEnglish ? "Copy English summary" : '複製英文摘要')}
           </span>
         </Button>
       </div>
@@ -1807,7 +1807,7 @@ function FollowUpCard({
         className="whitespace-pre-wrap break-words px-3 py-2.5 font-sans text-xs leading-relaxed text-foreground"
         data-testid="cdss-hf-summary-text"
       >
-        {flow.summaryText}
+        {flow.englishSummaryText}
       </pre>
 
       {flow.carriedFields.length > 0 ? (
