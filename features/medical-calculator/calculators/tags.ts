@@ -62,6 +62,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'pf-ratio': { purpose: ['severity', 'formula'], diseases: [{ en: 'ARDS', zh: '急性呼吸窘迫' }, { en: 'Hypoxemia', zh: '低血氧' }] },
   'egfr-mdrd': { purpose: ['formula'], diseases: [CKD] },
   'ckd-kdigo-risk': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'End-stage renal disease', zh: '末期腎病' }] },
+  'ascvd-vhr-2023': { purpose: ['risk', 'treatment'], diseases: [{ en: 'ASCVD / Coronary disease', zh: '動脈粥樣硬化／冠心病' }] },
   'who-cvd-2019': { purpose: ['prognosis', 'risk', 'screening'], diseases: [{ en: 'Cardiovascular disease', zh: '心血管疾病' }, { en: 'Primary prevention', zh: '初級預防' }] },
   'meld-3': { purpose: ['prognosis'], diseases: [CIRRHOSIS, { en: 'End-stage liver disease', zh: '末期肝病' }] },
   'maddrey-df': { purpose: ['prognosis', 'severity'], diseases: [{ en: 'Alcoholic hepatitis', zh: '酒精性肝炎' }] },

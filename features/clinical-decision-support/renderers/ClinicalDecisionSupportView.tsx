@@ -52,6 +52,8 @@ import {
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
+import { buildCoronaryDiseaseBoard } from './coronary-disease-board'
+import { CoronaryDiseaseStatusBoard } from './CoronaryDiseaseStatusBoard'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
@@ -85,6 +87,7 @@ interface ClinicalDecisionSupportViewProps {
    * prescription state from them when the pack produced no module for it.
    */
   profileFacts?: CdssPatientProfile['facts']
+  coronaryCalculator?: ReactNode
   /**
    * `classic` renders every pack the module-first way, board or not; `board`
    * (the default) lets the heart-failure pack open with its status board.
@@ -1412,8 +1415,8 @@ function SourceGuidelineReference({
         </summary>
         <div className="space-y-2 border-t border-border/60 py-2">
           <dl className="space-y-2">
-            {citedStatements.map((statement) => (
-              <div key={`${reference.id}-${statement.label}`}>
+            {citedStatements.map((statement, statementIndex) => (
+              <div key={`${reference.id}-${statement.label}-${statementIndex}`}>
                 <dt className="font-semibold text-foreground">{statement.label}</dt>
                 <dd className="mt-0.5 whitespace-pre-line leading-relaxed text-foreground">
                   {statement.text}
@@ -2023,6 +2026,7 @@ export function ClinicalDecisionSupportView({
   locale,
   patientId,
   profileFacts,
+  coronaryCalculator,
   layout = 'flow',
   clinicVitals,
   onSaveClinicVitals,
@@ -2068,6 +2072,10 @@ export function ClinicalDecisionSupportView({
   const [now] = useState(() => new Date())
   const board = useMemo(
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
+    [layout, locale, now, profileFacts, result],
+  )
+  const coronaryBoard = useMemo(
+    () => layout === 'classic' ? undefined : buildCoronaryDiseaseBoard(result, locale, now, profileFacts),
     [layout, locale, now, profileFacts, result],
   )
   // The visit flow is the heart-failure default. Every other pack, and the
@@ -2228,7 +2236,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && (
+  const showClinicalSummary = !board && !coronaryBoard && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2410,6 +2418,23 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
+      {coronaryBoard ? (
+        <CoronaryDiseaseStatusBoard
+          key={`${patientId ?? 'anonymous'}-${result.packId}`}
+          calculator={coronaryCalculator}
+          board={coronaryBoard} isEnglish={isEnglish} now={now}
+          expandedId={expandedId} onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          clinicVitals={clinicVitals} onSaveClinicVitals={onSaveClinicVitals} onClearClinicVitals={onClearClinicVitals}
+          decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
+          packVersion={result.packVersion}
+          renderDetail={(recommendation) => (
+            <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
+              onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance}
+              clinicVitals={clinicVitals} onSaveClinicVitals={onSaveClinicVitals} />
+          )}
+        />
+      ) : null}
+
       {board && !isVisitFlow ? (
         <HeartFailureStatusBoard
           board={board}
@@ -2445,7 +2470,7 @@ export function ClinicalDecisionSupportView({
         do and carrying a decision on every row; a second copy of the same rows
         underneath is the duplication it removed.
       */}
-      {isVisitFlow ? null : (
+      {isVisitFlow || coronaryBoard ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}

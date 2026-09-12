@@ -41,6 +41,14 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
+## Coronary review branch
+
+On `codex/coronary-cdss-hf-style`, `HOST_PACK_ORDER` lists HF followed by chronic
+coronary disease. Both packs are enabled on this review branch; HF remains the
+default. The existing tab, Beta, site, and launch-route gates are unchanged.
+The owner requested a complete coronary CDSS on its own branch (2026-09-12).
+No surface is removed or disabled by this addition.
+
 ## Prompt Gallery visibility
 
 | Where | Kind | Behaviour | Owner decision |

@@ -8,6 +8,7 @@ import { RENAL } from './renal'
 import { HEPATIC } from './hepatic'
 import { GI } from './gi'
 import { ELECTROLYTE } from './electrolyte'
+import { ASCVD_VHR_CALCULATOR } from './ascvd-vhr'
 import { HFPEF } from './hfpef'
 import { CARDIAC } from './cardiac'
 import { PULMONARY } from './pulmonary'
@@ -23,6 +24,7 @@ export const CALCULATORS: CalculatorDef[] = [
   ...ELECTROLYTE,
   ...CARDIAC,
   ...HFPEF,
+  ASCVD_VHR_CALCULATOR,
   ...PULMONARY,
   ...HEME,
   ...NEURO,

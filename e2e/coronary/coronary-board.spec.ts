@@ -1,0 +1,98 @@
+import { expect, test } from '@playwright/test'
+
+test('renders the real pack at desktop and phone widths, in both themes', async ({ page }, testInfo) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/dev/coronary-cdss?scenario=acs')
+  await expect(page.getByTestId('cdss-coronary-board')).toBeVisible()
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), theme === 'dark')
+    for (const width of [320, 390, 430, 640, 768, 880, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await expect(page.getByTestId('cdss-ccd-metric-LDL')).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+      await page.screenshot({ path: testInfo.outputPath(`ccd-${theme}-${width}.png`), fullPage: true })
+    }
+  }
+  await page.getByTestId('cdss-ccd-expand-coronary-lipid-lowering').click()
+  await expect(page.getByRole('region', { name: '降脂治療與 LDL-C 目標' })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  expect(errors).toEqual([])
+})
+
+test('a measurement recomputes the pack, decisions survive reload and stay with their patient', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/dev/coronary-cdss?scenario=missing')
+  await page.getByRole('button', { name: '補填／修改門診量測' }).click()
+  await page.getByTestId('cdss-hf-clinic-vitals-systolic').fill('150')
+  await page.getByTestId('cdss-hf-clinic-vitals-diastolic').fill('90')
+  await page.getByTestId('cdss-hf-clinic-vitals-save').click()
+  await expect(page.getByTestId('cdss-ccd-metric-bloodPressure')).toContainText('150/90')
+  await expect(page.getByTestId('cdss-ccd-module-coronary-blood-pressure')).toContainText('150/90')
+  await page.getByTestId('cdss-ccd-decision-coronary-antiplatelet-strategy-prescribed').click()
+  await expect(page.getByTestId('cdss-ccd-decision-recorded-coronary-antiplatelet-strategy')).toContainText('已開立')
+  // Wait for the encrypted write, then prove the read path in a real browser.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cdss-physician-decisions:synthetic-missing'))).not.toBeNull()
+  await page.reload()
+  await expect(page.getByTestId('cdss-ccd-decision-recorded-coronary-antiplatelet-strategy')).toContainText('已開立')
+  await expect(page.getByTestId('cdss-ccd-metric-bloodPressure')).toContainText('150/90')
+  await page.getByRole('button', { name: '複製本次摘要' }).click()
+  await expect(page.getByRole('button', { name: '已複製' })).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('本次處置：已開立')
+  await page.getByRole('link', { name: '慢性期', exact: true }).click()
+  await expect(page.getByTestId('cdss-ccd-metric-bloodPressure')).toContainText('124/76')
+  await expect(page.getByTestId('cdss-ccd-follow-up')).not.toContainText('抗血小板策略 · 已開立')
+})
+
+test('evidence switches recompute the pathway and all no-action modules remain accessible', async ({ page }) => {
+  await page.goto('/dev/coronary-cdss?scenario=stable')
+  await page.getByTestId('cdss-ccd-expand-coronary-disease-evidence').click()
+  const detail = page.getByRole('region', { name: '冠心病證據與分期' })
+  const chronic = detail.getByTestId('cdss-evidence-switch-ccd:chronic-code')
+  await expect(chronic).toBeChecked()
+  await chronic.click()
+  await expect(page.getByTestId('cdss-ccd-therapy')).toHaveCount(0)
+  await chronic.click()
+  await expect(page.getByTestId('cdss-ccd-therapy')).toBeVisible()
+  await page.getByRole('button', { name: /目前無需處理 ·/ }).click()
+  await expect(page.getByTestId('cdss-ccd-module-coronary-follow-up-monitoring')).toBeVisible()
+})
+
+test('keeps safety, empty and English states readable, and preserves the HF view', async ({ page }, testInfo) => {
+  await page.goto('/dev/coronary-cdss?scenario=safety')
+  await expect(page.getByTestId('cdss-ccd-safety')).toContainText('NSAID')
+  await page.screenshot({ path: testInfo.outputPath('ccd-safety.png'), fullPage: true })
+  await page.goto('/dev/coronary-cdss?scenario=empty')
+  await expect(page.getByTestId('cdss-ccd-module-coronary-disease-evidence')).toBeVisible()
+  await expect(page.getByTestId('cdss-ccd-therapy')).toHaveCount(0)
+  await page.goto('/dev/coronary-cdss?scenario=acs&lang=en')
+  await expect(page.getByRole('heading', { name: 'Antithrombotic and lipid therapy' })).toBeVisible()
+  await page.goto('/dev/coronary-cdss?scenario=hf')
+  await expect(page.getByTestId('cdss-hf-visit-flow')).toBeVisible()
+  await expect(page.getByTestId('cdss-coronary-board')).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('hf-reference.png'), fullPage: true })
+})
+
+
+test('Medical Calculator inputs update CDSS and persist per patient', async ({ page }) => {
+  await page.goto('/dev/coronary-cdss?scenario=stable')
+  const calc = page.getByTestId('ascvd-risk-calculator')
+  await expect(calc.getByRole('heading')).toContainText('尚無法判定')
+  await page.getByTestId('ascvd-risk-inputs').locator('summary').click()
+  const mi = page.getByTestId('ascvd-input-vhr:major:prior-mi')
+  await expect(mi).toBeEnabled()
+  await mi.selectOption('2')
+  await expect(calc.getByRole('heading')).toHaveText('極高風險')
+  await expect(page.getByTestId('cdss-ccd-module-coronary-lipid-lowering')).toContainText('可立即處理')
+  await expect(page.getByTestId('cdss-ccd-module-coronary-lipid-lowering')).toContainText('醫療計算機')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('calculator-ascvd-risk-inputs:synthetic-stable'))).not.toBeNull()
+  await page.reload()
+  await expect(calc.getByRole('heading')).toHaveText('極高風險')
+  await page.getByRole('link', { name: 'ACS 後', exact: true }).click()
+  await expect(calc.getByRole('heading')).toContainText('尚無法判定')
+  await page.getByRole('link', { name: '慢性期', exact: true }).click()
+  await expect(calc.getByRole('heading')).toHaveText('極高風險')
+  await calc.getByRole('button', { name: '還原病歷帶入值' }).click()
+  await expect(calc.getByRole('heading')).toContainText('尚無法判定')
+})

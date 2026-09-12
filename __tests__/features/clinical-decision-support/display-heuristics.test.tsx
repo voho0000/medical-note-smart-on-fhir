@@ -106,7 +106,7 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         <ClinicalDecisionSupportView result={result} locale={locale} layout="board" />,
       )
 
-      const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"]')
+      const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"], [data-testid^="cdss-ccd-module-"]')
       expect(cells.length).toBeGreaterThan(0)
 
       cells.forEach((cell) => {
@@ -127,6 +127,7 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         const row = container
           .querySelector(`[data-testid="cdss-module-cell-${recommendation.id}"]`)
           ?.closest('[id^="cdss-trigger-"]')
+          ?? container.querySelector(`[data-testid="cdss-ccd-module-${recommendation.id}"]`)
         if (!row) continue
 
         // The subtraction rules may move a phrase from the title into the

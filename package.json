@@ -32,7 +32,9 @@
     "loop:dashboard": "node scripts/loop/dashboard.mjs",
     "loop:log": "node scripts/loop/log.mjs",
     "version": "node scripts/write-version.mjs && git add public/version.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "dev:coronary": "next dev --webpack --hostname 127.0.0.1 -p 3015",
+    "test:e2e:coronary": "playwright test -c playwright.coronary.config.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
@@ -57,8 +59,8 @@
     "@tanstack/react-virtual": "^3.14.9",
     "@voho0000/clinical-lab-normalization": "1.1.1",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "2.0.0",
-    "@voho0000/personalized-care-fhir": "1.6.0",
+    "@voho0000/personalized-care": "file:vendor/coronary-cdss/voho0000-personalized-care-2.1.0-ccd.1.tgz",
+    "@voho0000/personalized-care-fhir": "file:vendor/coronary-cdss/voho0000-personalized-care-fhir-1.7.0-ccd.1.tgz",
     "@voho0000/personalized-education": "1.4.1",
     "ai": "^6.0.43",
     "class-variance-authority": "^0.7.1",

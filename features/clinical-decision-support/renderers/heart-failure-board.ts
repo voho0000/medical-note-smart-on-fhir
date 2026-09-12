@@ -23,7 +23,12 @@ import type {
   CdssStatus,
   ClinicalEvidence,
 } from '../types'
-import { CLINIC_ENTRY_PATTERN } from '../utils/apply-clinic-vitals'
+import {
+  buildDiseaseBoard, findEvidence, metricFromEvidence, latestSourceDate, TAKING_PATTERN,
+  type DiseaseMetric,
+} from './disease-board'
+export { daysBetween } from './disease-board'
+export type HeartFailureMetric = DiseaseMetric
 import { buildCareTimeline, type CareTimelineModel } from './care-timeline'
 
 export const HEART_FAILURE_PACK_ID = 'heart-failure-cdss'
@@ -95,39 +100,6 @@ const STATUS_METRICS: readonly {
   },
 ]
 
-const UNIT_PATTERN = /\s*(?:mmHg|bpm|mmol\/L|mEq\/L|mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)|mg\/dL|pg\/mL|ng\/L|kg)(?![A-Za-z])/gi
-/** The parenthetical `agedFactEvidence` appends to a value past its window. */
-const STALE_NOTE_PATTERN = /[（(][^（()）]*(?:已 \d+ 天|\d+ d old|超過 \d+ 天窗|past the \d+-day window)[^（()）]*[）)]/
-const TAKING_PATTERN = /^(?:目前用藥中|Currently taking)/
-
-export interface HeartFailureMetric {
-  factKey: string
-  label: string
-  kind: HeartFailureMetricKind
-  /** The measurement without its unit or stale note; undefined when absent. */
-  value?: string
-  /** The evidence value as the pack wrote it, for the tooltip. */
-  fullValue?: string
-  unit?: string
-  date?: string
-  ageDays?: number
-  /** The pack marked the value as past its monitoring window. */
-  stale: boolean
-  /** Entered in the room this visit rather than read from the record. */
-  entered: boolean
-  /**
-   * A pack module carried this value this visit. `false` when the record holds
-   * the value but no module ran that reads it — a patient outside the HFrEF
-   * pathway gets the phenotype card alone, which names LVEF and NT-proBNP and
-   * nothing else — so the tile shows the measurement without a judgement
-   * behind it. The distinction matters: 「未取得」 asks the clinician to order
-   * a test the laboratory already ran.
-   */
-  evaluated: boolean
-  /** Where the value came from, for the source link. */
-  evidence?: ClinicalEvidence
-}
-
 export interface HeartFailurePillar {
   id: string
   label: string
@@ -176,8 +148,8 @@ export interface HeartFailureBoardModel {
   evaluatedCount: number
   /** Modules per status, for the counts line under today's sentences. */
   statusCounts: Readonly<Record<CdssStatus, number>>
-  lvef?: HeartFailureMetric
-  metrics: readonly HeartFailureMetric[]
+  lvef?: DiseaseMetric
+  metrics: readonly DiseaseMetric[]
   fmtSafety?: CdssRecommendation
   /** Safety modules the pack marked actionable: read before anything else. */
   alerts: readonly CdssRecommendation[]
@@ -200,172 +172,6 @@ export interface HeartFailureBoardModel {
   pillars: readonly HeartFailurePillar[]
   /** Module ids the board renders itself, so the list does not repeat them. */
   consumedIds: ReadonlySet<string>
-}
-
-function latestSourceDate(evidence: ClinicalEvidence | undefined): string | undefined {
-  const dates = (evidence?.sources ?? [])
-    .map((source) => source.date)
-    .filter((date): date is string => Boolean(date))
-    .sort()
-  return dates.at(-1)
-}
-
-export function daysBetween(fromIsoDate: string, now: Date): number | undefined {
-  const from = new Date(fromIsoDate.length === 10 ? `${fromIsoDate}T00:00:00` : fromIsoDate)
-  if (Number.isNaN(from.getTime())) return undefined
-  const days = Math.floor((now.getTime() - from.getTime()) / 86_400_000)
-  return days < 0 ? 0 : days
-}
-
-/**
- * The evidence row for one fact. Modules print the same measurement with and
- * without the stale annotation, so the annotated row wins when one exists:
- * the board must not show a value as current because the first module that
- * mentioned it happened not to date it.
- */
-function findEvidence(
-  recommendations: readonly CdssRecommendation[],
-  factKey: string,
-): ClinicalEvidence | undefined {
-  const exact = recommendations.flatMap((recommendation) => (
-    recommendation.patientEvidence.filter((item) => (
-      item.factKeys.length === 1 && item.factKeys[0] === factKey
-    ))
-  ))
-  const loose = exact.length > 0
-    ? exact
-    : recommendations.flatMap((recommendation) => (
-      recommendation.patientEvidence.filter((item) => item.factKeys.includes(factKey))
-    ))
-  return loose.find((item) => STALE_NOTE_PATTERN.test(item.value)) ?? loose[0]
-}
-
-/**
- * The collection date the adapter prints inside the value —
- * 「142/84 mmHg（2026-04-18）」 — or, for a value entered in the room,
- * the date with its provenance note: 「142/84 mmHg（2026-09-05 門診輸入）」.
- */
-const INLINE_DATE_PATTERN = /\s*[（(]\s*(\d{4}-\d{2}-\d{2})(?:[,，\s]+[^（()）]*)?[）)]/
-
-function compactValue(value: string): {
-  value: string
-  unit?: string
-  stale: boolean
-  inlineDate?: string
-} {
-  const stale = STALE_NOTE_PATTERN.test(value)
-  const withoutNote = value.replace(STALE_NOTE_PATTERN, '').trim()
-  const inlineDate = withoutNote.match(INLINE_DATE_PATTERN)?.[1]
-  const withoutDate = withoutNote.replace(INLINE_DATE_PATTERN, '').trim()
-  const unit = withoutDate.match(UNIT_PATTERN)?.[0]?.trim()
-  const compact = withoutDate.replace(UNIT_PATTERN, '').replace(/\s+(?=[（(])/g, '').trim()
-  return { value: compact || withoutDate, unit, stale, inlineDate }
-}
-
-function metricFromEvidence(
-  config: (typeof STATUS_METRICS)[number],
-  evidence: ClinicalEvidence | undefined,
-  isEnglish: boolean,
-  now: Date,
-): HeartFailureMetric {
-  const label = isEnglish ? config.en : config.zh
-  if (!evidence) {
-    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false, evaluated: false }
-  }
-  const compact = compactValue(evidence.value)
-  const date = latestSourceDate(evidence) ?? compact.inlineDate
-  return {
-    factKey: config.factKey,
-    label,
-    kind: config.kind,
-    value: compact.value,
-    fullValue: evidence.value,
-    unit: compact.unit,
-    date,
-    ageDays: date ? daysBetween(date, now) : undefined,
-    stale: compact.stale,
-    entered: CLINIC_ENTRY_PATTERN.test(evidence.value),
-    evaluated: true,
-    evidence,
-  }
-}
-
-function metricFromEvidenceTable(
-  config: (typeof STATUS_METRICS)[number],
-  recommendations: readonly CdssRecommendation[],
-  isEnglish: boolean,
-  now: Date,
-): HeartFailureMetric | undefined {
-  const ids = config.evidenceItemIds ?? []
-  if (ids.length === 0) return undefined
-  for (const recommendation of recommendations) {
-    for (const table of recommendation.evidenceTables ?? []) {
-      const item = table.items.find((candidate) => ids.includes(candidate.id) && candidate.value)
-      if (!item?.value) continue
-      const compact = compactValue(item.value)
-      const date = item.date ?? compact.inlineDate
-      return {
-        factKey: config.factKey,
-        label: isEnglish ? config.en : config.zh,
-        kind: config.kind,
-        value: compact.value,
-        fullValue: item.value,
-        unit: compact.unit,
-        date,
-        ageDays: date ? daysBetween(date, now) : undefined,
-        stale: compact.stale,
-        entered: CLINIC_ENTRY_PATTERN.test(item.value),
-        evaluated: true,
-        evidence: {
-          label: isEnglish ? item.label.en : item.label.zh,
-          value: item.value,
-          factKeys: [config.factKey],
-          sources: item.sources,
-        },
-      }
-    }
-  }
-  return undefined
-}
-
-/**
- * A safety input no module carried, read from the adapter's fact. The fact's
- * own wording — 「2.8 mmol/L（2026-08-20）」 — is kept as the value so the
- * tooltip and source link read the same as a module-carried one; only
- * `evaluated` says that no rule looked at it this visit.
- */
-function metricFromFact(
-  config: (typeof STATUS_METRICS)[number],
-  facts: CdssPatientProfile['facts'] | undefined,
-  isEnglish: boolean,
-  now: Date,
-): HeartFailureMetric | undefined {
-  const fact = facts?.[config.factKey] as CdssFact | undefined
-  if (!fact) return undefined
-  const text = isEnglish ? fact.en : fact.zh
-  if (!text?.trim()) return undefined
-  const compact = compactValue(text)
-  const evidence: ClinicalEvidence = {
-    label: isEnglish ? config.en : config.zh,
-    value: text,
-    factKeys: [config.factKey],
-    sources: fact.sources,
-  }
-  const date = fact.date ?? latestSourceDate(evidence) ?? compact.inlineDate
-  return {
-    factKey: config.factKey,
-    label: isEnglish ? config.en : config.zh,
-    kind: config.kind,
-    value: compact.value,
-    fullValue: text,
-    unit: compact.unit ?? fact.unit,
-    date,
-    ageDays: date ? daysBetween(date, now) : undefined,
-    stale: compact.stale,
-    entered: CLINIC_ENTRY_PATTERN.test(text),
-    evaluated: false,
-    evidence,
-  }
 }
 
 function pillarFromRecommendation(
@@ -450,15 +256,12 @@ export function buildHeartFailureBoard(
    */
   profileFacts?: CdssPatientProfile['facts'],
 ): HeartFailureBoardModel | undefined {
-  if (result.packId !== HEART_FAILURE_PACK_ID) return undefined
+  const common = buildDiseaseBoard(result, {
+    packId: HEART_FAILURE_PACK_ID, headlineModuleId: PHENOTYPE_MODULE_ID, metrics: STATUS_METRICS,
+  }, locale, now, profileFacts)
+  if (!common) return undefined
+  const { recommendations, byId, metrics, alerts, statusCounts } = common
   const isEnglish = locale === 'en'
-  const recommendations = [
-    ...result.recommendations,
-    ...(result.automatedChecks ?? [])
-      .map((check) => check.recommendation)
-      .filter((item): item is CdssRecommendation => Boolean(item)),
-  ]
-  const byId = new Map(recommendations.map((item) => [item.id, item]))
 
   const phenotype = byId.get(PHENOTYPE_MODULE_ID)
   const lvefEvidence = findEvidence(recommendations, 'LVEF')
@@ -466,17 +269,6 @@ export function buildHeartFailureBoard(
     ? metricFromEvidence({ factKey: 'LVEF', zh: 'LVEF', en: 'LVEF', kind: 'lab' }, lvefEvidence, isEnglish, now)
     : undefined
 
-  const metrics = STATUS_METRICS.map((config) => {
-    const evidence = findEvidence(recommendations, config.factKey)
-    if (evidence) return metricFromEvidence(config, evidence, isEnglish, now)
-    return metricFromEvidenceTable(config, recommendations, isEnglish, now)
-      ?? metricFromFact(config, profileFacts, isEnglish, now)
-      ?? metricFromEvidence(config, undefined, isEnglish, now)
-  })
-
-  const alerts = recommendations.filter((item) => (
-    item.domain === 'safety' && item.status === 'actionable'
-  ))
   const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = { high: 0, medium: 1, routine: 2 }
   const statusRank: Readonly<Partial<Record<CdssStatus, number>>> = { actionable: 0, 'needs-data': 1 }
   const headlines: HeartFailureHeadline[] = recommendations
@@ -523,9 +315,6 @@ export function buildHeartFailureBoard(
     // the same thing twice; it stays reachable from the heading.
     ...(evaluatedPillars.length > 0 && byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
   ])
-
-  const statusCounts: Record<CdssStatus, number> = { actionable: 0, 'needs-data': 0, review: 0, 'no-action': 0 }
-  recommendations.forEach((item) => { statusCounts[item.status] += 1 })
 
   return {
     phenotype,

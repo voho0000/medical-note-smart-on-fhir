@@ -67,3 +67,6 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Reproducible coronary review packages, without publishing to the registry.
+!vendor/coronary-cdss/*.tgz

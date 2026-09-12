@@ -139,6 +139,9 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
 }
 
 const CONCEPT_LABELS: Record<EvidenceTable['concept'], { zh: string; en: string }> = {
+  'ccd-diagnosis': { zh: '冠心病診斷證據', en: 'Coronary disease evidence' },
+  'ascvd-very-high-risk': { zh: 'ASCVD 極高風險條件', en: 'Very-high-risk ASCVD evidence' },
+  'ccd-medication-safety': { zh: '冠心病用藥安全', en: 'Coronary medication safety' },
   'hf-diagnosis': { zh: '心衰竭診斷證據', en: 'Heart-failure diagnosis evidence' },
   'ckd-diagnosis': { zh: '慢性腎臟病診斷證據', en: 'CKD diagnosis evidence' },
   congestion: { zh: '鬱血證據', en: 'Congestion evidence' },

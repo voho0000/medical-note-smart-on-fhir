@@ -14,6 +14,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
+import { ConnectedAscvdRiskCalculator } from "./components/ConnectedAscvdRiskCalculator"
 import { CalculatorDetail } from "./components/CalculatorDetail"
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
@@ -82,12 +83,15 @@ export default function MedicalCalculatorFeature() {
   if (selected) {
     return (
       <div>
-        <CalculatorDetail
+        {selected.id === 'ascvd-vhr-2023' ? <>
+          <button type="button" className="min-h-11 px-3 text-sm text-primary" onClick={() => setSelectedId(null)}>{zh ? '返回計算機列表' : 'Back to calculators'}</button>
+          <ConnectedAscvdRiskCalculator />
+        </> : <CalculatorDetail
           calc={selected}
           onBack={() => setSelectedId(null)}
           isFavorite={isFavorite(selected.id)}
           onToggleFavorite={() => toggleFavorite(selected.id)}
-        />
+        />}
       </div>
     )
   }

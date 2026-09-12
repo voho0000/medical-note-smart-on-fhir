@@ -41,7 +41,7 @@ import {
 } from '@/src/application/stores/beta-features.store'
 
 /** What the host lists, in switcher order. */
-const HOST_PACK_IDS = ['heart-failure-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss', 'chronic-coronary-disease-cdss']
 /** Names the package has carried at one time or another, none of them listed here. */
 const UNLISTED_PACK_IDS = [
   'ckd-cdss',
@@ -71,7 +71,7 @@ describe('care pack visibility', () => {
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
 
-  it('lists heart failure, and nothing else', () => {
+  it('lists HF followed by coronary disease', () => {
     expect(HOST_CARE_PACKS.map((pack) => pack.id)).toEqual(HOST_PACK_IDS)
   })
 

@@ -40,6 +40,9 @@ import {
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
+import { AscvdRiskCalculator } from '@/features/medical-calculator/components/AscvdRiskCalculator'
+import { applyAscvdRiskReading } from '@/features/medical-calculator/ascvd-risk-profile'
+import { useAscvdRiskInputs, useAscvdRiskInputsHydrated, useAscvdRiskInputsStore } from '@/features/medical-calculator/stores/ascvd-risk-inputs.store'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
@@ -246,6 +249,8 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const ascvdInputs = useAscvdRiskInputs(patientId)
+  useEffect(() => { if (patientId) useAscvdRiskInputsStore.getState().hydrate(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clinicVitals = useClinicVitals(patientId)
@@ -274,6 +279,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     useClinicVitalsHydrated(patientId),
     usePhysicianDecisionsHydrated(patientId),
     useHfpefInputsHydrated(patientId),
+    useAscvdRiskInputsHydrated(patientId),
     usePhenotypeAnswerHydrated(patientId),
   ].every(Boolean)
 
@@ -367,8 +373,8 @@ export default function LiveClinicalDecisionSupportFeature() {
   ), [answeredProfile, autofill, hfpefInputs])
 
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
-  ), [answeredProfile, hfpefReading])
+    answeredProfile ? applyAscvdRiskReading(applyHfpefReading(answeredProfile, hfpefReading), ascvdInputs) : null
+  ), [answeredProfile, hfpefReading, ascvdInputs])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -525,6 +531,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         onClearDecision={patientId
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
           : undefined}
+        coronaryCalculator={answeredProfile ? <AscvdRiskCalculator profile={answeredProfile} isEnglish={cdssLocale === 'en'} /> : undefined}
         hfpefReading={hfpefReading}
         onSaveHfpefInputs={patientId
           ? (patch) => setHfpefInputs(patientId, patch)

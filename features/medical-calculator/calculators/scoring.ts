@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'ascvd-vhr-2023': {
+    formula: { zh: '極高風險 = ≥2 次主要 ASCVD 事件，或 1 次主要事件＋≥2 項高風險條件。', en: 'Very high risk = ≥2 major ASCVD events, or 1 major event + ≥2 high-risk conditions.' },
+    note: { zh: '每個獨立事件只計一次。未確認項目維持未知；若缺值可能改變分類，回傳尚無法判定。', en: 'Count each distinct event once. Unconfirmed inputs remain unknown; return indeterminate if they could change the classification.' },
+  },
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },

@@ -9,6 +9,10 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'ascvd-vhr-2023': {
+    useWhen: { en: 'Secondary prevention in established ASCVD, using AHA/ACC 2023 CCD Table 10.', zh: '已確立 ASCVD 的次級預防，依 AHA/ACC 2023 CCD Table 10 分類。' },
+    caveats: { en: 'Not a 10-year event probability. Count each distinct event once; missing history remains unknown. Confirm symptomatic PAD and persistent LDL-C elevation despite maximally tolerated therapy.', zh: '不是 10 年事件發生率。每個獨立事件只計一次；缺病史維持未知。請確認 PAD 症狀，以及最大耐受治療下 LDL-C 持續升高。' },
+  },
   'h2fpef': {
     useWhen: { en: 'Unexplained exertional dyspnea in adults with preserved EF.', zh: '成人射出分率保留，且有原因未明的活動性呼吸困難。' },
     caveats: { en: 'AF uses diagnosis codes first, then ECG history; a negative reflects available records only. Antihypertensives use deduplicated ingredients in valid prescriptions; confirm actual use. Auto-filled echo values come from one report; review its date, technique and source. A preserved EF alone does not establish HFpEF.', zh: 'AF 先查診斷碼，再查 EKG；「否」僅表示目前紀錄未見 AF，請核對病史。降壓藥按有效處方成分去重推算，請核對實際使用情形。心超值取自同一份報告，請核對日期、測量方式與原文；EF 保留本身不能確診 HFpEF。' },

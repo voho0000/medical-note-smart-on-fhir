@@ -1,0 +1,23 @@
+{
+  "sourceRepository": "https://github.com/voho0000/mediprisma-personalization.git",
+  "sourceBranch": "codex/coronary-cdss-hf-style",
+  "sourceCommit": "d2125cbbe300514f8e58443a962147a5ab2f3eeb",
+  "hostBase": "1c17761f",
+  "calculator": "ascvd-vhr-2023:v1",
+  "packages": [
+    {
+      "name": "@voho0000/personalized-care",
+      "version": "2.1.0-ccd.1",
+      "filename": "voho0000-personalized-care-2.1.0-ccd.1.tgz",
+      "integrity": "sha512-m9GGG+Gk30lTIBzvY42bW2haDzUneR750NZ0nPasVYexAIZZ+ueMpwCuyS+0Eg5tvd+3RcePr1bNNseVkrb69w==",
+      "sha256": "669814b136622ec0e153e0c673e376da5de38dded00e2daa50ad1ffdd647ec40"
+    },
+    {
+      "name": "@voho0000/personalized-care-fhir",
+      "version": "1.7.0-ccd.1",
+      "filename": "voho0000-personalized-care-fhir-1.7.0-ccd.1.tgz",
+      "integrity": "sha512-EU2FVqysLPGirRMnkEN7AqNCWwgaQYkOIrDkhJqELQT7/bW7Xcs6htJgF/jiV7Yy2eELc0F4UwtyTPW1JLffVA==",
+      "sha256": "05ac13e21b6c372d1a27a73d45e341f1b0f2ab38885aa9d7b4a18d8957f99d1c"
+    }
+  ]
+}
