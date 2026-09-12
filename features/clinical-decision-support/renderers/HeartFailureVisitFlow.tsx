@@ -47,6 +47,7 @@ import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { RecordMetricEditor } from './RecordMetricEditor'
+import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { ClinicVitalsForm } from './ClinicVitalsForm'
 import { DiagnosisReading } from './DiagnosisReading'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
@@ -123,7 +124,7 @@ const ROW_BAR_CLASS: Readonly<Record<VisitActionGroupId, string>> = {
 
 
 /** The measurements this stage can take back from the clinician. */
-const METRIC_ENTRY_KEYS = { heartRate: 'heartRate', bodyWeight: 'bodyWeight', potassium: 'potassium', eGFR: 'eGFR', sodium: 'sodium', NTproBNP: 'NTproBNP' } as const
+const METRIC_ENTRY_KEYS = { oxygenSaturation: 'oxygenSaturation', bodyHeight: 'bodyHeight', heartRate: 'heartRate', bodyWeight: 'bodyWeight', potassium: 'potassium', eGFR: 'eGFR', sodium: 'sodium', NTproBNP: 'NTproBNP' } as const
 
 export interface HeartFailureVisitFlowProps {
   flow: VisitFlowModel
@@ -178,18 +179,33 @@ export function HeartFailureVisitFlow({
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
 
   const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
-  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => {
-    if (metric.factKey === 'LVEF') {
-      onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
-    } else if (metric.factKey === 'bloodPressure') {
-      onSaveClinicVitals?.({ entries: { systolic: values ? { value: values[0], measuredOn } : null, diastolic: values ? { value: values[1], measuredOn } : null } })
-    } else {
-      const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
-      if (key) onSaveClinicVitals?.({ entries: { [key]: values ? { value: values[0], measuredOn } : null } })
-      if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
-    }
-    setEditingMetric(null)
+  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
+  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
+  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
+  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
+    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
+    const entry = clinicVitals?.entries[key]
+    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
   }
+  const saveMetrics = (changes: RecordValueChange[]) => {
+    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
+    for (const { metric, values, measuredOn } of changes) {
+      if (metric.factKey === 'LVEF') {
+        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
+      } else if (metric.factKey === 'bloodPressure') {
+        entries.systolic = values ? { value: values[0], measuredOn } : null
+        entries.diastolic = values ? { value: values[1], measuredOn } : null
+      } else {
+        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
+        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
+        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
+      }
+    }
+    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
+    setEditingMetric(null)
+    setRecordValuesOpen(false)
+  }
+  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
 
   const openVitalsForm = (scopeNote?: string) => {
     setVitalsScopeNote(scopeNote)
@@ -206,6 +222,8 @@ export function HeartFailureVisitFlow({
         onSave={(values, date) => saveMetric(editingMetric, values, date)}
         onRestore={() => saveMetric(editingMetric, null, todayIsoDate(now))}
         onClose={() => setEditingMetric(null)} /> : null}
+      {recordValuesOpen ? <RecordValuesEditor metrics={allEditableMetrics} isEnglish={isEnglish} now={now}
+        onSave={saveMetrics} onClose={() => setRecordValuesOpen(false)} /> : null}
       <StepCard
         steps={flow.steps}
         nextStep={flow.nextStep}
@@ -223,7 +241,7 @@ export function HeartFailureVisitFlow({
         now={now}
         onRefill={setEditingMetric}
         canEdit={Boolean(onSaveClinicVitals)}
-        onOpenForm={() => openVitalsForm()}
+        onOpenForm={() => setRecordValuesOpen(true)}
       />
 
       <QuestionsCard
@@ -509,7 +527,7 @@ function RecordCard({
             data-testid="cdss-hf-record-values-edit"
           >
             <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-            {isEnglish ? 'Add or edit clinic measurements' : '補填／修改門診量測'}
+            {isEnglish ? 'Edit clinical values' : '補填／修改臨床數值'}
           </button>
         ) : null}
       </div>

@@ -49,3 +49,58 @@ test('physician NT-proBNP overrides old laboratory autofill in HFpEF scoring', (
   const restored = applyClinicVitals({ id: 'synthetic', facts: { NTproBNP: { zh: '10', en: '10', numericValue: 10 } } }, mergeClinicVitals(undefined, { entries: { NTproBNP: null } }, now))
   expect(restored.facts.NTproBNP?.numericValue).toBe(10)
 })
+
+describe('combined clinical values dialog', () => {
+  function setup() {
+    const board = buildHeartFailureBoard(result, 'zh-TW', now)!
+    const flow = buildHeartFailureVisitFlow({ board, result, now, isEnglish: false, patientId: 'synthetic', decisions: {} })
+    const metrics = specs.map(([key, value, unit]) => ({ factKey: key, label: key, value, unit, date: value ? '2024-09-09' : undefined, kind: 'measure', entered: true, stale: false, evaluated: true } as HeartFailureMetric))
+    const save = jest.fn(), answer = jest.fn(), hfpef = jest.fn()
+    render(<HeartFailureVisitFlow board={board} flow={{ ...flow, metrics }} now={now} isEnglish={false}
+      expandedId={null} onToggle={() => {}} renderDetail={() => null} packVersion="test"
+      phenotypeAnswer={{ hfSuspicion: 'suspected', hfpEfConfirmed: true, answeredOn: '2026-09-12' }}
+      onSaveClinicVitals={save} onAnswerPhenotype={answer} onSaveHfpefInputs={hfpef} />)
+    fireEvent.click(screen.getByTestId('cdss-hf-record-values-edit'))
+    return { save, answer, hfpef }
+  }
+
+  test('header directly opens all fields and saves multiple changes in one vitals patch', () => {
+    const { save, answer, hfpef } = setup()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    for (const [key] of specs) expect(screen.getByTestId(`record-values-${key}`)).toBeInTheDocument()
+    expect(screen.getByLabelText('SpO₂')).toBeInTheDocument()
+    expect(screen.getByLabelText('身高')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '45' } })
+    fireEvent.change(screen.getByLabelText('potassium'), { target: { value: '5.1' } })
+    fireEvent.change(screen.getByLabelText('NTproBNP'), { target: { value: '700' } })
+    fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledWith({ entries: { potassium: { value: 5.1, measuredOn: '2024-09-09' }, NTproBNP: { value: 700, measuredOn: '2026-09-12' } } })
+    expect(answer).toHaveBeenCalledWith(expect.objectContaining({ lvef: 45, hfSuspicion: 'suspected', hfpEfConfirmed: true }))
+    expect(hfpef).toHaveBeenCalledWith({ ntprobnp: null })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('restore all removes overrides without clearing clinical answers', () => {
+    const { save, answer } = setup()
+    fireEvent.click(screen.getByRole('button', { name: '全部恢復預設' }))
+    expect(save).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0][0].entries).toEqual({ systolic: null, diastolic: null, heartRate: null, potassium: null, eGFR: null, sodium: null, bodyWeight: null, NTproBNP: null, oxygenSaturation: null, bodyHeight: null })
+    expect(answer).toHaveBeenCalledWith(expect.objectContaining({ lvef: undefined, measuredOn: undefined, hfSuspicion: 'suspected', hfpEfConfirmed: true }))
+    const original = { id: 'synthetic', facts: { potassium: { zh: '3.7', en: '3.7', numericValue: 3.7 } } }
+    const restored = applyClinicVitals(original, mergeClinicVitals(undefined, save.mock.calls[0][0], now))
+    expect(restored.facts.potassium?.numericValue).toBe(3.7)
+  })
+
+  test('cancel discards edits and invalid LVEF blocks saving', () => {
+    const { save, answer } = setup()
+    fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '150' } })
+    expect(screen.getByRole('button', { name: '儲存修改' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }))
+    expect(save).not.toHaveBeenCalled()
+    expect(answer).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
