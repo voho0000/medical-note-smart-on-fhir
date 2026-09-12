@@ -1,5 +1,7 @@
 "use client"
 
+import { DyslipidemiaVisitFlow } from './DyslipidemiaVisitFlow'
+
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
@@ -115,6 +117,7 @@ interface ClinicalDecisionSupportViewProps {
    * complete the echo values behind them. Only the visit flow reads them; the
    * original board shows the pack's own reading of the same facts.
    */
+  preventCalculator?: React.ReactNode
   hfpefReading?: HfpefReading
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
 }
@@ -2032,6 +2035,7 @@ export function ClinicalDecisionSupportView({
   physicianDecisions,
   onRecordDecision,
   onClearDecision,
+  preventCalculator,
   hfpefReading,
   onSaveHfpefInputs,
 }: ClinicalDecisionSupportViewProps) {
@@ -2072,6 +2076,7 @@ export function ClinicalDecisionSupportView({
   )
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
+  const isLipidFlow = (layout === 'flow' || layout === 'c') && result.packId === 'hyperlipidemia-cdss'
   const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
   const visitFlow = useMemo(() => (
     isVisitFlow && board
@@ -2228,7 +2233,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && (
+  const showClinicalSummary = !board && !isLipidFlow && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2410,6 +2415,14 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
+      {isLipidFlow ? (
+        <DyslipidemiaVisitFlow calculator={preventCalculator} result={result} isEnglish={isEnglish} now={now}
+          expandedId={expandedId} onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+          decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
+          renderDetail={(recommendation) => <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
+            onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance} />} />
+      ) : null}
+
       {board && !isVisitFlow ? (
         <HeartFailureStatusBoard
           board={board}
@@ -2445,7 +2458,7 @@ export function ClinicalDecisionSupportView({
         do and carrying a decision on every row; a second copy of the same rows
         underneath is the duplication it removed.
       */}
-      {isVisitFlow ? null : (
+      {isVisitFlow || isLipidFlow ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}

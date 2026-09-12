@@ -17,17 +17,16 @@
  * Two host decisions live below, and they are separate questions.
  *
  * WHICH packs: `HOST_PACK_ORDER` is the switcher, and nothing outside it is
- * reachable. The package develops one pathway per branch and the released
- * version ships the heart-failure pack alone, so that is the whole list. A pack
+ * reachable. This review branch explicitly lists heart failure and dyslipidemia;
+ * the matching local rules build is prepared by `npm run dev:lipid`. A pack
  * the package adds does not appear here until it is named in that list — the
  * package proposes, the host decides. The one exception is a local development
  * server, which may list the packs of the rules branch it was started on
  * (`DEV_EXTRA_PACK_IDS` below); no deployed build does.
  *
  * WHETHER a listed pack shows: the Beta switch, for a pack the package ships
- * `enabled: false`. Heart failure is released, so today the gate decides
- * nothing and the list is the same for every browser; the machinery stays for
- * the next unreleased pathway. The 個人化照護指引 tab is itself `beta: true`,
+ * `enabled: false`. Heart failure is released; dyslipidemia remains a review pack
+ * and requires Beta or its explicit pilot id. The 個人化照護指引 tab is itself `beta: true`,
  * so the people who reach this list are visitors who turned Beta features on
  * in Settings either way. Signing in is not part of that gate (owner decision,
  * 2026-09); the switch is stored per browser under the account uid, the
@@ -47,12 +46,10 @@ import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 /**
  * The disease switcher: exactly these packs, in exactly this order.
  *
- * Heart failure is the only one left. `@voho0000/personalized-care` develops
- * one pathway per branch, and the released package now ships the heart-failure
- * pack alone — it no longer carries `ckd-cdss`, and a listed pack the package
- * does not carry throws below rather than silently shortening the switcher.
+ * HF remains first and default. Dyslipidemia is available through the
+ * existing Beta/pilot gate; missing packages remain a configuration error.
  */
-const HOST_PACK_ORDER = ['heart-failure-cdss'] as const
+const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss'] as const
 
 /**
  * Local development only: the packs a disease-branch start-of-session script
@@ -73,8 +70,7 @@ const DEV_EXTRA_PACK_IDS: readonly string[] = process.env.NODE_ENV === 'developm
 
 /**
  * The default the package validates against. Heart failure carries that role
- * now that it is the only pack the package ships, and the package ships it
- * released. The 個人化照護指引 tab is itself Beta-only, so the readers who
+ * and remains released while dyslipidemia is under review. The 個人化照護指引 tab is itself Beta-only, so the readers who
  * reach this list are still the ones the Beta switch admits; what the switcher
  * opens on is decided by `getDefaultClinicalGuidelinePack` below, which
  * follows the host order and the visibility rule instead.

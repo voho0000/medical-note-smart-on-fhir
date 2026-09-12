@@ -1,5 +1,6 @@
 "use client"
 
+import { PreventCalculatorDetail } from './PreventCalculatorDetail'
 import { useMemo, useState, useCallback } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -89,7 +90,7 @@ function seed(calc: CalculatorDef, autofill: Autofill): {
   return { values, filled, units }
 }
 
-export function CalculatorDetail({
+function GenericCalculatorDetail({
   calc,
   onBack,
   isFavorite,
@@ -638,4 +639,8 @@ function ScoringGridView({ grid, locale }: { grid: ScoringGrid; locale: string }
       )}
     </div>
   )
+}
+
+export function CalculatorDetail(props: Parameters<typeof GenericCalculatorDetail>[0]) {
+  return props.calc.id === 'prevent-ascvd' ? <PreventCalculatorDetail onBack={props.onBack} isFavorite={props.isFavorite} onToggleFavorite={props.onToggleFavorite} /> : <GenericCalculatorDetail {...props} />
 }

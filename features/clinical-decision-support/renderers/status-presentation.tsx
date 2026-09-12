@@ -1,5 +1,5 @@
 import { CircleArrowRight, CircleHelp, FileSearch, ShieldCheck } from 'lucide-react'
-import type { CdssStatus } from '../types'
+import type { CdssStatus, CdssSourceAssessmentStatus } from '../types'
 
 /**
  * The four module states, styled the same wherever a card, a row, or a tile
@@ -29,5 +29,30 @@ export function statusLabel(status: CdssStatus, isEnglish: boolean): string {
     case 'needs-data': return isEnglish ? 'Data needed' : '需先補資料'
     case 'review': return isEnglish ? 'Clinical review' : '需臨床確認'
     case 'no-action': return isEnglish ? 'No action needed' : '目前無需處理'
+  }
+}
+
+export const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
+  recommended: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
+  consider: 'bg-blue-100 text-blue-900 dark:bg-blue-500/10 dark:text-blue-200',
+  covered: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
+  'not-covered': 'bg-rose-100 text-rose-900 dark:bg-rose-500/10 dark:text-rose-200',
+  'needs-data': 'bg-amber-100 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200',
+  'no-special-rule': 'bg-blue-100 text-blue-900 dark:bg-blue-500/10 dark:text-blue-200',
+  'not-applicable': 'bg-muted text-muted-foreground',
+}
+
+export function sourceStatusLabel(
+  status: CdssSourceAssessmentStatus,
+  isEnglish: boolean,
+): string {
+  switch (status) {
+    case 'recommended': return isEnglish ? 'Recommended' : '建議'
+    case 'consider': return isEnglish ? 'Consider' : '可考慮'
+    case 'covered': return isEnglish ? 'Covered' : '符合給付'
+    case 'not-covered': return isEnglish ? 'Not covered' : '不符合給付'
+    case 'needs-data': return isEnglish ? 'Verify data' : '待補資料'
+    case 'no-special-rule': return isEnglish ? 'No special rule' : '無專款門檻'
+    case 'not-applicable': return isEnglish ? 'Not applicable' : '不適用'
   }
 }

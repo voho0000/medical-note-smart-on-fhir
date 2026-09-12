@@ -207,7 +207,7 @@ describe('Live personalized-guidance pathway list', () => {
     expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
   })
 
-  it('lists heart failure alone and no pack the package does not ship', () => {
+  it('keeps HF default and offers dyslipidemia behind Beta', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     const heartFailureButton = screen.getByTestId('cdss-disease-switch-heart-failure-cdss')
@@ -215,10 +215,11 @@ describe('Live personalized-guidance pathway list', () => {
     // governed CKD, diabetes and hyperlipidemia diagnoses as well, and none of
     // them opens a switch — a pack the package does not ship, or one the host
     // does not list, is not reachable from here.
-    for (const unlisted of ['ckd', 'dm-ckd', 'hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+    for (const unlisted of ['ckd', 'dm-ckd', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
       expect(screen.queryByTestId(`cdss-disease-switch-${unlisted}-cdss`)).not.toBeInTheDocument()
     }
 
+    expect(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')).toBeInTheDocument()
     expect(heartFailureButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('心衰竭臨床決策支援')
     // The knowledge sources travel with the pack that was built, and they are

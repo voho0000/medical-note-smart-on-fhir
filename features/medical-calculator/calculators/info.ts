@@ -9,6 +9,10 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-ascvd': {
+    useWhen: { zh: '30–79 歲且無已知心血管疾病者的初級預防 ASCVD 風險；30 年風險限 30–59 歲。', en: 'Primary-prevention ASCVD risk at ages 30–79 without known CVD; 30-year estimates only at ages 30–59.' },
+    caveats: { zh: '基礎模型，未加入 UACR、HbA1c 或 SDI，未經台灣族群再校準。需確認每項輸入及其日期；缺值或超出適用範圍時不計算。', en: 'Base model without UACR, HbA1c or SDI, not recalibrated for Taiwan. Confirm all inputs and dates. Missing or out-of-range inputs do not yield a risk.' },
+  },
   'h2fpef': {
     useWhen: { en: 'Unexplained exertional dyspnea in adults with preserved EF.', zh: '成人射出分率保留，且有原因未明的活動性呼吸困難。' },
     caveats: { en: 'AF uses diagnosis codes first, then ECG history; a negative reflects available records only. Antihypertensives use deduplicated ingredients in valid prescriptions; confirm actual use. Auto-filled echo values come from one report; review its date, technique and source. A preserved EF alone does not establish HFpEF.', zh: 'AF 先查診斷碼，再查 EKG；「否」僅表示目前紀錄未見 AF，請核對病史。降壓藥按有效處方成分去重推算，請核對實際使用情形。心超值取自同一份報告，請核對日期、測量方式與原文；EF 保留本身不能確診 HFpEF。' },

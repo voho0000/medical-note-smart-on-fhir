@@ -68,3 +68,7 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 4. A test must cover the route where the surface is *kept*, not only the route
    where it is hidden (`__tests__/features/clinical-decision-support/pilot-pack-registry.test.ts`
    and `__tests__/application/hooks/use-beta-features.test.tsx` are the pattern).
+
+## Dyslipidemia review branch (2026-09-12)
+
+The host additionally lists `hyperlipidemia-cdss` as an unreleased pack. Existing Beta and pilot visibility rules apply; HF remains enabled and the default. On the ordinary and vghtpe routes, Beta exposes the lipid pathway. Other unattended Medcloud routes continue to show released HF only. No existing surface is removed. The app branch requires the matching personalization source build; it is not a production package release.

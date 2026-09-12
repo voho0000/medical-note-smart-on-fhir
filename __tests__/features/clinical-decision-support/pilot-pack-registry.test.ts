@@ -42,12 +42,12 @@ import {
 
 /** What the host lists, in switcher order. */
 const HOST_PACK_IDS = ['heart-failure-cdss']
+const BETA_PACK_IDS = [...HOST_PACK_IDS, 'hyperlipidemia-cdss']
 /** Names the package has carried at one time or another, none of them listed here. */
 const UNLISTED_PACK_IDS = [
   'ckd-cdss',
   'dm-ckd-cdss',
   'hypertension-cdss',
-  'hyperlipidemia-cdss',
   'cirrhosis-cdss',
   'aki-alert-cdss',
   'renal-safety-cdss',
@@ -71,8 +71,8 @@ describe('care pack visibility', () => {
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
 
-  it('lists heart failure, and nothing else', () => {
-    expect(HOST_CARE_PACKS.map((pack) => pack.id)).toEqual(HOST_PACK_IDS)
+  it('lists HF and the unreleased dyslipidemia review pack', () => {
+    expect(HOST_CARE_PACKS.map((pack) => pack.id)).toEqual(BETA_PACK_IDS)
   })
 
   it('shows the listed pack to a browser with nothing turned on', () => {
@@ -80,10 +80,10 @@ describe('care pack visibility', () => {
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
   })
 
-  it('does not change what is listed when Beta features go on', () => {
+  it('adds dyslipidemia when Beta features go on', () => {
     enableBeta()
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(BETA_PACK_IDS)
   })
 
   it('reads a signed-out visitor\'s Beta switch the same way', () => {
@@ -92,7 +92,7 @@ describe('care pack visibility', () => {
     // must not hide anything either.
     useBetaFeaturesStore.getState().setBetaFeaturesEnabled(GUEST_BETA_FEATURES_KEY, true)
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(BETA_PACK_IDS)
   })
 
   it('leaves the listed pack marked released, which is what the 試辦 chip reads', () => {
@@ -100,14 +100,14 @@ describe('care pack visibility', () => {
     // pathway on this host is labelled 試辦 — the label returns with the next
     // pack the package ships disabled.
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.enabled).toBe(true)
-    expect(HOST_CARE_PACKS.every((pack) => pack.enabled)).toBe(true)
+    expect(HOST_CARE_PACKS.find(pack => pack.id === 'hyperlipidemia-cdss')?.enabled).toBe(false)
   })
 
   it('never shows a pack this host does not list', () => {
     enableBeta()
     writePilotPackIds(UNLISTED_PACK_IDS)
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(BETA_PACK_IDS)
     for (const id of UNLISTED_PACK_IDS) {
       expect(getClinicalGuidelinePack(id)).toBeUndefined()
     }
@@ -127,7 +127,7 @@ describe('care pack visibility', () => {
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
 
     enableBeta()
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(BETA_PACK_IDS)
 
     useBetaFeaturesStore.getState().setBetaFeaturesEnabled('user-a', false)
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
@@ -151,7 +151,7 @@ describe('care pack visibility', () => {
 
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
     enableBeta()
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(BETA_PACK_IDS)
   })
 })
 

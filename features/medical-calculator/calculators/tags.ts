@@ -15,6 +15,7 @@ const AFIB: L = { en: 'Atrial fibrillation', zh: '心房顫動' }
 const DOSING: L = { en: 'Drug dosing', zh: '藥物劑量' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
+  'prevent-ascvd': { purpose: ['risk'], diseases: [{ en: 'Dyslipidemia', zh: '血脂異常' }] },
   'egfr-ckd-epi-2021': { purpose: ['formula'], diseases: [CKD] },
   'kfre-4-variable': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'Kidney failure', zh: '腎衰竭' }] },
   'crcl-cockcroft-gault': { purpose: ['formula'], diseases: [CKD, DOSING] },

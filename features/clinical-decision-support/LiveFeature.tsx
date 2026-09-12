@@ -38,6 +38,10 @@ import {
   usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
+import { usePreventInputs, usePreventInputsHydrated, usePreventInputsStore } from '@/features/medical-calculator/prevent-inputs.store'
+import { buildPreventReading } from '@/features/medical-calculator/prevent-reading'
+import { PreventCalculatorPanel } from '@/features/medical-calculator/components/PreventCalculatorPanel'
+import { applyPreventReading } from './utils/prevent-result'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -246,6 +250,9 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const preventInputs = usePreventInputs(patientId)
+  const preventReady = usePreventInputsHydrated(patientId)
+  useEffect(() => { if (patientId) usePreventInputsStore.getState().hydrate(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clinicVitals = useClinicVitals(patientId)
@@ -366,9 +373,10 @@ export default function LiveClinicalDecisionSupportFeature() {
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
+  const preventReading = useMemo(() => buildPreventReading({ profile: answeredProfile ?? undefined, autofill, inputs: preventInputs }), [answeredProfile, autofill, preventInputs])
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
-  ), [answeredProfile, hfpefReading])
+    answeredProfile ? applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReady ? preventReading : { ...preventReading, result: null }) : null
+  ), [answeredProfile, hfpefReading, preventReading, preventReady])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -525,6 +533,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         onClearDecision={patientId
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
           : undefined}
+        preventCalculator={patientId ? <PreventCalculatorPanel reading={preventReading} ready={preventReady} locale={cdssLocale} onChange={patch => usePreventInputsStore.getState().setInputs(patientId, patch)} onReset={() => usePreventInputsStore.getState().clearInputs(patientId)} /> : undefined}
         hfpefReading={hfpefReading}
         onSaveHfpefInputs={patientId
           ? (patch) => setHfpefInputs(patientId, patch)

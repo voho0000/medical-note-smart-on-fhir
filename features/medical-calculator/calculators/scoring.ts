@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-ascvd': {
+    formula: { zh: '風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))；依性別及 10／30 年模型使用原始研究的係數。', en: 'Risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)); use the published sex-specific 10- or 30-year model coefficients.' },
+    note: { zh: '年齡、non-HDL-C、HDL-C、血壓與 eGFR 經中心化；加入糖尿病、吸菸、降壓藥、statin 及交互作用。30 年模型另含年齡平方。BMI 用於適用範圍核對，在 ASCVD 基礎模型的係數為 0。', en: 'Centered age, non-HDL-C, HDL-C, blood pressure and eGFR with diabetes, smoking, antihypertensive/statin treatment and interactions. The 30-year model also includes age squared. BMI is checked for eligibility; its ASCVD base-model coefficient is zero.' },
+  },
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },
