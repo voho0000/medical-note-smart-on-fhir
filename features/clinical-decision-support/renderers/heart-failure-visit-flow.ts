@@ -328,15 +328,15 @@ export interface VisitSignItem {
 
 /** Question ②: what the patient describes. */
 export const VISIT_SYMPTOM_ITEMS: readonly VisitSignItem[] = [
-  { term: 'exertional-dyspnea', zh: '勞力性呼吸困難', en: 'Exertional dyspnoea', shortZh: '勞力性喘', shortEn: 'Exertional dyspnoea', side: 'pulmonary', common: true },
+  { term: 'exertional-dyspnea', zh: '勞力性呼吸困難（exertional dyspnea）', en: 'Exertional dyspnoea', shortZh: '勞力性喘', shortEn: 'Exertional dyspnoea', side: 'pulmonary', common: true },
   { term: 'orthopnea', zh: '端坐呼吸（orthopnea）', en: 'Orthopnoea', shortZh: '端坐呼吸', shortEn: 'Orthopnoea', side: 'pulmonary', common: true },
-  { term: 'paroxysmal-nocturnal-dyspnea', zh: '夜間陣發性呼吸困難（PND）', en: 'Paroxysmal nocturnal dyspnoea (PND)', shortZh: 'PND', shortEn: 'PND', side: 'pulmonary', common: true },
-  { term: 'fatigue-exercise-intolerance', zh: '疲倦／運動耐受下降', en: 'Fatigue / reduced exercise tolerance', shortZh: '疲倦', shortEn: 'Fatigue', side: 'pulmonary', common: true },
-  { term: 'reported-ankle-swelling', zh: '腳腫（自述）', en: 'Ankle swelling (reported)', shortZh: '腳腫', shortEn: 'Ankle swelling', side: 'systemic', common: true },
-  { term: 'abdominal-bloating', zh: '腹脹／吃一點就飽', en: 'Abdominal bloating / early satiety', shortZh: '腹脹', shortEn: 'Bloating', side: 'systemic', common: true },
-  { term: 'nocturnal-cough', zh: '夜咳／喘鳴', en: 'Nocturnal cough / wheeze', shortZh: '夜咳', shortEn: 'Nocturnal cough', side: 'pulmonary', common: false },
+  { term: 'paroxysmal-nocturnal-dyspnea', zh: '夜間陣發性呼吸困難（paroxysmal nocturnal dyspnea，PND）', en: 'Paroxysmal nocturnal dyspnoea (PND)', shortZh: 'PND', shortEn: 'PND', side: 'pulmonary', common: true },
+  { term: 'fatigue-exercise-intolerance', zh: '疲倦／運動耐受下降（fatigue／exercise intolerance）', en: 'Fatigue / reduced exercise tolerance', shortZh: '疲倦', shortEn: 'Fatigue', side: 'pulmonary', common: true },
+  { term: 'reported-ankle-swelling', zh: '腳腫（ankle swelling，自述）', en: 'Ankle swelling (reported)', shortZh: '腳腫', shortEn: 'Ankle swelling', side: 'systemic', common: true },
+  { term: 'abdominal-bloating', zh: '腹脹／吃一點就飽（abdominal bloating／early satiety）', en: 'Abdominal bloating / early satiety', shortZh: '腹脹', shortEn: 'Bloating', side: 'systemic', common: true },
+  { term: 'nocturnal-cough', zh: '夜咳／喘鳴（nocturnal cough／wheeze）', en: 'Nocturnal cough / wheeze', shortZh: '夜咳', shortEn: 'Nocturnal cough', side: 'pulmonary', common: false },
   { term: 'bendopnea', zh: '彎腰呼吸困難（bendopnea）', en: 'Bendopnea', shortZh: '彎腰喘', shortEn: 'Bendopnea', side: 'both', common: false },
-  { term: 'reported-weight-gain', zh: '近期體重增加（自述）', en: 'Recent weight gain (reported)', shortZh: '體重增加', shortEn: 'Weight gain', side: 'both', common: false },
+  { term: 'reported-weight-gain', zh: '近期體重增加（recent weight gain，自述）', en: 'Recent weight gain (reported)', shortZh: '體重增加', shortEn: 'Weight gain', side: 'both', common: false },
 ]
 
 /** Question ④: what the clinician finds. */

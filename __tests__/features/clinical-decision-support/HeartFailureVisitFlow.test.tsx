@@ -231,6 +231,22 @@ describe('the visit flow', () => {
     render(<Harness />)
     suspectHeartFailure()
 
+    for (const label of [
+      '勞力性呼吸困難（exertional dyspnea）',
+      '端坐呼吸（orthopnea）',
+      '夜間陣發性呼吸困難（paroxysmal nocturnal dyspnea，PND）',
+      '疲倦／運動耐受下降（fatigue／exercise intolerance）',
+      '腳腫（ankle swelling，自述）',
+      '腹脹／吃一點就飽（abdominal bloating／early satiety）',
+    ]) expect(screen.getByText(label)).toBeVisible()
+
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-more-symptoms'))
+    for (const label of [
+      '夜咳／喘鳴（nocturnal cough／wheeze）',
+      '彎腰呼吸困難（bendopnea）',
+      '近期體重增加（recent weight gain，自述）',
+    ]) expect(screen.getByText(label)).toBeVisible()
+
     // One control for 凹陷性水腫 on the whole screen: no board chip strip, and
     // no DP-00 tick-list repeating the same examination.
     expect(screen.getAllByTestId('cdss-hf-flow-sign-pitting-edema')).toHaveLength(1)
