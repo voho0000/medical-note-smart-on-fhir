@@ -1030,11 +1030,11 @@ function QuestionShell({
           {answered && onEdit ? (
             <button
               type="button"
-              className="ml-auto min-h-7 rounded-md px-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto min-h-11 min-w-20 shrink-0 rounded-md border border-primary/20 bg-primary/5 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={onEdit}
               data-testid={`cdss-hf-question-edit-${question.id}`}
             >
-              {isEnglish ? 'Change' : '改'}
+              {isEnglish ? 'Edit' : '修改'}
             </button>
           ) : null}
         </div>
@@ -1434,11 +1434,11 @@ function DecisionControls({
         ) : null}
         <button
           type="button"
-          className="min-h-7 rounded-md px-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-11 min-w-20 shrink-0 rounded-md border border-primary/20 bg-primary/5 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onEdit(true)}
           data-testid={`cdss-hf-decision-edit-${moduleId}`}
         >
-          {isEnglish ? 'Change' : '改'}
+          {isEnglish ? 'Edit' : '修改'}
         </button>
       </div>
     )

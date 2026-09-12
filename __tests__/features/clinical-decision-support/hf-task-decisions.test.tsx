@@ -48,7 +48,7 @@ test('current maintenance therapy defaults to prescribed with provenance, withou
   const { flow } = model()
   expect(flow.decidedCount).toBe(1)
   expect(flow.summaryText).toContain('已開立（依目前用藥紀錄）')
-  fireEvent.click(within(selected).getByRole('button', { name: '改' }))
+  fireEvent.click(within(selected).getByRole('button', { name: '修改' }))
   fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-deferred'))
   expect(onRecord).toHaveBeenCalledWith('heart-failure-sglt2', expect.objectContaining({ decision: 'deferred' }))
   expect(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-deferred')).toHaveAttribute('aria-pressed', 'true')
@@ -63,7 +63,7 @@ test.each([
   expect(controls.getAllByRole('button').map(button => button.textContent)).toEqual(labels)
   fireEvent.click(controls.getByRole('button', { name: labels[0] }))
   expect(within(screen.getByTestId(`cdss-hf-decision-recorded-${id}`)).getByText(labels[0])).toBeVisible()
-  expect(screen.getByText(new RegExp(`${id} ${labels[0]}`))).toBeVisible()
+  expect(screen.getByTestId('cdss-hf-summary-text')).toHaveTextContent(id === 'heart-failure-monitoring' ? 'Follow-up arranged' : 'Referred')
 })
 
 test('no default for a medication gap or missing current therapy; explicit choices take precedence', () => {
