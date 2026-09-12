@@ -14,6 +14,7 @@ const specs = [
   ['LVEF', '72.6%', '%', 45], ['bloodPressure', '154/88', 'mmHg', 120], ['heartRate', '60', 'bpm', 70],
   ['potassium', '3.7', 'mmol/L', 5.6], ['eGFR', '32', 'mL/min/1.73m²', 48], ['sodium', '141', 'mmol/L', 135],
   ['bodyWeight', '78', 'kg', 75], ['NTproBNP', undefined, 'pg/mL', 1000],
+  ['oxygenSaturation', '97', '%', 95], ['bodyHeight', '165', 'cm', 170],
 ] as const
 
 test.each(specs)('%s can be edited from its record tile and reaches the profile with its measurement date', (key, value, unit, next) => {
@@ -68,8 +69,8 @@ describe('combined clinical values dialog', () => {
     const { save, answer, hfpef } = setup()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     for (const [key] of specs) expect(screen.getByTestId(`record-values-${key}`)).toBeInTheDocument()
-    expect(screen.getByLabelText('SpO₂')).toBeInTheDocument()
-    expect(screen.getByLabelText('身高')).toBeInTheDocument()
+    expect(screen.getByLabelText('oxygenSaturation')).toBeInTheDocument()
+    expect(screen.getByLabelText('bodyHeight')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '45' } })
     fireEvent.change(screen.getByLabelText('potassium'), { target: { value: '5.1' } })
     fireEvent.change(screen.getByLabelText('NTproBNP'), { target: { value: '700' } })

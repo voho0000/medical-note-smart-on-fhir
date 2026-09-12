@@ -282,7 +282,7 @@ describe('heart-failure board model', () => {
 
     expect(board).toBeDefined()
     expect(board!.metrics.map((metric) => metric.factKey)).toEqual([
-      'bloodPressure', 'heartRate', 'potassium', 'eGFR', 'sodium', 'bodyWeight', 'NTproBNP',
+      'bloodPressure', 'heartRate', 'oxygenSaturation', 'potassium', 'eGFR', 'sodium', 'bodyWeight', 'bodyHeight', 'NTproBNP',
     ])
     const bp = board!.metrics[0]
     expect(bp.value).toBe('118/72')
@@ -290,12 +290,12 @@ describe('heart-failure board model', () => {
     expect(bp.date).toBe('2026-09-02')
     expect(bp.ageDays).toBe(3)
     expect(bp.stale).toBe(false)
-    const egfr = board!.metrics[3]
+    const egfr = board!.metrics.find(metric => metric.factKey === 'eGFR')!
     expect(egfr.value).toBe('48')
     expect(egfr.ageDays).toBe(8)
     // NT-proBNP has an evidence-table row but no value: absent, and named as a
     // laboratory order rather than left blank.
-    const ntProBnp = board!.metrics[6]
+    const ntProBnp = board!.metrics.find(metric => metric.factKey === 'NTproBNP')!
     expect(ntProBnp.value).toBeUndefined()
     expect(ntProBnp.kind).toBe('lab')
     expect(board!.lvef?.value).toBe('32%')
@@ -318,7 +318,7 @@ describe('heart-failure board model', () => {
       )),
     }
 
-    const potassiumMetric = buildHeartFailureBoard(stale, 'zh-TW', NOW)!.metrics[2]
+    const potassiumMetric = buildHeartFailureBoard(stale, 'zh-TW', NOW)!.metrics.find(metric => metric.factKey === 'potassium')!
     expect(potassiumMetric.value).toBe('4.9')
     expect(potassiumMetric.stale).toBe(true)
     expect(potassiumMetric.fullValue).toContain('已 96 天')

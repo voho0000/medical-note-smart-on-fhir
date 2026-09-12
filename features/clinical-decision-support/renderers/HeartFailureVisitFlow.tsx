@@ -236,7 +236,7 @@ export function HeartFailureVisitFlow({
       />
 
       <RecordCard
-        metrics={flow.metrics}
+        metrics={allEditableMetrics}
         isEnglish={isEnglish}
         now={now}
         onRefill={setEditingMetric}
@@ -531,7 +531,7 @@ function RecordCard({
           </button>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 @min-[32rem]:grid-cols-4 @min-[60rem]:grid-cols-8">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 @min-[32rem]:grid-cols-5">
         {metrics.map((metric) => {
           const missing = metric.value === undefined
           const source = metricSourceLine(metric, isEnglish)
