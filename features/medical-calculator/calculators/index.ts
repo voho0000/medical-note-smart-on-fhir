@@ -9,6 +9,7 @@ import { HEPATIC } from './hepatic'
 import { GI } from './gi'
 import { ELECTROLYTE } from './electrolyte'
 import { HFPEF } from './hfpef'
+import { CARDIOVASCULAR_RISK } from './cardiovascular-risk'
 import { CARDIAC } from './cardiac'
 import { PULMONARY } from './pulmonary'
 import { HEME } from './heme'
@@ -22,6 +23,7 @@ export const CALCULATORS: CalculatorDef[] = [
   ...GI,
   ...ELECTROLYTE,
   ...CARDIAC,
+  ...CARDIOVASCULAR_RISK,
   ...HFPEF,
   ...PULMONARY,
   ...HEME,

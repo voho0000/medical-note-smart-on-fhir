@@ -9,6 +9,18 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-cvd': {
+    useWhen: { en: 'Primary prevention: 10-year total CVD risk in adults aged 30–79 without known CVD.', zh: '初級預防：30–79 歲、無已知 CVD 者的 10 年總心血管風險。' },
+    caveats: { en: 'US base model; no UACR, HbA1c or SDI add-on. Confirm applicability, treatment and smoking status; missing inputs are not zero.', zh: '美國基礎模型，未加 UACR、HbA1c 或 SDI；須確認族群適用性、實際用藥與吸菸狀態，缺項不當作零。' },
+  },
+  'score2': {
+    useWhen: { en: '10-year fatal and non-fatal CVD risk at age 40–69 without diabetes or established CVD.', zh: '40–69 歲、無糖尿病與已知 CVD 者的 10 年致死與非致死心血管風險。' },
+    caveats: { en: 'Requires an explicit European region. Do not substitute this for SCORE2-Diabetes or infer a European region for Taiwan.', zh: '須明確選擇歐洲風險地區；不能替代 SCORE2-Diabetes，也不替台灣預設地區。' },
+  },
+  'score2-op': {
+    useWhen: { en: '10-year fatal and non-fatal CVD risk at age 70–89 without established CVD; includes diabetes status.', zh: '70–89 歲、無已知 CVD 者的 10 年致死與非致死心血管風險，包含糖尿病變項。' },
+    caveats: { en: 'Requires an explicit European region. Consider frailty, life expectancy and preferences separately; age alone does not imply frailty.', zh: '須明確選擇歐洲風險地區；虛弱、預期壽命與病人偏好另行評估，年齡不能代表虛弱。' },
+  },
   'h2fpef': {
     useWhen: { en: 'Unexplained exertional dyspnea in adults with preserved EF.', zh: '成人射出分率保留，且有原因未明的活動性呼吸困難。' },
     caveats: { en: 'AF uses diagnosis codes first, then ECG history; a negative reflects available records only. Antihypertensives use deduplicated ingredients in valid prescriptions; confirm actual use. Auto-filled echo values come from one report; review its date, technique and source. A preserved EF alone does not establish HFpEF.', zh: 'AF 先查診斷碼，再查 EKG；「否」僅表示目前紀錄未見 AF，請核對病史。降壓藥按有效處方成分去重推算，請核對實際使用情形。心超值取自同一份報告，請核對日期、測量方式與原文；EF 保留本身不能確診 HFpEF。' },

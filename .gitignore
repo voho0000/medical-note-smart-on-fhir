@@ -67,3 +67,6 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Self-contained prereleases for the isolated hypertension branch.
+!vendor/htn/*.tgz

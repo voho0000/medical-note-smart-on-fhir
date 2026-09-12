@@ -61,6 +61,14 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-cvd': {
+    formula: { en: 'Risk (%) = 100 / (1 + exp(−LP)). LP uses sex-specific base coefficients, transformed age, lipids, BP, eGFR, diabetes, smoking, medications and interactions.', zh: '風險（%）= 100 / (1 + exp(−LP))。LP 使用性別專屬基礎係數、轉換後年齡、血脂、血壓、eGFR、糖尿病、吸菸、用藥及交互作用。' },
+    note: { en: 'Lipids: mg/dL × 0.02586 → mmol/L. BMI is an eligibility check, not a coefficient in the base total-CVD equation. Preserve the unrounded result for downstream thresholds.', zh: '血脂：mg/dL × 0.02586 → mmol/L。BMI 用於適用性檢查，不是基礎總 CVD 公式的係數；門檻判讀保留未四捨五入結果。' },
+  },
+  ...Object.fromEntries(['score2', 'score2-op'].map(id => [id, {
+    formula: { en: 'p₀ = 1 − S₀^exp(LP − meanLP); risk (%) = 100 × [1 − exp(−exp(scale₁ + scale₂ × ln(−ln(1 − p₀))))]. SCORE2 meanLP = 0; SCORE2-OP uses sex-specific meanLP.', zh: 'p₀ = 1 − S₀^exp(LP − meanLP)；風險（%）= 100 × [1 − exp(−exp(scale₁ + scale₂ × ln(−ln(1 − p₀))))]。SCORE2 的 meanLP = 0；SCORE2-OP 使用性別專屬 meanLP。' },
+    note: { en: 'Coefficients, centering, baseline survival and regional scales are specific to each model and sex. No region is selected by default.', zh: '係數、中心化、基準存活率及地區校準值依模型與性別分開；不預設地區。' },
+  }])),
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },

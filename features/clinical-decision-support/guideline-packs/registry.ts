@@ -17,8 +17,8 @@
  * Two host decisions live below, and they are separate questions.
  *
  * WHICH packs: `HOST_PACK_ORDER` is the switcher, and nothing outside it is
- * reachable. The package develops one pathway per branch and the released
- * version ships the heart-failure pack alone, so that is the whole list. A pack
+ * reachable. The package develops one pathway per branch and this branch
+ * ships HF plus the HTN pilot. A pack
  * the package adds does not appear here until it is named in that list — the
  * package proposes, the host decides. The one exception is a local development
  * server, which may list the packs of the rules branch it was started on
@@ -44,15 +44,8 @@ import { isBetaFeaturesEnabledInBrowser } from '@/src/application/stores/beta-fe
 import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
-/**
- * The disease switcher: exactly these packs, in exactly this order.
- *
- * Heart failure is the only one left. `@voho0000/personalized-care` develops
- * one pathway per branch, and the released package now ships the heart-failure
- * pack alone — it no longer carries `ckd-cdss`, and a listed pack the package
- * does not carry throws below rather than silently shortening the switcher.
- */
-const HOST_PACK_ORDER = ['heart-failure-cdss'] as const
+/** HF remains the default. HTN is available behind the existing Beta/pilot gate. */
+const HOST_PACK_ORDER = ['heart-failure-cdss', 'hypertension-cdss'] as const
 
 /**
  * Local development only: the packs a disease-branch start-of-session script

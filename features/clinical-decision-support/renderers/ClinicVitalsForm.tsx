@@ -35,6 +35,8 @@ export function ClinicVitalsForm({
   onClose,
   /** Extra line under the form, used by the visit flow for its scope note. */
   footnote,
+  fieldKeys = CLINIC_VITALS_ENTRY_KEYS,
+  testIdPrefix = "cdss-hf-clinic-vitals",
 }: {
   isEnglish: boolean
   now: Date
@@ -43,6 +45,8 @@ export function ClinicVitalsForm({
   onClear?: () => void
   onClose: () => void
   footnote?: string
+  fieldKeys?: readonly ClinicVitalsEntryKey[]
+  testIdPrefix?: string
 }) {
   const id = useId()
   const entryOf = (key: ClinicVitalsEntryKey) => initial?.entries?.[key]?.value
@@ -62,11 +66,7 @@ export function ClinicVitalsForm({
   }
   // A blood pressure is two numbers or none; one half cannot be read.
   const bpHalfEntered = (parsed.systolic === undefined) !== (parsed.diastolic === undefined)
-  const hasAnything = parsed.heartRate !== undefined
-    || parsed.oxygenSaturation !== undefined
-    || parsed.bodyWeight !== undefined
-    || parsed.bodyHeight !== undefined
-    || (parsed.systolic !== undefined && parsed.diastolic !== undefined)
+  const hasAnything = fieldKeys.some((key) => parsed[key] !== undefined)
   const canSave = hasAnything && !bpHalfEntered
 
   const fields: readonly {
@@ -89,13 +89,13 @@ export function ClinicVitalsForm({
     <form
       className="flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border bg-muted/20 px-3.5 py-2.5"
       aria-label={isEnglish ? 'Measured in clinic' : '門診量測'}
-      data-testid="cdss-hf-clinic-vitals-form"
+      data-testid={`${testIdPrefix}-form`}
       onSubmit={(event) => {
         event.preventDefault()
         if (!canSave) return
         const measuredOn = todayIsoDate(now)
         const entries: ClinicVitalsPatch['entries'] = {}
-        for (const key of CLINIC_VITALS_ENTRY_KEYS) {
+        for (const key of fieldKeys) {
           const value = parsed[key]
           if (key === 'systolic' || key === 'diastolic') {
             if (parsed.systolic === undefined || parsed.diastolic === undefined) continue
@@ -112,7 +112,7 @@ export function ClinicVitalsForm({
           ? 'Measured in clinic today. Encrypted and kept for this tab session; every module recomputes from it.'
           : '今日門診量測。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
       </span>
-      {fields.map((field) => (
+      {fields.filter((field) => fieldKeys.includes(field.key)).map((field) => (
         <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
           <span>{field.label} <span className="font-normal">{field.unit}</span></span>
           <Input
@@ -125,12 +125,12 @@ export function ClinicVitalsForm({
             onChange={(event) => field.set(event.target.value)}
             className="h-8 w-20 px-2 text-sm tabular-nums md:text-sm"
             aria-invalid={bpHalfEntered && (field.key === 'systolic' || field.key === 'diastolic') ? true : undefined}
-            data-testid={`cdss-hf-clinic-vitals-${field.key}`}
+            data-testid={`${testIdPrefix}-${field.key}`}
           />
         </label>
       ))}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" size="sm" className="h-8" disabled={!canSave} data-testid="cdss-hf-clinic-vitals-save">
+        <Button type="submit" size="sm" className="h-8" disabled={!canSave} data-testid={`${testIdPrefix}-save`}>
           {isEnglish ? 'Apply' : '套用'}
         </Button>
         <Button type="button" size="sm" variant="ghost" className="h-8" onClick={onClose}>
@@ -143,7 +143,7 @@ export function ClinicVitalsForm({
             variant="ghost"
             className="h-8 text-muted-foreground"
             onClick={() => { onClear(); onClose() }}
-            data-testid="cdss-hf-clinic-vitals-clear"
+            data-testid={`${testIdPrefix}-clear`}
           >
             {isEnglish ? 'Clear' : '清除'}
           </Button>
@@ -157,7 +157,7 @@ export function ClinicVitalsForm({
       {footnote ? (
         <span
           className="w-full text-[11px] leading-4 text-muted-foreground"
-          data-testid="cdss-hf-clinic-vitals-footnote"
+          data-testid={`${testIdPrefix}-footnote`}
         >
           {footnote}
         </span>

@@ -68,3 +68,7 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 4. A test must cover the route where the surface is *kept*, not only the route
    where it is hidden (`__tests__/features/clinical-decision-support/pilot-pack-registry.test.ts`
    and `__tests__/application/hooks/use-beta-features.test.tsx` are the pattern).
+
+## Hypertension branch (2026-09-12)
+
+`codex/hypertension-cdss-complete` adds `hypertension-cdss` to the host list after HF. It keeps its `enabled: false` pilot marker and follows the existing Beta/pilot gate, including Beta access on the vghtpe hospital route. HF and all existing clinical surfaces remain available. No new hiding rule is introduced.

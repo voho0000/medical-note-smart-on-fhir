@@ -138,6 +138,8 @@ export type CalcInput = NumberInput | SelectInput
 export type Severity = 'normal' | 'low' | 'moderate' | 'high'
 
 export interface CalcResult {
+  /** Unrounded result for downstream clinical rules; never parse display text. */
+  numericValue?: number
   /** Formatted primary value, e.g. "72" or "Class B". */
   value: string
   unit?: string

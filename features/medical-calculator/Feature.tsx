@@ -14,6 +14,8 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
+import { CardiovascularRiskCalculator } from "./components/CardiovascularRiskCalculator"
+import { isCvdRiskId } from "./calculators/cardiovascular-risk"
 import { CalculatorDetail } from "./components/CalculatorDetail"
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
@@ -78,6 +80,8 @@ export default function MedicalCalculatorFeature() {
   )
   const flatList = list.mode === "flat" ? list.flat : null
   const grouped = list.grouped
+
+  if (selected && isCvdRiskId(selected.id)) return <CardiovascularRiskCalculator id={selected.id} onBack={() => setSelectedId(null)} />
 
   if (selected) {
     return (

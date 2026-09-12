@@ -1,0 +1,18 @@
+{
+  "sourceRepository": "https://github.com/voho0000/mediprisma-personalization",
+  "sourceCommit": "07e6cb79d0d2213dc92d6bbf005c9e16fecfa7a0",
+  "packages": [
+    {
+      "name": "@voho0000/personalized-care",
+      "version": "2.1.0-htn.0",
+      "file": "vendor/htn/voho0000-personalized-care-2.1.0-htn.0.tgz",
+      "integrity": "sha512-s07haUwQ+JGi91wAMAQix5rVF5MzpDw78k0dOai+GxBtX3slG70dIythgSbtu0+7GDunRj1bDYSWi3VJ48TEfA=="
+    },
+    {
+      "name": "@voho0000/personalized-care-fhir",
+      "version": "1.7.0-htn.0",
+      "file": "vendor/htn/voho0000-personalized-care-fhir-1.7.0-htn.0.tgz",
+      "integrity": "sha512-QhfoA4I4Jb+fmS38LsMWi/47BygLu/jpoNJE2cg8+KlVwrMddSbxzVrqfWwQHykMpLDgYD5YQS0ypwE7x2ig1w=="
+    }
+  ]
+}

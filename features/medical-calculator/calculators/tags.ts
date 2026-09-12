@@ -29,6 +29,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
+  ...Object.fromEntries(['prevent-cvd', 'score2', 'score2-op'].map(id => [id, { purpose: ['risk', 'prognosis'] as Purpose[], diseases: [{ en: 'Hypertension', zh: '高血壓' }, { en: 'Cardiovascular prevention', zh: '心血管預防' }] }])),
   'h2fpef': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
   'hfa-peff': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
   'map': { purpose: ['formula'], diseases: [{ en: 'Shock', zh: '休克' }, { en: 'Hypotension', zh: '低血壓' }] },

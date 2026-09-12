@@ -43,6 +43,8 @@ import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { useCvdRiskResults } from '@/features/medical-calculator/cardiovascular-risk-results'
+import { applyHypertensionRiskResults, clinicRiskContext } from './utils/hypertension-risk-results'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
@@ -246,6 +248,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const cvdRiskResults = useCvdRiskResults(patientId)
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clinicVitals = useClinicVitals(patientId)
@@ -366,9 +369,10 @@ export default function LiveClinicalDecisionSupportFeature() {
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
+  const riskContext = useMemo(() => clinicRiskContext(clinicVitals), [clinicVitals])
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
-  ), [answeredProfile, hfpefReading])
+    answeredProfile ? applyHypertensionRiskResults(applyHfpefReading(answeredProfile, hfpefReading), cvdRiskResults, autofill, riskContext) : null
+  ), [answeredProfile, hfpefReading, cvdRiskResults, autofill, riskContext])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -510,6 +514,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
+        riskContext={riskContext}
         layout={layout}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}

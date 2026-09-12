@@ -51,7 +51,11 @@ import {
 } from './heart-failure-board'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
+import { HypertensionRiskResults } from './HypertensionRiskResults'
+import type { RiskContext } from '@/features/medical-calculator/cardiovascular-risk-results'
 import type { HfpefReading } from '../utils/hfpef-scores'
+import { buildHypertensionBoard } from './hypertension-board'
+import { DiseaseStatusBoard } from './DiseaseStatusBoard'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
@@ -115,6 +119,7 @@ interface ClinicalDecisionSupportViewProps {
    * complete the echo values behind them. Only the visit flow reads them; the
    * original board shows the pack's own reading of the same facts.
    */
+  riskContext?: RiskContext
   hfpefReading?: HfpefReading
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
 }
@@ -2032,6 +2037,7 @@ export function ClinicalDecisionSupportView({
   physicianDecisions,
   onRecordDecision,
   onClearDecision,
+  riskContext,
   hfpefReading,
   onSaveHfpefInputs,
 }: ClinicalDecisionSupportViewProps) {
@@ -2070,6 +2076,11 @@ export function ClinicalDecisionSupportView({
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
   )
+  const hypertensionBoard = useMemo(
+    () => layout === 'classic' ? undefined : buildHypertensionBoard(result, locale, now, profileFacts),
+    [layout, result, locale, now, profileFacts],
+  )
+  const activeBoard = board ?? hypertensionBoard
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
   const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
@@ -2098,14 +2109,14 @@ export function ClinicalDecisionSupportView({
   // it holds something to do.
   const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<string>>(
     () => new Set<string>(
-      board
-        // On the heart-failure board the done modules fold into one line that
+      activeBoard
+        // On a disease board the done modules fold into one line that
         // names them; the rest of the list is what still needs the clinician.
         // When nothing else is listed — a patient the pathway did not open
         // for produces the phenotype card alone — the line is the whole list,
         // so it stays open rather than hiding the one thing there is to read.
         ? (result.recommendations.some((item) => (
-            !board.consumedIds.has(item.id) && item.status !== 'no-action'
+            !activeBoard.consumedIds.has(item.id) && item.status !== 'no-action'
           ))
             ? ['no-action']
             : [])
@@ -2160,10 +2171,10 @@ export function ClinicalDecisionSupportView({
     medium: 1,
     routine: 2,
   }
-  const heartFailureRows: ModuleDisplayRow[] = board
+  const heartFailureRows: ModuleDisplayRow[] = activeBoard
     ? HEART_FAILURE_LIST_STATUS_ORDER.flatMap((status): ModuleDisplayRow[] => {
       const items = displayRecommendations
-        .filter((item) => !board.consumedIds.has(item.id) && item.status === status)
+        .filter((item) => !activeBoard.consumedIds.has(item.id) && item.status === status)
         .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority])
       if (items.length === 0) return []
       const isCollapsed = collapsedModuleGroups.has(status)
@@ -2184,7 +2195,7 @@ export function ClinicalDecisionSupportView({
       ]
     })
     : []
-  const moduleDisplayRows: ModuleDisplayRow[] = board
+  const moduleDisplayRows: ModuleDisplayRow[] = activeBoard
     ? heartFailureRows
     : hasCompleteModuleGrouping
     ? MODULE_GROUPS.flatMap((group): ModuleDisplayRow[] => {
@@ -2228,7 +2239,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && (
+  const showClinicalSummary = !activeBoard && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2410,6 +2421,19 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
+      {hypertensionBoard ? <DiseaseStatusBoard
+        board={hypertensionBoard} isEnglish={isEnglish} now={now}
+        expandedId={expandedId} onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+        clinicVitals={clinicVitals} onSaveClinicVitals={onSaveClinicVitals}
+        renderDetail={(recommendation) => <RecommendationDetail
+          recommendation={recommendation} isEnglish={isEnglish} onNavigate={navigateToResource}
+          label={label} patientId={patientId} copyProvenance={copyProvenance}
+          clinicVitals={clinicVitals} onSaveClinicVitals={onSaveClinicVitals}
+        />} /> : null}
+
+      {result.packId === 'hypertension-cdss' && patientId && riskContext && profileFacts ? <HypertensionRiskResults
+        patientId={patientId} facts={profileFacts} context={riskContext} isEnglish={isEnglish} /> : null}
+
       {board && !isVisitFlow ? (
         <HeartFailureStatusBoard
           board={board}
@@ -2450,7 +2474,7 @@ export function ClinicalDecisionSupportView({
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}
       >
-        {board ? (
+        {activeBoard ? (
           // Action first: the heart-failure list reads 處置 → 依據, the way the
           // board's headlines do, so a reader who came from a sentence above
           // lands on the same words.
@@ -2592,14 +2616,14 @@ export function ClinicalDecisionSupportView({
                   recommendation.status === 'no-action'
                     ? 'hover:bg-emerald-100/50 dark:hover:bg-emerald-500/10'
                     : 'hover:bg-muted/30',
-                  board
+                  activeBoard
                     ? '@min-[40rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3'
                     : '@min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3',
                   isExpanded && 'bg-muted/25',
                 )}
                 aria-expanded={isExpanded}
                 aria-controls={detailId}
-                data-layout={board ? 'action-first' : 'module-first'}
+                data-layout={activeBoard ? 'action-first' : 'module-first'}
                 data-testid={`cdss-recommendation-trigger-${recommendation.id}`}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return
@@ -2634,7 +2658,7 @@ export function ClinicalDecisionSupportView({
                   setRequestedExpandedId(isExpanded ? null : recommendation.id)
                 }}
               >
-                {board ? (
+                {activeBoard ? (
                   <>
                     <span
                       className="min-w-0 cursor-text"

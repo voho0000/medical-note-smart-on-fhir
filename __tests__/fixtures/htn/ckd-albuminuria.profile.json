@@ -1,0 +1,1998 @@
+{
+  "id": "mc-94119411941194119411941194119411:cdss",
+  "profileVersion": "multi-disease-cdss-profile-v2",
+  "evaluatedAt": "2026-09-03T16:00:00.000Z",
+  "demographics": {
+    "sex": "unknown"
+  },
+  "eligibleDiseasePackIds": [
+    "ckd-poc",
+    "hypertension-poc"
+  ],
+  "diseasePackEligibility": {
+    "ckd-poc": {
+      "basis": "encounter_diagnosis",
+      "resourceType": "Encounter",
+      "resourceId": "08dea24078a74d3ceef4453d771eab0c",
+      "codingSystem": "http://hl7.org/fhir/sid/icd-10-cm",
+      "code": "N18.3"
+    },
+    "hypertension-poc": {
+      "basis": "encounter_diagnosis",
+      "resourceType": "Encounter",
+      "resourceId": "45762d916fd4736da49b686c470574ee",
+      "codingSystem": "http://hl7.org/fhir/sid/icd-10-cm",
+      "code": "I10"
+    }
+  },
+  "facts": {
+    "eGFR": {
+      "zh": "41.6 mL/min/1.73m²（2026-08-14）",
+      "en": "41.6 mL/min/1.73m² (2026-08-14)",
+      "numericValue": 41.6,
+      "unit": "mL/min/1.73m²",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "65128ee4923de880b86b871aa82435e6",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 41.6,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "eGFRTrend": {
+      "zh": "2026-05-05 43 → 2026-05-20 58.2 → 2026-08-14 41.6 mL/min/1.73m²",
+      "en": "2026-05-05 43 → 2026-05-20 58.2 → 2026-08-14 41.6 mL/min/1.73m²",
+      "numericValue": 41.6,
+      "unit": "mL/min/1.73m²",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "a721d4c97a61246e5ad479178788a92e",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 43,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "69405-9",
+              "display": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by based on 1.73 sq M"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR",
+              "display": "eGFR"
+            }
+          ],
+          "facility": "示範測試醫院"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "fc4cd41e62d7045224792a01345cec94",
+          "date": "2026-05-20",
+          "status": "unknown",
+          "value": 58.2,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "65128ee4923de880b86b871aa82435e6",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 41.6,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "ckdChronicity": {
+      "zh": "至少兩次 eGFR <60，間隔達 3 個月（2026-05-05 → 2026-08-14）",
+      "en": "At least two eGFR values below 60 separated by at least 3 months (2026-05-05 to 2026-08-14)",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "a721d4c97a61246e5ad479178788a92e",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 43,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "69405-9",
+              "display": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by based on 1.73 sq M"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR",
+              "display": "eGFR"
+            }
+          ],
+          "facility": "示範測試醫院"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "65128ee4923de880b86b871aa82435e6",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 41.6,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "ckdDiagnosis": {
+      "zh": "慢性腎臟病診斷：慢性腎臟病，第三期（2026-08-14）",
+      "en": "Chronic kidney disease diagnosis: 慢性腎臟病，第三期 (2026-08-14)",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Encounter",
+          "resourceId": "08dea24078a74d3ceef4453d771eab0c",
+          "date": "2026-08-14",
+          "status": "finished",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "N18.3",
+              "display": "慢性腎臟病，第三期"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "hypertensionDiagnosis": {
+      "zh": "高血壓：原發性高血壓（2026-08-14）",
+      "en": "Hypertension: 原發性高血壓 (2026-08-14)",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Encounter",
+          "resourceId": "45762d916fd4736da49b686c470574ee",
+          "date": "2026-08-14",
+          "status": "finished",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "原發性高血壓"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "earliestHypertensionDiagnosis": {
+      "zh": "資料中最早的高血壓診斷（僅為發病日下限）：原發性高血壓（2026-08-10）",
+      "en": "Earliest hypertension diagnosis in the available data (a lower bound on onset): 原發性高血壓 (2026-08-10)",
+      "date": "2026-08-10",
+      "sources": [
+        {
+          "resourceType": "Encounter",
+          "resourceId": "9b9a128432e6179e6fd346f13b64c335",
+          "date": "2026-08-10",
+          "status": "finished",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "原發性高血壓"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "urineAlbuminRatio": {
+      "zh": "342 mg/g（2026-08-14）",
+      "en": "342 mg/g (2026-08-14)",
+      "numericValue": 342,
+      "unit": "mg/g",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 342,
+          "unit": "mg/g",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "99012C",
+              "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "UACR 尿液白蛋白肌酸酐比值",
+              "display": "UACR 尿液白蛋白肌酸酐比值"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "urineAlbuminOverview": {
+      "zh": "342 mg/g · 2026-08-14",
+      "en": "342 mg/g · 2026-08-14",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 342,
+          "unit": "mg/g",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "99012C",
+              "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "UACR 尿液白蛋白肌酸酐比值",
+              "display": "UACR 尿液白蛋白肌酸酐比值"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "urineAlbuminRatioQuantitative": {
+      "zh": "342 mg/g（2026-08-14）",
+      "en": "342 mg/g (2026-08-14)",
+      "numericValue": 342,
+      "unit": "mg/g",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 342,
+          "unit": "mg/g",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "99012C",
+              "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "UACR 尿液白蛋白肌酸酐比值",
+              "display": "UACR 尿液白蛋白肌酸酐比值"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "bloodPressure": {
+      "zh": "138/86 mmHg（2026-05-05）",
+      "en": "138/86 mmHg (2026-05-05)",
+      "unit": "mmHg",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "3379e34a97c8fbe287698a8c9125e3d0",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": "138/86",
+          "unit": "mmHg",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "bloodPressureAdultPreventive": {
+      "zh": "成人預防保健血壓 1 筆（最新 138/86 mmHg，2026-05-05）",
+      "en": "1 adult preventive health-check BP reading(s) (latest 138/86 mmHg, 2026-05-05)",
+      "numericValue": 1,
+      "unit": "mmHg",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "3379e34a97c8fbe287698a8c9125e3d0",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": "138/86",
+          "unit": "mmHg",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "bodyWeight": {
+      "zh": "58.4 kg（2026-05-05）",
+      "en": "58.4 kg (2026-05-05)",
+      "numericValue": 58.4,
+      "unit": "kg",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "2ce084a3fc72418845db1632b0293623",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 58.4,
+          "unit": "kg",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "Body Weight",
+              "display": "Body Weight"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "bodyHeight": {
+      "zh": "156 cm（2026-05-05）",
+      "en": "156 cm (2026-05-05)",
+      "numericValue": 156,
+      "unit": "cm",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "4e5a2ebcc78b8eb02ffb00c3c4f2fff2",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 156,
+          "unit": "cm",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2",
+              "display": "Body height"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "Body Height",
+              "display": "Body Height"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "bodyMassIndex": {
+      "zh": "24 kg/m²（身高 156 cm、體重 58.4 kg）",
+      "en": "24 kg/m2 (height 156 cm, weight 58.4 kg)",
+      "numericValue": 24,
+      "unit": "kg/m²",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "2ce084a3fc72418845db1632b0293623",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 58.4,
+          "unit": "kg",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "Body Weight",
+              "display": "Body Weight"
+            }
+          ],
+          "facility": "示範測試醫院"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "4e5a2ebcc78b8eb02ffb00c3c4f2fff2",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 156,
+          "unit": "cm",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2",
+              "display": "Body height"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "Body Height",
+              "display": "Body Height"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "sodium": {
+      "zh": "139 mmol/L（2026-08-14）",
+      "en": "139 mmol/L (2026-08-14)",
+      "numericValue": 139,
+      "unit": "mmol/L",
+      "date": "2026-08-14",
+      "abnormality": {
+        "direction": "normal",
+        "basis": "reported-interpretation"
+      },
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "5292da3a60613cac77217f00d0f5a6a8",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 139,
+          "unit": "mmol/L",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2",
+              "display": "Sodium [Moles/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09021C",
+              "display": "鈉 ;(Na (Sodium))"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "potassium": {
+      "zh": "4.3 mmol/L（2026-08-14）",
+      "en": "4.3 mmol/L (2026-08-14)",
+      "numericValue": 4.3,
+      "unit": "mmol/L",
+      "date": "2026-08-14",
+      "abnormality": {
+        "direction": "normal",
+        "basis": "reported-interpretation"
+      },
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "eb5f7e0f8cd2abf9451790097c464538",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 4.3,
+          "unit": "mmol/L",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3",
+              "display": "Potassium [Moles/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09022C",
+              "display": "鉀 ;(K(Potassium))"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "serumCreatinine": {
+      "zh": "1.34 mg/dL（2026-08-14）",
+      "en": "1.34 mg/dL (2026-08-14)",
+      "numericValue": 1.34,
+      "unit": "mg/dL",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "7c5865fca6fa59c999e541da60277789",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 1.34,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0",
+              "display": "Creatinine [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "serumCreatinineTrend": {
+      "zh": "2026-05-05 1.3 → 2026-08-14 1.34 mg/dL",
+      "en": "2026-05-05 1.3 → 2026-08-14 1.34 mg/dL",
+      "numericValue": 1.34,
+      "unit": "mg/dL",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "042477c2e00daa57413c10e58ef97736",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 1.3,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0",
+              "display": "Creatinine [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "Creatinine"
+            }
+          ],
+          "facility": "示範測試醫院"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "7c5865fca6fa59c999e541da60277789",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 1.34,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0",
+              "display": "Creatinine [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "hemoglobin": {
+      "zh": "11.9 g/dL（2026-08-14）",
+      "en": "11.9 g/dL (2026-08-14)",
+      "numericValue": 11.9,
+      "unit": "g/dL",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "6b6c711695a6fb35f5c33c9183c1a775",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 11.9,
+          "unit": "g/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "718-7",
+              "display": "Hemoglobin [Mass/volume] in Blood"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "08011C",
+              "display": "全套血液檢查Ｉ（八項） ;(CBC-I(WBC,RBC,HB,HCT,PLATELET COUNT,MCV,MCH,MCHC))"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "glucose": {
+      "zh": "96 mg/dL（2026-05-05）",
+      "en": "96 mg/dL (2026-05-05)",
+      "numericValue": 96,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "61d6b2b295352c36f0a696d436673aeb",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 96,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "1558-6",
+              "display": "Fasting glucose [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09005C",
+              "display": "Glu-AC"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "totalCholesterol": {
+      "zh": "182 mg/dL（2026-05-05）",
+      "en": "182 mg/dL (2026-05-05)",
+      "numericValue": 182,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "f8368625962a088a83737fd70f2f2e6c",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 182,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2093-3",
+              "display": "Cholesterol [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09001C",
+              "display": "Cholesterol"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "LDL": {
+      "zh": "104 mg/dL（2026-05-05）",
+      "en": "104 mg/dL (2026-05-05)",
+      "numericValue": 104,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "6416c2b7368339ce9df2e1ad36e27b86",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 104,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2089-1",
+              "display": "Cholesterol in LDL [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09044C",
+              "display": "LDL"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "HDL": {
+      "zh": "52 mg/dL（2026-05-05）",
+      "en": "52 mg/dL (2026-05-05)",
+      "numericValue": 52,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "c3f8f518e8e975174f873c6201b48562",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 52,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2085-9",
+              "display": "Cholesterol in HDL [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09043C",
+              "display": "HDL"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "triglycerides": {
+      "zh": "132 mg/dL（2026-05-05）",
+      "en": "132 mg/dL (2026-05-05)",
+      "numericValue": 132,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "23535e930863a038e8a5815e7a0c6b44",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 132,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2571-8",
+              "display": "Triglyceride [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09004C",
+              "display": "Triglyceride"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "nonHDL": {
+      "zh": "130 mg/dL（總膽固醇 − HDL-C；2026-05-05）",
+      "en": "130 mg/dL (total cholesterol − HDL-C; 2026-05-05)",
+      "numericValue": 130,
+      "unit": "mg/dL",
+      "date": "2026-05-05",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "f8368625962a088a83737fd70f2f2e6c",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 182,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2093-3",
+              "display": "Cholesterol [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09001C",
+              "display": "Cholesterol"
+            }
+          ],
+          "facility": "示範測試醫院"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "c3f8f518e8e975174f873c6201b48562",
+          "date": "2026-05-05",
+          "status": "unknown",
+          "value": 52,
+          "unit": "mg/dL",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2085-9",
+              "display": "Cholesterol in HDL [Mass/volume] in Serum or Plasma"
+            },
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09043C",
+              "display": "HDL"
+            }
+          ],
+          "facility": "示範測試醫院"
+        }
+      ]
+    },
+    "medicationListOverview": {
+      "zh": "資料切片內目前用藥 1 筆：DICHLOTRIDE TABLETS 25MG",
+      "en": "1 current medication record(s) in the available data slice: DICHLOTRIDE TABLETS 25MG",
+      "sources": [
+        {
+          "resourceType": "MedicationRequest",
+          "resourceId": "37024099564d8c7e0f6924e31c6c740a",
+          "date": "2026-08-10",
+          "status": "unknown",
+          "value": "DICHLOTRIDE TABLETS 25MG",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "A004236100",
+              "display": "DICHLOTRIDE TABLETS 25MG"
+            },
+            {
+              "system": "http://www.whocc.no/atc",
+              "code": "C03AA03"
+            }
+          ],
+          "facility": "示範測試醫院;門診"
+        }
+      ]
+    },
+    "hypoglycemiaRiskMedications": {
+      "zh": "目前未使用胰島素或磺醯脲",
+      "en": "Not currently taking insulin or a sulfonylurea"
+    },
+    "sglt2Therapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "arniTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "hfEvidenceBetaBlockerTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "loopDiureticTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "ivabradineTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "vericiguatTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "hydralazineIsdnTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "digoxinTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "statinTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "ezetimibeTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "pcsk9Therapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "bempedoicAcidTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "fibrateTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "prescriptionOmega3Therapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "aceArbTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "ccbTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "aceInhibitorTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "arbTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "dhpCcbTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "directReninInhibitorTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "centrallyActingAntihypertensiveTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "alphaBlockerTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "hydralazineTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "potassiumSparingDiureticTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "thiazideTherapy": {
+      "zh": "目前用藥中：DICHLOTRIDE TABLETS 25MG",
+      "en": "Currently taking: DICHLOTRIDE TABLETS 25MG",
+      "sources": [
+        {
+          "resourceType": "MedicationRequest",
+          "resourceId": "37024099564d8c7e0f6924e31c6c740a",
+          "date": "2026-08-10",
+          "status": "unknown",
+          "value": "DICHLOTRIDE TABLETS 25MG",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "A004236100",
+              "display": "DICHLOTRIDE TABLETS 25MG"
+            },
+            {
+              "system": "http://www.whocc.no/atc",
+              "code": "C03AA03"
+            }
+          ],
+          "facility": "示範測試醫院;門診"
+        }
+      ]
+    },
+    "betaBlockerTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "nonselectiveBetaBlockerTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "mraTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "lactuloseTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "rifaximinTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "finerenoneTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "calciumPhosphateBinderTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "nonCalciumPhosphateBinderTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "ironTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "esaTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "hifPhiTherapy": {
+      "zh": "目前未使用",
+      "en": "Not currently taking"
+    },
+    "sglt2Allergy": {
+      "zh": "過敏／不耐受紀錄未見 SGLT2i",
+      "en": "No SGLT2 inhibitor allergy/intolerance appears in the available record"
+    },
+    "insulinAllergy": {
+      "zh": "過敏／不耐受紀錄未見 胰島素",
+      "en": "No insulin allergy/intolerance appears in the available record"
+    },
+    "sulfonylureaAllergy": {
+      "zh": "過敏／不耐受紀錄未見 磺醯脲",
+      "en": "No sulfonylurea allergy/intolerance appears in the available record"
+    },
+    "statinAllergy": {
+      "zh": "過敏／不耐受紀錄未見 statin",
+      "en": "No statin allergy/intolerance appears in the available record"
+    },
+    "ironTherapyAllergy": {
+      "zh": "過敏／不耐受紀錄未見 鐵劑",
+      "en": "No iron therapy allergy/intolerance appears in the available record"
+    },
+    "esaAllergy": {
+      "zh": "過敏／不耐受紀錄未見 ESA",
+      "en": "No ESA allergy/intolerance appears in the available record"
+    },
+    "ezetimibeAllergy": {
+      "zh": "過敏／不耐受紀錄未見 ezetimibe",
+      "en": "No ezetimibe allergy/intolerance appears in the available record"
+    },
+    "pcsk9Allergy": {
+      "zh": "過敏／不耐受紀錄未見 PCSK9 抑制劑",
+      "en": "No PCSK9 inhibitor allergy/intolerance appears in the available record"
+    },
+    "bempedoicAcidAllergy": {
+      "zh": "過敏／不耐受紀錄未見 bempedoic acid",
+      "en": "No bempedoic acid allergy/intolerance appears in the available record"
+    },
+    "fibrateAllergy": {
+      "zh": "過敏／不耐受紀錄未見 fibrate",
+      "en": "No fibrate allergy/intolerance appears in the available record"
+    },
+    "prescriptionOmega3Allergy": {
+      "zh": "過敏／不耐受紀錄未見 處方 omega-3",
+      "en": "No prescription omega-3 allergy/intolerance appears in the available record"
+    },
+    "aceArbAllergy": {
+      "zh": "過敏／不耐受紀錄未見 ACEI／ARB",
+      "en": "No ACE inhibitor/ARB allergy/intolerance appears in the available record"
+    },
+    "ccbAllergy": {
+      "zh": "過敏／不耐受紀錄未見 鈣離子通道阻斷劑",
+      "en": "No calcium-channel blocker allergy/intolerance appears in the available record"
+    },
+    "thiazideAllergy": {
+      "zh": "過敏／不耐受紀錄未見 thiazide／thiazide-like 利尿劑",
+      "en": "No thiazide/thiazide-like diuretic allergy/intolerance appears in the available record"
+    },
+    "betaBlockerAllergy": {
+      "zh": "過敏／不耐受紀錄未見 β 阻斷劑",
+      "en": "No beta-blocker allergy/intolerance appears in the available record"
+    },
+    "nonselectiveBetaBlockerAllergy": {
+      "zh": "過敏／不耐受紀錄未見 非選擇性 β 阻斷劑",
+      "en": "No nonselective beta-blocker allergy/intolerance appears in the available record"
+    },
+    "mraAllergy": {
+      "zh": "過敏／不耐受紀錄未見 spironolactone／eplerenone",
+      "en": "No spironolactone/eplerenone allergy/intolerance appears in the available record"
+    },
+    "lactuloseAllergy": {
+      "zh": "過敏／不耐受紀錄未見 lactulose",
+      "en": "No lactulose allergy/intolerance appears in the available record"
+    },
+    "rifaximinAllergy": {
+      "zh": "過敏／不耐受紀錄未見 rifaximin",
+      "en": "No rifaximin allergy/intolerance appears in the available record"
+    },
+    "finerenoneAllergy": {
+      "zh": "過敏／不耐受紀錄未見 finerenone",
+      "en": "No finerenone allergy/intolerance appears in the available record"
+    },
+    "ecgReport": {
+      "zh": "心電圖：只有醫令存根，沒有報告內容（2026-08-14）",
+      "en": "ECG: a completed-order stub with no report content (2026-08-14)",
+      "date": "2026-08-14",
+      "textEvidence": {
+        "direction": "unknown",
+        "matchedTerms": [
+          "ecg-order-stub"
+        ],
+        "fragments": [
+          "18001E.K.G. 心電圖    已完成"
+        ]
+      },
+      "sources": [
+        {
+          "resourceType": "DiagnosticReport",
+          "resourceId": "7be2de26b7028ec0b1e696cb22f5d1ae",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "18001C",
+              "display": "心電圖ＥＫＧ ;(E.K.G.)"
+            },
+            {
+              "system": "http://loinc.org",
+              "code": "11524-6",
+              "display": "EKG study"
+            }
+          ]
+        }
+      ]
+    },
+    "antihypertensiveMedicationEvent": {
+      "zh": "thiazide／thiazide-like 利尿劑：DICHLOTRIDE TABLETS 25MG 於 2026-08-10 起始，已 24 天",
+      "en": "thiazide/thiazide-like diuretic: DICHLOTRIDE TABLETS 25MG started on 2026-08-10, 24 d ago",
+      "numericValue": 24,
+      "unit": "d",
+      "date": "2026-08-10",
+      "sources": [
+        {
+          "resourceType": "MedicationRequest",
+          "resourceId": "37024099564d8c7e0f6924e31c6c740a",
+          "date": "2026-08-10",
+          "status": "unknown",
+          "value": "DICHLOTRIDE TABLETS 25MG",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "A004236100",
+              "display": "DICHLOTRIDE TABLETS 25MG"
+            },
+            {
+              "system": "http://www.whocc.no/atc",
+              "code": "C03AA03"
+            }
+          ],
+          "facility": "示範測試醫院;門診"
+        }
+      ]
+    },
+    "eGFRPreEventBaseline": {
+      "zh": "事件前基準 eGFR 58.2 mL/min/1.73m²（2026-05-20）",
+      "en": "Pre-event baseline eGFR 58.2 mL/min/1.73m² (2026-05-20)",
+      "numericValue": 58.2,
+      "unit": "mL/min/1.73m²",
+      "date": "2026-05-20",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "fc4cd41e62d7045224792a01345cec94",
+          "date": "2026-05-20",
+          "status": "unknown",
+          "value": 58.2,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    },
+    "eGFRChangeAfterMedicationEvent": {
+      "zh": "事件前後 eGFR 58.2 → 41.6 mL/min/1.73m²（-28.5%，2026-08-14）",
+      "en": "eGFR across the event: 58.2 to 41.6 mL/min/1.73m² (-28.5%, 2026-08-14)",
+      "numericValue": -28.5,
+      "unit": "%",
+      "date": "2026-08-14",
+      "sources": [
+        {
+          "resourceType": "Observation",
+          "resourceId": "fc4cd41e62d7045224792a01345cec94",
+          "date": "2026-05-20",
+          "status": "unknown",
+          "value": 58.2,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        },
+        {
+          "resourceType": "Observation",
+          "resourceId": "65128ee4923de880b86b871aa82435e6",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 41.6,
+          "unit": "mL/min/1.73m²",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "09015C",
+              "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "eGFR 腎絲球過濾率(CKD-EPI)",
+              "display": "eGFR 腎絲球過濾率(CKD-EPI)"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      ]
+    }
+  },
+  "akiAssessment": {
+    "state": "not-detected",
+    "readingCount": 2,
+    "latestReading": {
+      "observedAt": "2026-08-14",
+      "valueMgDl": 1.34,
+      "source": {
+        "resourceType": "Observation",
+        "resourceId": "7c5865fca6fa59c999e541da60277789",
+        "date": "2026-08-14",
+        "status": "unknown",
+        "value": 1.34,
+        "unit": "mg/dL",
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "2160-0",
+            "display": "Creatinine [Mass/volume] in Serum or Plasma"
+          },
+          {
+            "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+            "code": "09015C",
+            "display": "肌酸酐、血 ;(Creatinine (B) CRTN)"
+          }
+        ],
+        "facility": "示範測試醫院;門診;9901010011"
+      }
+    }
+  },
+  "medicationClassContexts": {
+    "insulin": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hypoglycemiaRiskMedications",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "insulinAllergy"
+    },
+    "sulfonylurea": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hypoglycemiaRiskMedications",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "sulfonylureaAllergy"
+    },
+    "sglt2-inhibitor": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "sglt2Therapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "sglt2Allergy"
+    },
+    "arni": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "arniTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "hf-evidence-based-beta-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfEvidenceBetaBlockerTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "loop-diuretic": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "loopDiureticTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "statin": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "statinTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "statinAllergy"
+    },
+    "ezetimibe": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "ezetimibeTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ezetimibeAllergy"
+    },
+    "pcsk9-inhibitor": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "pcsk9Therapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "pcsk9Allergy"
+    },
+    "bempedoic-acid": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "bempedoicAcidTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "bempedoicAcidAllergy"
+    },
+    "fibrate": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "fibrateTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "fibrateAllergy"
+    },
+    "prescription-omega-3": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "prescriptionOmega3Therapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "prescriptionOmega3Allergy"
+    },
+    "ace-inhibitor-or-arb": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "aceArbTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "aceArbAllergy"
+    },
+    "calcium-channel-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "ccbTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ccbAllergy"
+    },
+    "ace-inhibitor": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "aceInhibitorTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "angiotensin-receptor-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "arbTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "dihydropyridine-calcium-channel-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "dhpCcbTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "direct-renin-inhibitor": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "directReninInhibitorTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "centrally-acting-antihypertensive": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "centrallyActingAntihypertensiveTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "alpha-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "alphaBlockerTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "hydralazine": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hydralazineTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "potassium-sparing-diuretic": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "potassiumSparingDiureticTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "thiazide-or-thiazide-like-diuretic": {
+      "state": "confirmed-current",
+      "medicationNames": [
+        "DICHLOTRIDE TABLETS 25MG"
+      ],
+      "factKey": "thiazideTherapy",
+      "lastPrescriptionDate": "2026-08-10",
+      "earliestObservedPrescriptionDate": "2026-08-10",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "thiazideAllergy"
+    },
+    "beta-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "betaBlockerTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "betaBlockerAllergy"
+    },
+    "nonselective-beta-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "nonselectiveBetaBlockerTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "nonselectiveBetaBlockerAllergy"
+    },
+    "mineralocorticoid-receptor-antagonist": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "mraTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "mraAllergy"
+    },
+    "lactulose": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "lactuloseTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "lactuloseAllergy"
+    },
+    "rifaximin": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "rifaximinTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "rifaximinAllergy"
+    },
+    "finerenone": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "finerenoneTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "finerenoneAllergy"
+    },
+    "calcium-based-phosphate-binder": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "calciumPhosphateBinderTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "non-calcium-phosphate-binder": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "nonCalciumPhosphateBinderTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "iron-therapy": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "ironTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ironTherapyAllergy"
+    },
+    "erythropoiesis-stimulating-agent": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "esaTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "esaAllergy"
+    },
+    "hif-phi": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hifPhiTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "ivabradine": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "ivabradineTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "vericiguat": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "vericiguatTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "hydralazine-isdn": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hydralazineIsdnTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "digoxin": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "digoxinTherapy",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "non-dihydropyridine-calcium-channel-blocker": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfHarmfulNonDhpCcb",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "thiazolidinedione": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfHarmfulThiazolidinedione",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "saxagliptin": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfHarmfulSaxagliptin",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "hf-avoided-antiarrhythmic": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfHarmfulAntiarrhythmic",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    },
+    "nsaid-or-cox2-inhibitor": {
+      "state": "not-found",
+      "medicationNames": [],
+      "factKey": "hfHarmfulNsaid",
+      "dataWindowStartDate": "2026-08-10",
+      "dataWindowEndDate": "2026-08-10"
+    }
+  },
+  "freshnessContexts": {
+    "HbA1c": {
+      "factKey": "HbA1c",
+      "intervalDays": 90,
+      "state": "missing"
+    },
+    "bloodPressure": {
+      "factKey": "bloodPressure",
+      "date": "2026-05-05",
+      "intervalDays": 90,
+      "state": "due",
+      "ageDays": 121
+    },
+    "heartRate": {
+      "factKey": "heartRate",
+      "intervalDays": 90,
+      "state": "missing"
+    },
+    "LDL": {
+      "factKey": "LDL",
+      "date": "2026-05-05",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 121
+    },
+    "totalCholesterol": {
+      "factKey": "totalCholesterol",
+      "date": "2026-05-05",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 121
+    },
+    "HDL": {
+      "factKey": "HDL",
+      "date": "2026-05-05",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 121
+    },
+    "triglycerides": {
+      "factKey": "triglycerides",
+      "date": "2026-05-05",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 121
+    },
+    "nonHDL": {
+      "factKey": "nonHDL",
+      "date": "2026-05-05",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 121
+    },
+    "apolipoproteinB": {
+      "factKey": "apolipoproteinB",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "plateletCount": {
+      "factKey": "plateletCount",
+      "intervalDays": 180,
+      "state": "missing"
+    },
+    "totalBilirubin": {
+      "factKey": "totalBilirubin",
+      "intervalDays": 90,
+      "state": "missing"
+    },
+    "INR": {
+      "factKey": "INR",
+      "intervalDays": 90,
+      "state": "missing"
+    },
+    "albumin": {
+      "factKey": "albumin",
+      "intervalDays": 90,
+      "state": "missing"
+    },
+    "sodium": {
+      "factKey": "sodium",
+      "date": "2026-08-14",
+      "intervalDays": 28,
+      "state": "current",
+      "ageDays": 20
+    },
+    "potassium": {
+      "factKey": "potassium",
+      "date": "2026-08-14",
+      "intervalDays": 28,
+      "state": "current",
+      "ageDays": 20
+    },
+    "bodyWeight": {
+      "factKey": "bodyWeight",
+      "date": "2026-05-05",
+      "intervalDays": 30,
+      "state": "overdue",
+      "ageDays": 121
+    },
+    "NTproBNP": {
+      "factKey": "NTproBNP",
+      "intervalDays": 180,
+      "state": "missing"
+    },
+    "BNP": {
+      "factKey": "BNP",
+      "intervalDays": 180,
+      "state": "missing"
+    },
+    "serumCreatinine": {
+      "factKey": "serumCreatinine",
+      "date": "2026-08-14",
+      "intervalDays": 28,
+      "state": "current",
+      "ageDays": 20
+    },
+    "AFP": {
+      "factKey": "AFP",
+      "intervalDays": 183,
+      "state": "missing"
+    },
+    "liverUltrasound": {
+      "factKey": "liverUltrasound",
+      "intervalDays": 183,
+      "state": "missing"
+    },
+    "upperEndoscopy": {
+      "factKey": "upperEndoscopy",
+      "intervalDays": 730,
+      "state": "missing"
+    },
+    "liverStiffness": {
+      "factKey": "liverStiffness",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "eGFR": {
+      "factKey": "eGFR",
+      "date": "2026-08-14",
+      "intervalDays": 122,
+      "state": "current",
+      "ageDays": 20
+    },
+    "ecgReport": {
+      "factKey": "ecgReport",
+      "date": "2026-08-14",
+      "intervalDays": 365,
+      "state": "current",
+      "ageDays": 20
+    },
+    "echocardiogramReport": {
+      "factKey": "echocardiogramReport",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "glucose": {
+      "factKey": "glucose",
+      "date": "2026-05-05",
+      "intervalDays": 90,
+      "state": "due",
+      "ageDays": 121
+    },
+    "ecgRhythm": {
+      "factKey": "ecgRhythm",
+      "intervalDays": 180,
+      "state": "missing"
+    },
+    "ecgHeartRate": {
+      "factKey": "ecgHeartRate",
+      "intervalDays": 180,
+      "state": "missing"
+    },
+    "quantitativeUacr": {
+      "factKey": "urineAlbuminRatioQuantitative",
+      "date": "2026-08-14",
+      "intervalDays": 122,
+      "state": "current",
+      "ageDays": 20
+    }
+  },
+  "screeningContexts": {
+    "retinal-exam": {
+      "id": "retinal-exam",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "neuropathy-exam": {
+      "id": "neuropathy-exam",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "foot-exam": {
+      "id": "foot-exam",
+      "intervalDays": 365,
+      "highRisk": false,
+      "state": "missing"
+    },
+    "influenza-vaccine": {
+      "id": "influenza-vaccine",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "covid-vaccine": {
+      "id": "covid-vaccine",
+      "intervalDays": 365,
+      "state": "missing"
+    },
+    "pneumococcal-vaccine": {
+      "id": "pneumococcal-vaccine",
+      "state": "missing",
+      "intervalDays": 0
+    }
+  },
+  "observationContexts": {
+    "uacr": {
+      "useState": "quantitative_comparable",
+      "readings": [
+        {
+          "kind": "quantitative",
+          "date": "2026-08-14",
+          "displayValue": "342 mg/g",
+          "numericValueMgG": 342,
+          "zh": "342 mg/g（2026-08-14）",
+          "en": "342 mg/g (2026-08-14)",
+          "source": {
+            "resourceType": "Observation",
+            "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+            "date": "2026-08-14",
+            "status": "unknown",
+            "value": 342,
+            "unit": "mg/g",
+            "coding": [
+              {
+                "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+                "code": "99012C",
+                "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+              },
+              {
+                "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+                "code": "UACR 尿液白蛋白肌酸酐比值",
+                "display": "UACR 尿液白蛋白肌酸酐比值"
+              }
+            ],
+            "facility": "示範測試醫院;門診;9901010011"
+          }
+        }
+      ],
+      "latestReading": {
+        "kind": "quantitative",
+        "date": "2026-08-14",
+        "displayValue": "342 mg/g",
+        "numericValueMgG": 342,
+        "zh": "342 mg/g（2026-08-14）",
+        "en": "342 mg/g (2026-08-14)",
+        "source": {
+          "resourceType": "Observation",
+          "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 342,
+          "unit": "mg/g",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "99012C",
+              "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "UACR 尿液白蛋白肌酸酐比值",
+              "display": "UACR 尿液白蛋白肌酸酐比值"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      },
+      "latestQuantitativeReading": {
+        "kind": "quantitative",
+        "date": "2026-08-14",
+        "displayValue": "342 mg/g",
+        "numericValueMgG": 342,
+        "zh": "342 mg/g（2026-08-14）",
+        "en": "342 mg/g (2026-08-14)",
+        "source": {
+          "resourceType": "Observation",
+          "resourceId": "ce4208f37c9a4ebed41dc1c50e1c37cc",
+          "date": "2026-08-14",
+          "status": "unknown",
+          "value": 342,
+          "unit": "mg/g",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw",
+              "code": "99012C",
+              "display": "尿液白蛋白／肌酸酐比值 ;(Urine albumin/creatinine ratio)"
+            },
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/upstream-local/CodeSystem/his-local-lab",
+              "code": "UACR 尿液白蛋白肌酸酐比值",
+              "display": "UACR 尿液白蛋白肌酸酐比值"
+            }
+          ],
+          "facility": "示範測試醫院;門診;9901010011"
+        }
+      }
+    }
+  }
+}

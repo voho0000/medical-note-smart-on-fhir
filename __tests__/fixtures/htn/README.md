@@ -1,0 +1,3 @@
+# HTN renderer fixtures
+
+Profiles produced without modification by `createFhirCdssPatientProfile` from the two synthetic bridge bundles in `mediprisma-personalization/__tests__/fixtures/htn-phenotypes/fhir/`, at `2026-09-04T00:00:00+08:00`. Source branch: `codex/hypertension-cdss-complete` (fixtures introduced by `11a3365`). All demographic and medical values are synthetic. The upstream fixture README lists the invented values and bridge provenance. The app tests the renderer and input/recomputation path; FHIR extraction and clinical thresholds are verified in the packages repository. Result objects are built by the real pack during each test, never stored snapshots.
