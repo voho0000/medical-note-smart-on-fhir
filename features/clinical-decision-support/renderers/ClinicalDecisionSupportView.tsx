@@ -74,6 +74,7 @@ import { statusStyle, StatusIcon } from './status-presentation'
 
 interface ClinicalDecisionSupportViewProps {
   result: CdssResult
+  englishResult?: CdssResult
   locale: CdssLocale
   /**
    * Whose chart this is. The evidence switches are a clinical judgement about
@@ -1497,6 +1498,7 @@ function SourceGuidelineReference({
 
 function RecommendationDetail({
   recommendation,
+  englishRecommendation,
   isEnglish,
   onNavigate,
   label,
@@ -1510,6 +1512,7 @@ function RecommendationDetail({
   onEditPhysicianRow,
 }: {
   recommendation: CdssRecommendation
+  englishRecommendation?: CdssRecommendation
   isEnglish: boolean
   onNavigate: (target: ResourceNavTarget) => void
   patientId?: string
@@ -1567,9 +1570,14 @@ function RecommendationDetail({
     : undefined
   const { copied: rationaleCopied, copy: copyToClipboard } = useCopyToClipboard()
   const copyRationale = async () => {
+    const source = englishRecommendation ?? (isEnglish ? recommendation : undefined)
+    if (!source) {
+      toast.error(isEnglish ? 'English rationale is unavailable.' : '英文理由尚未取得，請重新載入病人資料。')
+      return
+    }
     const ok = await copyToClipboard(buildRationaleCopyText(
-      recommendation,
-      isEnglish ? 'en' : 'zh-TW',
+      source,
+      'en',
       copyProvenance,
     ))
     if (!ok) {
@@ -1728,7 +1736,7 @@ function RecommendationDetail({
               : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
             {rationaleCopied
               ? (isEnglish ? 'Copied' : '已複製')
-              : (isEnglish ? 'Copy rationale' : '複製理由')}
+              : (isEnglish ? 'Copy English rationale' : '複製英文理由')}
           </button>
           {primaryGuidelineRule ? (
             <a
@@ -2020,6 +2028,7 @@ function RecommendationDetail({
 
 export function ClinicalDecisionSupportView({
   result,
+  englishResult,
   locale,
   patientId,
   profileFacts,
@@ -2035,6 +2044,10 @@ export function ClinicalDecisionSupportView({
   hfpefReading,
   onSaveHfpefInputs,
 }: ClinicalDecisionSupportViewProps) {
+  const englishRecommendations = new Map([
+    ...(englishResult?.recommendations ?? []),
+    ...(englishResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
+  ].map(item => [item.id, item]))
   const isEnglish = locale === 'en'
   const label = {
     high: isEnglish ? 'High priority' : '優先處理',
@@ -2391,6 +2404,7 @@ export function ClinicalDecisionSupportView({
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
               isEnglish={isEnglish}
               onNavigate={navigateToResource}
               label={label}
@@ -2426,6 +2440,7 @@ export function ClinicalDecisionSupportView({
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
               isEnglish={isEnglish}
               onNavigate={navigateToResource}
               label={label}
@@ -2840,6 +2855,7 @@ export function ClinicalDecisionSupportView({
                 >
                   <RecommendationDetail
                     recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
                     isEnglish={isEnglish}
                     onNavigate={navigateToResource}
                     label={label}

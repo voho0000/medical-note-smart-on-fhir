@@ -187,6 +187,8 @@ export function HeartFailureVisitFlow({
     const entry = clinicVitals?.entries[key]
     allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
   }
+  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
+  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
   const saveMetrics = (changes: RecordValueChange[]) => {
     const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
     for (const { metric, values, measuredOn } of changes) {

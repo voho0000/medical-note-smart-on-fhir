@@ -120,5 +120,6 @@ export function buildRationaleCopyText(
     ))
   }
 
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  const output = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  return locale === 'en' ? output.replace(/：/g, ': ').replace(/（/g, ' (').replace(/）/g, ')').replace(/[「」]/g, '"') : output
 }

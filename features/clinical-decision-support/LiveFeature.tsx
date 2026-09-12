@@ -394,6 +394,11 @@ export default function LiveClinicalDecisionSupportFeature() {
       : null
   }, [cdssLocale, profile, selectedPack])
 
+  const englishResult = useMemo(() => {
+    if (cdssLocale === 'en') return result
+    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
+  }, [cdssLocale, profile, result, selectedPack])
+
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
   }
@@ -507,6 +512,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       ) : null}
       <ClinicalDecisionSupportView
         result={result}
+        englishResult={englishResult ?? undefined}
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
