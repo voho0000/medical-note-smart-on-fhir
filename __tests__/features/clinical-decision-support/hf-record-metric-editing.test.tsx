@@ -99,8 +99,15 @@ describe('combined clinical values dialog', () => {
 
   test('today shortcut updates a measurement date without opening the date picker', () => {
     const { answer } = setup()
+    const lvef = screen.getByTestId('record-values-LVEF')
     fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '55' } })
-    fireEvent.click(screen.getByTestId('record-values-LVEF').getElementsByTagName('button')[0])
+    fireEvent.click(lvef.getElementsByTagName('button')[0])
+    expect(screen.getByLabelText('LVEF 日期')).toHaveValue('2026-09-12')
+    fireEvent.click(screen.getAllByRole('button', { name: '恢復預設' })[0])
+    expect(screen.getByLabelText('LVEF')).toHaveValue(72.6)
+    expect(screen.getByLabelText('LVEF 日期')).toHaveValue('2024-09-09')
+    fireEvent.click(screen.getAllByRole('button', { name: '取消恢復' })[0])
+    expect(screen.getByLabelText('LVEF')).toHaveValue(55)
     expect(screen.getByLabelText('LVEF 日期')).toHaveValue('2026-09-12')
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     expect(answer).toHaveBeenCalledWith(expect.objectContaining({ lvef: 55, measuredOn: '2026-09-12' }))
