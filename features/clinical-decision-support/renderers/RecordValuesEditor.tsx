@@ -20,6 +20,11 @@ export function RecordValuesEditor({ metrics, isEnglish, now, onSave, onClose }:
   onSave: (changes: RecordValueChange[]) => void
   onClose: () => void
 }) {
+  const columnOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
+  const orderedMetrics = metrics.map((metric, index) => ({ metric, index })).sort((a, b) => {
+    const rank = (key: string) => { const index = columnOrder.indexOf(key); return index < 0 ? columnOrder.length : index }
+    return rank(a.metric.factKey) - rank(b.metric.factKey)
+  })
   const today = todayIsoDate(now)
   const [drafts, setDrafts] = useState(() => metrics.map(metric => {
     const text = metric.value?.replace(/,/g, '') ?? ''
@@ -46,8 +51,8 @@ export function RecordValuesEditor({ metrics, isEnglish, now, onSave, onClose }:
         event.preventDefault()
         if (valid) onSave(drafts.flatMap((draft, index) => !draft.dirty ? [] : [{ metric: metrics[index], values: draft.restore ? null : (metrics[index].factKey === 'bloodPressure' ? [draft.first, draft.second] : [draft.first]).map(Number), measuredOn: draft.date }]))
       }}>
-        <div className="grid min-h-0 grid-cols-1 gap-x-5 gap-y-2 overflow-y-auto pr-1 md:grid-cols-2">
-          {metrics.map((metric, index) => {
+        <div className="grid min-h-0 grid-cols-1 gap-x-5 gap-y-2 overflow-y-auto pr-1 md:grid-cols-2 md:grid-flow-col md:grid-rows-5">
+          {orderedMetrics.map(({ metric, index }) => {
             const draft = drafts[index]
             const bp = metric.factKey === 'bloodPressure'
             return <fieldset key={metric.factKey} className="min-w-0 border-b border-border pb-2" data-testid={`record-values-${metric.factKey}`}>
