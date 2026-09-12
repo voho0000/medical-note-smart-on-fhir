@@ -9,15 +9,33 @@
  * AES-GCM does not resolve on the microtask queue.
  */
 import { webcrypto } from 'crypto'
+import { Buffer } from 'node:buffer'
 import { saveEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
 
 /** jsdom ships `getRandomValues` but not `crypto.subtle`. */
 export function useRealWebCrypto(): void {
   const jsdomCrypto = globalThis.crypto
+  let decryptSpy: jest.SpyInstance
   beforeAll(() => {
+    // Node 22 rejects jsdom's ArrayBuffer as the ciphertext argument. Keep
+    // real AES-GCM (including authentication failures), but cross this test
+    // realm boundary using a Node Buffer. Browsers need no such adapter.
+    const decrypt = webcrypto.subtle.decrypt.bind(webcrypto.subtle)
+    decryptSpy = jest
+      .spyOn(webcrypto.subtle, 'decrypt')
+      .mockImplementation((algorithm, key, data) =>
+        decrypt(
+          algorithm,
+          key,
+          Object.prototype.toString.call(data) === '[object ArrayBuffer]'
+            ? Buffer.from(new Uint8Array(data as ArrayBuffer))
+            : data,
+        ),
+      )
     Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
   })
   afterAll(() => {
+    decryptSpy.mockRestore()
     Object.defineProperty(globalThis, 'crypto', { value: jsdomCrypto, configurable: true })
   })
 }
@@ -26,7 +44,9 @@ export function useRealWebCrypto(): void {
 export async function until(predicate: () => boolean, what: string): Promise<void> {
   for (let attempt = 0; attempt < 400; attempt++) {
     if (predicate()) return
-    await new Promise((resolve) => { setTimeout(resolve, 5) })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5)
+    })
   }
   throw new Error(`timed out waiting for ${what}`)
 }
