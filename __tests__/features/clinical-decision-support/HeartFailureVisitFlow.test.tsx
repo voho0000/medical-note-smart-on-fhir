@@ -110,6 +110,14 @@ function heartFailureResult(): CdssResult {
               defaultEnabled: false,
             },
             {
+              id: 'congestion:exertional-dyspnea',
+              label: { zh: '勞力性呼吸困難', en: 'Exertional dyspnoea' },
+              category: 'examination',
+              derivability: 'physician-entered',
+              direction: 'unknown',
+              defaultEnabled: false,
+            },
+            {
               id: 'congestion:nyha',
               label: { zh: 'NYHA 分級', en: 'NYHA class' },
               category: 'examination',
@@ -120,7 +128,7 @@ function heartFailureResult(): CdssResult {
           ],
           supportsCount: 0,
           againstCount: 0,
-          unknownCount: 2,
+          unknownCount: 3,
           limitations: [],
           evidenceReferences: [],
         }],
@@ -211,6 +219,8 @@ function suspectHeartFailure() {
 
 describe('the visit flow', () => {
   beforeEach(() => {
+    // jsdom has no layout, so the jump-to-question scroll is a no-op here.
+    Element.prototype.scrollIntoView = jest.fn()
     localStorage.clear()
     useClinicVitalsStore.setState({ byPatientId: {} })
     usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
@@ -242,6 +252,13 @@ describe('the visit flow', () => {
     expect(screen.queryByTestId('cdss-evidence-nyha-congestion:nyha')).toBeNull()
     expect(screen.getByTestId('cdss-evidence-edit-in-flow-congestion:pitting-edema'))
       .toHaveTextContent('在本次評估修改')
+
+    // A symptom row the pack added reads the same answer and leads back to the
+    // question that asks it — question ②, not the signs.
+    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-exertional-dyspnea-present'))
+    expect(screen.getByTestId('cdss-evidence-readonly-congestion:exertional-dyspnea'))
+      .toHaveTextContent('有')
+    fireEvent.click(screen.getByTestId('cdss-evidence-edit-in-flow-congestion:exertional-dyspnea'))
   })
 
   it('counts down 還有 n 題 as the questions are answered', () => {

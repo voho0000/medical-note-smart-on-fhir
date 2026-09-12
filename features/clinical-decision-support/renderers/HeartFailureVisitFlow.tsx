@@ -218,8 +218,8 @@ export function HeartFailureVisitFlow({
           openVitalsForm(REFILLABLE_FACT_KEYS.includes(metric.factKey)
             ? undefined
             : (isEnglish
-              ? 'This stage takes only blood pressure, heart rate, weight and height.'
-              : '本階段僅支援血壓、心率、體重、身高。'))
+              ? 'This stage takes only blood pressure, heart rate, SpO₂, weight and height.'
+              : '本階段僅支援血壓、心率、SpO₂、體重、身高。'))
         }}
         canEdit={Boolean(onSaveClinicVitals)}
         onOpenForm={() => openVitalsForm()}
