@@ -260,8 +260,13 @@ function readInput(
           } as CdssFactSource,
         }
         : {}),
-      // The adapter scanned the same report: the profile already says this.
-      inRecord: Boolean(fact && (numeric === undefined || fact.numericValue === numeric)),
+      // The adapter scanned the same report. Where it published a value for
+      // this key, that value stands: the two scanners read the same study and
+      // can round or prefer differently, and the host replacing the record's
+      // own number with a second reading of it — labelled 「自動帶入」 either
+      // way — would change what criterion (iii) reads with nobody deciding to.
+      // A number the clinician types is the one case that does outrank it.
+      inRecord: Boolean(fact),
     }
   }
 

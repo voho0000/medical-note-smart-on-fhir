@@ -165,7 +165,8 @@ describe('the measurements behind the score', () => {
     })
     expect(next.facts.echoGls?.zh).toContain('你輸入')
     // LAVI came off the same report the adapter already read: one measurement,
-    // one fact, and the record's own keeps its provenance.
+    // one fact, and the record's own keeps its provenance — even where the two
+    // scanners would have printed slightly different numbers.
     expect(next.facts.echoLavi).toBe(profile.facts.echoLavi)
     // A parameter the report did print, that the adapter had no key for, is
     // published so criterion (iii) can read it.
