@@ -6,14 +6,19 @@ import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
-import { useEvidenceOverrides } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
+import {
+  useEvidenceOverrides,
+  useEvidenceOverridesStore,
+} from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
 import {
   useClinicVitals,
+  useClinicVitalsHydrated,
   useClinicVitalsStore,
 } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import {
   usePhysicianDecisions,
+  usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 const scenarios = [
@@ -87,8 +92,13 @@ export default function Preview() {
     overrides = useEvidenceOverrides(patientId),
     vitals = useClinicVitals(patientId),
     decisions = usePhysicianDecisions(patientId)
+  const vitalsHydrated = useClinicVitalsHydrated(patientId)
+  const decisionsHydrated = usePhysicianDecisionsHydrated(patientId)
   useEffect(() => {
     useAfAnswersStore.getState().setPatient(patientId)
+    useEvidenceOverridesStore.getState().hydrate(patientId)
+    useClinicVitalsStore.getState().hydrate(patientId)
+    usePhysicianDecisionsStore.getState().hydrate(patientId)
   }, [patientId])
   const original = useMemo(() => synthetic(scenario), [scenario])
   const profile = useMemo(
@@ -126,23 +136,29 @@ export default function Preview() {
             {en ? '繁體中文' : 'English'}
           </button>
         </header>
-        <ClinicalDecisionSupportView
-          key={patientId}
-          result={pack.build({ profile, locale: en ? 'en' : 'zh-TW' })}
-          locale={en ? 'en' : 'zh-TW'}
-          patientId={patientId}
-          profileFacts={profile.facts}
-          layout="flow"
-          afAnswers={answers}
-          onAfAnswer={(id, value) => useAfAnswersStore.getState().answer(patientId, id, value)}
-          clinicVitals={vitals}
-          onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(patientId, patch)}
-          physicianDecisions={decisions}
-          onRecordDecision={(id, input) =>
-            usePhysicianDecisionsStore.getState().recordDecision(patientId, id, input)
-          }
-          onClearDecision={(id) => usePhysicianDecisionsStore.getState().clearDecision(patientId, id)}
-        />
+        {!vitalsHydrated || !decisionsHydrated ? (
+          <p role="status" className="py-4 text-sm text-muted-foreground">
+            {en ? 'Loading this visit’s measurements and decisions…' : '正在讀取本次量測與處置紀錄…'}
+          </p>
+        ) : (
+          <ClinicalDecisionSupportView
+            key={patientId}
+            result={pack.build({ profile, locale: en ? 'en' : 'zh-TW' })}
+            locale={en ? 'en' : 'zh-TW'}
+            patientId={patientId}
+            profileFacts={profile.facts}
+            layout="flow"
+            afAnswers={answers}
+            onAfAnswer={(id, value) => useAfAnswersStore.getState().answer(patientId, id, value)}
+            clinicVitals={vitals}
+            onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(patientId, patch)}
+            physicianDecisions={decisions}
+            onRecordDecision={(id, input) =>
+              usePhysicianDecisionsStore.getState().recordDecision(patientId, id, input)
+            }
+            onClearDecision={(id) => usePhysicianDecisionsStore.getState().clearDecision(patientId, id)}
+          />
+        )}
       </main>
     </TooltipProvider>
   )

@@ -47,12 +47,22 @@ and the 32-page module document are in the rules repository.
 
 - Rules repository: all 35 suites / 963 tests passed, including a synthetic AF
   capture converted through the real MedCloud-to-FHIR bridge.
-- Host AF, calculator, registry and display checks: all 6 suites / 191 tests passed.
+- Host CDSS and medical-calculator checks: all 45 suites / 613 tests passed
+  against the packaged dependencies, including HF regression coverage.
 - Production build, TypeScript, focused ESLint and both dependency lock checks passed.
 - Citation checks matched all 169 quoted occurrences to the two guideline PDFs;
   the generated module document passed the 32-page budget and visual review.
 - Browser checks covered 320–1440 px, both languages, case changes, physician
   answers, clinic measurements, evidence switches and treatment decisions.
-- The broader host suite has 13 existing encrypted-store hydration failures in
-  five suites. The same failures were reproduced on pristine `origin/master`;
-  these are outside the AF changes.
+- The initial broader host run reproduced 13 encrypted-store hydration failures
+  on pristine `origin/master`. Diagnosis isolated Node 22 WebCrypto rejecting
+  jsdom's ArrayBuffer realm when reading serialized ciphertext. The test helper
+  now passes that ciphertext as a Node Buffer to the real decrypt implementation;
+  encryption and authentication remain real, with tamper/session regression cases.
+  No production cryptography was changed.
+- The synthetic preview now hydrates measurements, evidence choices and treatment
+  decisions, and waits for encrypted reads just as the live feature does. AF
+  clinical answers remain memory-only. Reload and patient isolation are covered.
+- The host was verified against the two vendored tarballs (152 files checked
+  against the committed source build and SHA-512 manifests) plus released SDK
+  and lab-normalization dependencies, without source-worktree package links.
