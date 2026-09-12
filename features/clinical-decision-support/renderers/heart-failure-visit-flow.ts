@@ -388,11 +388,17 @@ function signItemsText(
   items: readonly VisitSignItem[],
   vitals: ClinicVitals | undefined,
   isEnglish: boolean,
+  useExamSymbols = false,
 ): string | undefined {
   const answered = items.flatMap((item) => {
     const value = vitals?.signAnswers?.[item.term]?.value
     if (!value) return []
-    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${signText(value, isEnglish)}`]
+    const answer = useExamSymbols && value === 'present'
+      ? '+'
+      : useExamSymbols && value === 'absent'
+        ? '−'
+        : signText(value, isEnglish)
+    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${answer}`]
   })
   const unanswered = items.filter((item) => !vitals?.signAnswers?.[item.term]?.value).length
   if (answered.length === 0) return undefined
@@ -633,7 +639,7 @@ export function buildHeartFailureVisitFlow(
   const signsStamp = latestStamp(...VISIT_EXAM_ITEMS.map(
     (item) => clinicVitals?.signAnswers?.[item.term]?.modifiedAt,
   ))
-  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish)
+  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish, true)
   const signsAnswered = signItemsAnswered(VISIT_EXAM_ITEMS, clinicVitals)
   questions.push({
     id: 'signs',

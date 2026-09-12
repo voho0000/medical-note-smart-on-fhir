@@ -416,7 +416,7 @@ describe('the questions', () => {
     expect(symptoms?.answerText).toBe(
       '勞力性喘：有 · 端坐呼吸：無 · PND：未評估 · 疲倦：有 · 腳腫：有 · 腹脹：無 · 更多 3 項未評估',
     )
-    expect(signs?.answerText).toBe('rales：無 · JVP：無 · 凹陷性水腫：有 · 更多 4 項未評估')
+    expect(signs?.answerText).toBe('rales：− · JVP：− · 凹陷性水腫：+ · 更多 4 項未評估')
     // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
     // systemic one; the tally is read across both questions.
     expect(signs?.sideTally).toEqual({ pulmonary: 2, systemic: 2 })
@@ -612,7 +612,7 @@ describe('the record card', () => {
     expect(lines[0]).toContain('LVEF 32%')
     expect(lines[1]).toContain('NYHA：NYHA II')
     expect(lines[1]).toContain('症狀：勞力性喘：有')
-    expect(lines[1]).toContain('徵象：rales：無')
+    expect(lines[1]).toContain('徵象：rales：−')
     expect(lines[2]).toContain('118/72')
     expect(lines[2]).toContain('SpO₂ 97%')
     expect(lines[3]).toContain('待決定')
