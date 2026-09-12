@@ -533,7 +533,7 @@ function RecordCard({
           </button>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 @min-[32rem]:grid-cols-5">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 @min-[32rem]:grid-cols-5 @min-[72rem]:grid-cols-10">
         {metrics.map((metric) => {
           const missing = metric.value === undefined
           const source = metricSourceLine(metric, isEnglish)
@@ -622,6 +622,7 @@ function SegmentedControl<T extends string>({
   onSelect,
   testId,
   disabled,
+  equalWidth = false,
 }: {
   label: string
   options: readonly { id: T; text: string }[]
@@ -629,10 +630,11 @@ function SegmentedControl<T extends string>({
   onSelect: (next: T) => void
   testId: string
   disabled?: boolean
+  equalWidth?: boolean
 }) {
   return (
     <div
-      className="flex shrink-0 overflow-hidden rounded-md border border-border"
+      className={cn("shrink-0 overflow-hidden rounded-md border border-border", equalWidth ? "inline-grid w-fit max-w-full grid-flow-col auto-cols-fr" : "flex")}
       role="group"
       aria-label={label}
       data-testid={testId}
@@ -984,6 +986,7 @@ function QuestionShell({
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
   const open = question.state === 'open'
   const answered = question.state === 'answered'
+  const sideBySide = ['hf-suspicion', 'lvef-phenotype', 'nyha', 'compensation'].includes(question.id)
   return (
     <li
       id={visitQuestionElementId(question.id)}
@@ -1007,8 +1010,8 @@ function QuestionShell({
       >
         {answered ? <Check className="h-3 w-3" aria-hidden="true" /> : question.number}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <div className={cn("min-w-0 flex-1", sideBySide && "@min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,1fr)_auto] @min-[64rem]:items-center @min-[64rem]:gap-x-6")}>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 @min-[64rem]:col-start-1">
           <span className={cn(
             'text-sm font-semibold leading-5',
             question.state === 'locked' ? 'text-muted-foreground' : 'text-foreground',
@@ -1047,9 +1050,9 @@ function QuestionShell({
         ) : (
           <>
             {question.hint ? (
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{question.hint}</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground @min-[64rem]:col-start-1">{question.hint}</p>
             ) : null}
-            {children ? <div className="mt-2">{children}</div> : null}
+            {children ? <div className={cn("mt-2", sideBySide && "@min-[64rem]:col-start-2 @min-[64rem]:row-start-1 @min-[64rem]:row-span-2 @min-[64rem]:mt-0 @min-[64rem]:max-w-[36rem]")}>{children}</div> : null}
           </>
         )}
       </div>
@@ -1203,6 +1206,7 @@ function QuestionsCard({
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<NyhaAnswerValue>
+                    equalWidth
                     label={question.label}
                     options={[
                       { id: 'I', text: 'I' },
