@@ -94,6 +94,9 @@ function MedicationRowTooltip({
     ? `${item.change.previousDose} → ${row.dose ?? ''}`.trim()
     : row.dose
   const remaining = item.daysRemaining
+  const usedUpText = remaining !== undefined && remaining < 0
+    ? strings.meds.daysUsedUp.replace('{days}', String(Math.abs(remaining)))
+    : undefined
   const entry = (label: string, value?: string | number | null): [string, string][] => (
     value === undefined || value === null || value === '' || value === '—'
       ? []
@@ -115,7 +118,9 @@ function MedicationRowTooltip({
     ...entry(strings.meds.detailRemaining, remaining === undefined
       ? undefined
       : remaining < 0
-        ? strings.meds.daysUsedUp
+        ? item.row.displayRemainingSource === 'app-estimate'
+          ? strings.meds.daysUsedUpEstimate.replace('{days}', String(Math.abs(remaining)))
+          : usedUpText
         : strings.meds.daysLeft.replace('{days}', String(remaining))),
   ]
   return (
@@ -220,7 +225,7 @@ export function OverviewMedsSection({
           )}
         >
           {daysLeft < 0
-            ? strings.meds.daysUsedUp
+            ? strings.meds.daysUsedUp.replace('{days}', String(Math.abs(daysLeft)))
             : strings.meds.daysLeft.replace('{days}', String(daysLeft))}
         </Badge>
       )
