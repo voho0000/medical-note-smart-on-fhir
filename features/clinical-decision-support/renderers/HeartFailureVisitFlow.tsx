@@ -1335,17 +1335,19 @@ function DoseAdjustmentEditor({ initialNote, medications, defaultMedication, isE
             <Input value={medication} onChange={event => setMedication(event.target.value)}
               className="h-8 w-40 px-2 text-sm" placeholder={isEnglish ? 'Drug and strength' : '藥名＋規格'} />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {isEnglish ? 'Previous amount' : '原每次用量'}
+          <label className="flex w-14 flex-col gap-1 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">{isEnglish ? 'Previous' : '原用量'}</span>
             <Input type="text" inputMode="decimal" value={previous}
-              onChange={event => setPrevious(event.target.value)} className="h-8 w-16 px-2 text-sm"
+              aria-label={isEnglish ? 'Previous amount' : '原每次用量'}
+              onChange={event => setPrevious(event.target.value)} className="h-8 w-14 px-2 text-sm"
               placeholder="1" />
           </label>
           <span className="pb-1.5 text-sm text-muted-foreground" aria-hidden="true">→</span>
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {isEnglish ? 'New amount' : '新每次用量'}
+          <label className="flex w-14 flex-col gap-1 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">{isEnglish ? 'New' : '新用量'}</span>
             <Input type="text" inputMode="decimal" value={next}
-              onChange={event => setNext(event.target.value)} className="h-8 w-16 px-2 text-sm" placeholder="0.5" />
+              aria-label={isEnglish ? 'New amount' : '新每次用量'}
+              onChange={event => setNext(event.target.value)} className="h-8 w-14 px-2 text-sm" placeholder="0.5" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {isEnglish ? 'Unit' : '單位'}
@@ -1364,7 +1366,7 @@ function DoseAdjustmentEditor({ initialNote, medications, defaultMedication, isE
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {isEnglish ? 'Frequency' : '頻次'}
             <select value={frequency} onChange={event => setFrequency(event.target.value)}
-              className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <option value="">{isEnglish ? 'Select' : '選擇'}</option>
               {['QD', 'BID', 'TID', 'QID', 'QAM', 'QHS', 'PRN'].map(value => <option key={value} value={value}>{value}</option>)}
             </select>
