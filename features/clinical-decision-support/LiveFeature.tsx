@@ -19,6 +19,7 @@ import {
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
 import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
+import { useHfpefInputs, useHfpefInputsStore } from './stores/hfpef-inputs.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from './stores/phenotype-answer.store'
 import {
   usePhysicianDecisions,
@@ -26,8 +27,10 @@ import {
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
+import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -223,6 +226,7 @@ function LayoutSwitcher({
 export default function LiveClinicalDecisionSupportFeature() {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
+  const { autofill } = useLabAutofill()
   const { locale } = useLanguage()
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
@@ -239,6 +243,9 @@ export default function LiveClinicalDecisionSupportFeature() {
   const recordPhysicianDecision = usePhysicianDecisionsStore((state) => state.recordDecision)
   const clearPhysicianDecision = usePhysicianDecisionsStore((state) => state.clearDecision)
   const hydratePhysicianDecisions = usePhysicianDecisionsStore((state) => state.hydrate)
+  const hfpefInputs = useHfpefInputs(patientId)
+  const setHfpefInputs = useHfpefInputsStore((state) => state.setInputs)
+  const hydrateHfpefInputs = useHfpefInputsStore((state) => state.hydrate)
   const phenotypeAnswer = usePhenotypeAnswer(patientId)
   const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
@@ -267,6 +274,10 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => {
     if (patientId) hydratePhysicianDecisions(patientId)
   }, [hydratePhysicianDecisions, patientId])
+
+  useEffect(() => {
+    if (patientId) hydrateHfpefInputs(patientId)
+  }, [hydrateHfpefInputs, patientId])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -305,7 +316,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   // follows what the physician left standing. Nothing patches a rendered card.
   // The vitals measured in the room travel the same way: as facts on the
   // profile, so every module that reads them recomputes.
-  const profile = useMemo(() => (
+  const answeredProfile = useMemo(() => (
     recordProfile
       ? applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
@@ -313,6 +324,26 @@ export default function LiveClinicalDecisionSupportFeature() {
         )
       : null
   ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+
+  // The HFpEF scores are computed here, once, by the host's own calculator —
+  // reading the echo report, the ECG and what the clinician typed — and handed
+  // to the pack as facts. The clinic measurements are applied first because the
+  // BMI H₂FPEF weighs most is derived from the height and weight taken in the
+  // room, and the phenotype answer because the LVEF decides whether the scores
+  // are read at all.
+  const hfpefReading = useMemo(() => (
+    answeredProfile
+      ? buildHfpefReading({
+        profile: answeredProfile,
+        autofill,
+        ...(hfpefInputs ? { inputs: hfpefInputs } : {}),
+      })
+      : undefined
+  ), [answeredProfile, autofill, hfpefInputs])
+
+  const profile = useMemo(() => (
+    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
+  ), [answeredProfile, hfpefReading])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -468,6 +499,10 @@ export default function LiveClinicalDecisionSupportFeature() {
           : undefined}
         onClearDecision={patientId
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
+          : undefined}
+        hfpefReading={hfpefReading}
+        onSaveHfpefInputs={patientId
+          ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
       />
     </div>

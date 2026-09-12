@@ -50,6 +50,8 @@ import {
   HEART_FAILURE_PACK_ID,
 } from './heart-failure-board'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
+import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
+import type { HfpefReading } from '../utils/hfpef-scores'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
@@ -108,6 +110,13 @@ interface ClinicalDecisionSupportViewProps {
   physicianDecisions?: PhysicianDecisionMap
   onRecordDecision?: (moduleId: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (moduleId: string) => void
+  /**
+   * The HFpEF scores the host's own calculator produced, and the way to
+   * complete the echo values behind them. Only the visit flow reads them; the
+   * original board shows the pack's own reading of the same facts.
+   */
+  hfpefReading?: HfpefReading
+  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -2023,6 +2032,8 @@ export function ClinicalDecisionSupportView({
   physicianDecisions,
   onRecordDecision,
   onClearDecision,
+  hfpefReading,
+  onSaveHfpefInputs,
 }: ClinicalDecisionSupportViewProps) {
   const isEnglish = locale === 'en'
   const label = {
@@ -2374,6 +2385,8 @@ export function ClinicalDecisionSupportView({
           onAnswerPhenotype={onAnswerPhenotype}
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}
+          hfpefReading={hfpefReading}
+          onSaveHfpefInputs={onSaveHfpefInputs}
           packVersion={result.packVersion}
           renderDetail={(recommendation) => (
             <RecommendationDetail

@@ -37,6 +37,13 @@ import type {
   PhysicianDecisionKind,
 } from '../stores/physician-decisions.store'
 import { diagnosticSummaryOf, type DiagnosticSummary } from '../physician-input-contract'
+import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
+import {
+  HFPEF_CALCULATOR_VERSION,
+  type HfpefReading,
+  type HfpefScoreReading,
+} from '../utils/hfpef-scores'
+import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { ClinicVitalsForm } from './ClinicVitalsForm'
@@ -141,6 +148,9 @@ export interface HeartFailureVisitFlowProps {
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
   onRecordDecision?: (moduleId: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (moduleId: string) => void
+  /** The host's own HFpEF calculator reading, where the pathway raised one. */
+  hfpefReading?: HfpefReading
+  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   packVersion: string
 }
 
@@ -159,9 +169,12 @@ export function HeartFailureVisitFlow({
   onAnswerPhenotype,
   onRecordDecision,
   onClearDecision,
+  hfpefReading,
+  onSaveHfpefInputs,
   packVersion,
 }: HeartFailureVisitFlowProps) {
   const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
+  const [calculatorOpen, setCalculatorOpen] = useState(false)
   const [vitalsScopeNote, setVitalsScopeNote] = useState<string | undefined>(undefined)
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<VisitActionGroupId>>(
     () => new Set(flow.actionGroups
@@ -222,6 +235,8 @@ export function HeartFailureVisitFlow({
         phenotypeAnswer={phenotypeAnswer}
         onAnswerPhenotype={onAnswerPhenotype}
         board={board}
+        hfpefReading={hfpefReading}
+        onOpenCalculator={onSaveHfpefInputs ? () => setCalculatorOpen(true) : undefined}
         vitalsFormOpen={vitalsFormOpen}
         vitalsScopeNote={vitalsScopeNote}
         onOpenVitalsForm={() => openVitalsForm()}
@@ -260,8 +275,44 @@ export function HeartFailureVisitFlow({
         isEnglish={isEnglish}
         now={now}
       />
+
+      {hfpefReading && onSaveHfpefInputs ? (
+        <HfpefInputsDialog
+          open={calculatorOpen}
+          onOpenChange={setCalculatorOpen}
+          reading={hfpefReading}
+          isEnglish={isEnglish}
+          now={now}
+          onApply={onSaveHfpefInputs}
+          {...(natriureticRowId(flow)
+            ? {
+              onOrderNtProBnp: () => focusVisitFlowTarget({
+                kind: 'action',
+                moduleId: natriureticRowId(flow)!,
+                index: 1,
+              }),
+            }
+            : {})}
+        />
+      ) : null}
     </div>
   )
+}
+
+/**
+ * The row that would order an NT-proBNP, where the pack raised one.
+ *
+ * Read off the pack's own 「這項決策還缺」 rather than named here: which module
+ * asks for the assay is the pack's to decide, and a hard-coded module id would
+ * send the reader to a row that had moved.
+ */
+function natriureticRowId(flow: VisitFlowModel): string | undefined {
+  return flow.actionGroups
+    .flatMap((group) => group.rows)
+    .find((row) => (
+      row.recommendation.missingData?.some((item) => /NT-proBNP|BNP/i.test(item))
+      || /NT-proBNP/i.test(row.headline)
+    ))?.recommendation.id
 }
 
 /* ----------------------------------------------------------- 區塊 1 步驟列 */
@@ -732,18 +783,106 @@ function SignItemRows({
  * question was put and no diagnosis was made today, and it writes no fact —
  * 「先不確認」 is not a statement that the patient has no HFpEF.
  */
+/**
+ * The two scores, as the host's own calculator computed them.
+ *
+ * Printed from the calculator rather than waited for from the pack, because
+ * the calculator is the only thing that scores: the pack reads the same
+ * numbers off the facts this host wrote. A score with parameters missing is
+ * never printed as a bare total — what is still unreported, and how much it
+ * could still add, is on the line under it.
+ */
+function HfpEfScoreLine({
+  reading,
+  isEnglish,
+  onComplete,
+}: {
+  reading?: HfpefReading
+  isEnglish: boolean
+  onComplete?: () => void
+}) {
+  const scores = [reading?.hfaPeff, reading?.h2fpef]
+    .filter((score): score is HfpefScoreReading => Boolean(score))
+  const date = scores.map((score) => score.date).filter(Boolean).sort().at(-1)
+  const missing = scores.find((score) => score.missing.length > 0)
+  return (
+    <div
+      className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
+      data-testid="cdss-hf-hfpef-scores"
+    >
+      {scores.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {isEnglish
+            ? 'The calculator has no score yet: the record does not carry enough of the parameters.'
+            : '目前的輸入不足，計算機尚無分數。'}
+        </p>
+      ) : (
+        <>
+          {scores.map((score) => (
+            <p
+              key={score.id}
+              className="flex flex-wrap items-baseline gap-x-2 text-xs"
+              data-testid={`cdss-hf-hfpef-score-${score.id}`}
+            >
+              <span className="w-[5.5rem] shrink-0 font-semibold text-foreground">{score.name}</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                {score.score}
+                {isEnglish ? '/' : '／'}
+                {score.maximum}
+              </span>
+              <span className="text-muted-foreground">
+                {isEnglish ? score.bandEn : score.bandZh}
+              </span>
+            </p>
+          ))}
+          <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+            {isEnglish
+              ? `By calculator ${HFPEF_CALCULATOR_VERSION}${date ? ` · echo ${date}` : ''}`
+              : `依計算機 ${HFPEF_CALCULATOR_VERSION}${date ? ` · 心超 ${date}` : ''}`}
+          </p>
+          {missing ? (
+            <p
+              className="mt-0.5 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
+              data-testid="cdss-hf-hfpef-score-missing"
+            >
+              {isEnglish
+                ? `Not reported: ${missing.missingEn.join(', ')} (at most +${missing.upper - missing.score})`
+                : `報告未提供：${missing.missingZh.join('、')}（最多再 +${missing.upper - missing.score}）`}
+            </p>
+          ) : null}
+        </>
+      )}
+      {onComplete ? (
+        <button
+          type="button"
+          className="mt-1 inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={onComplete}
+          data-testid="cdss-hf-hfpef-open-calculator"
+        >
+          <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
+          {isEnglish ? 'Complete the echo values' : '補完心超數值'}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function HfpEfConfirmation({
   summary,
   isEnglish,
   now,
   answer,
   onAnswer,
+  hfpefReading,
+  onOpenCalculator,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
   now: Date
   answer?: PhenotypeAnswer
   onAnswer: (answer: PhenotypeAnswer) => void
+  hfpefReading?: HfpefReading
+  onOpenCalculator?: () => void
 }) {
   const symptomsState = summary?.criteria
     .find((criterion) => criterion.id === 'symptoms-signs')?.state
@@ -756,6 +895,11 @@ function HfpEfConfirmation({
   return (
     <div className="space-y-2" data-testid="cdss-hf-hfpef-confirmation">
       <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} />
+      <HfpEfScoreLine
+        reading={hfpefReading}
+        isEnglish={isEnglish}
+        {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+      />
       <div className="flex flex-wrap items-center gap-2">
         {symptomsUndetermined ? (
           <Button
@@ -900,6 +1044,8 @@ function QuestionsCard({
   phenotypeAnswer,
   onAnswerPhenotype,
   board,
+  hfpefReading,
+  onOpenCalculator,
   vitalsFormOpen,
   vitalsScopeNote,
   onOpenVitalsForm,
@@ -914,6 +1060,8 @@ function QuestionsCard({
   phenotypeAnswer?: PhenotypeAnswer
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
   board: HeartFailureBoardModel
+  hfpefReading?: HfpefReading
+  onOpenCalculator?: () => void
   vitalsFormOpen: boolean
   vitalsScopeNote?: string
   onOpenVitalsForm: () => void
@@ -1017,6 +1165,8 @@ function QuestionsCard({
                     now={now}
                     answer={phenotypeAnswer}
                     onAnswer={onAnswerPhenotype}
+                    hfpefReading={hfpefReading}
+                    onOpenCalculator={onOpenCalculator}
                   />
                 ) : null}
               </QuestionShell>
