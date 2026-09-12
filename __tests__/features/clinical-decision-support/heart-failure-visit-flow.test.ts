@@ -221,6 +221,27 @@ function answeredVitals(): ClinicVitals {
 }
 
 describe('the next step', () => {
+  it('states the negative medication-safety finding instead of a generic rescan instruction', () => {
+    const packResult = result()
+    packResult.recommendations = packResult.recommendations.map((item) => (
+      item.id === 'heart-failure-medication-safety'
+        ? {
+            ...item,
+            status: 'no-action',
+            patientEvidence: [],
+            nextActions: ['新增處方或跨院所回診後重新掃描；本卡不需要額外資料。'],
+          }
+        : item
+    ))
+
+    const flow = flowFor({ result: packResult })
+    const safetyRow = flow.actionGroups
+      .flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-medication-safety')
+
+    expect(safetyRow?.headline).toBe('本次用藥掃描未發現 NSAID 或 COX-2 抑制劑使用紀錄。')
+  })
+
   it('puts an undecided safety alert above an unanswered question 1', () => {
     // A harmful prescription is harmful whether or not this clinician is
     // asking about heart failure today, so it outranks the gate itself.

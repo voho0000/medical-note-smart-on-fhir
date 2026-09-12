@@ -807,7 +807,7 @@ export function buildHeartFailureVisitFlow(
         return {
           ...(decisionKind === 'none' ? {} : { index }),
           recommendation,
-          headline: recommendation.nextActions[0] ?? recommendation.title,
+          headline: visitActionHeadline(recommendation, isEnglish),
           moduleName: recommendation.moduleName ?? recommendation.id,
           status: recommendation.status,
           isSafety: groupId === 'safety',
@@ -1165,6 +1165,16 @@ export function buildHeartFailureVisitFlow(
     ...(followUpNote ? { followUpNote } : {}),
     readOnly,
   }
+}
+
+/** State the result of a negative medication-safety scan instead of when to scan again. */
+function visitActionHeadline(recommendation: CdssRecommendation, isEnglish: boolean): string {
+  if (recommendation.id === 'heart-failure-medication-safety' && recommendation.status === 'no-action') {
+    return isEnglish
+      ? 'Medication review found no recorded NSAID or COX-2 inhibitor use.'
+      : '本次用藥掃描未發現 NSAID 或 COX-2 抑制劑使用紀錄。'
+  }
+  return recommendation.nextActions[0] ?? recommendation.title
 }
 
 /**
