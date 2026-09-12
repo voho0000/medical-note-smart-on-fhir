@@ -1,0 +1,16 @@
+[
+  {
+    "package": "@voho0000/personalized-care",
+    "sourceCommit": "3d525c72d3593ba7ecf691788687fe443033d4ea",
+    "version": "2.1.0-af.0",
+    "file": "vendor/af-cdss/voho0000-personalized-care-2.1.0-af.0.tgz",
+    "integrity": "sha512-9xXmAuH1AWaaVkgD5mppb3H0J+q31XbeCP14SMNwvHcY739kvsiuK/9kdQqESA827J/hvlf1cxc1IQRZ8435wQ=="
+  },
+  {
+    "package": "@voho0000/personalized-care-fhir",
+    "sourceCommit": "3d525c72d3593ba7ecf691788687fe443033d4ea",
+    "version": "1.7.0-af.0",
+    "file": "vendor/af-cdss/voho0000-personalized-care-fhir-1.7.0-af.0.tgz",
+    "integrity": "sha512-7QOiGaOY5w9XaaEtz+iPEPnBx4gI9LIP7yja8ESHJ2hOzLoGJhrCg77paHnM/YwOUtPw8RnK2Hp38g47YcSCWg=="
+  }
+]

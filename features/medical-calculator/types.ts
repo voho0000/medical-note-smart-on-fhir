@@ -138,6 +138,9 @@ export type CalcInput = NumberInput | SelectInput
 export type Severity = 'normal' | 'low' | 'moderate' | 'high'
 
 export interface CalcResult {
+  /** Unrounded value for downstream clinical consumers; never parse display text. */
+  numericValue?: number
+  completeness?: { complete: boolean; upperBound: number; missingKeys: string[] }
   /** Formatted primary value, e.g. "72" or "Class B". */
   value: string
   unit?: string
@@ -157,6 +160,8 @@ export interface CalcResult {
 export type CalcValues = Record<string, string>
 
 export interface CalculatorDef {
+  /** Raise when a clinical formula or missing-input rule changes. */
+  version?: string
   id: string
   name: L
   category: CalcCategory

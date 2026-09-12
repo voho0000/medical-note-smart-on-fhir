@@ -49,6 +49,9 @@ import {
   HEART_FAILURE_LIST_STATUS_ORDER,
   HEART_FAILURE_PACK_ID,
 } from './heart-failure-board'
+import { AtrialFibrillationVisitFlow } from './AtrialFibrillationVisitFlow'
+import { buildDiseaseBoard, AF_BOARD_CONFIG } from './disease-board'
+import type { AfAnswers } from '../stores/af-answers.store'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
@@ -73,6 +76,8 @@ import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
 
 interface ClinicalDecisionSupportViewProps {
+  afAnswers?: AfAnswers
+  onAfAnswer?: (id: string, value: boolean | undefined) => void
   result: CdssResult
   locale: CdssLocale
   /**
@@ -2019,6 +2024,8 @@ function RecommendationDetail({
 }
 
 export function ClinicalDecisionSupportView({
+  afAnswers,
+  onAfAnswer,
   result,
   locale,
   patientId,
@@ -2070,6 +2077,7 @@ export function ClinicalDecisionSupportView({
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
   )
+  const afBoard = useMemo(() => layout === 'classic' ? undefined : buildDiseaseBoard(result, AF_BOARD_CONFIG, locale, profileFacts), [result, locale, profileFacts, layout])
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
   const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
@@ -2228,7 +2236,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && (
+  const showClinicalSummary = !board && !afBoard && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2370,6 +2378,15 @@ export function ClinicalDecisionSupportView({
         </details>
       ) : null}
 
+      {afBoard ? <AtrialFibrillationVisitFlow
+        board={afBoard} result={result} isEnglish={isEnglish} now={now}
+        expandedId={expandedId} onToggle={id => setRequestedExpandedId(expandedId === id ? null : id)}
+        answers={afAnswers} onAnswer={onAfAnswer} clinicVitals={clinicVitals}
+        onSaveClinicVitals={onSaveClinicVitals} onClearClinicVitals={onClearClinicVitals}
+        decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
+        renderDetail={recommendation => <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
+          onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance} />}
+      /> : null}
       {isVisitFlow && visitFlow && board ? (
         <HeartFailureVisitFlow
           flow={visitFlow}
@@ -2445,7 +2462,7 @@ export function ClinicalDecisionSupportView({
         do and carrying a decision on every row; a second copy of the same rows
         underneath is the duplication it removed.
       */}
-      {isVisitFlow ? null : (
+      {isVisitFlow || afBoard ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}

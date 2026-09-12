@@ -1142,6 +1142,7 @@ function firstOpenHint(board: HeartFailureBoardModel, isEnglish: boolean): strin
 }
 
 export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { zh: string; en: string }>> = {
+  reviewed: { zh: '已評估', en: 'Reviewed' },
   prescribed: { zh: '已開立', en: 'Prescribed' },
   'dose-adjusted': { zh: '劑量調整', en: 'Dose adjusted' },
   contraindicated: { zh: '禁忌', en: 'Contraindicated' },

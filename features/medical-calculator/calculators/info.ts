@@ -143,6 +143,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Checking respiratory compensation in a metabolic acidosis.', zh: '檢查代謝性酸中毒之呼吸代償。' },
     caveats: { en: 'Applies to metabolic acidosis only; a measured PaCO₂ outside the expected range signals a mixed disorder.', zh: '僅適用於代謝性酸中毒；實測 PaCO₂ 超出預期範圍代表合併型障礙。' },
   },
+  'cha2ds2-va': {
+    useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
+    caveats: { en: 'No sex point. Missing histories remain unknown. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。未填病史保留未知；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
+  },
   'cha2ds2-vasc': {
     useWhen: { en: 'Stroke risk in non-valvular atrial fibrillation, to guide anticoagulation.', zh: '非瓣膜性心房顫動之中風風險，用以指引抗凝。' },
     caveats: { en: 'Not for valvular AF / mechanical valves (anticoagulate regardless). Balance against bleeding risk (HAS-BLED).', zh: '不適用於瓣膜性 AF／機械瓣膜（一律抗凝）。需與出血風險（HAS-BLED）權衡。' },

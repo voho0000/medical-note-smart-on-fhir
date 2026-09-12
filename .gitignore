@@ -67,3 +67,6 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Reviewable AF branch builds; these two local packages are not published.
+!vendor/af-cdss/*.tgz

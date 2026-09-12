@@ -39,10 +39,12 @@ import {
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
+import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
@@ -246,6 +248,8 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const afAnswers = useAfAnswers(patientId)
+  useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clinicVitals = useClinicVitals(patientId)
@@ -344,11 +348,11 @@ export default function LiveClinicalDecisionSupportFeature() {
   const answeredProfile = useMemo(() => (
     recordProfile
       ? applyPhenotypeAnswer(
-          applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
+          applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
         )
       : null
-  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -367,7 +371,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   ), [answeredProfile, autofill, hfpefInputs])
 
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
+    answeredProfile ? applyAfCalculatorResults(applyHfpefReading(answeredProfile, hfpefReading)) : null
   ), [answeredProfile, hfpefReading])
 
   const applicablePacks = useMemo(() => (
@@ -506,6 +510,8 @@ export default function LiveClinicalDecisionSupportFeature() {
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <ClinicalDecisionSupportView
+        afAnswers={afAnswers}
+        onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
         locale={cdssLocale}
         patientId={patientId}

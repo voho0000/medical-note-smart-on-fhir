@@ -41,6 +41,7 @@ export type PhysicianDecisionKind =
   | 'deferred'
   | 'patient-preference'
   | 'ordered'
+  | 'reviewed'
 
 export interface PhysicianDecision {
   decision: PhysicianDecisionKind
@@ -69,6 +70,7 @@ const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
   'deferred',
   'patient-preference',
   'ordered',
+  'reviewed',
 ]
 
 function isDecisionKind(value: unknown): value is PhysicianDecisionKind {

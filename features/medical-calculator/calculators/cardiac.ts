@@ -1,3 +1,4 @@
+import { AF_STROKE } from './af-stroke'
 import type { CalculatorDef, L } from '../types'
 import { n, round, SEX_INPUT, AGE_INPUT, yesNoQuestionnaire, scoredQuestionnaire, ynItem } from './_shared'
 
@@ -40,55 +41,7 @@ function who2019Cvd(sex: 'male' | 'female', age: number, chol: number, sbp: numb
 }
 
 export const CARDIAC: CalculatorDef[] = [
-  // ── CHA₂DS₂-VASc ────────────────────────────────────────────────────────
-    {
-      id: 'cha2ds2-vasc',
-      name: { en: 'CHA₂DS₂-VASc Score', zh: 'CHA₂DS₂-VASc 分數' },
-      category: 'cardiac',
-      blurb: { en: 'Stroke risk in atrial fibrillation.', zh: '心房顫動之中風風險。' },
-      inputs: [
-        AGE_INPUT,
-        SEX_INPUT,
-        { key: 'chf', type: 'select', label: { en: 'CHF / LV dysfunction', zh: '心衰竭／左心室功能不良' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'htn', type: 'select', label: { en: 'Hypertension', zh: '高血壓' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'stroke', type: 'select', label: { en: 'Prior stroke / TIA / thromboembolism', zh: '曾中風／TIA／血栓栓塞' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'vascular', type: 'select', label: { en: 'Vascular disease', zh: '血管疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-      ],
-      compute: (v) => {
-        const age = n(v, 'age')
-        if (age === undefined) return null
-        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
-        let s = 0
-        if (age >= 75) s += 2
-        else if (age >= 65) s += 1
-        if (v.sex === 'female') s += 1
-        if (v.chf === 'yes') s += 1
-        if (v.htn === 'yes') s += 1
-        if (v.dm === 'yes') s += 1
-        if (v.stroke === 'yes') s += 2
-        if (v.vascular === 'yes') s += 1
-        // Adjusted annual ischemic stroke rate (%) by score — Friberg 2012
-        // (n=170 291), the table MDCalc reports. Verified 2026-07-04.
-        const risk = ['0.2', '0.6', '2.2', '3.2', '4.8', '7.2', '9.7', '11.2', '10.8', '12.2'][Math.min(s, 9)]
-        let cat: L; let severity: 'normal' | 'moderate' | 'high'
-        if (s === 0) { cat = { en: 'Low risk', zh: '低風險' }; severity = 'normal' }
-        else if (s === 1) { cat = { en: 'Low–moderate risk', zh: '低至中度風險' }; severity = 'moderate' }
-        else { cat = { en: 'High risk', zh: '高風險' }; severity = 'high' }
-        return {
-          value: String(s),
-          interpretation: cat,
-          severity,
-          extra: [{ label: { en: 'Adjusted annual ischemic stroke rate', zh: '校正後每年缺血性中風率' }, value: `${risk}%` }],
-          notes: s >= 2
-            ? { en: 'Oral anticoagulation is generally recommended (men ≥ 2, women ≥ 3). Weigh against bleeding risk (see HAS-BLED).', zh: '一般建議口服抗凝（男性 ≥ 2、女性 ≥ 3）。需與出血風險權衡（參見 HAS-BLED）。' }
-            : s === 1
-              ? { en: 'Anticoagulation may be considered (men) — shared decision-making. Women scoring 1 for sex alone are low risk.', zh: '可考慮抗凝（男性）— 共同決策。女性若僅因性別得 1 分屬低風險。' }
-              : { en: 'No antithrombotic therapy needed; reassess as risk factors change.', zh: '不需抗栓治療;危險因子改變時再評估。' },
-        }
-      },
-      reference: 'Lip GYH, et al. Chest 2010 (score); Friberg L, et al. Eur Heart J 2012 (risk rates). Age ≥75 & prior stroke = 2 pts each.',
-    },
+  ...AF_STROKE,
 
   // ── Mean arterial pressure ──────────────────────────────────────────────
     {

@@ -39,7 +39,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `features/clinical-decision-support/guideline-packs/pilot-gate.ts` | 不顯示 | `?pilotPacks=` is ignored and stored pilot ids do not apply (a tester's per-pack switch must not follow a clinician into a hand-off) | 90a3938c, 2026-09-05 — **stands**; the Beta switch is the way in |
 | `features/settings/components/DisplaySettings.tsx` (pilot-pack checkboxes) | 不顯示 | The per-pack 試辦 checkboxes are not shown | 90a3938c — stands, same reason |
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
-| `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
+| `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs (including the AF review pathway on `codex/af-cdss-ui`) hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
 ## Prompt Gallery visibility
 
@@ -68,3 +68,5 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 4. A test must cover the route where the surface is *kept*, not only the route
    where it is hidden (`__tests__/features/clinical-decision-support/pilot-pack-registry.test.ts`
    and `__tests__/application/hooks/use-beta-features.test.tsx` are the pattern).
+
+AF branch: the host now lists HF followed by AF. HF stays the released default. AF (`enabled: false`) uses the existing Beta or explicit pilot gate on ordinary visits; vghtpe honours Beta, while other unattended Medcloud launches show released HF only. No existing surface was removed.
