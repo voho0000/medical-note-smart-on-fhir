@@ -52,7 +52,7 @@ test('physician NT-proBNP overrides old laboratory autofill in HFpEF scoring', (
 })
 
 describe('combined clinical values dialog', () => {
-  function setup(entry = 'cdss-hf-record-values-edit') {
+  function setup() {
     const board = buildHeartFailureBoard(result, 'zh-TW', now)!
     const flow = buildHeartFailureVisitFlow({ board, result, now, isEnglish: false, patientId: 'synthetic', decisions: {} })
     const metrics = specs.map(([key, value, unit]) => ({ factKey: key, label: key, value, unit, date: value ? '2024-09-09' : undefined, kind: 'measure', entered: true, stale: false, evaluated: true } as HeartFailureMetric))
@@ -61,12 +61,12 @@ describe('combined clinical values dialog', () => {
       expandedId={null} onToggle={() => {}} renderDetail={() => null} packVersion="test"
       phenotypeAnswer={{ hfSuspicion: 'suspected', hfpEfConfirmed: true, answeredOn: '2026-09-12' }}
       onSaveClinicVitals={save} onAnswerPhenotype={answer} onSaveHfpefInputs={hfpef} />)
-    fireEvent.click(screen.getByTestId(entry))
+    fireEvent.click(screen.getByTestId('cdss-hf-record-values-edit'))
     return { save, answer, hfpef }
   }
 
-  test.each(['cdss-hf-record-values-edit', 'cdss-hf-flow-open-vitals'])('%s opens the shared editor and saves multiple changes in one patch', entry => {
-    const { save, answer, hfpef } = setup(entry)
+  test('the clinical-information card opens the shared editor and saves multiple changes in one patch', () => {
+    const { save, answer, hfpef } = setup()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     for (const [key] of specs) expect(screen.getByTestId(`record-values-${key}`)).toBeInTheDocument()
     expect(screen.getByLabelText('oxygenSaturation')).toBeInTheDocument()

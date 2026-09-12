@@ -265,19 +265,19 @@ describe('the visit flow', () => {
     render(<Harness />)
     const remaining = () => screen.getByTestId('cdss-hf-questions-remaining').textContent
 
-    expect(remaining()).toBe('還有 2 題')
+    expect(remaining()).toBe('還有 1 題')
     suspectHeartFailure()
-    expect(remaining()).toBe('還有 5 題')
+    expect(remaining()).toBe('還有 4 題')
 
     fireEvent.click(screen.getByTestId('cdss-hf-flow-nyha-II'))
-    expect(remaining()).toBe('還有 4 題')
+    expect(remaining()).toBe('還有 3 題')
 
     // Question ④ is answered once every 常見 sign has been answered; the
     // 更多 rows stay optional.
     for (const term of ['rales', 'jvp', 'pitting-edema']) {
       fireEvent.click(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`))
     }
-    expect(remaining()).toBe('還有 3 題')
+    expect(remaining()).toBe('還有 2 題')
 
     for (const term of [
       'exertional-dyspnea',
@@ -289,10 +289,10 @@ describe('the visit flow', () => {
     ]) {
       fireEvent.click(screen.getByTestId(`cdss-hf-flow-sign-${term}-not-assessed`))
     }
-    expect(remaining()).toBe('還有 2 題')
+    expect(remaining()).toBe('還有 1 題')
 
     fireEvent.click(screen.getByTestId('cdss-hf-flow-compensation-compensated'))
-    expect(remaining()).toBe('還有 1 題')
+    expect(remaining()).toBe('本次評估完成')
   })
 
   it('records a decision on the row, with its date and a way to change it', () => {
@@ -343,7 +343,7 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-question-answer-nyha')).toHaveTextContent('NYHA III')
     expect(screen.getByTestId('cdss-hf-decision-recorded-heart-failure-mra'))
       .toHaveTextContent('已開立')
-    expect(screen.getByTestId('cdss-hf-questions-remaining')).toHaveTextContent('還有 4 題')
+    expect(screen.getByTestId('cdss-hf-questions-remaining')).toHaveTextContent('還有 3 題')
   })
 
   it('leads with 「前往第 2 題」 while criterion (i) is undetermined', () => {

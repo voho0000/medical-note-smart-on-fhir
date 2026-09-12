@@ -130,7 +130,6 @@ export type VisitQuestionId =
   | 'symptoms'
   | 'signs'
   | 'compensation'
-  | 'clinic-vitals'
 
 export type VisitQuestionState = 'open' | 'answered' | 'locked'
 
@@ -653,8 +652,8 @@ export function buildHeartFailureVisitFlow(
       }
       : {}),
     hint: isEnglish
-      ? 'What you found. 「No」 means examined and absent. Written into the congestion table and HFpEF criterion (i); blood pressure, heart rate, SpO₂ and weight are question 5.'
-      : '你檢查到的。「無」＝檢查了沒有。寫進鬱血證據表與 HFpEF 條件 (i)；血壓、心率、SpO₂、體重在第 5 題。',
+      ? 'What you found. 「No」 means examined and absent. Written into the congestion table and HFpEF criterion (i).'
+      : '你檢查到的。「無」＝檢查了沒有。寫進鬱血證據表與 HFpEF 條件 (i)。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
     items: VISIT_EXAM_ITEMS,
@@ -664,7 +663,7 @@ export function buildHeartFailureVisitFlow(
   const compensation = clinicVitals?.compensationStatus
   const compensationQuestion: VisitQuestion = {
     id: 'compensation',
-    number: '6',
+    number: '5',
     label: isEnglish
       ? 'Compensated or decompensated today?'
       : '今天是代償還是失代償？',
@@ -687,32 +686,9 @@ export function buildHeartFailureVisitFlow(
   }
 
   const vitalsText = entryText(clinicVitals, isEnglish)
-  const vitalsStamp = latestStamp(
-    ...Object.values(clinicVitals?.entries ?? {}).map((entry) => entry?.modifiedAt),
-  )
-  questions.push({
-    id: 'clinic-vitals',
-    number: '5',
-    label: isEnglish
-      ? 'Clinic measurements: BP, heart rate, SpO₂, weight, height'
-      : '門診量測：血壓、心率、SpO₂、體重、身高',
-    // Never locked: a nurse can take the measurements before anyone decides
-    // whether this is a heart-failure visit at all.
-    state: vitalsText ? 'answered' : 'open',
-    ...(vitalsText ? { answerText: vitalsText } : {}),
-    ...(vitalsStamp ? { modifiedAt: vitalsStamp } : {}),
-    hint: isEnglish
-      ? 'Encrypted and kept for this tab session, never written to the chart; each field carries its own measurement date.'
-      : '加密保存於本分頁的工作階段、不寫回病歷；每個欄位各自記量測日。',
-    // A nurse can weigh a patient before anyone decides this is a heart-failure
-    // visit, so this one is never locked — but it stops being part of
-    // 「還有 n 題」 once the clinician has said they are not asking about it.
-    counted: !notSuspected,
-  })
-
   questions.push(compensationQuestion)
 
-  // ⑦ The HFpEF confirmation, last because it reads questions ② and ④ to judge
+  // ⑥ The HFpEF confirmation, last because it reads questions ② and ④ to judge
   // criterion (i): a card that asked for the conclusion before the findings
   // were in sent the clinician back up the page to answer them.
   if (hfpEfRequest && diagnosisCard) {
@@ -722,7 +698,7 @@ export function buildHeartFailureVisitFlow(
     const answered = confirmation === true || confirmation === HFPEF_NOT_CONFIRMED
     questions.push({
       id: 'hfpef-confirmation',
-      number: '7',
+      number: '6',
       label: hfpEfRequest.label,
       state: gated(answered ? 'answered' : 'open'),
       ...(!answered

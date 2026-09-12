@@ -332,9 +332,9 @@ describe('the step bar', () => {
     expect(confirm.detail).toContain('是')
     expect(confirm.detail).toContain('HFrEF')
     expect(confirm.detail).toContain('LVEF 32%')
-    // ② 症狀, ③ NYHA, ④ 徵象, ⑤ 門診量測, ⑥ 代償 are all outstanding here.
+    // ② 症狀, ③ NYHA, ④ 徵象 and ⑤ 代償 are all outstanding here.
     expect(assess.state).toBe('current')
-    expect(assess.detail).toBe('還有 5 題')
+    expect(assess.detail).toBe('還有 4 題')
   })
 
   it('marks the visit not applicable when the clinician does not suspect heart failure', () => {
@@ -349,7 +349,7 @@ describe('the step bar', () => {
 })
 
 describe('the questions', () => {
-  it('locks 2–4 and 6 until question 1 is answered, and never locks the measurements', () => {
+  it('locks questions 2–5 until question 1 is answered', () => {
     const flow = flowFor()
     const states = Object.fromEntries(flow.questions.map((item) => [item.id, item.state]))
 
@@ -358,7 +358,7 @@ describe('the questions', () => {
     expect(states.nyha).toBe('locked')
     expect(states.signs).toBe('locked')
     expect(states.compensation).toBe('locked')
-    expect(states['clinic-vitals']).toBe('open')
+    expect(states['clinic-vitals']).toBeUndefined()
     expect(flow.questions.find((item) => item.id === 'nyha')?.lockedReason)
       .toBe('回答第 1 題後開放')
   })
@@ -395,8 +395,7 @@ describe('the questions', () => {
       ['2', 'symptoms'],
       ['3', 'nyha'],
       ['4', 'signs'],
-      ['5', 'clinic-vitals'],
-      ['6', 'compensation'],
+      ['5', 'compensation'],
     ])
     const symptoms = flow.questions.find((item) => item.id === 'symptoms')
     expect(symptoms?.items?.map((item) => item.term)).toContain('exertional-dyspnea')
@@ -457,7 +456,7 @@ describe('the questions', () => {
     const open = flowFor({ result: withConfirmation, phenotypeAnswer: SUSPECTED })
     const last = open.questions.at(-1)
     expect(last?.id).toBe('hfpef-confirmation')
-    expect(last?.number).toBe('7')
+    expect(last?.number).toBe('6')
     expect(last?.counted).toBe(true)
     expect(last?.state).toBe('open')
     // ① is settled by the suspicion and the LVEF gate alone.

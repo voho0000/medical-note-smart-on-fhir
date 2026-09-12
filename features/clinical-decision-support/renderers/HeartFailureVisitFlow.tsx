@@ -245,7 +245,6 @@ export function HeartFailureVisitFlow({
         board={board}
         hfpefReading={hfpefReading}
         onOpenCalculator={onSaveHfpefInputs ? () => setCalculatorOpen(true) : undefined}
-        onOpenVitalsForm={() => setRecordValuesOpen(true)}
       />
 
       <ActionsCard
@@ -1055,7 +1054,6 @@ function QuestionsCard({
   board,
   hfpefReading,
   onOpenCalculator,
-  onOpenVitalsForm,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1068,7 +1066,6 @@ function QuestionsCard({
   board: HeartFailureBoardModel
   hfpefReading?: HfpefReading
   onOpenCalculator?: () => void
-  onOpenVitalsForm: () => void
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
@@ -1254,31 +1251,7 @@ function QuestionsCard({
             )
           }
 
-          // The clinic measurements: the form itself, opened from here or from
-          // a 「補填」 on a missing value above.
-          return (
-            <QuestionShell
-              key={question.id}
-              question={question}
-              isEnglish={isEnglish}
-              now={now}
-              onEdit={onSaveClinicVitals ? onOpenVitalsForm : undefined}
-            >
-              {onSaveClinicVitals ? (
-                  <button
-                    type="button"
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={onOpenVitalsForm}
-                    data-testid="cdss-hf-flow-open-vitals"
-                  >
-                    <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-                    {question.answerText
-                      ? (isEnglish ? 'Edit clinic measurements' : '修改門診量測')
-                      : (isEnglish ? 'Enter clinic measurements' : '輸入門診量測')}
-                  </button>
-              ) : null}
-            </QuestionShell>
-          )
+          return null
         })}
       </ul>
     </section>
