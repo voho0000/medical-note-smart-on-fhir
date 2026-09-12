@@ -307,9 +307,10 @@ describe('the diagnosis reading the host shows', () => {
   it('carries both HFpEF scores the calculator handed over, attributed to their authors', () => {
     // The scores are computed once, by the host's HFpEF calculator, and reach
     // the pack as two facts whose `matchedTerms` carry the breakdown (brief v2
-    // §1.2). The published 1.13.0 pack still derives its own; the pilot/hmc pack
-    // reads these facts. Both must yield the same shape, so only the shape and
-    // the attribution are asserted here — the values are the pack's own tests.
+    // §1.2). Since 2.0.0 the pack derives nothing of its own here: it reads
+    // these facts, so the values below are the ones handed over and not the
+    // pack's arithmetic. What is asserted is that handover — the value, the
+    // upper bound, and the attribution.
     const profile = applyPhenotypeAnswer({
       ...baseProfile,
       facts: {
@@ -345,11 +346,11 @@ describe('the diagnosis reading the host shows', () => {
     const byName = (name: string) => scores.find((item) => item.name === name)
 
     expect(scores.map((item) => item.name)).toEqual(['HFA-PEFF', 'H2FPEF'])
-    expect(byName('HFA-PEFF')).toMatchObject({ maximum: 6 })
+    expect(byName('HFA-PEFF')).toMatchObject({ value: 4, maximum: 6 })
     // Attributed to the body that published it, not to the guideline that
     // merely cites it.
     expect(byName('HFA-PEFF')?.source).toContain('Heart Failure Association')
-    expect(byName('H2FPEF')).toMatchObject({ maximum: 9 })
+    expect(byName('H2FPEF')).toMatchObject({ value: 5, maximum: 9 })
     expect(byName('H2FPEF')?.source).toContain('Circulation 2018')
     // The paper maps score to probability in a figure, so no percentage is
     // printed and no rule-in cut-off is invented.
