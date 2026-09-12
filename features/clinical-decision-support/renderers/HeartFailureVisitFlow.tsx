@@ -1292,6 +1292,55 @@ function QuestionsCard({
 
 /* --------------------------------------------------- 區塊 4 今日處置 */
 
+function DoseAdjustmentEditor({ initialNote, isEnglish, onSave }: {
+  initialNote: string
+  isEnglish: boolean
+  onSave: (note: string) => void
+}) {
+  const parsed = /^(\d+(?:\.\d+)?) → (\d+(?:\.\d+)?) (mg|mcg|g|mL|units|錠)(?:；([\s\S]*))?$/.exec(initialNote)
+  const [previous, setPrevious] = useState(parsed?.[1] ?? '')
+  const [next, setNext] = useState(parsed?.[2] ?? '')
+  const [unit, setUnit] = useState(parsed?.[3] ?? 'mg')
+  const [extra, setExtra] = useState(parsed ? parsed[4] ?? '' : initialNote)
+  const valid = previous.trim() !== '' && next.trim() !== ''
+    && Number.isFinite(Number(previous)) && Number(previous) >= 0
+    && Number.isFinite(Number(next)) && Number(next) > 0
+    && Number(previous) !== Number(next)
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {isEnglish ? 'Previous dose' : '原劑量'}
+          <Input type="number" inputMode="decimal" min="0" step="any" value={previous}
+            onChange={event => setPrevious(event.target.value)} className="h-11 w-24 px-2 text-sm"
+            placeholder="0" />
+        </label>
+        <span className="pb-3 text-muted-foreground" aria-hidden="true">→</span>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {isEnglish ? 'New dose' : '新劑量'}
+          <Input type="number" inputMode="decimal" min="0" step="any" value={next}
+            onChange={event => setNext(event.target.value)} className="h-11 w-24 px-2 text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {isEnglish ? 'Unit' : '單位'}
+          <select value={unit} onChange={event => setUnit(event.target.value)}
+            className="h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {['mg', 'mcg', 'g', 'mL', 'units', '錠'].map(value => <option key={value} value={value}>{value === '錠' && isEnglish ? 'tablets' : value}</option>)}
+          </select>
+        </label>
+        <Button type="button" size="sm" className="h-11" disabled={!valid}
+          onClick={() => onSave([`${Number(previous)} → ${Number(next)} ${unit}`, extra.trim()].filter(Boolean).join('；'))}>
+          {isEnglish ? 'Record' : '記錄'}
+        </Button>
+      </div>
+      {extra ? <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {isEnglish ? 'Existing note' : '原有備註'}
+        <Input value={extra} onChange={event => setExtra(event.target.value)} className="h-9 text-sm" />
+      </label> : null}
+    </div>
+  )
+}
+
 function DecisionControls({
   row,
   isEnglish,
@@ -1447,14 +1496,16 @@ function DecisionControls({
         </div>
       ) : null}
 
-      {needsReasons || needsNote ? (
+      {needsNote ? (
+        <DoseAdjustmentEditor initialNote={decision?.note ?? ''} isEnglish={isEnglish}
+          onSave={doseNote => { record({ decision: 'dose-adjusted', note: doseNote }); onEdit(false) }} />
+      ) : null}
+      {needsReasons ? (
         <div className="flex flex-wrap items-end gap-1.5">
           <Input
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder={needsNote
-              ? (isEnglish ? 'e.g. 2.5 → 5 mg' : '例：2.5 → 5 mg')
-              : (isEnglish ? 'Anything else worth recording' : '其他想記的一行')}
+            placeholder={isEnglish ? 'Anything else worth recording' : '其他想記的一行'}
             className="h-8 w-56 px-2 text-sm md:text-sm"
             aria-label={isEnglish ? 'Decision note' : '處置備註'}
             data-testid={`cdss-hf-decision-note-${moduleId}`}

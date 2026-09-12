@@ -75,3 +75,23 @@ test('no default for a medication gap or missing current therapy; explicit choic
   expect(rowFor(result, { [drug.id]: explicit }).decision).toEqual(explicit)
   expect(rowFor(result, { [drug.id]: explicit }).decisionSource).toBeUndefined()
 })
+
+
+test('dose adjustment records separate numeric doses and a selected unit, and reopens them', () => {
+  const onRecord = jest.fn()
+  render(<Harness onRecord={onRecord} />)
+  fireEvent.click(screen.getByTestId('cdss-hf-decision-edit-heart-failure-sglt2'))
+  fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-dose-adjusted'))
+  const save = screen.getByRole('button', { name: '記錄' })
+  expect(save).toBeDisabled()
+  fireEvent.change(screen.getByRole('spinbutton', { name: '原劑量' }), { target: { value: '2.5' } })
+  fireEvent.change(screen.getByRole('spinbutton', { name: '新劑量' }), { target: { value: '5' } })
+  fireEvent.change(screen.getByRole('combobox', { name: '單位' }), { target: { value: 'mg' } })
+  fireEvent.click(save)
+  expect(onRecord).toHaveBeenLastCalledWith('heart-failure-sglt2', expect.objectContaining({ decision: 'dose-adjusted', note: '2.5 → 5 mg' }))
+  fireEvent.click(screen.getByTestId('cdss-hf-decision-edit-heart-failure-sglt2'))
+  expect(screen.getByRole('spinbutton', { name: '原劑量' })).toHaveValue(2.5)
+  expect(screen.getByRole('spinbutton', { name: '新劑量' })).toHaveValue(5)
+  fireEvent.change(screen.getByRole('spinbutton', { name: '新劑量' }), { target: { value: '2.5' } })
+  expect(screen.getByRole('button', { name: '記錄' })).toBeDisabled()
+})
