@@ -17,13 +17,22 @@
  *   same gap next visit the row comes back, carrying last visit's decision and
  *   its date, because the record is what decides whether a gap is still open.
  * - **Not a chart entry.** Nothing is written back to the record and nothing
- *   is claimed; the decision lives in this browser, keyed by patient.
+ *   is claimed; the decision is encrypted under this tab's session key and
+ *   keyed by patient, so it survives a reload and no one else's browser
+ *   session can read it. Carrying it to the next visit is phase 2.
  *
  * `packVersion` travels with each decision so a reader can tell 「這是對哪一版
  * 規則做的決定」 — a row whose wording changed between releases is not
  * necessarily the row that was decided.
  */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 
 export type PhysicianDecisionKind =
   | 'prescribed'
@@ -48,7 +57,7 @@ export type PhysicianDecisionMap = Readonly<Record<string, PhysicianDecision>>
 
 const STORAGE_PREFIX = 'cdss-physician-decisions:'
 
-/** The localStorage key one patient's decisions are kept under. */
+/** The key one patient's encrypted decisions are kept under. */
 export function physicianDecisionsStorageKey(patientId: string): string {
   return `${STORAGE_PREFIX}${patientId}`
 }
@@ -68,15 +77,12 @@ function isDecisionKind(value: unknown): value is PhysicianDecisionKind {
 
 /**
  * Storage is a best-effort cache, never a source of clinical truth: Safari
- * private mode throws on write, a quota can be full, and a hand-edited value
- * can be anything at all. Every path therefore degrades to 「還沒決定」.
+ * private mode throws on write, a quota can be full, a session that cannot
+ * decrypt hands back nothing, and a hand-edited value can be anything at all.
+ * Every path therefore degrades to 「還沒決定」.
  */
-function readStoredDecisions(patientId: string): PhysicianDecisionMap {
-  if (typeof window === 'undefined') return {}
+function toDecisions(parsed: unknown): PhysicianDecisionMap {
   try {
-    const raw = window.localStorage.getItem(physicianDecisionsStorageKey(patientId))
-    if (!raw) return {}
-    const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     const decisions: Record<string, PhysicianDecision> = {}
     for (const [moduleId, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -100,18 +106,15 @@ function readStoredDecisions(patientId: string): PhysicianDecisionMap {
 }
 
 function writeStoredDecisions(patientId: string, decisions: PhysicianDecisionMap): void {
-  if (typeof window === 'undefined') return
   const key = physicianDecisionsStorageKey(patientId)
-  try {
-    if (Object.keys(decisions).length === 0) {
-      window.localStorage.removeItem(key)
-      return
-    }
-    window.localStorage.setItem(key, JSON.stringify(decisions))
-  } catch {
-    // A decision that cannot be persisted still holds for this session.
+  if (Object.keys(decisions).length === 0) {
+    discardEncryptedAnswers(key)
+    return
   }
+  persistEncryptedAnswers(key, decisions)
 }
+
+const hydration = createHydrationGuard()
 
 /** What a decision is being recorded about, without the clock or the store. */
 export interface PhysicianDecisionInput {
@@ -121,8 +124,13 @@ export interface PhysicianDecisionInput {
   packVersion: string
 }
 
+const EMPTY_DECISIONS: PhysicianDecisionMap = Object.freeze({})
+
 interface PhysicianDecisionsState {
   byPatientId: Readonly<Record<string, PhysicianDecisionMap>>
+  /** Which charts have been read back, so the screen can tell 「沒有決定」 from
+   *  「還沒讀到」 rather than showing every row undecided and then jumping. */
+  hydratedPatientIds: Readonly<Record<string, true>>
   /** Loads one patient's stored decisions once; a no-op after that. */
   hydrate: (patientId: string) => void
   recordDecision: (
@@ -137,21 +145,52 @@ interface PhysicianDecisionsState {
 
 export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set, get) => ({
   byPatientId: {},
+  hydratedPatientIds: {},
 
   hydrate: (patientId) => {
-    if (!patientId || get().byPatientId[patientId]) return
-    const stored = readStoredDecisions(patientId)
-    set((state) => (
+    if (!patientId) return
+    const state = get()
+    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+
+    // Decisions already in memory are this session's own, and a chart with no
+    // stored record is a first visit. Neither needs a decryption, and neither
+    // writes anything.
+    if (
       state.byPatientId[patientId]
-        ? state
-        : { byPatientId: { ...state.byPatientId, [patientId]: stored } }
-    ))
+      || !hasEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+    ) {
+      set((current) => ({
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: EMPTY_DECISIONS },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+      return
+    }
+
+    const settle = hydration.begin(patientId)
+    const apply = (decisions: PhysicianDecisionMap) => {
+      if (!settle()) return
+      set((current) => ({
+        // A decision recorded while the read was in flight is more recent than
+        // storage; it stands.
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: decisions },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+    }
+    void loadEncryptedAnswers<unknown>(physicianDecisionsStorageKey(patientId))
+      .then((stored) => apply(toDecisions(stored)))
+      // A record that cannot be read leaves every row undecided, which is the
+      // same state as a chart nobody has decided on.
+      .catch(() => apply(EMPTY_DECISIONS))
   },
 
   recordDecision: (patientId, moduleId, input, now = new Date()) => {
     if (!patientId || !moduleId) return
     set((state) => {
-      const current = state.byPatientId[patientId] ?? readStoredDecisions(patientId)
+      const current = state.byPatientId[patientId] ?? EMPTY_DECISIONS
       const next: PhysicianDecisionMap = {
         ...current,
         [moduleId]: {
@@ -162,6 +201,8 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
           packVersion: input.packVersion,
         },
       }
+      // In memory first; the encryption runs in the background and cannot
+      // reach back into what the screen is already showing.
       writeStoredDecisions(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }
     })
@@ -170,7 +211,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
   clearDecision: (patientId, moduleId) => {
     if (!patientId || !moduleId) return
     set((state) => {
-      const current = state.byPatientId[patientId] ?? readStoredDecisions(patientId)
+      const current = state.byPatientId[patientId] ?? EMPTY_DECISIONS
       if (!(moduleId in current)) return state
       const next = { ...current }
       delete next[moduleId]
@@ -181,12 +222,13 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
 
   clearDecisions: (patientId) => {
     if (!patientId) return
-    writeStoredDecisions(patientId, {})
-    set((state) => ({ byPatientId: { ...state.byPatientId, [patientId]: {} } }))
+    discardEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+    set((state) => ({
+      byPatientId: { ...state.byPatientId, [patientId]: EMPTY_DECISIONS },
+      hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+    }))
   },
 }))
-
-const EMPTY_DECISIONS: PhysicianDecisionMap = Object.freeze({})
 
 /**
  * One patient's decisions, referentially stable between changes, so the flow
@@ -198,8 +240,15 @@ export function usePhysicianDecisions(patientId: string | undefined): PhysicianD
   )
 }
 
-/** Reads one patient's decisions outside React (tests, imperative callers). */
+/** Whether this chart's decisions have been read back yet. */
+export function usePhysicianDecisionsHydrated(patientId: string | undefined): boolean {
+  return usePhysicianDecisionsStore(
+    (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
+  )
+}
+
+/** Reads one patient's decisions outside React (tests, imperative callers). The
+ *  stored copy is encrypted, so only what this session has read back is here. */
 export function getPhysicianDecisions(patientId: string): PhysicianDecisionMap {
-  return usePhysicianDecisionsStore.getState().byPatientId[patientId]
-    ?? readStoredDecisions(patientId)
+  return usePhysicianDecisionsStore.getState().byPatientId[patientId] ?? EMPTY_DECISIONS
 }

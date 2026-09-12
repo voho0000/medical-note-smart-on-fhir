@@ -18,11 +18,24 @@ import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
-import { useClinicVitals, useClinicVitalsStore } from './stores/clinic-vitals.store'
-import { useHfpefInputs, useHfpefInputsStore } from './stores/hfpef-inputs.store'
-import { usePhenotypeAnswer, usePhenotypeAnswerStore } from './stores/phenotype-answer.store'
+import {
+  useClinicVitals,
+  useClinicVitalsHydrated,
+  useClinicVitalsStore,
+} from './stores/clinic-vitals.store'
+import {
+  useHfpefInputs,
+  useHfpefInputsHydrated,
+  useHfpefInputsStore,
+} from './stores/hfpef-inputs.store'
+import {
+  usePhenotypeAnswer,
+  usePhenotypeAnswerHydrated,
+  usePhenotypeAnswerStore,
+} from './stores/phenotype-answer.store'
 import {
   usePhysicianDecisions,
+  usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
@@ -252,6 +265,18 @@ export default function LiveClinicalDecisionSupportFeature() {
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
 
+  // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
+  // and 「還沒讀到」 render identically and mean opposite things, so the
+  // guidance waits here rather than drawing every question unanswered and
+  // jumping when the reads land. A chart with nothing stored resolves in the
+  // same tick, so a first visit never sees this.
+  const answersHydrated = [
+    useClinicVitalsHydrated(patientId),
+    usePhysicianDecisionsHydrated(patientId),
+    useHfpefInputsHydrated(patientId),
+    usePhenotypeAnswerHydrated(patientId),
+  ].every(Boolean)
+
   // The switches this physician set on this chart survive a reload, so they are
   // read back before the pack runs rather than after.
   useEffect(() => {
@@ -369,7 +394,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       : null
   }, [cdssLocale, profile, selectedPack])
 
-  if (patientLoading || clinicalData.isLoading || clinicalData.isFetching) {
+  if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
   }
 

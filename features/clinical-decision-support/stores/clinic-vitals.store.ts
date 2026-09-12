@@ -18,12 +18,20 @@
  * storing the same value again leaves it alone, so 「最後修改」 means what it
  * says.
  *
- * Kept per patient, in this browser's `localStorage`, so the answers a
- * clinician gave at the last visit are there at the next one and a value never
- * follows the previous patient into the next chart. Nothing is written to the
- * record and nothing leaves the browser.
+ * Kept per patient, encrypted under the tab-session key (see
+ * `encrypted-answer-cache.service`), so a value survives a reload of this tab, never
+ * follows the previous patient into the next chart, and cannot be read by the
+ * next person to open the browser. Carrying an answer to the next visit is
+ * phase 2. Nothing is written to the record and nothing leaves the browser.
  */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 
 /** The three one-tap groups the congestion question is asked in. */
 export type CongestionSignsAnswer = 'edema' | 'orthopnea-pnd' | 'jvp-rales'
@@ -255,7 +263,7 @@ export function entryValue(
 
 const STORAGE_PREFIX = 'cdss-clinic-vitals:'
 
-/** The localStorage key one patient's visit record is kept under. */
+/** The key one patient's encrypted visit record is kept under. */
 export function clinicVitalsStorageKey(patientId: string): string {
   return `${STORAGE_PREFIX}${patientId}`
 }
@@ -276,16 +284,13 @@ function toAnsweredField<T extends string>(
 
 /**
  * Storage is a best-effort cache, never a source of clinical truth: Safari
- * private mode throws on write, a quota can be full, and a hand-edited value
- * can be anything at all. Every path therefore degrades to 「沒問」, which is
- * the same reading a first visit gives.
+ * private mode throws on write, a quota can be full, a session that cannot
+ * decrypt hands back nothing, and a hand-edited value can be anything at all.
+ * Every path therefore degrades to 「沒問」, which is the same reading a first
+ * visit gives.
  */
-function readStoredVitals(patientId: string): ClinicVitals {
-  if (typeof window === 'undefined') return EMPTY_CLINIC_VITALS
+function toClinicVitals(parsed: unknown): ClinicVitals {
   try {
-    const raw = window.localStorage.getItem(clinicVitalsStorageKey(patientId))
-    if (!raw) return EMPTY_CLINIC_VITALS
-    const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_CLINIC_VITALS
     const record = parsed as Record<string, unknown>
     const entries: Partial<Record<ClinicVitalsEntryKey, MeasuredEntry>> = {}
@@ -322,26 +327,31 @@ function readStoredVitals(patientId: string): ClinicVitals {
   }
 }
 
-function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
-  if (typeof window === 'undefined') return
-  const key = clinicVitalsStorageKey(patientId)
-  try {
-    const empty = Object.keys(vitals.entries).length === 0
-      && Object.keys(vitals.signAnswers).length === 0
-      && !vitals.nyhaClass
-      && !vitals.compensationStatus
-    if (empty) {
-      window.localStorage.removeItem(key)
-      return
-    }
-    window.localStorage.setItem(key, JSON.stringify(vitals))
-  } catch {
-    // A value that cannot be persisted still holds for this session.
-  }
+/** Empty is 「沒問」: nothing worth keeping, so the key goes rather than
+ *  holding an encrypted record of no answers at all. */
+function isEmptyVitals(vitals: ClinicVitals): boolean {
+  return Object.keys(vitals.entries).length === 0
+    && Object.keys(vitals.signAnswers).length === 0
+    && !vitals.nyhaClass
+    && !vitals.compensationStatus
 }
+
+function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
+  const key = clinicVitalsStorageKey(patientId)
+  if (isEmptyVitals(vitals)) {
+    discardEncryptedAnswers(key)
+    return
+  }
+  persistEncryptedAnswers(key, vitals)
+}
+
+const hydration = createHydrationGuard()
 
 interface ClinicVitalsState {
   byPatientId: Readonly<Record<string, ClinicVitals>>
+  /** Which charts have been read back, so the screen can tell 「沒答案」 from
+   *  「還沒讀到」 and show the questions only once it knows which it is. */
+  hydratedPatientIds: Readonly<Record<string, true>>
   /** Reads one patient's stored record once; a no-op after that. */
   hydrate: (patientId: string) => void
   setVitals: (patientId: string, patch: ClinicVitalsPatch, now?: Date) => void
@@ -356,23 +366,59 @@ interface ClinicVitalsState {
 
 export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
   byPatientId: {},
+  hydratedPatientIds: {},
 
   hydrate: (patientId) => {
-    if (!patientId || get().byPatientId[patientId]) return
-    const stored = readStoredVitals(patientId)
-    set((state) => (
-      state.byPatientId[patientId]
-        ? state
-        : { byPatientId: { ...state.byPatientId, [patientId]: stored } }
-    ))
+    if (!patientId) return
+    const state = get()
+    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+
+    // Two cases need no decryption: an answer already in memory is this
+    // session's own and more recent than anything storage holds, and a chart
+    // with no stored record is a first visit. Neither writes anything.
+    if (state.byPatientId[patientId] || !hasEncryptedAnswers(clinicVitalsStorageKey(patientId))) {
+      set((current) => ({
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: EMPTY_CLINIC_VITALS },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+      return
+    }
+
+    const settle = hydration.begin(patientId)
+    const apply = (vitals: ClinicVitals) => {
+      // A read that resolves after the chart moved on is a record for a patient
+      // nobody is looking at; it is dropped, and the chart it belongs to is
+      // read again if it is opened.
+      if (!settle()) return
+      set((current) => ({
+        // A clinician who answered while the read was in flight has said
+        // something more recent than storage; their answer stands.
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: vitals },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+    }
+    void loadEncryptedAnswers<unknown>(clinicVitalsStorageKey(patientId))
+      .then((stored) => apply(toClinicVitals(stored)))
+      // A record that cannot be read leaves the chart asking, which is the
+      // same state as a patient who has never been answered for.
+      .catch(() => apply(EMPTY_CLINIC_VITALS))
   },
 
   setVitals: (patientId, patch, now = new Date()) => {
     if (!patientId) return
     set((state) => {
-      const current = state.byPatientId[patientId] ?? readStoredVitals(patientId)
+      const current = state.byPatientId[patientId]
       const next = mergeClinicVitals(current, patch, now)
-      if (next === current && state.byPatientId[patientId]) return state
+      // Nothing changed — and where there was nothing in memory to change,
+      // `next` is the frozen empty record, which must not be written over a
+      // stored one this session has not read back yet.
+      if (next === current || next === EMPTY_CLINIC_VITALS) return state
+      // In memory first; the encryption runs in the background and cannot
+      // reach back into what the screen is already showing.
       writeStoredVitals(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }
     })
@@ -384,9 +430,10 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
 
   clearVitals: (patientId) => {
     if (!patientId) return
-    writeStoredVitals(patientId, EMPTY_CLINIC_VITALS)
+    discardEncryptedAnswers(clinicVitalsStorageKey(patientId))
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_CLINIC_VITALS },
+      hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
     }))
   },
 }))
@@ -401,9 +448,23 @@ export function useClinicVitals(patientId: string | undefined): ClinicVitals | u
   return useClinicVitalsStore((state) => (patientId ? state.byPatientId[patientId] : undefined))
 }
 
-/** Reads one patient's record outside React (tests, imperative callers). */
+/**
+ * Whether this chart's record has been read back yet.
+ *
+ * 「沒有答案」 and 「還沒讀到」 look identical on screen and mean opposite
+ * things, so the questions wait for this rather than rendering unanswered and
+ * jumping when the decryption lands.
+ */
+export function useClinicVitalsHydrated(patientId: string | undefined): boolean {
+  return useClinicVitalsStore(
+    (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
+  )
+}
+
+/** Reads one patient's record outside React (tests, imperative callers). The
+ *  stored copy is encrypted, so only what this session has read back is here. */
 export function getClinicVitals(patientId: string): ClinicVitals {
-  return useClinicVitalsStore.getState().byPatientId[patientId] ?? readStoredVitals(patientId)
+  return useClinicVitalsStore.getState().byPatientId[patientId] ?? EMPTY_CLINIC_VITALS
 }
 
 /**

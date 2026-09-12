@@ -12,10 +12,19 @@
  * written here: it is already in the report, it would go stale the day a newer
  * echo arrives, and 「你輸入」 must mean what it says.
  *
- * Kept in this browser, keyed by patient, like the rest of this feature's
- * answers. Nothing is written to the chart and nothing leaves the browser.
+ * Kept encrypted under this tab's session key, keyed by patient, like the rest
+ * of this feature's answers: a typed value survives a reload of this tab, no
+ * other session can read it, and carrying it to the next visit is phase 2.
+ * Nothing is written to the chart and nothing leaves the browser.
  */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 
 /** One value the clinician typed, with the day it was measured and changed. */
 export interface HfpefInputEntry {
@@ -81,22 +90,19 @@ export function mergeHfpefInputs(
 
 const STORAGE_PREFIX = 'cdss-hfpef-inputs:'
 
-/** The localStorage key one patient's typed echo values are kept under. */
+/** The key one patient's encrypted typed echo values are kept under. */
 export function hfpefInputsStorageKey(patientId: string): string {
   return `${STORAGE_PREFIX}${patientId}`
 }
 
 /**
  * Storage is a best-effort cache, never a source of clinical truth: a private
- * window throws on write, a quota can be full, and a hand-edited value can be
- * anything. Every path degrades to 「沒填」, which is a first visit's reading.
+ * window throws on write, a quota can be full, a session that cannot decrypt
+ * hands back nothing, and a hand-edited value can be anything. Every path
+ * degrades to 「沒填」, which is a first visit's reading.
  */
-function readStored(patientId: string): HfpefInputs {
-  if (typeof window === 'undefined') return EMPTY_HFPEF_INPUTS
+function toHfpefInputs(parsed: unknown): HfpefInputs {
   try {
-    const raw = window.localStorage.getItem(hfpefInputsStorageKey(patientId))
-    if (!raw) return EMPTY_HFPEF_INPUTS
-    const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_HFPEF_INPUTS
     const record = (parsed as Record<string, unknown>).entries
     if (!record || typeof record !== 'object') return EMPTY_HFPEF_INPUTS
@@ -118,21 +124,21 @@ function readStored(patientId: string): HfpefInputs {
 }
 
 function writeStored(patientId: string, inputs: HfpefInputs): void {
-  if (typeof window === 'undefined') return
   const key = hfpefInputsStorageKey(patientId)
-  try {
-    if (Object.keys(inputs.entries).length === 0) {
-      window.localStorage.removeItem(key)
-      return
-    }
-    window.localStorage.setItem(key, JSON.stringify(inputs))
-  } catch {
-    // A value that cannot be persisted still holds for this session.
+  if (Object.keys(inputs.entries).length === 0) {
+    discardEncryptedAnswers(key)
+    return
   }
+  persistEncryptedAnswers(key, inputs)
 }
+
+const hydration = createHydrationGuard()
 
 interface HfpefInputsState {
   byPatientId: Readonly<Record<string, HfpefInputs>>
+  /** Which charts have been read back, so a field can tell 「沒填」 from
+   *  「還沒讀到」 instead of offering an empty box that later fills itself. */
+  hydratedPatientIds: Readonly<Record<string, true>>
   /** Reads one patient's stored values once; a no-op after that. */
   hydrate: (patientId: string) => void
   setInputs: (patientId: string, patch: HfpefInputsPatch, now?: Date) => void
@@ -141,23 +147,56 @@ interface HfpefInputsState {
 
 export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
   byPatientId: {},
+  hydratedPatientIds: {},
 
   hydrate: (patientId) => {
-    if (!patientId || get().byPatientId[patientId]) return
-    const stored = readStored(patientId)
-    set((state) => (
-      state.byPatientId[patientId]
-        ? state
-        : { byPatientId: { ...state.byPatientId, [patientId]: stored } }
-    ))
+    if (!patientId) return
+    const state = get()
+    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+
+    // Values already in memory are this session's own, and a chart with no
+    // stored record is a first visit. Neither needs a decryption, and neither
+    // writes anything.
+    if (state.byPatientId[patientId] || !hasEncryptedAnswers(hfpefInputsStorageKey(patientId))) {
+      set((current) => ({
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: EMPTY_HFPEF_INPUTS },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+      return
+    }
+
+    const settle = hydration.begin(patientId)
+    const apply = (inputs: HfpefInputs) => {
+      if (!settle()) return
+      set((current) => ({
+        // A value typed while the read was in flight is more recent than
+        // storage; it stands.
+        byPatientId: current.byPatientId[patientId]
+          ? current.byPatientId
+          : { ...current.byPatientId, [patientId]: inputs },
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+    }
+    void loadEncryptedAnswers<unknown>(hfpefInputsStorageKey(patientId))
+      .then((stored) => apply(toHfpefInputs(stored)))
+      // A record that cannot be read leaves every field to the report, which
+      // is a first visit's reading.
+      .catch(() => apply(EMPTY_HFPEF_INPUTS))
   },
 
   setInputs: (patientId, patch, now = new Date()) => {
     if (!patientId) return
     set((state) => {
-      const current = state.byPatientId[patientId] ?? readStored(patientId)
+      const current = state.byPatientId[patientId]
       const next = mergeHfpefInputs(current, patch, now)
-      if (next === current && state.byPatientId[patientId]) return state
+      // Nothing changed — and where there was nothing in memory to change,
+      // `next` is the frozen empty record, which must not be written over a
+      // stored one this session has not read back yet.
+      if (next === current || next === EMPTY_HFPEF_INPUTS) return state
+      // In memory first; the encryption runs in the background and cannot
+      // reach back into what the screen is already showing.
       writeStored(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }
     })
@@ -165,9 +204,10 @@ export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
 
   clearInputs: (patientId) => {
     if (!patientId) return
-    writeStored(patientId, EMPTY_HFPEF_INPUTS)
+    discardEncryptedAnswers(hfpefInputsStorageKey(patientId))
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_HFPEF_INPUTS },
+      hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
     }))
   },
 }))
@@ -175,6 +215,13 @@ export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
 /** One patient's typed values, referentially stable between changes. */
 export function useHfpefInputs(patientId: string | undefined): HfpefInputs | undefined {
   return useHfpefInputsStore((state) => (patientId ? state.byPatientId[patientId] : undefined))
+}
+
+/** Whether this chart's typed values have been read back yet. */
+export function useHfpefInputsHydrated(patientId: string | undefined): boolean {
+  return useHfpefInputsStore(
+    (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
+  )
 }
 
 /** A record built from one statement, for a caller with no store. */

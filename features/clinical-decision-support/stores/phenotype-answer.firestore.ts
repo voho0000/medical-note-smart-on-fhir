@@ -18,8 +18,10 @@
  *
  * The trade-offs and a Rules draft are written up in
  * `docs/HF-DP01_phenotype-answer-persistence-proposal.md`. Until those are
- * settled the store keeps its session-only default, so an answer lives for the
- * tab and is gone on reload — the state this pilot has approval for.
+ * settled the store keeps its encrypted tab-session default: an answer is
+ * sealed under this tab's session key, so it survives a reload of this tab and
+ * is unreadable — and therefore gone — in any other session. Carrying it to the
+ * next visit is exactly what this file would add, and it is phase 2.
  *
  * Nothing here imports Firestore or opens a connection. Wiring it in is a
  * separate change that must also say, in its commit and its PR, that it adds a

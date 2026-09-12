@@ -14,13 +14,21 @@
  * carried-over answer look like today's. Storing an answer unchanged leaves
  * its stamp alone, so 「最後修改」 dates the change rather than the click.
  *
- * Kept per patient in this browser's `localStorage`, so last visit's answers
- * are there at the next one and an answer never follows the previous patient
- * into the next chart. The seam for a server-side implementation is
+ * Kept per patient, encrypted under this tab's session key, so an answer
+ * survives a reload of this tab, no other browser session can read it, and it
+ * never follows the previous patient into the next chart. Carrying an answer to
+ * the next visit is phase 2: the seam for that server-side implementation is
  * `PhenotypeAnswerRepository` — swap the repository, and nothing above it
  * changes.
  */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 
 /** The three choices the pack offers, by the option ids it publishes. */
 export type PhenotypeAnswerChoice = 'reduced' | 'preserved' | 'unknown'
@@ -126,11 +134,19 @@ export interface PhenotypeAnswerRepository {
   load: (patientId: string) => Promise<PhenotypeAnswer | undefined>
   save: (patientId: string, answer: PhenotypeAnswer) => Promise<void>
   clear: (patientId: string) => Promise<void>
+  /**
+   * Optional: whether this repository holds anything for the patient, answered
+   * without a round trip. A browser-local store can say so by looking at a key,
+   * and the card then opens on the question instead of on 「讀取中」. A remote
+   * one omits it, and the caller waits for `load` — which is why this is a
+   * hint, never a substitute for the answer `load` returns.
+   */
+  has?: (patientId: string) => boolean
 }
 
 const STORAGE_PREFIX = 'cdss-phenotype-answer:'
 
-/** The localStorage key one patient's answer is kept under. */
+/** The key one patient's encrypted answer is kept under. */
 export function phenotypeAnswerStorageKey(patientId: string): string {
   return `${STORAGE_PREFIX}${patientId}`
 }
@@ -143,10 +159,8 @@ function isChoice(value: unknown): value is PhenotypeAnswerChoice {
   return value === 'reduced' || value === 'preserved' || value === 'unknown'
 }
 
-function parseStoredAnswer(raw: string | null): PhenotypeAnswer | undefined {
-  if (!raw) return undefined
+function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
   try {
-    const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
     const record = parsed as Record<string, unknown>
     const stamps = (record.modifiedAt ?? {}) as Record<string, unknown>
@@ -172,39 +186,34 @@ function parseStoredAnswer(raw: string | null): PhenotypeAnswer | undefined {
 }
 
 /**
- * The default: this browser, keyed by patient.
+ * The default: this tab, keyed by patient, encrypted.
  *
  * Nothing is written to the chart and nothing leaves the machine. What is kept
- * is what the clinician said about this patient — the same standing as the
- * evidence switches next door, which persist for the same reason: a judgement
- * re-entered at every visit is a judgement nobody makes twice.
+ * is what the clinician said about this patient, under the same envelope as the
+ * imported bundle — ciphertext in `localStorage`, readable only by the tab
+ * session that wrote it, so the next person at a shared workstation reads
+ * nothing. A save returns before the ciphertext lands; the store's in-memory
+ * answer is what the screen shows, and a write that fails never reaches it.
  */
-export function createLocalStoragePhenotypeAnswerRepository(): PhenotypeAnswerRepository {
-  const available = () => typeof window !== 'undefined'
+export function createEncryptedPhenotypeAnswerRepository(): PhenotypeAnswerRepository {
+  const available = (patientId: string) => typeof window !== 'undefined' && Boolean(patientId)
   return {
+    has: (patientId) => (
+      available(patientId) && hasEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
+    ),
     load: async (patientId) => {
-      if (!available() || !patientId) return undefined
-      try {
-        return parseStoredAnswer(window.localStorage.getItem(phenotypeAnswerStorageKey(patientId)))
-      } catch {
-        return undefined
-      }
+      if (!available(patientId)) return undefined
+      const key = phenotypeAnswerStorageKey(patientId)
+      if (!hasEncryptedAnswers(key)) return undefined
+      return parseStoredAnswer(await loadEncryptedAnswers<unknown>(key))
     },
     save: async (patientId, answer) => {
-      if (!available() || !patientId) return
-      try {
-        window.localStorage.setItem(phenotypeAnswerStorageKey(patientId), JSON.stringify(answer))
-      } catch {
-        // An answer that cannot be persisted still holds for this session.
-      }
+      if (!available(patientId)) return
+      persistEncryptedAnswers(phenotypeAnswerStorageKey(patientId), answer)
     },
     clear: async (patientId) => {
-      if (!available() || !patientId) return
-      try {
-        window.localStorage.removeItem(phenotypeAnswerStorageKey(patientId))
-      } catch {
-        // Nothing to do: the in-memory copy is cleared by the caller.
-      }
+      if (!available(patientId)) return
+      discardEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
     },
   }
 }
@@ -213,6 +222,7 @@ export function createLocalStoragePhenotypeAnswerRepository(): PhenotypeAnswerRe
 export function createSessionPhenotypeAnswerRepository(): PhenotypeAnswerRepository {
   const answers = new Map<string, PhenotypeAnswer>()
   return {
+    has: (patientId) => answers.has(patientId),
     load: async (patientId) => answers.get(patientId),
     save: async (patientId, answer) => {
       answers.set(patientId, answer)
@@ -223,7 +233,11 @@ export function createSessionPhenotypeAnswerRepository(): PhenotypeAnswerReposit
   }
 }
 
-let repository: PhenotypeAnswerRepository = createLocalStoragePhenotypeAnswerRepository()
+let repository: PhenotypeAnswerRepository = createEncryptedPhenotypeAnswerRepository()
+
+/** One read in flight at a time, so an answer that decrypts after the chart
+ *  moved on is dropped rather than applied to whoever is on screen now. */
+const hydration = createHydrationGuard()
 
 /**
  * Replaces the repository, for a server-side implementation or for a test.
@@ -234,12 +248,20 @@ let repository: PhenotypeAnswerRepository = createLocalStoragePhenotypeAnswerRep
  */
 export function setPhenotypeAnswerRepository(next: PhenotypeAnswerRepository): void {
   repository = next
+  // A read still in flight belongs to the repository being replaced, and its
+  // answer is no longer this store's answer to 「上次填了什麼」.
+  hydration.invalidate()
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
 }
 
 interface PhenotypeAnswerState {
   byPatientId: Readonly<Record<string, PhenotypeAnswer>>
-  /** Which patients the repository has already been asked about. */
+  /**
+   * Which patients the repository has already answered for — set when the read
+   * resolves, not when it starts. 「沒作答」 and 「還沒讀到」 look identical on
+   * the card and mean opposite things, so the question waits for this rather
+   * than opening unanswered and jumping when the read lands.
+   */
   hydratedPatientIds: Readonly<Record<string, true>>
   /** Reads one patient's stored answer once; a no-op after that. */
   hydrate: (patientId: string) => void
@@ -252,23 +274,40 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
   hydratedPatientIds: {},
 
   hydrate: (patientId) => {
-    if (!patientId || get().hydratedPatientIds[patientId]) return
-    set((state) => ({
-      hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
-    }))
-    void repository.load(patientId).then((answer) => {
-      if (!answer) return
-      set((state) => (
+    if (!patientId) return
+    const state = get()
+    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+
+    // An answer already in memory is this session's own, and a repository that
+    // can say 「沒有」 without a round trip has already answered. Neither waits,
+    // and neither writes anything back.
+    if (state.byPatientId[patientId] || repository.has?.(patientId) === false) {
+      set((current) => ({
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+      return
+    }
+
+    const settle = hydration.begin(patientId)
+    const apply = (answer: PhenotypeAnswer | undefined) => {
+      // A read that resolves after the chart moved on is an answer for a
+      // patient nobody is looking at; it is dropped, and the chart it belongs
+      // to is read again if it is opened.
+      if (!settle()) return
+      set((current) => ({
         // A physician who answered while the read was in flight has said
         // something more recent than storage; their answer stands.
-        state.byPatientId[patientId]
-          ? state
-          : { byPatientId: { ...state.byPatientId, [patientId]: answer } }
-      ))
-    }).catch(() => {
+        byPatientId: answer && !current.byPatientId[patientId]
+          ? { ...current.byPatientId, [patientId]: answer }
+          : current.byPatientId,
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+    }
+    void repository.load(patientId)
+      .then(apply)
       // A store that cannot be read leaves the card asking, which is the same
       // state as a patient who has never been answered for.
-    })
+      .catch(() => apply(undefined))
   },
 
   setAnswer: (patientId, answer, now = new Date()) => {
@@ -288,10 +327,13 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
   clearAnswer: (patientId) => {
     if (!patientId) return
     set((state) => {
-      if (!(patientId in state.byPatientId)) return state
       const next = { ...state.byPatientId }
       delete next[patientId]
-      return { byPatientId: next }
+      return {
+        byPatientId: next,
+        // Cleared is an answer to 「讀到了嗎」: there is nothing to read back.
+        hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+      }
     })
     void repository.clear(patientId).catch(() => {})
   },
@@ -301,5 +343,12 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
 export function usePhenotypeAnswer(patientId: string | undefined): PhenotypeAnswer | undefined {
   return usePhenotypeAnswerStore(
     (state) => (patientId ? state.byPatientId[patientId] : undefined),
+  )
+}
+
+/** Whether this chart's answer has been read back yet. */
+export function usePhenotypeAnswerHydrated(patientId: string | undefined): boolean {
+  return usePhenotypeAnswerStore(
+    (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
   )
 }
