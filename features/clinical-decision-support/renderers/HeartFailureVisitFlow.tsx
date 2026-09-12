@@ -24,8 +24,6 @@ import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import type { CdssRecommendation } from '../types'
 import {
   NOT_ASSESSED,
-  congestionGroupAnswer,
-  congestionGroupPatch,
   type ClinicVitals,
   type ClinicVitalsPatch,
   type CompensationAnswerValue,
@@ -46,7 +44,7 @@ import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
-  VISIT_CONGESTION_GROUPS,
+  VISIT_SIDE_LABELS,
   decisionLabel,
   decisionReasonLabel,
   formatDay,
@@ -57,6 +55,8 @@ import {
   type VisitNextStepTarget,
   type VisitQuestion,
   type VisitQuestionId,
+  type VisitSignItem,
+  type VisitSignSide,
   type VisitStep,
 } from './heart-failure-visit-flow'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
@@ -590,17 +590,150 @@ function SegmentedControl<T extends string>({
   )
 }
 
+/** The one-character side tag in front of a symptom or a sign. */
+const SIDE_TAG_CLASS: Readonly<Record<VisitSignSide, string>> = {
+  pulmonary: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-200',
+  systemic: 'bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-200',
+  both: 'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-200',
+}
+
+function SideTag({ side, isEnglish }: { side: VisitSignSide; isEnglish: boolean }) {
+  const meta = VISIT_SIDE_LABELS[side]
+  return (
+    <span
+      className={cn(
+        'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-semibold leading-none',
+        SIDE_TAG_CLASS[side],
+      )}
+      title={isEnglish ? meta.legendEn : meta.legendZh}
+      data-testid={`cdss-hf-side-tag-${side}`}
+    >
+      {isEnglish ? meta.tagEn : meta.tagZh}
+    </span>
+  )
+}
+
+/** 「肺鬱血 2 · 體循環 2」 beside the folded answer of question ④. */
+function SideTallyChip({
+  tally,
+  isEnglish,
+}: {
+  tally: { pulmonary: number; systemic: number }
+  isEnglish: boolean
+}) {
+  if (tally.pulmonary === 0 && tally.systemic === 0) return null
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md bg-muted px-1.5 py-px text-[11px] tabular-nums text-muted-foreground"
+      data-testid="cdss-hf-side-tally"
+      data-pulmonary={tally.pulmonary}
+      data-systemic={tally.systemic}
+    >
+      <span>{isEnglish ? `Pulmonary ${tally.pulmonary}` : `肺鬱血 ${tally.pulmonary}`}</span>
+      <span aria-hidden="true">·</span>
+      <span>{isEnglish ? `Systemic ${tally.systemic}` : `體循環 ${tally.systemic}`}</span>
+    </span>
+  )
+}
+
+/**
+ * One question's rows: a side tag, the finding, and 有／無／未評估.
+ *
+ * The 常見 rows are open; the rest fold behind 「更多 n 項」, whose folded line
+ * names them so the reader knows what is behind it rather than having to open
+ * it to find out. Each row writes its own term with its own stamp — a visit
+ * where only 腳腫 was asked about says exactly that.
+ */
+function SignItemRows({
+  questionId,
+  items,
+  clinicVitals,
+  isEnglish,
+  showLegend,
+  onAnswer,
+}: {
+  questionId: VisitQuestionId
+  items: readonly VisitSignItem[]
+  clinicVitals?: ClinicVitals
+  isEnglish: boolean
+  showLegend: boolean
+  onAnswer: (term: string, value: SignAnswerValue) => void
+}) {
+  const [moreOpen, setMoreOpen] = useState(false)
+  const common = items.filter((item) => item.common)
+  const more = items.filter((item) => !item.common)
+  const row = (item: VisitSignItem) => (
+    <div key={item.term} className="flex flex-wrap items-center gap-2">
+      <SideTag side={item.side} isEnglish={isEnglish} />
+      <span className="min-w-0 flex-1 text-xs text-foreground">
+        {isEnglish ? item.en : item.zh}
+      </span>
+      <SegmentedControl<SignAnswerValue>
+        label={isEnglish ? item.en : item.zh}
+        options={[
+          { id: 'present', text: isEnglish ? 'Yes' : '有' },
+          { id: 'absent', text: isEnglish ? 'No' : '無' },
+          { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
+        ]}
+        value={clinicVitals?.signAnswers?.[item.term]?.value ?? null}
+        onSelect={(next) => onAnswer(item.term, next)}
+        testId={`cdss-hf-flow-sign-${item.term}`}
+      />
+    </div>
+  )
+  return (
+    <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
+      {showLegend ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+          {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
+            <span key={side} className="inline-flex items-center gap-1">
+              <SideTag side={side} isEnglish={isEnglish} />
+              {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
+            </span>
+          ))}
+        </p>
+      ) : null}
+      <div className="grid gap-x-6 gap-y-1.5 @min-[44rem]:grid-cols-2">
+        {common.map(row)}
+        {moreOpen ? more.map(row) : null}
+      </div>
+      {more.length > 0 ? (
+        <button
+          type="button"
+          className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((open) => !open)}
+          data-testid={`cdss-hf-sign-more-${questionId}`}
+        >
+          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', moreOpen && 'rotate-180')} aria-hidden="true" />
+          {isEnglish ? `${more.length} more` : `更多 ${more.length} 項`}
+          {moreOpen ? null : (
+            <span className="min-w-0 truncate font-normal text-muted-foreground">
+              {more
+                .map((item) => `${isEnglish ? item.shortEn : item.shortZh}（${isEnglish ? VISIT_SIDE_LABELS[item.side].tagEn : VISIT_SIDE_LABELS[item.side].tagZh}）`)
+                .join(' · ')}
+            </span>
+          )}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function QuestionShell({
   question,
   isEnglish,
   now,
   onEdit,
+  answerBadge,
   children,
 }: {
   question: VisitQuestion
   isEnglish: boolean
   now: Date
   onEdit?: () => void
+  /** Shown beside the folded answer — the side tally on question ④. */
+  answerBadge?: ReactNode
   children?: ReactNode
 }) {
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
@@ -645,6 +778,7 @@ function QuestionShell({
               {question.answerText}
             </span>
           ) : null}
+          {answered && answerBadge ? answerBadge : null}
           {answered && stamp ? (
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {isEnglish ? `last changed ${stamp}` : `最後修改 ${stamp}`}
@@ -740,8 +874,8 @@ function QuestionsCard({
       </div>
       <p className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Each question is asked here and nowhere else; 「not assessed」 is the default and is never read as a negative. Answers re-enter the rules, and the actions below recompute.'
-          : '每題只在這裡問一次；預設「未評估」，不會被當成陰性。答案寫回規則後，下方處置會重算。'}
+          ? 'Each question is asked here and nowhere else; 「not assessed」 is the default and is never read as a negative. Symptoms are what the patient says, signs are what you find — they are recorded apart. Answers re-enter the rules, and the actions below recompute.'
+          : '每題只在這裡問一次；預設「未評估」，不會被當成陰性。症狀是病人說的，徵象是你檢查的，分開記。答案寫回規則後，下方處置會重算。'}
       </p>
       {flow.readOnly ? (
         <p
@@ -839,7 +973,7 @@ function QuestionsCard({
             )
           }
 
-          if (question.id === 'congestion') {
+          if (question.items) {
             return (
               <QuestionShell
                 key={question.id}
@@ -847,28 +981,19 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                answerBadge={question.sideTally ? (
+                  <SideTallyChip tally={question.sideTally} isEnglish={isEnglish} />
+                ) : undefined}
               >
                 {shows(question) && onSaveClinicVitals ? (
-                  <div className="flex flex-col gap-1.5">
-                    {VISIT_CONGESTION_GROUPS.map((group) => (
-                      <div key={group.id} className="flex flex-wrap items-center gap-2">
-                        <span className="w-[9rem] shrink-0 text-xs text-foreground">
-                          {isEnglish ? group.en : group.zh}
-                        </span>
-                        <SegmentedControl<SignAnswerValue>
-                          label={isEnglish ? group.en : group.zh}
-                          options={[
-                            { id: 'present', text: isEnglish ? 'Yes' : '有' },
-                            { id: 'absent', text: isEnglish ? 'No' : '無' },
-                            { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
-                          ]}
-                          value={congestionGroupAnswer(clinicVitals, group.id)}
-                          onSelect={(next) => onSaveClinicVitals(congestionGroupPatch(group.id, next))}
-                          testId={`cdss-hf-flow-sign-${group.id}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  <SignItemRows
+                    questionId={question.id}
+                    items={question.items}
+                    clinicVitals={clinicVitals}
+                    isEnglish={isEnglish}
+                    showLegend={question.id === 'symptoms'}
+                    onAnswer={(term, next) => onSaveClinicVitals({ signAnswers: { [term]: next } })}
+                  />
                 ) : null}
               </QuestionShell>
             )

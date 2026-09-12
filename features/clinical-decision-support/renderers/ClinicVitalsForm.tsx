@@ -49,18 +49,21 @@ export function ClinicVitalsForm({
   const [systolic, setSystolic] = useState(entryOf('systolic')?.toString() ?? '')
   const [diastolic, setDiastolic] = useState(entryOf('diastolic')?.toString() ?? '')
   const [heartRate, setHeartRate] = useState(entryOf('heartRate')?.toString() ?? '')
+  const [oxygenSaturation, setOxygenSaturation] = useState(entryOf('oxygenSaturation')?.toString() ?? '')
   const [bodyWeight, setBodyWeight] = useState(entryOf('bodyWeight')?.toString() ?? '')
   const [bodyHeight, setBodyHeight] = useState(entryOf('bodyHeight')?.toString() ?? '')
   const parsed = {
     systolic: parseNumber(systolic),
     diastolic: parseNumber(diastolic),
     heartRate: parseNumber(heartRate),
+    oxygenSaturation: parseNumber(oxygenSaturation),
     bodyWeight: parseNumber(bodyWeight),
     bodyHeight: parseNumber(bodyHeight),
   }
   // A blood pressure is two numbers or none; one half cannot be read.
   const bpHalfEntered = (parsed.systolic === undefined) !== (parsed.diastolic === undefined)
   const hasAnything = parsed.heartRate !== undefined
+    || parsed.oxygenSaturation !== undefined
     || parsed.bodyWeight !== undefined
     || parsed.bodyHeight !== undefined
     || (parsed.systolic !== undefined && parsed.diastolic !== undefined)
@@ -77,6 +80,7 @@ export function ClinicVitalsForm({
     { key: 'systolic', label: isEnglish ? 'Systolic' : '收縮壓', unit: 'mmHg', value: systolic, set: setSystolic, step: '1' },
     { key: 'diastolic', label: isEnglish ? 'Diastolic' : '舒張壓', unit: 'mmHg', value: diastolic, set: setDiastolic, step: '1' },
     { key: 'heartRate', label: isEnglish ? 'Heart rate' : '心率', unit: 'bpm', value: heartRate, set: setHeartRate, step: '1' },
+    { key: 'oxygenSaturation', label: 'SpO₂', unit: '%', value: oxygenSaturation, set: setOxygenSaturation, step: '1' },
     { key: 'bodyWeight', label: isEnglish ? 'Weight' : '體重', unit: 'kg', value: bodyWeight, set: setBodyWeight, step: '0.1' },
     { key: 'bodyHeight', label: isEnglish ? 'Height' : '身高', unit: 'cm', value: bodyHeight, set: setBodyHeight, step: '0.1' },
   ]

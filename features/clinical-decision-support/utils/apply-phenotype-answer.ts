@@ -88,7 +88,10 @@ export function applyPhenotypeAnswer(
     }
   }
 
-  if (answer.hfpEfConfirmed) {
+  // Only 「確認」 writes a fact. 「暫不確認」 is an answered question with no
+  // finding in it: the clinician has seen the criteria and is not concluding
+  // today, which the pack must not read as a refutation.
+  if (answer.hfpEfConfirmed === true) {
     facts.physicianConfirmedHfpEf = {
       zh: `HFpEF 診斷已由醫師確認（${answeredOn} ${CLINIC_ENTRY_NOTE.zh}）`,
       en: `The HFpEF diagnosis was confirmed by the clinician (${answeredOn}, ${CLINIC_ENTRY_NOTE.en})`,

@@ -193,19 +193,30 @@ const SUSPECTED: PhenotypeAnswer = {
   modifiedAt: { hfSuspicion: '2026-09-11T06:05:00.000Z' },
 }
 
-/** Everything questions 2–5 can be answered with, in one statement. */
+/** Everything questions 2–6 can be answered with, in one statement. */
 function answeredVitals(): ClinicVitals {
   return buildClinicVitals({
     nyhaClass: 'II',
     signAnswers: {
-      'pitting-edema': 'absent',
+      // ② every common symptom
+      'exertional-dyspnea': 'present',
       orthopnea: 'absent',
-      'paroxysmal-nocturnal-dyspnea': 'absent',
-      jvp: 'not-assessed',
-      rales: 'not-assessed',
+      'paroxysmal-nocturnal-dyspnea': 'not-assessed',
+      'fatigue-exercise-intolerance': 'present',
+      'reported-ankle-swelling': 'present',
+      'abdominal-bloating': 'absent',
+      // ④ every common sign
+      rales: 'absent',
+      jvp: 'absent',
+      'pitting-edema': 'present',
     },
     compensationStatus: 'compensated',
-    entries: { systolic: { value: 118 }, diastolic: { value: 72 }, heartRate: { value: 76 } },
+    entries: {
+      systolic: { value: 118 },
+      diastolic: { value: 72 },
+      heartRate: { value: 76 },
+      oxygenSaturation: { value: 97 },
+    },
   }, NOW)
 }
 
@@ -321,10 +332,9 @@ describe('the step bar', () => {
     expect(confirm.detail).toContain('是')
     expect(confirm.detail).toContain('HFrEF')
     expect(confirm.detail).toContain('LVEF 32%')
-    // Question 5 can be answered before anyone opens the pathway, so four are
-    // outstanding here, not five.
+    // ② 症狀, ③ NYHA, ④ 徵象, ⑤ 門診量測, ⑥ 代償 are all outstanding here.
     expect(assess.state).toBe('current')
-    expect(assess.detail).toBe('還有 4 題')
+    expect(assess.detail).toBe('還有 5 題')
   })
 
   it('marks the visit not applicable when the clinician does not suspect heart failure', () => {
@@ -339,20 +349,21 @@ describe('the step bar', () => {
 })
 
 describe('the questions', () => {
-  it('locks 2–4 until question 1 is answered, and never locks the measurements', () => {
+  it('locks 2–4 and 6 until question 1 is answered, and never locks the measurements', () => {
     const flow = flowFor()
     const states = Object.fromEntries(flow.questions.map((item) => [item.id, item.state]))
 
     expect(states['hf-suspicion']).toBe('open')
+    expect(states.symptoms).toBe('locked')
     expect(states.nyha).toBe('locked')
-    expect(states.congestion).toBe('locked')
+    expect(states.signs).toBe('locked')
     expect(states.compensation).toBe('locked')
     expect(states['clinic-vitals']).toBe('open')
     expect(flow.questions.find((item) => item.id === 'nyha')?.lockedReason)
       .toBe('回答第 1 題後開放')
   })
 
-  it('folds 2–4 away and drops the count when the answer is 「否」', () => {
+  it('folds the rest away and drops the count when the answer is 「否」', () => {
     const flow = flowFor({
       phenotypeAnswer: { hfSuspicion: 'not-suspected', answeredOn: '2026-09-11' },
     })
@@ -374,6 +385,53 @@ describe('the questions', () => {
 
     expect(nyha?.state).toBe('answered')
     expect(nyha?.answerText).toBe('未評估')
+  })
+
+  it('asks the symptoms and the signs as two questions, in the visit\'s order', () => {
+    const flow = flowFor({ phenotypeAnswer: SUSPECTED })
+
+    expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
+      ['1', 'hf-suspicion'],
+      ['2', 'symptoms'],
+      ['3', 'nyha'],
+      ['4', 'signs'],
+      ['5', 'clinic-vitals'],
+      ['6', 'compensation'],
+    ])
+    const symptoms = flow.questions.find((item) => item.id === 'symptoms')
+    expect(symptoms?.items?.map((item) => item.term)).toContain('exertional-dyspnea')
+    // The tag is for the reader; every answer still travels as its own term.
+    expect(symptoms?.items?.find((item) => item.term === 'reported-ankle-swelling')?.side)
+      .toBe('systemic')
+    expect(symptoms?.items?.filter((item) => !item.common).map((item) => item.term))
+      .toEqual(['nocturnal-cough', 'bendopnea', 'reported-weight-gain'])
+  })
+
+  it('folds each answered list onto one line and tallies the two sides', () => {
+    const flow = flowFor({ phenotypeAnswer: SUSPECTED, clinicVitals: answeredVitals() })
+    const symptoms = flow.questions.find((item) => item.id === 'symptoms')
+    const signs = flow.questions.find((item) => item.id === 'signs')
+
+    expect(symptoms?.state).toBe('answered')
+    expect(symptoms?.answerText).toBe(
+      '勞力性喘：有 · 端坐呼吸：無 · PND：未評估 · 疲倦：有 · 腳腫：有 · 腹脹：無 · 更多 3 項未評估',
+    )
+    expect(signs?.answerText).toBe('rales：無 · JVP：無 · 凹陷性水腫：有 · 更多 4 項未評估')
+    // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
+    // systemic one; the tally is read across both questions.
+    expect(signs?.sideTally).toEqual({ pulmonary: 2, systemic: 2 })
+    expect(symptoms?.sideTally).toBeUndefined()
+  })
+
+  it('leaves a list open while a common row is unanswered, whatever the rest say', () => {
+    const flow = flowFor({
+      phenotypeAnswer: SUSPECTED,
+      clinicVitals: buildClinicVitals({
+        signAnswers: { rales: 'absent', jvp: 'absent', ascites: 'absent' },
+      }, NOW),
+    })
+
+    expect(flow.questions.find((item) => item.id === 'signs')?.state).toBe('open')
   })
 
   it('asks the pack\'s own question in the pack\'s own words', () => {
@@ -503,8 +561,10 @@ describe('the record card', () => {
     expect(lines).toHaveLength(4)
     expect(lines[0]).toContain('LVEF 32%')
     expect(lines[1]).toContain('NYHA：NYHA II')
-    expect(lines[1]).toContain('下肢水腫：無')
+    expect(lines[1]).toContain('症狀：勞力性喘：有')
+    expect(lines[1]).toContain('徵象：rales：無')
     expect(lines[2]).toContain('118/72')
+    expect(lines[2]).toContain('SpO₂ 97%')
     expect(lines[3]).toContain('待決定')
   })
 })

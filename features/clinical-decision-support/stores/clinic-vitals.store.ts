@@ -72,6 +72,7 @@ export const CLINIC_VITALS_ENTRY_KEYS = [
   'systolic',
   'diastolic',
   'heartRate',
+  'oxygenSaturation',
   'bodyWeight',
   'bodyHeight',
 ] as const

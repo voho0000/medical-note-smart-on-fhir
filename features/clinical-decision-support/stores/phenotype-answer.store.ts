@@ -25,6 +25,9 @@ import { create } from 'zustand'
 /** The three choices the pack offers, by the option ids it publishes. */
 export type PhenotypeAnswerChoice = 'reduced' | 'preserved' | 'unknown'
 
+/** 「暫不確認」: the question was put, and the answer is deliberately none. */
+export const HFPEF_NOT_CONFIRMED = 'not-assessed' as const
+
 /** The DP-00 answer: whether this clinician is asking about heart failure. */
 export type HeartFailureSuspicionAnswer = 'suspected' | 'not-suspected'
 
@@ -53,8 +56,13 @@ export interface PhenotypeAnswer {
   measuredOn?: string
   /** The day the answer was given, as YYYY-MM-DD. */
   answeredOn: string
-  /** Set once the physician works through §5.2.2 and confirms HFpEF. */
-  hfpEfConfirmed?: boolean
+  /**
+   * Set once the physician works through §5.2.2: `true` confirms HFpEF,
+   * `'not-assessed'` is 「暫不確認」 — the question was put and deliberately
+   * left open. Both count as answered on screen; only `true` produces a fact,
+   * because 「今天先不確認」 is not a statement that the patient has no HFpEF.
+   */
+  hfpEfConfirmed?: boolean | typeof HFPEF_NOT_CONFIRMED
   /** Per-answer last-modified stamps, kept by the store rather than callers. */
   modifiedAt?: PhenotypeAnswerTimestamps
 }
@@ -149,7 +157,9 @@ function parseStoredAnswer(raw: string | null): PhenotypeAnswer | undefined {
       ...(isChoice(record.choice) ? { choice: record.choice } : {}),
       ...(typeof record.lvef === 'number' && Number.isFinite(record.lvef) ? { lvef: record.lvef } : {}),
       ...(typeof record.measuredOn === 'string' ? { measuredOn: record.measuredOn } : {}),
-      ...(typeof record.hfpEfConfirmed === 'boolean' ? { hfpEfConfirmed: record.hfpEfConfirmed } : {}),
+      ...(typeof record.hfpEfConfirmed === 'boolean' || record.hfpEfConfirmed === HFPEF_NOT_CONFIRMED
+        ? { hfpEfConfirmed: record.hfpEfConfirmed as boolean | typeof HFPEF_NOT_CONFIRMED }
+        : {}),
       modifiedAt: {
         ...stamp('hfSuspicion'),
         ...stamp('phenotype'),

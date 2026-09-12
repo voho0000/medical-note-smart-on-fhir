@@ -1515,7 +1515,7 @@ function RecommendationDetail({
    * rows inside a detail echo the answer instead of offering a second control.
    */
   physicianRowsReadOnly?: boolean
-  onEditPhysicianRow?: (question: 'nyha' | 'congestion') => void
+  onEditPhysicianRow?: (question: 'nyha' | 'symptoms' | 'signs') => void
   /** Names the pack in the copied rationale; absent when the result has no version. */
   copyProvenance?: RationaleCopyProvenance
   label: {
@@ -2390,7 +2390,7 @@ export function ClinicalDecisionSupportView({
               physicianRowsReadOnly
               onEditPhysicianRow={(question) => focusVisitFlowTarget({
                 kind: 'question',
-                questionId: question === 'nyha' ? 'nyha' : 'congestion',
+                questionId: question,
               })}
             />
           )}

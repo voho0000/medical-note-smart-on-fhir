@@ -184,9 +184,9 @@ describe('the visit flow', () => {
     render(<Harness />)
     suspectHeartFailure()
 
-    // One control for 下肢水腫 on the whole screen: no board chip strip, and
+    // One control for 凹陷性水腫 on the whole screen: no board chip strip, and
     // no DP-00 tick-list repeating the same examination.
-    expect(screen.getAllByTestId('cdss-hf-flow-sign-edema')).toHaveLength(1)
+    expect(screen.getAllByTestId('cdss-hf-flow-sign-pitting-edema')).toHaveLength(1)
     expect(screen.queryByTestId('cdss-hf-congestion-signs')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-symptom-edema')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-compensation-control')).toBeNull()
@@ -195,7 +195,7 @@ describe('the visit flow', () => {
   it('echoes the answer on the evidence row instead of offering a second control', () => {
     render(<Harness />)
     suspectHeartFailure()
-    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-edema-absent'))
+    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-pitting-edema-absent'))
     // Open the module that carries the congestion table.
     fireEvent.click(screen.getByTestId('cdss-hf-action-expand-heart-failure-congestion-diuretic'))
 
@@ -213,14 +213,30 @@ describe('the visit flow', () => {
 
     expect(remaining()).toBe('還有 2 題')
     suspectHeartFailure()
-    expect(remaining()).toBe('還有 4 題')
+    expect(remaining()).toBe('還有 5 題')
 
     fireEvent.click(screen.getByTestId('cdss-hf-flow-nyha-II'))
+    expect(remaining()).toBe('還有 4 題')
+
+    // Question ④ is answered once every 常見 sign has been answered; the
+    // 更多 rows stay optional.
+    for (const term of ['rales', 'jvp', 'pitting-edema']) {
+      fireEvent.click(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`))
+    }
     expect(remaining()).toBe('還有 3 題')
-    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-edema-absent'))
-    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-orthopnea-pnd-absent'))
-    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-jvp-rales-not-assessed'))
+
+    for (const term of [
+      'exertional-dyspnea',
+      'orthopnea',
+      'paroxysmal-nocturnal-dyspnea',
+      'fatigue-exercise-intolerance',
+      'reported-ankle-swelling',
+      'abdominal-bloating',
+    ]) {
+      fireEvent.click(screen.getByTestId(`cdss-hf-flow-sign-${term}-not-assessed`))
+    }
     expect(remaining()).toBe('還有 2 題')
+
     fireEvent.click(screen.getByTestId('cdss-hf-flow-compensation-compensated'))
     expect(remaining()).toBe('還有 1 題')
   })
@@ -272,7 +288,7 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-question-answer-nyha')).toHaveTextContent('NYHA III')
     expect(screen.getByTestId('cdss-hf-decision-recorded-heart-failure-mra'))
       .toHaveTextContent('已開立')
-    expect(screen.getByTestId('cdss-hf-questions-remaining')).toHaveTextContent('還有 3 題')
+    expect(screen.getByTestId('cdss-hf-questions-remaining')).toHaveTextContent('還有 4 題')
   })
 
   it('draws the module list once, not twice', () => {

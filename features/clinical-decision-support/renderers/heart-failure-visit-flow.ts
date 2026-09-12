@@ -11,9 +11,10 @@
  *
  * Nothing here is a clinical rule. Every headline, module name, option label
  * and evidence value is the pack's; this file decides order, grouping and what
- * counts as done. The four question labels the pack does not supply (NYHA,
- * congestion, compensation, the clinic measurements) are the host's, and are
- * the questions the previous screen already asked in its own words.
+ * counts as done. The question labels the pack does not supply (the symptoms,
+ * the NYHA grade, the signs, the clinic measurements, the compensation
+ * judgement) are the host's, and are the questions the previous screen already
+ * asked in its own words.
  *
  * Pure and React-free on purpose: the ordering rules — which next step wins,
  * when a step is done, what a locked question says — are the part worth
@@ -29,10 +30,8 @@ import type {
 } from '../types'
 import {
   NOT_ASSESSED,
-  congestionGroupAnswer,
   type ClinicVitals,
   type ClinicVitalsEntryKey,
-  type CongestionSignsAnswer,
   type SignAnswerValue,
 } from '../stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
@@ -127,7 +126,8 @@ export type VisitQuestionId =
   | 'lvef-phenotype'
   | 'hfpef-confirmation'
   | 'nyha'
-  | 'congestion'
+  | 'symptoms'
+  | 'signs'
   | 'compensation'
   | 'clinic-vitals'
 
@@ -146,6 +146,18 @@ export interface VisitQuestion {
   modifiedAt?: string
   /** The one-line note under the question. */
   hint?: string
+  /**
+   * The per-term rows this question asks, where it asks any. Question ② and
+   * question ④ are the same control over two different lists: what the patient
+   * reported, and what the clinician found.
+   */
+  items?: readonly VisitSignItem[]
+  /**
+   * 「肺鬱血 2 · 體循環 2」 on the folded line: how many terms were answered
+   * 「有」 on each side, counted across both questions because congestion is
+   * one finding whoever noticed it. Present on question ④ only.
+   */
+  sideTally?: { pulmonary: number; systemic: number }
   /** Why a locked question is locked, in the words the reader needs. */
   lockedReason?: string
   /**
@@ -256,23 +268,89 @@ export interface HeartFailureVisitFlowInput {
 
 /* ------------------------------------------------------------------ build */
 
-const CONGESTION_GROUPS: readonly { id: CongestionSignsAnswer; zh: string; en: string }[] = [
-  { id: 'edema', zh: '下肢水腫', en: 'Peripheral oedema' },
-  { id: 'orthopnea-pnd', zh: 'Orthopnea／PND', en: 'Orthopnoea / PND' },
-  { id: 'jvp-rales', zh: 'JVP 上升／rales', en: 'Raised JVP / rales' },
+/**
+ * Which side of the heart a finding speaks for.
+ *
+ * A one-character tag, and nothing more: it tells a reader why 腳腫 and 端坐
+ * 呼吸 are not the same question, and it never reaches the data model. Every
+ * answer travels as its own term whatever the tag says.
+ */
+export type VisitSignSide = 'pulmonary' | 'systemic' | 'both'
+
+export const VISIT_SIDE_LABELS: Readonly<Record<VisitSignSide, {
+  tagZh: string
+  tagEn: string
+  legendZh: string
+  legendEn: string
+}>> = {
+  pulmonary: {
+    tagZh: '肺',
+    tagEn: 'P',
+    legendZh: '肺 = 左心衰竭／肺鬱血',
+    legendEn: 'P = left-sided / pulmonary congestion',
+  },
+  systemic: {
+    tagZh: '體',
+    tagEn: 'S',
+    legendZh: '體 = 右心衰竭／體循環鬱血',
+    legendEn: 'S = right-sided / systemic congestion',
+  },
+  both: {
+    tagZh: '兩',
+    tagEn: 'B',
+    legendZh: '兩 = 兩側皆可',
+    legendEn: 'B = either side',
+  },
+}
+
+/**
+ * One row of question ② or question ④.
+ *
+ * `term` is the canonical id the evidence table matches on, so an answer given
+ * here lands on the pack's own row; the labels are the screen's. `common`
+ * rows are open by default and are what 「本題已答」 is counted from — the rest
+ * fold behind 「更多 n 項」, because a list of sixteen findings asked in full at
+ * every visit is a list nobody answers.
+ */
+export interface VisitSignItem {
+  term: string
+  zh: string
+  en: string
+  /** The short form used on the folded one-line answer. */
+  shortZh: string
+  shortEn: string
+  side: VisitSignSide
+  common: boolean
+}
+
+/** Question ②: what the patient describes. */
+export const VISIT_SYMPTOM_ITEMS: readonly VisitSignItem[] = [
+  { term: 'exertional-dyspnea', zh: '勞力性呼吸困難', en: 'Exertional dyspnoea', shortZh: '勞力性喘', shortEn: 'Exertional dyspnoea', side: 'pulmonary', common: true },
+  { term: 'orthopnea', zh: '端坐呼吸（orthopnea）', en: 'Orthopnoea', shortZh: '端坐呼吸', shortEn: 'Orthopnoea', side: 'pulmonary', common: true },
+  { term: 'paroxysmal-nocturnal-dyspnea', zh: '夜間陣發性呼吸困難（PND）', en: 'Paroxysmal nocturnal dyspnoea (PND)', shortZh: 'PND', shortEn: 'PND', side: 'pulmonary', common: true },
+  { term: 'fatigue-exercise-intolerance', zh: '疲倦／運動耐受下降', en: 'Fatigue / reduced exercise tolerance', shortZh: '疲倦', shortEn: 'Fatigue', side: 'pulmonary', common: true },
+  { term: 'reported-ankle-swelling', zh: '腳腫（自述）', en: 'Ankle swelling (reported)', shortZh: '腳腫', shortEn: 'Ankle swelling', side: 'systemic', common: true },
+  { term: 'abdominal-bloating', zh: '腹脹／吃一點就飽', en: 'Abdominal bloating / early satiety', shortZh: '腹脹', shortEn: 'Bloating', side: 'systemic', common: true },
+  { term: 'nocturnal-cough', zh: '夜咳／喘鳴', en: 'Nocturnal cough / wheeze', shortZh: '夜咳', shortEn: 'Nocturnal cough', side: 'pulmonary', common: false },
+  { term: 'bendopnea', zh: '彎腰呼吸困難（bendopnea）', en: 'Bendopnea', shortZh: '彎腰喘', shortEn: 'Bendopnea', side: 'both', common: false },
+  { term: 'reported-weight-gain', zh: '近期體重增加（自述）', en: 'Recent weight gain (reported)', shortZh: '體重增加', shortEn: 'Weight gain', side: 'both', common: false },
 ]
 
-/** The congestion question's three rows, named for the screen that asks them. */
-export const VISIT_CONGESTION_GROUPS = CONGESTION_GROUPS
-
-/** Every term the three groups write, for reading a stamp back off them. */
-const CONGESTION_TERMS: readonly string[] = [
-  'pitting-edema',
-  'orthopnea',
-  'paroxysmal-nocturnal-dyspnea',
-  'jvp',
-  'rales',
+/** Question ④: what the clinician finds. */
+export const VISIT_EXAM_ITEMS: readonly VisitSignItem[] = [
+  { term: 'rales', zh: '肺部濕囉音（rales）', en: 'Pulmonary rales', shortZh: 'rales', shortEn: 'Rales', side: 'pulmonary', common: true },
+  { term: 'jvp', zh: '頸靜脈怒張（JVP）', en: 'Raised JVP', shortZh: 'JVP', shortEn: 'JVP', side: 'systemic', common: true },
+  { term: 'pitting-edema', zh: '凹陷性水腫', en: 'Pitting oedema', shortZh: '凹陷性水腫', shortEn: 'Pitting oedema', side: 'systemic', common: true },
+  { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: '第三心音', shortEn: 'S3', side: 'pulmonary', common: false },
+  { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: '肝頸反流', shortEn: 'HJR', side: 'systemic', common: false },
+  { term: 'ascites', zh: '腹水', en: 'Ascites', shortZh: '腹水', shortEn: 'Ascites', side: 'systemic', common: false },
+  { term: 'hepatomegaly', zh: '肝腫大', en: 'Hepatomegaly', shortZh: '肝腫大', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
 ]
+
+/** Which of the two questions a term is asked in, for a link back to it. */
+export function visitQuestionForSignTerm(term: string): 'symptoms' | 'signs' {
+  return VISIT_SYMPTOM_ITEMS.some((item) => item.term === term) ? 'symptoms' : 'signs'
+}
 
 function requestOf(
   recommendation: CdssRecommendation | undefined,
@@ -289,6 +367,54 @@ function signText(value: SignAnswerValue | null, isEnglish: boolean): string {
   return isEnglish ? 'not answered' : '尚未回答'
 }
 
+/** What one question's rows were answered, on one folded line. */
+function signItemsText(
+  items: readonly VisitSignItem[],
+  vitals: ClinicVitals | undefined,
+  isEnglish: boolean,
+): string | undefined {
+  const answered = items.flatMap((item) => {
+    const value = vitals?.signAnswers?.[item.term]?.value
+    if (!value) return []
+    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${signText(value, isEnglish)}`]
+  })
+  const unanswered = items.filter((item) => !vitals?.signAnswers?.[item.term]?.value).length
+  if (answered.length === 0) return undefined
+  if (unanswered > 0) {
+    answered.push(isEnglish ? `${unanswered} more not assessed` : `更多 ${unanswered} 項未評估`)
+  }
+  return answered.join(' · ')
+}
+
+/** A question is answered once every 常見 row in it has an answer. */
+function signItemsAnswered(
+  items: readonly VisitSignItem[],
+  vitals: ClinicVitals | undefined,
+): boolean {
+  return items
+    .filter((item) => item.common)
+    .every((item) => Boolean(vitals?.signAnswers?.[item.term]?.value))
+}
+
+/**
+ * 「肺鬱血 n · 體循環 n」: how many terms were seen on each side.
+ *
+ * Counted across the symptoms and the examination together, because a patient
+ * whose only pulmonary finding is 勞力性呼吸困難 has pulmonary congestion the
+ * clinician reported rather than found. 「兩」 is counted on neither side: a
+ * finding that could be either cannot settle which.
+ */
+function sideTallyOf(vitals: ClinicVitals | undefined): { pulmonary: number; systemic: number } {
+  let pulmonary = 0
+  let systemic = 0
+  for (const item of [...VISIT_SYMPTOM_ITEMS, ...VISIT_EXAM_ITEMS]) {
+    if (vitals?.signAnswers?.[item.term]?.value !== 'present') continue
+    if (item.side === 'pulmonary') pulmonary += 1
+    if (item.side === 'systemic') systemic += 1
+  }
+  return { pulmonary, systemic }
+}
+
 function entryText(
   vitals: ClinicVitals | undefined,
   isEnglish: boolean,
@@ -300,6 +426,8 @@ function entryText(
   if (systolic !== undefined && diastolic !== undefined) parts.push(`${systolic}/${diastolic}`)
   const heartRate = value('heartRate')
   if (heartRate !== undefined) parts.push(`${heartRate} bpm`)
+  const oxygenSaturation = value('oxygenSaturation')
+  if (oxygenSaturation !== undefined) parts.push(`SpO₂ ${oxygenSaturation}%`)
   const bodyWeight = value('bodyWeight')
   if (bodyWeight !== undefined) parts.push(`${bodyWeight} kg`)
   const bodyHeight = value('bodyHeight')
@@ -414,25 +542,7 @@ export function buildHeartFailureVisitFlow(
       recommendationId: phenotypeCard.id,
     })
   }
-  if (hfpEfRequest && diagnosisCard) {
-    questions.push({
-      id: 'hfpef-confirmation',
-      number: '1c',
-      label: hfpEfRequest.label,
-      state: phenotypeAnswer?.hfpEfConfirmed ? 'answered' : 'open',
-      ...(phenotypeAnswer?.hfpEfConfirmed
-        ? { answerText: isEnglish ? 'Confirmed by you' : '已由你確認' }
-        : {}),
-      ...(phenotypeAnswer?.modifiedAt?.hfpEfConfirmed
-        ? { modifiedAt: phenotypeAnswer.modifiedAt.hfpEfConfirmed }
-        : {}),
-      counted: false,
-      request: hfpEfRequest,
-      recommendationId: diagnosisCard.id,
-    })
-  }
-
-  // 2–4 are questions about a heart-failure patient. Until someone says this
+  // 2–6 are questions about a heart-failure patient. Until someone says this
   // is one they are a form put to the wrong person, and once someone says it
   // is not, they are a form nobody has to fill in.
   const lockedReason = notSuspected
@@ -444,10 +554,35 @@ export function buildHeartFailureVisitFlow(
     suspected ? state : 'locked'
   )
 
+  // ② 症狀 — what the patient says, before anything the clinician looks for.
+  const symptomsStamp = latestStamp(...VISIT_SYMPTOM_ITEMS.map(
+    (item) => clinicVitals?.signAnswers?.[item.term]?.modifiedAt,
+  ))
+  const symptomsText = signItemsText(VISIT_SYMPTOM_ITEMS, clinicVitals, isEnglish)
+  const symptomsAnswered = signItemsAnswered(VISIT_SYMPTOM_ITEMS, clinicVitals)
+  questions.push({
+    id: 'symptoms',
+    number: '2',
+    label: isEnglish ? 'Symptoms the patient describes' : '病人描述的症狀',
+    state: gated(symptomsAnswered ? 'answered' : 'open'),
+    ...(symptomsAnswered && symptomsText
+      ? {
+        answerText: symptomsText,
+        ...(symptomsStamp ? { modifiedAt: symptomsStamp } : {}),
+      }
+      : {}),
+    hint: isEnglish
+      ? 'What the patient reports. 「No」 means asked and denied; 「not assessed」 records nothing. Written into the congestion table and HFpEF criterion (i).'
+      : '病人描述。「無」＝問了說沒有；「未評估」不記錄。寫進鬱血證據表與 HFpEF 條件 (i)。',
+    ...(suspected ? {} : { lockedReason }),
+    counted: true,
+    items: VISIT_SYMPTOM_ITEMS,
+  })
+
   const nyha = clinicVitals?.nyhaClass
   questions.push({
     id: 'nyha',
-    number: '2',
+    number: '3',
     label: isEnglish ? "Today's NYHA class?" : '今天的 NYHA 分級？',
     state: gated(nyha ? 'answered' : 'open'),
     ...(nyha
@@ -459,46 +594,44 @@ export function buildHeartFailureVisitFlow(
       }
       : {}),
     hint: isEnglish
-      ? 'Graded from activity limitation and symptoms; never inferred from LVEF or a diagnosis code.'
-      : '依活動限制與症狀選擇；不由 LVEF 或診斷碼推定。',
+      ? 'Graded from the symptoms in question 2 and the activity limitation; never inferred from LVEF or a diagnosis code.'
+      : '依第 2 題的症狀與活動限制選擇；不由 LVEF 或診斷碼推定。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
   })
 
-  const congestionAnswers = CONGESTION_GROUPS.map((group) => ({
-    group,
-    value: congestionGroupAnswer(clinicVitals, group.id),
-  }))
-  const congestionAnswered = congestionAnswers.every((entry) => entry.value !== null)
-  const congestionStamp = latestStamp(...CONGESTION_TERMS.map(
-    (term) => clinicVitals?.signAnswers?.[term]?.modifiedAt,
+  // ④ 徵象 — what the clinician examined for. Kept apart from ② because the
+  // source differs and so does what 「無」 means: 「問了說沒有」 is not 「看了
+  // 沒有」, and a rule that cannot tell them apart cannot weigh either.
+  const signsStamp = latestStamp(...VISIT_EXAM_ITEMS.map(
+    (item) => clinicVitals?.signAnswers?.[item.term]?.modifiedAt,
   ))
+  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish)
+  const signsAnswered = signItemsAnswered(VISIT_EXAM_ITEMS, clinicVitals)
   questions.push({
-    id: 'congestion',
-    number: '3',
-    label: isEnglish
-      ? 'Which congestion symptoms or signs are present today?'
-      : '今天有哪些鬱血症狀／徵象？',
-    state: gated(congestionAnswered ? 'answered' : 'open'),
-    ...(congestionAnswered
+    id: 'signs',
+    number: '4',
+    label: isEnglish ? 'Signs you found on examination' : '你檢查到的徵象',
+    state: gated(signsAnswered ? 'answered' : 'open'),
+    ...(signsAnswered && signsText
       ? {
-        answerText: congestionAnswers
-          .map((entry) => `${isEnglish ? entry.group.en : entry.group.zh}${isEnglish ? ': ' : '：'}${signText(entry.value, isEnglish)}`)
-          .join(' · '),
-        ...(congestionStamp ? { modifiedAt: congestionStamp } : {}),
+        answerText: signsText,
+        ...(signsStamp ? { modifiedAt: signsStamp } : {}),
       }
       : {}),
     hint: isEnglish
-      ? 'Asked here and nowhere else; written into the congestion table and ESC criterion (i). 「No」 is recorded as a negative examination, 「not assessed」 is not.'
-      : '只在這裡問一次；寫進鬱血證據表與 HFpEF 條件 (i)。「無」會記錄為陰性檢查，「未評估」不會。',
+      ? 'What you found. 「No」 means examined and absent. Written into the congestion table and HFpEF criterion (i); blood pressure, heart rate, SpO₂ and weight are question 5.'
+      : '你檢查到的。「無」＝檢查了沒有。寫進鬱血證據表與 HFpEF 條件 (i)；血壓、心率、SpO₂、體重在第 5 題。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
+    items: VISIT_EXAM_ITEMS,
+    sideTally: sideTallyOf(clinicVitals),
   })
 
   const compensation = clinicVitals?.compensationStatus
-  questions.push({
+  const compensationQuestion: VisitQuestion = {
     id: 'compensation',
-    number: '4',
+    number: '6',
     label: isEnglish
       ? 'Compensated or decompensated today?'
       : '今天是代償還是失代償？',
@@ -518,7 +651,7 @@ export function buildHeartFailureVisitFlow(
       : '與紀錄中的住院史分開存放；目前規則尚未讀取此答案。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
-  })
+  }
 
   const vitalsText = entryText(clinicVitals, isEnglish)
   const vitalsStamp = latestStamp(
@@ -528,8 +661,8 @@ export function buildHeartFailureVisitFlow(
     id: 'clinic-vitals',
     number: '5',
     label: isEnglish
-      ? 'Clinic measurements: BP, heart rate, weight'
-      : '門診量測：血壓、心率、體重',
+      ? 'Clinic measurements: BP, heart rate, SpO₂, weight, height'
+      : '門診量測：血壓、心率、SpO₂、體重、身高',
     // Never locked: a nurse can take the measurements before anyone decides
     // whether this is a heart-failure visit at all.
     state: vitalsText ? 'answered' : 'open',
@@ -543,6 +676,38 @@ export function buildHeartFailureVisitFlow(
     // 「還有 n 題」 once the clinician has said they are not asking about it.
     counted: !notSuspected,
   })
+
+  questions.push(compensationQuestion)
+
+  // ⑦ The HFpEF confirmation, last because it reads questions ② and ④ to judge
+  // criterion (i): a card that asked for the conclusion before the findings
+  // were in sent the clinician back up the page to answer them.
+  if (hfpEfRequest && diagnosisCard) {
+    const confirmation = phenotypeAnswer?.hfpEfConfirmed
+    questions.push({
+      id: 'hfpef-confirmation',
+      number: '7',
+      label: hfpEfRequest.label,
+      state: gated(confirmation === undefined ? 'open' : 'answered'),
+      ...(confirmation === undefined
+        ? {}
+        : {
+          answerText: confirmation === true
+            ? (isEnglish ? 'HFpEF confirmed' : 'HFpEF 已確認')
+            : (isEnglish ? 'Not confirmed this visit' : '暫不確認'),
+          ...(phenotypeAnswer?.modifiedAt?.hfpEfConfirmed
+            ? { modifiedAt: phenotypeAnswer.modifiedAt.hfpEfConfirmed }
+            : {}),
+        }),
+      hint: isEnglish
+        ? "The pack judges the three criteria; the scores and echo values come from the HFpEF calculator, which is their only source — the pack does not recompute them."
+        : 'pack 判三個條件；分數與心超數值來自 HFpEF 計算機（唯一來源，pack 不重算）。',
+      ...(suspected ? {} : { lockedReason }),
+      counted: true,
+      request: hfpEfRequest,
+      recommendationId: diagnosisCard.id,
+    })
+  }
 
   const countedQuestions = questions.filter((question) => question.counted)
   const openQuestionCount = countedQuestions.filter((question) => question.state === 'open').length
@@ -662,12 +827,14 @@ export function buildHeartFailureVisitFlow(
 
   /* -------------------------------------------------------------- steps */
 
-  // ① is done once the clinician has said they suspect heart failure and every
-  // phenotype question the pack raised has an answer. `na` is the other
-  // settled state: a patient this clinician is not asking about.
+  // ① is done once the clinician has said they suspect heart failure and the
+  // LVEF gate the pack raised has an answer. The HFpEF confirmation is not part
+  // of it: it reads this visit's symptoms and signs, so it belongs to ② and a
+  // step bar that waited for it left ① 「進行中」 for the whole consultation.
+  // `na` is the other settled state: a patient this clinician is not asking
+  // about.
   const phenotypeSettled = suspected
     && (!lvefRequest || Boolean(phenotypeAnswer?.choice))
-    && (!hfpEfRequest || phenotypeAnswer?.hfpEfConfirmed === true)
   const confirmState: VisitStepState = notSuspected
     ? 'na'
     : phenotypeSettled
@@ -850,12 +1017,22 @@ export function buildHeartFailureVisitFlow(
       nyha.modifiedAt,
     )
   }
-  for (const entry of congestionAnswers) {
-    if (entry.value === null) continue
+  for (const item of [...VISIT_SYMPTOM_ITEMS, ...VISIT_EXAM_ITEMS]) {
+    const answer = clinicVitals?.signAnswers?.[item.term]
+    if (!answer) continue
     pushCarried(
-      isEnglish ? entry.group.en : entry.group.zh,
-      signText(entry.value, isEnglish),
-      congestionStamp,
+      isEnglish ? item.en : item.zh,
+      signText(answer.value, isEnglish),
+      answer.modifiedAt,
+    )
+  }
+  const hfpEfAnswerText = questions
+    .find((question) => question.id === 'hfpef-confirmation')?.answerText
+  if (hfpEfAnswerText) {
+    pushCarried(
+      'HFpEF',
+      hfpEfAnswerText,
+      phenotypeAnswer?.modifiedAt?.hfpEfConfirmed,
     )
   }
   if (compensation) {
@@ -873,6 +1050,7 @@ export function buildHeartFailureVisitFlow(
     systolic: { zh: '收縮壓', en: 'Systolic', unit: 'mmHg' },
     diastolic: { zh: '舒張壓', en: 'Diastolic', unit: 'mmHg' },
     heartRate: { zh: '心率', en: 'Heart rate', unit: 'bpm' },
+    oxygenSaturation: { zh: 'SpO₂', en: 'SpO₂', unit: '%' },
     bodyWeight: { zh: '體重', en: 'Weight', unit: 'kg' },
     bodyHeight: { zh: '身高', en: 'Height', unit: 'cm' },
   }
@@ -906,9 +1084,9 @@ export function buildHeartFailureVisitFlow(
     nyhaText: nyha
       ? (nyha.value === NOT_ASSESSED ? (isEnglish ? 'not assessed' : '未評估') : `NYHA ${nyha.value}`)
       : (isEnglish ? 'not answered' : '尚未回答'),
-    congestionText: congestionAnswers
-      .map((entry) => `${isEnglish ? entry.group.en : entry.group.zh}${isEnglish ? ': ' : '：'}${signText(entry.value, isEnglish)}`)
-      .join(isEnglish ? ', ' : '、'),
+    symptomsText: symptomsText ?? (isEnglish ? 'not answered' : '尚未回答'),
+    signsText: signsText ?? (isEnglish ? 'not answered' : '尚未回答'),
+    ...(hfpEfAnswerText ? { hfpEfText: hfpEfAnswerText } : {}),
     compensationText: compensation
       ? (compensation.value === NOT_ASSESSED
         ? (isEnglish ? 'not assessed' : '未評估')
@@ -1008,7 +1186,9 @@ function buildVisitSummaryText(input: {
   suspicionAnswerText?: string
   suspicionModifiedAt?: string
   nyhaText: string
-  congestionText: string
+  symptomsText: string
+  signsText: string
+  hfpEfText?: string
   compensationText: string
   vitalsText?: string
   decidableRows: readonly VisitActionRow[]
@@ -1017,8 +1197,8 @@ function buildVisitSummaryText(input: {
 }): string {
   const {
     board, isEnglish, now, phenotypeTitle, suspicionAnswerText, suspicionModifiedAt,
-    nyhaText, congestionText, compensationText, vitalsText, decidableRows, decidedCount,
-    followUpNote,
+    nyhaText, symptomsText, signsText, hfpEfText, compensationText, vitalsText,
+    decidableRows, decidedCount, followUpNote,
   } = input
   const suspicionStamp = formatStamp(suspicionModifiedAt, now, isEnglish)
   const lines: string[] = []
@@ -1031,11 +1211,13 @@ function buildVisitSummaryText(input: {
     board.lvef?.value
       ? `LVEF ${board.lvef.value}${board.lvef.date ? `（${formatDay(board.lvef.date)}）` : ''}`
       : undefined,
+    hfpEfText,
   ].filter(Boolean).join(' · '))
 
   lines.push([
     `NYHA${isEnglish ? ': ' : '：'}${nyhaText}`,
-    `${isEnglish ? 'Congestion' : '鬱血徵象'}${isEnglish ? ': ' : '：'}${congestionText}`,
+    `${isEnglish ? 'Symptoms' : '症狀'}${isEnglish ? ': ' : '：'}${symptomsText}`,
+    `${isEnglish ? 'Signs' : '徵象'}${isEnglish ? ': ' : '：'}${signsText}`,
     `${isEnglish ? 'Compensation' : '代償狀態'}${isEnglish ? ': ' : '：'}${compensationText}`,
   ].join(' · '))
 

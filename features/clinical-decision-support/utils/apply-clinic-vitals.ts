@@ -64,6 +64,15 @@ export const EVIDENCE_ROW_SIGN_TERMS: Readonly<Record<string, string>> = {
   // so an answer here does reach the reading.
   'congestion:bendopnea': 'bendopnea',
   'congestion:hepatojugular-reflux': 'hepatojugular-reflux',
+  // The six rows the pack adds for the symptoms a patient reports. They reach
+  // the published table the same way — completed on the way out — and their
+  // row ids follow the table's own `congestion:<term>` convention.
+  'congestion:exertional-dyspnea': 'exertional-dyspnea',
+  'congestion:fatigue-exercise-intolerance': 'fatigue-exercise-intolerance',
+  'congestion:reported-ankle-swelling': 'reported-ankle-swelling',
+  'congestion:abdominal-bloating': 'abdominal-bloating',
+  'congestion:nocturnal-cough': 'nocturnal-cough',
+  'congestion:reported-weight-gain': 'reported-weight-gain',
   // The LV filling-pressure table asks two of the same signs under its own ids.
   'filling-pressure:orthopnea': 'orthopnea',
   'filling-pressure:jvp': 'jvp',
@@ -155,6 +164,20 @@ export function applyClinicVitals(
       date: heartRate.measuredOn,
     }
     factDates.heartRate = heartRate.measuredOn
+  }
+
+  // Room air is not stated here: the pack's own `congestion:spo2` row reads the
+  // number, and whether the patient was on oxygen is a second question nobody
+  // has been asked. A saturation with no such context is still the saturation.
+  const oxygenSaturation = entry('oxygenSaturation')
+  if (oxygenSaturation) {
+    facts.oxygenSaturation = {
+      zh: `${oxygenSaturation.value}%${noteZh(oxygenSaturation.measuredOn)}`,
+      en: `${oxygenSaturation.value}%${noteEn(oxygenSaturation.measuredOn)}`,
+      numericValue: oxygenSaturation.value,
+      unit: '%',
+      date: oxygenSaturation.measuredOn,
+    }
   }
 
   const bodyWeight = entry('bodyWeight')

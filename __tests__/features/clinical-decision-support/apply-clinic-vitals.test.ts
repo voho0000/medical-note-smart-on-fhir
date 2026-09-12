@@ -110,6 +110,38 @@ describe('applyClinicVitals', () => {
       .facts.clinicCongestionExam).toBeUndefined()
   })
 
+  it('carries a symptom the patient only described into the same examination fact', () => {
+    // ESC criterion (i) can be met by 勞力性呼吸困難 alone. While the host wrote
+    // only the three congestion groups, a breathless patient with no signs
+    // produced no term at all and the criterion could never be read.
+    const next = applyClinicVitals(profile, buildClinicVitals({
+      signAnswers: {
+        'exertional-dyspnea': 'present',
+        'fatigue-exercise-intolerance': 'absent',
+      },
+    }, VISIT))
+
+    expect(next.facts.clinicCongestionExam?.textEvidence).toEqual({
+      direction: 'supports',
+      matchedTerms: ['exertional-dyspnea'],
+      negatedTerms: ['fatigue-exercise-intolerance'],
+    })
+  })
+
+  it('hands the saturation to the pack under the key its own row reads', () => {
+    const next = applyClinicVitals(profile, buildClinicVitals({
+      entries: { oxygenSaturation: { value: 95 } },
+    }, VISIT))
+
+    expect(next.facts.oxygenSaturation).toEqual({
+      zh: '95%（2026-09-05 門診輸入）',
+      en: '95% (2026-09-05, entered in clinic)',
+      numericValue: 95,
+      unit: '%',
+      date: '2026-09-05',
+    })
+  })
+
   it('treats an explicit 「未評估」 as unknown, exactly like never having asked', () => {
     // 「未評估」 is an answer to the screen and a silence to the pack: it says
     // the question was put, and it must never become a negative finding.

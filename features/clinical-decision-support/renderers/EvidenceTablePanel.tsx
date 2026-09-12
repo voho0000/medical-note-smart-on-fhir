@@ -5,6 +5,7 @@ import { isEvidenceItemEnabled } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { EVIDENCE_ROW_SIGN_TERMS } from '../utils/apply-clinic-vitals'
+import { visitQuestionForSignTerm } from './heart-failure-visit-flow'
 import {
   NOT_ASSESSED,
   type ClinicVitals,
@@ -563,7 +564,7 @@ export function EvidenceTablePanel({
    * it `false` and keeps the controls it has always had.
    */
   physicianRowsReadOnly?: boolean
-  onEditPhysicianRow?: (question: 'nyha' | 'congestion') => void
+  onEditPhysicianRow?: (question: 'nyha' | 'symptoms' | 'signs') => void
 }) {
   const isEnglish = locale === 'en'
   const overrides = useEvidenceOverrides(patientId)
@@ -644,7 +645,7 @@ export function EvidenceTablePanel({
                         readOnlyAnswer: {
                           text: signAnswerText(signValue),
                           ...(onEditPhysicianRow
-                            ? { onEdit: () => onEditPhysicianRow('congestion') }
+                            ? { onEdit: () => onEditPhysicianRow(visitQuestionForSignTerm(term)) }
                             : {}),
                         },
                       }
