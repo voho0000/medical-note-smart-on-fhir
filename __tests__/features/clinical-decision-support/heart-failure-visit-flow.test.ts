@@ -663,7 +663,11 @@ describe('English chart summary independent of the Chinese interface', () => {
     expect(flow.englishSummaryText).toContain('2.5 → 5 mg')
     expect(flow.englishSummaryText).toContain('Patient declined')
     expect(flow.englishSummaryText).toContain('from current medication record')
-    expect(flow.englishSummaryText).toContain('not assessed')
+    expect(flow.englishSummaryText).toContain('Not assessed: PND')
+    expect(flow.englishSummaryText).toContain('Symptoms\n  Exertional dyspnoea (+)\n  Orthopnoea (-)')
+    expect(flow.englishSummaryText).toContain('\n\nSigns\n  Rales (-)')
+    expect(flow.englishSummaryText).toContain('\n\nManagement\n- ')
+    expect(flow.englishSummaryText).not.toContain('PND (-)')
   })
 
   it('does not turn unanswered findings into normal findings or a negative diagnosis', () => {

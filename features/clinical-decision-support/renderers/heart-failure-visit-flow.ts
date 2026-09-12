@@ -371,6 +371,18 @@ function signText(value: SignAnswerValue | null, isEnglish: boolean): string {
   return isEnglish ? 'not answered' : '尚未回答'
 }
 
+/** Chart notation preserves the distinction between absent and unassessed. */
+function chartSignsText(items: readonly VisitSignItem[], vitals: ClinicVitals | undefined): string {
+  const assessed = items.flatMap(item => {
+    const value = vitals?.signAnswers?.[item.term]?.value
+    return value === 'present' || value === 'absent'
+      ? [`  ${item.shortEn} (${value === 'present' ? '+' : '-'})`] : []
+  })
+  const unassessed = items.filter(item => !['present', 'absent'].includes(vitals?.signAnswers?.[item.term]?.value ?? ''))
+  if (unassessed.length) assessed.push(`  Not assessed: ${unassessed.map(item => item.shortEn).join(', ')}`)
+  return assessed.join('\n')
+}
+
 /** What one question's rows were answered, on one folded line. */
 function signItemsText(
   items: readonly VisitSignItem[],
@@ -1131,6 +1143,7 @@ export function buildHeartFailureVisitFlow(
 
   // Build chart text from structured answers, independently of the UI/pack language.
   const englishSummaryText = buildVisitSummaryText({
+    chartLayout: true,
     board,
     isEnglish: true,
     now,
@@ -1139,8 +1152,8 @@ export function buildHeartFailureVisitFlow(
     suspicionAnswerText: suspicion ? (suspected ? 'Yes' : 'No, not suspected at this visit') : 'Not assessed',
     suspicionModifiedAt: phenotypeAnswer?.modifiedAt?.hfSuspicion,
     nyhaText: nyha && nyha.value !== NOT_ASSESSED ? String(nyha.value) : 'not assessed',
-    symptomsText: signItemsText(VISIT_SYMPTOM_ITEMS, clinicVitals, true) ?? 'not assessed',
-    signsText: signItemsText(VISIT_EXAM_ITEMS, clinicVitals, true) ?? 'not assessed',
+    symptomsText: chartSignsText(VISIT_SYMPTOM_ITEMS, clinicVitals),
+    signsText: chartSignsText(VISIT_EXAM_ITEMS, clinicVitals),
     hfpEfText: phenotypeAnswer?.hfpEfConfirmed === true ? 'HFpEF confirmed'
       : phenotypeAnswer?.hfpEfConfirmed === HFPEF_NOT_CONFIRMED ? 'HFpEF not confirmed this visit' : undefined,
     compensationText: compensation && compensation.value !== NOT_ASSESSED ? compensation.value : 'not assessed',
@@ -1267,6 +1280,7 @@ export function decisionReasonLabel(id: string, isEnglish: boolean): string {
  * every clinical phrase in it is one the screen already showed.
  */
 function buildVisitSummaryText(input: {
+  chartLayout?: boolean
   board: HeartFailureBoardModel
   isEnglish: boolean
   now: Date
@@ -1315,7 +1329,7 @@ function buildVisitSummaryText(input: {
 
   const decided = decidableRows
     .flatMap((row) => (row.decision
-      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}${row.decision.reasons.length ? ` (${row.decision.reasons.map(reason => decisionReasonLabel(reason, isEnglish)).join('; ')})` : ''}${row.decision.note ? ` (${row.decision.note})` : ''}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
+      ? [`${row.moduleName}${input.chartLayout ? ': ' : ' '}${decisionLabel(row.decision.decision, isEnglish)}${row.decision.reasons.length ? ` (${row.decision.reasons.map(reason => decisionReasonLabel(reason, isEnglish)).join('; ')})` : ''}${row.decision.note ? ` (${row.decision.note})` : ''}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
       : []))
   const undecided = decidableRows.length - decidedCount
   lines.push([
@@ -1328,5 +1342,24 @@ function buildVisitSummaryText(input: {
     followUpNote,
   ].filter(Boolean).join(isEnglish ? ' · ' : ' · '))
 
+  if (input.chartLayout) {
+    return [
+      [
+        'Assessment',
+        suspicionAnswerText ? `Heart-failure suspicion: ${suspicionAnswerText}${suspicionStamp ? ` (${suspicionStamp})` : ''}` : undefined,
+        phenotypeTitle,
+        board.lvef?.value ? `LVEF ${board.lvef.value}${board.lvef.date ? ` (${formatDay(board.lvef.date)})` : ''}` : undefined,
+        hfpEfText,
+        `NYHA: ${nyhaText}`,
+        `Compensation: ${compensationText}`,
+      ].filter(Boolean).join('\n'),
+      `Symptoms\n${symptomsText}`,
+      `Signs\n${signsText}`,
+      `Clinic measurements\n${vitalsText ? vitalsText.split(' · ').map(value => `  ${value}`).join('\n') : '  None entered'}`,
+      ['Management', ...(decided.length ? decided.map(value => `- ${value}`) : ['- No decisions recorded']),
+        ...(undecided > 0 ? [`- Pending decisions: ${undecided}`] : []),
+      ].join('\n'),
+    ].join('\n\n')
+  }
   return lines.join('\n')
 }
