@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { HeartFailureVisitFlow } from '@/features/clinical-decision-support/renderers/HeartFailureVisitFlow'
+import {
+  doseAdjustmentDefaults,
+  HeartFailureVisitFlow,
+} from '@/features/clinical-decision-support/renderers/HeartFailureVisitFlow'
 import { buildHeartFailureVisitFlow } from '@/features/clinical-decision-support/renderers/heart-failure-visit-flow'
 import { buildHeartFailureBoard } from '@/features/clinical-decision-support/renderers/heart-failure-board'
 import type { CdssRecommendation, CdssResult } from '@/features/clinical-decision-support/types'
@@ -27,9 +30,9 @@ function model(decisions: PhysicianDecisionMap = {}, packResult = result) {
     phenotypeAnswer: { hfSuspicion: 'suspected', answeredOn: '2026-09-12' },
   }) }
 }
-function Harness({ onRecord = jest.fn() }) {
+function Harness({ onRecord = jest.fn(), packResult = result }: { onRecord?: jest.Mock; packResult?: CdssResult }) {
   const [decisions, setDecisions] = useState<PhysicianDecisionMap>({})
-  const { board, flow } = model(decisions)
+  const { board, flow } = model(decisions, packResult)
   return <HeartFailureVisitFlow board={board} flow={flow} now={now} isEnglish={false}
     expandedId={null} onToggle={() => {}} renderDetail={() => null} packVersion="2.0.0"
     onRecordDecision={(id, input) => {
@@ -41,6 +44,9 @@ function Harness({ onRecord = jest.fn() }) {
 test('current maintenance therapy defaults to prescribed with provenance, without writing a physician decision', () => {
   const onRecord = jest.fn()
   render(<Harness onRecord={onRecord} />)
+  expect(screen.getByTestId('cdss-hf-action-category-heart-failure-sglt2')).toHaveTextContent('SGLT2i')
+  expect(screen.getByTestId('cdss-hf-action-headline-heart-failure-sglt2'))
+    .toHaveTextContent('依最高耐受劑量與追蹤資料持續治療。')
   const selected = screen.getByTestId('cdss-hf-decision-recorded-heart-failure-sglt2')
   expect(within(selected).getByText('已開立')).toBeVisible()
   expect(within(selected).getByText('依目前用藥紀錄帶入')).toBeVisible()
@@ -84,23 +90,52 @@ test('no default for a medication gap or missing current therapy; explicit choic
 })
 
 
-test('dose adjustment records separate numeric doses and a selected unit, and reopens them', () => {
+test('dose adjustment prefills the current product strength and records per-dose units', () => {
   const onRecord = jest.fn()
   render(<Harness onRecord={onRecord} />)
   fireEvent.click(screen.getByTestId('cdss-hf-decision-edit-heart-failure-sglt2'))
   fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-dose-adjusted'))
   const save = screen.getByRole('button', { name: '記錄' })
+  expect(screen.getByRole('textbox', { name: '藥品規格' })).toHaveValue('Dapagliflozin 10mg')
+  expect(screen.getByRole('textbox', { name: '原每次用量' })).toHaveValue('1')
+  expect(screen.getByRole('combobox', { name: '單位' })).toHaveValue('錠')
   expect(save).toBeDisabled()
-  fireEvent.change(screen.getByRole('spinbutton', { name: '原劑量' }), { target: { value: '2.5' } })
-  fireEvent.change(screen.getByRole('spinbutton', { name: '新劑量' }), { target: { value: '5' } })
-  fireEvent.change(screen.getByRole('combobox', { name: '單位' }), { target: { value: 'mg' } })
+  fireEvent.change(screen.getByRole('textbox', { name: '新每次用量' }), { target: { value: '0.5' } })
+  expect(screen.getByRole('combobox', { name: '途徑' })).toHaveValue('PO')
+  expect(screen.getByRole('combobox', { name: '頻次' })).toHaveValue('QD')
   fireEvent.click(save)
-  expect(onRecord).toHaveBeenLastCalledWith('heart-failure-sglt2', expect.objectContaining({ decision: 'dose-adjusted', note: '2.5 → 5 mg' }))
+  expect(onRecord).toHaveBeenLastCalledWith('heart-failure-sglt2', expect.objectContaining({ decision: 'dose-adjusted', note: 'Dapagliflozin 10mg：1 → 0.5 錠 · PO · QD' }))
   fireEvent.click(screen.getByTestId('cdss-hf-decision-edit-heart-failure-sglt2'))
-  expect(screen.getByRole('spinbutton', { name: '原劑量' })).toHaveValue(2.5)
-  expect(screen.getByRole('spinbutton', { name: '新劑量' })).toHaveValue(5)
-  fireEvent.change(screen.getByRole('spinbutton', { name: '新劑量' }), { target: { value: '2.5' } })
+  expect(screen.getByRole('textbox', { name: '藥品規格' })).toHaveValue('Dapagliflozin 10mg')
+  expect(screen.getByRole('textbox', { name: '原每次用量' })).toHaveValue('1')
+  expect(screen.getByRole('textbox', { name: '新每次用量' })).toHaveValue('0.5')
+  expect(screen.getByRole('combobox', { name: '單位' })).toHaveValue('錠')
+  expect(screen.getByRole('combobox', { name: '途徑' })).toHaveValue('PO')
+  expect(screen.getByRole('combobox', { name: '頻次' })).toHaveValue('QD')
+  fireEvent.change(screen.getByRole('textbox', { name: '新每次用量' }), { target: { value: '1' } })
   expect(screen.getByRole('button', { name: '記錄' })).toBeDisabled()
+})
+
+test.each([
+  ['Carvedilol 12.5 mg', { medication: 'Carvedilol 12.5 mg', previous: '1', unit: '錠' }],
+  ['Sacubitril/valsartan 49/51 mg', { medication: 'Sacubitril/valsartan 49/51 mg', previous: '1', unit: '錠' }],
+])('keeps %s together as the product strength and defaults to one tablet', (medication, expected) => {
+  expect(doseAdjustmentDefaults(medication)).toEqual(expected)
+})
+
+test('prefills furosemide for a loop-diuretic dose adjustment without a recorded drug', () => {
+  const diureticResult: CdssResult = {
+    ...result,
+    recommendations: [
+      ...result.recommendations,
+      rec('heart-failure-congestion-diuretic', 'medication', { status: 'actionable' }),
+    ],
+  }
+  render(<Harness packResult={diureticResult} />)
+
+  fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-congestion-diuretic-dose-adjusted'))
+
+  expect(screen.getByRole('textbox', { name: '藥品規格' })).toHaveValue('Furosemide')
 })
 
 

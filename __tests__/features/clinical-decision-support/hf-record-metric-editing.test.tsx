@@ -13,7 +13,7 @@ const result: CdssResult = { packId: 'heart-failure-cdss', packVersion: '2.0.0',
 const specs = [
   ['LVEF', '72.6%', '%', 45], ['bloodPressure', '154/88', 'mmHg', 120], ['heartRate', '60', 'bpm', 70],
   ['potassium', '3.7', 'mmol/L', 5.6], ['eGFR', '32', 'mL/min/1.73m²', 48], ['sodium', '141', 'mmol/L', 135],
-  ['bodyWeight', '78', 'kg', 75], ['NTproBNP', undefined, 'pg/mL', 1000],
+  ['hemoglobin', '12.5', 'g/dL', 13.2], ['bodyWeight', '78', 'kg', 75], ['NTproBNP', undefined, 'pg/mL', 1000],
   ['oxygenSaturation', '97', '%', 95], ['bodyHeight', '165', 'cm', 170],
 ] as const
 
@@ -25,12 +25,12 @@ test.each(specs)('%s can be edited from its record tile and reaches the profile 
   render(<HeartFailureVisitFlow board={board} flow={{ ...flow, metrics: [metric] }} now={now} isEnglish={false}
     expandedId={null} onToggle={() => {}} renderDetail={() => null} packVersion="2.0.0"
     onSaveClinicVitals={onSave} onAnswerPhenotype={onAnswer} onSaveHfpefInputs={onHfpef} />)
-  fireEvent.click(screen.getByTestId(`cdss-hf-flow-metric-refill-${key}`))
-  const inputs = screen.getAllByRole('spinbutton')
+  fireEvent.click(screen.getByTestId('cdss-hf-record-values-edit'))
+  const inputs = screen.getByTestId(`record-values-${key}`).querySelectorAll('input[type=number]')
   fireEvent.change(inputs[0], { target: { value: String(next) } })
   if (key === 'bloodPressure') fireEvent.change(inputs[1], { target: { value: '80' } })
-  fireEvent.change(screen.getByLabelText('量測／檢驗日期'), { target: { value: '2026-09-10' } })
-  fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+  fireEvent.change(screen.getByLabelText(`${key} 日期`), { target: { value: '2026-09-10' } })
+  fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
   const base: CdssPatientProfile = { id: 'synthetic', evaluatedAt: now.toISOString(), facts: {} }
   const updated = key === 'LVEF'
     ? applyPhenotypeAnswer(base, onAnswer.mock.calls[0][0])
@@ -90,7 +90,7 @@ describe('combined clinical values dialog', () => {
     expect(save).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     expect(save).toHaveBeenCalledTimes(1)
-    expect(save.mock.calls[0][0].entries).toEqual({ systolic: null, diastolic: null, heartRate: null, potassium: null, eGFR: null, sodium: null, bodyWeight: null, NTproBNP: null, oxygenSaturation: null, bodyHeight: null })
+    expect(save.mock.calls[0][0].entries).toEqual({ systolic: null, diastolic: null, heartRate: null, potassium: null, eGFR: null, sodium: null, hemoglobin: null, bodyWeight: null, NTproBNP: null, oxygenSaturation: null, bodyHeight: null })
     expect(answer).toHaveBeenCalledWith(expect.objectContaining({ lvef: undefined, measuredOn: undefined, hfSuspicion: 'suspected', hfpEfConfirmed: true }))
     const original = { id: 'synthetic', facts: { potassium: { zh: '3.7', en: '3.7', numericValue: 3.7 } } }
     const restored = applyClinicVitals(original, mergeClinicVitals(undefined, save.mock.calls[0][0], now))
@@ -117,7 +117,7 @@ describe('combined clinical values dialog', () => {
     const { save, answer } = setup()
     fireEvent.change(screen.getByLabelText('LVEF'), { target: { value: '150' } })
     expect(screen.getByRole('button', { name: '儲存修改' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(save).not.toHaveBeenCalled()
     expect(answer).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

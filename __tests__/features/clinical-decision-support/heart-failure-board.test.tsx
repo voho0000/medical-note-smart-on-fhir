@@ -282,7 +282,7 @@ describe('heart-failure board model', () => {
 
     expect(board).toBeDefined()
     expect(board!.metrics.map((metric) => metric.factKey)).toEqual([
-      'bloodPressure', 'heartRate', 'oxygenSaturation', 'potassium', 'eGFR', 'sodium', 'bodyWeight', 'bodyHeight', 'NTproBNP',
+      'bloodPressure', 'heartRate', 'oxygenSaturation', 'potassium', 'eGFR', 'sodium', 'hemoglobin', 'bodyWeight', 'bodyHeight', 'NTproBNP',
     ])
     const bp = board!.metrics[0]
     expect(bp.value).toBe('118/72')
@@ -468,7 +468,12 @@ describe('heart-failure board view', () => {
   it('reads today\'s sentences first, then lists rows action-first, and copies a rationale', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
+    render(<ClinicalDecisionSupportView
+      result={heartFailureResult()}
+      englishResult={heartFailureResult()}
+      locale="zh-TW"
+      layout="board"
+    />)
 
     const headlines = screen.getByTestId('cdss-hf-headlines')
     expect(headlines).toHaveTextContent('今天要做的 3 件事')
@@ -488,8 +493,8 @@ describe('heart-failure board view', () => {
     fireEvent.click(screen.getByTestId('cdss-copy-rationale-heart-failure-congestion-diuretic'))
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     const copied = writeText.mock.calls[0][0] as string
-    expect(copied).toContain('【判定理由】鬱血與利尿策略')
-    expect(copied).toContain('來源：MediPrisma 個人化照護指引 · heart-failure-cdss 0.2.0-poc')
+    expect(copied).toContain('[Decision rationale] 鬱血與利尿策略')
+    expect(copied).toContain('Source: MediPrisma personalized care guidance · heart-failure-cdss 0.2.0-poc')
   })
 
   it('shows one quiet line when the visit needs nothing', () => {

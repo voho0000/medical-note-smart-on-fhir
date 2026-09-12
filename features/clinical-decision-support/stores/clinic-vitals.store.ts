@@ -87,6 +87,7 @@ export const CLINIC_VITALS_ENTRY_KEYS = [
   'eGFR',
   'sodium',
   'NTproBNP',
+  'hemoglobin',
 ] as const
 
 export type ClinicVitalsEntryKey = (typeof CLINIC_VITALS_ENTRY_KEYS)[number]

@@ -1,3 +1,4 @@
+import type { CalcResult as ScoreExplanationResult } from '@/features/medical-calculator/types'
 /**
  * The HFA-PEFF and H₂FPEF scores, computed once by the host's own calculator
  * and handed to the pack as facts.
@@ -134,6 +135,8 @@ export interface HfpefInputReading {
 }
 
 export interface HfpefScoreReading {
+  scoreRanges?: ScoreExplanationResult['scoreRanges']
+  notes?: ScoreExplanationResult['notes']
   id: HfpefScoreId
   name: string
   score: number
@@ -214,7 +217,7 @@ function readInput(
     ...(unitOf(input) ? { unit: unitOf(input) } : {}),
     token: meta?.token ?? input.key,
     ...(meta?.factKey ? { factKey: meta.factKey } : {}),
-    editable: Boolean(meta?.editable),
+    editable: true,
     origin: 'none',
     inRecord: false,
   }
@@ -341,6 +344,8 @@ function hfaPeffReading(
     score,
     upper,
     maximum: 6,
+    scoreRanges: result.scoreRanges,
+    notes: result.notes,
     bandZh: result.interpretation?.zh ?? '',
     bandEn: result.interpretation?.en ?? '',
     components: (result.extra ?? []).slice(0, 3).map((row, index) => ({
@@ -383,6 +388,8 @@ function h2fpefReading(
     score,
     upper,
     maximum: 9,
+    scoreRanges: result.scoreRanges,
+    notes: result.notes,
     bandZh: result.interpretation?.zh ?? '',
     bandEn: result.interpretation?.en ?? '',
     components: items.map((item) => ({

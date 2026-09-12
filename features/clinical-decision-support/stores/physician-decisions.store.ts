@@ -41,6 +41,7 @@ export type PhysicianDecisionKind =
   | 'deferred'
   | 'patient-preference'
   | 'ordered'
+  | 'measurements-completed'
   | 'follow-up-arranged'
   | 'referred'
   | 'exercise-cleared'
@@ -74,6 +75,7 @@ const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
   'deferred',
   'patient-preference',
   'ordered',
+  'measurements-completed',
   'follow-up-arranged',
   'referred',
   'exercise-cleared',

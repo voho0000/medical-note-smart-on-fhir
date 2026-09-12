@@ -79,6 +79,8 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 ## Adding or changing a gate
 
+HF new-flow clinical information card: owner requested replacing the height tile with calculated BMI on 2026-09-12. Height remains editable in the shared clinical-values dialog; BMI is only displayed when positive height and weight are available, and its tooltip includes both measurement dates. Other values use two rows beside LVEF on desktop.
+
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.
 2. Put a `Visible behaviour changes:` section in the commit message that says,
    in one line per surface, what a user on which route can no longer see or
@@ -87,3 +89,5 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 4. A test must cover the route where the surface is *kept*, not only the route
    where it is hidden (`__tests__/features/clinical-decision-support/pilot-pack-registry.test.ts`
    and `__tests__/application/hooks/use-beta-features.test.tsx` are the pattern).
+
+- HF 門診流程：依使用者要求移除重複的「補完心超數值」按鈕；仍可點擊 HFA-PEFF／H₂FPEF 名稱開啟相同計算機並補填資料。

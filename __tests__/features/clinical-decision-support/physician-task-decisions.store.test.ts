@@ -8,7 +8,7 @@ describe('task decisions persistence', () => {
 useRealWebCrypto()
 
 test('task-specific decisions survive encrypted storage and rehydration', async () => {
-  const kinds: PhysicianDecisionKind[] = ['follow-up-arranged', 'referred', 'exercise-cleared', 'supervised-exercise', 'reviewed']
+  const kinds: PhysicianDecisionKind[] = ['measurements-completed', 'follow-up-arranged', 'referred', 'exercise-cleared', 'supervised-exercise', 'reviewed']
   const patientId = 'synthetic-task-decisions'
   kinds.forEach((decision) => usePhysicianDecisionsStore.getState().recordDecision(patientId, decision, {
     decision, packVersion: '2.0.0',

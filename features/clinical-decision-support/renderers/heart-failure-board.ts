@@ -86,6 +86,7 @@ const STATUS_METRICS: readonly {
   { factKey: 'potassium', zh: 'K', en: 'K', kind: 'lab' },
   { factKey: 'eGFR', zh: 'eGFR', en: 'eGFR', kind: 'lab' },
   { factKey: 'sodium', zh: 'Na', en: 'Na', kind: 'lab' },
+  { factKey: 'hemoglobin', zh: 'Hb', en: 'Hb', kind: 'lab' },
   { factKey: 'bodyWeight', zh: '體重', en: 'Weight', kind: 'measure' },
   { factKey: 'bodyHeight', zh: '身高', en: 'Height', kind: 'measure' },
   {
@@ -97,7 +98,7 @@ const STATUS_METRICS: readonly {
   },
 ]
 
-const UNIT_PATTERN = /\s*(?:mmHg|bpm|mmol\/L|mEq\/L|mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)|mg\/dL|pg\/mL|ng\/L|kg|cm)(?![A-Za-z])/gi
+const UNIT_PATTERN = /\s*(?:mmHg|bpm|mmol\/L|mEq\/L|mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)|mg\/dL|g\/dL|pg\/mL|ng\/L|kg|cm)(?![A-Za-z])/gi
 /** The parenthetical `agedFactEvidence` appends to a value past its window. */
 const STALE_NOTE_PATTERN = /[（(][^（()）]*(?:已 \d+ 天|\d+ d old|超過 \d+ 天窗|past the \d+-day window)[^（()）]*[）)]/
 const TAKING_PATTERN = /^(?:目前用藥中|Currently taking)/
@@ -272,7 +273,7 @@ function metricFromEvidence(
 ): HeartFailureMetric {
   const label = isEnglish ? config.en : config.zh
   if (!evidence) {
-    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false, evaluated: false }
+    return { factKey: config.factKey, label, unit: config.factKey === 'hemoglobin' ? 'g/dL' : undefined, kind: config.kind, stale: false, entered: false, evaluated: false }
   }
   const compact = compactValue(evidence.value)
   const date = latestSourceDate(evidence) ?? compact.inlineDate

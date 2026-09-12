@@ -1,0 +1,34 @@
+[
+  {
+    "id": "stable-four-pillars",
+    "file": "01-stable-four-pillars.json",
+    "name": "模擬 林穩定",
+    "summary": "穩定 HFrEF，四大支柱已建立，無明顯鬱血。",
+    "lvef": 35,
+    "resourceCount": 21
+  },
+  {
+    "id": "congested-needs-diuresis",
+    "file": "02-congested-needs-diuresis.json",
+    "name": "模擬 陳鬱血",
+    "summary": "HFrEF 合併肺鬱血與周邊水腫，需評估 loop 利尿劑調整。",
+    "lvef": 28,
+    "resourceCount": 21
+  },
+  {
+    "id": "renal-hyperkalemia",
+    "file": "03-renal-hyperkalemia.json",
+    "name": "模擬 黃腎限",
+    "summary": "HFrEF 合併 eGFR 下降與高血鉀，MRA 起始條件不符。",
+    "lvef": 30,
+    "resourceCount": 20
+  },
+  {
+    "id": "hypotension-bradycardia",
+    "file": "04-hypotension-bradycardia.json",
+    "name": "模擬 周低壓",
+    "summary": "HFrEF 合併低血壓與心搏過緩，需重新評估 ARNI 與 β 阻斷劑耐受性。",
+    "lvef": 25,
+    "resourceCount": 21
+  }
+]

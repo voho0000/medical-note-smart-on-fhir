@@ -27,6 +27,11 @@ import type {
   CdssResult,
   ClinicalEvidence,
 } from '@/features/clinical-decision-support/types'
+import { decisionReasonIds } from '@/features/clinical-decision-support/renderers/heart-failure-visit-flow'
+
+jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
+  useClinicalData: () => ({ diagnosticReports: [] }),
+}))
 
 const PATIENT = 'flow-patient'
 
@@ -165,7 +170,7 @@ function withHfpEfConfirmation(symptomsState: 'met' | 'undetermined'): CdssResul
               id: 'symptoms-signs',
               label: '症狀／徵象',
               state: symptomsState,
-              detail: symptomsState === 'met' ? '支持 1 項、反對 0 項' : '第 2、4 題未答',
+              detail: symptomsState === 'met' ? '支持 1 項、反對 0 項' : '第 2、3 題未答',
             },
             { id: 'lvef', label: 'LVEF ≥50% 且未曾 <50%', state: 'met', detail: 'LVEF 58%' },
             { id: 'objective-abnormality', label: '客觀結構／功能異常', state: 'met', detail: 'Table 10 支持 5 項' },
@@ -253,32 +258,22 @@ describe('the visit flow', () => {
     expect(screen.queryByTestId('cdss-hf-congestion-signs')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-symptom-edema')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-compensation-control')).toBeNull()
-    expect(screen.getByText('Rales')).toBeVisible()
-    expect(screen.getByText('Pitting edema')).toBeVisible()
+    expect(screen.getByText('肺部濕囉音（rales）')).toBeVisible()
+    expect(screen.getByText('凹陷性水腫（pitting edema）')).toBeVisible()
     fireEvent.click(screen.getByTestId('cdss-hf-sign-more-signs'))
-    for (const label of ['S3', 'HJR', 'Ascites', 'Hepatomegaly']) expect(screen.getByText(label)).toBeVisible()
+    for (const label of ['第三心音（S3）', '肝頸反流（HJR）', '腹水（ascites）', '肝腫大（hepatomegaly）']) expect(screen.getByText(label)).toBeVisible()
   })
 
-  it('echoes the answer on the evidence row instead of offering a second control', () => {
+  it('omits the duplicate congestion evidence table from the visit-flow detail', () => {
     render(<Harness />)
     suspectHeartFailure()
     fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-pitting-edema-absent'))
-    // Open the module that carries the congestion table.
     fireEvent.click(screen.getByTestId('cdss-hf-action-expand-heart-failure-congestion-diuretic'))
 
-    const row = screen.getByTestId('cdss-evidence-readonly-congestion:pitting-edema')
-    expect(row).toHaveTextContent('無')
+    expect(screen.queryByTestId('cdss-evidence-table-heart-failure-congestion-diuretic-congestion')).toBeNull()
+    expect(screen.queryByTestId('cdss-evidence-readonly-congestion:pitting-edema')).toBeNull()
     expect(screen.queryByTestId('cdss-evidence-answer-congestion:pitting-edema')).toBeNull()
-    expect(screen.queryByTestId('cdss-evidence-nyha-congestion:nyha')).toBeNull()
-    expect(screen.getByTestId('cdss-evidence-edit-in-flow-congestion:pitting-edema'))
-      .toHaveTextContent('在本次評估修改')
-
-    // A symptom row the pack added reads the same answer and leads back to the
-    // question that asks it — question ②, not the signs.
-    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-exertional-dyspnea-present'))
-    expect(screen.getByTestId('cdss-evidence-readonly-congestion:exertional-dyspnea'))
-      .toHaveTextContent('有')
-    fireEvent.click(screen.getByTestId('cdss-evidence-edit-in-flow-congestion:exertional-dyspnea'))
+    expect(screen.getByTestId('cdss-hf-flow-sign-pitting-edema-absent')).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('counts down 還有 n 題 as the questions are answered', () => {
@@ -319,6 +314,19 @@ describe('the visit flow', () => {
     render(<Harness />)
     suspectHeartFailure()
 
+    expect(screen.getByTestId('cdss-hf-action-category-heart-failure-mra')).toHaveTextContent('MRA')
+    const mraRow = screen.getByTestId('cdss-hf-action-row-heart-failure-mra')
+    const mraStatus = within(mraRow).getByText('可立即處理')
+    const mraCategory = screen.getByTestId('cdss-hf-action-category-heart-failure-mra')
+    expect(mraStatus.compareDocumentPosition(mraCategory) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mraCategory).toHaveClass('bg-violet-100', 'text-violet-800')
+    expect(screen.getByTestId('cdss-hf-action-headline-heart-failure-mra')).toHaveTextContent('評估啟用。')
+    expect(screen.getByTestId('cdss-hf-action-row-heart-failure-mra')).not.toHaveTextContent('medication reconciliation')
+    expect(screen.getByTestId('cdss-hf-action-row-heart-failure-mra')).not.toHaveTextContent('模組 heart-failure-mra')
+    expect(screen.getByTestId('cdss-hf-action-category-heart-failure-congestion-diuretic')).toHaveTextContent('Loop 利尿劑')
+    expect(screen.getByTestId('cdss-hf-action-headline-heart-failure-congestion-diuretic'))
+      .toHaveTextContent('有鬱血症狀或徵象時，依容量狀態調整。')
+    expect(screen.queryByText('建議與你的決定')).not.toBeInTheDocument()
     expect(screen.queryByText(/排序＝規則的優先順序/)).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-hf-actions-decided')).toHaveTextContent('已決定 0 / 2')
     fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-mra-prescribed'))
@@ -335,6 +343,51 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-decision-heart-failure-mra-deferred')).toBeInTheDocument()
   })
 
+  it('uses the same drug-category heading style for all HFrEF foundational therapies', () => {
+    const base = heartFailureResult()
+    const hfrEfResult: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-ras-inhibition', {
+          status: 'actionable',
+          title: '評估建立或最佳化 ARNI（不適用時 ACEI／ARB）。',
+        }),
+        recommendation('heart-failure-beta-blocker', {
+          status: 'needs-data',
+          title: '評估建立或最佳化具 HFrEF 實證的 β 阻斷劑。',
+          missingData: ['此決策可用的 心率（目前資料完全沒有這一項）'],
+        }),
+        recommendation('heart-failure-sglt2', {
+          status: 'actionable',
+          title: '評估建立或持續 SGLT2i。',
+        }),
+      ],
+    }
+
+    render(<Harness result={hfrEfResult} />)
+    suspectHeartFailure()
+
+    expect(screen.getByTestId('cdss-hf-action-category-heart-failure-ras-inhibition'))
+      .toHaveTextContent('ARNI／ACEI／ARB')
+    expect(screen.getByTestId('cdss-hf-action-headline-heart-failure-ras-inhibition'))
+      .toHaveTextContent('評估建立或最佳化。')
+    expect(screen.getByTestId('cdss-hf-action-category-heart-failure-beta-blocker'))
+      .toHaveTextContent('β 阻斷劑')
+    expect(screen.getByTestId('cdss-hf-action-headline-heart-failure-beta-blocker'))
+      .toHaveTextContent('評估建立或最佳化。')
+    expect(screen.getByTestId('cdss-hf-action-row-heart-failure-beta-blocker'))
+      .toHaveTextContent('缺：心率')
+    expect(screen.getByTestId('cdss-hf-action-row-heart-failure-beta-blocker'))
+      .not.toHaveTextContent('目前資料完全沒有這一項')
+    expect(screen.getByTestId('cdss-hf-action-subgroup-pillars'))
+      .toHaveTextContent('HFrEF 四大支柱')
+    expect(screen.getByTestId('cdss-hf-action-subgroup-pillars'))
+      .toHaveTextContent('已決定 0 / 4')
+    expect(screen.getByTestId('cdss-hf-action-subgroup-symptom-control'))
+      .toHaveTextContent('症狀控制')
+  })
+
   it('asks for a reason when a recommendation is deferred', () => {
     render(<Harness />)
     suspectHeartFailure()
@@ -342,11 +395,42 @@ describe('the visit flow', () => {
 
     const reasons = screen.getByTestId('cdss-hf-decision-reasons-heart-failure-mra')
     expect(within(reasons).getAllByRole('button').length).toBeGreaterThan(1)
-    fireEvent.click(screen.getByTestId('cdss-hf-decision-reason-heart-failure-mra-high-potassium'))
+    expect(screen.queryByTestId('cdss-hf-decision-note-heart-failure-mra')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-reason-heart-failure-mra-other'))
+    expect(screen.getByTestId('cdss-hf-decision-note-heart-failure-mra')).toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-reason-heart-failure-mra-other'))
+    expect(screen.queryByTestId('cdss-hf-decision-note-heart-failure-mra')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-reason-heart-failure-mra-drug-intolerance'))
     fireEvent.click(screen.getByTestId('cdss-hf-decision-save-heart-failure-mra'))
 
     expect(screen.getByTestId('cdss-hf-decision-recorded-heart-failure-mra'))
-      .toHaveTextContent('K 偏高')
+      .toHaveTextContent('不耐受')
+  })
+
+  it('clears reasons from another drug decision instead of carrying them into the new choice', () => {
+    usePhysicianDecisionsStore.setState({
+      byPatientId: {
+        [PATIENT]: {
+          'heart-failure-mra': {
+            decision: 'contraindicated',
+            reasons: ['low-egfr'],
+            note: '舊的通用原因',
+            recordedAt: '2026-09-12T08:00:00.000Z',
+            packVersion: 'old',
+          },
+        },
+      },
+    })
+    render(<Harness />)
+    suspectHeartFailure()
+
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-edit-heart-failure-mra'))
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-mra-deferred'))
+
+    expect(usePhysicianDecisionsStore.getState().byPatientId[PATIENT]?.['heart-failure-mra'])
+      .toMatchObject({ decision: 'deferred', reasons: [] })
+    expect(usePhysicianDecisionsStore.getState().byPatientId[PATIENT]?.['heart-failure-mra']?.note)
+      .toBeUndefined()
   })
 
   it('keeps every answer when the reader switches to the original board and back', () => {
@@ -416,5 +500,97 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-questions-read-only')).toHaveTextContent('需載入病人才能作答')
     expect(screen.queryByTestId('cdss-hf-flow-nyha')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-decision-heart-failure-mra')).toBeNull()
+  })
+
+  it('labels clinic measurements as measured rather than ordered', () => {
+    const base = heartFailureResult()
+    const withFmtSafety: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-fmt-safety', {
+          moduleGroup: 'monitoring',
+          domain: 'monitoring',
+          status: 'needs-data',
+          missingData: ['心率'],
+          nextActions: ['補齊心率並複驗血壓，再評估藥物調整。'],
+        }),
+      ],
+    }
+    render(<Harness result={withFmtSafety} />)
+    suspectHeartFailure()
+
+    expect(screen.getByTestId('cdss-hf-decision-heart-failure-fmt-safety-measurements-completed'))
+      .toHaveTextContent('已量測')
+    expect(screen.queryByTestId('cdss-hf-decision-heart-failure-fmt-safety-ordered'))
+      .not.toBeInTheDocument()
+  })
+})
+
+describe('diuretic decision reasons', () => {
+  it('uses true contraindications for contraindicated and clinical adjustment reasons for deferred', () => {
+    expect(decisionReasonIds('heart-failure-congestion-diuretic', 'medication', 'contraindicated')).toEqual([
+      'anuria', 'drug-hypersensitivity', 'other',
+    ])
+    const deferred = decisionReasonIds('heart-failure-congestion-diuretic', 'medication', 'deferred')
+    expect(deferred).toEqual([
+      'no-congestion', 'volume-depletion', 'electrolyte-depletion',
+      'worsening-renal-function', 'drug-intolerance', 'patient-refused', 'other',
+    ])
+    expect(deferred).not.toEqual(expect.arrayContaining(['high-potassium', 'bradycardia', 'low-egfr']))
+  })
+})
+
+describe('foundational therapy decision reasons', () => {
+  it('separates ARNI/ACEI/ARB contraindications from reasons to defer', () => {
+    expect(decisionReasonIds('heart-failure-ras-inhibition', 'medication', 'contraindicated')).toEqual([
+      'angioedema-history', 'pregnancy', 'acei-arni-overlap', 'arni-aliskiren-diabetes',
+      'drug-hypersensitivity', 'other',
+    ])
+    expect(decisionReasonIds('heart-failure-ras-inhibition', 'medication', 'deferred')).toEqual([
+      'symptomatic-hypotension', 'high-potassium', 'worsening-renal-function', 'drug-intolerance',
+      'patient-refused', 'cost', 'other',
+    ])
+  })
+
+  it('uses beta-blocker-specific contraindications and keeps instability under deferral', () => {
+    expect(decisionReasonIds('heart-failure-beta-blocker', 'medication', 'contraindicated')).toEqual([
+      'high-grade-av-block', 'severe-bradycardia', 'cardiogenic-shock', 'bronchial-asthma',
+      'drug-hypersensitivity', 'other',
+    ])
+    expect(decisionReasonIds('heart-failure-beta-blocker', 'medication', 'deferred')).toEqual([
+      'acute-decompensation', 'bradycardia', 'symptomatic-hypotension', 'drug-intolerance',
+      'patient-refused', 'cost', 'other',
+    ])
+  })
+
+  it('uses MRA-specific potassium, kidney and product contraindications', () => {
+    expect(decisionReasonIds('heart-failure-mra', 'medication', 'contraindicated')).toEqual([
+      'mra-hyperkalemia', 'mra-renal-threshold', 'addison-disease', 'duplicate-mra',
+      'drug-hypersensitivity', 'other',
+    ])
+    expect(decisionReasonIds('heart-failure-mra', 'medication', 'deferred')).toEqual([
+      'symptomatic-hypotension', 'worsening-renal-function', 'acute-illness-fasting-surgery',
+      'drug-intolerance', 'patient-refused', 'cost', 'other',
+    ])
+  })
+
+  it('uses SGLT2i-specific contraindications and temporary withholding reasons', () => {
+    expect(decisionReasonIds('heart-failure-sglt2', 'medication', 'contraindicated')).toEqual([
+      'drug-hypersensitivity', 'other',
+    ])
+    expect(decisionReasonIds('heart-failure-sglt2', 'medication', 'deferred')).toEqual([
+      'volume-depletion', 'ketoacidosis', 'acute-illness-fasting-surgery', 'low-egfr-initiation',
+      'drug-intolerance', 'patient-refused', 'cost', 'other',
+    ])
+  })
+
+  it('does not guess drug-specific physiology for an unknown medication module', () => {
+    expect(decisionReasonIds('unknown-medication', 'medication', 'contraindicated')).toEqual([
+      'drug-hypersensitivity', 'other',
+    ])
+    expect(decisionReasonIds('unknown-medication', 'medication', 'deferred')).toEqual([
+      'drug-intolerance', 'patient-refused', 'cost', 'other',
+    ])
   })
 })

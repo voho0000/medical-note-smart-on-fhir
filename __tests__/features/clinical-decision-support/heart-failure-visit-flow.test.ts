@@ -305,7 +305,6 @@ describe('the next step', () => {
     const decisions: PhysicianDecisionMap = Object.fromEntries(
       [
         'heart-failure-medication-safety',
-        'heart-failure-hfref-gdmt',
         'heart-failure-ras-inhibition',
         'heart-failure-mra',
         'heart-failure-beta-blocker',
@@ -414,8 +413,8 @@ describe('the questions', () => {
     expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
       ['1', 'hf-suspicion'],
       ['2', 'symptoms'],
-      ['3', 'nyha'],
-      ['4', 'signs'],
+      ['3', 'signs'],
+      ['4', 'nyha'],
       ['5', 'compensation'],
     ])
     const symptoms = flow.questions.find((item) => item.id === 'symptoms')
@@ -425,6 +424,35 @@ describe('the questions', () => {
       .toBe('systemic')
     expect(symptoms?.items?.filter((item) => !item.common).map((item) => item.term))
       .toEqual(['nocturnal-cough', 'bendopnea', 'reported-weight-gain'])
+  })
+
+  it('enters HFrEF directly when the record has an HF diagnosis and LVEF is below 50%', () => {
+    const packResult = result()
+    const diagnosedResult: CdssResult = {
+      ...packResult,
+      recommendations: packResult.recommendations.map((item) => item.id === 'heart-failure-phenotype'
+        ? {
+          ...item,
+          patientEvidence: [
+            evidence('心衰竭診斷', 'I50.22 慢性收縮性心衰竭', 'heartFailureDiagnosis', '2026-07-01'),
+            ...item.patientEvidence,
+          ],
+        }
+        : item),
+    }
+
+    const flow = flowFor({ result: diagnosedResult })
+
+    expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
+      ['1', 'symptoms'],
+      ['2', 'signs'],
+      ['3', 'nyha'],
+      ['4', 'compensation'],
+    ])
+    expect(flow.steps[0]).toMatchObject({ state: 'done' })
+    expect(flow.steps[0].detail).toContain('HFrEF · LVEF 32')
+    expect(flow.questions.find((item) => item.id === 'symptoms')?.hint).toBeUndefined()
+    expect(flow.questions.find((item) => item.id === 'signs')?.hint).toBeUndefined()
   })
 
   it('folds each answered list onto one line and tallies the two sides', () => {
@@ -558,8 +586,9 @@ describe("today's actions", () => {
       'heart-failure-beta-blocker',
       'heart-failure-mra',
       'heart-failure-sglt2',
-      'heart-failure-hfref-gdmt',
     ])
+    expect(flow.actionGroups.flatMap((group) => group.rows)
+      .some((row) => row.recommendation.id === 'heart-failure-hfref-gdmt')).toBe(false)
     const ras = medication?.rows.find((row) => row.recommendation.id === 'heart-failure-ras-inhibition')
     expect(ras?.medications).toBe('Valsartan 80mg')
     expect(ras?.headline).toBe('ARB → ARNI（sacubitril/valsartan）')
@@ -585,10 +614,35 @@ describe("today's actions", () => {
     const rows = flow.actionGroups.flatMap((group) => group.rows)
 
     expect(rows.filter((row) => row.index !== undefined).map((row) => row.index))
-      .toEqual([1, 2, 3, 4, 5, 6, 7])
+      .toEqual([1, 2, 3, 4, 5, 6])
     const test = rows.find((row) => row.recommendation.id === 'heart-failure-monitoring')
     expect(test?.decisionKind).toBe('test')
-    expect(flow.decidableCount).toBe(7)
+    expect(flow.decidableCount).toBe(6)
+  })
+
+  it('names the concrete missing and stale safety inputs in the FMT monitoring headline', () => {
+    const packResult = result()
+    packResult.recommendations = [
+      ...packResult.recommendations,
+      recommendation('heart-failure-fmt-safety', {
+        moduleGroup: 'monitoring',
+        domain: 'monitoring',
+        status: 'needs-data',
+        missingData: ['此決策可用的 心率（目前資料完全沒有這一項）'],
+        patientEvidence: [
+          evidence('血壓', '142/84 mmHg（2026-04-18）（已 147 天，超過 90 天窗）', 'bloodPressure'),
+          evidence('eGFR', '48.3 mL/min/1.73m²（2026-07-06）', 'egfr'),
+        ],
+        nextActions: ['將目前安全資料帶入各藥物 track 的下一個 decision point。'],
+      }),
+    ]
+
+    const flow = flowFor({ result: packResult, phenotypeAnswer: SUSPECTED })
+    const safety = flow.actionGroups.flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-fmt-safety')
+
+    expect(safety?.headline).toBe('補齊心率並複驗血壓，再評估藥物調整。')
+    expect(safety?.decisionKind).toBe('measurement')
   })
 
   it('keeps HFpEF in the assessment and omits its duplicate treatment card', () => {
@@ -630,6 +684,63 @@ describe("today's actions", () => {
       .find((row) => row.recommendation.id === 'heart-failure-mra')
 
     expect(mra?.basis).toBe('MRA：目前未使用')
+  })
+
+  it('adds positive symptoms and PE findings to the loop-diuretic evidence', () => {
+    const base = result()
+    const withDiuretic = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-congestion-diuretic', {
+          status: 'actionable',
+          overviewEvidenceFactKey: 'chestXray',
+          patientEvidence: [
+            evidence('CXR', 'CXR 符合 cardiomegaly、pleural-effusion', 'chestXray', '2026-07-06'),
+          ],
+        }),
+      ],
+    }
+    const flow = flowFor({
+      result: withDiuretic,
+      phenotypeAnswer: SUSPECTED,
+      clinicVitals: answeredVitals(),
+    })
+    const diuretic = flow.actionGroups
+      .flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-congestion-diuretic')
+
+    expect(diuretic?.basis).toBe(
+      '症狀：勞力性喘、疲倦、腳腫 · PE：Pitting edema · CXR 符合 cardiomegaly、pleural-effusion',
+    )
+    expect(diuretic?.basis).not.toContain('未評估')
+  })
+
+  it('omits the duplicate AMT umbrella and keeps HFimpEF as a clinical review', () => {
+    const base = result()
+    const withUmbrellaModules: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-additional-medical-therapy', {
+          domain: 'medication',
+          status: 'review',
+          title: '評估其他治療。',
+        }),
+        recommendation('heart-failure-hfimpEF-therapy', {
+          domain: 'medication',
+          status: 'review',
+          title: '持續原有治療。',
+        }),
+      ],
+    }
+    const rows = flowFor({ result: withUmbrellaModules, phenotypeAnswer: SUSPECTED })
+      .actionGroups.flatMap((group) => group.rows)
+
+    expect(rows.find((row) => row.recommendation.id === 'heart-failure-additional-medical-therapy'))
+      .toBeUndefined()
+    expect(rows.find((row) => row.recommendation.id === 'heart-failure-hfimpEF-therapy')?.decisionKind)
+      .toBe('review')
   })
 })
 
