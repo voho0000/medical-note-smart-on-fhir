@@ -762,6 +762,8 @@ export function buildHeartFailureVisitFlow(
     // listing them again as things to do is the duplication this screen removes.
     item.id !== PHENOTYPE_MODULE_ID && item.id !== HFPEF_DIAGNOSIS_MODULE_ID
     && !isGenericMonitoringReminder(item)
+    // Exercise clearance belongs to the rehabilitation assessment, not this HF visit.
+    && item.id !== 'cardiac-rehabilitation-safety'
   ))
 
   const groupOrder: readonly VisitActionGroupId[] = [

@@ -57,7 +57,6 @@ test('current maintenance therapy defaults to prescribed with provenance, withou
 test.each([
   ['heart-failure-monitoring', ['已安排追蹤', '已評估', '暫緩', '病人意願']],
   ['cardiac-rehabilitation', ['已轉介', '暫緩', '病人意願']],
-  ['cardiac-rehabilitation-safety', ['可運動', '需監測下運動', '暫緩']],
 ])('%s offers task-specific decisions', (id, labels) => {
   render(<Harness />)
   const controls = within(screen.getByTestId(`cdss-hf-decision-${id}`))
@@ -94,4 +93,14 @@ test('dose adjustment records separate numeric doses and a selected unit, and re
   expect(screen.getByRole('spinbutton', { name: '新劑量' })).toHaveValue(5)
   fireEvent.change(screen.getByRole('spinbutton', { name: '新劑量' }), { target: { value: '2.5' } })
   expect(screen.getByRole('button', { name: '記錄' })).toBeDisabled()
+})
+
+
+test('HF visit omits rehabilitation clearance but retains rehabilitation referral', () => {
+  render(<Harness />)
+  expect(screen.queryByTestId('cdss-hf-decision-cardiac-rehabilitation-safety')).not.toBeInTheDocument()
+  expect(screen.getByTestId('cdss-hf-decision-cardiac-rehabilitation')).toBeVisible()
+  const { flow } = model()
+  expect(flow.decidableCount).toBe(3)
+  expect(flow.actionGroups.flatMap(group => group.rows).some(row => row.recommendation.id === 'cardiac-rehabilitation-safety')).toBe(false)
 })
