@@ -52,6 +52,7 @@ import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
+  VISIT_DECISIONS,
   VISIT_SIDE_LABELS,
   decisionLabel,
   decisionReasonLabel,
@@ -119,14 +120,6 @@ const ROW_BAR_CLASS: Readonly<Record<VisitActionGroupId, string>> = {
   'no-action': 'bg-emerald-400',
 }
 
-const MEDICATION_DECISIONS: readonly PhysicianDecisionKind[] = [
-  'prescribed',
-  'dose-adjusted',
-  'contraindicated',
-  'deferred',
-  'patient-preference',
-]
-const TEST_DECISIONS: readonly PhysicianDecisionKind[] = ['ordered', 'deferred']
 
 /** The measurements this stage can take back from the clinician. */
 const REFILLABLE_FACT_KEYS: readonly string[] = ['bloodPressure', 'heartRate', 'bodyWeight']
@@ -1323,7 +1316,7 @@ function DecisionControls({
   const [note, setNote] = useState(row.decision?.note ?? '')
   if (row.decisionKind === 'none' || readOnly || !onRecordDecision) return null
   const moduleId = row.recommendation.id
-  const options = row.decisionKind === 'test' ? TEST_DECISIONS : MEDICATION_DECISIONS
+  const options = VISIT_DECISIONS[row.decisionKind]
   const decision = row.decision
   const recordedStamp = formatStamp(decision?.recordedAt, now, isEnglish)
 
@@ -1353,6 +1346,11 @@ function DecisionControls({
         ) : null}
         {decision.note ? (
           <span className="text-[11px] text-foreground">{decision.note}</span>
+        ) : null}
+        {row.decisionSource === 'medication-record' ? (
+          <span className="text-[11px] text-muted-foreground">
+            {isEnglish ? 'From current medication record' : '依目前用藥紀錄帶入'}
+          </span>
         ) : null}
         {recordedStamp ? (
           <span className="text-[11px] tabular-nums text-muted-foreground">{recordedStamp}</span>
@@ -1419,7 +1417,7 @@ function DecisionControls({
 
       {needsReasons ? (
         <div className="flex flex-wrap items-center gap-1.5" data-testid={`cdss-hf-decision-reasons-${moduleId}`}>
-          {DECISION_REASONS.map((reason) => {
+          {DECISION_REASONS.filter((reason) => row.decisionKind === 'medication' || ['patient-refused', 'cost', 'other'].includes(reason.id)).map((reason) => {
             const selected = decision?.reasons.includes(reason.id) ?? false
             return (
               <button

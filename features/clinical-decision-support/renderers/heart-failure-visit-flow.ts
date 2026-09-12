@@ -178,7 +178,7 @@ export interface VisitQuestion {
 export type VisitActionGroupId = 'safety' | 'actionable' | 'needs-data' | 'review' | 'no-action'
 
 /** Which set of decision buttons a row offers. */
-export type VisitDecisionKind = 'medication' | 'test' | 'none'
+export type VisitDecisionKind = 'medication' | 'test' | 'follow-up' | 'rehabilitation' | 'exercise-safety' | 'review' | 'none'
 
 export interface VisitActionRow {
   /** Continuous across the groups that carry a decision; absent on 目前無需處理. */
@@ -195,6 +195,8 @@ export interface VisitActionRow {
   basis?: string
   decisionKind: VisitDecisionKind
   decision?: PhysicianDecision
+  /** Derived from current therapy, never persisted as a physician action. */
+  decisionSource?: 'medication-record'
 }
 
 export interface VisitActionGroup {
@@ -795,13 +797,14 @@ export function buildHeartFailureVisitFlow(
         || (a.moduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.moduleOrder ?? Number.MAX_SAFE_INTEGER)
       ))
       .map((recommendation): VisitActionRow => {
-        const decisionKind: VisitDecisionKind = groupId === 'no-action'
-          ? 'none'
-          : groupId === 'needs-data'
-            ? 'test'
-            : 'medication'
+        const decisionKind = visitDecisionKind(recommendation, groupId)
         if (decisionKind !== 'none') index += 1
         const medications = pillarMedications.get(recommendation.id)
+        const recordedDecision = decisions[recommendation.id]
+        // An existing drug does not fulfil a recommendation to switch or adjust it.
+        const defaultPrescribed = !recordedDecision && decisionKind === 'medication'
+          && recommendation.status === 'no-action'
+          && board.pillars.some((pillar) => pillar.id === recommendation.id && pillar.taking)
         return {
           ...(decisionKind === 'none' ? {} : { index }),
           recommendation,
@@ -814,7 +817,10 @@ export function buildHeartFailureVisitFlow(
             ? { basis: basisOf(recommendation, isEnglish) }
             : {}),
           decisionKind,
-          ...(decisions[recommendation.id] ? { decision: decisions[recommendation.id] } : {}),
+          ...(recordedDecision ? { decision: recordedDecision } : defaultPrescribed ? {
+            decision: { decision: 'prescribed', reasons: [], recordedAt: '', packVersion: result.packVersion },
+            decisionSource: 'medication-record',
+          } : {}),
         }
       })
     if (rows.length === 0) return []
@@ -1080,7 +1086,7 @@ export function buildHeartFailureVisitFlow(
   }
   for (const row of decidableRows) {
     const decision = row.decision
-    if (!decision) continue
+    if (!decision || row.decisionSource === 'medication-record') continue
     pushCarried(
       row.moduleName,
       decisionLabel(decision.decision, isEnglish),
@@ -1152,6 +1158,28 @@ function firstOpenHint(board: HeartFailureBoardModel, isEnglish: boolean): strin
     : `紀錄有 ${clues.join(' · ')}，可協助判斷；但只有你能決定是否啟動心衰竭路徑。`
 }
 
+
+/** Match the task itself, not the severity/group in which it happens to appear. */
+function visitDecisionKind(recommendation: CdssRecommendation, group: VisitActionGroupId): VisitDecisionKind {
+  if (group === 'no-action') return 'none'
+  if (recommendation.id === 'cardiac-rehabilitation-safety') return 'exercise-safety'
+  if (recommendation.id === 'cardiac-rehabilitation') return 'rehabilitation'
+  if (group === 'needs-data') return 'test'
+  if (recommendation.id === 'heart-failure-monitoring' || recommendation.id === 'cardiac-rehabilitation-response') return 'follow-up'
+  if (recommendation.domain === 'medication') return 'medication'
+  return 'review'
+}
+
+export const VISIT_DECISIONS: Readonly<Record<VisitDecisionKind, readonly PhysicianDecision['decision'][]>> = {
+  medication: ['prescribed', 'dose-adjusted', 'contraindicated', 'deferred', 'patient-preference'],
+  test: ['ordered', 'deferred'],
+  'follow-up': ['follow-up-arranged', 'reviewed', 'deferred', 'patient-preference'],
+  rehabilitation: ['referred', 'deferred', 'patient-preference'],
+  'exercise-safety': ['exercise-cleared', 'supervised-exercise', 'deferred'],
+  review: ['reviewed', 'deferred', 'patient-preference'],
+  none: [],
+}
+
 export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { zh: string; en: string }>> = {
   prescribed: { zh: '已開立', en: 'Prescribed' },
   'dose-adjusted': { zh: '劑量調整', en: 'Dose adjusted' },
@@ -1159,6 +1187,11 @@ export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { z
   deferred: { zh: '暫緩', en: 'Deferred' },
   'patient-preference': { zh: '病人意願', en: "Patient's preference" },
   ordered: { zh: '已開單', en: 'Ordered' },
+  'follow-up-arranged': { zh: '已安排追蹤', en: 'Follow-up arranged' },
+  referred: { zh: '已轉介', en: 'Referred' },
+  'exercise-cleared': { zh: '可運動', en: 'Cleared for exercise' },
+  'supervised-exercise': { zh: '需監測下運動', en: 'Supervised exercise' },
+  reviewed: { zh: '已評估', en: 'Reviewed' },
 }
 
 export function decisionLabel(
@@ -1241,7 +1274,7 @@ function buildVisitSummaryText(input: {
 
   const decided = decidableRows
     .flatMap((row) => (row.decision
-      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}`]
+      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
       : []))
   const undecided = decidableRows.length - decidedCount
   lines.push([
