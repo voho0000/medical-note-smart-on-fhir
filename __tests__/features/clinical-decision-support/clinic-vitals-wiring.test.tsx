@@ -3,10 +3,14 @@
  * the pack is a pure function of it — so this checks the feature hands it
  * over, and stops handing it over once the patient changes.
  */
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
-import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import {
+  clinicVitalsStorageKey,
+  useClinicVitalsStore,
+} from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
+import { storedCiphertext, useRealWebCrypto } from './encrypted-answers.helper'
 
 const mockUsePatient = jest.fn()
 const mockUseClinicalData = jest.fn()
@@ -79,9 +83,11 @@ function latestProfile(): CdssPatientProfile {
 }
 
 describe('clinic vitals reach the pack through the profile', () => {
+  useRealWebCrypto()
+
   beforeEach(() => {
     packBuildSpy.mockClear()
-    useClinicVitalsStore.setState({ byPatientId: {} })
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     mockUseClinicalData.mockReturnValue(clinicalData())
     mockUsePatient.mockReturnValue({
       patient: { id: 'vitals-patient', resourceType: 'Patient', age: 70 },
@@ -120,5 +126,35 @@ describe('clinic vitals reach the pack through the profile', () => {
     await waitFor(() => expect(packBuildSpy).toHaveBeenCalled())
     expect(latestProfile().facts.bloodPressure).toBeUndefined()
     expect(latestProfile().facts.heartRate).toBeUndefined()
+  })
+
+  it('waits for the stored answers rather than building the pack without them', async () => {
+    // A reload of this tab: the record is on disk, sealed, and nothing is in
+    // memory. Reading it back is a decryption, so the guidance has to wait —
+    // a pack built from the empty record would draw every question unanswered
+    // and then jump when the answers landed.
+    useClinicVitalsStore.getState().setVitals('vitals-patient', {
+      entries: {
+        systolic: { value: 126, measuredOn: '2026-09-05' },
+        diastolic: { value: 78, measuredOn: '2026-09-05' },
+      },
+      nyhaClass: 'III',
+    })
+    await storedCiphertext(clinicVitalsStorageKey('vitals-patient'))
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    packBuildSpy.mockClear()
+
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    // While the read is in flight the reader sees the loading state, never a
+    // visit with every question unanswered.
+    expect(screen.queryByTestId('mock-cdss-result')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('正在整理臨床決策支援')).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByTestId('mock-cdss-result')).toBeInTheDocument())
+    // The first guidance this reader is shown already carries the answer, so
+    // there is no unanswered state to flash out of.
+    expect(latestProfile().facts.physicianNyhaClass?.zh).toContain('NYHA III')
+    expect(latestProfile().facts.bloodPressure?.zh).toContain('126/78 mmHg')
   })
 })
