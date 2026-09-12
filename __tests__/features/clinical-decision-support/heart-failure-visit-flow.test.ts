@@ -625,3 +625,23 @@ describe('without a patient', () => {
     expect(flowFor().readOnly).toBe(false)
   })
 })
+
+
+describe('generic monitoring reminders', () => {
+  it.each([
+    '先查找院內近期病歷與出院計畫，再補齊病人自述與量測資料。',
+    'Retrieve recent institutional notes and the discharge plan first, then complete patient-reported and measured data.',
+  ])('omits the generic reminder and its decision count: %s', (reminder) => {
+    const original = result()
+    const filtered = flowFor({ result: {
+      ...original,
+      recommendations: original.recommendations.map(item => item.id === 'heart-failure-monitoring'
+        ? { ...item, nextActions: [reminder], status: 'review' } : item),
+    } })
+    expect(filtered.actionGroups.flatMap(group => group.rows).some(row => row.recommendation.id === 'heart-failure-monitoring')).toBe(false)
+    expect(filtered.decidableCount).toBe(flowFor().decidableCount - 1)
+    // Concrete test/follow-up instructions remain actionable in the same view.
+    expect(flowFor().actionGroups.flatMap(group => group.rows).find(row => row.recommendation.id === 'heart-failure-monitoring')?.headline)
+      .toBe('抽 NT-proBNP 作為基準；1 週後追蹤 K 與腎功能。')
+  })
+})

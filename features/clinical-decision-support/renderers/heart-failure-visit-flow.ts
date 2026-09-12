@@ -761,6 +761,7 @@ export function buildHeartFailureVisitFlow(
     // The phenotype gate and the HFpEF confirmation are questions 1, 1b and 1c;
     // listing them again as things to do is the duplication this screen removes.
     item.id !== PHENOTYPE_MODULE_ID && item.id !== HFPEF_DIAGNOSIS_MODULE_ID
+    && !isGenericMonitoringReminder(item)
   ))
 
   const groupOrder: readonly VisitActionGroupId[] = [
@@ -1158,6 +1159,14 @@ function firstOpenHint(board: HeartFailureBoardModel, isEnglish: boolean): strin
     : `紀錄有 ${clues.join(' · ')}，可協助判斷；但只有你能決定是否啟動心衰竭路徑。`
 }
 
+
+/** This generic record-retrieval reminder is not a decision for today's visit. */
+function isGenericMonitoringReminder(item: CdssRecommendation): boolean {
+  return item.id === 'heart-failure-monitoring' && [
+    '先查找院內近期病歷與出院計畫，再補齊病人自述與量測資料。',
+    'Retrieve recent institutional notes and the discharge plan first, then complete patient-reported and measured data.',
+  ].includes(item.nextActions[0] ?? '')
+}
 
 /** Match the task itself, not the severity/group in which it happens to appear. */
 function visitDecisionKind(recommendation: CdssRecommendation, group: VisitActionGroupId): VisitDecisionKind {

@@ -58,6 +58,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Medication duration | The 2×2 card omits prescribed supply days. | Stacked rows, expanded list, and medication hover details retain supply days. | Explicit chat approval, 2026-09-10 |
 | Report, medication, and visit rows | Stacked layouts also use single-line records; long text may be truncated. | Existing report dialogs, row tooltips, and destination tabs retain details. | Explicit chat approval, 2026-09-10 |
 
+## HF visit action list (all launch routes)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| HF「今日處置」at `/` and launch-query variants | Omit the `heart-failure-monitoring` row when its first action is the generic reminder to retrieve institutional notes and complete patient-reported/measurement data (Chinese or English). It adds no decision or pending count. Concrete testing/follow-up recommendations remain. The pack output and safety modules are unchanged. | Explicit screenshot-based removal request, 2026-09-12 |
+
 ## Adding or changing a gate
 
 1. Decide the kind. If it is 不顯示, stop and ask the owner before writing code.
