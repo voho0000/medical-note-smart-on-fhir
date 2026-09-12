@@ -1413,6 +1413,13 @@ function DecisionControls({
 
   const needsReasons = decision?.decision === 'contraindicated' || decision?.decision === 'deferred'
   const needsNote = decision?.decision === 'dose-adjusted'
+  const reasonIds = moduleId === 'heart-failure-sglt2'
+    ? decision?.decision === 'contraindicated'
+      ? ['drug-hypersensitivity', 'other']
+      : ['volume-depletion', 'ketoacidosis', 'acute-illness-fasting-surgery', 'low-egfr-initiation', 'patient-refused', 'cost', 'other']
+    : row.decisionKind === 'medication'
+      ? ['high-potassium', 'symptomatic-hypotension', 'low-egfr', 'bradycardia', 'patient-refused', 'cost', 'other']
+      : ['patient-refused', 'cost', 'other']
 
   return (
     <div className="mt-1.5 space-y-1.5" data-testid={`cdss-hf-decision-${moduleId}`}>
@@ -1461,7 +1468,7 @@ function DecisionControls({
 
       {needsReasons ? (
         <div className="flex flex-wrap items-center gap-1.5" data-testid={`cdss-hf-decision-reasons-${moduleId}`}>
-          {DECISION_REASONS.filter((reason) => row.decisionKind === 'medication' || ['patient-refused', 'cost', 'other'].includes(reason.id)).map((reason) => {
+          {DECISION_REASONS.filter((reason) => reasonIds.includes(reason.id)).map((reason) => {
             const selected = decision?.reasons.includes(reason.id) ?? false
             return (
               <button

@@ -52,6 +52,14 @@ test('current maintenance therapy defaults to prescribed with provenance, withou
   fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-deferred'))
   expect(onRecord).toHaveBeenCalledWith('heart-failure-sglt2', expect.objectContaining({ decision: 'deferred' }))
   expect(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-deferred')).toHaveAttribute('aria-pressed', 'true')
+  const reasons = screen.getByTestId('cdss-hf-decision-reasons-heart-failure-sglt2')
+  expect(within(reasons).getByRole('button', { name: '容量不足／症狀性低血壓' })).toBeVisible()
+  expect(within(reasons).getByRole('button', { name: 'eGFR 低於起始門檻' })).toBeVisible()
+  expect(within(reasons).queryByRole('button', { name: 'K 偏高' })).not.toBeInTheDocument()
+  expect(within(reasons).queryByRole('button', { name: '心率過慢' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('cdss-hf-decision-heart-failure-sglt2-contraindicated'))
+  expect(within(reasons).getByRole('button', { name: '對本藥嚴重過敏' })).toBeVisible()
+  expect(within(reasons).queryByRole('button', { name: '容量不足／症狀性低血壓' })).not.toBeInTheDocument()
 })
 
 test.each([
