@@ -304,23 +304,52 @@ describe('the diagnosis reading the host shows', () => {
     expect(summary?.verdict).toContain('醫師已確認')
   })
 
-  it('carries both published scores as floors, with what could not be measured', () => {
-    const scores = diagnosticSummaryOf(diagnosisCard(suspectedHfpEf))?.scores ?? []
+  it('carries both HFpEF scores the calculator handed over, attributed to their authors', () => {
+    // The scores are computed once, by the host's HFpEF calculator, and reach
+    // the pack as two facts whose `matchedTerms` carry the breakdown (brief v2
+    // §1.2). The published 1.13.0 pack still derives its own; the pilot/hmc pack
+    // reads these facts. Both must yield the same shape, so only the shape and
+    // the attribution are asserted here — the values are the pack's own tests.
+    const profile = applyPhenotypeAnswer({
+      ...baseProfile,
+      facts: {
+        ...baseProfile.facts,
+        hfaPeffScore: {
+          zh: 'HFA-PEFF 4／6（功能 2 · 結構 2 · 生物標記 0）',
+          en: 'HFA-PEFF 4/6 (functional 2 · morphological 2 · biomarker 0)',
+          numericValue: 4,
+          unit: 'points',
+          date: '2026-07-14',
+          textEvidence: {
+            direction: 'unknown' as const,
+            matchedTerms: ['functional:2', 'morphological:2', 'biomarker:0', 'upper:6', 'missing:gls', 'missing:nt-probnp', 'calculator:hfa-peff@v1'],
+          },
+        },
+        h2fpefScore: {
+          zh: 'H₂FPEF 5／9',
+          en: 'H2FPEF 5/9',
+          numericValue: 5,
+          unit: 'points',
+          date: '2026-07-14',
+          textEvidence: {
+            direction: 'unknown' as const,
+            matchedTerms: ['item:bmi:0', 'item:antihypertensives:1', 'item:af:0', 'item:pasp:1', 'item:age:1', 'item:e-over-e-prime:2', 'upper:5', 'calculator:h2fpef@v1'],
+          },
+        },
+      },
+    }, suspectedHfpEf)
+    const card = HEART_FAILURE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' }).recommendations
+      .find((item) => item.id === 'heart-failure-hfpef-diagnosis')
+    if (!card) throw new Error('the diagnosis module did not build')
+    const scores = diagnosticSummaryOf(card)?.scores ?? []
     const byName = (name: string) => scores.find((item) => item.name === name)
 
     expect(scores.map((item) => item.name)).toEqual(['HFA-PEFF', 'H2FPEF'])
-
-    // This profile holds no echocardiographic measurement and no natriuretic
-    // peptide, so HFA-PEFF is 0 — and a floor, never a rule-out.
-    expect(byName('HFA-PEFF')).toMatchObject({ value: 0, maximum: 6, isFloor: true })
-    expect(byName('HFA-PEFF')?.unmeasured?.length).toBeGreaterThan(0)
+    expect(byName('HFA-PEFF')).toMatchObject({ maximum: 6 })
     // Attributed to the body that published it, not to the guideline that
     // merely cites it.
     expect(byName('HFA-PEFF')?.source).toContain('Heart Failure Association')
-
-    // H2FPEF: age 68 is its one point here, and BMI, PASP and E/e-prime are all
-    // unmeasured, so it is a floor too.
-    expect(byName('H2FPEF')).toMatchObject({ value: 1, maximum: 9, isFloor: true })
+    expect(byName('H2FPEF')).toMatchObject({ maximum: 9 })
     expect(byName('H2FPEF')?.source).toContain('Circulation 2018')
     // The paper maps score to probability in a figure, so no percentage is
     // printed and no rule-in cut-off is invented.
