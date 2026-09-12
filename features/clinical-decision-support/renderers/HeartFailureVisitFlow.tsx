@@ -46,6 +46,7 @@ import {
 import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
+import { RecordMetricEditor } from './RecordMetricEditor'
 import { ClinicVitalsForm } from './ClinicVitalsForm'
 import { DiagnosisReading } from './DiagnosisReading'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
@@ -122,7 +123,7 @@ const ROW_BAR_CLASS: Readonly<Record<VisitActionGroupId, string>> = {
 
 
 /** The measurements this stage can take back from the clinician. */
-const REFILLABLE_FACT_KEYS: readonly string[] = ['bloodPressure', 'heartRate', 'bodyWeight']
+const METRIC_ENTRY_KEYS = { heartRate: 'heartRate', bodyWeight: 'bodyWeight', potassium: 'potassium', eGFR: 'eGFR', sodium: 'sodium', NTproBNP: 'NTproBNP' } as const
 
 export interface HeartFailureVisitFlowProps {
   flow: VisitFlowModel
@@ -176,6 +177,20 @@ export function HeartFailureVisitFlow({
   )
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
 
+  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
+  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => {
+    if (metric.factKey === 'LVEF') {
+      onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
+    } else if (metric.factKey === 'bloodPressure') {
+      onSaveClinicVitals?.({ entries: { systolic: values ? { value: values[0], measuredOn } : null, diastolic: values ? { value: values[1], measuredOn } : null } })
+    } else {
+      const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
+      if (key) onSaveClinicVitals?.({ entries: { [key]: values ? { value: values[0], measuredOn } : null } })
+      if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
+    }
+    setEditingMetric(null)
+  }
+
   const openVitalsForm = (scopeNote?: string) => {
     setVitalsScopeNote(scopeNote)
     setVitalsFormOpen(true)
@@ -187,6 +202,10 @@ export function HeartFailureVisitFlow({
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-visit-flow">
+      {editingMetric ? <RecordMetricEditor key={editingMetric.factKey} metric={editingMetric} isEnglish={isEnglish} now={now}
+        onSave={(values, date) => saveMetric(editingMetric, values, date)}
+        onRestore={() => saveMetric(editingMetric, null, todayIsoDate(now))}
+        onClose={() => setEditingMetric(null)} /> : null}
       <StepCard
         steps={flow.steps}
         nextStep={flow.nextStep}
@@ -202,18 +221,7 @@ export function HeartFailureVisitFlow({
         metrics={flow.metrics}
         isEnglish={isEnglish}
         now={now}
-        hasLvefQuestion={flow.questions.some((question) => question.id === 'lvef-phenotype')}
-        onRefill={(metric) => {
-          if (metric.factKey === 'LVEF') {
-            focusVisitFlowTarget({ kind: 'question', questionId: 'lvef-phenotype' })
-            return
-          }
-          openVitalsForm(REFILLABLE_FACT_KEYS.includes(metric.factKey)
-            ? undefined
-            : (isEnglish
-              ? 'This stage takes only blood pressure, heart rate, SpO₂, weight and height.'
-              : '本階段僅支援血壓、心率、SpO₂、體重、身高。'))
-        }}
+        onRefill={setEditingMetric}
         canEdit={Boolean(onSaveClinicVitals)}
         onOpenForm={() => openVitalsForm()}
       />
@@ -469,7 +477,6 @@ function RecordCard({
   metrics,
   isEnglish,
   now,
-  hasLvefQuestion,
   onRefill,
   canEdit,
   onOpenForm,
@@ -477,7 +484,6 @@ function RecordCard({
   metrics: readonly HeartFailureMetric[]
   isEnglish: boolean
   now: Date
-  hasLvefQuestion: boolean
   onRefill: (metric: HeartFailureMetric) => void
   canEdit: boolean
   onOpenForm: () => void
@@ -511,7 +517,7 @@ function RecordCard({
         {metrics.map((metric) => {
           const missing = metric.value === undefined
           const source = metricSourceLine(metric, isEnglish)
-          const refillable = canEdit && (metric.factKey !== 'LVEF' || hasLvefQuestion)
+          const refillable = canEdit
           return (
             <div
               key={metric.factKey}
@@ -568,6 +574,10 @@ function RecordCard({
                   ) : null}
                 </>
               )}
+              {!missing && refillable ? <button type="button" className="min-h-7 rounded-md text-[11px] font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => onRefill(metric)} data-testid={`cdss-hf-flow-metric-refill-${metric.factKey}`}>
+                {isEnglish ? 'Edit' : '修改'}
+              </button> : null}
             </div>
           )
         })}

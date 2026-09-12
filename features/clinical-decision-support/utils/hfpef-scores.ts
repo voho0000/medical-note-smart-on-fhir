@@ -235,6 +235,12 @@ function readInput(
     }
   }
 
+  const clinicFact = meta?.factKey ? profile.facts[meta.factKey] : undefined
+  if (clinicFact && CLINIC_ENTRY_PATTERN.test(clinicFact.zh) && isFiniteNumber(clinicFact.numericValue) && input.type === 'number') {
+    return { ...base, value: String(clinicFact.numericValue), numericValue: clinicFact.numericValue,
+      origin: 'physician', date: clinicFact.date?.slice(0, 10), inRecord: true,
+      sourceZh: `你輸入 ${clinicFact.date ?? ''}`.trim(), sourceEn: `Entered by you ${clinicFact.date ?? ''}`.trim() }
+  }
   const hit = resolveInput(input, autofill)
   if (hit.filled && hit.value.trim()) {
     const numeric = numberFrom(hit.value)

@@ -4,7 +4,6 @@ import { useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  CLINIC_VITALS_ENTRY_KEYS,
   todayIsoDate,
   type ClinicVitals,
   type ClinicVitalsEntryKey,
@@ -95,7 +94,7 @@ export function ClinicVitalsForm({
         if (!canSave) return
         const measuredOn = todayIsoDate(now)
         const entries: ClinicVitalsPatch['entries'] = {}
-        for (const key of CLINIC_VITALS_ENTRY_KEYS) {
+        for (const key of Object.keys(parsed) as (keyof typeof parsed)[]) {
           const value = parsed[key]
           if (key === 'systolic' || key === 'diastolic') {
             if (parsed.systolic === undefined || parsed.diastolic === undefined) continue

@@ -83,6 +83,10 @@ export const CLINIC_VITALS_ENTRY_KEYS = [
   'oxygenSaturation',
   'bodyWeight',
   'bodyHeight',
+  'potassium',
+  'eGFR',
+  'sodium',
+  'NTproBNP',
 ] as const
 
 export type ClinicVitalsEntryKey = (typeof CLINIC_VITALS_ENTRY_KEYS)[number]
@@ -172,7 +176,7 @@ export function mergeClinicVitals(
       }
       continue
     }
-    if (!isFinitePositive(entry.value)) continue
+    if (!isFinitePositive(entry.value) && !(key === 'NTproBNP' && entry.value === 0)) continue
     const measuredOn = entry.measuredOn ?? todayIsoDate(now)
     const existing = entries[key]
     if (existing && existing.value === entry.value && existing.measuredOn === measuredOn) continue
@@ -299,9 +303,9 @@ function toClinicVitals(parsed: unknown): ClinicVitals {
       const entry = rawEntries[key]
       if (!entry || typeof entry !== 'object') continue
       const item = entry as Record<string, unknown>
-      if (!isFinitePositive(item.value) || typeof item.measuredOn !== 'string') continue
+      if ((!isFinitePositive(item.value) && !(key === 'NTproBNP' && item.value === 0)) || typeof item.measuredOn !== 'string') continue
       entries[key] = {
-        value: item.value,
+        value: item.value as number,
         measuredOn: item.measuredOn,
         modifiedAt: typeof item.modifiedAt === 'string' ? item.modifiedAt : '',
       }

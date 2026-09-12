@@ -1076,6 +1076,10 @@ export function buildHeartFailureVisitFlow(
     oxygenSaturation: { zh: 'SpO₂', en: 'SpO₂', unit: '%' },
     bodyWeight: { zh: '體重', en: 'Weight', unit: 'kg' },
     bodyHeight: { zh: '身高', en: 'Height', unit: 'cm' },
+    potassium: { zh: 'K', en: 'K', unit: 'mmol/L' },
+    eGFR: { zh: 'eGFR', en: 'eGFR', unit: 'mL/min/1.73m²' },
+    sodium: { zh: 'Na', en: 'Na', unit: 'mmol/L' },
+    NTproBNP: { zh: 'NT-proBNP', en: 'NT-proBNP', unit: 'pg/mL' },
   }
   for (const [key, entry] of Object.entries(clinicVitals?.entries ?? {})) {
     if (!entry) continue
