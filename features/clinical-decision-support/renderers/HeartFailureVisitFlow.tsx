@@ -1030,7 +1030,7 @@ function QuestionShell({
           {answered && onEdit ? (
             <button
               type="button"
-              className="ml-auto min-h-11 min-w-20 shrink-0 rounded-md border border-primary/20 bg-primary/5 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={onEdit}
               data-testid={`cdss-hf-question-edit-${question.id}`}
             >
@@ -1434,7 +1434,7 @@ function DecisionControls({
         ) : null}
         <button
           type="button"
-          className="min-h-11 min-w-20 shrink-0 rounded-md border border-primary/20 bg-primary/5 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onEdit(true)}
           data-testid={`cdss-hf-decision-edit-${moduleId}`}
         >

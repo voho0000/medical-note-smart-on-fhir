@@ -1302,7 +1302,10 @@ function buildVisitSummaryText(input: {
     nyhaText, symptomsText, signsText, hfpEfText, compensationText, vitalsText,
     decidableRows, decidedCount, followUpNote,
   } = input
-  const suspicionStamp = formatStamp(suspicionModifiedAt, now, isEnglish)
+  const recordedStamp = suspicionModifiedAt ? zonedParts(suspicionModifiedAt) : undefined
+  const suspicionStamp = input.chartLayout
+    ? (recordedStamp ? `${recordedStamp.date}${suspicionModifiedAt!.length > 10 ? ` ${recordedStamp.time}` : ''}` : undefined)
+    : formatStamp(suspicionModifiedAt, now, isEnglish)
   const lines: string[] = []
 
   lines.push([

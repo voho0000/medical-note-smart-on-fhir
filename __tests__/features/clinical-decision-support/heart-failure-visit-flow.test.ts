@@ -654,7 +654,8 @@ describe('English chart summary independent of the Chinese interface', () => {
       'heart-failure-monitoring': { decision: 'deferred', reasons: ['patient-refused'], recordedAt: NOW.toISOString(), packVersion: 'test' },
     } })
     expect(flow.englishSummaryText).not.toMatch(/[\u3400-\u9fff]/)
-    expect(flow.englishSummaryText).toContain('Heart-failure suspicion: Yes')
+    expect(flow.englishSummaryText).toContain('Heart-failure suspicion: Yes (2026/09/11 14:05)')
+    expect(flow.englishSummaryText).not.toContain('Today')
     expect(flow.englishSummaryText).toContain('HFrEF')
     expect(flow.englishSummaryText).toContain('LVEF 32% (2026/07/14)')
     expect(flow.englishSummaryText).toContain('NYHA: II')
