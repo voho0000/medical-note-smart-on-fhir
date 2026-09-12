@@ -574,6 +574,7 @@ describe('clinical decision summary', () => {
 
     const semanticCard = screen.getByTestId('cdss-semantic-card-sglt2-semantic')
     expect(within(semanticCard).getByText('指引用藥條件')).toBeInTheDocument()
+    expect(within(semanticCard).getByRole('button', { name: '複製' })).toBeInTheDocument()
     expect(semanticCard).toHaveTextContent('KDIGO CKD 指引 · 2024')
     expect(semanticCard).toHaveTextContent('1A / 2B')
     expect(semanticCard).toHaveTextContent('eGFR ≥20 且 UACR ≥200 mg/g')

@@ -14,10 +14,21 @@ import { saveEncryptedCache } from '@/src/infrastructure/cache/encrypted-session
 /** jsdom ships `getRandomValues` but not `crypto.subtle`. */
 export function useRealWebCrypto(): void {
   const jsdomCrypto = globalThis.crypto
+  const decrypt = webcrypto.subtle.decrypt.bind(webcrypto.subtle)
+  let decryptSpy: jest.SpyInstance
   beforeAll(() => {
+    // Node WebCrypto rejects jsdom-realm ArrayBuffers on its decrypt path.
+    // Convert only the input buffer; encryption/decryption still use real AES-GCM.
+    decryptSpy = jest.spyOn(webcrypto.subtle, 'decrypt').mockImplementation((algorithm, key, data) => {
+      const bytes = ArrayBuffer.isView(data)
+        ? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+        : Buffer.from(new Uint8Array(data))
+      return decrypt(algorithm, key, bytes)
+    })
     Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
   })
   afterAll(() => {
+    decryptSpy.mockRestore()
     Object.defineProperty(globalThis, 'crypto', { value: jsdomCrypto, configurable: true })
   })
 }

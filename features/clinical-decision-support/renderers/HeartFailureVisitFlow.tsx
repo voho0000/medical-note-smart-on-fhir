@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useState } from 'react'
+import { Fragment, type ReactNode, useState } from 'react'
 import {
   ArrowRight,
   Check,
@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -42,18 +43,23 @@ import {
   HFPEF_CALCULATOR_VERSION,
   type HfpefReading,
   type HfpefScoreReading,
+  type HfpefScoreId,
 } from '../utils/hfpef-scores'
 import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
-import { ClinicVitalsForm } from './ClinicVitalsForm'
+import { EchoReportButton } from './EchoReportButton'
+import { RecordMetricEditor } from './RecordMetricEditor'
+import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { DiagnosisReading } from './DiagnosisReading'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
+  VISIT_DECISIONS,
   VISIT_SIDE_LABELS,
   decisionLabel,
+  decisionReasonIds,
   decisionReasonLabel,
   formatDay,
   formatStamp,
@@ -67,6 +73,7 @@ import {
   type VisitSignSide,
   type VisitStep,
 } from './heart-failure-visit-flow'
+import { heartFailureMedicationSafetyAssessment } from './heart-failure-medication-safety'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
 /** The element a step's 「前往」 button scrolls to. */
@@ -119,17 +126,9 @@ const ROW_BAR_CLASS: Readonly<Record<VisitActionGroupId, string>> = {
   'no-action': 'bg-emerald-400',
 }
 
-const MEDICATION_DECISIONS: readonly PhysicianDecisionKind[] = [
-  'prescribed',
-  'dose-adjusted',
-  'contraindicated',
-  'deferred',
-  'patient-preference',
-]
-const TEST_DECISIONS: readonly PhysicianDecisionKind[] = ['ordered', 'deferred']
 
 /** The measurements this stage can take back from the clinician. */
-const REFILLABLE_FACT_KEYS: readonly string[] = ['bloodPressure', 'heartRate', 'bodyWeight']
+const METRIC_ENTRY_KEYS = { oxygenSaturation: 'oxygenSaturation', bodyHeight: 'bodyHeight', heartRate: 'heartRate', bodyWeight: 'bodyWeight', potassium: 'potassium', eGFR: 'eGFR', sodium: 'sodium', NTproBNP: 'NTproBNP', hemoglobin: 'hemoglobin' } as const
 
 export interface HeartFailureVisitFlowProps {
   flow: VisitFlowModel
@@ -152,6 +151,7 @@ export interface HeartFailureVisitFlowProps {
   hfpefReading?: HfpefReading
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   packVersion: string
+  rhythmPanel?: ReactNode
 }
 
 export function HeartFailureVisitFlow({
@@ -164,7 +164,6 @@ export function HeartFailureVisitFlow({
   renderDetail,
   clinicVitals,
   onSaveClinicVitals,
-  onClearClinicVitals,
   phenotypeAnswer,
   onAnswerPhenotype,
   onRecordDecision,
@@ -172,10 +171,10 @@ export function HeartFailureVisitFlow({
   hfpefReading,
   onSaveHfpefInputs,
   packVersion,
+  rhythmPanel,
 }: HeartFailureVisitFlowProps) {
-  const [vitalsFormOpen, setVitalsFormOpen] = useState(false)
+  const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
-  const [vitalsScopeNote, setVitalsScopeNote] = useState<string | undefined>(undefined)
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<VisitActionGroupId>>(
     () => new Set(flow.actionGroups
       .filter((group) => group.collapsedByDefault)
@@ -183,17 +182,46 @@ export function HeartFailureVisitFlow({
   )
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
 
-  const openVitalsForm = (scopeNote?: string) => {
-    setVitalsScopeNote(scopeNote)
-    setVitalsFormOpen(true)
-    if (typeof document !== 'undefined') {
-      document.getElementById(visitQuestionElementId('clinic-vitals'))
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }
+  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
+  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
+  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
+  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
+  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
+    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
+    const entry = clinicVitals?.entries[key]
+    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
   }
+  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'hemoglobin', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
+  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
+  const saveMetrics = (changes: RecordValueChange[]) => {
+    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
+    for (const { metric, values, measuredOn } of changes) {
+      if (metric.factKey === 'LVEF') {
+        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
+      } else if (metric.factKey === 'bloodPressure') {
+        entries.systolic = values ? { value: values[0], measuredOn } : null
+        entries.diastolic = values ? { value: values[1], measuredOn } : null
+      } else {
+        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
+        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
+        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
+      }
+    }
+    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
+    setEditingMetric(null)
+    setRecordValuesOpen(false)
+  }
+  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
+
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-visit-flow">
+      {editingMetric ? <RecordMetricEditor key={editingMetric.factKey} metric={editingMetric} isEnglish={isEnglish} now={now}
+        onSave={(values, date) => saveMetric(editingMetric, values, date)}
+        onRestore={() => saveMetric(editingMetric, null, todayIsoDate(now))}
+        onClose={() => setEditingMetric(null)} /> : null}
+      {recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={allEditableMetrics} isEnglish={isEnglish} now={now}
+        onSave={saveMetrics} onClose={() => setRecordValuesOpen(false)} /> : null}
       <StepCard
         steps={flow.steps}
         nextStep={flow.nextStep}
@@ -202,27 +230,15 @@ export function HeartFailureVisitFlow({
           if (flow.nextStep.target.kind === 'copy') return
           focusVisitFlowTarget(flow.nextStep.target)
         }}
-        summaryText={flow.summaryText}
+        summaryText={flow.englishSummaryText}
       />
 
       <RecordCard
-        metrics={flow.metrics}
+        rhythmPanel={rhythmPanel}
+        metrics={allEditableMetrics}
         isEnglish={isEnglish}
-        now={now}
-        hasLvefQuestion={flow.questions.some((question) => question.id === 'lvef-phenotype')}
-        onRefill={(metric) => {
-          if (metric.factKey === 'LVEF') {
-            focusVisitFlowTarget({ kind: 'question', questionId: 'lvef-phenotype' })
-            return
-          }
-          openVitalsForm(REFILLABLE_FACT_KEYS.includes(metric.factKey)
-            ? undefined
-            : (isEnglish
-              ? 'This stage takes only blood pressure, heart rate, SpO₂, weight and height.'
-              : '本階段僅支援血壓、心率、SpO₂、體重、身高。'))
-        }}
         canEdit={Boolean(onSaveClinicVitals)}
-        onOpenForm={() => openVitalsForm()}
+        onOpenForm={() => setRecordValuesOpen(true)}
       />
 
       <QuestionsCard
@@ -231,16 +247,11 @@ export function HeartFailureVisitFlow({
         now={now}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={onSaveClinicVitals}
-        onClearClinicVitals={onClearClinicVitals}
         phenotypeAnswer={phenotypeAnswer}
         onAnswerPhenotype={onAnswerPhenotype}
         board={board}
         hfpefReading={hfpefReading}
-        onOpenCalculator={onSaveHfpefInputs ? () => setCalculatorOpen(true) : undefined}
-        vitalsFormOpen={vitalsFormOpen}
-        vitalsScopeNote={vitalsScopeNote}
-        onOpenVitalsForm={() => openVitalsForm()}
-        onCloseVitalsForm={() => { setVitalsFormOpen(false); setVitalsScopeNote(undefined) }}
+        onOpenCalculator={onSaveHfpefInputs ? (id = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined}
       />
 
       <ActionsCard
@@ -278,6 +289,8 @@ export function HeartFailureVisitFlow({
 
       {hfpefReading && onSaveHfpefInputs ? (
         <HfpefInputsDialog
+          key={`${calculatorTab}-${calculatorOpen}`}
+          initialTab={calculatorTab}
           open={calculatorOpen}
           onOpenChange={setCalculatorOpen}
           reading={hfpefReading}
@@ -461,34 +474,35 @@ const MISSING_PATTERN_STYLE = { backgroundImage: 'var(--clinical-missing-data-pa
 
 function metricSourceLine(
   metric: HeartFailureMetric,
-  isEnglish: boolean,
-): string | undefined {
+ ): string | undefined {
   const day = formatDay(metric.date)
   if (metric.entered) {
-    return isEnglish ? `Clinic ${day ?? 'today'} · entered by you` : `門診 ${day ?? '今日'} · 你輸入`
+    return day
   }
   if (!day) return undefined
-  if (metric.factKey === 'LVEF') return isEnglish ? `Echo ${day}` : `心超 ${day}`
-  return metric.kind === 'lab' ? (isEnglish ? `Lab ${day}` : `檢驗 ${day}`) : day
+  return day
 }
 
 function RecordCard({
+  rhythmPanel,
   metrics,
   isEnglish,
-  now,
-  hasLvefQuestion,
-  onRefill,
   canEdit,
   onOpenForm,
 }: {
+  rhythmPanel?: ReactNode
   metrics: readonly HeartFailureMetric[]
   isEnglish: boolean
-  now: Date
-  hasLvefQuestion: boolean
-  onRefill: (metric: HeartFailureMetric) => void
   canEdit: boolean
   onOpenForm: () => void
 }) {
+  const weightMetric = metrics.find((item) => item.factKey === 'bodyWeight')
+  const heightMetric = metrics.find((item) => item.factKey === 'bodyHeight')
+  const weight = Number.parseFloat(weightMetric?.value ?? '')
+  const height = Number.parseFloat(heightMetric?.value ?? '')
+  const bmi = Number.isFinite(weight) && weight > 0 && Number.isFinite(height) && height > 0
+    ? (weight / (height / 100) ** 2).toFixed(1)
+    : undefined
   return (
     <section
       className="overflow-hidden rounded-lg border border-border bg-card"
@@ -510,54 +524,58 @@ function RecordCard({
             data-testid="cdss-hf-record-values-edit"
           >
             <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-            {isEnglish ? 'Add or edit clinic measurements' : '補填／修改門診量測'}
+            {isEnglish ? 'Edit clinical values' : '補填／修改臨床數值'}
           </button>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 @min-[32rem]:grid-cols-4 @min-[60rem]:grid-cols-8">
+      <div className="grid grid-cols-2 @min-[24rem]:grid-cols-3 @min-[32rem]:grid-cols-5 @min-[40rem]:grid-cols-[11rem_repeat(5,minmax(0,1fr))]">
         {metrics.map((metric) => {
-          const missing = metric.value === undefined
-          const source = metricSourceLine(metric, isEnglish)
-          const refillable = canEdit && (metric.factKey !== 'LVEF' || hasLvefQuestion)
+          const isLvef = metric.factKey === 'LVEF'
+          const isBmi = metric.factKey === 'bodyHeight'
+          const displayedValue = isBmi ? bmi : metric.value
+          const missing = displayedValue === undefined
+          const source = isBmi
+            ? (isEnglish ? 'Calculated from height & weight' : '由身高、體重計算')
+            : metricSourceLine(metric)
           return (
             <div
               key={metric.factKey}
-              className={cn('min-w-0 px-2 py-2', missing && 'bg-muted/40')}
+              className={cn(
+                'min-w-0 border-b border-r border-border/60 px-3 py-2',
+                isLvef && 'relative col-span-full grid grid-cols-1 p-0 @min-[24rem]:grid-cols-2 @min-[40rem]:col-span-1 @min-[40rem]:row-span-2 @min-[40rem]:grid-cols-1 @min-[40rem]:grid-rows-subgrid',
+                metric.factKey === 'bloodPressure' && 'col-start-1 @min-[40rem]:col-start-auto',
+                missing && 'bg-muted/40',
+              )}
               style={missing ? MISSING_PATTERN_STYLE : undefined}
-              title={metric.fullValue}
+              title={isBmi ? `${weightMetric?.value ?? '—'} kg (${weightMetric?.date ?? '—'}) / ${heightMetric?.value ?? '—'} cm (${heightMetric?.date ?? '—'})` : metric.fullValue}
               data-testid={`cdss-hf-flow-metric-${metric.factKey}`}
               data-missing={missing ? 'true' : undefined}
               data-stale={metric.stale ? 'true' : undefined}
               data-entered={metric.entered ? 'true' : undefined}
             >
+              <div className={isLvef ? "relative flex w-full flex-col items-start px-3 py-2" : undefined}>
               <div className="truncate text-[11px] font-medium leading-4 text-muted-foreground">
-                {metric.label}
-                {metric.unit ? <span className="ml-1 font-normal opacity-80">{metric.unit}</span> : null}
+                {isBmi ? 'BMI' : metric.label}
+                {isBmi ? <span className="ml-1 font-normal opacity-80">kg/m²</span> : metric.unit ? <span className="ml-1 font-normal opacity-80">{metric.unit}</span> : null}
               </div>
               {missing ? (
                 <>
                   <div className="mt-0.5 text-sm font-medium leading-5 text-muted-foreground">
                     {isEnglish ? 'No value in the record' : '紀錄無值'}
                   </div>
-                  {refillable ? (
-                    <button
-                      type="button"
-                      className="min-h-7 rounded-md text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => onRefill(metric)}
-                      data-testid={`cdss-hf-flow-metric-refill-${metric.factKey}`}
-                    >
-                      {isEnglish ? 'Add it' : '補填'}
-                    </button>
-                  ) : null}
                 </>
               ) : (
                 <>
+                  <div className="flex items-center gap-2">
                   <div className={cn(
-                    'mt-0.5 truncate text-base font-semibold leading-5 tabular-nums',
+                    'mt-0.5 font-semibold tabular-nums',
+                    isLvef ? 'text-2xl leading-tight tracking-tight' : 'truncate text-base leading-5',
                     metric.stale ? 'text-amber-700 dark:text-amber-300' : 'text-foreground',
                   )}>
-                    {metric.value}
+                    {displayedValue}
                   </div>
+                  </div>
+                  <div className="flex w-full items-center justify-between gap-2">
                   {source ? (
                     <div className={cn(
                       'truncate text-[11px] leading-4 tabular-nums',
@@ -573,19 +591,18 @@ function RecordCard({
                         : ''}
                     </div>
                   ) : null}
+                  {isLvef ? <EchoReportButton metric={metric} isEnglish={isEnglish} /> : null}
+                  </div>
                 </>
               )}
+
+              {isLvef && missing ? <EchoReportButton metric={metric} isEnglish={isEnglish} /> : null}
+              </div>
+              {isLvef && rhythmPanel ? <div className="relative border-t border-border px-3 py-2 @min-[24rem]:border-l @min-[24rem]:border-t-0 @min-[40rem]:border-l-0 @min-[40rem]:border-t">{rhythmPanel}</div> : null}
             </div>
           )
         })}
       </div>
-      <p className="border-t border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'A missing value reads 「no value in the record」 and is never treated as normal. An entered value is encrypted and kept for this tab session, carries its measurement and modification dates, and is not carried to the next visit until phase 2.'
-          : '缺的值以「紀錄無值」顯示，不會被當成正常。補填的值加密保存於本分頁的工作階段，並記量測日與修改日；跨次就診沿用為第二階段。'}
-        {' '}
-        {formatStamp(now.toISOString(), now, isEnglish)}
-      </p>
     </section>
   )
 }
@@ -599,24 +616,26 @@ function SegmentedControl<T extends string>({
   onSelect,
   testId,
   disabled,
+  equalWidth = false,
 }: {
   label: string
-  options: readonly { id: T; text: string }[]
+  options: readonly { id: T; text: string; description?: string }[]
   value: T | null
   onSelect: (next: T) => void
   testId: string
   disabled?: boolean
+  equalWidth?: boolean
 }) {
   return (
     <div
-      className="flex shrink-0 overflow-hidden rounded-md border border-border"
+      className={cn("shrink-0 overflow-hidden rounded-md border border-border", equalWidth ? "inline-grid w-fit max-w-full grid-flow-col auto-cols-fr" : "flex")}
       role="group"
       aria-label={label}
       data-testid={testId}
     >
       {options.map((option) => {
         const isSelected = value === option.id
-        return (
+        const button = (
           <button
             key={option.id}
             type="button"
@@ -637,6 +656,14 @@ function SegmentedControl<T extends string>({
             {option.text}
           </button>
         )
+        return option.description ? (
+          <Tooltip key={option.id}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6} className="max-w-72 leading-relaxed">
+              <span className="font-semibold">NYHA {option.text}</span><br />{option.description}
+            </TooltipContent>
+          </Tooltip>
+        ) : button
       })}
     </div>
   )
@@ -714,14 +741,13 @@ function SignItemRows({
   const [moreOpen, setMoreOpen] = useState(false)
   const common = items.filter((item) => item.common)
   const more = items.filter((item) => !item.common)
-  const row = (item: VisitSignItem) => (
-    <div key={item.term} className="flex flex-wrap items-center gap-2">
+  const row = (item: VisitSignItem) => {
+    const visibleLabel = isEnglish ? item.en : item.zh
+    return <div key={item.term} className="flex flex-wrap items-center gap-2">
       <SideTag side={item.side} isEnglish={isEnglish} />
-      <span className="min-w-0 flex-1 text-xs text-foreground">
-        {isEnglish ? item.en : item.zh}
-      </span>
+      <span className="min-w-0 flex-1 text-xs text-foreground">{visibleLabel}</span>
       <SegmentedControl<SignAnswerValue>
-        label={isEnglish ? item.en : item.zh}
+        label={visibleLabel}
         options={[
           { id: 'present', text: isEnglish ? 'Yes' : '有' },
           { id: 'absent', text: isEnglish ? 'No' : '無' },
@@ -732,7 +758,7 @@ function SignItemRows({
         testId={`cdss-hf-flow-sign-${item.term}`}
       />
     </div>
-  )
+  }
   return (
     <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
       {showLegend ? (
@@ -799,7 +825,7 @@ function HfpEfScoreLine({
 }: {
   reading?: HfpefReading
   isEnglish: boolean
-  onComplete?: () => void
+  onComplete?: (id?: HfpefScoreId) => void
 }) {
   const scores = [reading?.hfaPeff, reading?.h2fpef]
     .filter((score): score is HfpefScoreReading => Boolean(score))
@@ -824,7 +850,7 @@ function HfpEfScoreLine({
               className="flex flex-wrap items-baseline gap-x-2 text-xs"
               data-testid={`cdss-hf-hfpef-score-${score.id}`}
             >
-              <span className="w-[5.5rem] shrink-0 font-semibold text-foreground">{score.name}</span>
+              {onComplete ? <button type="button" className="min-h-8 w-[5.5rem] shrink-0 text-left font-semibold text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary" aria-label={`${isEnglish ? 'Open' : '開啟'} ${score.name}`} onClick={() => onComplete(score.id)}>{score.name}</button> : <span className="w-[5.5rem] shrink-0 font-semibold text-foreground">{score.name}</span>}
               <span className="font-semibold tabular-nums text-foreground">
                 {score.score}
                 {isEnglish ? '/' : '／'}
@@ -852,17 +878,7 @@ function HfpEfScoreLine({
           ) : null}
         </>
       )}
-      {onComplete ? (
-        <button
-          type="button"
-          className="mt-1 inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={onComplete}
-          data-testid="cdss-hf-hfpef-open-calculator"
-        >
-          <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-          {isEnglish ? 'Complete the echo values' : '補完心超數值'}
-        </button>
-      ) : null}
+
     </div>
   )
 }
@@ -882,7 +898,7 @@ function HfpEfConfirmation({
   answer?: PhenotypeAnswer
   onAnswer: (answer: PhenotypeAnswer) => void
   hfpefReading?: HfpefReading
-  onOpenCalculator?: () => void
+  onOpenCalculator?: (id?: HfpefScoreId) => void
 }) {
   const symptomsState = summary?.criteria
     .find((criterion) => criterion.id === 'symptoms-signs')?.state
@@ -961,6 +977,8 @@ function QuestionShell({
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
   const open = question.state === 'open'
   const answered = question.state === 'answered'
+  const sideBySide = ['hf-suspicion', 'lvef-phenotype', 'nyha', 'compensation'].includes(question.id)
+  const editingInline = sideBySide && Boolean(children)
   return (
     <li
       id={visitQuestionElementId(question.id)}
@@ -984,17 +1002,17 @@ function QuestionShell({
       >
         {answered ? <Check className="h-3 w-3" aria-hidden="true" /> : question.number}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <div className={cn("min-w-0 flex-1", sideBySide && "@min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,34rem)_auto] @min-[64rem]:justify-start @min-[64rem]:items-center @min-[64rem]:gap-x-6")}>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 @min-[64rem]:col-start-1">
           <span className={cn(
             'text-sm font-semibold leading-5',
             question.state === 'locked' ? 'text-muted-foreground' : 'text-foreground',
           )}>
             {question.label}
           </span>
-          {answered && question.answerText ? (
+          {answered && !editingInline && question.answerText ? (
             <span
-              className="text-xs font-medium text-foreground"
+              className="inline-flex min-h-6 items-center rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs font-semibold leading-4 text-primary"
               data-testid={`cdss-hf-question-answer-${question.id}`}
             >
               {question.answerText}
@@ -1006,14 +1024,14 @@ function QuestionShell({
               {isEnglish ? `last changed ${stamp}` : `最後修改 ${stamp}`}
             </span>
           ) : null}
-          {answered && onEdit ? (
+          {answered && !editingInline && onEdit ? (
             <button
               type="button"
-              className="ml-auto min-h-7 rounded-md px-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={onEdit}
               data-testid={`cdss-hf-question-edit-${question.id}`}
             >
-              {isEnglish ? 'Change' : '改'}
+              {isEnglish ? 'Edit' : '修改'}
             </button>
           ) : null}
         </div>
@@ -1024,9 +1042,9 @@ function QuestionShell({
         ) : (
           <>
             {question.hint ? (
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{question.hint}</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground @min-[64rem]:col-start-1">{question.hint}</p>
             ) : null}
-            {children ? <div className="mt-2">{children}</div> : null}
+            {children ? <div className={cn("mt-2", sideBySide && "@min-[64rem]:col-start-2 @min-[64rem]:row-start-1 @min-[64rem]:row-span-2 @min-[64rem]:mt-0 @min-[64rem]:max-w-[36rem]")}>{children}</div> : null}
           </>
         )}
       </div>
@@ -1040,16 +1058,11 @@ function QuestionsCard({
   now,
   clinicVitals,
   onSaveClinicVitals,
-  onClearClinicVitals,
   phenotypeAnswer,
   onAnswerPhenotype,
   board,
   hfpefReading,
   onOpenCalculator,
-  vitalsFormOpen,
-  vitalsScopeNote,
-  onOpenVitalsForm,
-  onCloseVitalsForm,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1061,18 +1074,18 @@ function QuestionsCard({
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
   board: HeartFailureBoardModel
   hfpefReading?: HfpefReading
-  onOpenCalculator?: () => void
-  vitalsFormOpen: boolean
-  vitalsScopeNote?: string
-  onOpenVitalsForm: () => void
-  onCloseVitalsForm: () => void
+  onOpenCalculator?: (id?: HfpefScoreId) => void
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
   const [reopened, setReopened] = useState<ReadonlySet<VisitQuestionId>>(new Set())
-  const reopen = (id: VisitQuestionId) => setReopened((current) => new Set(current).add(id))
+  const [collapsedItems, setCollapsedItems] = useState<ReadonlySet<VisitQuestionId>>(new Set())
+  const reopen = (id: VisitQuestionId) => {
+    setReopened(current => new Set(current).add(id))
+    setCollapsedItems(current => { const next = new Set(current); next.delete(id); return next })
+  }
   const shows = (question: VisitQuestion) => (
-    question.state === 'open' || reopened.has(question.id)
+    question.items ? !collapsedItems.has(question.id) : question.state === 'open' || reopened.has(question.id)
   )
   const diagnosisCard = board.hfpEfDiagnosis
 
@@ -1098,19 +1111,14 @@ function QuestionsCard({
             : (isEnglish ? 'Assessment complete' : '本次評估完成')}
         </span>
       </div>
-      <p className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'Each question is asked here and nowhere else; 「not assessed」 is the default and is never read as a negative. Symptoms are what the patient says, signs are what you find — they are recorded apart. Answers re-enter the rules, and the actions below recompute.'
-          : '每題只在這裡問一次；預設「未評估」，不會被當成陰性。症狀是病人說的，徵象是你檢查的，分開記。答案寫回規則後，下方處置會重算。'}
-      </p>
       {flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
           className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
           data-testid="cdss-hf-questions-hfpef-note"
         >
           {isEnglish
-            ? 'A patient with an LVEF of 50% or more gets one more question at the end of this assessment. It reads the answers to questions 2 and 4 to judge criterion (i), which is why it comes last.'
-            : 'LVEF ≥50% 的病人在本次評估最後多一題。它讀第 2、4 題的答案判條件 (i)，所以排在後面。'}
+            ? 'A patient with an LVEF of 50% or more gets one more question at the end of this assessment. It reads the answers to questions 2 and 3 to judge criterion (i), which is why it comes last.'
+            : 'LVEF ≥50% 的病人在本次評估最後多一題。它讀第 2、3 題的答案判條件 (i)，所以排在後面。'}
         </p>
       ) : null}
       {flow.readOnly ? (
@@ -1137,6 +1145,7 @@ function QuestionsCard({
               >
                 {shows(question) && question.request && onAnswerPhenotype && question.recommendationId ? (
                   <PhysicianInputRequestPanel
+                    inline
                     requests={[question.request]}
                     recommendationId={question.recommendationId}
                     isEnglish={isEnglish}
@@ -1185,12 +1194,13 @@ function QuestionsCard({
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<NyhaAnswerValue>
+                    equalWidth
                     label={question.label}
                     options={[
-                      { id: 'I', text: 'I' },
-                      { id: 'II', text: 'II' },
-                      { id: 'III', text: 'III' },
-                      { id: 'IV', text: 'IV' },
+                      { id: 'I', text: 'I', description: isEnglish ? 'Activity is unrestricted; usual daily exertion does not provoke undue fatigue, palpitations or breathlessness.' : '日常活動不受限制；一般活動不會引起明顯疲倦、心悸或呼吸困難。' },
+                      { id: 'II', text: 'II', description: isEnglish ? 'Mild activity restriction: comfortable at rest, but usual daily exertion brings on fatigue, palpitations or breathlessness.' : '活動輕度受限；休息時舒適，但一般日常活動會引起疲倦、心悸或呼吸困難。' },
+                      { id: 'III', text: 'III', description: isEnglish ? 'Substantial activity restriction: comfortable at rest, but symptoms develop with lighter-than-usual daily exertion.' : '活動明顯受限；休息時舒適，但低於一般日常活動的程度就會引起症狀。' },
+                      { id: 'IV', text: 'IV', description: isEnglish ? 'Heart failure symptoms occur at rest, and any physical exertion increases discomfort.' : '休息時也有心衰竭症狀，任何身體活動都會增加不適。' },
                       { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
                     ]}
                     value={value}
@@ -1215,14 +1225,20 @@ function QuestionsCard({
                 ) : undefined}
               >
                 {shows(question) && onSaveClinicVitals ? (
+                  <div>
                   <SignItemRows
                     questionId={question.id}
                     items={question.items}
                     clinicVitals={clinicVitals}
                     isEnglish={isEnglish}
                     showLegend={question.id === 'symptoms'}
-                    onAnswer={(term, next) => onSaveClinicVitals({ signAnswers: { [term]: next } })}
+                    onAnswer={(term, next) => {
+                      reopen(question.id)
+                      onSaveClinicVitals({ signAnswers: { [term]: next } })
+                    }}
                   />
+                  {question.state === 'answered' ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
+                  </div>
                 ) : null}
               </QuestionShell>
             )
@@ -1239,6 +1255,7 @@ function QuestionsCard({
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<CompensationAnswerValue>
+                    equalWidth
                     label={question.label}
                     options={[
                       { id: 'compensated', text: isEnglish ? 'Compensated' : '代償' },
@@ -1254,43 +1271,7 @@ function QuestionsCard({
             )
           }
 
-          // The clinic measurements: the form itself, opened from here or from
-          // a 「補填」 on a missing value above.
-          return (
-            <QuestionShell
-              key={question.id}
-              question={question}
-              isEnglish={isEnglish}
-              now={now}
-              onEdit={onSaveClinicVitals ? onOpenVitalsForm : undefined}
-            >
-              {onSaveClinicVitals ? (
-                vitalsFormOpen ? (
-                  <ClinicVitalsForm
-                    isEnglish={isEnglish}
-                    now={now}
-                    initial={clinicVitals}
-                    onSave={onSaveClinicVitals}
-                    onClear={onClearClinicVitals}
-                    onClose={onCloseVitalsForm}
-                    footnote={vitalsScopeNote}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={onOpenVitalsForm}
-                    data-testid="cdss-hf-flow-open-vitals"
-                  >
-                    <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-                    {question.answerText
-                      ? (isEnglish ? 'Edit clinic measurements' : '修改門診量測')
-                      : (isEnglish ? 'Enter clinic measurements' : '輸入門診量測')}
-                  </button>
-                )
-              ) : null}
-            </QuestionShell>
-          )
+          return null
         })}
       </ul>
     </section>
@@ -1298,6 +1279,109 @@ function QuestionsCard({
 }
 
 /* --------------------------------------------------- 區塊 4 今日處置 */
+
+const DOSE_EXPRESSION = '\\d+(?:\\.\\d+)?(?:/\\d+(?:\\.\\d+)?)?'
+
+export function doseAdjustmentDefaults(medications?: string): {
+  medication: string
+  previous: string
+  unit: string
+} {
+  const medication = medications?.split(/[、,;]/)[0]?.trim() ?? ''
+  const hasStrength = new RegExp(
+    `^.+?\\s+${DOSE_EXPRESSION}\\s*(?:mg|mcg|g|mL|units|錠)(?:\\b|$)`,
+    'i',
+  ).test(medication)
+  return {
+    medication,
+    previous: hasStrength ? '1' : '',
+    unit: hasStrength ? '錠' : 'mg',
+  }
+}
+
+function DoseAdjustmentEditor({ initialNote, medications, defaultMedication, isEnglish, onSave }: {
+  initialNote: string
+  medications?: string
+  defaultMedication?: string
+  isEnglish: boolean
+  onSave: (note: string) => void
+}) {
+  const dosePattern = DOSE_EXPRESSION
+  const parsed = new RegExp(`^(?:(.+?)[：:])?(${dosePattern}) → (${dosePattern}) (mg|mcg|g|mL|units|錠)(?:(?: · | )(PO|IV|IM|SC))?(?:(?: · | )(QD|BID|TID|QID|QAM|QHS|PRN))?(?:；([\\s\\S]*))?$`).exec(initialNote)
+  const inferred = doseAdjustmentDefaults(medications)
+  // Keep the dispensed strength with the drug name. The editable numbers are
+  // units per administration, so combination strengths such as 49/51 mg stay
+  // intact and a change can read 1 → 0.5 tablet.
+  const [medication, setMedication] = useState(parsed?.[1]?.trim() || inferred.medication || defaultMedication || '')
+  const [previous, setPrevious] = useState(parsed?.[2] ?? inferred.previous)
+  const [next, setNext] = useState(parsed?.[3] ?? '')
+  const [unit, setUnit] = useState(parsed?.[4] ?? inferred.unit)
+  const [route, setRoute] = useState(parsed?.[5] ?? 'PO')
+  const [frequency, setFrequency] = useState(parsed?.[6] ?? 'QD')
+  const [extra, setExtra] = useState(parsed ? parsed[7] ?? '' : initialNote)
+  const validDose = (value: string, allowZero: boolean) => {
+    if (!new RegExp(`^${dosePattern}$`).test(value.trim())) return false
+    return value.split('/').every((part) => allowZero ? Number(part) >= 0 : Number(part) > 0)
+  }
+  const valid = medication.trim() !== '' && route !== '' && frequency !== ''
+    && validDose(previous, true) && validDose(next, false)
+    && previous.trim() !== next.trim()
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-end gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'Medication / strength' : '藥品規格'}
+            <Input value={medication} onChange={event => setMedication(event.target.value)}
+              className="h-8 w-40 px-2 text-sm" placeholder={isEnglish ? 'Drug and strength' : '藥名＋規格'} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'Previous amount' : '原每次用量'}
+            <Input type="text" inputMode="decimal" value={previous}
+              onChange={event => setPrevious(event.target.value)} className="h-8 w-16 px-2 text-sm"
+              placeholder="1" />
+          </label>
+          <span className="pb-1.5 text-sm text-muted-foreground" aria-hidden="true">→</span>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'New amount' : '新每次用量'}
+            <Input type="text" inputMode="decimal" value={next}
+              onChange={event => setNext(event.target.value)} className="h-8 w-16 px-2 text-sm" placeholder="0.5" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'Unit' : '單位'}
+            <select value={unit} onChange={event => setUnit(event.target.value)}
+              className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {['錠', '顆', '包', 'mg', 'mcg', 'g', 'mL', 'units'].map(value => <option key={value} value={value}>{value === '錠' && isEnglish ? 'tablets' : value === '顆' && isEnglish ? 'capsules' : value === '包' && isEnglish ? 'packets' : value}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'Route' : '途徑'}
+            <select value={route} onChange={event => setRoute(event.target.value)}
+              className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {['PO', 'IV', 'IM', 'SC'].map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {isEnglish ? 'Frequency' : '頻次'}
+            <select value={frequency} onChange={event => setFrequency(event.target.value)}
+              className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <option value="">{isEnglish ? 'Select' : '選擇'}</option>
+              {['QD', 'BID', 'TID', 'QID', 'QAM', 'QHS', 'PRN'].map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+        </div>
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-sm" disabled={!valid}
+          onClick={() => onSave([`${medication.trim()}：${previous.trim()} → ${next.trim()} ${unit} · ${route} · ${frequency}`, extra.trim()].filter(Boolean).join('；'))}>
+          {isEnglish ? 'Record' : '記錄'}
+        </Button>
+      </div>
+      {extra ? <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {isEnglish ? 'Existing note' : '原有備註'}
+        <Input value={extra} onChange={event => setExtra(event.target.value)} className="h-9 text-sm" />
+      </label> : null}
+    </div>
+  )
+}
 
 function DecisionControls({
   row,
@@ -1323,7 +1407,7 @@ function DecisionControls({
   const [note, setNote] = useState(row.decision?.note ?? '')
   if (row.decisionKind === 'none' || readOnly || !onRecordDecision) return null
   const moduleId = row.recommendation.id
-  const options = row.decisionKind === 'test' ? TEST_DECISIONS : MEDICATION_DECISIONS
+  const options = VISIT_DECISIONS[row.decisionKind]
   const decision = row.decision
   const recordedStamp = formatStamp(decision?.recordedAt, now, isEnglish)
 
@@ -1354,16 +1438,21 @@ function DecisionControls({
         {decision.note ? (
           <span className="text-[11px] text-foreground">{decision.note}</span>
         ) : null}
+        {row.decisionSource === 'medication-record' ? (
+          <span className="text-[11px] text-muted-foreground">
+            {isEnglish ? 'From current medication record' : '依目前用藥紀錄帶入'}
+          </span>
+        ) : null}
         {recordedStamp ? (
           <span className="text-[11px] tabular-nums text-muted-foreground">{recordedStamp}</span>
         ) : null}
         <button
           type="button"
-          className="min-h-7 rounded-md px-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onEdit(true)}
           data-testid={`cdss-hf-decision-edit-${moduleId}`}
         >
-          {isEnglish ? 'Change' : '改'}
+          {isEnglish ? 'Edit' : '修改'}
         </button>
       </div>
     )
@@ -1371,6 +1460,7 @@ function DecisionControls({
 
   const needsReasons = decision?.decision === 'contraindicated' || decision?.decision === 'deferred'
   const needsNote = decision?.decision === 'dose-adjusted'
+  const reasonIds = decisionReasonIds(moduleId, row.decisionKind, decision?.decision)
 
   return (
     <div className="mt-1.5 space-y-1.5" data-testid={`cdss-hf-decision-${moduleId}`}>
@@ -1393,7 +1483,16 @@ function DecisionControls({
                   : 'border-border bg-card text-foreground hover:bg-muted/40',
               )}
               onClick={() => {
-                record({ decision: option })
+                const allowedReasons = decisionReasonIds(moduleId, row.decisionKind, option)
+                const sameDecision = decision?.decision === option
+                const reasons = sameDecision
+                  ? (decision?.reasons ?? []).filter((reason) => allowedReasons.includes(reason))
+                  : []
+                record({
+                  decision: option,
+                  reasons,
+                  note: sameDecision && reasons.includes('other') ? decision?.note ?? '' : '',
+                })
                 // A refusal and a deferral are only half a record without the
                 // reason, and a dose change without the new dose says nothing,
                 // so those three keep the editor open for the second half.
@@ -1418,57 +1517,61 @@ function DecisionControls({
       </div>
 
       {needsReasons ? (
-        <div className="flex flex-wrap items-center gap-1.5" data-testid={`cdss-hf-decision-reasons-${moduleId}`}>
-          {DECISION_REASONS.map((reason) => {
-            const selected = decision?.reasons.includes(reason.id) ?? false
-            return (
-              <button
-                key={reason.id}
-                type="button"
-                aria-pressed={selected}
-                className={cn(
-                  'inline-flex min-h-8 items-center rounded-full border px-2.5 text-[11px] font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  selected
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted/40',
-                )}
-                onClick={() => {
-                  const current = decision?.reasons ?? []
-                  const reasons = selected
-                    ? current.filter((item) => item !== reason.id)
-                    : [...current, reason.id]
-                  if (decision) record({ decision: decision.decision, reasons })
-                }}
-                data-testid={`cdss-hf-decision-reason-${moduleId}-${reason.id}`}
-              >
-                {isEnglish ? reason.en : reason.zh}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {needsReasons || needsNote ? (
-        <div className="flex flex-wrap items-end gap-1.5">
-          <Input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder={needsNote
-              ? (isEnglish ? 'e.g. 2.5 → 5 mg' : '例：2.5 → 5 mg')
-              : (isEnglish ? 'Anything else worth recording' : '其他想記的一行')}
-            className="h-8 w-56 px-2 text-sm md:text-sm"
-            aria-label={isEnglish ? 'Decision note' : '處置備註'}
-            data-testid={`cdss-hf-decision-note-${moduleId}`}
-          />
+        <div className="flex items-end gap-2" data-testid={`cdss-hf-decision-reasons-${moduleId}`}>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {DECISION_REASONS.filter((reason) => reasonIds.includes(reason.id)).map((reason) => {
+              const selected = decision?.reasons.includes(reason.id) ?? false
+              return (
+                <button
+                  key={reason.id}
+                  type="button"
+                  aria-pressed={selected}
+                  className={cn(
+                    'inline-flex min-h-8 items-center rounded-full border px-2.5 text-[11px] font-medium transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    selected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted/40',
+                  )}
+                  onClick={() => {
+                    const current = (decision?.reasons ?? []).filter((item) => reasonIds.includes(item))
+                    const reasons = selected
+                      ? current.filter((item) => item !== reason.id)
+                      : [...current, reason.id]
+                    if (decision) {
+                      if (reason.id === 'other' && selected) {
+                        setNote('')
+                        record({ decision: decision.decision, reasons, note: '' })
+                      } else {
+                        record({ decision: decision.decision, reasons })
+                      }
+                    }
+                  }}
+                  data-testid={`cdss-hf-decision-reason-${moduleId}-${reason.id}`}
+                >
+                  {isEnglish ? reason.en : reason.zh}
+                </button>
+              )
+            })}
+            {decision?.reasons.includes('other') ? (
+              <Input
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={isEnglish ? 'Specify other reason' : '其他想記的一行'}
+                className="h-8 w-56 px-2 text-sm md:text-sm"
+                aria-label={isEnglish ? 'Other decision reason' : '其他處置原因'}
+                data-testid={`cdss-hf-decision-note-${moduleId}`}
+              />
+            ) : null}
+          </div>
           <Button
             type="button"
             size="sm"
-            className="h-8"
-            disabled={!decision}
+            className="h-8 shrink-0 px-3 text-sm"
+            disabled={!decision || (decision.reasons.includes('other') && !note.trim())}
             onClick={() => {
               if (!decision) return
-              record({ decision: decision.decision, note })
+              record({ decision: decision.decision, note: decision.reasons.includes('other') ? note.trim() : '' })
               onEdit(false)
             }}
             data-testid={`cdss-hf-decision-save-${moduleId}`}
@@ -1477,8 +1580,79 @@ function DecisionControls({
           </Button>
         </div>
       ) : null}
+
+      {needsNote ? (
+        <DoseAdjustmentEditor
+          initialNote={decision?.note ?? ''}
+          medications={row.medications}
+          defaultMedication={moduleId === 'heart-failure-congestion-diuretic' ? 'Furosemide' : undefined}
+          isEnglish={isEnglish}
+          onSave={doseNote => { record({ decision: 'dose-adjusted', note: doseNote }); onEdit(false) }} />
+      ) : null}
     </div>
   )
+}
+
+function conciseActionBasis(row: VisitActionRow): string | undefined {
+  let basis = row.basis?.trim()
+  if (!basis) return undefined
+
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim()
+  if (row.medications && normalize(basis).includes(normalize(row.medications))) return undefined
+
+  const topic = row.moduleName.replace(/\s*(?:治療|策略|treatment|therapy|strategy)$/i, '').trim()
+  for (const separator of ['：', ':']) {
+    const prefix = `${topic}${separator}`
+    if (topic && normalize(basis).startsWith(normalize(prefix))) {
+      basis = basis.slice(prefix.length).trim()
+      break
+    }
+  }
+
+  const repeatedSource = /^([^：:]+)[：:]\s*(.+)$/.exec(basis)
+  if (repeatedSource && normalize(repeatedSource[2]).startsWith(`${normalize(repeatedSource[1])} `)) {
+    basis = repeatedSource[2]
+  }
+  return basis
+}
+
+function actionCategory(row: VisitActionRow, isEnglish: boolean): { label: string; headline: string } | undefined {
+  const safetyAssessment = heartFailureMedicationSafetyAssessment(row.recommendation)
+  const safetyHeadline = safetyAssessment
+    ? (isEnglish ? safetyAssessment.headlineEn : safetyAssessment.headlineZh)
+    : undefined
+  if (row.recommendation.id === 'heart-failure-ras-inhibition') {
+    return {
+      label: isEnglish ? 'ARNI / ACEI / ARB' : 'ARNI／ACEI／ARB',
+      headline: safetyHeadline ?? (isEnglish ? 'Assess initiation or optimization.' : '評估建立或最佳化。'),
+    }
+  }
+  if (row.recommendation.id === 'heart-failure-beta-blocker') {
+    return {
+      label: isEnglish ? 'Beta-blocker' : 'β 阻斷劑',
+      headline: safetyHeadline ?? (isEnglish ? 'Assess initiation or optimization.' : '評估建立或最佳化。'),
+    }
+  }
+  if (row.recommendation.id === 'heart-failure-mra') {
+    return { label: 'MRA', headline: safetyHeadline ?? (isEnglish ? 'Assess initiation.' : '評估啟用。') }
+  }
+  if (row.recommendation.id === 'heart-failure-sglt2') {
+    return {
+      label: 'SGLT2i',
+      headline: safetyHeadline ?? (isEnglish
+        ? 'Continue at the highest tolerated dose with follow-up data.'
+        : '依最高耐受劑量與追蹤資料持續治療。'),
+    }
+  }
+  if (row.recommendation.id === 'heart-failure-congestion-diuretic') {
+    return {
+      label: isEnglish ? 'Loop diuretic' : 'Loop 利尿劑',
+      headline: isEnglish
+        ? 'When congestion signs or symptoms are present, adjust to volume status.'
+        : '有鬱血症狀或徵象時，依容量狀態調整。',
+    }
+  }
+  return undefined
 }
 
 function ActionsCard({
@@ -1510,6 +1684,13 @@ function ActionsCard({
   onClearDecision?: (moduleId: string) => void
   packVersion: string
 }) {
+  const pillarIds = new Set([
+    'heart-failure-ras-inhibition',
+    'heart-failure-beta-blocker',
+    'heart-failure-mra',
+    'heart-failure-sglt2',
+  ])
+
   return (
     <section
       className="overflow-hidden rounded-lg border border-border bg-card"
@@ -1518,9 +1699,6 @@ function ActionsCard({
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
         <ListChecks className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-        <span className="text-[11px] font-semibold text-indigo-700 dark:text-secondary-foreground/80">
-          {isEnglish ? 'Recommendations and your decisions' : '建議與你的決定'}
-        </span>
         <span className="text-sm font-semibold text-foreground">
           {isEnglish ? "Today's actions" : '今日處置'}
         </span>
@@ -1533,12 +1711,6 @@ function ActionsCard({
             : `已決定 ${flow.decidedCount} / ${flow.decidableCount}`}
         </span>
       </div>
-      <p className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? "Ordered by the rules' own priority. A decision is your record only: nothing is written to the chart or claimed, and 「prescribed」 does not close the row — if the rules find the same gap next visit it comes back, carrying today's decision."
-          : '排序＝規則的優先順序。處置只是你的紀錄，不寫回病歷、不申報；「已開立」不會永久關閉這一列，下次規則若再發現缺口會重新出現，並帶著這次的決定。'}
-      </p>
-
       {flow.actionGroups.length === 0 ? (
         <p className="px-3 py-2.5 text-xs text-muted-foreground" data-testid="cdss-hf-actions-empty">
           {isEnglish ? 'Nothing to decide this visit.' : '本次無需處理。'}
@@ -1548,6 +1720,11 @@ function ActionsCard({
       {flow.actionGroups.map((group) => {
         const collapsed = collapsedGroups.has(group.id)
         const tone = GROUP_PRESENTATION[group.id]
+        const pillarRows = group.id === 'actionable'
+          ? group.rows.filter((row) => pillarIds.has(row.recommendation.id))
+          : []
+        const showFourPillars = pillarRows.length === 4
+        const decidedPillars = pillarRows.filter((row) => row.decision).length
         return (
           <div key={group.id} data-testid={`cdss-hf-action-group-${group.id}`}>
             <button
@@ -1580,14 +1757,53 @@ function ActionsCard({
             {collapsed ? null : group.rows.map((row) => {
               const moduleId = row.recommendation.id
               const expanded = expandedId === moduleId
+              const basis = conciseActionBasis(row)
+              const category = actionCategory(row, isEnglish)
               return (
-                <article
-                  key={moduleId}
-                  id={visitActionElementId(moduleId)}
-                  className="border-b border-border last:border-b-0"
-                  data-testid={`cdss-hf-action-row-${moduleId}`}
-                  data-decided={row.decision ? 'true' : undefined}
-                >
+                <Fragment key={moduleId}>
+                  {showFourPillars && moduleId === pillarRows[0]?.recommendation.id ? (
+                    <div
+                      className="flex items-center gap-2 border-y border-violet-200 bg-violet-50/80 px-4 py-1.5 dark:border-violet-500/30 dark:bg-violet-500/10"
+                      data-testid="cdss-hf-action-subgroup-pillars"
+                    >
+                      <span className="text-xs font-bold text-violet-800 dark:text-violet-200">
+                        {isEnglish ? 'Four pillars of HFrEF' : 'HFrEF 四大支柱'}
+                      </span>
+                      <span className="flex gap-1" aria-hidden="true">
+                        {pillarRows.map((pillar) => (
+                          <span
+                            key={pillar.recommendation.id}
+                            className={cn(
+                              'h-1.5 w-5 rounded-full',
+                              pillar.decision ? 'bg-violet-600' : 'bg-violet-200 dark:bg-violet-400/30',
+                            )}
+                          />
+                        ))}
+                      </span>
+                      <span className="ml-auto text-[11px] tabular-nums text-violet-700 dark:text-violet-300">
+                        {isEnglish
+                          ? `${decidedPillars} / 4 decided`
+                          : `已決定 ${decidedPillars} / 4`}
+                      </span>
+                    </div>
+                  ) : null}
+                  {moduleId === 'heart-failure-congestion-diuretic' ? (
+                    <div
+                      className="border-y border-border bg-muted/25 px-4 py-1.5 text-xs font-semibold text-muted-foreground"
+                      data-testid="cdss-hf-action-subgroup-symptom-control"
+                    >
+                      {isEnglish ? 'Symptom control' : '症狀控制'}
+                    </div>
+                  ) : null}
+                  <article
+                    id={visitActionElementId(moduleId)}
+                    className={cn(
+                      'border-b border-border last:border-b-0',
+                      showFourPillars && pillarIds.has(moduleId) && 'bg-violet-50/20 dark:bg-violet-500/[0.03]',
+                    )}
+                    data-testid={`cdss-hf-action-row-${moduleId}`}
+                    data-decided={row.decision ? 'true' : undefined}
+                  >
                   <div className="flex">
                     <span
                       className={cn('w-[3px] shrink-0', ROW_BAR_CLASS[group.id])}
@@ -1608,16 +1824,21 @@ function ActionsCard({
                                 ? (isEnglish ? 'Safety alert' : '安全警訊')
                                 : statusLabel(row.status, isEnglish)}
                             </Badge>
+                            {category ? (
+                              <span
+                                className="inline-flex h-5 shrink-0 items-center rounded-md bg-violet-100 px-2 text-xs font-bold text-violet-800 dark:bg-violet-500/20 dark:text-violet-200"
+                                data-testid={`cdss-hf-action-category-${moduleId}`}
+                              >
+                                {category.label}
+                              </span>
+                            ) : null}
                             <span
                               className="min-w-0 text-sm font-semibold leading-snug text-foreground"
                               data-testid={`cdss-hf-action-headline-${moduleId}`}
                             >
-                              {row.headline}
+                              {category?.headline ?? row.headline}
                             </span>
                           </div>
-                          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                            <span className="font-medium text-foreground">{row.moduleName}</span>
-                          </p>
                           {row.medications ? (
                             <p
                               className="mt-0.5 text-xs leading-relaxed text-muted-foreground"
@@ -1629,12 +1850,12 @@ function ActionsCard({
                               {row.medications}
                             </p>
                           ) : null}
-                          {row.basis ? (
+                          {basis ? (
                             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                               <span className="font-medium text-foreground">
                                 {isEnglish ? 'Basis' : '依據'}：
                               </span>
-                              {row.basis}
+                              {basis}
                             </p>
                           ) : null}
                           <DecisionControls
@@ -1675,7 +1896,8 @@ function ActionsCard({
                       {renderDetail(row.recommendation)}
                     </div>
                   ) : null}
-                </article>
+                  </article>
+                </Fragment>
               )
             })}
           </div>
@@ -1719,7 +1941,7 @@ function FollowUpCard({
           variant="outline"
           className="ml-auto h-8"
           onClick={() => {
-            void copy(flow.summaryText).then((ok) => {
+            void copy(flow.englishSummaryText).then((ok) => {
               if (!ok) {
                 toast.error(isEnglish
                   ? 'Could not copy — the clipboard is unavailable in this context.'
@@ -1733,7 +1955,7 @@ function FollowUpCard({
           <span aria-live="polite">
             {copied
               ? (isEnglish ? 'Copied' : '已複製')
-              : (isEnglish ? "Copy this visit's summary" : '複製本次摘要')}
+              : (isEnglish ? "Copy English summary" : '複製英文摘要')}
           </span>
         </Button>
       </div>
@@ -1748,7 +1970,7 @@ function FollowUpCard({
         className="whitespace-pre-wrap break-words px-3 py-2.5 font-sans text-xs leading-relaxed text-foreground"
         data-testid="cdss-hf-summary-text"
       >
-        {flow.summaryText}
+        {flow.englishSummaryText}
       </pre>
 
       {flow.carriedFields.length > 0 ? (

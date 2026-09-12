@@ -1,5 +1,6 @@
 "use client"
 
+import { ScoreInterpretation } from './ScoreInterpretation'
 import { useMemo, useState, useCallback } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -344,24 +345,7 @@ export function CalculatorDetail({
                 ))}
               </div>
             )}
-            {result.scoreRanges && (
-              <section className="mt-3 border-t border-current/15 pt-3" aria-label={zh ? '分數判讀' : 'Score interpretation'}>
-                <h4 className="mb-2 text-xs font-semibold">{zh ? '分數判讀' : 'Score interpretation'}</h4>
-                <dl className="space-y-2 text-xs leading-relaxed">
-                  {result.scoreRanges.map(row => (
-                    <div key={row.range} className="flex items-baseline gap-4">
-                      <dt className="w-14 shrink-0 font-medium tabular-nums">{row.range} {zh ? '分' : 'pts'}</dt>
-                      <dd className="min-w-0">{tr(locale, row.meaning)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            )}
-            {result.notes && (
-              <div className="pt-1 text-xs leading-relaxed opacity-90">
-                {tr(locale, result.notes)}
-              </div>
-            )}
+            <ScoreInterpretation result={result} isEnglish={!zh} />
           </div>
         ) : computeCrashed ? (
           <div className="text-sm text-destructive">

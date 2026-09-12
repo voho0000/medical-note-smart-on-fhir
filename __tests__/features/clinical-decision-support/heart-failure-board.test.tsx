@@ -282,7 +282,7 @@ describe('heart-failure board model', () => {
 
     expect(board).toBeDefined()
     expect(board!.metrics.map((metric) => metric.factKey)).toEqual([
-      'bloodPressure', 'heartRate', 'potassium', 'eGFR', 'sodium', 'bodyWeight', 'NTproBNP',
+      'bloodPressure', 'heartRate', 'oxygenSaturation', 'potassium', 'eGFR', 'sodium', 'hemoglobin', 'bodyWeight', 'bodyHeight', 'NTproBNP',
     ])
     const bp = board!.metrics[0]
     expect(bp.value).toBe('118/72')
@@ -290,12 +290,12 @@ describe('heart-failure board model', () => {
     expect(bp.date).toBe('2026-09-02')
     expect(bp.ageDays).toBe(3)
     expect(bp.stale).toBe(false)
-    const egfr = board!.metrics[3]
+    const egfr = board!.metrics.find(metric => metric.factKey === 'eGFR')!
     expect(egfr.value).toBe('48')
     expect(egfr.ageDays).toBe(8)
     // NT-proBNP has an evidence-table row but no value: absent, and named as a
     // laboratory order rather than left blank.
-    const ntProBnp = board!.metrics[6]
+    const ntProBnp = board!.metrics.find(metric => metric.factKey === 'NTproBNP')!
     expect(ntProBnp.value).toBeUndefined()
     expect(ntProBnp.kind).toBe('lab')
     expect(board!.lvef?.value).toBe('32%')
@@ -318,7 +318,7 @@ describe('heart-failure board model', () => {
       )),
     }
 
-    const potassiumMetric = buildHeartFailureBoard(stale, 'zh-TW', NOW)!.metrics[2]
+    const potassiumMetric = buildHeartFailureBoard(stale, 'zh-TW', NOW)!.metrics.find(metric => metric.factKey === 'potassium')!
     expect(potassiumMetric.value).toBe('4.9')
     expect(potassiumMetric.stale).toBe(true)
     expect(potassiumMetric.fullValue).toContain('已 96 天')
@@ -468,7 +468,12 @@ describe('heart-failure board view', () => {
   it('reads today\'s sentences first, then lists rows action-first, and copies a rationale', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    render(<ClinicalDecisionSupportView result={heartFailureResult()} locale="zh-TW" layout="board" />)
+    render(<ClinicalDecisionSupportView
+      result={heartFailureResult()}
+      englishResult={heartFailureResult()}
+      locale="zh-TW"
+      layout="board"
+    />)
 
     const headlines = screen.getByTestId('cdss-hf-headlines')
     expect(headlines).toHaveTextContent('今天要做的 3 件事')
@@ -488,8 +493,8 @@ describe('heart-failure board view', () => {
     fireEvent.click(screen.getByTestId('cdss-copy-rationale-heart-failure-congestion-diuretic'))
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     const copied = writeText.mock.calls[0][0] as string
-    expect(copied).toContain('【判定理由】鬱血與利尿策略')
-    expect(copied).toContain('來源：MediPrisma 個人化照護指引 · heart-failure-cdss 0.2.0-poc')
+    expect(copied).toContain('[Decision rationale] 鬱血與利尿策略')
+    expect(copied).toContain('Source: MediPrisma personalized care guidance · heart-failure-cdss 0.2.0-poc')
   })
 
   it('shows one quiet line when the visit needs nothing', () => {
@@ -707,6 +712,7 @@ describe('heart-failure board view', () => {
   it('keeps only the LVEF-independent classes on the HFpEF pathway', () => {
     render(<ClinicalDecisionSupportView result={hfpefResult()} locale="zh-TW" layout="board" profileFacts={HFPEF_FACTS} />)
 
+    expect(screen.queryByTestId('cdss-recommendation-heart-failure-hfpef-treatment')).toBeNull()
     const pillars = screen.getByTestId('cdss-hf-pillars')
     expect(pillars).toHaveAttribute('data-pillar-scope', 'lvef-independent')
     expect(within(pillars).getByTestId('cdss-hf-pillars-title')).toHaveTextContent('HFpEF 的 FMT')

@@ -51,7 +51,7 @@ export function DiagnosisReading({
         ) : null}
         {summary.verdict}
       </p>
-      <ul className="flex flex-wrap gap-1.5" data-testid="cdss-hf-diagnosis-criteria">
+      <ul className="flex flex-col items-start gap-1.5" data-testid="cdss-hf-diagnosis-criteria">
         {summary.criteria.map((criterion) => (
           <li
             key={criterion.id}

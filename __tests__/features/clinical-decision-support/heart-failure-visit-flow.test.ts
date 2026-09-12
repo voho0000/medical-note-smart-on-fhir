@@ -221,6 +221,27 @@ function answeredVitals(): ClinicVitals {
 }
 
 describe('the next step', () => {
+  it('states the negative medication-safety finding instead of a generic rescan instruction', () => {
+    const packResult = result()
+    packResult.recommendations = packResult.recommendations.map((item) => (
+      item.id === 'heart-failure-medication-safety'
+        ? {
+            ...item,
+            status: 'no-action',
+            patientEvidence: [],
+            nextActions: ['新增處方或跨院所回診後重新掃描；本卡不需要額外資料。'],
+          }
+        : item
+    ))
+
+    const flow = flowFor({ result: packResult })
+    const safetyRow = flow.actionGroups
+      .flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-medication-safety')
+
+    expect(safetyRow?.headline).toBe('本次用藥掃描未發現 NSAID 或 COX-2 抑制劑使用紀錄。')
+  })
+
   it('puts an undecided safety alert above an unanswered question 1', () => {
     // A harmful prescription is harmful whether or not this clinician is
     // asking about heart failure today, so it outranks the gate itself.
@@ -284,7 +305,6 @@ describe('the next step', () => {
     const decisions: PhysicianDecisionMap = Object.fromEntries(
       [
         'heart-failure-medication-safety',
-        'heart-failure-hfref-gdmt',
         'heart-failure-ras-inhibition',
         'heart-failure-mra',
         'heart-failure-beta-blocker',
@@ -332,9 +352,9 @@ describe('the step bar', () => {
     expect(confirm.detail).toContain('是')
     expect(confirm.detail).toContain('HFrEF')
     expect(confirm.detail).toContain('LVEF 32%')
-    // ② 症狀, ③ NYHA, ④ 徵象, ⑤ 門診量測, ⑥ 代償 are all outstanding here.
+    // ② 症狀, ③ NYHA, ④ 徵象 and ⑤ 代償 are all outstanding here.
     expect(assess.state).toBe('current')
-    expect(assess.detail).toBe('還有 5 題')
+    expect(assess.detail).toBe('還有 4 題')
   })
 
   it('marks the visit not applicable when the clinician does not suspect heart failure', () => {
@@ -349,7 +369,7 @@ describe('the step bar', () => {
 })
 
 describe('the questions', () => {
-  it('locks 2–4 and 6 until question 1 is answered, and never locks the measurements', () => {
+  it('locks questions 2–5 until question 1 is answered', () => {
     const flow = flowFor()
     const states = Object.fromEntries(flow.questions.map((item) => [item.id, item.state]))
 
@@ -358,7 +378,7 @@ describe('the questions', () => {
     expect(states.nyha).toBe('locked')
     expect(states.signs).toBe('locked')
     expect(states.compensation).toBe('locked')
-    expect(states['clinic-vitals']).toBe('open')
+    expect(states['clinic-vitals']).toBeUndefined()
     expect(flow.questions.find((item) => item.id === 'nyha')?.lockedReason)
       .toBe('回答第 1 題後開放')
   })
@@ -393,10 +413,9 @@ describe('the questions', () => {
     expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
       ['1', 'hf-suspicion'],
       ['2', 'symptoms'],
-      ['3', 'nyha'],
-      ['4', 'signs'],
-      ['5', 'clinic-vitals'],
-      ['6', 'compensation'],
+      ['3', 'signs'],
+      ['4', 'nyha'],
+      ['5', 'compensation'],
     ])
     const symptoms = flow.questions.find((item) => item.id === 'symptoms')
     expect(symptoms?.items?.map((item) => item.term)).toContain('exertional-dyspnea')
@@ -405,6 +424,35 @@ describe('the questions', () => {
       .toBe('systemic')
     expect(symptoms?.items?.filter((item) => !item.common).map((item) => item.term))
       .toEqual(['nocturnal-cough', 'bendopnea', 'reported-weight-gain'])
+  })
+
+  it('enters HFrEF directly when the record has an HF diagnosis and LVEF is below 50%', () => {
+    const packResult = result()
+    const diagnosedResult: CdssResult = {
+      ...packResult,
+      recommendations: packResult.recommendations.map((item) => item.id === 'heart-failure-phenotype'
+        ? {
+          ...item,
+          patientEvidence: [
+            evidence('心衰竭診斷', 'I50.22 慢性收縮性心衰竭', 'heartFailureDiagnosis', '2026-07-01'),
+            ...item.patientEvidence,
+          ],
+        }
+        : item),
+    }
+
+    const flow = flowFor({ result: diagnosedResult })
+
+    expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
+      ['1', 'symptoms'],
+      ['2', 'signs'],
+      ['3', 'nyha'],
+      ['4', 'compensation'],
+    ])
+    expect(flow.steps[0]).toMatchObject({ state: 'done' })
+    expect(flow.steps[0].detail).toContain('HFrEF · LVEF 32')
+    expect(flow.questions.find((item) => item.id === 'symptoms')?.hint).toBeUndefined()
+    expect(flow.questions.find((item) => item.id === 'signs')?.hint).toBeUndefined()
   })
 
   it('folds each answered list onto one line and tallies the two sides', () => {
@@ -416,7 +464,7 @@ describe('the questions', () => {
     expect(symptoms?.answerText).toBe(
       '勞力性喘：有 · 端坐呼吸：無 · PND：未評估 · 疲倦：有 · 腳腫：有 · 腹脹：無 · 更多 3 項未評估',
     )
-    expect(signs?.answerText).toBe('rales：無 · JVP：無 · 凹陷性水腫：有 · 更多 4 項未評估')
+    expect(signs?.answerText).toBe('Rales：− · JVP：− · Pitting edema：+ · 更多 4 項未評估')
     // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
     // systemic one; the tally is read across both questions.
     expect(signs?.sideTally).toEqual({ pulmonary: 2, systemic: 2 })
@@ -457,7 +505,7 @@ describe('the questions', () => {
     const open = flowFor({ result: withConfirmation, phenotypeAnswer: SUSPECTED })
     const last = open.questions.at(-1)
     expect(last?.id).toBe('hfpef-confirmation')
-    expect(last?.number).toBe('7')
+    expect(last?.number).toBe('6')
     expect(last?.counted).toBe(true)
     expect(last?.state).toBe('open')
     // ① is settled by the suspicion and the LVEF gate alone.
@@ -538,8 +586,9 @@ describe("today's actions", () => {
       'heart-failure-beta-blocker',
       'heart-failure-mra',
       'heart-failure-sglt2',
-      'heart-failure-hfref-gdmt',
     ])
+    expect(flow.actionGroups.flatMap((group) => group.rows)
+      .some((row) => row.recommendation.id === 'heart-failure-hfref-gdmt')).toBe(false)
     const ras = medication?.rows.find((row) => row.recommendation.id === 'heart-failure-ras-inhibition')
     expect(ras?.medications).toBe('Valsartan 80mg')
     expect(ras?.headline).toBe('ARB → ARNI（sacubitril/valsartan）')
@@ -565,20 +614,67 @@ describe("today's actions", () => {
     const rows = flow.actionGroups.flatMap((group) => group.rows)
 
     expect(rows.filter((row) => row.index !== undefined).map((row) => row.index))
-      .toEqual([1, 2, 3, 4, 5, 6, 7])
+      .toEqual([1, 2, 3, 4, 5, 6])
     const test = rows.find((row) => row.recommendation.id === 'heart-failure-monitoring')
     expect(test?.decisionKind).toBe('test')
-    expect(flow.decidableCount).toBe(7)
+    expect(flow.decidableCount).toBe(6)
   })
 
-  it('never lists the phenotype gate or the HFpEF confirmation as something to do', () => {
-    // They are questions 1, 1b and 1c. A row that says 「answer the question」
-    // beside the question itself is the duplication this screen removed.
-    const flow = flowFor({ phenotypeAnswer: SUSPECTED })
+  it('names the concrete missing and stale safety inputs in the FMT monitoring headline', () => {
+    const packResult = result()
+    packResult.recommendations = [
+      ...packResult.recommendations,
+      recommendation('heart-failure-fmt-safety', {
+        moduleGroup: 'monitoring',
+        domain: 'monitoring',
+        status: 'needs-data',
+        missingData: ['此決策可用的 心率（目前資料完全沒有這一項）'],
+        patientEvidence: [
+          evidence('血壓', '142/84 mmHg（2026-04-18）（已 147 天，超過 90 天窗）', 'bloodPressure'),
+          evidence('eGFR', '48.3 mL/min/1.73m²（2026-07-06）', 'egfr'),
+        ],
+        nextActions: ['將目前安全資料帶入各藥物 track 的下一個 decision point。'],
+      }),
+    ]
+
+    const flow = flowFor({ result: packResult, phenotypeAnswer: SUSPECTED })
+    const safety = flow.actionGroups.flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-fmt-safety')
+
+    expect(safety?.headline).toBe('補齊心率並複驗血壓，再評估藥物調整。')
+    expect(safety?.decisionKind).toBe('measurement')
+  })
+
+  it('keeps HFpEF in the assessment and omits its duplicate treatment card', () => {
+    // The diagnosis is answered in question 6 with the calculator evidence.
+    // Repeating the same evidence as a read-only treatment row adds no action.
+    const base = result()
+    const withHfpEf: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-hfpef-diagnosis', {
+          moduleGroup: 'assessment',
+          domain: 'diagnosis',
+          physicianInputRequests: [{
+            kind: 'hfpef-diagnosis-confirmation',
+            label: '確認 HFpEF 診斷？',
+          }],
+        } as Partial<CdssRecommendation>),
+        recommendation('heart-failure-hfpef-treatment', {
+          moduleName: 'HFpEF 治療',
+          status: 'no-action',
+          nextActions: ['由臨床人員確認分型與適應症後，再依完整病歷共同決策。'],
+        }),
+      ],
+    }
+    const flow = flowFor({ result: withHfpEf, phenotypeAnswer: SUSPECTED })
     const ids = flow.actionGroups.flatMap((group) => group.rows.map((row) => row.recommendation.id))
 
+    expect(flow.questions.some((question) => question.id === 'hfpef-confirmation')).toBe(true)
     expect(ids).not.toContain('heart-failure-phenotype')
     expect(ids).not.toContain('heart-failure-hfpef-diagnosis')
+    expect(ids).not.toContain('heart-failure-hfpef-treatment')
   })
 
   it('carries the basis from the pack\'s own overview evidence', () => {
@@ -588,6 +684,63 @@ describe("today's actions", () => {
       .find((row) => row.recommendation.id === 'heart-failure-mra')
 
     expect(mra?.basis).toBe('MRA：目前未使用')
+  })
+
+  it('adds positive symptoms and PE findings to the loop-diuretic evidence', () => {
+    const base = result()
+    const withDiuretic = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-congestion-diuretic', {
+          status: 'actionable',
+          overviewEvidenceFactKey: 'chestXray',
+          patientEvidence: [
+            evidence('CXR', 'CXR 符合 cardiomegaly、pleural-effusion', 'chestXray', '2026-07-06'),
+          ],
+        }),
+      ],
+    }
+    const flow = flowFor({
+      result: withDiuretic,
+      phenotypeAnswer: SUSPECTED,
+      clinicVitals: answeredVitals(),
+    })
+    const diuretic = flow.actionGroups
+      .flatMap((group) => group.rows)
+      .find((row) => row.recommendation.id === 'heart-failure-congestion-diuretic')
+
+    expect(diuretic?.basis).toBe(
+      '症狀：勞力性喘、疲倦、腳腫 · PE：Pitting edema · CXR 符合 cardiomegaly、pleural-effusion',
+    )
+    expect(diuretic?.basis).not.toContain('未評估')
+  })
+
+  it('omits the duplicate AMT umbrella and keeps HFimpEF as a clinical review', () => {
+    const base = result()
+    const withUmbrellaModules: CdssResult = {
+      ...base,
+      recommendations: [
+        ...base.recommendations,
+        recommendation('heart-failure-additional-medical-therapy', {
+          domain: 'medication',
+          status: 'review',
+          title: '評估其他治療。',
+        }),
+        recommendation('heart-failure-hfimpEF-therapy', {
+          domain: 'medication',
+          status: 'review',
+          title: '持續原有治療。',
+        }),
+      ],
+    }
+    const rows = flowFor({ result: withUmbrellaModules, phenotypeAnswer: SUSPECTED })
+      .actionGroups.flatMap((group) => group.rows)
+
+    expect(rows.find((row) => row.recommendation.id === 'heart-failure-additional-medical-therapy'))
+      .toBeUndefined()
+    expect(rows.find((row) => row.recommendation.id === 'heart-failure-hfimpEF-therapy')?.decisionKind)
+      .toBe('review')
   })
 })
 
@@ -612,7 +765,7 @@ describe('the record card', () => {
     expect(lines[0]).toContain('LVEF 32%')
     expect(lines[1]).toContain('NYHA：NYHA II')
     expect(lines[1]).toContain('症狀：勞力性喘：有')
-    expect(lines[1]).toContain('徵象：rales：無')
+    expect(lines[1]).toContain('徵象：Rales：−')
     expect(lines[2]).toContain('118/72')
     expect(lines[2]).toContain('SpO₂ 97%')
     expect(lines[3]).toContain('待決定')
@@ -623,5 +776,58 @@ describe('without a patient', () => {
   it('says so rather than offering controls that have nowhere to write', () => {
     expect(flowFor({ patientId: undefined }).readOnly).toBe(true)
     expect(flowFor().readOnly).toBe(false)
+  })
+})
+
+
+describe('generic monitoring reminders', () => {
+  it.each([
+    '先查找院內近期病歷與出院計畫，再補齊病人自述與量測資料。',
+    'Retrieve recent institutional notes and the discharge plan first, then complete patient-reported and measured data.',
+  ])('omits the generic reminder and its decision count: %s', (reminder) => {
+    const original = result()
+    const filtered = flowFor({ result: {
+      ...original,
+      recommendations: original.recommendations.map(item => item.id === 'heart-failure-monitoring'
+        ? { ...item, nextActions: [reminder], status: 'review' } : item),
+    } })
+    expect(filtered.actionGroups.flatMap(group => group.rows).some(row => row.recommendation.id === 'heart-failure-monitoring')).toBe(false)
+    expect(filtered.decidableCount).toBe(flowFor().decidableCount - 1)
+    // Concrete test/follow-up instructions remain actionable in the same view.
+    expect(flowFor().actionGroups.flatMap(group => group.rows).find(row => row.recommendation.id === 'heart-failure-monitoring')?.headline)
+      .toBe('抽 NT-proBNP 作為基準；1 週後追蹤 K 與腎功能。')
+  })
+})
+
+
+describe('English chart summary independent of the Chinese interface', () => {
+  it('uses English clinical labels and keeps findings, dates, doses and medication provenance', () => {
+    const flow = flowFor({ phenotypeAnswer: SUSPECTED, clinicVitals: answeredVitals(), decisions: {
+      'heart-failure-mra': { decision: 'dose-adjusted', reasons: [], note: '2.5 → 5 mg', recordedAt: NOW.toISOString(), packVersion: 'test' },
+      'heart-failure-monitoring': { decision: 'deferred', reasons: ['patient-refused'], recordedAt: NOW.toISOString(), packVersion: 'test' },
+    } })
+    expect(flow.englishSummaryText).not.toMatch(/[\u3400-\u9fff]/)
+    expect(flow.englishSummaryText).toContain('Heart-failure suspicion: Yes (2026/09/11 14:05)')
+    expect(flow.englishSummaryText).not.toContain('Today')
+    expect(flow.englishSummaryText).toContain('HFrEF')
+    expect(flow.englishSummaryText).toContain('LVEF 32% (2026/07/14)')
+    expect(flow.englishSummaryText).toContain('NYHA: II')
+    expect(flow.englishSummaryText).toContain('118/72')
+    expect(flow.englishSummaryText).toContain('SpO₂ 97%')
+    expect(flow.englishSummaryText).toContain('2.5 → 5 mg')
+    expect(flow.englishSummaryText).toContain('Patient declined')
+    expect(flow.englishSummaryText).toContain('from current medication record')
+    expect(flow.englishSummaryText).toContain('Not assessed: PND')
+    expect(flow.englishSummaryText).toContain('Symptoms\n  Exertional dyspnoea (+)\n  Orthopnoea (-)')
+    expect(flow.englishSummaryText).toContain('\n\nSigns\n  Rales (-)')
+    expect(flow.englishSummaryText).toContain('\n\nManagement\n- ')
+    expect(flow.englishSummaryText).not.toContain('PND (-)')
+  })
+
+  it('does not turn unanswered findings into normal findings or a negative diagnosis', () => {
+    const text = flowFor().englishSummaryText
+    expect(text).toContain('Heart-failure suspicion: Not assessed')
+    expect(text).toContain('NYHA: not assessed')
+    expect(text).toContain('Compensation: not assessed')
   })
 })

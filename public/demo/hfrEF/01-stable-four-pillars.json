@@ -1,0 +1,947 @@
+{
+  "resourceType": "Bundle",
+  "id": "hfrEF-stable-four-pillars-bundle",
+  "type": "collection",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+        "code": "synthetic-hfrEF-case",
+        "display": "穩定 HFrEF，四大支柱已建立，無明顯鬱血。"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "Patient/hfrEF-stable-four-pillars",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "hfrEF-stable-four-pillars",
+        "meta": {
+          "tag": [
+            {
+              "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+              "code": "stable-four-pillars",
+              "display": "穩定 HFrEF，四大支柱已建立，無明顯鬱血。"
+            }
+          ]
+        },
+        "name": [
+          {
+            "text": "模擬 林穩定",
+            "family": "林",
+            "given": [
+              "穩定"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1958-04-16"
+      }
+    },
+    {
+      "fullUrl": "Encounter/hfrEF-stable-four-pillars-visit",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "hfrEF-stable-four-pillars-visit",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "period": {
+          "start": "2026-09-10T08:30:00+08:00",
+          "end": "2026-09-10T10:00:00+08:00"
+        },
+        "serviceProvider": {
+          "display": "示範心臟醫學中心"
+        },
+        "reasonCode": [
+          {
+            "text": "Chronic systolic (congestive) heart failure",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I50.22",
+                "display": "Chronic systolic (congestive) heart failure"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Condition/hfrEF-stable-four-pillars-hfrEF",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "hfrEF-stable-four-pillars-hfrEF",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chronic systolic heart failure",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I50.22",
+              "display": "Chronic systolic (congestive) heart failure"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-stable-four-pillars-visit"
+        },
+        "onsetDateTime": "2025-02-15"
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-lvef",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-lvef",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Left ventricular ejection fraction",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "10230-1",
+              "display": "Left ventricular ejection fraction"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 35,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-nt-probnp",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-nt-probnp",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "NT-proBNP",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33762-6",
+              "display": "NT-proBNP"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 520,
+          "unit": "pg/mL",
+          "system": "http://unitsofmeasure.org",
+          "code": "pg/mL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-egfr",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-egfr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Estimated glomerular filtration rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33914-3",
+              "display": "Estimated glomerular filtration rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 62,
+          "unit": "mL/min/1.73m2",
+          "system": "http://unitsofmeasure.org",
+          "code": "mL/min/1.73m2"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-potassium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-potassium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Potassium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3",
+              "display": "Potassium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 4.3,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-sodium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-sodium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Sodium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2",
+              "display": "Sodium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 139,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-hemoglobin",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-hemoglobin",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Hemoglobin",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "718-7",
+              "display": "Hemoglobin"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 13.6,
+          "unit": "g/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "g/dL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-blood-pressure",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-blood-pressure",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Blood pressure",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 118,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 72,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ],
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-heart-rate",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-heart-rate",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Heart rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 68,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-oxygen-saturation",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-oxygen-saturation",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Oxygen saturation",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "59408-5",
+              "display": "Oxygen saturation"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 97,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-body-weight",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-body-weight",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body weight",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 70,
+          "unit": "kg",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-stable-four-pillars-body-height",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-stable-four-pillars-body-height",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body height",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2",
+              "display": "Body height"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 170,
+          "unit": "cm",
+          "system": "http://unitsofmeasure.org",
+          "code": "cm"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-stable-four-pillars-echo",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-stable-four-pillars-echo",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "CUS",
+                "display": "Cardiac Ultrasound"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Echocardiography",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34552-0",
+              "display": "Cardiac echocardiography report"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-stable-four-pillars-visit"
+        },
+        "effectiveDateTime": "2026-09-08T10:00:00+08:00",
+        "issued": "2026-09-08T11:00:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Dilated left ventricle with global hypokinesis. LVEF 35%."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-stable-four-pillars-ecg",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-stable-four-pillars-ecg",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "EC",
+                "display": "Electrocardiography"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "12-lead ECG",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11524-6",
+              "display": "EKG study"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-stable-four-pillars-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:45:00+08:00",
+        "issued": "2026-09-10T08:50:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Sinus rhythm, rate 68 bpm."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-stable-four-pillars-cxr",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-stable-four-pillars-cxr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "RAD",
+                "display": "Radiology"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-stable-four-pillars-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:40:00+08:00",
+        "issued": "2026-09-10T08:55:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "No pulmonary edema or pleural effusion. Cardiac silhouette is mildly enlarged."
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-stable-four-pillars-sacubitril-valsartan",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-stable-four-pillars-sacubitril-valsartan",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Sacubitril/valsartan 49/51 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: stable-four-pillars"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-stable-four-pillars-bisoprolol",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-stable-four-pillars-bisoprolol",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Bisoprolol 5 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: stable-four-pillars"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-stable-four-pillars-spironolactone",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-stable-four-pillars-spironolactone",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Spironolactone 25 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: stable-four-pillars"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-stable-four-pillars-dapagliflozin",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-stable-four-pillars-dapagliflozin",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Dapagliflozin 10 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-stable-four-pillars"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: stable-four-pillars"
+          }
+        ]
+      }
+    }
+  ]
+}
