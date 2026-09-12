@@ -237,6 +237,10 @@ describe('the visit flow', () => {
     expect(screen.queryByTestId('cdss-hf-congestion-signs')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-symptom-edema')).toBeNull()
     expect(screen.queryByTestId('cdss-hf-compensation-control')).toBeNull()
+    expect(screen.getByText('Rales')).toBeVisible()
+    expect(screen.getByText('Pitting edema')).toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-more-signs'))
+    for (const label of ['S3', 'HJR', 'Ascites', 'Hepatomegaly']) expect(screen.getByText(label)).toBeVisible()
   })
 
   it('echoes the answer on the evidence row instead of offering a second control', () => {

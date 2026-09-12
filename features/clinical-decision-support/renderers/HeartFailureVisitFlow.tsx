@@ -721,14 +721,20 @@ function SignItemRows({
   const [moreOpen, setMoreOpen] = useState(false)
   const common = items.filter((item) => item.common)
   const more = items.filter((item) => !item.common)
-  const row = (item: VisitSignItem) => (
-    <div key={item.term} className="flex flex-wrap items-center gap-2">
+  const row = (item: VisitSignItem) => {
+    const examLabel = questionId === 'signs' ? item.shortEn : undefined
+    const visibleLabel = examLabel ?? (isEnglish ? item.en : item.zh)
+    const label = <span className={cn('min-w-0 flex-1 text-xs text-foreground', examLabel && !isEnglish && 'cursor-help underline decoration-dotted underline-offset-2')}>{visibleLabel}</span>
+    return <div key={item.term} className="flex flex-wrap items-center gap-2">
       <SideTag side={item.side} isEnglish={isEnglish} />
-      <span className="min-w-0 flex-1 text-xs text-foreground">
-        {isEnglish ? item.en : item.zh}
-      </span>
+      {examLabel && !isEnglish ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{label}</TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>{item.zh.replace(/（[^）]+）/g, '')}</TooltipContent>
+        </Tooltip>
+      ) : label}
       <SegmentedControl<SignAnswerValue>
-        label={isEnglish ? item.en : item.zh}
+        label={visibleLabel}
         options={[
           { id: 'present', text: isEnglish ? 'Yes' : '有' },
           { id: 'absent', text: isEnglish ? 'No' : '無' },
@@ -739,7 +745,7 @@ function SignItemRows({
         testId={`cdss-hf-flow-sign-${item.term}`}
       />
     </div>
-  )
+  }
   return (
     <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
       {showLegend ? (

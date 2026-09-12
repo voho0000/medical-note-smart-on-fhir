@@ -341,13 +341,13 @@ export const VISIT_SYMPTOM_ITEMS: readonly VisitSignItem[] = [
 
 /** Question ④: what the clinician finds. */
 export const VISIT_EXAM_ITEMS: readonly VisitSignItem[] = [
-  { term: 'rales', zh: '肺部濕囉音（rales）', en: 'Pulmonary rales', shortZh: 'rales', shortEn: 'Rales', side: 'pulmonary', common: true },
+  { term: 'rales', zh: '肺部濕囉音（rales）', en: 'Pulmonary rales', shortZh: 'Rales', shortEn: 'Rales', side: 'pulmonary', common: true },
   { term: 'jvp', zh: '頸靜脈怒張（JVP）', en: 'Raised JVP', shortZh: 'JVP', shortEn: 'JVP', side: 'systemic', common: true },
-  { term: 'pitting-edema', zh: '凹陷性水腫', en: 'Pitting oedema', shortZh: '凹陷性水腫', shortEn: 'Pitting oedema', side: 'systemic', common: true },
-  { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: '第三心音', shortEn: 'S3', side: 'pulmonary', common: false },
-  { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: '肝頸反流', shortEn: 'HJR', side: 'systemic', common: false },
-  { term: 'ascites', zh: '腹水', en: 'Ascites', shortZh: '腹水', shortEn: 'Ascites', side: 'systemic', common: false },
-  { term: 'hepatomegaly', zh: '肝腫大', en: 'Hepatomegaly', shortZh: '肝腫大', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
+  { term: 'pitting-edema', zh: '凹陷性水腫', en: 'Pitting edema', shortZh: 'Pitting edema', shortEn: 'Pitting edema', side: 'systemic', common: true },
+  { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: 'S3', shortEn: 'S3', side: 'pulmonary', common: false },
+  { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: 'HJR', shortEn: 'HJR', side: 'systemic', common: false },
+  { term: 'ascites', zh: '腹水', en: 'Ascites', shortZh: 'Ascites', shortEn: 'Ascites', side: 'systemic', common: false },
+  { term: 'hepatomegaly', zh: '肝腫大', en: 'Hepatomegaly', shortZh: 'Hepatomegaly', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
 ]
 
 /** Which of the two questions a term is asked in, for a link back to it. */
