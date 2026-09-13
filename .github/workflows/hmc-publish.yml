@@ -85,6 +85,10 @@ jobs:
         id: marker
         env:
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          # Through the environment rather than interpolated into the script:
+          # a ref name is attacker-shaped data in the general case, even though
+          # the job guard above already narrows it to two literals.
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         shell: bash
         run: |
           marker=incoming/app/out/hmc-build.json
@@ -102,8 +106,7 @@ jobs:
           fi
           # A push build is the commit it ran on; a personalization relay tag is
           # not, so only the first is worth asserting.
-          if [ "${{ github.event.workflow_run.head_branch }}" = 'pilot/hmc' ] \
-            && [ "$app_sha" != "$RUN_HEAD_SHA" ]; then
+          if [ "$RUN_HEAD_BRANCH" = 'pilot/hmc' ] && [ "$app_sha" != "$RUN_HEAD_SHA" ]; then
             echo "The marker names $app_sha but the run built $RUN_HEAD_SHA."
             exit 1
           fi
@@ -170,7 +173,15 @@ jobs:
     # there is nothing left to say: did not publish, published over a red Jest
     # run, clear.
     needs: publish
-    if: ${{ always() && needs.publish.result != 'skipped' }}
+    # Deliberately not gated on the build having succeeded: a build that failed
+    # is the case most worth reporting, and `publish` is skipped then. The repo
+    # and ref guard is repeated here because that one is about trust, not about
+    # outcome.
+    if: >-
+      ${{ always()
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && (github.event.workflow_run.head_branch == 'pilot/hmc'
+      || github.event.workflow_run.head_branch == 'hmc-personalization-trigger') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -183,6 +194,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BUILD_URL: ${{ github.event.workflow_run.html_url }}
+          BUILD_RESULT: ${{ github.event.workflow_run.conclusion }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
           TESTS_RESULT: ${{ needs.publish.outputs.tests }}
           TEST_SUMMARY: ${{ needs.publish.outputs.test_summary }}
@@ -211,7 +223,17 @@ jobs:
             exit 0
           fi
 
-          if [ "$PUBLISH_RESULT" = 'success' ]; then
+          if [ "$BUILD_RESULT" != 'success' ]; then
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The build on \`pilot/hmc\` did not finish, so nothing reached /app-hmc.** https://mediprisma.tw/app-hmc is still serving an older build.
+
+          Build run (\`${BUILD_RESULT}\`): ${BUILD_URL}
+
+          A step before the upload stopped it — the personalization build, the overlay or its check, typecheck, lint, or the export. The Jest run cannot be the cause: it reports and does not gate.
+
+          All of those steps are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so whatever is wrong there is yours to change without waiting for anyone.
+          EOF
+          elif [ "$PUBLISH_RESULT" = 'success' ]; then
             # Published over a red suite. Worth saying out loud, not worth
             # holding a clinic preview for.
             cat > note.md <<EOF
