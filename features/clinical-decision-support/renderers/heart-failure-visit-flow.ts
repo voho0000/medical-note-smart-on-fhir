@@ -20,6 +20,7 @@
  * when a step is done, what a locked question says — are the part worth
  * testing, and a test should not have to mount a tree to ask.
  */
+import { clinicalModuleLabel } from '@voho0000/personalized-care'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import type {
@@ -37,6 +38,10 @@ import {
 import { HFPEF_NOT_CONFIRMED, type PhenotypeAnswer } from '../stores/phenotype-answer.store'
 import type { PhysicianDecision, PhysicianDecisionMap } from '../stores/physician-decisions.store'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
+import {
+  applyHeartFailureMedicationSafety,
+  heartFailureMedicationSafetyAssessment,
+} from './heart-failure-medication-safety'
 
 const PHENOTYPE_MODULE_ID = 'heart-failure-phenotype'
 const HFPEF_DIAGNOSIS_MODULE_ID = 'heart-failure-hfpef-diagnosis'
@@ -129,7 +134,6 @@ export type VisitQuestionId =
   | 'symptoms'
   | 'signs'
   | 'compensation'
-  | 'clinic-vitals'
 
 export type VisitQuestionState = 'open' | 'answered' | 'locked'
 
@@ -178,7 +182,7 @@ export interface VisitQuestion {
 export type VisitActionGroupId = 'safety' | 'actionable' | 'needs-data' | 'review' | 'no-action'
 
 /** Which set of decision buttons a row offers. */
-export type VisitDecisionKind = 'medication' | 'test' | 'none'
+export type VisitDecisionKind = 'medication' | 'test' | 'measurement' | 'follow-up' | 'rehabilitation' | 'exercise-safety' | 'review' | 'none'
 
 export interface VisitActionRow {
   /** Continuous across the groups that carry a decision; absent on 目前無需處理. */
@@ -195,6 +199,8 @@ export interface VisitActionRow {
   basis?: string
   decisionKind: VisitDecisionKind
   decision?: PhysicianDecision
+  /** Derived from current therapy, never persisted as a physician action. */
+  decisionSource?: 'medication-record'
 }
 
 export interface VisitActionGroup {
@@ -246,6 +252,7 @@ export interface HeartFailureVisitFlow {
   decidedCount: number
   decidableCount: number
   summaryText: string
+  englishSummaryText: string
   carriedFields: readonly CarriedField[]
   handoff?: CdssClinicalHandoff
   /** The pack's own follow-up sentence, where a monitoring module wrote one. */
@@ -325,26 +332,26 @@ export interface VisitSignItem {
 
 /** Question ②: what the patient describes. */
 export const VISIT_SYMPTOM_ITEMS: readonly VisitSignItem[] = [
-  { term: 'exertional-dyspnea', zh: '勞力性呼吸困難', en: 'Exertional dyspnoea', shortZh: '勞力性喘', shortEn: 'Exertional dyspnoea', side: 'pulmonary', common: true },
+  { term: 'exertional-dyspnea', zh: '勞力性呼吸困難（exertional dyspnea）', en: 'Exertional dyspnoea', shortZh: '勞力性喘', shortEn: 'Exertional dyspnoea', side: 'pulmonary', common: true },
   { term: 'orthopnea', zh: '端坐呼吸（orthopnea）', en: 'Orthopnoea', shortZh: '端坐呼吸', shortEn: 'Orthopnoea', side: 'pulmonary', common: true },
-  { term: 'paroxysmal-nocturnal-dyspnea', zh: '夜間陣發性呼吸困難（PND）', en: 'Paroxysmal nocturnal dyspnoea (PND)', shortZh: 'PND', shortEn: 'PND', side: 'pulmonary', common: true },
-  { term: 'fatigue-exercise-intolerance', zh: '疲倦／運動耐受下降', en: 'Fatigue / reduced exercise tolerance', shortZh: '疲倦', shortEn: 'Fatigue', side: 'pulmonary', common: true },
-  { term: 'reported-ankle-swelling', zh: '腳腫（自述）', en: 'Ankle swelling (reported)', shortZh: '腳腫', shortEn: 'Ankle swelling', side: 'systemic', common: true },
-  { term: 'abdominal-bloating', zh: '腹脹／吃一點就飽', en: 'Abdominal bloating / early satiety', shortZh: '腹脹', shortEn: 'Bloating', side: 'systemic', common: true },
-  { term: 'nocturnal-cough', zh: '夜咳／喘鳴', en: 'Nocturnal cough / wheeze', shortZh: '夜咳', shortEn: 'Nocturnal cough', side: 'pulmonary', common: false },
+  { term: 'paroxysmal-nocturnal-dyspnea', zh: '夜間陣發性呼吸困難（paroxysmal nocturnal dyspnea，PND）', en: 'Paroxysmal nocturnal dyspnoea (PND)', shortZh: 'PND', shortEn: 'PND', side: 'pulmonary', common: true },
+  { term: 'fatigue-exercise-intolerance', zh: '疲倦／運動耐受下降（fatigue／exercise intolerance）', en: 'Fatigue / reduced exercise tolerance', shortZh: '疲倦', shortEn: 'Fatigue', side: 'pulmonary', common: true },
+  { term: 'reported-ankle-swelling', zh: '腳腫（ankle swelling，自述）', en: 'Ankle swelling (reported)', shortZh: '腳腫', shortEn: 'Ankle swelling', side: 'systemic', common: true },
+  { term: 'abdominal-bloating', zh: '腹脹／吃一點就飽（abdominal bloating／early satiety）', en: 'Abdominal bloating / early satiety', shortZh: '腹脹', shortEn: 'Bloating', side: 'systemic', common: true },
+  { term: 'nocturnal-cough', zh: '夜咳／喘鳴（nocturnal cough／wheeze）', en: 'Nocturnal cough / wheeze', shortZh: '夜咳', shortEn: 'Nocturnal cough', side: 'pulmonary', common: false },
   { term: 'bendopnea', zh: '彎腰呼吸困難（bendopnea）', en: 'Bendopnea', shortZh: '彎腰喘', shortEn: 'Bendopnea', side: 'both', common: false },
-  { term: 'reported-weight-gain', zh: '近期體重增加（自述）', en: 'Recent weight gain (reported)', shortZh: '體重增加', shortEn: 'Weight gain', side: 'both', common: false },
+  { term: 'reported-weight-gain', zh: '近期體重增加（recent weight gain，自述）', en: 'Recent weight gain (reported)', shortZh: '體重增加', shortEn: 'Weight gain', side: 'both', common: false },
 ]
 
 /** Question ④: what the clinician finds. */
 export const VISIT_EXAM_ITEMS: readonly VisitSignItem[] = [
-  { term: 'rales', zh: '肺部濕囉音（rales）', en: 'Pulmonary rales', shortZh: 'rales', shortEn: 'Rales', side: 'pulmonary', common: true },
+  { term: 'rales', zh: '肺部濕囉音（rales）', en: 'Pulmonary rales', shortZh: 'Rales', shortEn: 'Rales', side: 'pulmonary', common: true },
   { term: 'jvp', zh: '頸靜脈怒張（JVP）', en: 'Raised JVP', shortZh: 'JVP', shortEn: 'JVP', side: 'systemic', common: true },
-  { term: 'pitting-edema', zh: '凹陷性水腫', en: 'Pitting oedema', shortZh: '凹陷性水腫', shortEn: 'Pitting oedema', side: 'systemic', common: true },
-  { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: '第三心音', shortEn: 'S3', side: 'pulmonary', common: false },
-  { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: '肝頸反流', shortEn: 'HJR', side: 'systemic', common: false },
-  { term: 'ascites', zh: '腹水', en: 'Ascites', shortZh: '腹水', shortEn: 'Ascites', side: 'systemic', common: false },
-  { term: 'hepatomegaly', zh: '肝腫大', en: 'Hepatomegaly', shortZh: '肝腫大', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
+  { term: 'pitting-edema', zh: '凹陷性水腫（pitting edema）', en: 'Pitting edema', shortZh: 'Pitting edema', shortEn: 'Pitting edema', side: 'systemic', common: true },
+  { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: 'S3', shortEn: 'S3', side: 'pulmonary', common: false },
+  { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: 'HJR', shortEn: 'HJR', side: 'systemic', common: false },
+  { term: 'ascites', zh: '腹水（ascites）', en: 'Ascites', shortZh: 'Ascites', shortEn: 'Ascites', side: 'systemic', common: false },
+  { term: 'hepatomegaly', zh: '肝腫大（hepatomegaly）', en: 'Hepatomegaly', shortZh: 'Hepatomegaly', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
 ]
 
 /** Which of the two questions a term is asked in, for a link back to it. */
@@ -367,16 +374,34 @@ function signText(value: SignAnswerValue | null, isEnglish: boolean): string {
   return isEnglish ? 'not answered' : '尚未回答'
 }
 
+/** Chart notation preserves the distinction between absent and unassessed. */
+function chartSignsText(items: readonly VisitSignItem[], vitals: ClinicVitals | undefined): string {
+  const assessed = items.flatMap(item => {
+    const value = vitals?.signAnswers?.[item.term]?.value
+    return value === 'present' || value === 'absent'
+      ? [`  ${item.shortEn} (${value === 'present' ? '+' : '-'})`] : []
+  })
+  const unassessed = items.filter(item => !['present', 'absent'].includes(vitals?.signAnswers?.[item.term]?.value ?? ''))
+  if (unassessed.length) assessed.push(`  Not assessed: ${unassessed.map(item => item.shortEn).join(', ')}`)
+  return assessed.join('\n')
+}
+
 /** What one question's rows were answered, on one folded line. */
 function signItemsText(
   items: readonly VisitSignItem[],
   vitals: ClinicVitals | undefined,
   isEnglish: boolean,
+  useExamSymbols = false,
 ): string | undefined {
   const answered = items.flatMap((item) => {
     const value = vitals?.signAnswers?.[item.term]?.value
     if (!value) return []
-    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${signText(value, isEnglish)}`]
+    const answer = useExamSymbols && value === 'present'
+      ? '+'
+      : useExamSymbols && value === 'absent'
+        ? '−'
+        : signText(value, isEnglish)
+    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${answer}`]
   })
   const unanswered = items.filter((item) => !vitals?.signAnswers?.[item.term]?.value).length
   if (answered.length === 0) return undefined
@@ -415,6 +440,26 @@ function sideTallyOf(vitals: ClinicVitals | undefined): { pulmonary: number; sys
   return { pulmonary, systemic }
 }
 
+/** Positive bedside congestion findings belong beside the imported evidence. */
+function congestionAssessmentBasis(
+  vitals: ClinicVitals | undefined,
+  isEnglish: boolean,
+): string[] {
+  const positiveLabels = (items: readonly VisitSignItem[]) => items
+    .filter((item) => vitals?.signAnswers?.[item.term]?.value === 'present')
+    .map((item) => isEnglish ? item.shortEn : item.shortZh)
+  const symptoms = positiveLabels(VISIT_SYMPTOM_ITEMS)
+  const exam = positiveLabels(VISIT_EXAM_ITEMS)
+  return [
+    ...(symptoms.length > 0
+      ? [`${isEnglish ? 'Symptoms: ' : '症狀：'}${symptoms.join(isEnglish ? ', ' : '、')}`]
+      : []),
+    ...(exam.length > 0
+      ? [`PE${isEnglish ? ': ' : '：'}${exam.join(isEnglish ? ', ' : '、')}`]
+      : []),
+  ]
+}
+
 function entryText(
   vitals: ClinicVitals | undefined,
   isEnglish: boolean,
@@ -448,14 +493,27 @@ function basisOf(recommendation: CdssRecommendation, isEnglish: boolean): string
   const parts = keys.flatMap((factKey) => {
     const evidence = recommendation.patientEvidence.find((item) => item.factKeys.includes(factKey))
     if (!evidence) return []
-    const text = `${evidence.label}${isEnglish ? ': ' : '：'}${evidence.value}`
+    const label = evidence.label.trim()
+    const value = evidence.value.trim()
+    const repeatsLabel = value.toLocaleLowerCase().startsWith(`${label.toLocaleLowerCase()} `)
+    const text = repeatsLabel ? value : `${label}${isEnglish ? ': ' : '：'}${value}`
     if (seen.has(text)) return []
     seen.add(text)
     return [text]
   })
   const missing = recommendation.missingData?.[0]
-  if (missing) parts.push(isEnglish ? `Missing: ${missing}` : `缺：${missing}`)
+  if (missing) {
+    const conciseMissing = conciseMissingLabel(missing)
+    parts.push(isEnglish ? `Missing: ${conciseMissing}` : `缺：${conciseMissing}`)
+  }
   return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+function conciseMissingLabel(label: string): string {
+  return label
+    .replace(/^此決策可用的\s*/, '')
+    .replace(/（目前資料完全沒有這一項）/g, '')
+    .trim()
 }
 
 /**
@@ -473,24 +531,44 @@ export function buildHeartFailureVisitFlow(
     ...(result.automatedChecks ?? [])
       .map((check) => check.recommendation)
       .filter((item): item is CdssRecommendation => Boolean(item)),
-  ]
+  ].map(applyHeartFailureMedicationSafety)
   const byId = new Map(recommendations.map((item) => [item.id, item]))
   const phenotypeCard = byId.get(PHENOTYPE_MODULE_ID)
   const diagnosisCard = byId.get(HFPEF_DIAGNOSIS_MODULE_ID)
 
   /* ---------------------------------------------------------- questions */
 
-  const suspicionRequest = requestOf(phenotypeCard, 'hf-suspicion')
+  // The visit always starts with this answer, even when the pack already
+  // knows the phenotype and therefore has no diagnostic question to ask.
+  // Keep that visit input usable without changing the pack's clinical gates.
+  const suspicionRequest: PhysicianInputRequest = requestOf(phenotypeCard, 'hf-suspicion') ?? {
+    kind: 'hf-suspicion',
+    label: isEnglish ? 'Do you suspect heart failure in this patient?' : '您懷疑這位病人有心衰竭嗎？',
+    selection: 'single',
+    options: [
+      { id: 'suspected', label: isEnglish ? 'Yes, heart failure is suspected' : '是，懷疑心衰竭' },
+      { id: 'not-suspected', label: isEnglish ? 'No, not suspected at this visit' : '否，本次不懷疑' },
+    ],
+  }
   const lvefRequest = requestOf(phenotypeCard, 'lvef-phenotype')
   const hfpEfRequest = requestOf(diagnosisCard, 'hfpef-diagnosis-confirmation')
 
-  const suspicion = phenotypeAnswer?.hfSuspicion
+  const establishedHeartFailure = recommendations
+    .flatMap((recommendation) => recommendation.patientEvidence)
+    .some((evidence) => evidence.factKeys.includes('heartFailureDiagnosis'))
+  const lvefValue = Number.parseFloat(board.lvef?.value ?? '')
+  const establishedHfrEF = establishedHeartFailure
+    && Number.isFinite(lvefValue)
+    && lvefValue < 50
+  const suspicion = establishedHfrEF ? 'suspected' : phenotypeAnswer?.hfSuspicion
   const suspected = suspicion === 'suspected'
   const notSuspected = suspicion === 'not-suspected'
 
   const suspicionLabel = suspicionRequest?.label
     ?? (isEnglish ? 'Do you suspect heart failure in this patient?' : '您懷疑這位病人有心衰竭嗎？')
-  const suspicionAnswerText = suspicion
+  const suspicionAnswerText = establishedHfrEF
+    ? (isEnglish ? 'Established heart failure in the record' : '病歷已有心衰竭診斷')
+    : suspicion
     ? suspicionRequest?.options?.find((option) => option.id === suspicion)?.label
       ?? (suspected
         ? (isEnglish ? 'Yes' : '是，懷疑心衰竭')
@@ -499,22 +577,24 @@ export function buildHeartFailureVisitFlow(
 
   const questions: VisitQuestion[] = []
 
-  questions.push({
-    id: 'hf-suspicion',
-    number: '1',
-    label: suspicionLabel,
-    state: suspicion ? 'answered' : 'open',
-    ...(suspicionAnswerText ? { answerText: suspicionAnswerText } : {}),
-    ...(phenotypeAnswer?.modifiedAt?.hfSuspicion
-      ? { modifiedAt: phenotypeAnswer.modifiedAt.hfSuspicion }
-      : {}),
-    hint: isEnglish
-      ? 'Answering 「no」 folds the rest away and leaves only the safety alerts.'
-      : '答「否」後其餘題目與處置收起，只留安全警訊。',
-    counted: true,
-    ...(suspicionRequest ? { request: suspicionRequest } : {}),
-    ...(phenotypeCard ? { recommendationId: phenotypeCard.id } : {}),
-  })
+  if (!establishedHfrEF) {
+    questions.push({
+      id: 'hf-suspicion',
+      number: '1',
+      label: suspicionLabel,
+      state: suspicion ? 'answered' : 'open',
+      ...(suspicionAnswerText ? { answerText: suspicionAnswerText } : {}),
+      ...(phenotypeAnswer?.modifiedAt?.hfSuspicion
+        ? { modifiedAt: phenotypeAnswer.modifiedAt.hfSuspicion }
+        : {}),
+      hint: isEnglish
+        ? 'Answering 「no」 folds the rest away and leaves only the safety alerts.'
+        : '答「否」後其餘題目與處置收起，只留安全警訊。',
+      counted: true,
+      request: suspicionRequest,
+      recommendationId: PHENOTYPE_MODULE_ID,
+    })
+  }
 
   // 1b and 1c appear only where the pack actually raised them. The host does
   // not decide that a phenotype is missing — the pack does, by asking.
@@ -562,7 +642,7 @@ export function buildHeartFailureVisitFlow(
   const symptomsAnswered = signItemsAnswered(VISIT_SYMPTOM_ITEMS, clinicVitals)
   questions.push({
     id: 'symptoms',
-    number: '2',
+    number: establishedHfrEF ? '1' : '2',
     label: isEnglish ? 'Symptoms the patient describes' : '病人描述的症狀',
     state: gated(symptomsAnswered ? 'answered' : 'open'),
     ...(symptomsAnswered && symptomsText
@@ -571,18 +651,15 @@ export function buildHeartFailureVisitFlow(
         ...(symptomsStamp ? { modifiedAt: symptomsStamp } : {}),
       }
       : {}),
-    hint: isEnglish
-      ? 'What the patient reports. 「No」 means asked and denied; 「not assessed」 records nothing. Written into the congestion table and HFpEF criterion (i).'
-      : '病人描述。「無」＝問了說沒有；「未評估」不記錄。寫進鬱血證據表與 HFpEF 條件 (i)。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
     items: VISIT_SYMPTOM_ITEMS,
   })
 
   const nyha = clinicVitals?.nyhaClass
-  questions.push({
+  const nyhaQuestion: VisitQuestion = {
     id: 'nyha',
-    number: '3',
+    number: establishedHfrEF ? '3' : '4',
     label: isEnglish ? "Today's NYHA class?" : '今天的 NYHA 分級？',
     state: gated(nyha ? 'answered' : 'open'),
     ...(nyha
@@ -594,23 +671,23 @@ export function buildHeartFailureVisitFlow(
       }
       : {}),
     hint: isEnglish
-      ? 'Graded from the symptoms in question 2 and the activity limitation; never inferred from LVEF or a diagnosis code.'
-      : '依第 2 題的症狀與活動限制選擇；不由 LVEF 或診斷碼推定。',
+      ? `Graded from the symptoms in question ${establishedHfrEF ? '1' : '2'} and the activity limitation; never inferred from LVEF or a diagnosis code.`
+      : `依第 ${establishedHfrEF ? '1' : '2'} 題的症狀與活動限制選擇；不由 LVEF 或診斷碼推定。`,
     ...(suspected ? {} : { lockedReason }),
     counted: true,
-  })
+  }
 
-  // ④ 徵象 — what the clinician examined for. Kept apart from ② because the
+  // ③ 徵象 — what the clinician examined for. Kept apart from ② because the
   // source differs and so does what 「無」 means: 「問了說沒有」 is not 「看了
   // 沒有」, and a rule that cannot tell them apart cannot weigh either.
   const signsStamp = latestStamp(...VISIT_EXAM_ITEMS.map(
     (item) => clinicVitals?.signAnswers?.[item.term]?.modifiedAt,
   ))
-  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish)
+  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish, true)
   const signsAnswered = signItemsAnswered(VISIT_EXAM_ITEMS, clinicVitals)
   questions.push({
     id: 'signs',
-    number: '4',
+    number: establishedHfrEF ? '2' : '3',
     label: isEnglish ? 'Signs you found on examination' : '你檢查到的徵象',
     state: gated(signsAnswered ? 'answered' : 'open'),
     ...(signsAnswered && signsText
@@ -619,19 +696,17 @@ export function buildHeartFailureVisitFlow(
         ...(signsStamp ? { modifiedAt: signsStamp } : {}),
       }
       : {}),
-    hint: isEnglish
-      ? 'What you found. 「No」 means examined and absent. Written into the congestion table and HFpEF criterion (i); blood pressure, heart rate, SpO₂ and weight are question 5.'
-      : '你檢查到的。「無」＝檢查了沒有。寫進鬱血證據表與 HFpEF 條件 (i)；血壓、心率、SpO₂、體重在第 5 題。',
     ...(suspected ? {} : { lockedReason }),
     counted: true,
     items: VISIT_EXAM_ITEMS,
     sideTally: sideTallyOf(clinicVitals),
   })
+  questions.push(nyhaQuestion)
 
   const compensation = clinicVitals?.compensationStatus
   const compensationQuestion: VisitQuestion = {
     id: 'compensation',
-    number: '6',
+    number: establishedHfrEF ? '4' : '5',
     label: isEnglish
       ? 'Compensated or decompensated today?'
       : '今天是代償還是失代償？',
@@ -654,32 +729,9 @@ export function buildHeartFailureVisitFlow(
   }
 
   const vitalsText = entryText(clinicVitals, isEnglish)
-  const vitalsStamp = latestStamp(
-    ...Object.values(clinicVitals?.entries ?? {}).map((entry) => entry?.modifiedAt),
-  )
-  questions.push({
-    id: 'clinic-vitals',
-    number: '5',
-    label: isEnglish
-      ? 'Clinic measurements: BP, heart rate, SpO₂, weight, height'
-      : '門診量測：血壓、心率、SpO₂、體重、身高',
-    // Never locked: a nurse can take the measurements before anyone decides
-    // whether this is a heart-failure visit at all.
-    state: vitalsText ? 'answered' : 'open',
-    ...(vitalsText ? { answerText: vitalsText } : {}),
-    ...(vitalsStamp ? { modifiedAt: vitalsStamp } : {}),
-    hint: isEnglish
-      ? 'Encrypted and kept for this tab session, never written to the chart; each field carries its own measurement date.'
-      : '加密保存於本分頁的工作階段、不寫回病歷；每個欄位各自記量測日。',
-    // A nurse can weigh a patient before anyone decides this is a heart-failure
-    // visit, so this one is never locked — but it stops being part of
-    // 「還有 n 題」 once the clinician has said they are not asking about it.
-    counted: !notSuspected,
-  })
-
   questions.push(compensationQuestion)
 
-  // ⑦ The HFpEF confirmation, last because it reads questions ② and ④ to judge
+  // ⑥ The HFpEF confirmation, last because it reads questions ② and ④ to judge
   // criterion (i): a card that asked for the conclusion before the findings
   // were in sent the clinician back up the page to answer them.
   if (hfpEfRequest && diagnosisCard) {
@@ -689,7 +741,7 @@ export function buildHeartFailureVisitFlow(
     const answered = confirmation === true || confirmation === HFPEF_NOT_CONFIRMED
     questions.push({
       id: 'hfpef-confirmation',
-      number: '7',
+      number: '6',
       label: hfpEfRequest.label,
       state: gated(answered ? 'answered' : 'open'),
       ...(!answered
@@ -702,9 +754,6 @@ export function buildHeartFailureVisitFlow(
             ? { modifiedAt: phenotypeAnswer.modifiedAt.hfpEfConfirmed }
             : {}),
         }),
-      hint: isEnglish
-        ? "The pack judges the three criteria; the scores and echo values come from the HFpEF calculator, which is their only source — the pack does not recompute them."
-        : 'pack 判三個條件；分數與心超數值來自 HFpEF 計算機（唯一來源，pack 不重算）。',
       ...(suspected ? {} : { lockedReason }),
       counted: true,
       request: hfpEfRequest,
@@ -720,10 +769,7 @@ export function buildHeartFailureVisitFlow(
   /* ------------------------------------------------------------ actions */
 
   const alertIds = new Set(board.alerts.map((item) => item.id))
-  const pillarIds = new Set<string>([
-    ...PILLAR_MODULE_IDS.filter((id) => byId.has(id)),
-    ...(byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
-  ])
+  const pillarIds = new Set<string>(PILLAR_MODULE_IDS.filter((id) => byId.has(id)))
   const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = {
     high: 0,
     medium: 1,
@@ -748,6 +794,18 @@ export function buildHeartFailureVisitFlow(
     // The phenotype gate and the HFpEF confirmation are questions 1, 1b and 1c;
     // listing them again as things to do is the duplication this screen removes.
     item.id !== PHENOTYPE_MODULE_ID && item.id !== HFPEF_DIAGNOSIS_MODULE_ID
+    // The four medication-class rows already ask for the concrete decisions.
+    // A separate generic medication-reconciliation row repeats that work.
+    && item.id !== GDMT_MODULE_ID
+    // The diagnosis question and HFpEF calculator already present the same
+    // eligibility evidence; a second read-only treatment card adds no action.
+    && item.id !== 'heart-failure-hfpef-treatment'
+    // Each additional therapy already has its own evidence table and physician
+    // fields. The umbrella card only asks the clinician to repeat that work.
+    && item.id !== 'heart-failure-additional-medical-therapy'
+    && !isGenericMonitoringReminder(item)
+    // Exercise clearance belongs to the rehabilitation assessment, not this HF visit.
+    && item.id !== 'cardiac-rehabilitation-safety'
   ))
 
   const groupOrder: readonly VisitActionGroupId[] = [
@@ -784,26 +842,35 @@ export function buildHeartFailureVisitFlow(
         || (a.moduleOrder ?? Number.MAX_SAFE_INTEGER) - (b.moduleOrder ?? Number.MAX_SAFE_INTEGER)
       ))
       .map((recommendation): VisitActionRow => {
-        const decisionKind: VisitDecisionKind = groupId === 'no-action'
-          ? 'none'
-          : groupId === 'needs-data'
-            ? 'test'
-            : 'medication'
+        const decisionKind = visitDecisionKind(recommendation, groupId)
         if (decisionKind !== 'none') index += 1
         const medications = pillarMedications.get(recommendation.id)
+        const recordedDecision = decisions[recommendation.id]
+        // An existing drug does not fulfil a recommendation to switch or adjust it.
+        const defaultPrescribed = !recordedDecision && decisionKind === 'medication'
+          && recommendation.status === 'no-action'
+          && board.pillars.some((pillar) => pillar.id === recommendation.id && pillar.taking)
+        const packBasis = basisOf(recommendation, isEnglish)
+        const basis = [
+          ...(recommendation.id === 'heart-failure-congestion-diuretic'
+            ? congestionAssessmentBasis(clinicVitals, isEnglish)
+            : []),
+          ...(packBasis ? [packBasis] : []),
+        ].join(' · ')
         return {
           ...(decisionKind === 'none' ? {} : { index }),
           recommendation,
-          headline: recommendation.nextActions[0] ?? recommendation.title,
+          headline: visitActionHeadline(recommendation, isEnglish),
           moduleName: recommendation.moduleName ?? recommendation.id,
           status: recommendation.status,
           isSafety: groupId === 'safety',
           ...(medications ? { medications } : {}),
-          ...(basisOf(recommendation, isEnglish)
-            ? { basis: basisOf(recommendation, isEnglish) }
-            : {}),
+          ...(basis ? { basis } : {}),
           decisionKind,
-          ...(decisions[recommendation.id] ? { decision: decisions[recommendation.id] } : {}),
+          ...(recordedDecision ? { decision: recordedDecision } : defaultPrescribed ? {
+            decision: { decision: 'prescribed', reasons: [], recordedAt: '', packVersion: result.packVersion },
+            decisionSource: 'medication-record',
+          } : {}),
         }
       })
     if (rows.length === 0) return []
@@ -844,7 +911,13 @@ export function buildHeartFailureVisitFlow(
       ? 'done'
       : 'current'
   const phenotypeTitle = board.phenotype?.title
-  const confirmDetail = notSuspected
+  const confirmDetail = establishedHfrEF
+    ? [
+      'HFrEF',
+      board.lvef?.value ? `LVEF ${board.lvef.value}` : undefined,
+      isEnglish ? 'established HF diagnosis in record' : '病歷已有心衰竭診斷',
+    ].filter(Boolean).join(' · ')
+    : notSuspected
     ? (isEnglish ? 'Not suspected this visit' : '本次不懷疑')
     : suspected
       ? [isEnglish ? 'Yes' : '是', phenotypeTitle, board.lvef?.value ? `LVEF ${board.lvef.value}` : undefined]
@@ -992,7 +1065,7 @@ export function buildHeartFailureVisitFlow(
       message: isEnglish
         ? `This visit is complete: copy the summary into the chart${followUpNote ? `, ${followUpNote}` : ''}`
         : `本次完成：複製摘要到病歷${followUpNote ? `，${followUpNote}` : ''}`,
-      actionLabel: isEnglish ? "Copy this visit's summary" : '複製本次摘要',
+      actionLabel: isEnglish ? "Copy English summary" : '複製英文摘要',
       target: { kind: 'copy' },
     }
   })()
@@ -1056,6 +1129,11 @@ export function buildHeartFailureVisitFlow(
     oxygenSaturation: { zh: 'SpO₂', en: 'SpO₂', unit: '%' },
     bodyWeight: { zh: '體重', en: 'Weight', unit: 'kg' },
     bodyHeight: { zh: '身高', en: 'Height', unit: 'cm' },
+    potassium: { zh: 'K', en: 'K', unit: 'mmol/L' },
+    eGFR: { zh: 'eGFR', en: 'eGFR', unit: 'mL/min/1.73m²' },
+    sodium: { zh: 'Na', en: 'Na', unit: 'mmol/L' },
+    NTproBNP: { zh: 'NT-proBNP', en: 'NT-proBNP', unit: 'pg/mL' },
+    hemoglobin: { zh: 'Hb', en: 'Hb', unit: 'g/dL' },
   }
   for (const [key, entry] of Object.entries(clinicVitals?.entries ?? {})) {
     if (!entry) continue
@@ -1069,7 +1147,7 @@ export function buildHeartFailureVisitFlow(
   }
   for (const row of decidableRows) {
     const decision = row.decision
-    if (!decision) continue
+    if (!decision || row.decisionSource === 'medication-record') continue
     pushCarried(
       row.moduleName,
       decisionLabel(decision.decision, isEnglish),
@@ -1103,6 +1181,30 @@ export function buildHeartFailureVisitFlow(
     followUpNote,
   })
 
+  // Build chart text from structured answers, independently of the UI/pack language.
+  const englishSummaryText = buildVisitSummaryText({
+    chartLayout: true,
+    board,
+    isEnglish: true,
+    now,
+    phenotypeTitle: phenotypeTitle?.match(/HF(?:imp|mr|p|r)EF/i)?.[0]
+      ? `${phenotypeTitle.match(/HF(?:imp|mr|p|r)EF/i)![0]} pathway` : undefined,
+    suspicionAnswerText: suspicion ? (suspected ? 'Yes' : 'No, not suspected at this visit') : 'Not assessed',
+    suspicionModifiedAt: phenotypeAnswer?.modifiedAt?.hfSuspicion,
+    nyhaText: nyha && nyha.value !== NOT_ASSESSED ? String(nyha.value) : 'not assessed',
+    symptomsText: chartSignsText(VISIT_SYMPTOM_ITEMS, clinicVitals),
+    signsText: chartSignsText(VISIT_EXAM_ITEMS, clinicVitals),
+    hfpEfText: phenotypeAnswer?.hfpEfConfirmed === true ? 'HFpEF confirmed'
+      : phenotypeAnswer?.hfpEfConfirmed === HFPEF_NOT_CONFIRMED ? 'HFpEF not confirmed this visit' : undefined,
+    compensationText: compensation && compensation.value !== NOT_ASSESSED ? compensation.value : 'not assessed',
+    vitalsText: entryText(clinicVitals, true),
+    decidableRows: decidableRows.map(row => ({
+      ...row,
+      moduleName: clinicalModuleLabel(row.recommendation.id, 'en', row.recommendation.id),
+    })),
+    decidedCount,
+  }).replace(/：/g, ': ').replace(/（/g, ' (').replace(/）/g, ')')
+
   return {
     steps,
     nextStep,
@@ -1115,11 +1217,54 @@ export function buildHeartFailureVisitFlow(
     decidedCount,
     decidableCount,
     summaryText,
+    englishSummaryText,
     carriedFields,
     ...(result.clinicalHandoff ? { handoff: result.clinicalHandoff } : {}),
     ...(followUpNote ? { followUpNote } : {}),
     readOnly,
   }
+}
+
+/** State the result of a negative medication-safety scan instead of when to scan again. */
+function visitActionHeadline(recommendation: CdssRecommendation, isEnglish: boolean): string {
+  if (recommendation.id === 'heart-failure-fmt-safety') {
+    const missing = (recommendation.missingData ?? []).map(conciseMissingLabel)
+    const stale = recommendation.patientEvidence
+      .filter((item) => /超過\s*\d+\s*天窗|stale|exceeds?.*window|out(?:side| of).*window/i.test(item.value))
+      .map((item) => item.label)
+    const uniqueMissing = [...new Set(missing)]
+    const uniqueStale = [...new Set(stale)]
+    if (isEnglish) {
+      const actions = [
+        ...(uniqueMissing.length > 0 ? [`complete ${uniqueMissing.join(', ')}`] : []),
+        ...(uniqueStale.length > 0 ? [`repeat ${uniqueStale.join(', ')}`] : []),
+      ]
+      return actions.length > 0
+        ? `${actions.join(' and ')}, then reassess medication adjustment.`
+        : 'Review symptoms, vital signs, and laboratory results before adjusting medication.'
+    }
+    const actions = [
+      ...(uniqueMissing.length > 0 ? [`補齊${uniqueMissing.join('、')}`] : []),
+      ...(uniqueStale.length > 0 ? [`複驗${uniqueStale.join('、')}`] : []),
+    ]
+    return actions.length > 0
+      ? `${actions.join('並')}，再評估藥物調整。`
+      : '確認症狀、生命徵象與檢驗後，再評估藥物調整。'
+  }
+  if (recommendation.id === 'heart-failure-mra') {
+    return isEnglish ? 'Assess starting MRA.' : '評估啟用 MRA。'
+  }
+  if (recommendation.id === 'heart-failure-congestion-diuretic') {
+    return isEnglish
+      ? 'For HF with signs or symptoms of congestion, adjust loop diuretics to volume status.'
+      : '有鬱血症狀或徵象時，依容量狀態調整 loop 利尿劑。'
+  }
+  if (recommendation.id === 'heart-failure-medication-safety' && recommendation.status === 'no-action') {
+    return isEnglish
+      ? 'Medication review found no recorded NSAID or COX-2 inhibitor use.'
+      : '本次用藥掃描未發現 NSAID 或 COX-2 抑制劑使用紀錄。'
+  }
+  return recommendation.nextActions[0] ?? recommendation.title
 }
 
 /**
@@ -1141,6 +1286,41 @@ function firstOpenHint(board: HeartFailureBoardModel, isEnglish: boolean): strin
     : `紀錄有 ${clues.join(' · ')}，可協助判斷；但只有你能決定是否啟動心衰竭路徑。`
 }
 
+
+/** This generic record-retrieval reminder is not a decision for today's visit. */
+function isGenericMonitoringReminder(item: CdssRecommendation): boolean {
+  return item.id === 'heart-failure-monitoring' && [
+    '先查找院內近期病歷與出院計畫，再補齊病人自述與量測資料。',
+    'Retrieve recent institutional notes and the discharge plan first, then complete patient-reported and measured data.',
+  ].includes(item.nextActions[0] ?? '')
+}
+
+/** Match the task itself, not the severity/group in which it happens to appear. */
+function visitDecisionKind(recommendation: CdssRecommendation, group: VisitActionGroupId): VisitDecisionKind {
+  if (group === 'no-action') return 'none'
+  if (recommendation.id === 'cardiac-rehabilitation-safety') return 'exercise-safety'
+  if (recommendation.id === 'cardiac-rehabilitation') return 'rehabilitation'
+  if (recommendation.id === 'heart-failure-fmt-safety') return 'measurement'
+  if (group === 'needs-data') return 'test'
+  if (recommendation.id === 'heart-failure-monitoring' || recommendation.id === 'cardiac-rehabilitation-response') return 'follow-up'
+  if (
+    recommendation.id === 'heart-failure-hfimpEF-therapy'
+  ) return 'review'
+  if (recommendation.domain === 'medication') return 'medication'
+  return 'review'
+}
+
+export const VISIT_DECISIONS: Readonly<Record<VisitDecisionKind, readonly PhysicianDecision['decision'][]>> = {
+  medication: ['prescribed', 'dose-adjusted', 'contraindicated', 'deferred', 'patient-preference'],
+  test: ['ordered', 'deferred'],
+  measurement: ['measurements-completed', 'deferred'],
+  'follow-up': ['follow-up-arranged', 'reviewed', 'deferred', 'patient-preference'],
+  rehabilitation: ['referred', 'deferred', 'patient-preference'],
+  'exercise-safety': ['exercise-cleared', 'supervised-exercise', 'deferred'],
+  review: ['reviewed', 'deferred', 'patient-preference'],
+  none: [],
+}
+
 export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { zh: string; en: string }>> = {
   prescribed: { zh: '已開立', en: 'Prescribed' },
   'dose-adjusted': { zh: '劑量調整', en: 'Dose adjusted' },
@@ -1148,6 +1328,12 @@ export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { z
   deferred: { zh: '暫緩', en: 'Deferred' },
   'patient-preference': { zh: '病人意願', en: "Patient's preference" },
   ordered: { zh: '已開單', en: 'Ordered' },
+  'measurements-completed': { zh: '已量測', en: 'Measured' },
+  'follow-up-arranged': { zh: '已安排追蹤', en: 'Follow-up arranged' },
+  referred: { zh: '已轉介', en: 'Referred' },
+  'exercise-cleared': { zh: '可運動', en: 'Cleared for exercise' },
+  'supervised-exercise': { zh: '需監測下運動', en: 'Supervised exercise' },
+  reviewed: { zh: '已評估', en: 'Reviewed' },
 }
 
 export function decisionLabel(
@@ -1160,13 +1346,136 @@ export function decisionLabel(
 /** The reasons a deferral or a contraindication can be recorded under. */
 export const DECISION_REASONS: readonly { id: string; zh: string; en: string }[] = [
   { id: 'high-potassium', zh: 'K 偏高', en: 'Potassium high' },
+  { id: 'mra-hyperkalemia', zh: 'K ≥ 5.0 mmol/L', en: 'Potassium ≥ 5.0 mmol/L' },
+  { id: 'mra-renal-threshold', zh: 'eGFR ≤ 30 mL/min/1.73m²', en: 'eGFR ≤ 30 mL/min/1.73m²' },
+  { id: 'addison-disease', zh: 'Addison disease', en: 'Addison disease' },
+  { id: 'duplicate-mra', zh: '重複使用 MRA（如併用 eplerenone）', en: 'Duplicate MRA therapy (e.g. concomitant eplerenone)' },
   { id: 'symptomatic-hypotension', zh: '症狀性低血壓', en: 'Symptomatic hypotension' },
   { id: 'low-egfr', zh: 'eGFR 不足', en: 'eGFR too low' },
   { id: 'bradycardia', zh: '心率過慢', en: 'Heart rate too low' },
+  { id: 'drug-hypersensitivity', zh: '對本藥嚴重過敏', en: 'Serious drug hypersensitivity' },
+  { id: 'angioedema-history', zh: 'ACEI／ARB 相關血管性水腫史', en: 'History of ACEI/ARB-related angioedema' },
+  { id: 'pregnancy', zh: '懷孕', en: 'Pregnancy' },
+  { id: 'acei-arni-overlap', zh: 'ACEI 併用／停藥未滿 36 小時', en: 'Concomitant ACEI or washout under 36 hours' },
+  { id: 'arni-aliskiren-diabetes', zh: 'ARNI 併用 aliskiren（糖尿病）', en: 'ARNI with aliskiren in diabetes' },
+  { id: 'high-grade-av-block', zh: '二／三度 AV block（無節律器）', en: 'Second-/third-degree AV block without a pacemaker' },
+  { id: 'severe-bradycardia', zh: '嚴重心搏過緩', en: 'Severe bradycardia' },
+  { id: 'cardiogenic-shock', zh: '心因性休克／需靜脈強心劑', en: 'Cardiogenic shock / IV inotrope required' },
+  { id: 'bronchial-asthma', zh: '支氣管氣喘／嚴重支氣管痙攣', en: 'Bronchial asthma / severe bronchospasm' },
+  { id: 'acute-decompensation', zh: '急性失代償／尚未穩定', en: 'Acute decompensation / not yet stable' },
+  { id: 'anuria', zh: '無尿', en: 'Anuria' },
+  { id: 'no-congestion', zh: '無鬱血／已達乾體重', en: 'No congestion / at dry weight' },
+  { id: 'electrolyte-depletion', zh: '低血鉀／低血鈉', en: 'Hypokalaemia / hyponatraemia' },
+  { id: 'worsening-renal-function', zh: '腎功能惡化／少尿', en: 'Worsening renal function / oliguria' },
+  { id: 'drug-intolerance', zh: '不耐受', en: 'Intolerance' },
+  { id: 'volume-depletion', zh: '容量不足／症狀性低血壓', en: 'Volume depletion / symptomatic hypotension' },
+  { id: 'ketoacidosis', zh: '酮酸中毒／疑似 DKA', en: 'Ketoacidosis / suspected DKA' },
+  { id: 'acute-illness-fasting-surgery', zh: '急性病／禁食／手術', en: 'Acute illness / fasting / surgery' },
+  { id: 'low-egfr-initiation', zh: 'eGFR 低於起始門檻', en: 'eGFR below initiation threshold' },
   { id: 'patient-refused', zh: '病人拒絕', en: 'Patient declined' },
   { id: 'cost', zh: '費用／給付', en: 'Cost / coverage' },
   { id: 'other', zh: '其他', en: 'Other' },
 ]
+
+/** Reasons shown for this decision; diuretics use volume-status and renal safety reasons. */
+export function decisionReasonIds(
+  moduleId: string,
+  decisionKind: VisitDecisionKind,
+  decision: PhysicianDecision['decision'] | undefined,
+): readonly string[] {
+  if (moduleId === 'heart-failure-ras-inhibition') {
+    return decision === 'contraindicated'
+      ? [
+          'angioedema-history',
+          'pregnancy',
+          'acei-arni-overlap',
+          'arni-aliskiren-diabetes',
+          'drug-hypersensitivity',
+          'other',
+        ]
+      : [
+          'symptomatic-hypotension',
+          'high-potassium',
+          'worsening-renal-function',
+          'drug-intolerance',
+          'patient-refused',
+          'cost',
+          'other',
+        ]
+  }
+  if (moduleId === 'heart-failure-beta-blocker') {
+    return decision === 'contraindicated'
+      ? [
+          'high-grade-av-block',
+          'severe-bradycardia',
+          'cardiogenic-shock',
+          'bronchial-asthma',
+          'drug-hypersensitivity',
+          'other',
+        ]
+      : [
+          'acute-decompensation',
+          'bradycardia',
+          'symptomatic-hypotension',
+          'drug-intolerance',
+          'patient-refused',
+          'cost',
+          'other',
+        ]
+  }
+  if (moduleId === 'heart-failure-mra') {
+    return decision === 'contraindicated'
+      ? [
+          'mra-hyperkalemia',
+          'mra-renal-threshold',
+          'addison-disease',
+          'duplicate-mra',
+          'drug-hypersensitivity',
+          'other',
+        ]
+      : [
+          'symptomatic-hypotension',
+          'worsening-renal-function',
+          'acute-illness-fasting-surgery',
+          'drug-intolerance',
+          'patient-refused',
+          'cost',
+          'other',
+        ]
+  }
+  if (moduleId === 'heart-failure-congestion-diuretic') {
+    return decision === 'contraindicated'
+      ? ['anuria', 'drug-hypersensitivity', 'other']
+      : [
+          'no-congestion',
+          'volume-depletion',
+          'electrolyte-depletion',
+          'worsening-renal-function',
+          'drug-intolerance',
+          'patient-refused',
+          'other',
+        ]
+  }
+  if (moduleId === 'heart-failure-sglt2') {
+    return decision === 'contraindicated'
+      ? ['drug-hypersensitivity', 'other']
+      : [
+          'volume-depletion',
+          'ketoacidosis',
+          'acute-illness-fasting-surgery',
+          'low-egfr-initiation',
+          'drug-intolerance',
+          'patient-refused',
+          'cost',
+          'other',
+        ]
+  }
+  return decisionKind === 'medication'
+    ? (decision === 'contraindicated'
+        ? ['drug-hypersensitivity', 'other']
+        : ['drug-intolerance', 'patient-refused', 'cost', 'other'])
+    : ['patient-refused', 'cost', 'other']
+}
 
 export function decisionReasonLabel(id: string, isEnglish: boolean): string {
   const reason = DECISION_REASONS.find((item) => item.id === id)
@@ -1182,6 +1491,7 @@ export function decisionReasonLabel(id: string, isEnglish: boolean): string {
  * every clinical phrase in it is one the screen already showed.
  */
 function buildVisitSummaryText(input: {
+  chartLayout?: boolean
   board: HeartFailureBoardModel
   isEnglish: boolean
   now: Date
@@ -1203,7 +1513,10 @@ function buildVisitSummaryText(input: {
     nyhaText, symptomsText, signsText, hfpEfText, compensationText, vitalsText,
     decidableRows, decidedCount, followUpNote,
   } = input
-  const suspicionStamp = formatStamp(suspicionModifiedAt, now, isEnglish)
+  const recordedStamp = suspicionModifiedAt ? zonedParts(suspicionModifiedAt) : undefined
+  const suspicionStamp = input.chartLayout
+    ? (recordedStamp ? `${recordedStamp.date}${suspicionModifiedAt!.length > 10 ? ` ${recordedStamp.time}` : ''}` : undefined)
+    : formatStamp(suspicionModifiedAt, now, isEnglish)
   const lines: string[] = []
 
   lines.push([
@@ -1228,10 +1541,18 @@ function buildVisitSummaryText(input: {
     ? `${isEnglish ? 'Clinic measurements' : '門診量測'}：${vitalsText}`
     : `${isEnglish ? 'Clinic measurements' : '門診量測'}：${isEnglish ? 'none entered' : '未輸入'}`)
 
-  const decided = decidableRows
-    .flatMap((row) => (row.decision
-      ? [`${row.moduleName} ${decisionLabel(row.decision.decision, isEnglish)}`]
-      : []))
+  const decided = decidableRows.flatMap((row) => {
+    if (!row.decision) return []
+    const safety = ['dose-adjusted', 'deferred'].includes(row.decision.decision)
+      ? heartFailureMedicationSafetyAssessment(row.recommendation)
+      : undefined
+    const details = [
+      safety ? (isEnglish ? safety.summaryReasonEn : safety.summaryReasonZh) : undefined,
+      ...row.decision.reasons.map(reason => decisionReasonLabel(reason, isEnglish)),
+      row.decision.note,
+    ].filter((value): value is string => Boolean(value))
+    return [`${row.moduleName}${input.chartLayout ? ': ' : ' '}${decisionLabel(row.decision.decision, isEnglish)}${details.length ? ` (${details.join('; ')})` : ''}${row.decisionSource === 'medication-record' ? (isEnglish ? ' (from current medication record)' : '（依目前用藥紀錄）') : ''}`]
+  })
   const undecided = decidableRows.length - decidedCount
   lines.push([
     decided.length > 0
@@ -1243,5 +1564,24 @@ function buildVisitSummaryText(input: {
     followUpNote,
   ].filter(Boolean).join(isEnglish ? ' · ' : ' · '))
 
+  if (input.chartLayout) {
+    return [
+      [
+        'Assessment',
+        suspicionAnswerText ? `Heart-failure suspicion: ${suspicionAnswerText}${suspicionStamp ? ` (${suspicionStamp})` : ''}` : undefined,
+        phenotypeTitle,
+        board.lvef?.value ? `LVEF ${board.lvef.value}${board.lvef.date ? ` (${formatDay(board.lvef.date)})` : ''}` : undefined,
+        hfpEfText,
+        `NYHA: ${nyhaText}`,
+        `Compensation: ${compensationText}`,
+      ].filter(Boolean).join('\n'),
+      `Symptoms\n${symptomsText}`,
+      `Signs\n${signsText}`,
+      `Clinic measurements\n${vitalsText ? vitalsText.split(' · ').map(value => `  ${value}`).join('\n') : '  None entered'}`,
+      ['Management', ...(decided.length ? decided.map(value => `- ${value}`) : ['- No decisions recorded']),
+        ...(undecided > 0 ? [`- Pending decisions: ${undecided}`] : []),
+      ].join('\n'),
+    ].join('\n\n')
+  }
   return lines.join('\n')
 }

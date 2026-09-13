@@ -82,10 +82,13 @@ const STATUS_METRICS: readonly {
 }[] = [
   { factKey: 'bloodPressure', zh: '血壓', en: 'BP', kind: 'measure' },
   { factKey: 'heartRate', zh: '心率', en: 'HR', kind: 'measure' },
+  { factKey: 'oxygenSaturation', zh: 'SpO₂', en: 'SpO₂', kind: 'measure' },
   { factKey: 'potassium', zh: 'K', en: 'K', kind: 'lab' },
   { factKey: 'eGFR', zh: 'eGFR', en: 'eGFR', kind: 'lab' },
   { factKey: 'sodium', zh: 'Na', en: 'Na', kind: 'lab' },
+  { factKey: 'hemoglobin', zh: 'Hb', en: 'Hb', kind: 'lab' },
   { factKey: 'bodyWeight', zh: '體重', en: 'Weight', kind: 'measure' },
+  { factKey: 'bodyHeight', zh: '身高', en: 'Height', kind: 'measure' },
   {
     factKey: 'NTproBNP',
     zh: 'NT-proBNP',
@@ -95,7 +98,7 @@ const STATUS_METRICS: readonly {
   },
 ]
 
-const UNIT_PATTERN = /\s*(?:mmHg|bpm|mmol\/L|mEq\/L|mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)|mg\/dL|pg\/mL|ng\/L|kg)(?![A-Za-z])/gi
+const UNIT_PATTERN = /\s*(?:mmHg|bpm|mmol\/L|mEq\/L|mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)|mg\/dL|g\/dL|pg\/mL|ng\/L|kg|cm)(?![A-Za-z])/gi
 /** The parenthetical `agedFactEvidence` appends to a value past its window. */
 const STALE_NOTE_PATTERN = /[（(][^（()）]*(?:已 \d+ 天|\d+ d old|超過 \d+ 天窗|past the \d+-day window)[^（()）]*[）)]/
 const TAKING_PATTERN = /^(?:目前用藥中|Currently taking)/
@@ -270,7 +273,7 @@ function metricFromEvidence(
 ): HeartFailureMetric {
   const label = isEnglish ? config.en : config.zh
   if (!evidence) {
-    return { factKey: config.factKey, label, kind: config.kind, stale: false, entered: false, evaluated: false }
+    return { factKey: config.factKey, label, unit: config.factKey === 'hemoglobin' ? 'g/dL' : undefined, kind: config.kind, stale: false, entered: false, evaluated: false }
   }
   const compact = compactValue(evidence.value)
   const date = latestSourceDate(evidence) ?? compact.inlineDate
@@ -458,6 +461,7 @@ export function buildHeartFailureBoard(
       .map((check) => check.recommendation)
       .filter((item): item is CdssRecommendation => Boolean(item)),
   ]
+  const visibleRecommendations = recommendations.filter((item) => item.id !== HFPEF_TREATMENT_MODULE_ID)
   const byId = new Map(recommendations.map((item) => [item.id, item]))
 
   const phenotype = byId.get(PHENOTYPE_MODULE_ID)
@@ -474,12 +478,12 @@ export function buildHeartFailureBoard(
       ?? metricFromEvidence(config, undefined, isEnglish, now)
   })
 
-  const alerts = recommendations.filter((item) => (
+  const alerts = visibleRecommendations.filter((item) => (
     item.domain === 'safety' && item.status === 'actionable'
   ))
   const priorityRank: Readonly<Record<CdssRecommendation['priority'], number>> = { high: 0, medium: 1, routine: 2 }
   const statusRank: Readonly<Partial<Record<CdssStatus, number>>> = { actionable: 0, 'needs-data': 1 }
-  const headlines: HeartFailureHeadline[] = recommendations
+  const headlines: HeartFailureHeadline[] = visibleRecommendations
     .filter((item) => item.status === 'actionable' || item.status === 'needs-data')
     .filter((item) => item.nextActions[0])
     .sort((a, b) => (
@@ -519,18 +523,21 @@ export function buildHeartFailureBoard(
   const consumedIds = new Set<string>([
     ...alerts.map((item) => item.id),
     ...pillars.map((item) => item.id),
+    // The dedicated diagnosis panel and calculator already present this
+    // evidence and the confirmation control; do not repeat a read-only card.
+    ...(byId.has(HFPEF_TREATMENT_MODULE_ID) ? [HFPEF_TREATMENT_MODULE_ID] : []),
     // The pillar heading is the GDMT module's own title, so its row would say
     // the same thing twice; it stays reachable from the heading.
     ...(evaluatedPillars.length > 0 && byId.has(GDMT_MODULE_ID) ? [GDMT_MODULE_ID] : []),
   ])
 
   const statusCounts: Record<CdssStatus, number> = { actionable: 0, 'needs-data': 0, review: 0, 'no-action': 0 }
-  recommendations.forEach((item) => { statusCounts[item.status] += 1 })
+  visibleRecommendations.forEach((item) => { statusCounts[item.status] += 1 })
 
   return {
     phenotype,
     headlines,
-    evaluatedCount: recommendations.length,
+    evaluatedCount: visibleRecommendations.length,
     statusCounts,
     lvef,
     metrics,

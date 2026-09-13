@@ -1,0 +1,947 @@
+{
+  "resourceType": "Bundle",
+  "id": "hfrEF-hypotension-bradycardia-bundle",
+  "type": "collection",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+        "code": "synthetic-hfrEF-case",
+        "display": "HFrEF 合併低血壓與心搏過緩，需重新評估 ARNI 與 β 阻斷劑耐受性。"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "Patient/hfrEF-hypotension-bradycardia",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "hfrEF-hypotension-bradycardia",
+        "meta": {
+          "tag": [
+            {
+              "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+              "code": "hypotension-bradycardia",
+              "display": "HFrEF 合併低血壓與心搏過緩，需重新評估 ARNI 與 β 阻斷劑耐受性。"
+            }
+          ]
+        },
+        "name": [
+          {
+            "text": "模擬 周低壓",
+            "family": "周",
+            "given": [
+              "低壓"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1963-01-08"
+      }
+    },
+    {
+      "fullUrl": "Encounter/hfrEF-hypotension-bradycardia-visit",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "hfrEF-hypotension-bradycardia-visit",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "period": {
+          "start": "2026-09-10T08:30:00+08:00",
+          "end": "2026-09-10T10:00:00+08:00"
+        },
+        "serviceProvider": {
+          "display": "示範心臟醫學中心"
+        },
+        "reasonCode": [
+          {
+            "text": "Chronic systolic (congestive) heart failure",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I50.22",
+                "display": "Chronic systolic (congestive) heart failure"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Condition/hfrEF-hypotension-bradycardia-hfrEF",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "hfrEF-hypotension-bradycardia-hfrEF",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chronic systolic heart failure",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I50.22",
+              "display": "Chronic systolic (congestive) heart failure"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-hypotension-bradycardia-visit"
+        },
+        "onsetDateTime": "2025-02-15"
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-lvef",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-lvef",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Left ventricular ejection fraction",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "10230-1",
+              "display": "Left ventricular ejection fraction"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 25,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-nt-probnp",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-nt-probnp",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "NT-proBNP",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33762-6",
+              "display": "NT-proBNP"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 1350,
+          "unit": "pg/mL",
+          "system": "http://unitsofmeasure.org",
+          "code": "pg/mL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-egfr",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-egfr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Estimated glomerular filtration rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33914-3",
+              "display": "Estimated glomerular filtration rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 58,
+          "unit": "mL/min/1.73m2",
+          "system": "http://unitsofmeasure.org",
+          "code": "mL/min/1.73m2"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-potassium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-potassium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Potassium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3",
+              "display": "Potassium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 4.5,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-sodium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-sodium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Sodium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2",
+              "display": "Sodium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 136,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-hemoglobin",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-hemoglobin",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Hemoglobin",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "718-7",
+              "display": "Hemoglobin"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 12.2,
+          "unit": "g/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "g/dL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-blood-pressure",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-blood-pressure",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Blood pressure",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 86,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 54,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ],
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-heart-rate",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-heart-rate",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Heart rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 44,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-oxygen-saturation",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-oxygen-saturation",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Oxygen saturation",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "59408-5",
+              "display": "Oxygen saturation"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 95,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-body-weight",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-body-weight",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body weight",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 58,
+          "unit": "kg",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-hypotension-bradycardia-body-height",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-hypotension-bradycardia-body-height",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body height",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2",
+              "display": "Body height"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 158,
+          "unit": "cm",
+          "system": "http://unitsofmeasure.org",
+          "code": "cm"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-hypotension-bradycardia-echo",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-hypotension-bradycardia-echo",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "CUS",
+                "display": "Cardiac Ultrasound"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Echocardiography",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34552-0",
+              "display": "Cardiac echocardiography report"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-hypotension-bradycardia-visit"
+        },
+        "effectiveDateTime": "2026-09-08T10:00:00+08:00",
+        "issued": "2026-09-08T11:00:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Dilated left ventricle with global hypokinesis. LVEF 25%."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-hypotension-bradycardia-ecg",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-hypotension-bradycardia-ecg",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "EC",
+                "display": "Electrocardiography"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "12-lead ECG",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11524-6",
+              "display": "EKG study"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-hypotension-bradycardia-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:45:00+08:00",
+        "issued": "2026-09-10T08:50:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Sinus bradycardia, rate 44 bpm. PR interval 210 ms."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-hypotension-bradycardia-cxr",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-hypotension-bradycardia-cxr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "RAD",
+                "display": "Radiology"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-hypotension-bradycardia-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:40:00+08:00",
+        "issued": "2026-09-10T08:55:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Stable mild cardiomegaly. No pulmonary edema or pleural effusion."
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-hypotension-bradycardia-sacubitril-valsartan",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-hypotension-bradycardia-sacubitril-valsartan",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Sacubitril/valsartan 49/51 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: hypotension-bradycardia"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-hypotension-bradycardia-carvedilol",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-hypotension-bradycardia-carvedilol",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Carvedilol 12.5 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: hypotension-bradycardia"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-hypotension-bradycardia-spironolactone",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-hypotension-bradycardia-spironolactone",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Spironolactone 25 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: hypotension-bradycardia"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-hypotension-bradycardia-empagliflozin",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-hypotension-bradycardia-empagliflozin",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Empagliflozin 10 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-hypotension-bradycardia"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: hypotension-bradycardia"
+          }
+        ]
+      }
+    }
+  ]
+}

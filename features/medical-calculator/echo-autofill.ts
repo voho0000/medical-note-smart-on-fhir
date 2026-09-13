@@ -28,9 +28,16 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     return u === 'm/s' && unit?.includes('cm') ? value * 100 : value
   }
   const e = number('\\b(?:MV\\s*)?E(?:\\s*(?:max\\s*vel(?:ocity)?|vel(?:ocity)?|wave))?\\b(?!\\s*[/\\\'])', 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
+  // Some reports print both transmitral velocities as “MV E/A 54/89.1cm/s”.
+  // Require both point values and a velocity unit; a dimensionless E/A ratio is not E.
+  const pairedVelocity = text.match(/\bMV\s*E\s*\/\s*A\s*[:=]?\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(cm|m)\s*\/\s*s(?:ec)?\b(?!\s*(?:[-–~～]|to\b)\s*\d)/i)
+  const pairedE = pairedVelocity && Number(pairedVelocity[2]) > 0
+    ? Number(pairedVelocity[1]) * (pairedVelocity[3].toLowerCase() === 'm' ? 100 : 1)
+    : undefined
+  const mitralE = e ?? pairedE
   const septal = number("(?:\\b(?:med\\s*peak|sep(?:tal)?|medial)\\s*e'|(?<![/\\w])e'\\s*(?:sep(?:tal)?|medial))(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   const lateral = number("(?:\\b(?:lat(?:eral)?)\\s*e'|(?<![/\\w])e'\\s*lat(?:eral)?)(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
-  if (e !== undefined && e > 0) values.e = e
+  if (mitralE !== undefined && mitralE > 0) values.e = mitralE
   if (septal !== undefined && septal > 0) values.septalE = septal
   if (lateral !== undefined && lateral > 0) values.lateralE = lateral
   const average = number("\\bE\\s*/\\s*(?:avg|ave|average|mean)\\s*e'?") ?? number("\\b(?:average|mean)\\s*E\\s*/\\s*e'?") ?? number("\\bE\\s*/\\s*e'?\\s*(?:avg|ave|average|mean)")

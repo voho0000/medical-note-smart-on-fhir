@@ -36,6 +36,52 @@ red on a two-line version bump.
   table in the same commit, and test the route where the surface is kept, not
   only the one where it is hidden.
 
+## Someone else's branch, and the machinery that ships it
+
+`pilot/hmc` — in this repository and in `mediprisma-personalization` — is a
+collaborator's working branch. They push to it directly, they review their own
+clinical work on `https://mediprisma.tw/app-hmc/`, and nothing on it is yours
+to tidy.
+
+- Never commit, push, rebase, force-push or delete `pilot/hmc`. Do not
+  cherry-pick from it and then "clean up" what you took. Merging `origin/master`
+  into it counts as changing it: ask the owner in the chat first, even when the
+  merge is a fix they want.
+- A pilot author cannot see a failure on their own push before it happens, and
+  cannot fix what belongs to this repository. Assume every change you make to
+  shared machinery lands on them silently.
+
+The preview's engine is a chain across two repositories, and only its last
+link is ours:
+
+```
+mediprisma-personalization  main       .github/workflows/relay-hmc-preview.yml
+this repository             pilot/hmc  .github/workflows/hmc-build.yml
+this repository             master     .github/workflows/hmc-publish.yml
+this repository             master     docs/HMC-AI-AGENT-GUIDE.md
+```
+
+- Never delete, move, or revert the two on `master` as part of another change,
+  and never propose a PR that removes them. A `workflow_run` workflow fires
+  only from the default branch, so removing the publisher does not relocate the
+  preview — it stops every pilot deployment, with no error anywhere the pilot
+  can see. That happened on 2026-09-12 and cost two days.
+- The links are coupled in ways no single file shows. `hmc-publish.yml` selects
+  its trigger by workflow **name** (`HMC preview build`), and the relay's tag
+  must land on a commit that carries the build — when the build moved branches
+  on 2026-09-13 the relay kept tagging `master` and the chain went silent. Any
+  rename or move on one side is a change to the other two.
+- The trap to know: a branch built on `pilot/hmc` history carries that branch's
+  **older** copies of these files. Removing them so the PR "only contains the
+  product change" reads as correct locally and deletes `master`'s newer version.
+  Keep `master`'s copy; if the diff still looks wrong, ask.
+- A genuine change to any of the three — a gate, a trigger, a rule in the guide
+  — is its own PR, described as affecting the pilot's deployments, and the owner
+  decides. Never a side effect.
+- Before opening any PR to `master`, check that the diff deletes nothing under
+  `.github/workflows/` and no `docs/HMC-*` file: `git diff --diff-filter=D
+  --name-only origin/master...HEAD`.
+
 ## UI design guidance
 
 - Before creating, changing, or reviewing rendered UI, read the repository root `DESIGN.md`.

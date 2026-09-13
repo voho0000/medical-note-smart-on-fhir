@@ -1,5 +1,6 @@
 "use client"
 
+import { ScoreInterpretation } from '@/features/medical-calculator/components/ScoreInterpretation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,12 +62,6 @@ const SELECT_TEXT: Readonly<Record<string, { zh: string; en: string }>> = {
   no: { zh: '否', en: 'No' },
 }
 
-function valueText(reading: HfpefInputReading, isEnglish: boolean): string {
-  if (reading.value === undefined) return '—'
-  const select = SELECT_TEXT[reading.value]
-  if (select) return isEnglish ? select.en : select.zh
-  return `${reading.value}${reading.unit ? ` ${reading.unit}` : ''}`
-}
 
 function SourceChip({
   reading,
@@ -145,7 +140,7 @@ function ScoreSummary({
       <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
         <span className="font-semibold text-foreground">{score.name}</span>
         <span className="font-semibold tabular-nums text-foreground">
-          {score.score}
+          {score.upper > score.score ? `${score.score}–${score.upper}` : score.score}
           {isEnglish ? '/' : '／'}
           {score.maximum}
         </span>
@@ -168,11 +163,13 @@ function ScoreSummary({
             : `報告未提供：${score.missingZh.join('、')}：最多再 +${headroom}，缺項只會讓分數更高`}
         </p>
       ) : null}
+      <ScoreInterpretation result={score} isEnglish={isEnglish} />
     </div>
   )
 }
 
 export interface HfpefInputsDialogProps {
+  initialTab?: HfpefScoreId
   open: boolean
   onOpenChange: (open: boolean) => void
   reading: HfpefReading
@@ -184,6 +181,7 @@ export interface HfpefInputsDialogProps {
 }
 
 export function HfpefInputsDialog({
+  initialTab = 'hfa-peff',
   open,
   onOpenChange,
   reading,
@@ -192,7 +190,7 @@ export function HfpefInputsDialog({
   onApply,
   onOrderNtProBnp,
 }: HfpefInputsDialogProps) {
-  const [tab, setTab] = useState<HfpefScoreId>('hfa-peff')
+  const [tab, setTab] = useState<HfpefScoreId>(initialTab)
   // A draft, keyed by input: only what the reader changes is applied, so an
   // auto-filled value stays the report's and never becomes 「你輸入」.
   const [draft, setDraft] = useState<Readonly<Record<string, string>>>({})
@@ -269,7 +267,10 @@ export function HfpefInputsDialog({
                           <span className="ml-1 text-[11px] text-muted-foreground">{row.unit}</span>
                         ) : null}
                       </span>
-                      {row.editable ? (
+                      {['rhythm', 'af', 'antihypertensives', 'sex'].includes(row.key) ? <select className="h-8 w-28 rounded-md border border-border bg-background px-2 text-sm" aria-label={isEnglish ? row.en : row.zh} value={draft[row.key] ?? row.value ?? ''} onChange={event => setDraft(current => ({ ...current, [row.key]: event.target.value }))} data-testid={`cdss-hf-hfpef-input-${row.key}`}>
+                        <option value="">{isEnglish ? 'Not assessed' : '未評估'}</option>
+                        {(row.key === 'rhythm' ? ['sr', 'af'] : row.key === 'sex' ? ['male', 'female'] : ['yes', 'no']).map(value => <option key={value} value={value}>{SELECT_TEXT[value] ? (isEnglish ? SELECT_TEXT[value].en : SELECT_TEXT[value].zh) : value}</option>)}
+                      </select> : (
                         <Input
                           type="number"
                           inputMode="decimal"
@@ -278,18 +279,15 @@ export function HfpefInputsDialog({
                           className="h-8 w-24 px-2 text-sm tabular-nums md:text-sm"
                           aria-label={isEnglish ? row.en : row.zh}
                           placeholder={row.value ?? '—'}
-                          value={draft[row.key] ?? ''}
+                          value={draft[row.key] ?? row.value ?? ''}
                           onChange={(event) => setDraft((current) => ({
                             ...current,
                             [row.key]: event.target.value,
                           }))}
                           data-testid={`cdss-hf-hfpef-input-${row.key}`}
                         />
-                      ) : (
-                        <span className="w-24 shrink-0 text-sm tabular-nums text-foreground">
-                          {valueText(row, isEnglish)}
-                        </span>
                       )}
+                      <button type="button" className="shrink-0 rounded border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => setDraft(current => ({ ...current, [row.key]: '' }))}>{isEnglish ? 'Restore default' : '恢復預設'}</button>
                       <SourceChip
                         reading={row}
                         isEnglish={isEnglish}

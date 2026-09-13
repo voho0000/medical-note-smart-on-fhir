@@ -1,0 +1,947 @@
+{
+  "resourceType": "Bundle",
+  "id": "hfrEF-congested-needs-diuresis-bundle",
+  "type": "collection",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+        "code": "synthetic-hfrEF-case",
+        "display": "HFrEF 合併肺鬱血與周邊水腫，需評估 loop 利尿劑調整。"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "Patient/hfrEF-congested-needs-diuresis",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "hfrEF-congested-needs-diuresis",
+        "meta": {
+          "tag": [
+            {
+              "system": "https://mediprisma.app/CodeSystem/demo-fixture",
+              "code": "congested-needs-diuresis",
+              "display": "HFrEF 合併肺鬱血與周邊水腫，需評估 loop 利尿劑調整。"
+            }
+          ]
+        },
+        "name": [
+          {
+            "text": "模擬 陳鬱血",
+            "family": "陳",
+            "given": [
+              "鬱血"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1949-11-02"
+      }
+    },
+    {
+      "fullUrl": "Encounter/hfrEF-congested-needs-diuresis-visit",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "hfrEF-congested-needs-diuresis-visit",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "period": {
+          "start": "2026-09-10T08:30:00+08:00",
+          "end": "2026-09-10T10:00:00+08:00"
+        },
+        "serviceProvider": {
+          "display": "示範心臟醫學中心"
+        },
+        "reasonCode": [
+          {
+            "text": "Chronic systolic (congestive) heart failure",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I50.22",
+                "display": "Chronic systolic (congestive) heart failure"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Condition/hfrEF-congested-needs-diuresis-hfrEF",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "hfrEF-congested-needs-diuresis-hfrEF",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chronic systolic heart failure",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I50.22",
+              "display": "Chronic systolic (congestive) heart failure"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-congested-needs-diuresis-visit"
+        },
+        "onsetDateTime": "2025-02-15"
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-lvef",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-lvef",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Left ventricular ejection fraction",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "10230-1",
+              "display": "Left ventricular ejection fraction"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 28,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-nt-probnp",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-nt-probnp",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "NT-proBNP",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33762-6",
+              "display": "NT-proBNP"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 4200,
+          "unit": "pg/mL",
+          "system": "http://unitsofmeasure.org",
+          "code": "pg/mL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-egfr",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-egfr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Estimated glomerular filtration rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "33914-3",
+              "display": "Estimated glomerular filtration rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 46,
+          "unit": "mL/min/1.73m2",
+          "system": "http://unitsofmeasure.org",
+          "code": "mL/min/1.73m2"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-potassium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-potassium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Potassium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3",
+              "display": "Potassium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 4.1,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-sodium",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-sodium",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Sodium",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2",
+              "display": "Sodium"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 132,
+          "unit": "mmol/L",
+          "system": "http://unitsofmeasure.org",
+          "code": "mmol/L"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-hemoglobin",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-hemoglobin",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Hemoglobin",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "718-7",
+              "display": "Hemoglobin"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 11.4,
+          "unit": "g/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "g/dL"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-blood-pressure",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-blood-pressure",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Blood pressure",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 132,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 78,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ],
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-heart-rate",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-heart-rate",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Heart rate",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 92,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-oxygen-saturation",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-oxygen-saturation",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Oxygen saturation",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "59408-5",
+              "display": "Oxygen saturation"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 91,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-body-weight",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-body-weight",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body weight",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 76,
+          "unit": "kg",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "Observation/hfrEF-congested-needs-diuresis-body-height",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "hfrEF-congested-needs-diuresis-body-height",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Body height",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2",
+              "display": "Body height"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "effectiveDateTime": "2026-09-10T09:00:00+08:00",
+        "valueQuantity": {
+          "value": 160,
+          "unit": "cm",
+          "system": "http://unitsofmeasure.org",
+          "code": "cm"
+        },
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-congested-needs-diuresis-echo",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-congested-needs-diuresis-echo",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "CUS",
+                "display": "Cardiac Ultrasound"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Echocardiography",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34552-0",
+              "display": "Cardiac echocardiography report"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-congested-needs-diuresis-visit"
+        },
+        "effectiveDateTime": "2026-09-08T10:00:00+08:00",
+        "issued": "2026-09-08T11:00:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Dilated left ventricle with global hypokinesis. LVEF 28%."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-congested-needs-diuresis-ecg",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-congested-needs-diuresis-ecg",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "EC",
+                "display": "Electrocardiography"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "12-lead ECG",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11524-6",
+              "display": "EKG study"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-congested-needs-diuresis-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:45:00+08:00",
+        "issued": "2026-09-10T08:50:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Sinus tachycardia, rate 92 bpm."
+      }
+    },
+    {
+      "fullUrl": "DiagnosticReport/hfrEF-congested-needs-diuresis-cxr",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "hfrEF-congested-needs-diuresis-cxr",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "RAD",
+                "display": "Radiology"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "encounter": {
+          "reference": "Encounter/hfrEF-congested-needs-diuresis-visit"
+        },
+        "effectiveDateTime": "2026-09-10T08:40:00+08:00",
+        "issued": "2026-09-10T08:55:00+08:00",
+        "performer": [
+          {
+            "display": "示範心臟醫學中心"
+          }
+        ],
+        "conclusion": "Cardiomegaly with bilateral pleural effusions, prominent hila and pulmonary vascular congestion."
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-congested-needs-diuresis-valsartan",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-congested-needs-diuresis-valsartan",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Valsartan 80 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: congested-needs-diuresis"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-congested-needs-diuresis-bisoprolol",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-congested-needs-diuresis-bisoprolol",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Bisoprolol 2.5 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: congested-needs-diuresis"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-congested-needs-diuresis-dapagliflozin",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-congested-needs-diuresis-dapagliflozin",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Dapagliflozin 10 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: congested-needs-diuresis"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "MedicationRequest/hfrEF-congested-needs-diuresis-furosemide",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hfrEF-congested-needs-diuresis-furosemide",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Furosemide 20 mg"
+        },
+        "subject": {
+          "reference": "Patient/hfrEF-congested-needs-diuresis"
+        },
+        "authoredOn": "2026-09-01",
+        "dosageInstruction": [
+          {
+            "text": "1 tablet PO QD",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Synthetic HFrEF scenario: congested-needs-diuresis"
+          }
+        ]
+      }
+    }
+  ]
+}

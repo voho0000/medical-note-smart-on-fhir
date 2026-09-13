@@ -1,3 +1,4 @@
+import { HEART_FAILURE_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import { buildRationaleCopyText } from '@/features/clinical-decision-support/utils/build-rationale-copy-text'
 import type { CdssRecommendation } from '@/features/clinical-decision-support/types'
 
@@ -73,8 +74,23 @@ describe('buildRationaleCopyText', () => {
     const { semanticRule: _rule, ...bare } = recommendation
     const text = buildRationaleCopyText(bare, 'en')
     expect(text).toContain('[Decision rationale] MRA 治療')
-    expect(text).toContain('Guideline recommendation：MRA is recommended for HFrEF.')
-    expect(text).toContain('- MRA：目前未使用')
+    expect(text).toContain('Guideline recommendation: MRA is recommended for HFrEF.')
+    expect(text).toContain('- MRA: 目前未使用')
     expect(text).not.toContain('Source: MediPrisma')
   })
+})
+
+test('English HF rule output produces English rationale including evidence and guideline wording', () => {
+  const profile = { id: 'synthetic', evaluatedAt: '2026-09-12T10:00:00+08:00', facts: {
+    LVEF: { zh: '72.6%', en: '72.6%', numericValue: 72.6 },
+    heartFailureDiagnosis: { zh: '心衰竭', en: 'Heart failure', booleanValue: true },
+    sglt2Therapy: { zh: '目前用藥中：Dapagliflozin 10 mg', en: 'Currently taking: Dapagliflozin 10 mg', booleanValue: true },
+  } }
+  const result = HEART_FAILURE_GUIDELINE_PACK.build({ profile, locale: 'en' })
+  const item = [...result.recommendations, ...(result.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : [])].find(item => item.id === 'heart-failure-sglt2')!
+  expect(item).toBeDefined()
+  const text = buildRationaleCopyText(item, 'en')
+  expect(text).not.toMatch(/[\u3400-\u9fff]/)
+  expect(text).toContain('Dapagliflozin')
+  expect(text).toContain('Guideline')
 })

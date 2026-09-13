@@ -139,6 +139,17 @@ export function applyClinicVitals(
   const factDates: Record<string, string> = {}
   const entry = (key: ClinicVitalsEntryKey) => vitals.entries?.[key]
 
+  for (const [key, unit] of [['potassium', 'mmol/L'], ['eGFR', 'mL/min/1.73m²'], ['sodium', 'mmol/L'], ['NTproBNP', 'pg/mL'], ['hemoglobin', 'g/dL']] as const) {
+    const measured = entry(key)
+    if (!measured) continue
+    facts[key] = {
+      zh: `${measured.value} ${unit}${noteZh(measured.measuredOn)}`,
+      en: `${measured.value} ${unit}${noteEn(measured.measuredOn)}`,
+      numericValue: measured.value, unit, date: measured.measuredOn,
+    }
+    factDates[key] = measured.measuredOn
+  }
+
   const systolic = entry('systolic')
   const diastolic = entry('diastolic')
   if (systolic && diastolic) {
@@ -296,7 +307,7 @@ export function applyClinicVitals(
 
   const freshness: Record<string, CdssFreshnessContext> = {}
   for (const [factKey, date] of Object.entries(factDates)) {
-    if (!(factKey in DEFAULT_INTERVAL_DAYS)) continue
+    if (!(factKey in DEFAULT_INTERVAL_DAYS) && !profile.freshnessContexts?.[factKey]) continue
     const intervalDays = profile.freshnessContexts?.[factKey]?.intervalDays
       ?? DEFAULT_INTERVAL_DAYS[factKey]
     const age = ageInDays(date, profile.evaluatedAt)

@@ -4,6 +4,11 @@ import {
   GUEST_BETA_FEATURES_KEY,
   useBetaFeaturesStore,
 } from '@/src/application/stores/beta-features.store'
+import { useEvidenceOverridesStore } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
+import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
+import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
+import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 
 const ICD10_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
 
@@ -205,6 +210,24 @@ describe('Live personalized-guidance pathway list', () => {
     // retired direction C nor the module-first 「classic」 face is in the header.
     expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
+  })
+
+  it('restores every physician-entered HF value to the page defaults in one click', () => {
+    const patientId = 'switch-patient'
+    useEvidenceOverridesStore.setState({ byPatientId: { [patientId]: { congestion: true } } })
+    useClinicVitalsStore.setState({ byPatientId: { [patientId]: { entries: { heartRate: { value: 88, measuredOn: '2026-09-12', modifiedAt: '2026-09-12T10:00:00.000Z' } }, signAnswers: {}, nyhaClass: { value: 'II', modifiedAt: '2026-09-12T10:00:00.000Z' } } } })
+    useHfpefInputsStore.setState({ byPatientId: { [patientId]: { entries: { lavi: { value: '40', measuredOn: '2026-09-12', modifiedAt: '2026-09-12T10:00:00.000Z' } } } } })
+    usePhenotypeAnswerStore.setState({ byPatientId: { [patientId]: { hfSuspicion: 'suspected', answeredOn: '2026-09-12' } } })
+    usePhysicianDecisionsStore.setState({ byPatientId: { [patientId]: { 'heart-failure-sglt2': { decision: 'deferred', reasons: [], recordedAt: '2026-09-12T10:00:00.000Z', packVersion: '2.0.0' } } } })
+
+    render(<LiveClinicalDecisionSupportFeature />)
+    fireEvent.click(screen.getByTestId('cdss-hf-reset-page-defaults'))
+
+    expect(useEvidenceOverridesStore.getState().byPatientId[patientId]).toEqual({})
+    expect(useClinicVitalsStore.getState().byPatientId[patientId]).toMatchObject({ entries: {}, signAnswers: {} })
+    expect(useHfpefInputsStore.getState().byPatientId[patientId]).toEqual({ entries: {} })
+    expect(usePhenotypeAnswerStore.getState().byPatientId[patientId]).toBeUndefined()
+    expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
   })
 
   it('keeps HF default and offers dyslipidemia behind Beta', () => {

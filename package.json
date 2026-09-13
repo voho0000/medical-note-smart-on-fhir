@@ -14,6 +14,7 @@
     "build:mediprisma": "node scripts/build-mediprisma.mjs",
     "build:demo": "node scripts/build-demo-bundle.mjs && node scripts/enrich-demo-bundle.mjs",
     "demo:enrich": "node scripts/enrich-demo-bundle.mjs",
+    "demo:hf-cases": "node scripts/generate-hf-demo-cases.cjs",
     "deploy": "npm run build:gh && gh-pages -d out -b gh-pages",
     "test": "TZ=Asia/Taipei jest",
     "test:watch": "TZ=Asia/Taipei jest --watch",

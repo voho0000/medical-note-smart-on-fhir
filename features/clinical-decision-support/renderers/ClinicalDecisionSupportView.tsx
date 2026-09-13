@@ -51,6 +51,7 @@ import {
   HEART_FAILURE_LIST_STATUS_ORDER,
   HEART_FAILURE_PACK_ID,
 } from './heart-failure-board'
+import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
@@ -76,6 +77,7 @@ import { statusStyle, StatusIcon } from './status-presentation'
 
 interface ClinicalDecisionSupportViewProps {
   result: CdssResult
+  englishResult?: CdssResult
   locale: CdssLocale
   /**
    * Whose chart this is. The evidence switches are a clinical judgement about
@@ -405,7 +407,10 @@ function integratedNextStepActions(
   nextActions: readonly string[],
   isEnglish: boolean,
 ): string[] {
-  const missingItems = missingData ?? []
+  const missingItems = (missingData ?? []).map((item) => item
+    .replace(/^此決策可用的\s*/, '')
+    .replace(/（目前資料完全沒有這一項）/g, '')
+    .trim())
   if (missingItems.length === 0) return [...nextActions]
 
   const missingLabel = missingItems.join(isEnglish ? ', ' : '、')
@@ -1500,6 +1505,7 @@ function SourceGuidelineReference({
 
 function RecommendationDetail({
   recommendation,
+  englishRecommendation,
   isEnglish,
   onNavigate,
   label,
@@ -1510,9 +1516,11 @@ function RecommendationDetail({
   clinicVitals,
   onSaveClinicVitals,
   physicianRowsReadOnly = false,
+  hideEvidenceTables = false,
   onEditPhysicianRow,
 }: {
   recommendation: CdssRecommendation
+  englishRecommendation?: CdssRecommendation
   isEnglish: boolean
   onNavigate: (target: ResourceNavTarget) => void
   patientId?: string
@@ -1527,6 +1535,8 @@ function RecommendationDetail({
    * rows inside a detail echo the answer instead of offering a second control.
    */
   physicianRowsReadOnly?: boolean
+  /** Hides evidence tables already collected elsewhere in the visit flow. */
+  hideEvidenceTables?: boolean
   onEditPhysicianRow?: (question: 'nyha' | 'symptoms' | 'signs') => void
   /** Names the pack in the copied rationale; absent when the result has no version. */
   copyProvenance?: RationaleCopyProvenance
@@ -1570,9 +1580,14 @@ function RecommendationDetail({
     : undefined
   const { copied: rationaleCopied, copy: copyToClipboard } = useCopyToClipboard()
   const copyRationale = async () => {
+    const source = englishRecommendation ?? (isEnglish ? recommendation : undefined)
+    if (!source) {
+      toast.error(isEnglish ? 'English rationale is unavailable.' : '英文理由尚未取得，請重新載入病人資料。')
+      return
+    }
     const ok = await copyToClipboard(buildRationaleCopyText(
-      recommendation,
-      isEnglish ? 'en' : 'zh-TW',
+      source,
+      'en',
       copyProvenance,
     ))
     if (!ok) {
@@ -1608,6 +1623,9 @@ function RecommendationDetail({
     recommendation,
     isEnglish ? 'en' : 'zh-TW',
   )
+  const englishSemanticCard = englishRecommendation
+    ? buildPhysicianSemanticCard(englishRecommendation, 'en')
+    : undefined
   const sourceAssessmentsWithContent = (recommendation.sourceAssessments ?? []).filter((source) => (
     !(
       recommendation.domain !== 'medication'
@@ -1653,7 +1671,8 @@ function RecommendationDetail({
   const primaryGuidelineRule = semanticCard.guidelineRules.find(
     (rule) => rule.sourceKind === 'guideline',
   ) ?? semanticCard.guidelineRules[0]
-  const primaryGuidelineSummary = semanticCard.guidelineRecommendation
+  const primaryGuidelineSummary = englishSemanticCard?.guidelineRecommendation
+    ?? semanticCard.guidelineRecommendation
   const displayNextActions = integrateClinicalReviewIntoNextSteps(
     recommendation.clinicalReviewItems,
     integratedNextStepActions(
@@ -1731,7 +1750,7 @@ function RecommendationDetail({
               : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
             {rationaleCopied
               ? (isEnglish ? 'Copied' : '已複製')
-              : (isEnglish ? 'Copy rationale' : '複製理由')}
+              : (isEnglish ? 'Copy' : '複製')}
           </button>
           {primaryGuidelineRule ? (
             <a
@@ -1787,11 +1806,10 @@ function RecommendationDetail({
       ) : null}
 
       {/*
-        A module that concluded anything about 鬱血 or LV filling pressure ships
-        the rows it concluded from, immediately under the evidence it summarised
-        — switching one off recomputes the pack rather than editing this card.
+        Evidence tables remain available in the original board. The visit flow
+        can hide a table when its questions already live in the assessment step.
       */}
-      {(recommendation.evidenceTables ?? []).map((table) => (
+      {hideEvidenceTables ? null : (recommendation.evidenceTables ?? []).map((table) => (
         <EvidenceTablePanel
           key={`${recommendation.id}-${table.concept}`}
           table={table}
@@ -2023,6 +2041,7 @@ function RecommendationDetail({
 
 export function ClinicalDecisionSupportView({
   result,
+  englishResult,
   locale,
   patientId,
   profileFacts,
@@ -2039,6 +2058,10 @@ export function ClinicalDecisionSupportView({
   hfpefReading,
   onSaveHfpefInputs,
 }: ClinicalDecisionSupportViewProps) {
+  const englishRecommendations = new Map([
+    ...(englishResult?.recommendations ?? []),
+    ...(englishResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
+  ].map(item => [item.id, item]))
   const isEnglish = locale === 'en'
   const label = {
     high: isEnglish ? 'High priority' : '優先處理',
@@ -2377,6 +2400,7 @@ export function ClinicalDecisionSupportView({
 
       {isVisitFlow && visitFlow && board ? (
         <HeartFailureVisitFlow
+          rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
           flow={visitFlow}
           board={board}
           isEnglish={isEnglish}
@@ -2396,6 +2420,7 @@ export function ClinicalDecisionSupportView({
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
               isEnglish={isEnglish}
               onNavigate={navigateToResource}
               label={label}
@@ -2406,6 +2431,7 @@ export function ClinicalDecisionSupportView({
               clinicVitals={clinicVitals}
               onSaveClinicVitals={onSaveClinicVitals}
               physicianRowsReadOnly
+              hideEvidenceTables={recommendation.id === 'heart-failure-congestion-diuretic'}
               onEditPhysicianRow={(question) => focusVisitFlowTarget({
                 kind: 'question',
                 questionId: question,
@@ -2439,6 +2465,7 @@ export function ClinicalDecisionSupportView({
           renderDetail={(recommendation) => (
             <RecommendationDetail
               recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
               isEnglish={isEnglish}
               onNavigate={navigateToResource}
               label={label}
@@ -2853,6 +2880,7 @@ export function ClinicalDecisionSupportView({
                 >
                   <RecommendationDetail
                     recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
                     isEnglish={isEnglish}
                     onNavigate={navigateToResource}
                     label={label}

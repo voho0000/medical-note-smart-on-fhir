@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
-import { FileSearch, ShieldCheck } from 'lucide-react'
+import { FileSearch, RotateCcw, ShieldCheck } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -255,6 +257,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => { if (patientId) usePreventInputsStore.getState().hydrate(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
+  const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
   const clinicVitals = useClinicVitals(patientId)
   const setClinicVitals = useClinicVitalsStore((state) => state.setVitals)
   const clearClinicVitals = useClinicVitalsStore((state) => state.clearVitals)
@@ -262,12 +265,15 @@ export default function LiveClinicalDecisionSupportFeature() {
   const physicianDecisions = usePhysicianDecisions(patientId)
   const recordPhysicianDecision = usePhysicianDecisionsStore((state) => state.recordDecision)
   const clearPhysicianDecision = usePhysicianDecisionsStore((state) => state.clearDecision)
+  const clearPhysicianDecisions = usePhysicianDecisionsStore((state) => state.clearDecisions)
   const hydratePhysicianDecisions = usePhysicianDecisionsStore((state) => state.hydrate)
   const hfpefInputs = useHfpefInputs(patientId)
   const setHfpefInputs = useHfpefInputsStore((state) => state.setInputs)
+  const clearHfpefInputs = useHfpefInputsStore((state) => state.clearInputs)
   const hydrateHfpefInputs = useHfpefInputsStore((state) => state.hydrate)
   const phenotypeAnswer = usePhenotypeAnswer(patientId)
   const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
+  const clearPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.clearAnswer)
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
@@ -402,6 +408,11 @@ export default function LiveClinicalDecisionSupportFeature() {
       : null
   }, [cdssLocale, profile, selectedPack])
 
+  const englishResult = useMemo(() => {
+    if (cdssLocale === 'en') return result
+    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
+  }, [cdssLocale, profile, result, selectedPack])
+
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
   }
@@ -467,6 +478,15 @@ export default function LiveClinicalDecisionSupportFeature() {
   const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
+  const resetVisitDefaults = () => {
+    if (!patientId) return
+    clearEvidenceOverrides(patientId)
+    clearClinicVitals(patientId)
+    clearPhysicianDecisions(patientId)
+    clearHfpefInputs(patientId)
+    clearPhenotypeAnswer(patientId)
+    toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
+  }
 
   return (
     <div
@@ -495,6 +515,19 @@ export default function LiveClinicalDecisionSupportFeature() {
           {result.packId === HEART_FAILURE_PACK_ID ? (
             <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
           ) : null}
+          {isVisitFlow && patientId ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 px-2.5 text-xs shadow-none"
+              onClick={resetVisitDefaults}
+              data-testid="cdss-hf-reset-page-defaults"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
+            </Button>
+          ) : null}
           <div className="flex shrink-0 items-center gap-1.5">
             <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
               {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
@@ -515,6 +548,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       ) : null}
       <ClinicalDecisionSupportView
         result={result}
+        englishResult={englishResult ?? undefined}
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
