@@ -75,7 +75,11 @@ export function useOrphanObservations(
     const groupKey = (o: Observation) =>
       (o.encounter?.reference || "") +
       "|" +
-      (o.effectiveDateTime ? new Date(o.effectiveDateTime).toISOString().slice(0, 10) : "unknown") +
+      (o.effectiveDateTime || "unknown") +
+      "|" +
+      JSON.stringify(o.performer ?? []) +
+      "|" +
+      JSON.stringify(o.method ?? {}) +
       "|" +
       (getCodeableConceptText(o.code) || "Observation") +
       "|" +

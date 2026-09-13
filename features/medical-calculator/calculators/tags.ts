@@ -29,6 +29,8 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
+  'h2fpef': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
+  'hfa-peff': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
   'map': { purpose: ['formula'], diseases: [{ en: 'Shock', zh: '休克' }, { en: 'Hypotension', zh: '低血壓' }] },
   'has-bled': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Anticoagulation', zh: '抗凝治療' }] },
   'curb-65': { purpose: ['severity', 'prognosis'], diseases: [{ en: 'Pneumonia', zh: '肺炎' }] },

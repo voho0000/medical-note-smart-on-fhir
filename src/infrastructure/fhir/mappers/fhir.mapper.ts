@@ -251,6 +251,8 @@ export class FhirMapper implements IDataMapper {
 
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
+      extension: fhirResource.extension,
+      method: fhirResource.method,
       id: fhirResource.id || '',
       meta: fhirResource.meta,
       code: fhirResource.code,
@@ -438,6 +440,7 @@ export class FhirMapper implements IDataMapper {
 
   static toComposition(fhirResource: any): CompositionEntity {
     return {
+      meta: fhirResource.meta,
       id: fhirResource.id || '',
       status: fhirResource.status,
       type: fhirResource.type,

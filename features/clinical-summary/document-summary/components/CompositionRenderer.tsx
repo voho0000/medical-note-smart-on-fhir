@@ -104,6 +104,25 @@ export function CompositionRenderer({
   // sections with no .text are already represented in the other cards.)
   const renderableSections = sections.filter((s) => hasNarrativeContent(s?.text?.div))
   const continuousDocument = isPreventiveMedicineComposition(composition)
+  if (continuousDocument) {
+    // Display-only empty fields keep adult-exam forms consistent. Never
+    // borrow an Observation from another screening or modify the source.
+    const screeningFields = [
+      { code: 'hepatitis-b', title: locale === 'en' ? 'Hepatitis B screening' : 'B型肝炎檢查', assay: 'HBsAg', match: /HBsAg|B\s*型肝炎|hepatitis\s*B/i },
+      { code: 'hepatitis-c', title: locale === 'en' ? 'Hepatitis C screening' : 'C型肝炎檢查', assay: 'Anti-HCV', match: /Anti[\s-]?HCV|C\s*型肝炎|hepatitis\s*C/i },
+    ]
+    for (const field of screeningFields) {
+      const present = renderableSections.some(section =>
+        section.code?.coding?.some(coding => coding.code === field.code)
+        || field.match.test(`${section.title ?? ''} ${section.text?.div ?? ''}`),
+      )
+      if (!present) renderableSections.push({
+        title: field.title,
+        code: { coding: [{ code: field.code }] },
+        text: { div: `<div><table><tbody><tr><th scope="row">${field.assay}</th><td></td></tr></tbody></table></div>` },
+      })
+    }
+  }
   const compositionNarrative = continuousDocument && hasNarrativeContent(composition.text?.div)
     ? sanitizeNarrative(composition.text?.div)
     : ''
@@ -190,7 +209,8 @@ export function CompositionRenderer({
               {/* Bridge is the narrative authority for this document. Render
                   the supplied XHTML directly (after the shared XSS sanitizer),
                   first Composition.text and then section.text in source order.
-                  We do not rebuild any of this report from Observations. */}
+                  Missing hepatitis fields are display-only blank placeholders;
+                  we never rebuild results from other Observations. */}
               {compositionNarrative && (
                 <div
                   data-composition-narrative="true"

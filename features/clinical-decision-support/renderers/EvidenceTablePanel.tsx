@@ -5,7 +5,14 @@ import { isEvidenceItemEnabled } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { EVIDENCE_ROW_SIGN_TERMS } from '../utils/apply-clinic-vitals'
-import { todayIsoDate, type ClinicVitals, type NyhaClass } from '../stores/clinic-vitals.store'
+import { visitQuestionForSignTerm } from './heart-failure-visit-flow'
+import {
+  NOT_ASSESSED,
+  type ClinicVitals,
+  type ClinicVitalsPatch,
+  type NyhaClass,
+  type SignAnswerValue,
+} from '../stores/clinic-vitals.store'
 
 /** The row the published congestion table carries the NYHA class on. */
 const NYHA_ROW_ID = 'congestion:nyha'
@@ -387,6 +394,7 @@ function EvidenceRow({
   onAnswer,
   nyhaClass,
   onSelectNyha,
+  readOnlyAnswer,
 }: {
   item: EvidenceItem
   isEnglish: boolean
@@ -400,6 +408,12 @@ function EvidenceRow({
   /** The graded class, on the one row that carries a grade instead of a sign. */
   nyhaClass?: NyhaClass
   onSelectNyha?: (next: NyhaClass | undefined) => void
+  /**
+   * The visit flow asks each of these once, in 本次評估. Here the row echoes
+   * that answer and links back to it, so the same question is never open in
+   * two places with two controls that can disagree.
+   */
+  readOnlyAnswer?: { text: string; onEdit?: () => void }
 }) {
   const physicianEntered = item.derivability === 'physician-entered'
   const label = pick(item.label, isEnglish)
@@ -414,7 +428,26 @@ function EvidenceRow({
       data-testid={`cdss-evidence-row-${item.id}`}
       data-enabled={enabled ? 'true' : 'false'}
     >
-      {onSelectNyha ? (
+      {readOnlyAnswer ? (
+        <div
+          className="mt-0.5 flex shrink-0 flex-col items-start gap-0.5"
+          data-testid={`cdss-evidence-readonly-${item.id}`}
+        >
+          <span className="text-[11px] font-semibold leading-4 text-foreground">
+            {readOnlyAnswer.text}
+          </span>
+          {readOnlyAnswer.onEdit ? (
+            <button
+              type="button"
+              className="min-h-7 rounded-md px-1 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={readOnlyAnswer.onEdit}
+              data-testid={`cdss-evidence-edit-in-flow-${item.id}`}
+            >
+              {isEnglish ? 'Edit in this visit' : '在本次評估修改'}
+            </button>
+          ) : null}
+        </div>
+      ) : onSelectNyha ? (
         <NyhaClassControl
           itemId={item.id}
           label={label}
@@ -513,6 +546,8 @@ export function EvidenceTablePanel({
   onNavigate,
   clinicVitals,
   onSaveClinicVitals,
+  physicianRowsReadOnly = false,
+  onEditPhysicianRow,
 }: {
   table: EvidenceTable
   recommendationId: string
@@ -521,7 +556,15 @@ export function EvidenceTablePanel({
   onNavigate: (target: ResourceNavTarget) => void
   /** Today's examination. Absent leaves every row on the plain switch. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (vitals: ClinicVitals) => void
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  /**
+   * The visit flow asks the NYHA grade and the congestion signs once, in its
+   * own 本次評估 card. Set there, so these rows read the answer back instead of
+   * offering a second control for the same question. The original board leaves
+   * it `false` and keeps the controls it has always had.
+   */
+  physicianRowsReadOnly?: boolean
+  onEditPhysicianRow?: (question: 'nyha' | 'symptoms' | 'signs') => void
 }) {
   const isEnglish = locale === 'en'
   const overrides = useEvidenceOverrides(patientId)
@@ -529,17 +572,15 @@ export function EvidenceTablePanel({
   const signAnswers = clinicVitals?.signAnswers ?? {}
   const answerSign = onSaveClinicVitals
     ? (term: string, answer: SignAnswer | undefined) => {
-        const next = { ...signAnswers }
-        if (answer) next[term] = answer
-        else delete next[term]
-        const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
-        onSaveClinicVitals({
-          ...(clinicVitals ?? { measuredOn }),
-          measuredOn,
-          signAnswers: Object.keys(next).length > 0 ? next : undefined,
-        })
+        onSaveClinicVitals({ signAnswers: { [term]: answer ?? null } })
       }
     : undefined
+  const signAnswerText = (value: SignAnswerValue | undefined): string => {
+    if (value === 'present') return isEnglish ? 'Yes' : '有'
+    if (value === 'absent') return isEnglish ? 'No' : '無'
+    if (value === NOT_ASSESSED) return isEnglish ? 'Not assessed' : '未評估'
+    return isEnglish ? 'Not answered' : '尚未回答'
+  }
 
   const groups = CATEGORY_ORDER
     .map((category) => ({
@@ -583,24 +624,45 @@ export function EvidenceTablePanel({
                 // A row the clinician can answer in the room takes the
                 // 有／無／未評估 control; everything else keeps the switch.
                 const term = EVIDENCE_ROW_SIGN_TERMS[item.id]
-                const answerProps = item.id === NYHA_ROW_ID && onSaveClinicVitals
-                  ? {
-                    nyhaClass: clinicVitals?.nyhaClass,
-                    onSelectNyha: (next: NyhaClass | undefined) => {
-                      const measuredOn = clinicVitals?.measuredOn ?? todayIsoDate()
-                      onSaveClinicVitals({
-                        ...(clinicVitals ?? { measuredOn }),
-                        measuredOn,
-                        nyhaClass: next,
-                      })
-                    },
-                  }
-                  : term && answerSign
+                const nyhaValue = clinicVitals?.nyhaClass?.value
+                const signValue = term ? signAnswers[term]?.value : undefined
+                const answerProps = physicianRowsReadOnly
+                  ? item.id === NYHA_ROW_ID
                     ? {
-                      answer: signAnswers[term],
-                      onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                      readOnlyAnswer: {
+                        text: nyhaValue && nyhaValue !== NOT_ASSESSED
+                          ? `NYHA ${nyhaValue}`
+                          : nyhaValue === NOT_ASSESSED
+                            ? (isEnglish ? 'Not assessed' : '未評估')
+                            : (isEnglish ? 'Not answered' : '尚未回答'),
+                        ...(onEditPhysicianRow
+                          ? { onEdit: () => onEditPhysicianRow('nyha') }
+                          : {}),
+                      },
                     }
-                    : {}
+                    : term
+                      ? {
+                        readOnlyAnswer: {
+                          text: signAnswerText(signValue),
+                          ...(onEditPhysicianRow
+                            ? { onEdit: () => onEditPhysicianRow(visitQuestionForSignTerm(term)) }
+                            : {}),
+                        },
+                      }
+                      : {}
+                  : item.id === NYHA_ROW_ID && onSaveClinicVitals
+                    ? {
+                      nyhaClass: nyhaValue === NOT_ASSESSED ? undefined : nyhaValue,
+                      onSelectNyha: (next: NyhaClass | undefined) => {
+                        onSaveClinicVitals({ nyhaClass: next ?? null })
+                      },
+                    }
+                    : term && answerSign
+                      ? {
+                        answer: signValue === NOT_ASSESSED ? undefined : signValue,
+                        onAnswer: (next: SignAnswer | undefined) => answerSign(term, next),
+                      }
+                      : {}
                 return (
                   <EvidenceRow
                     key={item.id}

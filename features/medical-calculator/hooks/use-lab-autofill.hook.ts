@@ -12,6 +12,10 @@ import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinical-lab-normalization/canonical'
+import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
+import { buildEchoAutofill } from '../echo-autofill'
+import { convertToBase } from '../units'
+import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillSource, VitalKind } from '../types'
 
 export interface AutofillValue {
@@ -27,10 +31,12 @@ export interface AutofillValue {
   testName?: string // the source report's test name (code.text / coding display)
   loinc?: string // the LOINC code that identified it (if any)
   facility?: string // performing lab / institution (performer[0].display)
+  resourceType?: 'Observation' | 'DiagnosticReport'
   obsId?: string // FHIR Observation.id, for navigating to the source report
 }
 
 export interface Autofill {
+  clinicalSelects?: Partial<Record<ClinicalSelectKey, ClinicalSelectValue>>
   resolve: (source?: AutofillSource) => AutofillValue | undefined
   sex?: string
 }
@@ -124,7 +130,13 @@ function unitOkForVital(kind: VitalKind, unit: string): boolean {
 export function buildAutofill(
   observations: ObsLike[],
   demographics: { age?: number; gender?: string },
+  reports: DiagnosticReportEntity[] = [],
+  medications: MedicationEntity[] = [],
+  now = new Date(),
+  conditions: ConditionEntity[] = [],
+  encounters: EncounterEntity[] = [],
 ): Autofill {
+  const echo = buildEchoAutofill(reports, observations)
   const byCanonical: Record<string, AutofillValue> = {}
   const byLoinc: Record<string, AutofillValue> = {}
   // Keyed by `${specimen}|${canonicalKey}` (e.g. "blood|NA", "urine|CREA").
@@ -212,6 +224,25 @@ export function buildAutofill(
   const resolve = (source?: AutofillSource): AutofillValue | undefined => {
     if (!source) return undefined
     switch (source.kind) {
+      case 'echo': return echo[source.key]
+      case 'natriuretic': {
+        const hit = bySpecimen[`blood|${source.assay}`] ?? byCanonical[source.assay]
+        if (!hit) return undefined
+        const unit = hit.unit.toLowerCase().replace(/\s/g, '')
+        if (unit !== 'pg/ml' && unit !== 'ng/l') return undefined
+        return { ...hit, unit: 'pg/mL' }
+      }
+      case 'bmi': {
+        const direct = byLoinc['39156-5']
+        if (direct && /^(kg\/m[²2]|kg\/m\^2)$/.test(direct.unit)) return { ...direct, unit: 'kg/m²' }
+        const weight = byLoinc['29463-7'] ?? byVital.weight
+        const height = byLoinc['8302-2'] ?? byVital.height
+        if (!weight || !height || !weight.date || weight.date.slice(0, 10) !== height.date.slice(0, 10)) return undefined
+        const kg = convertToBase(weight.value, weight.unit, 'weight')?.value
+        const cm = convertToBase(height.value, height.unit, 'height')?.value
+        if (!kg || !cm || kg <= 0 || cm <= 0) return undefined
+        return { ...weight, value: kg / (cm / 100) ** 2, unit: 'kg/m²', testName: 'BMI（同日身高與體重）' }
+      }
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
         // same-named urine value (urine Na also canonicalises to NA); fall
@@ -254,7 +285,7 @@ export function buildAutofill(
     }
   }
 
-  return { resolve, sex }
+  return { resolve, sex, clinicalSelects: buildClinicalSelects(reports, medications, now, conditions, encounters) }
 }
 
 export interface LabAutofillState {
@@ -275,12 +306,17 @@ export interface LabAutofillState {
 }
 
 export function useLabAutofill(): LabAutofillState {
-  const { observations, isLoading, isFetching, error, refetch } = useClinicalData()
+  const { observations, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, refetch } = useClinicalData()
   const { patient } = usePatient()
 
   const autofill = useMemo(
-    () => buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }),
-    [observations, patient],
+    () => {
+      const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
+      // A partially loaded chart must not infer absence before diagnoses arrive.
+      if (isLoading || isFetching || error) data.clinicalSelects = undefined
+      return data
+    },
+    [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error],
   )
 
   return useMemo(

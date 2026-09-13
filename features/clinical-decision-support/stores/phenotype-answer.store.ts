@@ -1,28 +1,51 @@
 /**
- * What the physician answered on the DP-01 phenotype gate, per patient.
+ * What the physician answered on the DP-00/DP-01 phenotype gate, per patient.
  *
  * 健保雲端 holds no ejection fraction for a patient whose only echocardiogram
  * was done at another hospital, on paper, or in a nuclear medicine department,
  * and both ESC 2026 phenotypes start from one. The 01 card therefore asks, and
  * the answer is handed back to the pack as facts (see `applyPhenotypeAnswer`)
  * so every module that reads an LVEF recomputes from it — nothing patches a
- * rendered card. The same store carries the physician's confirmation of the
- * HFpEF diagnosis on the DP-01b card.
+ * rendered card. The same store carries the DP-00 suspicion and the
+ * physician's confirmation of the HFpEF diagnosis on the DP-01b card.
  *
- * Session-only, on purpose: an entered LVEF is patient data with no approved
- * persistence path, so it lives in memory for this tab and is gone on reload.
- * Keyed by patient so an answer never follows the previous patient into the
- * next chart. The seam for a later persisted implementation is
+ * Each of the three answers carries its own `modifiedAt`, because they are
+ * given at different visits and a screen that dates them alike makes a
+ * carried-over answer look like today's. Storing an answer unchanged leaves
+ * its stamp alone, so 「最後修改」 dates the change rather than the click.
+ *
+ * Kept per patient, encrypted under this tab's session key, so an answer
+ * survives a reload of this tab, no other browser session can read it, and it
+ * never follows the previous patient into the next chart. Carrying an answer to
+ * the next visit is phase 2: the seam for that server-side implementation is
  * `PhenotypeAnswerRepository` — swap the repository, and nothing above it
  * changes.
  */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 
 /** The three choices the pack offers, by the option ids it publishes. */
 export type PhenotypeAnswerChoice = 'reduced' | 'preserved' | 'unknown'
 
+/** 「暫不確認」: the question was put, and the answer is deliberately none. */
+export const HFPEF_NOT_CONFIRMED = 'not-assessed' as const
+
 /** The DP-00 answer: whether this clinician is asking about heart failure. */
 export type HeartFailureSuspicionAnswer = 'suspected' | 'not-suspected'
+
+/** When each answer was last changed, as ISO timestamps. */
+export interface PhenotypeAnswerTimestamps {
+  hfSuspicion?: string
+  /** The choice, the LVEF and its study date are one answer with one stamp. */
+  phenotype?: string
+  hfpEfConfirmed?: string
+}
 
 export interface PhenotypeAnswer {
   /**
@@ -41,15 +64,68 @@ export interface PhenotypeAnswer {
   measuredOn?: string
   /** The day the answer was given, as YYYY-MM-DD. */
   answeredOn: string
-  /** Set once the physician works through §5.2.2 and confirms HFpEF. */
-  hfpEfConfirmed?: boolean
+  /**
+   * Set once the physician works through §5.2.2: `true` confirms HFpEF,
+   * `'not-assessed'` is 「暫不確認」 — the question was put and deliberately
+   * left open. Both count as answered on screen; only `true` produces a fact,
+   * because 「今天先不確認」 is not a statement that the patient has no HFpEF.
+   */
+  hfpEfConfirmed?: boolean | typeof HFPEF_NOT_CONFIRMED
+  /** Per-answer last-modified stamps, kept by the store rather than callers. */
+  modifiedAt?: PhenotypeAnswerTimestamps
+}
+
+/**
+ * The stamps after one save.
+ *
+ * Each group keeps its stamp while its own value is unchanged, so answering
+ * the HFpEF confirmation today does not re-date a suspicion answered in
+ * August. Exported because the diff, not the click, is what 「最後修改」 means.
+ */
+export function stampPhenotypeAnswer(
+  previous: PhenotypeAnswer | undefined,
+  next: PhenotypeAnswer,
+  now: Date = new Date(),
+): PhenotypeAnswer {
+  const at = now.toISOString()
+  const before = previous?.modifiedAt ?? {}
+  const modifiedAt: PhenotypeAnswerTimestamps = {}
+
+  const suspicionChanged = previous?.hfSuspicion !== next.hfSuspicion
+  if (next.hfSuspicion !== undefined) {
+    modifiedAt.hfSuspicion = suspicionChanged ? at : before.hfSuspicion ?? at
+  }
+
+  const phenotypeChanged = previous?.choice !== next.choice
+    || previous?.lvef !== next.lvef
+    || previous?.measuredOn !== next.measuredOn
+  if (next.choice !== undefined) {
+    modifiedAt.phenotype = phenotypeChanged ? at : before.phenotype ?? at
+  }
+
+  const confirmationChanged = previous?.hfpEfConfirmed !== next.hfpEfConfirmed
+  if (next.hfpEfConfirmed !== undefined) {
+    modifiedAt.hfpEfConfirmed = confirmationChanged ? at : before.hfpEfConfirmed ?? at
+  }
+
+  return { ...next, modifiedAt }
+}
+
+/** Whether two answers state the same thing, stamps aside. */
+function sameAnswer(a: PhenotypeAnswer | undefined, b: PhenotypeAnswer): boolean {
+  return Boolean(a)
+    && a?.hfSuspicion === b.hfSuspicion
+    && a?.choice === b.choice
+    && a?.lvef === b.lvef
+    && a?.measuredOn === b.measuredOn
+    && a?.hfpEfConfirmed === b.hfpEfConfirmed
 }
 
 /**
  * Where a patient's answer is kept.
  *
- * Async on purpose. The session implementation below resolves immediately, but
- * the approved persisted path is a per-UID Firestore document, and an
+ * Async on purpose. The browser implementation below resolves immediately, but
+ * a per-UID Firestore document is the approved server-side path, and an
  * interface that could only be synchronous would have to be rewritten — along
  * with every caller — the day it lands. Callers await `load` once per patient
  * and read the cached value from the store afterwards.
@@ -58,18 +134,95 @@ export interface PhenotypeAnswerRepository {
   load: (patientId: string) => Promise<PhenotypeAnswer | undefined>
   save: (patientId: string, answer: PhenotypeAnswer) => Promise<void>
   clear: (patientId: string) => Promise<void>
+  /**
+   * Optional: whether this repository holds anything for the patient, answered
+   * without a round trip. A browser-local store can say so by looking at a key,
+   * and the card then opens on the question instead of on 「讀取中」. A remote
+   * one omits it, and the caller waits for `load` — which is why this is a
+   * hint, never a substitute for the answer `load` returns.
+   */
+  has?: (patientId: string) => boolean
+}
+
+const STORAGE_PREFIX = 'cdss-phenotype-answer:'
+
+/** The key one patient's encrypted answer is kept under. */
+export function phenotypeAnswerStorageKey(patientId: string): string {
+  return `${STORAGE_PREFIX}${patientId}`
+}
+
+function isSuspicion(value: unknown): value is HeartFailureSuspicionAnswer {
+  return value === 'suspected' || value === 'not-suspected'
+}
+
+function isChoice(value: unknown): value is PhenotypeAnswerChoice {
+  return value === 'reduced' || value === 'preserved' || value === 'unknown'
+}
+
+function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
+  try {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const record = parsed as Record<string, unknown>
+    const stamps = (record.modifiedAt ?? {}) as Record<string, unknown>
+    const stamp = (key: string) => (typeof stamps[key] === 'string' ? { [key]: stamps[key] } : {})
+    return {
+      answeredOn: typeof record.answeredOn === 'string' ? record.answeredOn : '',
+      ...(isSuspicion(record.hfSuspicion) ? { hfSuspicion: record.hfSuspicion } : {}),
+      ...(isChoice(record.choice) ? { choice: record.choice } : {}),
+      ...(typeof record.lvef === 'number' && Number.isFinite(record.lvef) ? { lvef: record.lvef } : {}),
+      ...(typeof record.measuredOn === 'string' ? { measuredOn: record.measuredOn } : {}),
+      ...(typeof record.hfpEfConfirmed === 'boolean' || record.hfpEfConfirmed === HFPEF_NOT_CONFIRMED
+        ? { hfpEfConfirmed: record.hfpEfConfirmed as boolean | typeof HFPEF_NOT_CONFIRMED }
+        : {}),
+      modifiedAt: {
+        ...stamp('hfSuspicion'),
+        ...stamp('phenotype'),
+        ...stamp('hfpEfConfirmed'),
+      },
+    }
+  } catch {
+    return undefined
+  }
 }
 
 /**
- * The default: this tab's memory and nothing else.
+ * The default: this tab, keyed by patient, encrypted.
  *
- * Deliberately not `localStorage`. An LVEF and a study date the physician typed
- * are patient data, and the evidence switches next door persist only because a
- * boolean about a row is not.
+ * Nothing is written to the chart and nothing leaves the machine. What is kept
+ * is what the clinician said about this patient, under the same envelope as the
+ * imported bundle — ciphertext in `localStorage`, readable only by the tab
+ * session that wrote it, so the next person at a shared workstation reads
+ * nothing. A save returns before the ciphertext lands; the store's in-memory
+ * answer is what the screen shows, and a write that fails never reaches it.
  */
+export function createEncryptedPhenotypeAnswerRepository(): PhenotypeAnswerRepository {
+  const available = (patientId: string) => typeof window !== 'undefined' && Boolean(patientId)
+  return {
+    has: (patientId) => (
+      available(patientId) && hasEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
+    ),
+    load: async (patientId) => {
+      if (!available(patientId)) return undefined
+      const key = phenotypeAnswerStorageKey(patientId)
+      if (!hasEncryptedAnswers(key)) return undefined
+      return parseStoredAnswer(await loadEncryptedAnswers<unknown>(key))
+    },
+    save: async (patientId, answer) => {
+      if (!available(patientId)) return
+      persistEncryptedAnswers(phenotypeAnswerStorageKey(patientId), answer)
+    },
+    clear: async (patientId) => {
+      if (!available(patientId)) return
+      discardEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
+    },
+  }
+}
+
+/** This tab's memory and nothing else, for a test that wants no storage. */
 export function createSessionPhenotypeAnswerRepository(): PhenotypeAnswerRepository {
   const answers = new Map<string, PhenotypeAnswer>()
   return {
+    has: (patientId) => answers.has(patientId),
     load: async (patientId) => answers.get(patientId),
     save: async (patientId, answer) => {
       answers.set(patientId, answer)
@@ -80,10 +233,14 @@ export function createSessionPhenotypeAnswerRepository(): PhenotypeAnswerReposit
   }
 }
 
-let repository: PhenotypeAnswerRepository = createSessionPhenotypeAnswerRepository()
+let repository: PhenotypeAnswerRepository = createEncryptedPhenotypeAnswerRepository()
+
+/** One read in flight at a time, so an answer that decrypts after the chart
+ *  moved on is dropped rather than applied to whoever is on screen now. */
+const hydration = createHydrationGuard()
 
 /**
- * Replaces the repository, for a persisted implementation or for a test.
+ * Replaces the repository, for a server-side implementation or for a test.
  *
  * Anything already cached in the store is dropped: a new repository is a new
  * answer to 「這位病人上次填了什麼」, and keeping the old cache would show one
@@ -91,16 +248,24 @@ let repository: PhenotypeAnswerRepository = createSessionPhenotypeAnswerReposito
  */
 export function setPhenotypeAnswerRepository(next: PhenotypeAnswerRepository): void {
   repository = next
+  // A read still in flight belongs to the repository being replaced, and its
+  // answer is no longer this store's answer to 「上次填了什麼」.
+  hydration.invalidate()
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
 }
 
 interface PhenotypeAnswerState {
   byPatientId: Readonly<Record<string, PhenotypeAnswer>>
-  /** Which patients the repository has already been asked about. */
+  /**
+   * Which patients the repository has already answered for — set when the read
+   * resolves, not when it starts. 「沒作答」 and 「還沒讀到」 look identical on
+   * the card and mean opposite things, so the question waits for this rather
+   * than opening unanswered and jumping when the read lands.
+   */
   hydratedPatientIds: Readonly<Record<string, true>>
   /** Reads one patient's stored answer once; a no-op after that. */
   hydrate: (patientId: string) => void
-  setAnswer: (patientId: string, answer: PhenotypeAnswer) => void
+  setAnswer: (patientId: string, answer: PhenotypeAnswer, now?: Date) => void
   clearAnswer: (patientId: string) => void
 }
 
@@ -109,29 +274,52 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
   hydratedPatientIds: {},
 
   hydrate: (patientId) => {
-    if (!patientId || get().hydratedPatientIds[patientId]) return
-    set((state) => ({
-      hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
-    }))
-    void repository.load(patientId).then((answer) => {
-      if (!answer) return
-      set((state) => (
+    if (!patientId) return
+    const state = get()
+    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+
+    // An answer already in memory is this session's own, and a repository that
+    // can say 「沒有」 without a round trip has already answered. Neither waits,
+    // and neither writes anything back.
+    if (state.byPatientId[patientId] || repository.has?.(patientId) === false) {
+      set((current) => ({
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+      return
+    }
+
+    const settle = hydration.begin(patientId)
+    const apply = (answer: PhenotypeAnswer | undefined) => {
+      // A read that resolves after the chart moved on is an answer for a
+      // patient nobody is looking at; it is dropped, and the chart it belongs
+      // to is read again if it is opened.
+      if (!settle()) return
+      set((current) => ({
         // A physician who answered while the read was in flight has said
         // something more recent than storage; their answer stands.
-        state.byPatientId[patientId]
-          ? state
-          : { byPatientId: { ...state.byPatientId, [patientId]: answer } }
-      ))
-    }).catch(() => {
+        byPatientId: answer && !current.byPatientId[patientId]
+          ? { ...current.byPatientId, [patientId]: answer }
+          : current.byPatientId,
+        hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
+      }))
+    }
+    void repository.load(patientId)
+      .then(apply)
       // A store that cannot be read leaves the card asking, which is the same
       // state as a patient who has never been answered for.
-    })
+      .catch(() => apply(undefined))
   },
 
-  setAnswer: (patientId, answer) => {
+  setAnswer: (patientId, answer, now = new Date()) => {
     if (!patientId) return
-    set((state) => ({ byPatientId: { ...state.byPatientId, [patientId]: answer } }))
-    void repository.save(patientId, answer).catch(() => {
+    const previous = get().byPatientId[patientId]
+    // Saving the same answer again is not a new answer. The stamps are carried
+    // forward so a re-render, a hydration or a second click cannot re-date what
+    // the clinician said last month.
+    if (sameAnswer(previous, answer) && previous?.answeredOn === answer.answeredOn) return
+    const stamped = stampPhenotypeAnswer(previous, answer, now)
+    set((state) => ({ byPatientId: { ...state.byPatientId, [patientId]: stamped } }))
+    void repository.save(patientId, stamped).catch(() => {
       // The answer holds for this session even where it could not be written.
     })
   },
@@ -139,10 +327,13 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
   clearAnswer: (patientId) => {
     if (!patientId) return
     set((state) => {
-      if (!(patientId in state.byPatientId)) return state
       const next = { ...state.byPatientId }
       delete next[patientId]
-      return { byPatientId: next }
+      return {
+        byPatientId: next,
+        // Cleared is an answer to 「讀到了嗎」: there is nothing to read back.
+        hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },
+      }
     })
     void repository.clear(patientId).catch(() => {})
   },
@@ -152,5 +343,12 @@ export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get)
 export function usePhenotypeAnswer(patientId: string | undefined): PhenotypeAnswer | undefined {
   return usePhenotypeAnswerStore(
     (state) => (patientId ? state.byPatientId[patientId] : undefined),
+  )
+}
+
+/** Whether this chart's answer has been read back yet. */
+export function usePhenotypeAnswerHydrated(patientId: string | undefined): boolean {
+  return usePhenotypeAnswerStore(
+    (state) => !patientId || Boolean(state.hydratedPatientIds[patientId]),
   )
 }

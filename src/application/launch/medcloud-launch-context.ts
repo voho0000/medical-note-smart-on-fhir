@@ -21,6 +21,10 @@ export const VGTPE_SITE_LAUNCH_URL =
   'https://mediprisma.tw/app/?site=vghtpe'
 export const VGTPE_MEDCLOUD_LAUNCH_URL =
   'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
+export const VGTPE_HMC_MEDCLOUD_LAUNCH_URL =
+  'https://mediprisma.tw/app-hmc/?medcloud2=auto&site=vghtpe'
+export const VGTPE_HMC_SITE_LAUNCH_URL =
+  'https://mediprisma.tw/app-hmc/?site=vghtpe'
 export const VGTPE_MEDCLOUD_DECRYPTION_KEY_BASE64URL =
   'T3oVibAh8qDaZlxykiWSEewbSh9kj4naOHWABviM5Fg'
 
@@ -30,6 +34,7 @@ const AES_256_KEY_LENGTH = 32
 const AES_GCM_IV_LENGTH = 12
 const AES_GCM_AUTH_TAG_LENGTH = 16
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/
+const MEDIPRISMA_APP_PATHS = new Set(['/app/', '/app-hmc/'])
 
 export type MedcloudLaunchContext =
   | {
@@ -59,7 +64,8 @@ export interface MedcloudLaunchOptions {
 }
 
 /** Parse only the PHI-free launch controls accepted by the production app.
- * The controls are deliberately independent: `medcloud2=auto` owns the
+ * Both the regular app and the HMC preview are valid entry points. The controls
+ * are deliberately independent: `medcloud2=auto` owns the
  * unattended workflow, `site=vghtpe` owns hospital routing, and `ws=` names the
  * workstation / clinic room for usage statistics.
  *
@@ -74,7 +80,7 @@ export function parseMedcloudLaunchOptions(
     const url = value instanceof URL ? value : new URL(value)
     if (
       url.origin !== MEDIPRISMA_PRODUCTION_ORIGIN ||
-      url.pathname !== '/app/' ||
+      !MEDIPRISMA_APP_PATHS.has(url.pathname) ||
       url.hash !== ''
     ) return null
 

@@ -101,7 +101,9 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
     it.each(locales)('leaves no displayed cell empty in %s', (locale) => {
       const result = pack.build({ profile, locale })
       const { container } = render(
-        <ClinicalDecisionSupportView result={result} locale={locale} />,
+        // The module rows are what this checks, so it reads the layout that
+        // draws them; the visit flow's own rows are covered by its own suite.
+        <ClinicalDecisionSupportView result={result} locale={locale} layout="board" />,
       )
 
       const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"]')
@@ -116,7 +118,9 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
     it.each(locales)('never drops a clinical phrase from the row in %s', (locale) => {
       const result = pack.build({ profile, locale })
       const { container } = render(
-        <ClinicalDecisionSupportView result={result} locale={locale} />,
+        // The module rows are what this checks, so it reads the layout that
+        // draws them; the visit flow's own rows are covered by its own suite.
+        <ClinicalDecisionSupportView result={result} locale={locale} layout="board" />,
       )
 
       for (const recommendation of result.recommendations) {

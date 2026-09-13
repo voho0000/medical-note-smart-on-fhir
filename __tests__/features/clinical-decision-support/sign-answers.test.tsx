@@ -2,7 +2,11 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { HEART_FAILURE_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import { EvidenceTablePanel } from '@/features/clinical-decision-support/renderers/EvidenceTablePanel'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
-import type { ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import {
+  buildClinicVitals,
+  EMPTY_CLINIC_VITALS,
+  type ClinicVitals,
+} from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type {
   CdssPatientProfile,
   CdssRecommendation,
@@ -33,8 +37,15 @@ const BASE: CdssPatientProfile = {
   },
 }
 
-function congestionRow(vitals: ClinicVitals, rowId: string) {
-  const profile = applyClinicVitals(BASE, vitals)
+const VISIT = new Date('2026-09-09T10:00:00+08:00')
+
+/** One statement about this visit, as the store would have recorded it. */
+function vitals(patch: Parameters<typeof buildClinicVitals>[0]): ClinicVitals {
+  return buildClinicVitals(patch, VISIT)
+}
+
+function congestionRow(recorded: ClinicVitals, rowId: string) {
+  const profile = applyClinicVitals(BASE, recorded)
   const cards: readonly CdssRecommendation[] = HEART_FAILURE_GUIDELINE_PACK
     .build({ profile, locale: 'zh-TW' }).recommendations
   const table = cards
@@ -45,12 +56,12 @@ function congestionRow(vitals: ClinicVitals, rowId: string) {
 
 describe('answering a sign in the room', () => {
   it('reaches the pack as a finding, not as a counted unknown', () => {
-    const unasked = congestionRow({ measuredOn: '2026-09-09' }, 'congestion:orthopnea')
+    const unasked = congestionRow(EMPTY_CLINIC_VITALS, 'congestion:orthopnea')
     expect(unasked?.direction).toBe('unknown')
     expect(unasked?.defaultEnabled).toBe(false)
 
     const present = congestionRow(
-      { measuredOn: '2026-09-09', signAnswers: { orthopnea: 'present' } },
+      vitals({ signAnswers: { orthopnea: 'present' } }),
       'congestion:orthopnea',
     )
     expect(present?.direction).toBe('supports')
@@ -61,7 +72,7 @@ describe('answering a sign in the room', () => {
 
   it('keeps 「無」 apart from 「沒問」', () => {
     const absent = congestionRow(
-      { measuredOn: '2026-09-09', signAnswers: { orthopnea: 'absent' } },
+      vitals({ signAnswers: { orthopnea: 'absent' } }),
       'congestion:orthopnea',
     )
 
@@ -73,7 +84,7 @@ describe('answering a sign in the room', () => {
     // The chip and the row write the same record, so the last answer given for
     // a sign is the one that stands — there is no second field to disagree.
     const row = congestionRow(
-      { measuredOn: '2026-09-09', signAnswers: { 'pitting-edema': 'absent' } },
+      vitals({ signAnswers: { 'pitting-edema': 'absent' } }),
       'congestion:pitting-edema',
     )
 
@@ -81,8 +92,8 @@ describe('answering a sign in the room', () => {
   })
 
   it('moves the module’s own count, not just the row', () => {
-    const countsFor = (vitals: ClinicVitals) => {
-      const profile = applyClinicVitals(BASE, vitals)
+    const countsFor = (recorded: ClinicVitals) => {
+      const profile = applyClinicVitals(BASE, recorded)
       const cards = HEART_FAILURE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' }).recommendations
       const table = cards
         .flatMap((card) => card.evidenceTables ?? [])
@@ -90,11 +101,10 @@ describe('answering a sign in the room', () => {
       return { supports: table.supportsCount, against: table.againstCount }
     }
 
-    const before = countsFor({ measuredOn: '2026-09-09' })
-    const after = countsFor({
-      measuredOn: '2026-09-09',
+    const before = countsFor(EMPTY_CLINIC_VITALS)
+    const after = countsFor(vitals({
       signAnswers: { orthopnea: 'present', rales: 'absent' },
-    })
+    }))
 
     expect(after.supports).toBe(before.supports + 1)
     expect(after.against).toBe(before.against + 1)
@@ -129,7 +139,7 @@ describe('the sign answer control', () => {
     evidenceReferences: [],
   }
 
-  function renderPanel(onSave = jest.fn(), vitals?: ClinicVitals) {
+  function renderPanel(onSave = jest.fn(), recorded?: ClinicVitals) {
     render(
       <EvidenceTablePanel
         table={table}
@@ -137,7 +147,7 @@ describe('the sign answer control', () => {
         locale="zh-TW"
         patientId="p1"
         onNavigate={jest.fn()}
-        clinicVitals={vitals ?? { measuredOn: '2026-09-09' }}
+        clinicVitals={recorded ?? EMPTY_CLINIC_VITALS}
         onSaveClinicVitals={onSave}
       />,
     )
@@ -154,21 +164,15 @@ describe('the sign answer control', () => {
       .toHaveAttribute('aria-pressed', 'true')
 
     fireEvent.click(screen.getByTestId('cdss-evidence-answer-congestion:orthopnea-present'))
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ signAnswers: { orthopnea: 'present' } }),
-    )
+    expect(onSave).toHaveBeenCalledWith({ signAnswers: { orthopnea: 'present' } })
   })
 
   it('clears the answer back to 未評估 rather than recording a negative', () => {
-    const onSave = renderPanel(jest.fn(), {
-      measuredOn: '2026-09-09',
-      signAnswers: { orthopnea: 'present' },
-    })
+    const onSave = renderPanel(jest.fn(), vitals({ signAnswers: { orthopnea: 'present' } }))
 
     fireEvent.click(screen.getByTestId('cdss-evidence-answer-congestion:orthopnea-unassessed'))
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ signAnswers: undefined }),
-    )
+    // `null` returns the sign to 「沒問」, which is not the same as 「無」.
+    expect(onSave).toHaveBeenCalledWith({ signAnswers: { orthopnea: null } })
   })
 
   it('grades NYHA on its own row, because 有／無 is the wrong question for a class', () => {
@@ -181,15 +185,15 @@ describe('the sign answer control', () => {
     expect(within(control).getAllByRole('button')).toHaveLength(4)
 
     fireEvent.click(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-III'))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ nyhaClass: 'III' }))
+    expect(onSave).toHaveBeenCalledWith({ nyhaClass: 'III' })
   })
 
   it('clears the NYHA grade when the selected class is tapped again', () => {
-    const onSave = renderPanel(jest.fn(), { measuredOn: '2026-09-09', nyhaClass: 'II' })
+    const onSave = renderPanel(jest.fn(), vitals({ nyhaClass: 'II' }))
 
     expect(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-II'))
       .toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByTestId('cdss-evidence-nyha-congestion:nyha-II'))
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ nyhaClass: undefined }))
+    expect(onSave).toHaveBeenCalledWith({ nyhaClass: null })
   })
 })

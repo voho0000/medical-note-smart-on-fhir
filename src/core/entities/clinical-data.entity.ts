@@ -85,6 +85,7 @@ export interface MedicationAtcClassification {
 }
 
 export interface ClinicalFhirExtension {
+  valueUri?: string
   url?: string
   extension?: ClinicalFhirExtension[]
   valueQuantity?: {
@@ -385,6 +386,8 @@ export interface AllergyEntity {
 }
 
 export interface ObservationEntity {
+  extension?: ClinicalFhirExtension[]
+  method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
   id?: string
   resourceType?: string
   meta?: {
@@ -829,6 +832,7 @@ export interface DocumentReferenceEntity {
 }
 
 export interface CompositionEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
   type?: {

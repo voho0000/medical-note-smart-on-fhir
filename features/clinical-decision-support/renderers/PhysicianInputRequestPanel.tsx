@@ -26,6 +26,7 @@ import type {
  */
 
 interface PhysicianInputRequestPanelProps {
+  inline?: boolean
   requests: readonly PhysicianInputRequest[]
   recommendationId: string
   isEnglish: boolean
@@ -309,8 +310,8 @@ function LvefPhenotypeRequest({
 
       <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Kept for this tab only, and never written to the chart. Every module that reads an ejection fraction recomputes from the answer.'
-          : '只保留在這個分頁，不寫回病歷。回答後，所有讀 LVEF 的模組都會重新判定。'}
+          ? 'Encrypted and kept for this tab session only, never written to the chart; carrying it to the next visit is phase 2. Every module that reads an ejection fraction recomputes from the answer.'
+          : '加密保存於本分頁的工作階段，不寫回病歷；跨次就診沿用為第二階段。回答後，所有讀 LVEF 的模組都會重新判定。'}
       </p>
     </fieldset>
   )
@@ -375,14 +376,15 @@ function HfpEfConfirmationRequest({
       )}
       <span className="text-[11px] leading-4 text-muted-foreground">
         {isEnglish
-          ? 'Kept for this tab only. Nothing is written to the chart or to any claim.'
-          : '只保留在這個分頁，不寫回病歷，也不做健保申報。'}
+          ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2. Nothing is written to the chart or to any claim.'
+          : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。'}
       </span>
     </div>
   )
 }
 
 export function PhysicianInputRequestPanel({
+  inline = false,
   requests,
   recommendationId,
   isEnglish,
@@ -395,7 +397,7 @@ export function PhysicianInputRequestPanel({
   if (requests.length === 0) return null
   return (
     <section
-      className="rounded-md border border-border bg-muted/[0.08] px-3 py-2.5"
+      className={inline ? "[&_legend]:sr-only" : "rounded-md border border-border bg-muted/[0.08] px-3 py-2.5"}
       aria-label={isEnglish ? 'Physician input' : '醫師輸入'}
       data-testid={`cdss-physician-input-${recommendationId}`}
     >
