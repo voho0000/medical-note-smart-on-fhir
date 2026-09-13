@@ -45,8 +45,8 @@ test.describe('demo data (試用資料)', () => {
 
   test('labels the bundled custom summary with honest pre-generated model provenance', async ({ page }) => {
     await page.getByTestId('welcome-demo-card').click()
-    await openFeaturePanel(page)
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await summaryPanel.getByRole('tab', { name: '自訂摘要' }).click()
@@ -65,8 +65,8 @@ test.describe('demo data (試用資料)', () => {
 
   test('includes one shared echocardiography and Doppler report in the actual trial data', async ({ page }) => {
     await page.getByTestId('welcome-demo-card').click()
-    await openFeaturePanel(page)
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await openFeaturePanel(page)
     await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
     await page.getByRole('tab').filter({ hasText: /^影像/ }).first().click()
     const search = page.getByPlaceholder(/搜尋/)
@@ -96,8 +96,8 @@ test.describe('demo data (試用資料)', () => {
 
   test('seeds the English medical summary immediately after switching locale', async ({ page }) => {
     await page.getByTestId('welcome-demo-card').click()
-    await openFeaturePanel(page)
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await openFeaturePanel(page)
 
     await page.getByRole('button', { name: '繁體中文' }).click()
     await page.getByRole('menuitemradio', { name: 'English' }).click()

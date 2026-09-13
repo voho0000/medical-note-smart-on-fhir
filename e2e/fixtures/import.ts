@@ -136,12 +136,21 @@ export async function enableSummaryAutoGenerate(page: Page) {
 export async function openFeaturePanel(page: Page) {
   // `header.medicalSummary` is 醫療摘要 in zh-TW and plain "Summary" in en.
   const summaryTab = page.getByRole('tab', { name: /醫療摘要|^Summary$/ }).first()
-  if (await summaryTab.isVisible().catch(() => false)) return summaryTab
   // Phone widths have no rail — the panels are swapped by the bottom switcher,
   // and a spec that drives that switcher itself must not be pre-empted here.
-  // Leaving the page as it is keeps this callable from every layout.
+  // Returning keeps this callable from every layout.
+  if ((page.viewportSize()?.width ?? 0) < 768) return summaryTab
+
   const rail = page.locator('[data-slot="clinical-workspace-rail"]').first()
-  if (!(await rail.isVisible().catch(() => false))) return summaryTab
+  // Straight after a reload neither is mounted yet. Waiting for whichever
+  // arrives is the difference between opening the panel and silently deciding
+  // it was already open — which is how the post-reload legs failed.
+  await expect.poll(async () => (
+    await summaryTab.isVisible().catch(() => false)
+      || await rail.isVisible().catch(() => false)
+  ), { timeout: 20_000 }).toBe(true)
+
+  if (await summaryTab.isVisible().catch(() => false)) return summaryTab
   await rail.click()
   await expect(summaryTab).toBeVisible({ timeout: 20_000 })
   return summaryTab
