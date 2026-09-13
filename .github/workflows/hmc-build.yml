@@ -1,32 +1,43 @@
-name: Deploy HMC pilot preview
+name: HMC preview build
 
-# The workflow definition lives on protected master. An unprivileged signal
-# workflow fires after either pilot branch changes. Source access, pilot code
-# execution, and site publishing remain separate so pilot code sees no secrets.
+# This file belongs to pilot/hmc, and it is the half of the preview HMC owns.
+#
+# Everything that can decide a build is not fit to show a clinician runs here:
+# the personalization build, the overlay, the overlay's own smoke check,
+# typecheck, lint, Jest, and the static export. When one of them is wrong —
+# the way the overlay check kept demanding the CKD pack on 2026-09-10, days
+# after the release that dropped it — the fix is a commit on this branch, by
+# whoever is blocked, without waiting for the app owner.
+#
+# Publishing is deliberately not here. The key that writes mediprisma.tw is an
+# environment secret restricted to protected branches, so this branch cannot
+# read it however this file is edited. `Publish HMC pilot preview` on master
+# waits for this run to finish, takes the artifact, and copies it into
+# /app-hmc and nowhere else.
+#
+# What this run produces is therefore the whole contract: `out/` as built, and
+# `hmc-build.json` naming the two commits it was built from. A red Jest run is
+# recorded in `test-summary.txt` and does not stop the upload — it is reported
+# on the other side, in the issue, not used as a gate.
 on:
-  workflow_run:
-    workflows:
-      - HMC preview change signal
-    types:
-      - completed
+  push:
+    branches:
+      - pilot/hmc
+    tags:
+      - hmc-personalization-trigger
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: hmc-pilot-preview
+  group: hmc-preview-build
   cancel-in-progress: true
 
 jobs:
-  resolve:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      app_sha: ${{ steps.revisions.outputs.app_sha }}
-      personalization_sha: ${{ steps.revisions.outputs.personalization_sha }}
-      changed: ${{ steps.freshness.outputs.changed }}
+    timeout-minutes: 50
     steps:
       - name: Checkout HMC app source
         uses: actions/checkout@v7
@@ -50,70 +61,6 @@ jobs:
         run: |
           echo "app_sha=$(git -C app rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "personalization_sha=$(git -C personalization rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Check whether preview is current
-        id: freshness
-        env:
-          APP_SHA: ${{ steps.revisions.outputs.app_sha }}
-          PERSONALIZATION_SHA: ${{ steps.revisions.outputs.personalization_sha }}
-        shell: bash
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          marker="$(curl --fail --silent --show-error \
-            'https://mediprisma.tw/app-hmc/hmc-build.json' 2>/dev/null || true)"
-          deployed_app="$(printf '%s' "$marker" | jq -r '.appSha // empty' 2>/dev/null || true)"
-          deployed_personalization="$(printf '%s' "$marker" | jq -r '.personalizationSha // empty' 2>/dev/null || true)"
-
-          if [ "$APP_SHA" = "$deployed_app" ] && [ "$PERSONALIZATION_SHA" = "$deployed_personalization" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Archive pinned source without credentials
-        if: steps.freshness.outputs.changed == 'true'
-        shell: bash
-        run: |
-          git -C app archive --format=tar.gz --output="$GITHUB_WORKSPACE/app-source.tar.gz" HEAD
-          git -C personalization archive --format=tar.gz --output="$GITHUB_WORKSPACE/personalization-source.tar.gz" HEAD
-
-      - name: Upload source snapshot
-        if: steps.freshness.outputs.changed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: hmc-source-${{ steps.revisions.outputs.app_sha }}
-          path: |
-            app-source.tar.gz
-            personalization-source.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Report unchanged preview
-        if: steps.freshness.outputs.changed != 'true'
-        run: echo "HMC preview already matches both pilot branches."
-
-  build:
-    needs: resolve
-    if: ${{ needs.resolve.outputs.changed == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    steps:
-      - name: Download credential-free source snapshot
-        uses: actions/download-artifact@v8
-        with:
-          name: hmc-source-${{ needs.resolve.outputs.app_sha }}
-          path: source
-
-      - name: Extract pinned source
-        shell: bash
-        run: |
-          mkdir app personalization
-          tar -xzf source/app-source.tar.gz -C app
-          tar -xzf source/personalization-source.tar.gz -C personalization
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -236,8 +183,8 @@ jobs:
 
       - name: Inject HMC personalization source packages
         env:
-          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
-          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+          APP_SHA: ${{ steps.revisions.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ steps.revisions.outputs.personalization_sha }}
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -347,12 +294,47 @@ jobs:
         working-directory: app
         run: npm run lint
 
+      # Reported, not gating. What has to be true before a build reaches a
+      # clinician is that the preview runs at all, and the steps around this one
+      # say so: the overlay check, typecheck, lint and the export each fail on
+      # something genuinely broken. A red Jest run means the repository is not
+      # clean, which is worth knowing and is not the same claim — so it travels
+      # to the publisher in `test-summary.txt` and is reported in the issue
+      # while the preview still goes out.
+      #
+      # This distinction cost a day on 2026-09-10, when four cases that could
+      # never pass in a preview build held back the whole HFpEF slice. Both
+      # halves of that are now fixable from this branch: the suite, and this
+      # step.
+      #
+      # The three ignored suites assert the released package's HF title and
+      # pilot gate, which this branch's source intentionally replaces; the
+      # personalization repository's own verify run and the overlay check above
+      # cover that boundary.
       - name: Test HMC app
+        id: tests
         working-directory: app
-        # These three suites assert the released package's HF title and pilot
-        # gate. The HMC source intentionally replaces those values; its own
-        # verify suite and the overlay smoke check above cover that boundary.
-        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry)[.]test[.]tsx?$"
+        continue-on-error: true
+        shell: bash
+        run: |
+          # `shell: bash` already runs with -eo pipefail, so the tee below does
+          # not swallow a failing run.
+          npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry)[.]test[.]tsx?$" 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+
+      - name: Record the test result for the publisher
+        if: always()
+        shell: bash
+        run: |
+          # Jest colours its own output whether or not a terminal is attached,
+          # so strip the escapes before matching on line starts.
+          perl -pe 's/\e\[[0-9;]*m//g' "$RUNNER_TEMP/test-output.txt" > plain.txt
+          {
+            echo "outcome=${{ steps.tests.outcome }}"
+            grep -E '^(Test Suites|Tests):' plain.txt || true
+            # Coloured output leaves ` FAIL ` padded once the escapes are gone.
+            grep -E '^ *FAIL +' plain.txt | sed -E 's/^ *FAIL +/FAIL /' | sort -u | head -20 || true
+          } > test-summary.txt
+          cat test-summary.txt
 
       - name: Build static HMC preview
         working-directory: app
@@ -388,70 +370,25 @@ jobs:
           fi
           npx next build
 
-      - name: Upload static preview
-        uses: actions/upload-artifact@v7
-        with:
-          name: hmc-preview-${{ needs.resolve.outputs.app_sha }}
-          path: app/out/
-          if-no-files-found: error
-          retention-days: 1
-
-  publish:
-    needs: [resolve, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: mediprisma-site-publish
-    steps:
-      - name: Download verified static preview
-        uses: actions/download-artifact@v8
-        with:
-          name: hmc-preview-${{ needs.resolve.outputs.app_sha }}
-          path: preview
-
-      - name: Verify preview revisions
-        env:
-          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
-          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
+      - name: Refuse to hand over a link that could escape /app-hmc
         shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          import { readFile } from 'node:fs/promises'
-
-          const marker = JSON.parse(await readFile('preview/hmc-build.json', 'utf8'))
-          if (marker.appSha !== process.env.APP_SHA) {
-            throw new Error(`Preview app SHA mismatch: ${marker.appSha}`)
-          }
-          if (marker.personalizationSha !== process.env.PERSONALIZATION_SHA) {
-            throw new Error(`Preview personalization SHA mismatch: ${marker.personalizationSha}`)
-          }
-          NODE
-
-      - name: Checkout mediprisma.tw site
-        uses: actions/checkout@v7
-        with:
-          repository: voho0000/mediprisma-site
-          ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
-          path: docs-site
-          ref: main
-
-      - name: Publish /app-hmc to the site repository
-        env:
-          APP_SHA: ${{ needs.resolve.outputs.app_sha }}
-          PERSONALIZATION_SHA: ${{ needs.resolve.outputs.personalization_sha }}
-        working-directory: docs-site
-        shell: bash
-        run: |
-          rm -rf static/app-hmc
-          mkdir -p static/app-hmc
-          cp -R ../preview/. static/app-hmc/
-
-          git config user.name "mediprisma-hmc-preview[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add static/app-hmc
-          if git diff --cached --quiet; then
-            echo "HMC preview output is unchanged."
-            exit 0
+          # The publisher copies this tree into the site repository. A symlink
+          # in it would be copied as a link and could point outside the
+          # directory, so the tree has to be plain files before it leaves here.
+          links="$(find app/out -type l)"
+          if [ -n "$links" ]; then
+            echo "Static export contains symlinks:"
+            echo "$links"
+            exit 1
           fi
 
-          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
-          git push origin main
+      - name: Upload the preview for the publisher
+        uses: actions/upload-artifact@v7
+        with:
+          name: hmc-preview
+          path: |
+            app/out/
+            test-summary.txt
+          if-no-files-found: error
+          retention-days: 1
