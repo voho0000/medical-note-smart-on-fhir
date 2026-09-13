@@ -281,7 +281,9 @@ export const LabPivotTable = memo(function LabPivotTable({
     <div
       ref={setScrollEl}
       role="region"
-      aria-label={`${categoryLabel}累積檢驗表，可水平捲動`}
+      aria-label={locale.startsWith('zh')
+        ? `${categoryLabel}累積檢驗表，可水平捲動`
+        : `${categoryLabel} cumulative lab table, scrolls horizontally`}
       tabIndex={0}
       className={`w-full max-w-full overflow-x-auto ${heightClass} rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
       style={{ scrollbarWidth: 'thin' }}

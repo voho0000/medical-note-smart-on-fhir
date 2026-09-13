@@ -11,6 +11,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { localizeDemoOrganizationDisplay } from '@/src/shared/utils/demo-display'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { formatReportText } from '@/src/shared/utils/report-text-format'
 import { FormattedReportText } from './FormattedReportText'
@@ -213,7 +214,7 @@ export function MicrobiologyCumulativeView({
   range,
   rangeToday,
 }: MicrobiologyCumulativeViewProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const strings = (t.reports as any).microbiologyCumulative ?? {}
   const model = useMemo(
     () => buildMicrobiologyCumulativeModel(observations),
@@ -418,7 +419,9 @@ export function MicrobiologyCumulativeView({
             {formatDate(event.date)} · {specimenCellLabel(event)} · {familyLabel(event.family)}
           </span>
           {event.organization && (
-            <span className="text-muted-foreground">{event.organization}</span>
+            <span className="text-muted-foreground">
+              {localizeDemoOrganizationDisplay(event.organization, locale)}
+            </span>
           )}
           {event.specimenConfidence === 'inferred' && (
             <span className="text-muted-foreground">{strings.specimenInferred ?? '由報告資訊推定'}</span>
@@ -688,8 +691,11 @@ export function MicrobiologyCumulativeView({
                           )}
                         </span>
                         {event.organization && (
-                          <span className="max-w-full truncate text-[0.6875rem] text-muted-foreground/80" title={event.organization}>
-                            {event.organization}
+                          <span
+                            className="max-w-full truncate text-[0.6875rem] text-muted-foreground/80"
+                            title={localizeDemoOrganizationDisplay(event.organization, locale)}
+                          >
+                            {localizeDemoOrganizationDisplay(event.organization, locale)}
                           </span>
                         )}
                       </button>
