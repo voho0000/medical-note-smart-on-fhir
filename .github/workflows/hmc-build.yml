@@ -42,7 +42,13 @@ jobs:
       - name: Checkout HMC app source
         uses: actions/checkout@v7
         with:
-          ref: pilot/hmc
+          # The commit that started this run, not whatever the branch points at
+          # by the time the checkout happens. Those differ when a second push
+          # lands while this one is still starting, and then the build would
+          # record a commit the run was not built from — which the publisher
+          # refuses, correctly, and the preview would stall for a reason nobody
+          # could see.
+          ref: ${{ github.sha }}
           path: app
           persist-credentials: false
 
