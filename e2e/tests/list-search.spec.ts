@@ -1,9 +1,14 @@
 import { test, expect } from '../fixtures/test'
 import { type Page } from '@playwright/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 
 async function openLeftTab(page: Page, tabText: string) {
   await importBundle(page)
+  // These widths are the left half of a split. The workspace now starts with
+  // the 功能 panel collapsed, which hands the whole window to the left panel —
+  // so restore the split before measuring, or the row-compactness bounds are
+  // being checked against a layout the assertions were never about.
+  await openFeaturePanel(page)
   await page.getByRole('tab').filter({ hasText: tabText }).first().click()
 }
 

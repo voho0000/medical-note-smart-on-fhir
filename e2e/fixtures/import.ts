@@ -79,6 +79,30 @@ export async function importBundle(
 }
 
 /**
+ * Activate a left-panel tab and wait for its panel.
+ *
+ * The workspace opens on 總覽 since the one-page overview landed (#72), so a
+ * spec that asserts on 病人資訊, 就診紀錄, 報告, 用藥 or 文件 content has to say
+ * so. Import used to leave 病人資訊 showing, which is why so many specs simply
+ * asserted on its cards after `importBundle`.
+ *
+ * Panels for inactive tabs may be unmounted, so this waits for the tabpanel
+ * rather than assuming a hidden one is merely invisible.
+ */
+export async function openLeftTab(page: Page, name: RegExp) {
+  const tab = page.getByRole('tab', { name }).first()
+  await expect(tab).toBeVisible({ timeout: 20_000 })
+  await tab.click()
+  await expect(tab).toHaveAttribute('aria-selected', 'true')
+  return page.getByRole('tabpanel', { name })
+}
+
+/** The 病人資訊 tab, where the patient cards live. */
+export async function openPatientTab(page: Page) {
+  return openLeftTab(page, /病人資訊|Patient/)
+}
+
+/**
  * Turn on 醫療摘要 › 摘要設定 › 自動產生 through the real control.
  *
  * Specs that just need auto-run active across a reload should seed
@@ -98,11 +122,39 @@ export async function enableSummaryAutoGenerate(page: Page) {
 }
 
 /**
+ * Make sure the right-hand 功能 panel is showing.
+ *
+ * The responsive workspace (#72) starts it collapsed to a rail, so the panel's
+ * tabs — 醫療摘要, 臨床對話 — are not in the DOM at all until it is expanded.
+ * Specs used to find them straight after import because the panel was open by
+ * default.
+ *
+ * The rail carries its own label (it reports a finished summary, or a running
+ * one) so this matches on `data-slot` rather than on text that changes with
+ * state.
+ */
+export async function openFeaturePanel(page: Page) {
+  // `header.medicalSummary` is 醫療摘要 in zh-TW and plain "Summary" in en.
+  const summaryTab = page.getByRole('tab', { name: /醫療摘要|^Summary$/ }).first()
+  if (await summaryTab.isVisible().catch(() => false)) return summaryTab
+  // Phone widths have no rail — the panels are swapped by the bottom switcher,
+  // and a spec that drives that switcher itself must not be pre-empted here.
+  // Leaving the page as it is keeps this callable from every layout.
+  const rail = page.locator('[data-slot="clinical-workspace-rail"]').first()
+  if (!(await rail.isVisible().catch(() => false))) return summaryTab
+  await rail.click()
+  await expect(summaryTab).toBeVisible({ timeout: 20_000 })
+  return summaryTab
+}
+
+/**
  * Activate the 臨床對話 (chat) tab and return its input. Since v0.26 the right
  * panel DEFAULTS to 醫療摘要 (medical summary), so the chat input renders in an
- * inactive tab (mounted-but-hidden) until this tab is selected.
+ * inactive tab (mounted-but-hidden) until this tab is selected — and since #72
+ * the panel itself starts collapsed, so it has to be opened first.
  */
 export async function openChatInput(page: Page) {
+  await openFeaturePanel(page)
   await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click()
   const textarea = page.getByPlaceholder(/輸入|Type your/).first()
   await expect(textarea).toBeVisible()

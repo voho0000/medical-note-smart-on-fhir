@@ -1,9 +1,10 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 
 test('Beta settings explain account persistence and retain guest choices across reloads', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await importBundle(page)
+  await openFeaturePanel(page)
   const openSettings = async () => {
     await page.getByRole('tab', { name: '設定', exact: true }).click()
     await page.getByRole('tab', { name: '顯示與關於', exact: true }).click()
@@ -15,10 +16,12 @@ test('Beta settings explain account persistence and retain guest choices across 
   await toggle.click()
   await expect(toggle).toBeChecked()
   await page.reload()
+  await openFeaturePanel(page)
   await openSettings()
   await expect(toggle).toBeChecked()
   await toggle.click()
   await page.reload()
+  await openFeaturePanel(page)
   await openSettings()
   await expect(toggle).not.toBeChecked()
   for (const width of [320, 390, 430, 768, 1024, 1440]) {

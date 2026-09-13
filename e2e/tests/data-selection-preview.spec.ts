@@ -1,9 +1,10 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 
 test.describe('Data Selection preview', () => {
   test('opens from Medical Summary and shows assembled context without manual editing controls', async ({ page }) => {
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const rightTabs = page.getByRole('tablist').filter({
       has: page.getByRole('tab', { name: '醫療摘要' }),
@@ -31,6 +32,7 @@ test.describe('Data Selection preview', () => {
 
   test('keeps the same data-scope entry available for custom summaries', async ({ page }) => {
     await importBundle(page)
+    await openFeaturePanel(page)
 
     await page.getByRole('tab', { name: '自訂摘要' }).click()
     await page.getByRole('button', { name: '摘要設定' }).click()

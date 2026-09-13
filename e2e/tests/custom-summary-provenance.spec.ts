@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 
 test.describe('custom summary generation provenance', () => {
   test('shows per-module model, completion time and duration with responsive wrapping', async ({ page }, testInfo) => {
@@ -22,6 +22,7 @@ test.describe('custom summary generation provenance', () => {
       })
     })
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     const customTab = summaryPanel.getByRole('tab', { name: '自訂摘要' })

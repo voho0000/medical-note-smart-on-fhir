@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openPatientTab } from '../fixtures/import'
 
 // FHIR-generic regression: the 問題清單 card must show conditions regardless of
 // FHIR category. The synthetic bundle's Hypertension is `encounter-diagnosis`
@@ -8,8 +8,10 @@ import { importBundle } from '../fixtures/import'
 test.describe('problem list (FHIR-generic)', () => {
   test('shows an encounter-diagnosis condition, not just problem-list-item', async ({ page }) => {
     await importBundle(page)
+    await openPatientTab(page)
 
-    // The card lives in the default 病人資訊 (patient) left-panel tab.
+    // The card lives in the 病人資訊 (patient) left-panel tab, which is no
+    // longer the one the workspace opens on.
     await expect(page.getByText('Hypertension').first()).toBeVisible({ timeout: 20_000 })
     // ...and the problem-list card is NOT in its empty state (that message is
     // unique to this card), proving it rendered the non-problem-list-item item.
@@ -20,6 +22,7 @@ test.describe('problem list (FHIR-generic)', () => {
   // own testid because the IPS export panel also renders every condition.
   test('status filter: default hides resolved, 全部 reveals it', async ({ page }) => {
     await importBundle(page)
+    await openPatientTab(page)
 
     const card = page.getByTestId('problem-list-card')
     // Default (active): the active Hypertension shows, resolved sinusitis hidden.

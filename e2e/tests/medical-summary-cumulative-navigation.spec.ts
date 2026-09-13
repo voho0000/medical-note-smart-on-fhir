@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/test'
+import { openFeaturePanel } from '../fixtures/import'
 
 const NON_REPORT_TABS = ['就診紀錄', '病人資訊', '用藥', '文件'] as const
 
@@ -18,6 +19,7 @@ test.describe('medical-summary cumulative-report navigation', () => {
     test.slow()
     await page.getByTestId('welcome-demo-card').click()
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })
+    await openFeaturePanel(page)
 
     const reportsTab = page.getByRole('tab').filter({ hasText: '報告' }).first()
     const reportsContent = page.getByTestId('clinical-tab-content-reports')
