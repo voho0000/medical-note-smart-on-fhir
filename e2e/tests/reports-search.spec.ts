@@ -15,19 +15,26 @@ async function openReportsSearch(page: Page) {
   return search
 }
 
+/** The report rows under the active 全部 sub-tab. */
+function reportList(page: Page) {
+  return page.getByRole('tabpanel', { name: /^全部/ })
+}
+
 test.describe('reports search (the v0.16.0 features)', () => {
   test('matches report CONTENT, not just the title (imaging conclusion)', async ({ page }) => {
     const search = await openReportsSearch(page)
     // "cardiomegaly" appears only in the Chest X-ray report's conclusion text.
     await search.fill('cardiomegaly')
-    await expect(page.getByText('Chest X-ray').first()).toBeVisible()
+    // 累積報告 stays mounted behind the active sub-tab and carries its own copy
+    // of the row, so scope to the panel that is actually showing.
+    await expect(reportList(page).getByText('Chest X-ray').first()).toBeVisible()
     await expect(page.getByText(/顯示 \d+ \/ 共 \d+ 筆/)).toBeVisible()
   })
 
   test('matches by institution name', async ({ page }) => {
     const search = await openReportsSearch(page)
     await search.fill('台北測試醫院')
-    await expect(page.getByText('Chest X-ray').first()).toBeVisible()
+    await expect(reportList(page).getByText('Chest X-ray').first()).toBeVisible()
     await expect(page.getByText(/顯示 [1-9]\d* \/ 共/)).toBeVisible()
   })
 

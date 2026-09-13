@@ -1,9 +1,10 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 
 test.describe('Medical summary model picker', () => {
   test('remains available in patient mode', async ({ page }) => {
     await importBundle(page)
+    await openFeaturePanel(page)
 
     await page.getByRole('button', { name: '使用身份' }).click()
     await page.getByRole('menuitem', { name: '民眾' }).click()

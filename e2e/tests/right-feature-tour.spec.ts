@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openFeaturePanel } from '../fixtures/import'
 import { getChatCallCount, mockAiStream } from '../fixtures/mock-stream'
 
 const cases = [
@@ -48,6 +48,7 @@ test.describe('right feature tour', () => {
       await page.setViewportSize({ width, height: 900 })
       await mockAiStream(page)
       await importBundle(page)
+      await openFeaturePanel(page)
       const toast = page.getByRole('button', { name: 'Close toast', exact: true }).first()
       if (await toast.isVisible()) await toast.click()
       await page.getByRole('tab', { name: '醫療摘要', exact: true }).click()
@@ -76,6 +77,7 @@ test.describe('right feature tour', () => {
       await page.setViewportSize({ width, height: 900 })
       await mockAiStream(page)
       await importBundle(page)
+      await openFeaturePanel(page)
       await openTourMenu(page)
       await page.getByRole('menuitem', { name: '功能工作區', exact: true }).click()
       const tour = page.locator('section[aria-labelledby="right-tour-title"]')
@@ -118,6 +120,7 @@ test.describe('right feature tour', () => {
       await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
       await mockAiStream(page)
       await importBundle(page)
+      await openFeaturePanel(page)
       const toast = page.getByRole('button', { name: 'Close toast', exact: true }).first()
       if (await toast.isVisible()) await toast.click()
       const phoneFeatures = page.getByRole('button', { name: '功能', exact: true })
@@ -153,6 +156,7 @@ test.describe('right feature tour', () => {
       await page.setViewportSize({ width, height })
       await mockAiStream(page)
       await importBundle(page, { locale })
+      await openFeaturePanel(page)
       const toast = page.getByRole('button', { name: 'Close toast', exact: true }).first()
       if (await toast.isVisible()) await toast.click()
       const english = locale === 'en'
@@ -270,6 +274,7 @@ test.describe('right feature tour', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockAiStream(page)
     await importBundle(page)
+    await openFeaturePanel(page)
     await page.getByRole('tab', { name: '醫療摘要', exact: true }).click()
     const customTab = page.getByRole('tab', { name: '自訂摘要', exact: true })
     await customTab.click()
@@ -292,6 +297,7 @@ test.describe('right feature tour', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockAiStream(page)
     await importBundle(page)
+    await openFeaturePanel(page)
     await page.getByRole('tab', { name: '醫療摘要', exact: true }).click()
     await page.getByRole('tab', { name: '自訂摘要', exact: true }).click()
     await page.getByRole('button', { name: '編輯', exact: true }).first().click()

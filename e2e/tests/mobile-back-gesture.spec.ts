@@ -27,8 +27,8 @@ test.describe('phone back gesture', () => {
       .getByRole('button', { name: /^查看 .+ 趨勢$/ })
       .first()
       .click()
-    await expect(page.getByRole('button', { name: '功能' })).toHaveAttribute('aria-pressed', 'true')
-    const detailPanel = page.getByRole('region', { name: '功能' })
+    await expect(page.getByRole('button', { name: '功能', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    const detailPanel = page.getByRole('region', { name: '功能', exact: true })
     await expect(detailPanel.getByTestId('cumulative-trend-detail')).toBeVisible()
 
     await page.goBack()
@@ -48,8 +48,8 @@ test.describe('phone back gesture', () => {
 
   test('returns from the 功能 panel to 臨床摘要', async ({ page }) => {
     await importBundle(page)
-    await page.getByRole('button', { name: '功能' }).click()
-    await expect(page.getByRole('button', { name: '功能' })).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: '功能', exact: true }).click()
+    await expect(page.getByRole('button', { name: '功能', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
     await page.goBack()
 
@@ -60,7 +60,7 @@ test.describe('phone back gesture', () => {
 
   test('does not pile up dead entries across repeated open/close cycles', async ({ page }) => {
     await importBundle(page)
-    const features = page.getByRole('button', { name: '功能' })
+    const features = page.getByRole('button', { name: '功能', exact: true })
     const clinical = page.getByRole('button', { name: '臨床摘要' })
 
     // Three round trips driven by the in-app switcher, which must rewind the
