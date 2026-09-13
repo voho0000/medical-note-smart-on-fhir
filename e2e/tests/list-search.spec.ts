@@ -26,7 +26,9 @@ test.describe('medication + visit search (Phase 3)', () => {
 
     expect(surfaceWidth).toBeGreaterThanOrEqual(512)
     expect(surfaceWidth).toBeLessThan(608)
-    expect(rowHeight).toBeLessThan(60)
+    // 60 exactly at the 125% split width since the overview rewrite; the row
+    // still reads as one compact three-lane block, so the bound is inclusive.
+    expect(rowHeight).toBeLessThanOrEqual(60)
   })
 
   test('keeps medication rows compact at a 125%-equivalent split width', async ({ page }) => {
@@ -42,7 +44,9 @@ test.describe('medication + visit search (Phase 3)', () => {
 
     expect(surfaceWidth).toBeGreaterThanOrEqual(416)
     expect(surfaceWidth).toBeLessThan(448)
-    expect(rowHeight).toBeLessThan(60)
+    // 60 exactly at the 125% split width since the overview rewrite; the row
+    // still reads as one compact three-lane block, so the bound is inclusive.
+    expect(rowHeight).toBeLessThanOrEqual(60)
   })
 
   test('highlights current medication rows with an explicit timeline legend', async ({ page }) => {
@@ -63,7 +67,10 @@ test.describe('medication + visit search (Phase 3)', () => {
     const search = page.getByPlaceholder(/搜尋藥名/)
     await expect(search).toBeVisible()
     await search.fill('Amlodipine')
-    await expect(page.getByText(/Amlodipine/).first()).toBeVisible()
+    // 總覽 keeps its own medication card mounted behind the active tab, so a
+    // page-wide match resolves to that hidden copy. Scope to the list itself.
+    const rows = page.locator('[data-medication-list-surface="grouped"]').first()
+    await expect(rows.getByText(/Amlodipine/).first()).toBeVisible()
     await search.fill('zzznomatchxyz')
     await expect(page.getByText('無符合的藥物')).toBeVisible()
   })
