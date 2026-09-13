@@ -487,6 +487,11 @@ export interface VisitRecordCardConfig {
   ) => { label: string; unit?: string; value?: string; source?: string; title?: string } | undefined
   /** Anything drawn inside a tile: heart failure's echo-report button. */
   renderTileExtra?: (metric: VisitFlowMetric, isEnglish: boolean) => ReactNode
+  /**
+   * A second line inside the large tile: the two goals the lipid targets are
+   * read against, one per rulebook. Both sentences are the pack's.
+   */
+  headlineNote?: (args: { surface: VisitFlowSurface; isEnglish: boolean }) => ReactNode
 }
 
 export interface VisitFlowDiseaseConfig {

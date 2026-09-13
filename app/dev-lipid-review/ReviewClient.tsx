@@ -8,6 +8,11 @@ import { HYPERLIPIDEMIA_GUIDELINE_PACK, HEART_FAILURE_GUIDELINE_PACK, type CdssP
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { useEvidenceOverrides } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
+import { useVisitAnswers, useVisitAnswersStore } from '@/features/clinical-decision-support/stores/visit-answers.store'
+import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { applyVisitAnswers } from '@/features/clinical-decision-support/utils/apply-visit-answers'
+import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
+import { visitFlowConfigFor } from '@/features/clinical-decision-support/visit-flow/registry'
 // Synthetic display profiles; adapter and raw FHIR behavior are covered by core fixtures.
 const fact = (n: number | string, unit = '') => ({ zh: `${n}${unit ? ' '+unit : ''}`, en: `${n}${unit ? ' '+unit : ''}`, ...(typeof n === 'number' ? { numericValue: n } : {}), date: '2026-09-05', sources: [{ resourceType: 'Observation' as const, resourceId: 'synthetic-'+n, date: '2026-09-05' }] })
 export default function Review() {
@@ -21,6 +26,13 @@ export default function Review() {
  const evidenceOverrides = useEvidenceOverrides(id)
  const decisions = usePhysicianDecisions(id)
  useEffect(() => { usePhysicianDecisionsStore.getState().hydrate(id) }, [id])
+ // The questions and the clinic measurements travel the same route the live
+ // feature gives them: into the profile as facts, so the pack recomputes.
+ const packId = scenario === 'hf' ? 'heart-failure-cdss' : 'hyperlipidemia-cdss'
+ const visitAnswers = useVisitAnswers(packId, id)
+ const clinicVitals = useClinicVitals(id)
+ useEffect(() => { useVisitAnswersStore.getState().hydrate(packId, id) }, [packId, id])
+ useEffect(() => { useClinicVitalsStore.getState().hydrate(id) }, [id])
  const profile: CdssPatientProfile = {
   id, evaluatedAt: '2026-09-12T00:00:00Z', eligibleDiseasePackIds: ['hyperlipidemia-poc'], evidenceOverrides,
   facts: scenario === 'missing' ? {} : scenario === 'primary' ? { age: fact(50), LDL: fact(130, 'mg/dL'), totalCholesterol: fact(240, 'mg/dL'), HDL: fact(55, 'mg/dL'), eGFR: fact(90), bodyMassIndex: fact(35) } : {
@@ -33,6 +45,7 @@ export default function Review() {
  }
  const reading = buildPreventReading({ profile, inputs: preventInputs })
  const calculator = <PreventCalculatorPanel reading={reading} ready={preventReady} locale={english ? 'en' : 'zh-TW'} onChange={patch => usePreventInputsStore.getState().setInputs(id, patch)} onReset={() => usePreventInputsStore.getState().clearInputs(id)} />
- const result = (scenario === 'hf' ? HEART_FAILURE_GUIDELINE_PACK : HYPERLIPIDEMIA_GUIDELINE_PACK).build({ profile: applyPreventReading(profile, reading), locale: english ? 'en' : 'zh-TW' })
- return <main className="mx-auto max-w-4xl p-3"><div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"><strong>合成案例 · 高血脂審閱</strong><select aria-label="案例" value={scenario} onChange={e=>setScenario(e.target.value)} className="min-h-11 rounded border bg-background p-2"><option value="ascvd">ASCVD 未達標</option><option value="goal">已達標</option><option value="tg">嚴重 TG</option><option value="primary">初級預防 PREVENT</option><option value="missing">缺資料</option><option value="hf">HF 基準</option></select><button className="min-h-11" onClick={()=>setShowCalculator(!showCalculator)}>{showCalculator ? '回 CDSS' : '檢視共用計算機'}</button>{scenario === 'primary' ? <button className="min-h-11" onClick={()=>usePreventInputsStore.getState().setInputs(id, Object.fromEntries(Object.entries({ age: '50', sex: 'female', tc: '240', hdl: '55', sbp: '160', bmi: '35', egfr: '90', dm: 'no', smoking: 'no', bpTx: 'yes', statin: 'no', cvd: 'no' }).map(([key,value])=>[key,{value}])))}>載入論文計算範例</button> : null}<button className="min-h-11" onClick={()=>setEnglish(!english)}>中文 / English</button><button className="min-h-11" onClick={()=>document.documentElement.classList.toggle('dark')}>明 / 暗</button></div><div className="@container">{showCalculator ? calculator : <ClinicalDecisionSupportView preventCalculator={calculator} key={id} result={result} locale={english ? 'en' : 'zh-TW'} patientId={id} profileFacts={profile.facts} physicianDecisions={decisions} onRecordDecision={(module,input)=>usePhysicianDecisionsStore.getState().recordDecision(id,module,input)} onClearDecision={module=>usePhysicianDecisionsStore.getState().clearDecision(id,module)} />}</div></main>
+ const answeredProfile = applyVisitAnswers(applyClinicVitals(applyPreventReading(profile, reading), clinicVitals), visitAnswers, visitFlowConfigFor(packId), english ? 'en' : 'zh-TW')
+ const result = (scenario === 'hf' ? HEART_FAILURE_GUIDELINE_PACK : HYPERLIPIDEMIA_GUIDELINE_PACK).build({ profile: answeredProfile, locale: english ? 'en' : 'zh-TW' })
+ return <main className="mx-auto max-w-4xl p-3"><div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"><strong>合成案例 · 高血脂審閱</strong><select aria-label="案例" value={scenario} onChange={e=>setScenario(e.target.value)} className="min-h-11 rounded border bg-background p-2"><option value="ascvd">ASCVD 未達標</option><option value="goal">已達標</option><option value="tg">嚴重 TG</option><option value="primary">初級預防 PREVENT</option><option value="missing">缺資料</option><option value="hf">HF 基準</option></select><button className="min-h-11" onClick={()=>setShowCalculator(!showCalculator)}>{showCalculator ? '回 CDSS' : '檢視共用計算機'}</button>{scenario === 'primary' ? <button className="min-h-11" onClick={()=>usePreventInputsStore.getState().setInputs(id, Object.fromEntries(Object.entries({ age: '50', sex: 'female', tc: '240', hdl: '55', sbp: '160', bmi: '35', egfr: '90', dm: 'no', smoking: 'no', bpTx: 'yes', statin: 'no', cvd: 'no' }).map(([key,value])=>[key,{value}])))}>載入論文計算範例</button> : null}<button className="min-h-11" onClick={()=>setEnglish(!english)}>中文 / English</button><button className="min-h-11" onClick={()=>document.documentElement.classList.toggle('dark')}>明 / 暗</button></div><div className="@container">{showCalculator ? calculator : <ClinicalDecisionSupportView preventCalculator={calculator} key={id} result={result} locale={english ? 'en' : 'zh-TW'} patientId={id} profileFacts={answeredProfile.facts} physicianDecisions={decisions} onRecordDecision={(module,input)=>usePhysicianDecisionsStore.getState().recordDecision(id,module,input)} onClearDecision={module=>usePhysicianDecisionsStore.getState().clearDecision(id,module)} visitAnswers={visitAnswers} onSaveVisitAnswers={patch=>useVisitAnswersStore.getState().setAnswer(packId,id,patch)} clinicVitals={clinicVitals} onSaveClinicVitals={patch=>useClinicVitalsStore.getState().setVitals(id,patch)} />}</div></main>
 }

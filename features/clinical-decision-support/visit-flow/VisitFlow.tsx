@@ -224,6 +224,7 @@ export function VisitFlow({
         config={config}
         metrics={recordMetrics}
         isEnglish={isEnglish}
+        headlineNote={config.recordCard.headlineNote?.({ surface, isEnglish })}
         headlineExtra={headlineExtra}
         secondRow={recordSecondRow ?? config.recordSecondRow?.({ surface, isEnglish })}
         onOpenForm={onSaveRecordValues ? () => setRecordValuesOpen(true) : undefined}
@@ -426,6 +427,7 @@ function RecordCard({
   config,
   metrics,
   isEnglish,
+  headlineNote,
   headlineExtra,
   secondRow,
   onOpenForm,
@@ -433,6 +435,7 @@ function RecordCard({
   config: VisitFlowDiseaseConfig
   metrics: readonly VisitFlowMetric[]
   isEnglish: boolean
+  headlineNote?: ReactNode
   headlineExtra?: ReactNode
   secondRow?: ReactNode
   onOpenForm?: () => void
@@ -543,6 +546,7 @@ function RecordCard({
 
               {isHeadline && missing ? extra : null}
               {isHeadline ? null : extra}
+              {isHeadline && headlineNote ? headlineNote : null}
               </div>
               {isHeadline && headlineExtra ? <div className="relative border-t border-border px-3 py-2 @min-[24rem]:border-l @min-[24rem]:border-t-0 @min-[40rem]:border-l-0 @min-[40rem]:border-t">{headlineExtra}</div> : null}
             </div>

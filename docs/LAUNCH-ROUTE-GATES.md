@@ -92,6 +92,8 @@ HF new-flow clinical information card: owner requested replacing the height tile
 
 - HF 門診流程：依使用者要求移除重複的「補完心超數值」按鈕；仍可點擊 HFA-PEFF／H₂FPEF 名稱開啟相同計算機並補填資料。
 
+- 高血脂看診流程（2026-09-13）：五個分頁區塊（風險與目標／檢驗資料／治療決策／健保條件／追蹤與紀錄）改為與心衰竭同一套五張卡。獨立的「健保條件」分頁移除；它列出的每一句給付判定都改到對應的處置列上，全文收在「條文」裡。版面切換器（新版流程／原版看板）在高血脂路徑也會出現；原版看板與 classic 不變。心衰竭無任何可見變更。
+
 ## Dyslipidemia review branch (2026-09-12)
 
 The host additionally lists `hyperlipidemia-cdss` as an unreleased pack. Existing Beta and pilot visibility rules apply; HF remains enabled and the default. On the ordinary and vghtpe routes, Beta exposes the lipid pathway. Other unattended Medcloud routes continue to show released HF only. No existing surface is removed. The app branch requires the matching personalization source build; it is not a production package release.

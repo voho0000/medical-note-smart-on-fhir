@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  clinicalModuleLabel,
   LIPID_RISK_FACTOR_IDS,
   type LipidRiskFactorId,
 } from '@voho0000/personalized-care'
@@ -22,6 +23,7 @@ import type {
   VisitDecisionReason,
   VisitFlowContext,
   VisitFlowDiseaseConfig,
+  VisitFlowStepContext,
   VisitFollowUpLine,
   VisitItem,
   VisitItemTag,
@@ -208,6 +210,29 @@ function commonItemsAnswered(
 function physicianNote(day: string, isEnglish: boolean): string {
   if (!day) return ''
   return isEnglish ? ` (${day}, entered by you)` : `（${day} 你輸入）`
+}
+
+/**
+ * What a question is called in a chart note.
+ *
+ * The label on screen is the pack's, in the locale the pack was built in. A
+ * note pasted into a chart is written in English whatever the screen says, so
+ * these four are the host's own words for the same questions — the way heart
+ * failure names its symptoms in `shortEn` rather than translating the pack.
+ */
+const CHART_QUESTION_LABELS: Readonly<Record<string, string>> = {
+  'lipid-risk-factors': 'Cardiovascular risk factors',
+  'statin-tolerance': 'Statin tolerance',
+  'severe-ldl-workup': 'Severe hypercholesterolemia checks',
+  'clinic-vitals': 'Measured in clinic',
+}
+
+const CHART_STATIN_TOLERANCE: Readonly<Record<string, string>> = {
+  tolerated: 'tolerated',
+  'muscle-symptoms': 'intolerant — muscle symptoms',
+  'liver-dysfunction': 'intolerant — liver dysfunction',
+  other: 'intolerant — another reason',
+  [NOT_ASSESSED]: 'not assessed',
 }
 
 /* -------------------------------------------------------------- questions */
@@ -597,6 +622,58 @@ function takingOf(recommendation: CdssRecommendation, factKey: string): boolean 
 
 /* ------------------------------------------------------------- 下次檢查 */
 
+/**
+ * 下次血脂檢查, counted from the day the treatment decision was recorded.
+ *
+ * 治療調整後 4–12 週複驗 is ACC/AHA 2026 §3.5's window; 健保 2.6 表一's
+ * prescribing rules write 6–8 週 instead, so the two are printed side by side
+ * and never averaged into one number. Nothing decided, nothing dated — an
+ * interval with no start is not a date.
+ *
+ * Written once and read twice: the card prints it in the language the screen
+ * is in, and the chart summary prints it in English whatever the screen says.
+ */
+function followUpLines(
+  ctx: VisitFlowStepContext,
+  isEnglish: boolean,
+): readonly VisitFollowUpLine[] {
+  const therapy = ctx.actionGroups
+    .flatMap((group) => group.rows)
+    .find((row) => row.recommendation.id === THERAPY_MODULE_ID)
+  const decision = therapy?.decision
+  if (!decision || therapy?.decisionSource === 'medication-record') return []
+  if (decision.decision === 'prescribed' || decision.decision === 'dose-adjusted') {
+    const from = decision.recordedAt ? new Date(decision.recordedAt) : ctx.now
+    const at = Number.isNaN(from.getTime()) ? ctx.now : from
+    return [{
+      id: 'next-lipid-panel',
+      label: isEnglish ? 'Next lipid panel' : '下次血脂檢查',
+      value: `${addDays(at, 28)} ${isEnglish ? 'to' : '至'} ${addDays(at, 84)}`,
+      source: isEnglish
+        ? '4-12 weeks after a treatment change, ACC/AHA 2026 §3.5'
+        : '治療調整後 4–12 週，ACC/AHA 2026 §3.5',
+    }, {
+      id: 'nhi-recheck',
+      label: isEnglish ? 'NHI' : '健保',
+      value: isEnglish
+        ? 'Recheck 6-8 weeks after starting or adjusting'
+        : '起始或調整後 6–8 週複檢',
+      source: isEnglish ? 'NHI 2.6 Table 1, prescribing rules' : '健保 2.6 表一 處方規定',
+    }]
+  }
+  if (decision.decision === 'reviewed' || decision.decision === 'follow-up-arranged') {
+    return [{
+      id: 'next-lipid-panel',
+      label: isEnglish ? 'Next lipid panel' : '下次血脂檢查',
+      value: isEnglish ? 'Every 6-12 months' : '每 6–12 個月',
+      source: isEnglish
+        ? 'At goal with no change this visit'
+        : '達標且本次未調整治療',
+    }]
+  }
+  return []
+}
+
 function addDays(now: Date, days: number): string {
   const at = new Date(now.getTime() + days * 86_400_000)
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -631,6 +708,67 @@ function RiskReading({
             : '答第 1 題後可判定。'}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The two goals the LDL-C on the tile is read against, one per rulebook.
+ *
+ * Printed under the number because that is the comparison a reader makes the
+ * moment they see it, and printed twice because the guideline target and 表一's
+ * are set by different documents and are often different numbers. Both
+ * sentences are the pack's `diagnosticSummary`; the host trims each at a
+ * sentence boundary and adds nothing.
+ */
+function goalChipText(criterionId: string, detail: string | undefined): string | undefined {
+  if (!detail) return undefined
+  if (criterionId === 'guideline-risk-category') {
+    const arrow = detail.indexOf('→')
+    const text = arrow >= 0 ? detail.slice(arrow + 1) : detail
+    return text.split('。')[0]?.trim() || undefined
+  }
+  return detail.split('。')[0]?.trim() || undefined
+}
+
+function GoalChips({
+  recommendation,
+  isEnglish,
+}: {
+  recommendation?: CdssRecommendation
+  isEnglish: boolean
+}) {
+  const summary = recommendation ? diagnosticSummaryOf(recommendation) : undefined
+  if (!summary || summary.criteria.length === 0) return null
+  return (
+    <div
+      className="mt-1 flex w-full flex-col gap-0.5"
+      data-testid="cdss-lipid-headline-goals"
+    >
+      {summary.criteria.map((criterion) => {
+        const text = criterion.state === 'undetermined'
+          ? (isEnglish ? 'Goal not set yet' : '目標未定')
+          : goalChipText(criterion.id, criterion.detail)
+        if (!text) return null
+        return (
+          <span
+            key={criterion.id}
+            className={cn(
+              'block rounded px-1 py-px text-[11px] leading-4',
+              criterion.state === 'undetermined'
+                ? 'bg-muted/60 text-muted-foreground'
+                : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
+            )}
+            data-testid={`cdss-lipid-headline-goal-${criterion.id}`}
+            data-state={criterion.state}
+            title={criterion.detail}
+          >
+            <span className="font-medium">{criterion.label}</span>
+            {' '}
+            <span className="break-words">{text}</span>
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -738,6 +876,9 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
     extraMetrics: () => [
       { factKey: 'LDL', label: 'LDL-C', unit: 'mg/dL', kind: 'lab', stale: false, entered: false, evaluated: false },
     ],
+    headlineNote: ({ surface, isEnglish }) => (
+      <GoalChips recommendation={surface.recommendationById(RISK_MODULE_ID)} isEnglish={isEnglish} />
+    ),
     // non-HDL-C is the one number on this panel nobody orders: it is TC minus
     // HDL-C on the same day, so a blank tile says how to get it rather than
     // asking for a test that does not exist.
@@ -877,9 +1018,20 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
       return `${criterion.label}${isEnglish ? ': ' : '：'}${state}${criterion.detail ? ` — ${criterion.detail}` : ''}`
     }
     const ldl = ctx.board.headlineMetric
-    const answers = ctx.questions
-      .filter((question) => question.answerText)
-      .map((question) => `${question.label.replace(/（[^）]*）/g, '').trim()}${isEnglish ? ': ' : '：'}${question.answerText}`)
+    const answers = ctx.questions.flatMap((question) => {
+      if (!question.answerText) return []
+      if (!chartLayout) {
+        return [`${question.label.replace(/（[^）]*）/g, '').trim()}：${question.answerText}`]
+      }
+      const label = CHART_QUESTION_LABELS[question.id] ?? question.id
+      const stored = ctx.visitAnswers?.[question.id]
+      const text = question.items
+        ? itemsAnswerText(question.items, stored?.items, true)
+        : question.id === 'statin-tolerance'
+          ? CHART_STATIN_TOLERANCE[stored?.value ?? ''] ?? stored?.value
+          : question.answerText
+      return text ? [`${label}: ${text}`] : []
+    })
     const decidableRows = ctx.actionGroups
       .flatMap((group) => group.rows)
       .filter((row) => row.decisionKind !== 'none')
@@ -892,12 +1044,15 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
         }),
         row.decision.note,
       ].filter((value): value is string => Boolean(value))
-      return [`${row.moduleName}${chartLayout ? ': ' : ' '}${decisionLabel(row.decision.decision, isEnglish)}${details.length ? ` (${details.join('; ')})` : ''}`]
+      const moduleName = chartLayout
+        ? clinicalModuleLabel(row.recommendation.id, 'en', row.recommendation.id)
+        : row.moduleName
+      return [`${moduleName}${chartLayout ? ': ' : ' '}${decisionLabel(row.decision.decision, isEnglish)}${details.length ? ` (${details.join('; ')})` : ''}`]
     })
     const undecided = decidableRows.length - ctx.decidedCount
-    const followUp = (ctx.followUpLines ?? []).map((line) => `${line.label}${isEnglish ? ': ' : '：'}${line.value}`)
-    const followUpLines = [
-      ...followUp,
+    const followUp = [
+      ...followUpLines(ctx, isEnglish)
+        .map((line) => `${line.label}${isEnglish ? ': ' : '：'}${line.value}`),
       ...(ctx.followUpNote ? [ctx.followUpNote] : []),
     ]
 
@@ -913,7 +1068,7 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
         ['Management', ...(decided.length ? decided.map((line) => `- ${line}`) : ['- No decisions recorded']),
           ...(undecided > 0 ? [`- Pending decisions: ${undecided}`] : []),
         ].join('\n'),
-        ['Follow-up', ...(followUpLines.length ? followUpLines.map((line) => `  ${line}`) : ['  Not set this visit'])].join('\n'),
+        ['Follow-up', ...(followUp.length ? followUp.map((line) => `  ${line}`) : ['  Not set this visit'])].join('\n'),
       ].join('\n\n')
     }
     return [
@@ -931,8 +1086,8 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
           ? (isEnglish ? `${undecided} still undecided` : `其餘 ${undecided} 項待決定`)
           : undefined,
       ].filter(Boolean).join(' · '),
-      followUpLines.length > 0
-        ? followUpLines.join(' · ')
+      followUp.length > 0
+        ? followUp.join(' · ')
         : (isEnglish ? 'Follow-up: not set this visit' : '追蹤：本次未設定'),
     ].join('\n')
   },
@@ -943,45 +1098,7 @@ export const DYSLIPIDEMIA_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
    * 規定另寫 6–8 週，兩條並列而不合併。沒有決定就不印——一個沒有起點的區間
    * 不是一個日期。
    */
-  followUp: (ctx) => {
-    const therapy = ctx.actionGroups
-      .flatMap((group) => group.rows)
-      .find((row) => row.recommendation.id === THERAPY_MODULE_ID)
-    const decision = therapy?.decision
-    if (!decision || therapy?.decisionSource === 'medication-record') return []
-    const isEnglish = ctx.isEnglish
-    if (decision.decision === 'prescribed' || decision.decision === 'dose-adjusted') {
-      const from = decision.recordedAt ? new Date(decision.recordedAt) : ctx.now
-      const at = Number.isNaN(from.getTime()) ? ctx.now : from
-      const lines: VisitFollowUpLine[] = [{
-        id: 'next-lipid-panel',
-        label: isEnglish ? 'Next lipid panel' : '下次血脂檢查',
-        value: `${addDays(at, 28)} ${isEnglish ? 'to' : '至'} ${addDays(at, 84)}`,
-        source: isEnglish
-          ? '4–12 weeks after a treatment change, ACC/AHA 2026 §3.5'
-          : '治療調整後 4–12 週，ACC/AHA 2026 §3.5',
-      }, {
-        id: 'nhi-recheck',
-        label: isEnglish ? 'NHI' : '健保',
-        value: isEnglish
-          ? 'Recheck 6–8 weeks after starting or adjusting'
-          : '起始或調整後 6–8 週複檢',
-        source: isEnglish ? 'NHI 2.6 Table 1, prescribing rules' : '健保 2.6 表一 處方規定',
-      }]
-      return lines
-    }
-    if (decision.decision === 'reviewed' || decision.decision === 'follow-up-arranged') {
-      return [{
-        id: 'next-lipid-panel',
-        label: isEnglish ? 'Next lipid panel' : '下次血脂檢查',
-        value: isEnglish ? 'Every 6–12 months' : '每 6–12 個月',
-        source: isEnglish
-          ? 'At goal with no change this visit'
-          : '達標且本次未調整治療',
-      }]
-    }
-    return []
-  },
+  followUp: (ctx) => followUpLines(ctx, ctx.isEnglish),
   steps: [
     {
       id: 'confirm',
