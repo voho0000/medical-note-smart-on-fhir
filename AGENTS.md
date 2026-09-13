@@ -51,20 +51,26 @@ to tidy.
   cannot fix what belongs to this repository. Assume every change you make to
   shared machinery lands on them silently.
 
-Three files are the preview's engine. They live on `master` and they stay
-there:
+The preview's engine is a chain across two repositories, and only its last
+link is ours:
 
 ```
-.github/workflows/deploy-hmc-preview.yml
-.github/workflows/hmc-preview-change-signal.yml
-docs/HMC-AI-AGENT-GUIDE.md
+mediprisma-personalization  main       .github/workflows/relay-hmc-preview.yml
+this repository             pilot/hmc  .github/workflows/hmc-build.yml
+this repository             master     .github/workflows/hmc-publish.yml
+this repository             master     docs/HMC-AI-AGENT-GUIDE.md
 ```
 
-- Never delete, move, or revert them as part of another change, and never
-  propose a PR to `master` that removes them. A `workflow_run` workflow fires
-  only from the default branch, so removing the first two does not relocate the
+- Never delete, move, or revert the two on `master` as part of another change,
+  and never propose a PR that removes them. A `workflow_run` workflow fires
+  only from the default branch, so removing the publisher does not relocate the
   preview — it stops every pilot deployment, with no error anywhere the pilot
   can see. That happened on 2026-09-12 and cost two days.
+- The links are coupled in ways no single file shows. `hmc-publish.yml` selects
+  its trigger by workflow **name** (`HMC preview build`), and the relay's tag
+  must land on a commit that carries the build — when the build moved branches
+  on 2026-09-13 the relay kept tagging `master` and the chain went silent. Any
+  rename or move on one side is a change to the other two.
 - The trap to know: a branch built on `pilot/hmc` history carries that branch's
   **older** copies of these files. Removing them so the PR "only contains the
   product change" reads as correct locally and deletes `master`'s newer version.

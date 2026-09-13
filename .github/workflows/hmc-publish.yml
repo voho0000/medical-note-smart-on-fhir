@@ -157,7 +157,22 @@ jobs:
           fi
 
           git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
-          git push origin main
+
+          # `Sync app to mediprisma.tw/app` publishes to this same branch from
+          # its own concurrency group, so the two can be in flight together and
+          # this push can arrive second. Without this, losing that race fails
+          # the job and opens an issue against the pilot for something that has
+          # nothing to do with them. The two touch static/app-hmc and
+          # static/app, so replaying on top of the other is always clean.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebasing onto whatever landed first."
+            git pull --rebase origin main
+          done
+          echo "Could not push /app-hmc after three attempts."
+          exit 1
 
   report:
     # A pilot push never learns its own fate, so the deploy says it itself.
@@ -229,9 +244,12 @@ jobs:
 
           Build run (\`${BUILD_RESULT}\`): ${BUILD_URL}
 
-          A step before the upload stopped it — the personalization build, the overlay or its check, typecheck, lint, or the export. The Jest run cannot be the cause: it reports and does not gate.
+          A step before the upload stopped it. The Jest run cannot be the cause: it reports and does not gate.
 
-          All of those steps are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so whatever is wrong there is yours to change without waiting for anyone.
+          Which half it is, is worth checking before assuming:
+
+          - **Yours** — the personalization build, the overlay or its check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so they are yours to change without waiting for anyone.
+          - **The owner's** — either checkout step, or \`Install app dependencies\` failing on a 401 or 403. Those use this repository's credentials (the packages token, the personalization deploy key), which expire and are not visible from your branch. Say so rather than digging: nothing on \`pilot/hmc\` can fix them.
           EOF
           elif [ "$PUBLISH_RESULT" = 'success' ]; then
             # Published over a red suite. Worth saying out loud, not worth
