@@ -23,7 +23,7 @@ HMC 的 pilot 由兩個 repository 組成：
 
 **跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後執行 `git push origin pilot/hmc`；push 到上述任一 repository 的 `pilot/hmc` 都會直接送出無權限訊號，並立即啟動受保護 `master` 上的部署流程。GitHub Actions 通常會在數秒內出現新 run，網站則在完整驗證與 build 通過後更新。
 
-若自動流程未出現或需要強制重跑，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署或跨 repository 轉送憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+若自動流程未出現或需要強制重跑，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，**選擇 `master`** 後按 `Run workflow`。ref 只能選 `master`：workflow 的定義刻意放在受保護的 `master`，選其他 branch 會改用那個 branch 上的定義來跑，而那份是 pilot 端可編輯的檔案卻拿得到本 repository 的 secrets——這正是這個設計要避免的事。若 `Deploy HMC pilot preview` 根本沒出現在清單上，或選 `master` 時找不到它，那是 `master` 上的檔案出了問題（2026-09-12 曾被誤刪兩天）：**停下來通知 owner**，不要改用 `pilot/hmc` 的那份跑，也不要自己把檔案補回 `master`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署或跨 repository 轉送憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
 
 **push 之後不要只看自己那一個 run。** 兩個 repository 都推的時候，personalization 側的轉送會在數十秒後送出第二個訊號，並依 `concurrency` 取消前一個 run；被取消的那個常常正是 HMC push 觸發的。要看的是清單最上面那一個 run，它抓的是兩邊最新的 `pilot/hmc`，結論才算數。也因為取消與轉送的關係，GitHub 內建的失敗通知寄給的是轉送者而不是 push 的人，所以部署有狀況時 workflow 會自行在 app repository 開一個標題為 `HMC pilot preview needs attention` 的 issue 並 @ HMC；同一個 issue 會持續留言，直到一次「有發布、測試也綠」的部署才自動關閉。issue 內文會寫明是哪一種狀況：**沒發布**（`/app-hmc` 停在舊版本），或**有發布但測試是紅的**（preview 是最新的，可以照常看，但 repo 有測試沒過）。
 
