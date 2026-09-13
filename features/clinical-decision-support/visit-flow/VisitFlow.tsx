@@ -25,6 +25,9 @@ import type {
   PhysicianDecisionInput,
 } from '../stores/physician-decisions.store'
 import { ClinicalHandoffCard } from '../renderers/ClinicalHandoffCard'
+import { RecordValuesEditor, type RecordValueChange } from '../renderers/RecordValuesEditor'
+import type { HeartFailureMetric } from '../renderers/heart-failure-board'
+import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import { statusLabel, statusStyle, StatusIcon } from '../renderers/status-presentation'
 import { formatDay, formatStamp } from './build-visit-flow'
 import { CoverageLine } from './CoverageLine'
@@ -132,8 +135,14 @@ export interface VisitFlowProps {
   packVersion: string
   /** The stores and callbacks the config's own controls write through. */
   surface: VisitFlowSurface
-  /** Opens 補填／修改臨床數值; absent while no patient is loaded. */
-  onOpenRecordEditor?: () => void
+  /**
+   * Saves what 補填／修改臨床數值 changed. Absent while no patient is loaded,
+   * which is also how the button is withheld.
+   */
+  onSaveRecordValues?: (changes: RecordValueChange[]) => void
+  /** Heart failure's rhythm field, which the same editor also offers. */
+  recordRhythm?: string
+  onSaveRecordRhythm?: (patch: HfpefInputsPatch) => void
   /** Drawn beside the large tile: heart failure's rhythm panel. */
   headlineExtra?: ReactNode
   /** A second row under the tiles: the lipid-lowering drug tiles. */
@@ -166,7 +175,9 @@ export function VisitFlow({
   onClearDecision,
   packVersion,
   surface,
-  onOpenRecordEditor,
+  onSaveRecordValues,
+  recordRhythm,
+  onSaveRecordRhythm,
   headlineExtra,
   recordSecondRow,
   questionsNote,
@@ -179,11 +190,24 @@ export function VisitFlow({
       .map((group) => group.id)),
   )
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
+  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
   const prefix = config.testIdPrefix
+  const recordMetrics = visitRecordMetrics(flow.metrics, config, surface)
 
   return (
     <div className="space-y-3" data-testid={`${prefix}-visit-flow`}>
       {children}
+      {recordValuesOpen && onSaveRecordValues ? (
+        <RecordValuesEditor
+          metrics={recordMetrics as HeartFailureMetric[]}
+          isEnglish={isEnglish}
+          now={now}
+          {...(recordRhythm !== undefined ? { rhythm: recordRhythm } : {})}
+          {...(onSaveRecordRhythm ? { onSaveRhythm: onSaveRecordRhythm } : {})}
+          onSave={(changes) => { onSaveRecordValues(changes); setRecordValuesOpen(false) }}
+          onClose={() => setRecordValuesOpen(false)}
+        />
+      ) : null}
       <StepCard
         steps={flow.steps}
         nextStep={flow.nextStep}
@@ -198,11 +222,11 @@ export function VisitFlow({
 
       <RecordCard
         config={config}
-        metrics={visitRecordMetrics(flow.metrics, config, surface)}
+        metrics={recordMetrics}
         isEnglish={isEnglish}
         headlineExtra={headlineExtra}
-        secondRow={recordSecondRow}
-        onOpenForm={onOpenRecordEditor}
+        secondRow={recordSecondRow ?? config.recordSecondRow?.({ surface, isEnglish })}
+        onOpenForm={onSaveRecordValues ? () => setRecordValuesOpen(true) : undefined}
       />
 
       <QuestionsCard
@@ -211,7 +235,7 @@ export function VisitFlow({
         isEnglish={isEnglish}
         now={now}
         surface={surface}
-        note={questionsNote}
+        note={questionsNote ?? config.questionsNote?.({ flow, surface, isEnglish })}
       />
 
       <ActionsCard
@@ -472,9 +496,19 @@ function RecordCard({
                   : null}
               </div>
               {missing ? (
-                <div className="mt-0.5 text-sm font-medium leading-5 text-muted-foreground">
-                  {isEnglish ? 'No value in the record' : '紀錄無值'}
-                </div>
+                <>
+                  <div className="mt-0.5 text-sm font-medium leading-5 text-muted-foreground">
+                    {isEnglish ? 'No value in the record' : '紀錄無值'}
+                  </div>
+                  {/* A tile nobody orders says how it is obtained instead of
+                      asking for a test that does not exist: non-HDL-C is TC
+                      minus HDL-C on the same day. */}
+                  {derived?.source ? (
+                    <div className="truncate text-[11px] leading-4 text-muted-foreground">
+                      {derived.source}
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <div className="flex items-center gap-2">

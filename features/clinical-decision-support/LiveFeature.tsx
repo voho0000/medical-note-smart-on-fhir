@@ -44,8 +44,14 @@ import { usePreventInputs, usePreventInputsHydrated, usePreventInputsStore } fro
 import { buildPreventReading } from '@/features/medical-calculator/prevent-reading'
 import { PreventCalculatorPanel } from '@/features/medical-calculator/components/PreventCalculatorPanel'
 import { applyPreventReading } from './utils/prevent-result'
+import {
+  useVisitAnswers,
+  useVisitAnswersHydrated,
+  useVisitAnswersStore,
+} from './stores/visit-answers.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
-import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
+import { hasVisitFlow, visitFlowConfigFor } from './visit-flow/registry'
+import { applyVisitAnswers } from './utils/apply-visit-answers'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
@@ -277,13 +283,15 @@ export default function LiveClinicalDecisionSupportFeature() {
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
+  const setVisitAnswer = useVisitAnswersStore((state) => state.setAnswer)
+  const clearVisitAnswers = useVisitAnswersStore((state) => state.clearAnswers)
 
   // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
   // and 「還沒讀到」 render identically and mean opposite things, so the
   // guidance waits here rather than drawing every question unanswered and
   // jumping when the reads land. A chart with nothing stored resolves in the
   // same tick, so a first visit never sees this.
-  const answersHydrated = [
+  const storeAnswersHydrated = [
     useClinicVitalsHydrated(patientId),
     usePhysicianDecisionsHydrated(patientId),
     useHfpefInputsHydrated(patientId),
@@ -380,13 +388,13 @@ export default function LiveClinicalDecisionSupportFeature() {
   ), [answeredProfile, autofill, hfpefInputs])
 
   const preventReading = useMemo(() => buildPreventReading({ profile: answeredProfile ?? undefined, autofill, inputs: preventInputs }), [answeredProfile, autofill, preventInputs])
-  const profile = useMemo(() => (
+  const scoredProfile = useMemo(() => (
     answeredProfile ? applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReady ? preventReading : { ...preventReading, result: null }) : null
   ), [answeredProfile, hfpefReading, preventReading, preventReady])
 
   const applicablePacks = useMemo(() => (
-    profile ? getApplicableClinicalGuidelinePacks(profile) : []
-  ), [profile])
+    scoredProfile ? getApplicableClinicalGuidelinePacks(scoredProfile) : []
+  ), [scoredProfile])
   const applicablePackIds = useMemo(
     () => new Set(applicablePacks.map((pack) => pack.id)),
     [applicablePacks],
@@ -400,6 +408,41 @@ export default function LiveClinicalDecisionSupportFeature() {
     : undefined)
     ?? applicablePacks[0]
     ?? getDefaultClinicalGuidelinePack()
+
+  // The questions a pathway asks belong to that pathway, so the answers are
+  // read under its own key and folded in once it is chosen. Which pack is
+  // applicable is settled by diagnoses, never by an answer given here, so
+  // nothing circular follows from applying them last.
+  const visitFlowConfig = visitFlowConfigFor(selectedPack.id)
+  const visitAnswers = useVisitAnswers(selectedPack.id, patientId)
+  const visitAnswersHydrated = useVisitAnswersHydrated(selectedPack.id, patientId)
+  const hydrateVisitAnswers = useVisitAnswersStore((state) => state.hydrate)
+  useEffect(() => {
+    if (patientId) hydrateVisitAnswers(selectedPack.id, patientId)
+  }, [hydrateVisitAnswers, patientId, selectedPack.id])
+  const answersHydrated = storeAnswersHydrated && visitAnswersHydrated
+
+  const profile = useMemo(() => (
+    scoredProfile ? applyVisitAnswers(scoredProfile, visitAnswers, visitFlowConfig, cdssLocale) : null
+  ), [cdssLocale, scoredProfile, visitAnswers, visitFlowConfig])
+
+  // 「目前吸菸」 is asked once, in the risk-factor question, and the PREVENT
+  // panel reads the same answer rather than asking again. Written into the
+  // calculator's own manual inputs so that one answer is the only one either
+  // surface has; 「未評估」 removes it again, because a question put and left
+  // unanswered is not a 「no」.
+  const smokingAnswer = visitAnswers?.['lipid-risk-factors']?.items?.smoking
+  useEffect(() => {
+    if (!patientId) return
+    const next = smokingAnswer === 'present' ? 'yes' : smokingAnswer === 'absent' ? 'no' : undefined
+    const current = usePreventInputsStore.getState().byPatientId[patientId]?.entries.smoking?.value
+    if (next === undefined) {
+      if (current !== undefined) usePreventInputsStore.getState().setInputs(patientId, { smoking: null })
+      return
+    }
+    if (current === next) return
+    usePreventInputsStore.getState().setInputs(patientId, { smoking: { value: next } })
+  }, [patientId, smokingAnswer])
 
   const result = useMemo(() => {
     if (!profile) return null
@@ -475,7 +518,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
-  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
+  const isVisitFlow = layout === 'flow' && hasVisitFlow(result.packId)
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -485,6 +528,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
+    clearVisitAnswers(selectedPack.id, patientId)
     toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
   }
 
@@ -512,7 +556,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             selectedPackId={selectedPack.id}
             onSelect={setRequestedPackId}
           />
-          {result.packId === HEART_FAILURE_PACK_ID ? (
+          {hasVisitFlow(result.packId) ? (
             <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
           ) : null}
           {isVisitFlow && patientId ? (
@@ -566,6 +610,10 @@ export default function LiveClinicalDecisionSupportFeature() {
           : undefined}
         onClearDecision={patientId
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
+          : undefined}
+        visitAnswers={visitAnswers}
+        onSaveVisitAnswers={patientId
+          ? (patch) => setVisitAnswer(selectedPack.id, patientId, patch)
           : undefined}
         preventCalculator={patientId ? <PreventCalculatorPanel reading={preventReading} ready={preventReady} locale={cdssLocale} onChange={patch => usePreventInputsStore.getState().setInputs(patientId, patch)} onReset={() => usePreventInputsStore.getState().clearInputs(patientId)} /> : undefined}
         hfpefReading={hfpefReading}

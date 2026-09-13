@@ -417,12 +417,15 @@ export function buildVisitFlow(
   }
 
   const followUpLines = config.followUp?.(stepContext) ?? []
+  // The summary prints what was decided *and* when the patient comes back, so
+  // it is built last, over a context that already carries both.
+  const summaryContext: VisitFlowStepContext = { ...stepContext, followUpLines }
 
-  const summaryText = config.summary(stepContext, { chartLayout: false, isEnglish })
+  const summaryText = config.summary(summaryContext, { chartLayout: false, isEnglish })
   // Build chart text from structured answers, independently of the UI/pack
   // language, then normalise the punctuation a chart field expects.
   const englishSummaryText = config
-    .summary(stepContext, { chartLayout: true, isEnglish: true })
+    .summary(summaryContext, { chartLayout: true, isEnglish: true })
     .replace(/：/g, ': ')
     .replace(/（/g, ' (')
     .replace(/）/g, ')')

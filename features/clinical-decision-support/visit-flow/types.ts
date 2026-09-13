@@ -24,6 +24,8 @@ import type { ReactNode } from 'react'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import type {
   CdssClinicalHandoff,
+  CdssFact,
+  CdssLocale,
   CdssRecommendation,
   CdssResult,
   CdssStatus,
@@ -32,7 +34,11 @@ import type {
 import type { ClinicVitals, ClinicVitalsPatch } from '../stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '../stores/phenotype-answer.store'
 import type { PhysicianDecision, PhysicianDecisionMap } from '../stores/physician-decisions.store'
-import type { VisitAnswers, VisitAnswerPatch } from '../stores/visit-answers.store'
+import type {
+  VisitAnswers,
+  VisitAnswerPatch,
+  VisitQuestionAnswer,
+} from '../stores/visit-answers.store'
 
 /* ------------------------------------------------------------------ steps */
 
@@ -369,6 +375,9 @@ export interface VisitFlowStepContext extends VisitFlowContext {
   decidableCount: number
   decidedCount: number
   followUpNote?: string
+  /** The follow-up lines the config derived, once they exist; the summary
+   *  prints them and is therefore built after them. */
+  followUpLines?: readonly VisitFollowUpLine[]
 }
 
 /* ----------------------------------------------------------------- config */
@@ -436,6 +445,18 @@ export interface VisitQuestionSpec {
   derive: (ctx: VisitFlowContext) => Omit<VisitQuestion, 'id'>
   /** The control drawn inside the question shell. */
   render?: (ctx: VisitQuestionRenderContext) => ReactNode
+  /**
+   * The facts this question's answers become, on the profile the pack reads.
+   *
+   * Nothing here judges. 「未評估」 and 「沒問」 both produce no fact, because
+   * the pack must not read either as a negative finding; only 「無」 is a
+   * negation, and it travels as its own term. A question that writes nothing
+   * returns an empty record, which is what an unanswered question is.
+   */
+  toFacts?: (
+    answer: VisitQuestionAnswer | undefined,
+    options: { isEnglish: boolean; locale: CdssLocale },
+  ) => Readonly<Record<string, CdssFact>>
 }
 
 /** A row's decision buttons, and the reasons behind the two that need one. */
@@ -544,4 +565,15 @@ export interface VisitFlowDiseaseConfig {
   rowClassName?: (row: VisitActionRow, group: VisitActionGroup) => string | undefined
   /** What a dose-adjustment editor starts from when the row names no drug. */
   defaultDoseMedication?: (moduleId: string) => string | undefined
+  /**
+   * A note above the questions: heart failure's 「LVEF ≥50% 多一題」 line, the
+   * lipid reading of 指引 and 健保表一 risk category.
+   */
+  questionsNote?: (args: {
+    flow: VisitFlowModel
+    surface: VisitFlowSurface
+    isEnglish: boolean
+  }) => ReactNode
+  /** A second row under the record tiles: the lipid-lowering drug tiles. */
+  recordSecondRow?: (args: { surface: VisitFlowSurface; isEnglish: boolean }) => ReactNode
 }

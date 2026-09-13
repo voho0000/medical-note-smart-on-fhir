@@ -1345,6 +1345,15 @@ export const HEART_FAILURE_VISIT_FLOW_CONFIG: VisitFlowDiseaseConfig = {
       sodium: { zh: 'Na', en: 'Na', unit: 'mmol/L' },
       NTproBNP: { zh: 'NT-proBNP', en: 'NT-proBNP', unit: 'pg/mL' },
       hemoglobin: { zh: 'Hb', en: 'Hb', unit: 'g/dL' },
+      // The lipid panel is in the shared store but nothing on this pathway
+      // offers a control for it; the labels exist so the table can print a
+      // value if one is ever carried in.
+      LDL: { zh: 'LDL-C', en: 'LDL-C', unit: 'mg/dL' },
+      HDL: { zh: 'HDL-C', en: 'HDL-C', unit: 'mg/dL' },
+      triglycerides: { zh: 'TG', en: 'TG', unit: 'mg/dL' },
+      totalCholesterol: { zh: 'TC', en: 'TC', unit: 'mg/dL' },
+      apolipoproteinB: { zh: 'ApoB', en: 'ApoB', unit: 'mg/dL' },
+      lipoproteinA: { zh: 'Lp(a)', en: 'Lp(a)', unit: 'nmol/L' },
     }
     for (const [key, entry] of Object.entries(clinicVitals?.entries ?? {})) {
       if (!entry) continue

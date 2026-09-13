@@ -161,6 +161,12 @@ const REQUEST_KINDS: readonly PhysicianInputRequestKind[] = [
   'hf-symptoms',
   'lvef-phenotype',
   'hfpef-diagnosis-confirmation',
+  // The three the lipid pack raises, for the answers no record in this
+  // profile can hold: the risk factors 表一 counts, whether a statin was
+  // tolerated, and the two checks an LDL-C of 190 or more asks for.
+  'lipid-risk-factors',
+  'statin-tolerance',
+  'severe-ldl-workup',
 ]
 
 function isRequestKind(value: unknown): value is PhysicianInputRequestKind {

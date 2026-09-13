@@ -1,6 +1,5 @@
 "use client"
 
-import { DyslipidemiaVisitFlow } from './DyslipidemiaVisitFlow'
 
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react'
 import {
@@ -57,6 +56,29 @@ import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
+import { buildDyslipidemiaBoard } from './dyslipidemia-board'
+import { buildVisitFlow } from '../visit-flow/build-visit-flow'
+import { VisitFlow } from '../visit-flow/VisitFlow'
+import { visitFlowConfigFor } from '../visit-flow/registry'
+import type { VisitFlowSurface } from '../visit-flow/types'
+import type { RecordValueChange } from './RecordValuesEditor'
+import type { VisitAnswers, VisitAnswerPatch } from '../stores/visit-answers.store'
+
+/**
+ * Which clinic-vitals field each lipid record tile writes back to.
+ *
+ * Only the tiles a clinician can complete from a report in their hand; the
+ * derived non-HDL-C is not one of them, because it is TC minus HDL-C and
+ * typing it separately would let the three disagree.
+ */
+const LIPID_RECORD_ENTRY_KEYS = {
+  LDL: 'LDL',
+  HDL: 'HDL',
+  triglycerides: 'triglycerides',
+  totalCholesterol: 'totalCholesterol',
+  apolipoproteinB: 'apolipoproteinB',
+  lipoproteinA: 'lipoproteinA',
+} as const
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import { isCongestionGroupPresent } from '../utils/apply-clinic-vitals'
@@ -114,6 +136,14 @@ interface ClinicalDecisionSupportViewProps {
   physicianDecisions?: PhysicianDecisionMap
   onRecordDecision?: (moduleId: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (moduleId: string) => void
+  /**
+   * What the clinician answered on this pack's own questions — the risk
+   * factors no record holds, the statin tolerance. Keyed by question id and
+   * kept per pack; `onSaveVisitAnswers` absent means the controls are not
+   * offered, which is the read-only case.
+   */
+  visitAnswers?: VisitAnswers
+  onSaveVisitAnswers?: (patch: VisitAnswerPatch) => void
   /**
    * The HFpEF scores the host's own calculator produced, and the way to
    * complete the echo values behind them. Only the visit flow reads them; the
@@ -2052,6 +2082,8 @@ export function ClinicalDecisionSupportView({
   phenotypeAnswer,
   onAnswerPhenotype,
   physicianDecisions,
+  visitAnswers,
+  onSaveVisitAnswers,
   onRecordDecision,
   onClearDecision,
   preventCalculator,
@@ -2101,6 +2133,34 @@ export function ClinicalDecisionSupportView({
   // original board, take the paths they always took — not a line of them moves.
   const isLipidFlow = (layout === 'flow' || layout === 'c') && result.packId === 'hyperlipidemia-cdss'
   const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
+  // The second pathway to draw the visit flow. Its board is the lipid one, and
+  // the engine reads the three fields every board carries; the risk category,
+  // the goals and every sentence are still the pack's.
+  const lipidBoard = useMemo(
+    () => (isLipidFlow ? buildDyslipidemiaBoard(result, locale, now) : undefined),
+    [isLipidFlow, locale, now, result],
+  )
+  const lipidConfig = isLipidFlow ? visitFlowConfigFor(result.packId) : undefined
+  const lipidFlow = useMemo(() => (
+    lipidBoard && lipidConfig
+      ? buildVisitFlow({
+        board: {
+          ...lipidBoard,
+          ...(lipidBoard.headline?.title ? { subtitle: lipidBoard.headline.title } : {}),
+        },
+        result,
+        isEnglish,
+        now,
+        clinicVitals,
+        visitAnswers,
+        decisions: physicianDecisions ?? {},
+        patientId,
+      }, lipidConfig)
+      : undefined
+  ), [
+    clinicVitals, isEnglish, lipidBoard, lipidConfig, now, patientId,
+    physicianDecisions, result, visitAnswers,
+  ])
   const visitFlow = useMemo(() => (
     isVisitFlow && board
       ? buildHeartFailureVisitFlow({
@@ -2441,13 +2501,72 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
-      {isLipidFlow ? (
-        <DyslipidemiaVisitFlow calculator={preventCalculator} result={result} isEnglish={isEnglish} now={now}
-          expandedId={expandedId} onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
-          decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
-          renderDetail={(recommendation) => <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
-            onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance} />} />
-      ) : null}
+      {lipidFlow && lipidConfig && lipidBoard ? (() => {
+        const surface: VisitFlowSurface = {
+          board: lipidFlow ? {
+            ...lipidBoard,
+            ...(lipidBoard.headline?.title ? { subtitle: lipidBoard.headline.title } : {}),
+          } : lipidBoard,
+          isEnglish,
+          now,
+          ...(clinicVitals ? { clinicVitals } : {}),
+          ...(onSaveClinicVitals ? { onSaveClinicVitals } : {}),
+          ...(visitAnswers ? { visitAnswers } : {}),
+          ...(onSaveVisitAnswers ? { onSaveVisitAnswers } : {}),
+          recommendationById: (id) => (
+            [...result.recommendations, ...(result.automatedChecks ?? [])
+              .flatMap((check) => check.recommendation ? [check.recommendation] : [])]
+              .find((recommendation) => recommendation.id === id)
+          ),
+        }
+        // The lipid record card offers the panel itself: a clinician holding
+        // today's report should not have to wait for it to reach 健保雲端.
+        const saveRecordValues = onSaveClinicVitals
+          ? (changes: RecordValueChange[]) => {
+            const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
+            for (const { metric, values, measuredOn } of changes) {
+              if (metric.factKey === 'bloodPressure') {
+                entries.systolic = values ? { value: values[0], measuredOn } : null
+                entries.diastolic = values ? { value: values[1], measuredOn } : null
+                continue
+              }
+              const key = LIPID_RECORD_ENTRY_KEYS[metric.factKey as keyof typeof LIPID_RECORD_ENTRY_KEYS]
+              if (key) entries[key] = values ? { value: values[0], measuredOn } : null
+            }
+            if (Object.keys(entries).length) onSaveClinicVitals({ entries })
+          }
+          : undefined
+        return (
+          <VisitFlow
+            flow={lipidFlow}
+            config={lipidConfig}
+            isEnglish={isEnglish}
+            now={now}
+            expandedId={expandedId}
+            onToggle={(id) => setRequestedExpandedId(expandedId === id ? null : id)}
+            renderDetail={(recommendation) => (
+              <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
+                onNavigate={navigateToResource} label={label} patientId={patientId}
+                copyProvenance={copyProvenance} />
+            )}
+            {...(onRecordDecision ? { onRecordDecision } : {})}
+            {...(onClearDecision ? { onClearDecision } : {})}
+            packVersion={result.packVersion}
+            surface={surface}
+            {...(saveRecordValues ? { onSaveRecordValues: saveRecordValues } : {})}
+            questionsNote={(
+              <>
+                {lipidConfig.questionsNote?.({ flow: lipidFlow, surface, isEnglish })}
+                {preventCalculator ? (
+                  <div className="border-b border-border px-3 py-2" data-testid="cdss-lipid-prevent">
+                    {preventCalculator}
+                  </div>
+                ) : null}
+              </>
+            )}
+          />
+        )
+      })() : null}
 
       {board && !isVisitFlow ? (
         <HeartFailureStatusBoard

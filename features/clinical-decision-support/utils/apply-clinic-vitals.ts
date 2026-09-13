@@ -139,7 +139,7 @@ export function applyClinicVitals(
   const factDates: Record<string, string> = {}
   const entry = (key: ClinicVitalsEntryKey) => vitals.entries?.[key]
 
-  for (const [key, unit] of [['potassium', 'mmol/L'], ['eGFR', 'mL/min/1.73m²'], ['sodium', 'mmol/L'], ['NTproBNP', 'pg/mL'], ['hemoglobin', 'g/dL']] as const) {
+  for (const [key, unit] of [['potassium', 'mmol/L'], ['eGFR', 'mL/min/1.73m²'], ['sodium', 'mmol/L'], ['NTproBNP', 'pg/mL'], ['hemoglobin', 'g/dL'], ['LDL', 'mg/dL'], ['HDL', 'mg/dL'], ['triglycerides', 'mg/dL'], ['totalCholesterol', 'mg/dL'], ['apolipoproteinB', 'mg/dL'], ['lipoproteinA', 'nmol/L']] as const) {
     const measured = entry(key)
     if (!measured) continue
     facts[key] = {

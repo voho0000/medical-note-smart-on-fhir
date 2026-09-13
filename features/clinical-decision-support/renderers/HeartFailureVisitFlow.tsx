@@ -14,9 +14,9 @@ import type { HfpefReading, HfpefScoreId } from '../utils/hfpef-scores'
 import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { RecordMetricEditor } from './RecordMetricEditor'
-import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
+import type { RecordValueChange } from './RecordValuesEditor'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
-import { VisitFlow, focusVisitFlowTarget, visitRecordMetrics } from '../visit-flow/VisitFlow'
+import { VisitFlow, focusVisitFlowTarget } from '../visit-flow/VisitFlow'
 import { HEART_FAILURE_VISIT_FLOW_CONFIG } from '../visit-flow/heart-failure-visit-flow.config'
 import type { VisitFlowModel, VisitFlowSurface } from '../visit-flow/types'
 
@@ -80,7 +80,6 @@ export function HeartFailureVisitFlow({
   const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
   const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
-  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
 
   const surface: VisitFlowSurface = {
     board,
@@ -100,12 +99,6 @@ export function HeartFailureVisitFlow({
     ),
   }
 
-  const allEditableMetrics = visitRecordMetrics(
-    flow.metrics,
-    HEART_FAILURE_VISIT_FLOW_CONFIG,
-    surface,
-  ) as HeartFailureMetric[]
-
   const saveMetrics = (changes: RecordValueChange[]) => {
     const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
     for (const { metric, values, measuredOn } of changes) {
@@ -122,7 +115,6 @@ export function HeartFailureVisitFlow({
     }
     if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
     setEditingMetric(null)
-    setRecordValuesOpen(false)
   }
   const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
 
@@ -139,7 +131,11 @@ export function HeartFailureVisitFlow({
       onClearDecision={onClearDecision}
       packVersion={packVersion}
       surface={surface}
-      {...(onSaveClinicVitals ? { onOpenRecordEditor: () => setRecordValuesOpen(true) } : {})}
+      {...(onSaveClinicVitals ? { onSaveRecordValues: saveMetrics } : {})}
+      {...(hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value !== undefined
+        ? { recordRhythm: hfpefReading.inputs.find(input => input.key === 'rhythm')!.value }
+        : {})}
+      {...(onSaveHfpefInputs ? { onSaveRecordRhythm: onSaveHfpefInputs } : {})}
       {...(rhythmPanel ? { headlineExtra: rhythmPanel } : {})}
       questionsNote={flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
@@ -161,8 +157,6 @@ export function HeartFailureVisitFlow({
         onSave={(values, date) => saveMetric(editingMetric, values, date)}
         onRestore={() => saveMetric(editingMetric, null, todayIsoDate(now))}
         onClose={() => setEditingMetric(null)} /> : null}
-      {recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={allEditableMetrics} isEnglish={isEnglish} now={now}
-        onSave={saveMetrics} onClose={() => setRecordValuesOpen(false)} /> : null}
       {hfpefReading && onSaveHfpefInputs ? (
         <HfpefInputsDialog
           key={`${calculatorTab}-${calculatorOpen}`}

@@ -88,6 +88,16 @@ export const CLINIC_VITALS_ENTRY_KEYS = [
   'sodium',
   'NTproBNP',
   'hemoglobin',
+  // The lipid panel. A 健保雲端 record often carries a TC and an HDL-C from
+  // one laboratory and an LDL-C from another months later, and the clinician
+  // has the current report on paper; these let that report reach the pack the
+  // same way a cuff reading does.
+  'LDL',
+  'HDL',
+  'triglycerides',
+  'totalCholesterol',
+  'apolipoproteinB',
+  'lipoproteinA',
 ] as const
 
 export type ClinicVitalsEntryKey = (typeof CLINIC_VITALS_ENTRY_KEYS)[number]
