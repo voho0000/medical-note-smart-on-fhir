@@ -1,0 +1,114 @@
+# HMC pilot：AI agent 開發與資料安全規範
+
+這份文件提供給在 HMC 電腦上操作本 repository 的 AI agent。開始任何工作前，先完整閱讀 repository 根目錄的 `AGENTS.md` 與本文件；兩者都必須遵守。
+
+## 你的角色與工作範圍
+
+- 只在 `pilot/hmc` branch 開發、commit 與 push。
+- `master` 是正式版；不得直接 push、force-push、reset 或改寫其歷史。
+- 要把成果帶回正式版時，從 `pilot/hmc` 對 `master` 開 Pull Request，等待 owner review。
+- HMC 是正式 Firebase 的一般使用者，不具 Firebase Console、Google Cloud IAM、Firestore Rules 或 Functions 部署權限。
+- HMC localhost 讀寫的是正式帳號資料。任何模板、聊天、面板設定或公開範本操作，都可能立即反映在正式版。
+
+## 兩個 pilot repository 與 `app-hmc`
+
+HMC 的 pilot 由兩個 repository 組成：
+
+| Repository | Pilot branch | 負責內容 |
+| --- | --- | --- |
+| `medical-note-smart-on-fhir` | `pilot/hmc` | 畫面、互動、CDSS renderer、FHIR host composition |
+| `mediprisma-personalization` | `pilot/hmc` | CDSS facts、clinical modules、guideline packs、evidence indexes、FHIR adapters |
+
+只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
+
+**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後執行 `git push origin pilot/hmc`；push 到上述任一 repository 的 `pilot/hmc` 都會直接送出無權限訊號，並立即啟動受保護 `master` 上的部署流程。GitHub Actions 通常會在數秒內出現新 run，網站則在完整驗證與 build 通過後更新。
+
+若自動流程未出現或需要強制重跑，可到 app repository 的 GitHub Actions 手動執行 `Deploy HMC pilot preview`，選擇 `master` 後按 `Run workflow`。workflow 會自行抓取兩個最新的 `pilot/hmc`；HMC 不需要也拿不到部署或跨 repository 轉送憑證。流程會驗證並 build personalization packages，再把 source build 注入 HMC app。全部檢查成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+
+**push 之後不要只看自己那一個 run。** 兩個 repository 都推的時候，personalization 側的轉送會在數十秒後送出第二個訊號，並依 `concurrency` 取消前一個 run；被取消的那個常常正是 HMC push 觸發的。要看的是清單最上面那一個 run，它抓的是兩邊最新的 `pilot/hmc`，結論才算數。也因為取消與轉送的關係，GitHub 內建的失敗通知寄給的是轉送者而不是 push 的人，所以部署有狀況時 workflow 會自行在 app repository 開一個標題為 `HMC pilot preview needs attention` 的 issue 並 @ HMC；同一個 issue 會持續留言，直到一次「有發布、測試也綠」的部署才自動關閉。issue 內文會寫明是哪一種狀況：**沒發布**（`/app-hmc` 停在舊版本），或**有發布但測試是紅的**（preview 是最新的，可以照常看，但 repo 有測試沒過）。
+
+**測試不擋部署。** `Test HMC app` 是回報用的，紅了 preview 照樣發布，只是在上面那個 issue 裡寫明哪幾支紅。會擋住發布的是另外四關——typecheck、lint、overlay 驗證、build——它們紅代表 preview 根本跑不起來。這個分界是刻意的：HMC 看不到也改不動屬於 app owner 的測試，不應該因為那些測試紅了就一天不能給臨床看。但這不代表可以無視紅字：那是「repo 不乾淨」的訊號，該修還是要修。
+
+**preview 的測試環境和開發機不一樣。** `Test HMC app` 跑的是 published 的 `@voho0000/personalized-care`，只把 pilot source 的 heart-failure 檔案覆蓋上去；`index`、`registry`、`bundled` 一律保留 published 版本。因此 rules branch 上獨有、還沒發布的 pack 或 export，在 preview build 裡並不存在——針對那些東西寫的測試在開發機會綠、在這裡一定紅。要在 preview 驗證的行為，測試必須自備 stub，不能依賴本機 `node_modules` 剛好裝了哪一份 build。
+
+可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
+
+兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
+
+## 第一次設定
+
+1. Clone repository，以 HMC 自己的 GitHub 帳號登入 GitHub CLI。
+2. 切換到 owner 已建立的 `pilot/hmc` branch。
+3. 向 owner 取得私下交付的 `.env.local`，放在 repository 根目錄，並執行 `chmod 600 .env.local`。這是連到 owner 現有 Firebase web app 與 proxy 的 localhost client 設定，不是 Firebase 管理帳號或管理憑證。
+4. 用 `git check-ignore .env.local` 確認它被 Git 忽略。
+5. 私有 `@voho0000/*` packages 需要 HMC 自己 GitHub 帳號的唯讀 package 授權。不得使用 owner 的 GitHub token：
+
+   ```bash
+   gh auth refresh -h github.com -s read:packages
+   npm run packages:ci
+   ```
+
+6. 執行 `npm run dev`，開啟 `http://localhost:3001`，使用 HMC 自己的 Google 帳號登入。
+
+## 每次開始工作
+
+先執行 `git status` 與 `git branch --show-current`。若不是 `pilot/hmc`，停止修改並切回正確 branch。同步正式版時：
+
+```bash
+git fetch origin
+git switch pilot/hmc
+git merge origin/master
+```
+
+遇到衝突時，先向 HMC 說明衝突檔案與兩邊意圖；不可用整檔覆蓋、`git reset --hard` 或刪除功能來消除衝突。
+
+## Firebase 與 token 邊界
+
+`.env.local` 已包含 localhost 所需的 Firebase Web config、AI proxy 公開端點，以及只供 HMC localhost 使用的 App Check debug token。HMC 不需要也不會取得獨立 Firebase 專案。localhost 與 `app-hmc` 都連到 owner 現有的正式 Firebase；HMC 使用自己的 Firebase Auth 帳號與 UID，以一般使用者身分呼叫服務。Web config 與 App Check debug token 都不提供 Firebase Console、IAM、Rules、Functions 或其他管理權限。
+
+- 不得顯示、摘要、複製、上傳或在訊息中貼出 `.env.local` 的內容。
+- 不得把 `.env.local`、token、API key、cookies、Firebase ID token 或 FHIR access token 加入 Git。
+- 不得修改 `.gitignore` 來讓任何 `.env*` 檔案進入版本控制。
+- 不得執行 `firebase deploy`，也不得嘗試部署 Firestore Rules、indexes、Functions、Auth 或 App Check 設定。
+- 不得建立或要求 Firebase service-account JSON、Admin SDK private key、Google Cloud key 或 owner 的 GitHub token。
+- 不得把 App Check debug token 放進正式 build、GitHub Actions、文件、issue 或 Pull Request。
+- 若 token 曾出現在 commit、agent 對話、terminal 分享內容或其他外部位置，立即停止工作並通知 owner 撤銷。
+
+## 正式資料的操作界線
+
+Firestore Rules 是最終權限來源。HMC 與其他一般使用者相同，可依現行 Rules 讀寫自己 UID 底下的資料，也可能依既有規則使用公開範本及所屬單位功能；沒有另外建立 `pilot/hmc/{uid}` namespace。owner 與 HMC 使用不同登入帳號時，Firebase Auth UID 可區分資料操作身分。修改前端程式不能取得 Rules 沒有授予的管理權限。
+
+- 開發與測試優先使用 repository 內建的去識別化 demo 資料。
+- 不得把真實病人資料放進 source、fixture、test、snapshot、截圖、log、issue、commit、PR 或 AI agent prompt。
+- 不得撰寫或執行批次刪除、資料搬移、schema migration、跨使用者查詢或大量 Firestore write。
+- 不得用真實內容測試「公開分享範本」。測試分享流程只用明確標示的去識別內容，完成後刪除測試項目。
+- 如果意外修改或刪除正式資料，立即停止 dev server，記錄發生時間、操作與受影響功能並通知 owner。不要自行大量寫回資料；owner 會依 PITR 或備份處理。
+
+## 程式與網路安全
+
+未經 owner 在 PR 中確認，不得修改或新增：
+
+- `.github/workflows/**`、部署腳本、GitHub Pages／`mediprisma.tw` 同步設定。
+- `firebase-smart-on-fhir` repository 中的 Rules、Functions、indexes 或部署設定。
+- 會改變病人資料、prompt、response、token 傳送目的地的網路 endpoint。
+- 會讀取 `.env.local`、瀏覽器 storage、cookies 或 token 並送往外部服務的程式。
+- 遙測、analytics、錯誤回報或 logging 中的新資料欄位。
+
+HMC 自備的 AI provider key 只能透過產品既有設定介面輸入，不得寫入 source、測試或 `.env.local`。任何新 provider 或 endpoint 都先在 PR 說明資料會傳到哪裡，再等待 owner review。
+
+## 完成修改
+
+依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `HMC preview change signal` 與接續的 `Deploy HMC pilot preview`；成功後用 `hmc-build.json` 確認兩個 SHA，並在 `app-hmc` 檢查實際 CDSS 畫面。
+
+提交正式版時建立 PR，清楚寫出：改了什麼、使用者會看到什麼、如何驗證，以及是否改變任何資料寫入或外部網路請求。不得自行 merge PR。
+
+## 給 AI agent 的停止條件
+
+遇到下列情況先停止相關動作，向 HMC 說明並等待 owner 處理：
+
+- 需要 Firebase／Google Cloud 管理權限或部署權限。
+- 需要查看、複製或傳送 `.env.local` 的實際值。
+- 需要 owner、service account、package publisher 或正式部署 token。
+- 需要存取其他使用者或真實病人的資料。
+- 發現 token 外洩、錯誤大量寫入或資料刪除。
+- 無法安全解決與 `master` 的 merge conflict。
