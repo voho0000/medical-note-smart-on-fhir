@@ -62,8 +62,8 @@ export function DiagnosisReading({
             data-testid={`cdss-hf-diagnosis-criterion-${criterion.id}`}
             data-state={criterion.state}
           >
-            <span className="font-medium">{criterion.label}</span>
-            <span>{stateText[criterion.state]}</span>
+            <span className="shrink-0 whitespace-nowrap font-medium">{criterion.label}</span>
+            <span className="shrink-0 whitespace-nowrap">{stateText[criterion.state]}</span>
             {criterion.detail ? (
               <span className="tabular-nums opacity-80">{criterion.detail}</span>
             ) : null}

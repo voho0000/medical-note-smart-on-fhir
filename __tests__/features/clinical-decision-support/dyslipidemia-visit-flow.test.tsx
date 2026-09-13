@@ -223,7 +223,7 @@ describe('dyslipidemia visit flow', () => {
     const therapy = screen.getByTestId('cdss-lipid-coverage-dyslipidemia-lipid-lowering-therapy')
     expect(therapy).toHaveAttribute('data-coverage-status', 'covered')
     expect(therapy).toHaveTextContent('健保')
-    expect(therapy).toHaveTextContent('符合給付')
+    expect(therapy).toHaveTextContent('符合條件')
     // 血脂追蹤 orders a test, not a drug; the pack says 2.6 has nothing to say
     // about it, so the row carries no coverage line at all.
     expect(screen.queryByTestId('cdss-lipid-coverage-dyslipidemia-monitoring-and-markers'))

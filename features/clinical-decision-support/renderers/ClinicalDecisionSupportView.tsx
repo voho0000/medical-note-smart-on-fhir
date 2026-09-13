@@ -1732,8 +1732,8 @@ function RecommendationDetail({
   const sourceStatusLabel: Record<CdssSourceAssessmentStatus, string> = {
     recommended: isEnglish ? 'Recommended' : '建議',
     consider: isEnglish ? 'Consider' : '可考慮',
-    covered: isEnglish ? 'Covered' : '符合給付',
-    'not-covered': isEnglish ? 'Not covered' : '不符合給付',
+    covered: isEnglish ? 'Within the rule' : '符合條件',
+    'not-covered': isEnglish ? 'Outside the rule' : '不在條件內',
     'needs-data': isEnglish ? 'Verify data' : '待補資料',
     'no-special-rule': isEnglish ? 'No special rule' : '無專款門檻',
     'not-applicable': isEnglish ? 'Not applicable' : '不適用',

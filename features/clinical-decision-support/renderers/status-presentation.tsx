@@ -49,8 +49,8 @@ export function sourceStatusLabel(
   switch (status) {
     case 'recommended': return isEnglish ? 'Recommended' : '建議'
     case 'consider': return isEnglish ? 'Consider' : '可考慮'
-    case 'covered': return isEnglish ? 'Covered' : '符合給付'
-    case 'not-covered': return isEnglish ? 'Not covered' : '不符合給付'
+    case 'covered': return isEnglish ? 'Within the rule' : '符合條件'
+    case 'not-covered': return isEnglish ? 'Outside the rule' : '不在條件內'
     case 'needs-data': return isEnglish ? 'Verify data' : '待補資料'
     case 'no-special-rule': return isEnglish ? 'No special rule' : '無專款門檻'
     case 'not-applicable': return isEnglish ? 'Not applicable' : '不適用'
