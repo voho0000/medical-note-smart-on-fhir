@@ -86,6 +86,7 @@ export const zhTW = {
   // 共用就地模型選擇器（對話／自訂摘要／醫療摘要標頭）
   modelPicker: {
     label: '模型',
+    switchModel: '切換模型',
     chatTooltip: '此對話使用的 AI 模型（與其他功能獨立）',
     insightsTooltip: '自訂摘要生成使用的 AI 模型（與其他功能獨立）',
     configureApiKey: '設定金鑰',
