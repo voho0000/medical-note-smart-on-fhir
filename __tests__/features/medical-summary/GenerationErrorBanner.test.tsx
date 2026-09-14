@@ -101,6 +101,26 @@ describe("GenerationErrorBanner", () => {
     expect(screen.queryByRole("button", { name: "重試" })).not.toBeInTheDocument()
   })
 
+  it("can direct recovery through another action without offering retry", () => {
+    render(
+      <GenerationErrorBanner
+        title="所選模型目前無法使用"
+        errors={[{ label: "AI 模型", message: "本次未送出任何資料。" }]}
+        retryLabel="重試"
+        closeLabel="關閉"
+        isBusy={false}
+        onRetry={jest.fn()}
+        showRetry={false}
+        actions={[
+          { label: "切換模型", onClick: jest.fn() },
+        ]}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: "切換模型" })).toBeEnabled()
+    expect(screen.queryByRole("button", { name: "重試" })).not.toBeInTheDocument()
+  })
+
   it("disables overflow actions while generation is busy", () => {
     render(
       <GenerationErrorBanner

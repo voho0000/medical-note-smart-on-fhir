@@ -139,6 +139,8 @@ export interface UseMedicalSummaryReturn {
   /** Effective user-facing model name for the next run, captured by the
    * orchestrator when a generation batch begins. */
   resolvedModelName: string
+  /** The selected summary model cannot run with the current credentials. */
+  modelUnavailable: boolean
   setModel: (id: string) => void
   recordGenerationCompletion: (input: {
     slotKey: string
@@ -659,6 +661,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     demoSeed,
     resultModelId: medicalSummaryResultModelId,
     retainResultOnModelChange: true,
+    blockUnavailableSelectedModel: true,
   })
 
   // Deterministic coverage stats for the coverage card — recomputes only when
@@ -786,6 +789,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     setAutoGenerate,
     model: modelId,
     resolvedModelName: slot.resolvedModelName,
+    modelUnavailable: slot.modelUnavailable,
     setModel,
     recordGenerationCompletion,
     generate,

@@ -42,6 +42,8 @@ import {
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
   modelId: string
+  /** Keep the raw selection on the trigger when its credentials are missing. */
+  preserveSelection?: boolean
   /** The feature's free default — where the gate lands without a key. */
   fallbackModelId: string
   onSelect: (id: string) => void
@@ -62,6 +64,7 @@ interface ModelPickerProps {
 
 export function ModelPicker({
   modelId,
+  preserveSelection = false,
   fallbackModelId,
   onSelect,
   tooltip,
@@ -99,9 +102,10 @@ export function ModelPicker({
     },
     fallbackModelId,
   )
+  const credentialGatedModelId = preserveSelection ? modelId : keyGatedModelId
   const effectiveModelId = agentModeActive
-    ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
-    : keyGatedModelId
+    ? gateModelForAgentSupport(credentialGatedModelId, fallbackModelId)
+    : credentialGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
   const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
   const usesStandardChat = (candidateModelId: string) => {
