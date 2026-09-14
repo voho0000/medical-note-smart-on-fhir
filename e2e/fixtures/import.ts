@@ -35,17 +35,16 @@ export async function importBundle(
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, options.locale ?? 'zh-TW')
-  await page.goto('/')
   // The header file input exists in the server-rendered loading shell, before
   // its change handler is ready. A clean page resolves to Welcome, while a
   // re-import resolves straight back to the persisted patient workspace. Wait
   // for either client-only result before selecting the file so the change
-  // cannot be lost during hydration.
-  await expect.poll(async () => {
-    const welcomeReady = await page.getByTestId('welcome-demo-card').isVisible()
-    const patientReady = await page.locator('[data-slot="clinical-patient-context"]').count() > 0
-    return welcomeReady || patientReady
-  }, { timeout: 20_000 }).toBe(true)
+  // cannot be lost during hydration. Loading goes through `loadApp` so a dev
+  // server caught mid-recompile gets one more chance (see there).
+  await loadApp(page, () => page.goto('/'), async () => (
+    await page.getByTestId('welcome-demo-card').isVisible()
+      || await page.locator('[data-slot="clinical-patient-context"]').count() > 0
+  ))
   // Register before choosing the file so a fast import cannot settle between
   // setInputFiles resolving and the next Playwright command.
   await page.evaluate(() => {
@@ -76,6 +75,40 @@ export async function importBundle(
     await expect(page.getByText('王小明').first()).toBeAttached({ timeout: 20_000 })
   }
   return bundlePath
+}
+
+/**
+ * Navigate (goto / reload) and wait for the app to actually mount.
+ *
+ * `next dev --webpack` — what the emulator suites run against — re-reads its
+ * build manifests on every request and rewrites them whenever it recompiles.
+ * A request that lands mid-rewrite renders "SyntaxError: Unexpected end of
+ * JSON input" for `/` and the browser shows the dev overlay instead of the
+ * app; the very next load is fine. CI hit this between tests and on in-spec
+ * reloads (#96/#97/#104 gallery-regression), never locally. So: bounded
+ * retries of the navigation, judged by whether the app mounted. A page that
+ * fails every time still fails the test — this covers the transient only.
+ */
+export async function loadApp(
+  page: Page,
+  navigate: () => Promise<unknown>,
+  mounted: () => Promise<boolean>,
+) {
+  await expect(async () => {
+    await navigate()
+    await expect.poll(mounted, { timeout: 15_000 }).toBe(true)
+  }).toPass({ timeout: 60_000, intervals: [1_000, 2_000] })
+}
+
+/**
+ * `page.reload()` for a workspace that already has a patient: waits for the
+ * patient context to come back, retrying the reload on the dev-server race
+ * described on `loadApp`.
+ */
+export async function reloadApp(page: Page) {
+  await loadApp(page, () => page.reload(), async () => (
+    await page.locator('[data-slot="clinical-patient-context"]').count() > 0
+  ))
 }
 
 /**
