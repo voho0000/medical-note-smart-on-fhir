@@ -18,7 +18,7 @@ import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
 import { preloadCumulativeLabTrendModule } from "./cumulative-lab-trend-loader"
-import { NhiMedicloudSourceIndicator } from "./NhiMedicloudSourceIndicator"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 
 export interface OpenTrendTarget {
   categoryId: string
@@ -231,6 +231,21 @@ export const LabPivotTable = memo(function LabPivotTable({
           tables then read as one calm sheet instead of black stripes. */}
       <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
         {formatDateLabel(date)}
+        {flatTests.some(test => {
+          const cell = test.values.get(date)
+          return cell?.sourceProvenance === 'nhi-medicloud'
+            || cell?.sourceRecords?.some(record => record.provenance === 'nhi-medicloud')
+        }) && (
+          <InfoHint
+            aria-label={locale.startsWith('zh') ? '本日期含健保雲端圖形化查詢結果' : 'This date includes NHI MediCloud results'}
+            className="ml-1 -my-1 h-6 w-6 align-middle text-primary/80"
+            contentClassName="max-w-sm"
+          >
+            {locale.startsWith('zh')
+              ? '本日期包含健保雲端圖形化查詢結果，不代表同日所有檢驗皆來自此來源。僅供診療參考，並非原始檢驗報告。'
+              : 'This date includes graphical lab results from NHI MediCloud; other same-day tests may have a different source. For clinical reference; not the original laboratory report.'}
+          </InfoHint>
+        )}
         {flatTests.some(test => test.values.get(date)?.adultPreventive) && (
           <span className="ml-1 inline-flex"
             title={locale.startsWith('zh') ? '本日期包含成人健檢來源結果，不代表同日所有檢驗皆為成人健檢。' : 'This date includes adult preventive-care results; other same-day tests may have a different source.'}
@@ -256,12 +271,7 @@ export const LabPivotTable = memo(function LabPivotTable({
             className={`border-l px-1 py-1 text-center ${cls}`}
             title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
           >
-            <span className="inline-flex items-center justify-center gap-0.5">
-              <span>{cell.value}</span>
-              {cell.sourceProvenance === 'nhi-medicloud' && (
-                <NhiMedicloudSourceIndicator iconOnly institution={cell.sourceInstitution} className="-my-1" />
-              )}
-            </span>
+            <span>{cell.value}</span>
             {!test.unit && cell.unit && (
               <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
                 {cell.unit}
