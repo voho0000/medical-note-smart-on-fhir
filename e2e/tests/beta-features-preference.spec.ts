@@ -26,7 +26,14 @@ test('Beta settings explain account persistence and retain guest choices across 
   await expect(toggle).not.toBeChecked()
   for (const width of [320, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
+    // Below md the two panels are swapped by the bottom switcher. At and above
+    // it the workspace folds the feature panel into the rail whenever the
+    // display is too narrow for 總覽's 2×2 — which 768 and 1024 are — so the
+    // settings this asserts on are behind the rail until it is opened. The
+    // panel keeps its selected tab while collapsed, so re-opening lands back
+    // on 設定 › 顯示與關於.
     if (width < 768) await page.getByRole('button', { name: '功能', exact: true }).click()
+    else await openFeaturePanel(page)
     await expect(toggle).toBeVisible()
     await expect(page.locator('#beta-features-description')).toBeVisible()
     await expect(toggle).not.toBeChecked()
