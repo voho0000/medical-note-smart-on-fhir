@@ -19,6 +19,7 @@ import {
   BUNDLE_CHANGE_SETTLED_EVENT,
 } from '@/src/shared/utils/reset-on-bundle-change'
 
+let mockOpenAiKey: string | null = 'user-openai-key'
 let mockPatientId = 'demo-patient-1'
 let mockClinicalContext = 'demo context'
 let mockClinicalContextForProfile:
@@ -77,7 +78,7 @@ jest.mock('@/src/application/providers/data-selection.provider', () => {
 })
 jest.mock('@/src/application/stores/ai-config.store', () => ({
   useAllApiKeys: () => ({
-    apiKey: 'user-openai-key',
+    apiKey: mockOpenAiKey,
     geminiKey: '',
     claudeKey: '',
     openAiCompatible: mockOpenAiCompatible,
@@ -115,6 +116,7 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
 describe('useAiSlotGeneration demo snapshot', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockOpenAiKey = 'user-openai-key'
     mockPatientId = 'demo-patient-1'
     mockClinicalContext = 'demo context'
     mockClinicalContextForProfile = null
@@ -129,6 +131,61 @@ describe('useAiSlotGeneration demo snapshot', () => {
     mockOpenAiCompatibleProfiles = null
     mockLocale = 'zh-TW'
     mockAudience = 'patient'
+  })
+
+  it('blocks an unavailable selected model only when the feature opts out of fallback', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockOpenAiKey = null
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'selected model result' }))
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gpt-5.6-terra',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (key) => `test:${key}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+      blockUnavailableSelectedModel: true,
+    }))
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    expect(result.current.resolvedModelId).toBe('gpt-5.6-terra')
+    expect(result.current.modelUnavailable).toBe(true)
+    expect(result.current.error).toContain('本次未送出任何資料')
+    await act(async () => result.current.generate())
+    expect(run).not.toHaveBeenCalled()
+
+    mockOpenAiKey = 'restored-test-key'
+    rerender()
+    await act(async () => result.current.generate())
+    expect(result.current.modelUnavailable).toBe(false)
+    expect(result.current.error).toBeNull()
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'gpt-5.6-terra' }))
+  })
+
+  it('keeps the shared fallback behaviour for features that do not opt in', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockOpenAiKey = null
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'fallback result' }))
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gpt-5.6-terra',
+      autoRunEnabled: false,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (key) => `test:${key}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    expect(result.current.resolvedModelId).toBe('gemini-3.1-flash-lite')
+    expect(result.current.modelUnavailable).toBe(false)
+    await act(async () => result.current.generate())
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'gemini-3.1-flash-lite' }))
   })
 
   it('keeps overflow structured and blocks the result from being stored or persisted', async () => {

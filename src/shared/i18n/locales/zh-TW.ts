@@ -286,6 +286,7 @@ export const zhTW = {
     generatingHint: '正在整理跨院資料，請稍候',
     loadingData: '正在載入病人資料…',
     loadingSavedSummary: '正在載入已儲存的摘要…',
+    modelUnavailableTitle: '所選模型目前無法使用',
     partialGenerationError: '部分摘要內容尚未完成',
     contextOverflowTitle: '輸入內容超過模型可用範圍，受影響項目尚未送出',
     contextOverflowInputLabel: '輸入預算',

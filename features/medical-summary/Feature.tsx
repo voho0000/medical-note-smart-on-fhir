@@ -214,6 +214,7 @@ export default function MedicalSummaryFeature() {
     hasPatient,
     dataReady,
     model,
+    modelUnavailable,
     autoGenerate,
     setModel,
     setAutoGenerate,
@@ -321,7 +322,7 @@ export default function MedicalSummaryFeature() {
     })
     const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
       ? [{
-          label: ms.prioritiesTitle,
+          label: modelUnavailable ? t.modelPicker.label : ms.prioritiesTitle,
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
@@ -347,8 +348,10 @@ export default function MedicalSummaryFeature() {
     cardLabels,
     ms,
     safetyError,
+    modelUnavailable,
     safetyText.parseError,
     summaryError,
+    t.modelPicker.label,
   ])
   const displayedGenerationErrors = useMemo(() => {
     if (
@@ -912,6 +915,7 @@ export default function MedicalSummaryFeature() {
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
+              preserveSelection
               fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
               onSelect={setModel}
               open={summaryModelPickerOpen}
@@ -1172,12 +1176,17 @@ export default function MedicalSummaryFeature() {
           {displayedGenerationErrors.length > 0 && generationActivity.showGenerationErrors ? (
             <GenerationErrorBanner
               key={displayedGenerationErrors.map((item) => `${item.label}:${item.message}`).join("|")}
-              title={contextOverflowIssue ? ms.contextOverflowTitle : ms.partialGenerationError}
+              title={contextOverflowIssue
+                ? ms.contextOverflowTitle
+                : modelUnavailable
+                  ? ms.modelUnavailableTitle
+                  : ms.partialGenerationError}
               errors={displayedGenerationErrors}
               retryLabel={t.errors.retry}
               closeLabel={t.common.close}
               isBusy={generationActivity.actionBusy}
               onRetry={() => void retryFailed()}
+              showRetry={!modelUnavailable}
               actions={contextOverflowIssue ? [
                 {
                   label: ms.adjustDataScope,

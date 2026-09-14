@@ -286,6 +286,7 @@ export const en = {
     generatingHint: 'Compiling cross-hospital records…',
     loadingData: 'Loading patient data…',
     loadingSavedSummary: 'Loading the saved summary…',
+    modelUnavailableTitle: 'The selected model is unavailable',
     partialGenerationError: 'Some summary content could not be completed',
     contextOverflowTitle: 'The input exceeds this model’s usable context; affected items were not sent',
     contextOverflowInputLabel: 'Input budget',

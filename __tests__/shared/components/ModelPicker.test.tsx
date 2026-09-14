@@ -164,6 +164,23 @@ describe('ModelPicker custom model management entry', () => {
     expect(screen.getByTestId('model-picker-menu')).toHaveAttribute('data-open', 'false')
   })
 
+  it('can keep an unavailable raw selection visible for blocking recovery flows', () => {
+    render(
+      <LanguageProvider>
+        <RightPanelProvider>
+          <ModelPicker
+            modelId="gpt-5.6-terra"
+            fallbackModelId="gemini-3.1-flash-lite"
+            onSelect={jest.fn()}
+            preserveSelection
+          />
+        </RightPanelProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('model-picker-trigger')).toHaveTextContent('GPT-5.6 Terra')
+  })
+
   it('updates the standard-chat badge from the selected custom profile capability', () => {
     const modelId = customOpenAiModelIdForProfile('hospital-7b')
     render(
