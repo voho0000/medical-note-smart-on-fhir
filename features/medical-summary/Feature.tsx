@@ -502,9 +502,9 @@ export default function MedicalSummaryFeature() {
     (cardId: GeneratedCardId) => Boolean(
       result &&
       (!result.completedCardIds || result.completedCardIds.includes(cardId)) &&
-      !cardErrors[cardId]
+      !result.cardErrors?.[cardId]
     ),
-    [cardErrors, result],
+    [result],
   )
   // A failed safety scan has to stay visible: it is the ONE card whose absence
   // reads as "nothing to worry about". The banner above never listed

@@ -1070,7 +1070,11 @@ export function useMedicalSummaryOrchestrator() {
     isSafetyGenerating: presentedSafetyGenerating,
     isRestoring,
     summaryError: presentedSummaryError,
-    cardErrors: presentedResult?.cardErrors ?? {},
+    // A retained coherent summary is presentation-only. Show the attempted
+    // model's failures even when its incomplete result cannot replace it.
+    cardErrors: readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
+      ? scopedBatchStatus.summarySlotKey
+      : summaryGenerationSlotKey).result?.cardErrors ?? {},
     safetyError: presentedSafetyError,
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,
