@@ -115,6 +115,7 @@ it('scopes imports by audience and tenant, while manual additions stay independe
 
 it('reuses existing imports at capacity but rejects new sources', async () => {
   const { result } = renderHook(useLibraries, { wrapper })
+  expect(result.current.chat.maxTemplates).toBe(20)
   const template = { ...result.current.chat.templates[0], ...chatImport, id: 'saved-chat' }
   const panel = { ...result.current.summary.panels[0], ...summaryImport, id: 'saved-summary' }
   await act(async () => {
