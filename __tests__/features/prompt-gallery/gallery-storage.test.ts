@@ -15,6 +15,22 @@ const prompt = (overrides = {}): Omit<SharedPrompt, 'id' | 'createdAt' | 'update
 })
 beforeEach(() => memory.reset())
 
+it('clears an explicitly removed description while preserving omitted metadata', async () => {
+  const id = await createSharedPrompt(prompt({ description: 'Old description', exampleOutput: 'Keep this example' }))
+  await updateSharedPrompt(id, { title: 'Edited title', description: undefined, prompt: 'Edited content' })
+  expect(await getSharedPrompt(id)).toMatchObject({
+    id, title: 'Edited title', prompt: 'Edited content', description: undefined,
+    exampleOutput: 'Keep this example', authorId: 'alice', usageCount: 0,
+  })
+  expect(memory.records.get('sharedPrompts/' + id)).not.toHaveProperty('description')
+})
+
+it('preserves the existing description when an edit does not include that field', async () => {
+  const id = await createSharedPrompt(prompt({ description: 'Keep this description' }))
+  await updateSharedPrompt(id, { title: 'Edited title' })
+  expect(await getSharedPrompt(id)).toMatchObject({ title: 'Edited title', description: 'Keep this description' })
+})
+
 it('splits at transport boundaries without cutting Unicode or limiting total length', () => {
   const chunks = splitTemplateText(largeText)
   expect(chunks.join('')).toBe(largeText)
