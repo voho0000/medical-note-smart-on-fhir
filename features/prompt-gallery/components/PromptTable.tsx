@@ -89,6 +89,7 @@ export function PromptTable({
         <TableRow className="hover:bg-transparent">
           {onToggleFavorite && <TableHead className="w-10"><span className="sr-only">{t.promptGallery.favorites}</span></TableHead>}
           <SortableHead field="title" label={t.promptGallery.columnTemplate} {...headProps} />
+          <TableHead className="w-[4rem] text-xs">{t.promptGallery.columnVersion}</TableHead>
           <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnType}</TableHead>
           <TableHead className="w-[6.5rem] text-xs">{t.promptGallery.columnCategory}</TableHead>
           <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnSpecialty}</TableHead>
@@ -127,7 +128,6 @@ export function PromptTable({
               <TableCell className="min-w-0 whitespace-normal py-1.5">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate font-semibold leading-tight" title={prompt.title}>{prompt.title}</span>
-                  <span className="shrink-0 text-[0.625rem] font-normal tabular-nums text-muted-foreground">V{coerceTemplateVersion(prompt.version)}</span>
                   {updatedIds?.has(prompt.id) && (
                     <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
                       {t.promptGallery.sourceUpdated}
@@ -138,6 +138,7 @@ export function PromptTable({
                 </div>
                 <p className="truncate text-[0.6875rem] leading-tight text-muted-foreground">{prompt.description || prompt.prompt}</p>
               </TableCell>
+              <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">V{coerceTemplateVersion(prompt.version)}</TableCell>
               <TableCell className="whitespace-normal py-1.5">
                 <div className="flex flex-wrap gap-1">
                   {prompt.types.map((type) => {
