@@ -44,6 +44,7 @@ import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE } from './report-color-roles'
 import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
 import { ReportTypeBadge } from './ReportTypeBadge'
+import { NhiMedicloudSourceIndicator } from './NhiMedicloudSourceIndicator'
 import { getSystolicDiastolicBloodPressureSummary } from '../utils/blood-pressure-panel'
 import { formatReportTextForClipboard } from '@/src/shared/utils/report-text-format'
 
@@ -816,9 +817,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             label={sourceProgramLabel}
           />
         )}
-        {!hideMeta && row.institution && (
+        {!hideMeta && (row.sourceProvenance === 'nhi-medicloud' ? (
+          <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
+        ) : row.institution ? (
           <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
-        )}
+        ) : null)}
         {!hideMeta && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1135,9 +1138,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     sourceProgram={row.sourceProgram}
                     label={sourceProgramLabel}
                   />
-                  {row.institution && (
+                  {row.sourceProvenance === 'nhi-medicloud' ? (
+                    <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
+                  ) : row.institution ? (
                     <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
-                  )}
+                  ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Badge variant="outline" className="px-1.5 py-0 text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
@@ -1381,9 +1386,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                       sourceProgram={row.sourceProgram}
                       label={sourceProgramLabel}
                     />
-                    {row.institution && (
+                    {row.sourceProvenance === 'nhi-medicloud' ? (
+                      <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem]" />
+                    ) : row.institution ? (
                       <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
-                    )}
+                    ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>

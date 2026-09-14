@@ -55,6 +55,14 @@ describe('groupLabReportsByDay', () => {
     expect(out[0].id).not.toBe(out[1].id)
   })
 
+  it('keeps MediCloud and ordinary same-day labs in separate source cards', () => {
+    const out = groupLabReportsByDay([
+      labRow({ effectiveDate: '2026-09-14', sourceProvenance: 'nhi-medicloud', obs: [obs('BUN')] }),
+      labRow({ effectiveDate: '2026-09-14', obs: [obs('CREA')] }),
+    ])
+    expect(out).toHaveLength(2)
+  })
+
   it('splits one day into per-category cards, stacked in LAB_CATEGORIES order', () => {
     // Hospital model: 血液 one report, 生化 one report — never one mega-sheet.
     const rows = [

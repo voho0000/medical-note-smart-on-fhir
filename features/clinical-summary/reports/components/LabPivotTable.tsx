@@ -18,6 +18,7 @@ import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
 import { preloadCumulativeLabTrendModule } from "./cumulative-lab-trend-loader"
+import { NhiMedicloudSourceIndicator } from "./NhiMedicloudSourceIndicator"
 
 export interface OpenTrendTarget {
   categoryId: string
@@ -255,7 +256,12 @@ export const LabPivotTable = memo(function LabPivotTable({
             className={`border-l px-1 py-1 text-center ${cls}`}
             title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
           >
-            <span>{cell.value}</span>
+            <span className="inline-flex items-center justify-center gap-0.5">
+              <span>{cell.value}</span>
+              {cell.sourceProvenance === 'nhi-medicloud' && (
+                <NhiMedicloudSourceIndicator iconOnly institution={cell.sourceInstitution} className="-my-1" />
+              )}
+            </span>
             {!test.unit && cell.unit && (
               <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
                 {cell.unit}

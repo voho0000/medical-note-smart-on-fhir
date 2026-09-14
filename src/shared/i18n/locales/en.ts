@@ -1207,6 +1207,17 @@ export const en = {
     sourcePrograms: {
       adultPreventive: 'Adult health exam',
     },
+    sourceProvenance: {
+      nhiMedicloud: {
+        shortLabel: 'NHI MediCloud graphical query',
+        formalName: 'NHI MediCloud System',
+        sourceLabel: 'Data source',
+        originalInstitutionLabel: 'Original testing institution',
+        institutionUnavailable: 'Not provided',
+        institutionUnavailableCompact: 'institution not provided',
+        tooltip: 'This item is graphical laboratory data retrieved from the NHI MediCloud System. It is for clinical reference only and is not the original laboratory report.',
+      },
+    },
     adultPreventiveGroup: {
       itemCount: '{n} items',
       expand: 'Expand adult health exam items',
