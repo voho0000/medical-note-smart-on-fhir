@@ -1,6 +1,6 @@
 # Feedback feature
 
-> Developer reference｜v0.40.0｜Reviewed 2026-07-14
+> Developer reference｜v0.51.0｜Entry-point review 2026-09-08
 
 This feature renders the in-app issue-report form. Deployment and email setup live in [`docs/FEEDBACK_SETUP.md`](../../docs/FEEDBACK_SETUP.md).
 
@@ -9,13 +9,12 @@ This feature renders the in-app issue-report form. Deployment and email setup li
 ```text
 features/feedback/
 ├── components/
-│   ├── FeedbackButton.tsx
 │   └── FeedbackDialog.tsx
 ├── index.ts
 └── README.md
 ```
 
-- `FeedbackButton` owns dialog open state and is mounted from `HeaderOverflowMenu`.
+- `features/settings/components/DisplaySettings.tsx` owns the app entry and dialog open state, and renders `FeedbackDialog` directly.
 - `FeedbackDialog` validates input, collects non-patient system metadata, chooses the endpoint, submits JSON, and shows success/error state. Selecting `Feature Request` opens the shared feature-request pool instead of sending a private email.
 - `app/api/feedback/route.ts` is the optional same-repo Node endpoint; it is not part of static exports.
 
@@ -54,12 +53,13 @@ Fallback strings exist for resilience, but new copy must be added to both locale
 ## Local integration
 
 ```tsx
-import { FeedbackButton } from '@/features/feedback'
+import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 
-<FeedbackButton />
+// The caller owns feedbackOpen and setFeedbackOpen.
+<FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
 ```
 
-The normal app entry is the header overflow menu; avoid mounting duplicate buttons unless a separate context requires one.
+The normal app entry is DisplaySettings; avoid mounting duplicate dialogs unless a separate context requires one.
 
 ## Security notes
 

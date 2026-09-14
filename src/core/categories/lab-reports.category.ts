@@ -132,7 +132,7 @@ function collectLabPoints(
 const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
 // ── Pivot rendering (full-trend mode) ───────────────────────────────────────
-// Experiment-driven (docs/LAB-FORMAT-EXPERIMENT-2026-07-12.md): a date × test
+// Experiment-driven (docs/history/LAB-FORMAT-EXPERIMENT-2026-07-12.md): a date × test
 // markdown pivot beats per-analyte trend lines on answer accuracy (+20pp),
 // citation validity (+24pp), hallucinations (¼) AND tokens (0.53–0.83×) —
 // the gap widening exactly on data-dense (ICU/onco) patients. Trend lines only
