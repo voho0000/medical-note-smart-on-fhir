@@ -34,7 +34,7 @@ export function useGalleryImport(options: Options) {
     copy: '另存副本', suffix: '（副本）', keep: '保留我的版本', update: '更新這份範本',
     changed: '來源範本有新內容', unknown: '來源與你的範本內容不同',
     description: '更新會取代這份範本的名稱、提示內容與來源提供的輸出設定。你可以保留自己的版本，或將來源另存副本。',
-    mine: '我的版本', source: '來源版本', full: '無法新增範本，請確認範本數量或稍後再試。', missing: '這份範本已不存在，請重新帶入。',
+    mine: '我的版本', source: '來源版本', full: '範本數量已超過上限，請先刪除不用的範本再帶入。', missing: '這份範本已不存在，請重新帶入。',
   } : {
     identicalTitle: 'You already have this template', acknowledge: 'Got it',
     identical: 'A template with the same title, content and output settings is already saved. Nothing was imported and your current input is unchanged.',
@@ -42,7 +42,7 @@ export function useGalleryImport(options: Options) {
     copy: 'Save a copy', suffix: ' (copy)', keep: 'Keep my version', update: 'Update this template',
     changed: 'The source template has changed', unknown: 'The source differs from your template',
     description: 'Updating replaces this template’s title, prompt and source output settings. Keep your version or save the source as a separate copy.',
-    mine: 'My version', source: 'Source version', full: 'Unable to add a template. Check the template limit or try again later.', missing: 'This template no longer exists. Please import it again.',
+    mine: 'My version', source: 'Source version', full: 'Template limit exceeded. Remove an unused template before importing.', missing: 'This template no longer exists. Please import it again.',
   }
   const importsThisTick = useRef(new Set<string>())
   const active = useRef(true)

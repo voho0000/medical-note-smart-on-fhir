@@ -294,7 +294,13 @@ const DEFAULT_TEMPLATES_ZH_PATIENT: Omit<ChatTemplate, "audience">[] = [
 ]
 
 const STORAGE_KEY = "medical-chat-templates"
+// Sanity bound on the stored list (both audiences together). Never used to
+// drop templates a user already has — see MAX_TEMPLATES_PER_AUDIENCE.
 const MAX_TEMPLATES = 999
+// Cap enforced when ADDING: each audience (醫療／民眾) keeps at most this many
+// templates. Beyond it, addTemplate returns null and callers show the
+// "over the limit" error.
+const MAX_TEMPLATES_PER_AUDIENCE = 20
 
 function generateTemplateId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -533,7 +539,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       }
     }
     const audienceCount = audienceTemplates.length
-    if (audienceCount >= MAX_TEMPLATES) return null
+    if (audienceCount >= MAX_TEMPLATES_PER_AUDIENCE) return null
     const nextOrder = audienceCount
     const newTemplate: ChatTemplate = {
       id: generateTemplateId(),
@@ -645,7 +651,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     moveTemplate,
     applyTemplates,
     saveTemplates,
-    maxTemplates: MAX_TEMPLATES,
+    maxTemplates: MAX_TEMPLATES_PER_AUDIENCE,
     isSaving,
     isLoading: user?.uid ? isLoading : !hasLoadedFromStorage,
   }
