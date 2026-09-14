@@ -202,6 +202,9 @@ export async function updateSharedPrompt(id: string, updates: Partial<NewPrompt>
   try {
     // Keep system fields untouched even if a usage increment lands concurrently.
     const payload = Object.fromEntries(allowed.filter(key => key in data).map(key => [key, data[key as keyof typeof data]]).filter(([, value]) => value !== undefined))
+    // An empty description is submitted as undefined; omitting it from an
+    // update would leave the previous description in Firestore.
+    if ('description' in updates && updates.description === undefined) payload.description = deleteField()
     await updateDoc(ref, { ...payload, prompt: body ? next.prompt.slice(0, 180) : next.prompt,
       body: body ?? deleteField(), authorName: next.isAnonymous ? deleteField() : next.authorName ?? deleteField(), updatedAt: Timestamp.now() })
   } catch (error) {
