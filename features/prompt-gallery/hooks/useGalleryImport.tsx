@@ -50,7 +50,7 @@ export function useGalleryImport(options: Options) {
   const keepButton = useRef<HTMLButtonElement>(null)
   const latest = useRef(options)
   useEffect(() => { latest.current = options }, [options])
-  const [pending, setPending] = useState<{ value: GalleryImportValue; id: string; scope: string; known: boolean } | null>(null)
+  const [pending, setPending] = useState<{ value: GalleryImportValue; id: string; scope: string; known: boolean; onImported?: () => void } | null>(null)
   const [notice, setNotice] = useState<{ message: string; value: GalleryImportValue; scope: string; copyable: boolean } | null>(null)
   const [error, setError] = useState('')
   const [identicalScope, setIdenticalScope] = useState<string | null>(null)
@@ -76,17 +76,18 @@ export function useGalleryImport(options: Options) {
     latest.current.select?.(id)
     latest.current.insert?.(content)
   }
-  const copy = (value: GalleryImportValue, scope: string, insert = false) => {
+  const copy = (value: GalleryImportValue, scope: string, insert = false, onImported?: () => void) => {
     if (!active.current || latest.current.scope !== scope) return
     const id = latest.current.add({ ...value, title: value.title + labels.suffix, sourcePromptKey: undefined, sourcePromptFingerprint: undefined })
     if (!id) { setError(labels.full); toast.error(labels.full); return }
     void latest.current.save()
     latest.current.select?.(id)
     if (insert) latest.current.insert?.(value.content)
+    onImported?.()
     feedback(labels.copied, value, scope, false)
     setPending(null)
   }
-  const importPrompt = (input: GalleryImportValue) => {
+  const importPrompt = (input: GalleryImportValue, onImported?: () => void) => {
     setError('')
     const o = latest.current
     const value = { ...input, sourcePromptFingerprint: galleryFingerprint(input) }
@@ -100,7 +101,7 @@ export function useGalleryImport(options: Options) {
     if (item) {
       const changed = galleryFingerprint(item) !== value.sourcePromptFingerprint
         && (!item.sourcePromptFingerprint || item.sourcePromptFingerprint !== value.sourcePromptFingerprint)
-      if (changed) { setPending({ value, id: item.id, scope: o.scope, known: !!item.sourcePromptFingerprint }); return }
+      if (changed) { setPending({ value, id: item.id, scope: o.scope, known: !!item.sourcePromptFingerprint, onImported }); return }
     }
     const id = o.add(value) // Provider also protects against same-tick repeated clicks.
     if (!id) { setError(labels.full); toast.error(labels.full); return }
@@ -108,6 +109,7 @@ export function useGalleryImport(options: Options) {
     queueMicrotask(() => importsThisTick.current.delete(importKey))
     void o.save()
     activate(id, item?.content ?? value.content)
+    onImported?.()
     feedback(item ? labels.reused : labels.added, value, o.scope)
   }
   const choose = (update: boolean) => {
@@ -117,6 +119,7 @@ export function useGalleryImport(options: Options) {
     latest.current.update(item.id, update ? livePending.value : { ...item, sourcePromptFingerprint: livePending.value.sourcePromptFingerprint })
     void latest.current.save()
     activate(item.id, update ? livePending.value.content : item.content)
+    livePending.onImported?.()
     feedback(update ? labels.updated : labels.reused, livePending.value, livePending.scope)
     setPending(null)
   }
@@ -156,7 +159,7 @@ export function useGalleryImport(options: Options) {
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter className="gap-2">
           <Button ref={keepButton} variant="outline" className="min-h-11" onClick={() => choose(false)}>{labels.keep}</Button>
-          <Button variant="outline" className="min-h-11" onClick={() => livePending && copy(livePending.value, livePending.scope, true)}>{labels.copy}</Button>
+          <Button variant="outline" className="min-h-11" onClick={() => livePending && copy(livePending.value, livePending.scope, true, livePending.onImported)}>{labels.copy}</Button>
           <Button className="min-h-11" onClick={() => choose(true)}>{labels.update}</Button>
         </DialogFooter>
       </DialogContent>

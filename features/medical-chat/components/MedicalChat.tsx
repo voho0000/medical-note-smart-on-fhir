@@ -647,10 +647,10 @@ export default function MedicalChat() {
     save: saveTemplates,
     insert: content => { input.insertTextWithTrim(content); scrollTextareaToBottom() },
   })
-  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType) => {
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
     if (useAs === 'summary') return
     setShowPromptGallery(false)
-    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) })
+    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) }, onImported)
   }
 
   // Keyboard shortcuts

@@ -59,7 +59,7 @@ interface PromptGalleryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode?: 'chat' | 'summary' | 'all'
-  onSelectPrompt: (prompt: SharedPrompt, useAs?: PromptType) => void
+  onSelectPrompt: (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => void
 }
 
 export function PromptGalleryDialog({
@@ -169,10 +169,14 @@ export function PromptGalleryDialog({
 
   const handleUse = (prompt: SharedPrompt, useAs?: PromptType) => {
     if (guidedPreview) return
-    onSelectPrompt(prompt, useAs)
-    rememberRecent(prompt)
-    if (prompt.tenantId) void tenantHook.trackUsage(prompt.id)
-    else void trackUsage(prompt.id)
+    let counted = false
+    onSelectPrompt(prompt, useAs, () => {
+      if (counted) return
+      counted = true
+      rememberRecent(prompt)
+      if (prompt.tenantId) void tenantHook.trackUsage(prompt.id)
+      else void trackUsage(prompt.id)
+    })
   }
 
   /** Quick use from a row: skip the preview when the target is unambiguous and the user is signed in. */

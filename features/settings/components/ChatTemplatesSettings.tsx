@@ -101,10 +101,10 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     save: saveTemplates,
     select: setActiveId,
   })
-  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType) => {
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
     if (useAs === "summary") return
     setShowPromptGallery(false)
-    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) })
+    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) }, onImported)
   }
 
   const restoreControl = (

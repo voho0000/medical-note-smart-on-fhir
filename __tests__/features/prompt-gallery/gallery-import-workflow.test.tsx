@@ -8,11 +8,12 @@ const add = jest.fn<string | null, [GalleryImportValue]>(() => 'new-id')
 const update = jest.fn()
 const save = jest.fn()
 const insert = jest.fn()
+const onImported = jest.fn()
 const source: GalleryImportValue = { title: 'Source', content: 'Original', sourcePromptKey: 'source-1' }
 const original: GalleryImportItem = { ...source, id: 'saved-id', sourcePromptFingerprint: galleryFingerprint(source) }
 function Harness({ item = original, value = source, scope = 'alice' }: { item?: GalleryImportItem; value?: GalleryImportValue; scope?: string }) {
   const flow = useGalleryImport({ scope, items: [item], add, update, save, insert })
-  return <><button onClick={() => flow.importPrompt(value)}>Import</button>{flow.dialog}</>
+  return <><button onClick={() => flow.importPrompt(value, onImported)}>Import</button>{flow.dialog}</>
 }
 beforeEach(() => { jest.clearAllMocks(); add.mockReturnValue('new-id') })
 
@@ -24,6 +25,7 @@ it.each(['source-1', 'another-source', undefined])('only notifies for identical 
   expect(add).not.toHaveBeenCalled()
   expect(update).not.toHaveBeenCalled()
   expect(save).not.toHaveBeenCalled()
+  expect(onImported).not.toHaveBeenCalled()
   expect(insert).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: '知道了' }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -34,6 +36,7 @@ it('reuses local edits quietly and offers an explicit independent copy', () => {
   fireEvent.click(screen.getByText('Import'))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(insert).toHaveBeenCalledWith('My edits')
+  expect(onImported).toHaveBeenCalledTimes(1)
   expect(update).not.toHaveBeenCalled()
   expect(toast).toHaveBeenCalledWith('已在你的範本中，沿用既有範本', expect.any(Object))
   const action = jest.mocked(toast).mock.calls[0][1]!.action as Action
@@ -53,6 +56,7 @@ it.each([false, true])('source changes require a choice; update=%s preserves ide
   fireEvent.click(screen.getByRole('button', { name: updateSource ? '更新這份範本' : '保留我的版本' }))
   expect(update).toHaveBeenCalledWith('saved-id', expect.objectContaining({ content: updateSource ? value.content : 'My edits', sourcePromptFingerprint: galleryFingerprint(value) }))
   expect(insert).toHaveBeenCalledWith(updateSource ? value.content : 'My edits')
+  expect(onImported).toHaveBeenCalledTimes(1)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
@@ -63,6 +67,7 @@ it('saving a copy from a source change never overwrites the saved version', () =
   expect(update).not.toHaveBeenCalled()
   expect(add).toHaveBeenCalledWith(expect.objectContaining({ content: 'New source', sourcePromptKey: undefined }))
   expect(insert).toHaveBeenCalledWith('New source')
+  expect(onImported).toHaveBeenCalledTimes(1)
 })
 
 it('rejects stale copy actions after an account switch and on unmount', () => {
@@ -105,4 +110,14 @@ it('a pending overwrite is discarded across role/account changes', () => {
   view.rerender(<Harness />)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(update).not.toHaveBeenCalled()
+})
+
+it('does not count a pending source decision that the user dismisses', () => {
+  render(<Harness value={{ ...source, content: 'New source' }} />)
+  fireEvent.click(screen.getByText('Import'))
+  expect(onImported).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(onImported).not.toHaveBeenCalled()
+  expect(add).not.toHaveBeenCalled()
+  expect(insert).not.toHaveBeenCalled()
 })

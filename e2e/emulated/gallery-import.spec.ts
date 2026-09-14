@@ -92,7 +92,13 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
         await expect(dialog).toBeHidden()
       }
     }
+    const usageCount = async () => {
+      const response = await request.get(`${firestore}/sharedPrompts/gallery-import-regression`, { headers: { Authorization: 'Bearer owner' } })
+      expect(response.ok()).toBe(true)
+      return Number((await response.json()).fields.usageCount.integerValue)
+    }
     await doImport()
+    await expect.poll(usageCount).toBe(1)
     await expect.poll(async () => (await imported()).length).toBe(1)
     const savedName = (await imported())[0].name
     await closeDialogs()
@@ -110,6 +116,7 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
     const duplicateNotice = page.getByRole('dialog', { name: '你已經有這份範本', exact: true })
     await expect(duplicateNotice).toBeVisible()
     await duplicateNotice.getByRole('button', { name: '知道了', exact: true }).click()
+    expect(await usageCount()).toBe(1)
     if (entry === 'chat') {
       await expect(await openChatInput(page)).toHaveValue(`${prompt}\n\n${prompt}`)
     }

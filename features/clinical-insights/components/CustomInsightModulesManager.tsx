@@ -174,13 +174,13 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     save: savePanels,
     select: setActiveId,
   })
-  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType) => {
+  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
     if (guidedPreview || useAs === "chat") return
     setShowGalleryDialog(false)
     await requestCustomization(() => galleryImport.importPrompt({
       title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt),
       outputFormat: prompt.outputFormat ?? 'markdown', languagePolicy: prompt.languagePolicy ?? 'interface-language',
-    }))
+    }, onImported))
   }
 
   const handleContinueAsGuest = () => {
