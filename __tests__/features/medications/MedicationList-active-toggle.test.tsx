@@ -124,8 +124,16 @@ jest.mock('@/features/clinical-summary/medications/components/MedicationItem', (
 
 jest.mock('@/features/clinical-summary/medications/components/MedicationHistoryList', () => ({
   MedicationHistoryList: () => <div data-testid="medication-history-list" />,
-  MedicationHistoryDetails: ({ medications }: { medications: MedicationRow[] }) => (
-    <div>{medications.map((medication) => medication.id).join(',')}</div>
+  MedicationHistoryDetails: ({
+    medications,
+    nameMode,
+  }: {
+    medications: MedicationRow[]
+    nameMode?: 'ingredient' | 'product'
+  }) => (
+    <div data-testid="active-history-details" data-name-mode={nameMode}>
+      {medications.map((medication) => medication.id).join(',')}
+    </div>
   ),
 }))
 
@@ -186,6 +194,24 @@ describe('MedicationList active section toggle', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+  })
+
+  it('passes product-name mode to the expanded current-drug history', () => {
+    render(
+      <MedicationList
+        medications={[mockActiveMedication, mockHistoricalMedication]}
+        isLoading={false}
+        error={null}
+        nameMode="product"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', {
+      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
+    }))
+
+    expect(screen.getByTestId('active-history-details'))
+      .toHaveAttribute('data-name-mode', 'product')
   })
 
   it('toggles current-drug history when the medication row is clicked', () => {
