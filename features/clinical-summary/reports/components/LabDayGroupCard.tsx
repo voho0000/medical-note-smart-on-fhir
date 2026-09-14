@@ -175,7 +175,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
             className={cn(
               'flex min-w-0 w-full',
               row.sourceProvenance === 'nhi-medicloud'
-                ? '[grid-column:2/-1] [grid-row:2]'
+                ? '[grid-column:2/-1] [grid-row:2] @min-[900px]:[grid-column:4/5] @min-[900px]:[grid-row:1]'
                 : 'col-span-2 col-start-2 row-start-2 @min-[300px]:col-span-1 @min-[300px]:col-start-4 @min-[300px]:row-start-1',
             )}
           >
