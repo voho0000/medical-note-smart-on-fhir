@@ -33,11 +33,22 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
   },
 }))
 jest.mock('@/src/core/use-cases/medical-summary/medical-summary-card-registry', () => {
-  const card = {
+  const medications = {
     id: 'medications', hasCompleteBatchBlock: () => true, parseBatch: () => 'NEW_MEDICATION_CARD',
     apply: (aggregate: any, parsed: any) => ({ ...aggregate, summary: { ...aggregate.summary, medications: parsed } }),
   }
-  return { MEDICAL_SUMMARY_CARD_REGISTRY: { medications: card }, registeredMedicalSummaryCards: () => [card] }
+  const safety = {
+    id: 'safety', hasCompleteBatchBlock: () => true,
+    parseBatch: () => ({ alerts: [], scannedCount: 1 }),
+    apply: (aggregate: any, parsed: any) => ({ ...aggregate, safety: parsed }),
+  }
+  const cards = { medications, safety }
+  return {
+    MEDICAL_SUMMARY_CARD_REGISTRY: cards,
+    registeredMedicalSummaryCards: (_input: any, enabledIds?: string[]) => (
+      Object.values(cards).filter((card: any) => !enabledIds || enabledIds.includes(card.id))
+    ),
+  }
 })
 jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
   runWithContextWindowRetry: async (options: any) => ({ value: await options.execute([]), clinicalContext: 'synthetic data' }),
@@ -94,4 +105,26 @@ test('replaces only the retried card provenance instead of retaining an obsolete
   expect(mockResult.problems).toBe('RETAINED_FLASH_CARD')
   expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-3.8-flash'])
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(false)
+})
+
+test('retrying a failed safety card preserves successful summary cards', async () => {
+  medicalSummaryStore.setState({ byKey: { 'audit-slot': {
+    problems: 'RETAINED_PROBLEM_CARD',
+    cardErrors: { safety: 'PARSE_FAILED' },
+    completedCardIds: ['problems'],
+    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash',
+      generatedAt: 1, modelExecution: createModelExecution('gemini-3.8-flash') },
+  } as any } })
+
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => result.current.retryFailedModules())
+
+  expect(mockResult.problems).toBe('RETAINED_PROBLEM_CARD')
+  expect(mockResult.safety).toEqual({
+    alerts: [],
+    scannedCount: 1,
+    generation: expect.any(Object),
+  })
+  expect(mockResult.cardErrors).toBeUndefined()
+  expect(mockResult.completedCardIds).toEqual(expect.arrayContaining(['problems', 'safety']))
 })

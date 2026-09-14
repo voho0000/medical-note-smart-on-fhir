@@ -8,11 +8,8 @@ import { SafetyAlertsPanel } from "@/features/proactive-safety-alerts/SafetyAler
 interface CareRemindersSafetyCardProps {
   result: SafetyScanResult | undefined
   isScanning: boolean
-  error: string | null
   hasPatient: boolean
   renderSources?: (keys: string[], unsupportedKeys?: string[]) => ReactNode
-  onRetry?: () => void
-  retryLabel?: string
   title: string
 }
 
@@ -25,11 +22,8 @@ interface CareRemindersSafetyCardProps {
 export function CareRemindersSafetyCard({
   result,
   isScanning,
-  error,
   hasPatient,
   renderSources,
-  onRetry,
-  retryLabel,
   title,
 }: CareRemindersSafetyCardProps) {
   const updatingExistingResult = isScanning && Boolean(result)
@@ -46,11 +40,9 @@ export function CareRemindersSafetyCard({
       <SafetyAlertsPanel
         result={result}
         isScanning={isScanning}
-        error={error}
+        error={null}
         hasPatient={hasPatient}
         renderSources={renderSources}
-        onRetry={onRetry}
-        retryLabel={retryLabel}
         showTitle={false}
         showScanSummary={false}
       />
