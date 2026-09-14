@@ -129,6 +129,17 @@ export async function enableSummaryAutoGenerate(page: Page) {
  * Specs used to find them straight after import because the panel was open by
  * default.
  *
+ * The collapse is decided one measurement AFTER first paint: the workspace
+ * mounts with the panel open (`preferredWidthReachable` still null), then the
+ * container is measured and, on a display too narrow for 總覽's 2×2, the
+ * panel folds into the rail. A helper that returned the moment it saw the tab
+ * therefore handed callers a tab that could vanish before their click landed —
+ * the CI signature was "visible → outside of the viewport → not visible",
+ * forever, because nothing ever clicked the rail. Clicking the rail is what
+ * makes the choice stick (`setCollapsedByUser`), so this retries: open when a
+ * rail is showing, then require the tab to still be there after the measure
+ * has had time to run.
+ *
  * The rail carries its own label (it reports a finished summary, or a running
  * one) so this matches on `data-slot` rather than on text that changes with
  * state.
@@ -142,17 +153,19 @@ export async function openFeaturePanel(page: Page) {
   if ((page.viewportSize()?.width ?? 0) < 768) return summaryTab
 
   const rail = page.locator('[data-slot="clinical-workspace-rail"]').first()
-  // Straight after a reload neither is mounted yet. Waiting for whichever
-  // arrives is the difference between opening the panel and silently deciding
-  // it was already open — which is how the post-reload legs failed.
-  await expect.poll(async () => (
-    await summaryTab.isVisible().catch(() => false)
-      || await rail.isVisible().catch(() => false)
-  ), { timeout: 20_000 }).toBe(true)
-
-  if (await summaryTab.isVisible().catch(() => false)) return summaryTab
-  await rail.click()
-  await expect(summaryTab).toBeVisible({ timeout: 20_000 })
+  await expect(async () => {
+    // Straight after a reload neither is mounted yet; a failed attempt here
+    // just comes round again.
+    if (!(await summaryTab.isVisible().catch(() => false))) {
+      await expect(rail).toBeVisible({ timeout: 2_000 })
+      await rail.click({ timeout: 2_000 })
+    }
+    await expect(summaryTab).toBeVisible({ timeout: 2_000 })
+    // Survive the post-mount measurement. If the panel folds now, the next
+    // attempt sees the rail and clicks it, which pins the panel open.
+    await page.waitForTimeout(300)
+    await expect(summaryTab).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 30_000, intervals: [250, 500, 1_000] })
   return summaryTab
 }
 
@@ -161,12 +174,18 @@ export async function openFeaturePanel(page: Page) {
  * panel DEFAULTS to 醫療摘要 (medical summary), so the chat input renders in an
  * inactive tab (mounted-but-hidden) until this tab is selected — and since #72
  * the panel itself starts collapsed, so it has to be opened first.
+ *
+ * Opening, selecting and reading the input are retried as one unit: the
+ * auto-collapse described on `openFeaturePanel` can land between any two of
+ * these steps, and only a fresh pass (which re-clicks the rail) recovers.
  */
 export async function openChatInput(page: Page) {
-  await openFeaturePanel(page)
-  await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click()
   const textarea = page.getByPlaceholder(/輸入|Type your/).first()
-  await expect(textarea).toBeVisible()
+  await expect(async () => {
+    await openFeaturePanel(page)
+    await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click({ timeout: 2_000 })
+    await expect(textarea).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 45_000, intervals: [250, 500, 1_000] })
   return textarea
 }
 
