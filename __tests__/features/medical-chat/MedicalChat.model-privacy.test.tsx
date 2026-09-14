@@ -512,7 +512,7 @@ describe('MedicalChat model privacy boundary', () => {
       { id: 'local-message', role: 'user', content: 'private local question' },
     ])
   })
-  it.each([false, true])('gallery use inserts each time but saves one template in expanded=%s', async expanded => {
+  it.each([false, true])('gallery duplicate selections insert only once in expanded=%s', async expanded => {
     mockExpanded = expanded
     const real = jest.requireActual<typeof import('@/src/application/providers/chat-templates.provider')>('@/src/application/providers/chat-templates.provider')
     mockAccountTemplates = [{ id: 'existing', label: 'Existing', content: 'Existing', audience: 'medical', order: 0 }]
@@ -521,12 +521,12 @@ describe('MedicalChat model privacy boundary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     fireEvent.click(screen.getByRole('button', { name: 'Use chat gallery twice' }))
     await waitFor(() => expect(mockAccountTemplates.filter(t => t.sourcePromptKey)).toHaveLength(1))
-    expect(mockInsertTemplate).toHaveBeenCalledTimes(2)
+    expect(mockInsertTemplate).toHaveBeenCalledTimes(1)
     expect(mockInsertTemplate).toHaveBeenLastCalledWith('Original source content')
     const saved = mockAccountTemplates.find(t => t.sourcePromptKey)!
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     fireEvent.click(screen.getByRole('button', { name: 'Use chat gallery twice' }))
-    await waitFor(() => expect(mockInsertTemplate).toHaveBeenCalledTimes(4))
+    await waitFor(() => expect(mockInsertTemplate).toHaveBeenCalledTimes(1))
     expect(mockAccountTemplates.filter(t => t.sourcePromptKey)).toEqual([saved])
   })
 

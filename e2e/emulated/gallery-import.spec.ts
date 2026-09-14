@@ -107,6 +107,10 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
       expect((await imported()).length).toBe(1)
     }
     await doImport(true)
+    await expect(page.getByText('你已經有完全相同的範本，未重複帶入。', { exact: true }).last()).toBeVisible()
+    if (entry === 'chat') {
+      await expect(await openChatInput(page)).toHaveValue(`${prompt}\n\n${prompt}`)
+    }
     await expect.poll(async () => (await imported()).length).toBe(1)
     await closeDialogs()
     const manager = await openManager()

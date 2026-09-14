@@ -16,6 +16,17 @@ function Harness({ item = original, value = source, scope = 'alice' }: { item?: 
 }
 beforeEach(() => { jest.clearAllMocks(); add.mockReturnValue('new-id') })
 
+it.each(['source-1', 'another-source', undefined])('only notifies for identical content with source %s', sourcePromptKey => {
+  render(<Harness item={{ ...original, sourcePromptKey }} />)
+  fireEvent.click(screen.getByText('Import'))
+  expect(toast.success).toHaveBeenCalledWith('你已經有完全相同的範本，未重複帶入。')
+  expect(add).not.toHaveBeenCalled()
+  expect(update).not.toHaveBeenCalled()
+  expect(save).not.toHaveBeenCalled()
+  expect(insert).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
 it('reuses local edits quietly and offers an explicit independent copy', () => {
   render(<Harness item={{ ...original, content: 'My edits' }} />)
   fireEvent.click(screen.getByText('Import'))
@@ -53,7 +64,7 @@ it('saving a copy from a source change never overwrites the saved version', () =
 })
 
 it('rejects stale copy actions after an account switch and on unmount', () => {
-  const view = render(<Harness />)
+  const view = render(<Harness item={{ ...original, content: 'My edits' }} />)
   fireEvent.click(screen.getByText('Import'))
   const action = jest.mocked(toast).mock.calls[0][1]!.action as Action
   add.mockClear()

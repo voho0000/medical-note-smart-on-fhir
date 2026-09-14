@@ -28,18 +28,21 @@ export function useGalleryImport(options: Options) {
   const { locale } = useLanguage()
   const zh = locale !== 'en'
   const labels = zh ? {
+    identical: '你已經有完全相同的範本，未重複帶入。',
     reused: '已在你的範本中，沿用既有範本', added: '已加入範本', copied: '已另存副本', updated: '已更新範本',
     copy: '另存副本', suffix: '（副本）', keep: '保留我的版本', update: '更新這份範本',
     changed: '來源範本有新內容', unknown: '來源與你的範本內容不同',
     description: '更新會取代這份範本的名稱、提示內容與來源提供的輸出設定。你可以保留自己的版本，或將來源另存副本。',
     mine: '我的版本', source: '來源版本', full: '無法新增範本，請確認範本數量或稍後再試。', missing: '這份範本已不存在，請重新帶入。',
   } : {
+    identical: 'You already have an identical template. Nothing was imported.',
     reused: 'Already in your templates; using your saved version', added: 'Template added', copied: 'Copy added', updated: 'Template updated',
     copy: 'Save a copy', suffix: ' (copy)', keep: 'Keep my version', update: 'Update this template',
     changed: 'The source template has changed', unknown: 'The source differs from your template',
     description: 'Updating replaces this template’s title, prompt and source output settings. Keep your version or save the source as a separate copy.',
     mine: 'My version', source: 'Source version', full: 'Unable to add a template. Check the template limit or try again later.', missing: 'This template no longer exists. Please import it again.',
   }
+  const importsThisTick = useRef(new Set<string>())
   const active = useRef(true)
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const keepButton = useRef<HTMLButtonElement>(null)
@@ -83,6 +86,12 @@ export function useGalleryImport(options: Options) {
     setError('')
     const o = latest.current
     const value = { ...input, sourcePromptFingerprint: galleryFingerprint(input) }
+    const importKey = JSON.stringify([o.scope, value.sourcePromptFingerprint])
+    if (importsThisTick.current.has(importKey)
+      || o.items.some(item => galleryFingerprint(item) === value.sourcePromptFingerprint)) {
+      feedback(labels.identical, value, o.scope, false)
+      return
+    }
     const item = findGalleryTemplate(o.items, value.sourcePromptKey!, candidate => galleryFingerprint(candidate) === value.sourcePromptFingerprint)
     if (item) {
       const changed = galleryFingerprint(item) !== value.sourcePromptFingerprint
@@ -91,6 +100,8 @@ export function useGalleryImport(options: Options) {
     }
     const id = o.add(value) // Provider also protects against same-tick repeated clicks.
     if (!id) { setError(labels.full); toast.error(labels.full); return }
+    importsThisTick.current.add(importKey)
+    queueMicrotask(() => importsThisTick.current.delete(importKey))
     void o.save()
     activate(id, item?.content ?? value.content)
     feedback(item ? labels.reused : labels.added, value, o.scope)
