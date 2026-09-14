@@ -3,6 +3,7 @@ type Reference = { path: string; id: string }
 type Row = Record<string, any>
 const records = new Map<string, Row>()
 let serial = 0
+let transactionTail: Promise<unknown> = Promise.resolve()
 const reference = (path: string): Reference => ({ path, id: path.split('/').at(-1)! })
 const snapshot = (ref: Reference) => ({ id: ref.id, ref, exists: () => records.has(ref.path), data: () => records.get(ref.path) })
 const value = (input: any) => typeof input?.toDate === 'function' ? input.toDate().getTime() : input
@@ -18,7 +19,7 @@ const commit = jest.fn(async (operations: (() => void)[]) => { operations.forEac
 
 export const memory = {
   records, commit,
-  reset() { records.clear(); serial = 0; jest.clearAllMocks(); commit.mockImplementation(async operations => operations.forEach(operation => operation())) },
+  reset() { records.clear(); serial = 0; transactionTail = Promise.resolve(); jest.clearAllMocks(); commit.mockImplementation(async operations => operations.forEach(operation => operation())) },
   seed(path: string, data: Row) { records.set(path, data) },
 }
 
@@ -53,6 +54,20 @@ export const firestore = {
   }),
   setDoc: jest.fn(async (ref: Reference, data: Row) => { records.set(ref.path, data) }),
   updateDoc: jest.fn(async (ref: Reference, data: Row) => { applyUpdate(ref, data) }),
+  runTransaction: jest.fn((_db: unknown, callback: (transaction: { get: (ref: Reference) => Promise<ReturnType<typeof snapshot>>; update: (ref: Reference, data: Row) => void }) => unknown) => {
+    const execute = async () => {
+      const operations: (() => void)[] = []
+      const result = await callback({
+        get: async (ref: Reference) => snapshot(ref),
+        update: (ref: Reference, data: Row) => operations.push(() => applyUpdate(ref, data)),
+      })
+      await commit(operations)
+      return result
+    }
+    const result = transactionTail.then(execute, execute)
+    transactionTail = result.catch(() => undefined)
+    return result
+  }),
   deleteDoc: jest.fn(async (ref: Reference) => { records.delete(ref.path) }),
   increment: (amount: number) => ({ operation: 'increment', amount }),
   deleteField: () => ({ operation: 'delete' }),

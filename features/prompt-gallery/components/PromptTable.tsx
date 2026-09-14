@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { getPromptSource } from '../constants/prompt-source'
-import type { PromptGallerySort, SharedPrompt } from '../types/prompt.types'
+import { coerceTemplateVersion, type PromptGallerySort, type SharedPrompt } from '../types/prompt.types'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
 import { FavoriteButton } from './FavoriteButton'
 import { PromptSourceBadge } from './PromptSourceBadge'
@@ -127,6 +127,7 @@ export function PromptTable({
               <TableCell className="min-w-0 whitespace-normal py-1.5">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate font-semibold leading-tight" title={prompt.title}>{prompt.title}</span>
+                  <span className="shrink-0 text-[0.625rem] font-normal tabular-nums text-muted-foreground">V{coerceTemplateVersion(prompt.version)}</span>
                   {updatedIds?.has(prompt.id) && (
                     <Badge className="h-4 shrink-0 border-0 bg-accent px-1.5 py-0 text-[0.5625rem] text-accent-foreground" title={t.promptGallery.sourceUpdatedHint}>
                       {t.promptGallery.sourceUpdated}

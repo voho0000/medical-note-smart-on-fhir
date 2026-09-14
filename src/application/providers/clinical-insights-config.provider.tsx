@@ -25,6 +25,7 @@ export { MAX_AUTO_INSIGHT_MODULES, MAX_SUMMARY_INSIGHT_MODULES }
 export type InsightPanelConfig = {
   sourcePromptKey?: string
   sourcePromptFingerprint?: string
+  sourcePromptVersion?: number
   id: string
   title: string
   prompt: string
@@ -315,6 +316,7 @@ function getPanelFingerprint(panel: InsightPanelConfig): string {
     templateLibraryRevision: panel.templateLibraryRevision,
     sourcePromptKey: panel.sourcePromptKey,
     sourcePromptFingerprint: panel.sourcePromptFingerprint,
+    sourcePromptVersion: panel.sourcePromptVersion,
   })
 }
 
@@ -379,7 +381,7 @@ type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
   guestEditingApproved: boolean
   approveGuestEditing: () => void
-  addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint">>) => string | null
+  addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">>) => string | null
   updatePanel: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => void
   updatePanelAndSave: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => Promise<void>
   removePanel: (id: string) => void
@@ -711,7 +713,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     return () => window.removeEventListener("beforeunload", handleBeforeUnload)
   }, [pendingMutationVersion, user?.uid])
 
-  const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint">>) => {
+  const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">>) => {
     if (isLoading) return null
     const audiencePanels = allPanelsRef.current.filter(p => p.audience === audience)
     if (initial?.sourcePromptKey) {
@@ -719,7 +721,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         p => p.title === initial.title && p.prompt === initial.prompt
           && p.outputFormat === initial.outputFormat && p.languagePolicy === initial.languagePolicy)
       if (existing) {
-        commitLocalPanels(current => current.map(p => p === existing ? { ...p, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint } : p))
+        commitLocalPanels(current => current.map(p => p === existing ? { ...p, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint, sourcePromptVersion: existing.sourcePromptVersion ?? initial.sourcePromptVersion } : p))
         return existing.id
       }
     }
@@ -730,6 +732,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       id: generatePanelId(),
       sourcePromptKey: initial?.sourcePromptKey,
       sourcePromptFingerprint: initial?.sourcePromptFingerprint,
+      sourcePromptVersion: initial?.sourcePromptVersion,
       title: initial?.title ?? `Custom Panel ${suffix}`,
       prompt: initial?.prompt ?? "Describe the key clinical insights for this focus area using the provided context.",
       showInSummary: initial?.showInSummary ?? false,

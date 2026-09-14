@@ -47,9 +47,32 @@ it('publishes and reads back a >1 MiB prompt exactly, fetching the body only for
   expect(await getSharedPrompts()).toHaveLength(1)
   expect(firestore.getDoc).not.toHaveBeenCalled()
   expect(await getSharedPrompt(id)).toMatchObject({ prompt: largeText, outputFormat: 'html', languagePolicy: 'follow-template' })
+  expect((await getSharedPrompt(id))?.version).toBe(1)
   expect(await getSharedPrompts({ searchQuery: 'needle-at-the-end' })).toHaveLength(1)
   await deleteSharedPrompt(id)
   expect(memory.records.size).toBe(0)
+})
+
+it('uses V1 for legacy or invalid versions and increments only material changes', async () => {
+  memory.seed('sharedPrompts/legacy', { ...prompt(), version: 0, createdAt: firestore.Timestamp.now(), updatedAt: firestore.Timestamp.now() })
+  expect((await getSharedPrompt('legacy'))?.version).toBe(1)
+  await updateSharedPrompt('legacy', { tags: ['reviewed'], category: 'safety', isPublic: false })
+  expect((await getSharedPrompt('legacy'))?.version).toBe(1)
+  await updateSharedPrompt('legacy', { prompt: 'Changed content' })
+  expect((await getSharedPrompt('legacy'))?.version).toBe(2)
+  await updateSharedPrompt('legacy', { prompt: 'Changed content' })
+  expect((await getSharedPrompt('legacy'))?.version).toBe(2)
+  await updateSharedPrompt('legacy', { outputFormat: 'plain-text' })
+  expect((await getSharedPrompt('legacy'))?.version).toBe(3)
+})
+
+it('serializes concurrent material updates so neither version increment is lost', async () => {
+  const id = await createSharedPrompt(prompt())
+  await Promise.all([
+    updateSharedPrompt(id, { outputFormat: 'plain-text' }),
+    updateSharedPrompt(id, { languagePolicy: 'interface-language' }),
+  ])
+  expect((await getSharedPrompt(id))?.version).toBe(3)
 })
 
 it('gives same-title prompts distinct ids and keeps their updates, counters, and deletion independent', async () => {
@@ -104,6 +127,16 @@ it('retains the old complete version when replacing a body fails', async () => {
   await updateSharedPrompt(id, { prompt: 'Short replacement', outputFormat: 'plain-text' })
   expect(await getSharedPrompt(id)).toMatchObject({ prompt: 'Short replacement', outputFormat: 'plain-text' })
   expect([...memory.records.keys()].filter(path => path.startsWith('templateBodies/'))).toEqual([])
+})
+
+it('reuses a long body and keeps V1 when an unchanged prompt is saved with metadata', async () => {
+  const id = await createSharedPrompt(prompt({ prompt: largeText }))
+  const before = memory.records.get('sharedPrompts/' + id)!.body
+  await updateSharedPrompt(id, { prompt: largeText, tags: ['reviewed'] })
+  const after = memory.records.get('sharedPrompts/' + id)!
+  expect(after.body).toBe(before)
+  expect(after.version).toBe(1)
+  expect(after.tags).toEqual(['reviewed'])
 })
 
 it('searches and ranks matches beyond the first page for all/my galleries', async () => {

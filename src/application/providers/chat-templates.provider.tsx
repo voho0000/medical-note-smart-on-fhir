@@ -15,6 +15,7 @@ import { findGalleryTemplate } from "@/src/shared/utils/gallery-template.utils"
 type ChatTemplate = {
   sourcePromptKey?: string
   sourcePromptFingerprint?: string
+  sourcePromptVersion?: number
   id: string
   label: string
   content: string
@@ -26,7 +27,7 @@ type ChatTemplate = {
 
 type ChatTemplatesContextValue = {
   templates: ChatTemplate[]
-  addTemplate: (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint">) => string | null
+  addTemplate: (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">) => string | null
   updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id" | "audience">>) => void
   removeTemplate: (id: string) => void
   moveTemplate: (fromIndex: number, toIndex: number) => void
@@ -367,6 +368,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       id: typeof c.id === "string" ? c.id : generateTemplateId(),
       sourcePromptFingerprint: typeof c.sourcePromptFingerprint === "string" ? c.sourcePromptFingerprint : undefined,
       sourcePromptKey: typeof c.sourcePromptKey === "string" ? c.sourcePromptKey : undefined,
+      sourcePromptVersion: Number.isSafeInteger(c.sourcePromptVersion) && (c.sourcePromptVersion as number) >= 1 ? c.sourcePromptVersion as number : undefined,
       label: typeof c.label === "string" ? c.label : "Untitled Template",
       content: typeof c.content === "string" ? c.content : "",
       shortcut: typeof c.shortcut === "string" ? c.shortcut : undefined,
@@ -523,7 +525,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     [allTemplates, audience],
   )
 
-  const addTemplate = (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint">) => {
+  const addTemplate = (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">) => {
     if (!hasLoadedFromStorage || (user?.uid && isLoading)) return null
     const current = allTemplatesRef.current
     const audienceTemplates = current.filter(t => t.audience === audience)
@@ -531,7 +533,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       const existing = findGalleryTemplate(audienceTemplates, initial.sourcePromptKey,
         t => t.label === initial.label && t.content === initial.content)
       if (existing) {
-        const next = current.map(t => t === existing ? { ...t, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint } : t)
+        const next = current.map(t => t === existing ? { ...t, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint, sourcePromptVersion: existing.sourcePromptVersion ?? initial.sourcePromptVersion } : t)
         allTemplatesRef.current = next
         setAllTemplates(next)
         setCustomByAudience(prev => ({ ...prev, [audience]: true }))
@@ -547,6 +549,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       content: initial?.content ?? "",
       sourcePromptKey: initial?.sourcePromptKey,
       sourcePromptFingerprint: initial?.sourcePromptFingerprint,
+      sourcePromptVersion: initial?.sourcePromptVersion,
       order: nextOrder,
       audience,
     }
