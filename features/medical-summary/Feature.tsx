@@ -91,6 +91,7 @@ import {
   buildInvestigationCumulativeTargets,
   type InvestigationCumulativeTarget,
 } from "./utils/investigation-cumulative-target"
+import { consolidateCardErrors } from "./utils/consolidate-card-errors"
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
@@ -333,7 +334,14 @@ export default function MedicalSummaryFeature() {
           message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
         }]
       : []
-    return [...failedCards, ...standaloneSafetyError, ...genericSummaryError]
+    // Consolidation counts against the standard card ids, so the standalone
+    // slot stays outside it. `safety` is one of those ids, so the two are
+    // mutually exclusive anyway: consolidating needs cardErrors.safety set.
+    return [
+      ...consolidateCardErrors(failedCards, ms.title),
+      ...standaloneSafetyError,
+      ...genericSummaryError,
+    ]
   }, [
     cardErrors,
     cardLabels,
