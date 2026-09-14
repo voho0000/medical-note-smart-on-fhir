@@ -10,7 +10,11 @@ import {
   replaceAllChatTemplates,
 } from "@/src/infrastructure/firebase/template-sync"
 
+import { findGalleryTemplate } from "@/src/shared/utils/gallery-template.utils"
+
 type ChatTemplate = {
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
   id: string
   label: string
   content: string
@@ -22,7 +26,7 @@ type ChatTemplate = {
 
 type ChatTemplatesContextValue = {
   templates: ChatTemplate[]
-  addTemplate: () => string | null
+  addTemplate: (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint">) => string | null
   updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id" | "audience">>) => void
   removeTemplate: (id: string) => void
   moveTemplate: (fromIndex: number, toIndex: number) => void
@@ -355,6 +359,8 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     const audienceValue: Audience = c.audience === 'patient' ? 'patient' : 'medical'
     return {
       id: typeof c.id === "string" ? c.id : generateTemplateId(),
+      sourcePromptFingerprint: typeof c.sourcePromptFingerprint === "string" ? c.sourcePromptFingerprint : undefined,
+      sourcePromptKey: typeof c.sourcePromptKey === "string" ? c.sourcePromptKey : undefined,
       label: typeof c.label === "string" ? c.label : "Untitled Template",
       content: typeof c.content === "string" ? c.content : "",
       shortcut: typeof c.shortcut === "string" ? c.shortcut : undefined,
@@ -511,24 +517,44 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     [allTemplates, audience],
   )
 
-  const addTemplate = () => {
-    const audienceCount = allTemplates.filter((t) => t.audience === audience).length
+  const addTemplate = (initial?: Pick<ChatTemplate, "label" | "content" | "sourcePromptKey" | "sourcePromptFingerprint">) => {
+    if (!hasLoadedFromStorage || (user?.uid && isLoading)) return null
+    const current = allTemplatesRef.current
+    const audienceTemplates = current.filter(t => t.audience === audience)
+    if (initial?.sourcePromptKey) {
+      const existing = findGalleryTemplate(audienceTemplates, initial.sourcePromptKey,
+        t => t.label === initial.label && t.content === initial.content)
+      if (existing) {
+        const next = current.map(t => t === existing ? { ...t, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint } : t)
+        allTemplatesRef.current = next
+        setAllTemplates(next)
+        setCustomByAudience(prev => ({ ...prev, [audience]: true }))
+        return existing.id
+      }
+    }
+    const audienceCount = audienceTemplates.length
     if (audienceCount >= MAX_TEMPLATES) return null
     const nextOrder = audienceCount
     const newTemplate: ChatTemplate = {
       id: generateTemplateId(),
-      label: "New Prompt Template",
-      content: "",
+      label: initial?.label ?? "New Prompt Template",
+      content: initial?.content ?? "",
+      sourcePromptKey: initial?.sourcePromptKey,
+      sourcePromptFingerprint: initial?.sourcePromptFingerprint,
       order: nextOrder,
       audience,
     }
-    setAllTemplates((prev) => [...prev, newTemplate])
+    const next = [...current, newTemplate]
+    allTemplatesRef.current = next
+    setAllTemplates(next)
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
     return newTemplate.id
   }
 
   const updateTemplate = (id: string, patch: Partial<Omit<ChatTemplate, "id" | "audience">>) => {
-    setAllTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch, id, audience: t.audience } : t)))
+    const next = allTemplatesRef.current.map(t => t.id === id ? { ...t, ...patch, id, audience: t.audience } : t)
+    allTemplatesRef.current = next
+    setAllTemplates(next)
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }
 

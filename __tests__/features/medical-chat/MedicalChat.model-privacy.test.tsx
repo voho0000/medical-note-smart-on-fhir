@@ -12,6 +12,15 @@ import {
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
+const mockInsertTemplate = jest.fn()
+const mockUseChatTemplates = jest.fn()
+let mockAccountTemplates: import('@/src/application/providers/chat-templates.provider').ChatTemplate[] = []
+jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
+jest.mock('@/src/infrastructure/firebase/template-sync', () => ({
+  subscribeToChatTemplates: (_uid: string, listener: (templates: typeof mockAccountTemplates) => void) => { listener(mockAccountTemplates); return jest.fn() },
+  replaceAllChatTemplates: async (_uid: string, templates: typeof mockAccountTemplates) => { mockAccountTemplates = templates; return true },
+  batchSaveChatTemplates: jest.fn(),
+}))
 const mockEvents: string[] = []
 const mockResetChat = jest.fn(() => {
   mockEvents.push('reset-chat')
@@ -141,14 +150,17 @@ jest.mock('@/features/medical-chat/components/ChatToolbar', () => ({
     patientDataDisabled,
     canTogglePatientData,
     onTogglePatientData,
+    onOpenGallery,
   }: {
     onModelSelect: (id: string) => void
     showModelPicker: boolean
     patientDataDisabled: boolean
     canTogglePatientData: boolean
     onTogglePatientData: () => void
+    onOpenGallery: () => void
   }) => (
     <>
+      <button onClick={onOpenGallery}>Browse</button>
       {canTogglePatientData && (
         <button
           type="button"
@@ -193,7 +205,7 @@ jest.mock('@/features/medical-chat/hooks/useChatInput', () => ({
     input: '',
     clear: jest.fn(),
     setInput: jest.fn(),
-    insertTextWithTrim: jest.fn(),
+    insertTextWithTrim: mockInsertTemplate,
   }),
 }))
 jest.mock('@/features/medical-chat/hooks/useImageUpload', () => ({
@@ -237,13 +249,7 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
   useClinicalData: () => ({ error: null }),
 }))
 jest.mock('@/src/application/providers/chat-templates.provider', () => ({
-  useChatTemplates: () => ({
-    addTemplate: jest.fn(),
-    updateTemplate: jest.fn(),
-    saveTemplates: jest.fn(),
-    maxTemplates: 10,
-    templates: [],
-  }),
+  useChatTemplates: () => mockUseChatTemplates(),
 }))
 
 jest.mock('@/features/medical-chat/components/ChatMessageList', () => ({ ChatMessageList: () => null }))
@@ -263,7 +269,15 @@ jest.mock('@/features/chat-history', () => ({
     return null
   },
 }))
-jest.mock('@/features/prompt-gallery', () => ({ PromptGalleryDialog: () => null }))
+jest.mock('@/features/prompt-gallery', () => ({
+  PromptGalleryDialog: ({ open, onSelectPrompt }: { open: boolean; onSelectPrompt: (prompt: import('@/features/prompt-gallery').SharedPrompt, useAs: 'chat') => void }) => open ? (
+    <button onClick={() => {
+      const prompt = { id: 'same-source', title: 'Source prompt', prompt: 'Original source content' } as import('@/features/prompt-gallery').SharedPrompt
+      onSelectPrompt(prompt, 'chat')
+      onSelectPrompt(prompt, 'chat')
+    }}>Use chat gallery twice</button>
+  ) : null,
+}))
 jest.mock('@/features/auth', () => ({ AuthDialog: () => null }))
 
 jest.mock('@/components/ui/card', () => ({
@@ -299,6 +313,7 @@ const profile: OpenAiCompatibleProfile = {
 describe('MedicalChat model privacy boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockUseChatTemplates.mockImplementation(() => ({ addTemplate: jest.fn(), updateTemplate: jest.fn(), saveTemplates: jest.fn(), maxTemplates: 10, templates: [] }))
     mockEvents.length = 0
     mockAutoSaveEnabled.length = 0
     mockDrawerPersistenceEnabled.length = 0
@@ -497,4 +512,24 @@ describe('MedicalChat model privacy boundary', () => {
       { id: 'local-message', role: 'user', content: 'private local question' },
     ])
   })
+  it.each([false, true])('gallery duplicate selections insert only once in expanded=%s', async expanded => {
+    mockExpanded = expanded
+    const real = jest.requireActual<typeof import('@/src/application/providers/chat-templates.provider')>('@/src/application/providers/chat-templates.provider')
+    mockAccountTemplates = [{ id: 'existing', label: 'Existing', content: 'Existing', audience: 'medical', order: 0 }]
+    mockUseChatTemplates.mockImplementation(real.useChatTemplates)
+    render(<real.ChatTemplatesProvider><MedicalChat /></real.ChatTemplatesProvider>)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use chat gallery twice' }))
+    if (screen.queryByRole('button', { name: '知道了' })) fireEvent.click(screen.getByRole('button', { name: '知道了' }))
+    await waitFor(() => expect(mockAccountTemplates.filter(t => t.sourcePromptKey)).toHaveLength(1))
+    expect(mockInsertTemplate).toHaveBeenCalledTimes(1)
+    expect(mockInsertTemplate).toHaveBeenLastCalledWith('Original source content')
+    const saved = mockAccountTemplates.find(t => t.sourcePromptKey)!
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use chat gallery twice' }))
+    if (screen.queryByRole('button', { name: '知道了' })) fireEvent.click(screen.getByRole('button', { name: '知道了' }))
+    await waitFor(() => expect(mockInsertTemplate).toHaveBeenCalledTimes(1))
+    expect(mockAccountTemplates.filter(t => t.sourcePromptKey)).toEqual([saved])
+  })
+
 })

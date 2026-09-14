@@ -90,7 +90,9 @@ it('lists the department templates with the department name and counts a use aga
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '心衰竭門診追蹤' })).not.toBeInTheDocument())
 
   fireEvent.click(within(row).getByRole('button', { name: '帶入: 心衰竭門診追蹤' }))
-  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'hf', tenantId: 'cardio' }), 'chat'))
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'hf', tenantId: 'cardio' }), 'chat', expect.any(Function)))
+  expect(incrementTenantPromptUsage).not.toHaveBeenCalled()
+  await act(async () => onSelect.mock.calls[0][2]())
   expect(incrementTenantPromptUsage).toHaveBeenCalledWith('hf')
 })
 

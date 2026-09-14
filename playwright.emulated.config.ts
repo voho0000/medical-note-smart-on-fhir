@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e/emulated',
   // The gallery suite owns dedicated emulator ports via its separate config.
-  testIgnore: 'prompt-gallery.spec.ts',
+  testIgnore: ['prompt-gallery.spec.ts', 'gallery-import.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,

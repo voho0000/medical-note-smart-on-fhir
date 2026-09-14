@@ -175,3 +175,18 @@ Rules 位於獨立 `firebase-smart-on-fhir` repo；本 app repo 的 TypeScript �
 - [Medical Chat](MEDICAL_CHAT.md)
 - [Feature modules](FEATURES.md)
 - [Security](SECURITY.md)
+
+## 重複匯入與來源更新
+
+對話、對話範本管理及自訂摘要管理共用匯入規則：
+
+- 已有名稱、內容與輸出設定完全相同的範本時，顯示「你已經有這份範本」提示視窗，按「知道了」關閉，不新增、不儲存、不再次插入輸入框。
+- 同一來源已有使用者編輯時，保留並沿用已存版本。
+- 帶入次數只在實際帶入後增加；重複阻擋、取消或新增失敗不計次。
+- 來源內容改變時，先提供「保留我的版本」「更新這份範本」「另存副本」；關閉對話框不覆寫。
+- 保留後記錄已看過的來源版本，再次帶入相同版本不重複詢問。
+- 副本有獨立身分，不跟隨原來源。
+- 來源身分包含部門與範本 ID；醫療／民眾範本分開比對，帳號同步保留來源與版本。
+- 已達範本上限仍可沿用既有範本，新增來源或副本仍遵守上限。
+
+本機回歸驗證：`npm test -- --runInBand __tests__/application/gallery-template-import.test.tsx __tests__/application/gallery-source-sync.test.ts __tests__/features/prompt-gallery`；帳號瀏覽器驗證沿用 `playwright.gallery.config.ts` 與既有 Firebase emulator 設定，涵蓋 `gallery-import.spec.ts`。

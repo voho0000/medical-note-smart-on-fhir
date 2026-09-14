@@ -70,7 +70,7 @@ it('turns placeholders into fields, previews the substitution live and brings th
   expect(drug).not.toHaveAttribute('aria-invalid')
   fireEvent.change(reader, { target: { value: '家屬' } })
   fireEvent.click(within(preview).getByRole('button', { name: '加入對話範本' }))
-  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'drug', prompt: '我剛開立了 Apixaban 5 mg。請為 家屬 寫衛教。' }), 'chat'))
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'drug', prompt: '我剛開立了 Apixaban 5 mg。請為 家屬 寫衛教。' }), 'chat', expect.any(Function)))
   // Only the id and time were remembered, never the values.
   expect(window.localStorage.getItem('mediprisma.promptGallery.recent.alice')).not.toContain('Apixaban')
 })
@@ -85,7 +85,7 @@ it('lets the user skip the fill-in, and resets fields', async () => {
   expect(within(preview).getByRole('textbox', { name: '藥物名稱 *' })).toHaveValue('')
   fireEvent.click(within(preview).getByRole('button', { name: '加入對話範本' }))
   fireEvent.click(within(preview).getByRole('button', { name: '略過填空，直接帶入' }))
-  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ prompt: '我剛開立了 {{藥物名稱}}。請為 [目標讀者] 寫衛教。' }), 'chat'))
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ prompt: '我剛開立了 {{藥物名稱}}。請為 [目標讀者] 寫衛教。' }), 'chat', expect.any(Function)))
 })
 
 it('remembers recently previewed prompts as quick chips, orders favorites by recent use, and clears', async () => {
