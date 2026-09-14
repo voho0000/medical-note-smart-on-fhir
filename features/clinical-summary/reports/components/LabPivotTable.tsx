@@ -242,8 +242,8 @@ export const LabPivotTable = memo(function LabPivotTable({
             contentClassName="max-w-sm"
           >
             {locale.startsWith('zh')
-              ? '本日期包含健保雲端圖形化查詢結果，不代表同日所有檢驗皆來自此來源。僅供診療參考，並非原始檢驗報告。'
-              : 'This date includes graphical lab results from NHI MediCloud; other same-day tests may have a different source. For clinical reference; not the original laboratory report.'}
+              ? '本日期包含健保雲端圖形化查詢結果'
+              : 'This date includes graphical lab results from NHI MediCloud'}
           </InfoHint>
         )}
         {flatTests.some(test => test.values.get(date)?.adultPreventive) && (
