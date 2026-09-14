@@ -26,7 +26,7 @@ import {
 } from './OverviewSectionParts'
 import { overviewChipClass } from './overview-styles'
 
-type LabMode = 'pinned' | 'all'
+type LabMode = 'abnormal' | 'pinned' | 'all'
 
 function shortDayLabel(day: string): string {
   return day.length >= 10 ? `${day.slice(5, 7)}/${day.slice(8, 10)}` : day
@@ -124,7 +124,6 @@ export function OverviewLabsSection({
   const { t } = useLanguage()
   const strings = t.overview
   const [mode, setMode] = useState<LabMode>('pinned')
-  const [abnormalOnly, setAbnormalOnly] = useState(false)
   const [listOpen, setListOpen] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardWidth, setCardWidth] = useState(0)
@@ -137,7 +136,7 @@ export function OverviewLabsSection({
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     return () => observer.disconnect()
-  }, [data.rows.length, mode, abnormalOnly])
+  }, [data.rows.length, mode])
   // 「常用」 only makes sense while the standard panels actually have rows in
   // range; otherwise the card would look empty for a filter the patient's data
   // cannot satisfy.
@@ -145,9 +144,9 @@ export function OverviewLabsSection({
 
   const matched = useMemo(() => data.rows.filter((row) => {
     if (effectiveMode === 'pinned' && !row.isPinned) return false
-    if (abnormalOnly && !row.hasAbnormal) return false
+    if (effectiveMode === 'abnormal' && !row.hasAbnormal) return false
     return true
-  }), [abnormalOnly, data.rows, effectiveMode])
+  }), [data.rows, effectiveMode])
 
   // Row budget. Category dividers are charged where they actually occur —
   // reserving one per category up-front would leave most of the card empty,
@@ -187,13 +186,13 @@ export function OverviewLabsSection({
   // One renderer for the card and the full-length dialog (see
   // OverviewExpandButton): the card draws what fits, the dialog draws every
   // matched analyte, and neither can drift from the other.
-  const showCategories = effectiveMode === 'all'
+  const showCategories = effectiveMode !== 'pinned'
 
   const renderPivot = (rows: OverviewLabRow[], expanded = false) => {
     // Filter before applying the card's date budget so empty pinned days
     // cannot displace older days that actually contain common results.
     const eligibleIndexes = columns.map((_, index) => index).filter(index =>
-      effectiveMode !== 'pinned' || rows.some(row => Boolean(row.cells[index])),
+      rows.some(row => Boolean(row.cells[index])),
     )
     const visibleIndexes = expanded ? eligibleIndexes : eligibleIndexes.slice(-cardColumnCount)
     const visibleColumns = visibleIndexes.map(index => columns[index])
@@ -325,14 +324,14 @@ export function OverviewLabsSection({
   }
 
   // One definition, two places: the card header and the expanded dialog, both
-  // driving the same mode / abnormal-only state.
+  // driving the same mutually exclusive display mode.
   const filterChips = (
     <>
       <button
         type="button"
-        aria-pressed={abnormalOnly}
-        className={overviewChipClass(abnormalOnly)}
-        onClick={() => setAbnormalOnly((previous) => !previous)}
+        aria-pressed={effectiveMode === 'abnormal'}
+        className={overviewChipClass(effectiveMode === 'abnormal')}
+        onClick={() => setMode('abnormal')}
       >
         {strings.labs.abnormalOnly}
       </button>

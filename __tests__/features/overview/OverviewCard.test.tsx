@@ -125,6 +125,65 @@ describe('OverviewCard (demo bundle)', () => {
     expect(dialog.getByText('No growth')).toBeInTheDocument()
   })
 
+  it('shows abnormal non-common analytes when switching from 常用 to 只看異常', () => {
+    const lab = ({
+      id,
+      code,
+      display,
+      value,
+      interpretation,
+      day = '2026-06-01',
+    }: {
+      id: string
+      code: string
+      display: string
+      value: number
+      interpretation?: string
+      day?: string
+    }) => ({
+      resourceType: 'Observation', id, status: 'final',
+      category: [{ coding: [{
+        system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+        code: 'laboratory',
+      }] }],
+      code: { coding: [{ system: 'http://loinc.org', code, display }] },
+      effectiveDateTime: `${day}T09:00:00+08:00`,
+      valueQuantity: { value, unit: code === '6690-2' ? 'K/uL' : 'U/L' },
+      interpretation: interpretation
+        ? [{ coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation',
+          code: interpretation,
+        }] }]
+        : undefined,
+    })
+    mockUseClinicalData.mockReturnValue({
+      ...clinicalData,
+      observations: [
+        // A newer normal WBC belongs to 常用. The older AST is outside 常用
+        // but abnormal, and must not be displaced by the empty newer date.
+        lab({ id: 'normal-common-wbc', code: '6690-2', display: 'Leukocytes', value: 5.5, day: '2026-06-08' }),
+        lab({ id: 'abnormal-non-common-ast', code: '1920-8', display: 'Aspartate aminotransferase', value: 987, interpretation: 'H' }),
+      ],
+    })
+
+    render(<OverviewCard />)
+
+    const card = document.getElementById('overview-section-labs')!
+    const labs = within(card)
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.pinned })).toHaveAttribute('aria-pressed', 'true')
+    expect(labs.getByText('5.5')).toBeInTheDocument()
+    expect(labs.queryByText('987 ↑')).not.toBeInTheDocument()
+
+    fireEvent.click(labs.getByRole('button', { name: zhTW.overview.labs.abnormalOnly }))
+
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.abnormalOnly })).toHaveAttribute('aria-pressed', 'true')
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.pinned })).toHaveAttribute('aria-pressed', 'false')
+    expect(labs.getByText('06/01')).toBeInTheDocument()
+    expect(labs.queryByText('06/08')).not.toBeInTheDocument()
+    expect(labs.getByText('987 ↑')).toBeInTheDocument()
+    expect(labs.queryByText('5.5')).not.toBeInTheDocument()
+  })
+
   it('exposes the complete narrative laboratory result on click', async () => {
     const narrative = 'Synthetic culture result\n' + 'Organism and susceptibility details. '.repeat(30)
     mockUseClinicalData.mockReturnValue({ ...clinicalData, observations: [{
