@@ -13,6 +13,8 @@ export type PanelAudience = 'medical' | 'patient'
 
 export interface ClinicalInsightPanel {
   id: string
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
   title: string
   prompt: string
   showInSummary: boolean
@@ -28,6 +30,8 @@ export interface ClinicalInsightPanel {
 
 interface FirestoreClinicalInsightPanel {
   id: string
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
   title: string
   prompt: string
   showInSummary?: boolean
@@ -50,6 +54,8 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
   getId: panel => panel.id,
   fromDoc: (id, data) => ({
     id,
+    sourcePromptFingerprint: typeof data.sourcePromptFingerprint === "string" ? data.sourcePromptFingerprint : undefined,
+    sourcePromptKey: typeof data.sourcePromptKey === "string" ? data.sourcePromptKey : undefined,
     title: data.title,
     prompt: data.prompt,
     showInSummary: coerceShowInSummary(data.showInSummary, data.id),
@@ -66,6 +72,8 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
   }),
   toDoc: (panel, now) => ({
     id: panel.id,
+    ...(panel.sourcePromptFingerprint ? { sourcePromptFingerprint: panel.sourcePromptFingerprint } : {}),
+    ...(panel.sourcePromptKey ? { sourcePromptKey: panel.sourcePromptKey } : {}),
     title: panel.title,
     prompt: panel.prompt,
     showInSummary: panel.showInSummary,

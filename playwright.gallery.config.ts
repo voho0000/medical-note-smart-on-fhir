@@ -4,7 +4,7 @@ const server = Array.isArray(config.webServer) ? config.webServer[0] : config.we
 
 export default defineConfig({
   ...config,
-  testMatch: 'prompt-gallery.spec.ts',
+  testMatch: ['prompt-gallery.spec.ts', 'gallery-import.spec.ts'],
   testIgnore: [],
   timeout: 90_000,
   use: { ...config.use, baseURL: 'http://localhost:3017' },

@@ -1,6 +1,8 @@
 // Chat Templates Manager
 "use client"
 
+import { useGalleryImport } from "@/features/prompt-gallery/hooks/useGalleryImport"
+import { gallerySourceKey } from "@/src/shared/utils/gallery-template.utils"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -90,14 +92,19 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     moveTemplate(currentIndex, targetIndex)
   }
 
+  const galleryImport = useGalleryImport({
+    inline: true,
+    scope: `${user?.uid ?? 'guest'}:${audience}:chat`,
+    items: templates.map(item => ({ ...item, title: item.label })),
+    add: value => addTemplate({ label: value.title, content: value.content, sourcePromptKey: value.sourcePromptKey, sourcePromptFingerprint: value.sourcePromptFingerprint }),
+    update: (id, value) => updateTemplate(id, { label: value.title, content: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint }),
+    save: saveTemplates,
+    select: setActiveId,
+  })
   const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType) => {
-    if (useAs === "summary" || !canAddTemplate) return
-    const newTemplateId = addTemplate()
-    if (!newTemplateId) return
-    updateTemplate(newTemplateId, { label: prompt.title, content: prompt.prompt })
-    setActiveId(newTemplateId)
+    if (useAs === "summary") return
     setShowPromptGallery(false)
-    if (user) window.setTimeout(() => void saveTemplates(), 200)
+    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) })
   }
 
   const restoreControl = (
@@ -116,6 +123,7 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
 
   return (
     <div className="space-y-4">
+      {galleryImport.notice}
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -207,7 +215,7 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
           </nav>
 
           <div className="space-y-1 border-t p-2">
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs" onClick={() => setShowPromptGallery(true)} disabled={!canAddTemplate}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start gap-2 text-xs" onClick={() => setShowPromptGallery(true)}>
               <Library className="h-3.5 w-3.5 text-primary" />
               {t.promptGallery.browseGallery}
             </Button>
@@ -248,7 +256,7 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
           {user ? t.settings.templateAccountSync : t.settings.templateBrowserAutosave}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:hidden" onClick={() => setShowPromptGallery(true)} disabled={!canAddTemplate}>
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs sm:hidden" onClick={() => setShowPromptGallery(true)}>
             <Library className="h-3.5 w-3.5" />
             {t.promptGallery.browseGallery}
           </Button>
@@ -262,6 +270,7 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
         </div>
       </div>
 
+      {galleryImport.dialog}
       <PromptGalleryDialog open={showPromptGallery} onOpenChange={setShowPromptGallery} mode="chat" onSelectPrompt={handleSelectPrompt} />
       <SharePromptDialog open={showShareDialog} onOpenChange={setShowShareDialog} initialTitle={templateToShare?.label || ""} initialPrompt={templateToShare?.content || ""} initialType="chat" />
     </div>

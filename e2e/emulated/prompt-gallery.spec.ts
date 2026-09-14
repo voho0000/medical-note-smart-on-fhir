@@ -69,7 +69,7 @@ test('summary entry can discover and import a public chat-only HMC template afte
     await expect(preview.getByRole('region', { name: 'Prompt 內容', exact: true })).toContainText(content)
     await preview.getByRole('button', { name: '加入自訂摘要', exact: true }).click()
     await expect(preview).toBeHidden()
-    await gallery.getByRole('button', { name: 'Close', exact: true }).click()
+    // Import returns directly to the selected saved template.
     await expect(gallery).toBeHidden()
     await expect(manager.getByRole('textbox', { name: '模組名稱', exact: true })).toHaveValue('HMC SOAP DNA')
     await expect(manager.locator('textarea')).toHaveValue(content)
