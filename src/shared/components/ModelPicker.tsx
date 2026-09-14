@@ -10,6 +10,7 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
+import type { Ref } from "react"
 import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
@@ -53,6 +54,10 @@ interface ModelPickerProps {
   compact?: boolean
   /** Optional host-specific trigger sizing without changing other AI features. */
   triggerClassName?: string
+  /** Optional external control for recovery flows that reveal this picker. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  triggerRef?: Ref<HTMLButtonElement>
 }
 
 export function ModelPicker({
@@ -64,6 +69,9 @@ export function ModelPicker({
   align = "end",
   compact = false,
   triggerClassName,
+  open,
+  onOpenChange,
+  triggerRef,
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
@@ -112,9 +120,10 @@ export function ModelPicker({
   ]
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           data-testid="model-picker-trigger"
           title={tooltip}

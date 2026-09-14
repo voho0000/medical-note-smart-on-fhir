@@ -494,9 +494,19 @@ export default function MedicalSummaryFeature() {
     .replace("{org}", String(coverage?.organizations ?? 0))
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
+  const [summaryModelPickerOpen, setSummaryModelPickerOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<MedicalSummaryCardId | null>(null)
+  const summaryModelPickerTriggerRef = useRef<HTMLButtonElement>(null)
   const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
+
+  const revealSummaryModelPicker = useCallback(() => {
+    const trigger = summaryModelPickerTriggerRef.current
+    if (!trigger) return
+    trigger.scrollIntoView({ block: "center" })
+    trigger.focus({ preventScroll: true })
+    setSummaryModelPickerOpen(true)
+  }, [])
 
   const cardSucceeded = useCallback(
     (cardId: GeneratedCardId) => Boolean(
@@ -894,6 +904,9 @@ export default function MedicalSummaryFeature() {
               modelId={model}
               fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
               onSelect={setModel}
+              open={summaryModelPickerOpen}
+              onOpenChange={setSummaryModelPickerOpen}
+              triggerRef={summaryModelPickerTriggerRef}
               tooltip={t.safetyAlerts.modelTooltip}
               compact
               triggerClassName="min-h-[44px] min-w-0 flex-1 basis-24 text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
@@ -1174,7 +1187,10 @@ export default function MedicalSummaryFeature() {
                   icon: <Settings2 className="h-3 w-3" />,
                   variant: "outline" as const,
                 }] : []),
-              ] : undefined}
+              ] : [{
+                label: t.modelPicker.switchModel,
+                onClick: revealSummaryModelPicker,
+              }]}
             />
           ) : null}
 

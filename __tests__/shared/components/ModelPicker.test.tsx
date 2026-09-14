@@ -1,4 +1,4 @@
-import type { MouseEventHandler, ReactNode } from 'react'
+import { useRef, useState, type MouseEventHandler, type ReactNode } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { ModelPicker } from '@/src/shared/components/ModelPicker'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -10,7 +10,20 @@ import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 
 jest.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({
+    children,
+    open,
+    onOpenChange,
+  }: {
+    children: ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+  }) => (
+    <div data-testid="model-picker-menu" data-open={String(Boolean(open))}>
+      <button type="button" onClick={() => onOpenChange?.(!open)}>toggle menu</button>
+      {children}
+    </div>
+  ),
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => (
     <div role="menu">{children}</div>
@@ -52,6 +65,32 @@ function NavigationProbe() {
     <output data-testid="settings-navigation">
       {`${activeTab}|${settingsTab}|${settingsTarget ?? 'none'}`}
     </output>
+  )
+}
+
+function ControlledPicker() {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          triggerRef.current?.focus()
+          setOpen(true)
+        }}
+      >
+        reveal picker
+      </button>
+      <ModelPicker
+        modelId="gemini-3.1-flash-lite"
+        fallbackModelId="gemini-3.1-flash-lite"
+        onSelect={jest.fn()}
+        open={open}
+        onOpenChange={setOpen}
+        triggerRef={triggerRef}
+      />
+    </>
   )
 }
 
@@ -103,6 +142,26 @@ describe('ModelPicker custom model management entry', () => {
     expect(screen.getByTestId('settings-navigation')).toHaveTextContent(
       'settings|ai|openai-compatible-add-profile',
     )
+  })
+
+  it('can be revealed and focused by a recovery action', () => {
+    render(
+      <LanguageProvider>
+        <RightPanelProvider>
+          <ControlledPicker />
+        </RightPanelProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('model-picker-menu')).toHaveAttribute('data-open', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'reveal picker' }))
+
+    expect(screen.getByTestId('model-picker-menu')).toHaveAttribute('data-open', 'true')
+    expect(screen.getByTestId('model-picker-trigger')).toHaveFocus()
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle menu' }))
+    expect(screen.getByTestId('model-picker-menu')).toHaveAttribute('data-open', 'false')
   })
 
   it('updates the standard-chat badge from the selected custom profile capability', () => {

@@ -85,6 +85,7 @@ export const en = {
   // Shared in-panel model picker (chat / custom-summary / medical-summary headers)
   modelPicker: {
     label: 'Model',
+    switchModel: 'Switch model',
     chatTooltip: 'Model for this chat (independent of other features)',
     insightsTooltip: 'Model for custom summary generation (independent of other features)',
     configureApiKey: 'Set API key',
