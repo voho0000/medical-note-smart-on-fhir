@@ -35,16 +35,17 @@ export async function importBundle(
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, options.locale ?? 'zh-TW')
+  await page.goto('/')
   // The header file input exists in the server-rendered loading shell, before
   // its change handler is ready. A clean page resolves to Welcome, while a
   // re-import resolves straight back to the persisted patient workspace. Wait
   // for either client-only result before selecting the file so the change
-  // cannot be lost during hydration. Loading goes through `loadApp` so a dev
-  // server caught mid-recompile gets one more chance (see there).
-  await loadApp(page, () => page.goto('/'), async () => (
-    await page.getByTestId('welcome-demo-card').isVisible()
-      || await page.locator('[data-slot="clinical-patient-context"]').count() > 0
-  ))
+  // cannot be lost during hydration.
+  await expect.poll(async () => {
+    const welcomeReady = await page.getByTestId('welcome-demo-card').isVisible()
+    const patientReady = await page.locator('[data-slot="clinical-patient-context"]').count() > 0
+    return welcomeReady || patientReady
+  }, { timeout: 20_000 }).toBe(true)
   // Register before choosing the file so a fast import cannot settle between
   // setInputFiles resolving and the next Playwright command.
   await page.evaluate(() => {
@@ -75,40 +76,6 @@ export async function importBundle(
     await expect(page.getByText('王小明').first()).toBeAttached({ timeout: 20_000 })
   }
   return bundlePath
-}
-
-/**
- * Navigate (goto / reload) and wait for the app to actually mount.
- *
- * `next dev --webpack` — what the emulator suites run against — re-reads its
- * build manifests on every request and rewrites them whenever it recompiles.
- * A request that lands mid-rewrite renders "SyntaxError: Unexpected end of
- * JSON input" for `/` and the browser shows the dev overlay instead of the
- * app; the very next load is fine. CI hit this between tests and on in-spec
- * reloads (#96/#97/#104 gallery-regression), never locally. So: bounded
- * retries of the navigation, judged by whether the app mounted. A page that
- * fails every time still fails the test — this covers the transient only.
- */
-export async function loadApp(
-  page: Page,
-  navigate: () => Promise<unknown>,
-  mounted: () => Promise<boolean>,
-) {
-  await expect(async () => {
-    await navigate()
-    await expect.poll(mounted, { timeout: 15_000 }).toBe(true)
-  }).toPass({ timeout: 60_000, intervals: [1_000, 2_000] })
-}
-
-/**
- * `page.reload()` for a workspace that already has a patient: waits for the
- * patient context to come back, retrying the reload on the dev-server race
- * described on `loadApp`.
- */
-export async function reloadApp(page: Page) {
-  await loadApp(page, () => page.reload(), async () => (
-    await page.locator('[data-slot="clinical-patient-context"]').count() > 0
-  ))
 }
 
 /**
@@ -162,17 +129,6 @@ export async function enableSummaryAutoGenerate(page: Page) {
  * Specs used to find them straight after import because the panel was open by
  * default.
  *
- * The collapse is decided one measurement AFTER first paint: the workspace
- * mounts with the panel open (`preferredWidthReachable` still null), then the
- * container is measured and, on a display too narrow for 總覽's 2×2, the
- * panel folds into the rail. A helper that returned the moment it saw the tab
- * therefore handed callers a tab that could vanish before their click landed —
- * the CI signature was "visible → outside of the viewport → not visible",
- * forever, because nothing ever clicked the rail. Clicking the rail is what
- * makes the choice stick (`setCollapsedByUser`), so this retries: open when a
- * rail is showing, then require the tab to still be there after the measure
- * has had time to run.
- *
  * The rail carries its own label (it reports a finished summary, or a running
  * one) so this matches on `data-slot` rather than on text that changes with
  * state.
@@ -180,25 +136,38 @@ export async function enableSummaryAutoGenerate(page: Page) {
 export async function openFeaturePanel(page: Page) {
   // `header.medicalSummary` is 醫療摘要 in zh-TW and plain "Summary" in en.
   const summaryTab = page.getByRole('tab', { name: /醫療摘要|^Summary$/ }).first()
-  // Phone widths have no rail — the panels are swapped by the bottom switcher,
-  // and a spec that drives that switcher itself must not be pre-empted here.
-  // Returning keeps this callable from every layout.
-  if ((page.viewportSize()?.width ?? 0) < 768) return summaryTab
+  // Phone widths have no rail: explicitly select 功能 through the same switcher
+  // a reader uses. A helper named openFeaturePanel must leave the panel open at
+  // every supported viewport, including after a test crosses the 768px boundary.
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    if (await summaryTab.isVisible().catch(() => false)) return summaryTab
+    const featureSwitcher = page.getByRole('button', { name: /^(功能|Features)$/ }).first()
+    await expect(featureSwitcher).toBeVisible({ timeout: 20_000 })
+    await featureSwitcher.click()
+    await expect(summaryTab).toBeVisible({ timeout: 20_000 })
+    return summaryTab
+  }
 
   const rail = page.locator('[data-slot="clinical-workspace-rail"]').first()
-  await expect(async () => {
-    // Straight after a reload neither is mounted yet; a failed attempt here
-    // just comes round again.
-    if (!(await summaryTab.isVisible().catch(() => false))) {
-      await expect(rail).toBeVisible({ timeout: 2_000 })
-      await rail.click({ timeout: 2_000 })
+  // The first desktop render is deliberately split while ResizeObserver
+  // measures whether the preferred overview width fits. On narrower desktop
+  // viewports that transiently exposes the Summary tab, then replaces it with
+  // the collapsed rail. Require the open state twice. If a late patient/layout
+  // reset restores the rail after a click, click the newly rendered rail again
+  // instead of making the whole spec depend on Playwright's test-level retry.
+  let matchingOpenObservations = 0
+  await expect.poll(async () => {
+    if (await summaryTab.isVisible().catch(() => false)) {
+      matchingOpenObservations += 1
+      return matchingOpenObservations >= 2
     }
-    await expect(summaryTab).toBeVisible({ timeout: 2_000 })
-    // Survive the post-mount measurement. If the panel folds now, the next
-    // attempt sees the rail and clicks it, which pins the panel open.
-    await page.waitForTimeout(300)
-    await expect(summaryTab).toBeVisible({ timeout: 1_000 })
-  }).toPass({ timeout: 30_000, intervals: [250, 500, 1_000] })
+
+    matchingOpenObservations = 0
+    if (await rail.isVisible().catch(() => false)) {
+      await rail.click({ timeout: 2_000 }).catch(() => undefined)
+    }
+    return false
+  }, { timeout: 20_000, intervals: [100] }).toBe(true)
   return summaryTab
 }
 
@@ -207,18 +176,12 @@ export async function openFeaturePanel(page: Page) {
  * panel DEFAULTS to 醫療摘要 (medical summary), so the chat input renders in an
  * inactive tab (mounted-but-hidden) until this tab is selected — and since #72
  * the panel itself starts collapsed, so it has to be opened first.
- *
- * Opening, selecting and reading the input are retried as one unit: the
- * auto-collapse described on `openFeaturePanel` can land between any two of
- * these steps, and only a fresh pass (which re-clicks the rail) recovers.
  */
 export async function openChatInput(page: Page) {
+  await openFeaturePanel(page)
+  await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click()
   const textarea = page.getByPlaceholder(/輸入|Type your/).first()
-  await expect(async () => {
-    await openFeaturePanel(page)
-    await page.getByRole('tab', { name: /臨床對話|Clinical Chat/ }).click({ timeout: 2_000 })
-    await expect(textarea).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 45_000, intervals: [250, 500, 1_000] })
+  await expect(textarea).toBeVisible()
   return textarea
 }
 

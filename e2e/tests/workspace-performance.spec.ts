@@ -10,12 +10,6 @@ declare global {
 const LEFT_TABS = ['病人資訊', '就診紀錄', '報告', '用藥', '文件'] as const
 const LEFT_TAB_CONTENT_IDS = ['patient', 'visits', 'reports', 'meds', 'documents'] as const
 
-async function afterPaint(page: Page) {
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    requestAnimationFrame(() => resolve())
-  }))
-}
-
 async function clickAndMeasureTwoPaints(target: Locator) {
   return target.evaluate(async (element) => {
     const startedAt = performance.now()
@@ -117,18 +111,16 @@ test.describe('clinical workspace performance contract', () => {
     await page.getByTestId('welcome-demo-card').click()
     const visitsTabDuringLoad = page.getByRole('tab').filter({ hasText: '就診紀錄' }).first()
     await expect(visitsTabDuringLoad).toBeVisible({ timeout: 30_000 })
-    const loadingTabSwitchStartedAt = await page.evaluate(() => performance.now())
-    await visitsTabDuringLoad.click()
+    // Measure in the browser, as the warm-switch and detail interaction
+    // budgets below do. Timing around Playwright's remote click includes
+    // protocol/actionability round trips and fails on a busy runner even when
+    // the page paints within budget.
+    const loadingTabSwitchMs = await mouseDownAndMeasureTwoPaints(visitsTabDuringLoad)
     await expect(visitsTabDuringLoad).toHaveAttribute('data-state', 'active')
     // The interaction contract is the first visible response: selected tab +
     // lightweight loading frame. The tab's heavy workspace intentionally
     // starts mounting on the following frame and is measured separately by
     // warm-switch/scroll/trend budgets below.
-    await afterPaint(page)
-    const loadingTabSwitchMs = await page.evaluate(
-      (start) => performance.now() - start,
-      loadingTabSwitchStartedAt,
-    )
     expect(loadingTabSwitchMs).toBeLessThan(500)
 
     await expect(page.getByText('陳○明').first()).toBeVisible({ timeout: 30_000 })

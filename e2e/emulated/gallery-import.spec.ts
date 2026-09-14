@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { importBundle, openChatInput, openFeaturePanel, reloadApp } from '../fixtures/import'
+import { importBundle, openChatInput, openFeaturePanel } from '../fixtures/import'
 
 const firestore = 'http://127.0.0.1:8188/v1/projects/demo-mediprisma/databases/mediprisma/documents'
 const title = 'E2E 範本重複匯入'
@@ -128,7 +128,7 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
     if (entry !== 'summary-manager') await manager.getByRole('button', { name: '儲存模板', exact: true }).click()
     const contentKey = entry === 'summary-manager' ? 'prompt' : 'content'
     await expect.poll(async () => (await imported())[0].fields[contentKey].stringValue).toBe('E2E 保留我的編輯內容')
-    await reloadApp(page)
+    await page.reload()
     await doImport()
     await expect.poll(async () => (await imported()).length).toBe(1)
     expect((await imported())[0].name).toBe(savedName)
@@ -180,7 +180,7 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
     await choice.getByRole('button', { name: '更新這份範本', exact: true }).click()
     await expect.poll(async () => (await imported())[0].fields[contentKey].stringValue).toBe('E2E 來源更新版本三')
     expect((await imported())[0].name).toBe(savedName)
-    await reloadApp(page)
+    await page.reload()
     await doImport()
     await expect(choice).toBeHidden()
     expect((await imported()).length).toBe(1)
