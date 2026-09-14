@@ -1,5 +1,5 @@
 import { firestore, memory } from './fixtures/firestore-memory'
-import { createTenantPrompt, deleteTenantPrompt, getTenantPrompts, incrementTenantPromptUsage } from '@/features/prompt-gallery/services/tenant-prompts.service'
+import { createTenantPrompt, deleteTenantPrompt, getTenantPrompts, incrementTenantPromptUsage, updateTenantPrompt } from '@/features/prompt-gallery/services/tenant-prompts.service'
 import { createSharedPrompt, getSharedPrompts } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { SharedPrompt } from '@/features/prompt-gallery/types/prompt.types'
 
@@ -21,10 +21,21 @@ it('stores department templates in their own collection, scoped by tenantId, new
 
   const cardio = await getTenantPrompts('cardio')
   expect(cardio.map((prompt) => prompt.title)).toEqual(['Cath note', 'HF follow-up'])
-  expect(cardio[0]).toMatchObject({ tenantId: 'cardio', usageCount: 0, authorName: 'Dr. B' })
+  expect(cardio[0]).toMatchObject({ tenantId: 'cardio', version: 1, usageCount: 0, authorName: 'Dr. B' })
   expect(firestore.where).toHaveBeenCalledWith('tenantId', '==', 'cardio')
   expect(await getSharedPrompts()).toHaveLength(0)
   expect(memory.records.get('tenantPrompts/' + first)).not.toHaveProperty('body')
+})
+
+it('versions department templates only when material output changes', async () => {
+  const id = await createTenantPrompt({ ...draft(), tenantId: 'cardio' })
+  await updateTenantPrompt(id, { tags: ['reviewed'], category: 'safety' })
+  expect((await getTenantPrompts('cardio'))[0].version).toBe(1)
+  await Promise.all([
+    updateTenantPrompt(id, { prompt: 'First material change' }),
+    updateTenantPrompt(id, { languagePolicy: 'interface-language' }),
+  ])
+  expect((await getTenantPrompts('cardio'))[0]).toMatchObject({ version: 3, prompt: 'First material change', languagePolicy: 'interface-language' })
 })
 
 it('counts uses and deletes department templates without touching the public gallery', async () => {

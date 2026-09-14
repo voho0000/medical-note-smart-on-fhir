@@ -2561,6 +2561,7 @@ export const zhTW = {
     updatedAt: '更新',
     resultsCount: '{count} 筆',
     columnTemplate: '範本',
+    columnVersion: '版本',
     columnType: '類型',
     columnCategory: '分類',
     columnSpecialty: '科別',

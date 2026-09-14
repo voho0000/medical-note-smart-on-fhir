@@ -20,7 +20,7 @@ import { Calendar, TrendingUp, Trash2, Loader2, Copy, RotateCcw, Pencil } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { applyTemplateVariables, extractTemplateVariables, missingTemplateVariables } from '../utils/template-variables.utils'
-import type { PromptType, SharedPrompt } from '../types/prompt.types'
+import { coerceTemplateVersion, type PromptType, type SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { deleteSharedPrompt, loadSharedPromptContent } from '@/features/prompt-gallery/services/prompt-gallery.service'
@@ -391,6 +391,8 @@ export function PromptPreviewDialog({
                 {t.promptGallery.sourceUpdated}
               </Badge>
             )}
+            <span className="tabular-nums">V{coerceTemplateVersion(prompt.version)}</span>
+            <span aria-hidden="true">·</span>
             <span className="tabular-nums">{t.promptGallery.updatedAt} {formatPromptDate(prompt.updatedAt)}</span>
             {isFavorite && (
               <>

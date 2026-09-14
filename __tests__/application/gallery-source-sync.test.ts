@@ -14,10 +14,11 @@ it.each(['chatTemplates', 'clinicalInsightPanels'])('%s preserves gallery proven
   const stored = config.toDoc({
     id: 'local-id', label: 'Chat', content: 'Edited chat', title: 'Summary', prompt: 'Edited summary',
     audience: 'medical', order: 0, showInSummary: false, autoGenerate: false,
-    outputFormat: 'markdown', languagePolicy: 'interface-language', sourcePromptKey, sourcePromptFingerprint: 'source-fingerprint',
+    outputFormat: 'markdown', languagePolicy: 'interface-language', sourcePromptKey, sourcePromptFingerprint: 'source-fingerprint', sourcePromptVersion: 3,
   }, { toDate: () => new Date(0) } as never)
   expect(stored.sourcePromptKey).toBe(sourcePromptKey)
-  expect(config.fromDoc('local-id', stored)).toMatchObject({ sourcePromptKey, sourcePromptFingerprint: 'source-fingerprint' })
+  expect(config.fromDoc('local-id', stored)).toMatchObject({ sourcePromptKey, sourcePromptFingerprint: 'source-fingerprint', sourcePromptVersion: 3 })
   const { sourcePromptKey: _source, ...legacy } = stored
   expect(config.fromDoc('local-id', legacy)).toHaveProperty('sourcePromptKey', undefined)
+  expect(config.fromDoc('local-id', { ...stored, sourcePromptVersion: 0 })).toHaveProperty('sourcePromptVersion', undefined)
 })

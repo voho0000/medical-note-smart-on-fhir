@@ -162,12 +162,14 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     add: value => addPanel({
       title: value.title, prompt: value.content, sourcePromptKey: value.sourcePromptKey,
       sourcePromptFingerprint: value.sourcePromptFingerprint,
+      sourcePromptVersion: value.sourcePromptVersion,
       showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES, autoGenerate: false,
       outputFormat: value.outputFormat as InsightPanelConfig['outputFormat'],
       languagePolicy: value.languagePolicy as InsightPanelConfig['languagePolicy'],
     }),
     update: (id, value) => updatePanel(id, {
       title: value.title, prompt: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint,
+      sourcePromptVersion: value.sourcePromptVersion,
       outputFormat: value.outputFormat as InsightPanelConfig['outputFormat'],
       languagePolicy: value.languagePolicy as InsightPanelConfig['languagePolicy'],
     }),
@@ -179,6 +181,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     setShowGalleryDialog(false)
     await requestCustomization(() => galleryImport.importPrompt({
       title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt),
+      sourcePromptVersion: prompt.version ?? 1,
       outputFormat: prompt.outputFormat ?? 'markdown', languagePolicy: prompt.languagePolicy ?? 'interface-language',
     }, onImported))
   }

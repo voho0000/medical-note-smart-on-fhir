@@ -8,7 +8,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { findGalleryTemplate, galleryFingerprint } from '@/src/shared/utils/gallery-template.utils'
 
 export type GalleryImportItem = {
-  id: string; title: string; content: string; sourcePromptKey?: string; sourcePromptFingerprint?: string
+  id: string; title: string; content: string; sourcePromptKey?: string; sourcePromptFingerprint?: string; sourcePromptVersion?: number
   outputFormat?: string; languagePolicy?: string
 }
 export type GalleryImportValue = Omit<GalleryImportItem, 'id'>
@@ -78,7 +78,7 @@ export function useGalleryImport(options: Options) {
   }
   const copy = (value: GalleryImportValue, scope: string, insert = false, onImported?: () => void) => {
     if (!active.current || latest.current.scope !== scope) return
-    const id = latest.current.add({ ...value, title: value.title + labels.suffix, sourcePromptKey: undefined, sourcePromptFingerprint: undefined })
+    const id = latest.current.add({ ...value, title: value.title + labels.suffix, sourcePromptKey: undefined, sourcePromptFingerprint: undefined, sourcePromptVersion: undefined })
     if (!id) { setError(labels.full); toast.error(labels.full); return }
     void latest.current.save()
     latest.current.select?.(id)
@@ -116,7 +116,7 @@ export function useGalleryImport(options: Options) {
     if (!livePending) return
     const item = latest.current.items.find(item => item.id === livePending.id)
     if (!item) { toast.error(labels.missing); setPending(null); return }
-    latest.current.update(item.id, update ? livePending.value : { ...item, sourcePromptFingerprint: livePending.value.sourcePromptFingerprint })
+    latest.current.update(item.id, update ? livePending.value : { ...item, sourcePromptFingerprint: livePending.value.sourcePromptFingerprint, sourcePromptVersion: livePending.value.sourcePromptVersion })
     void latest.current.save()
     activate(item.id, update ? livePending.value.content : item.content)
     livePending.onImported?.()
@@ -149,7 +149,10 @@ export function useGalleryImport(options: Options) {
           {[[labels.mine, existing], [labels.source, livePending?.value]].map(([label, item]) => {
             const version = item as GalleryImportValue | undefined
             return <section key={label as string} className="min-w-0 space-y-2">
-              <h3 className="text-sm font-semibold">{label as string}</h3>
+              <h3 className="flex items-baseline gap-2 text-sm font-semibold">
+                <span>{label as string}</span>
+                {version?.sourcePromptVersion && <span className="text-xs font-normal tabular-nums text-muted-foreground">V{version.sourcePromptVersion}</span>}
+              </h3>
               <p className="break-words text-sm">{version?.title}</p>
               {version?.outputFormat && <p className="text-xs text-muted-foreground">{version.outputFormat === 'plain-text' ? (zh ? '純文字' : 'Plain text') : version.outputFormat === 'markdown' ? 'Markdown' : version.outputFormat} · {version.languagePolicy === 'interface-language' ? (zh ? '依介面語言' : 'Interface language') : (zh ? '依範本語言' : 'Template language')}</p>}
               <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap break-words rounded-md border p-3 font-sans text-sm">{version?.content}</pre>

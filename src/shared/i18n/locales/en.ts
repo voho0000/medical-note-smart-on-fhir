@@ -2558,6 +2558,7 @@ export const en = {
     updatedAt: 'Updated',
     resultsCount: '{count} results',
     columnTemplate: 'Template',
+    columnVersion: 'Version',
     columnType: 'Type',
     columnCategory: 'Category',
     columnSpecialty: 'Specialty',

@@ -96,15 +96,15 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     inline: true,
     scope: `${user?.uid ?? 'guest'}:${audience}:chat`,
     items: templates.map(item => ({ ...item, title: item.label })),
-    add: value => addTemplate({ label: value.title, content: value.content, sourcePromptKey: value.sourcePromptKey, sourcePromptFingerprint: value.sourcePromptFingerprint }),
-    update: (id, value) => updateTemplate(id, { label: value.title, content: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint }),
+    add: value => addTemplate({ label: value.title, content: value.content, sourcePromptKey: value.sourcePromptKey, sourcePromptFingerprint: value.sourcePromptFingerprint, sourcePromptVersion: value.sourcePromptVersion }),
+    update: (id, value) => updateTemplate(id, { label: value.title, content: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint, sourcePromptVersion: value.sourcePromptVersion }),
     save: saveTemplates,
     select: setActiveId,
   })
   const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
     if (useAs === "summary") return
     setShowPromptGallery(false)
-    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt) }, onImported)
+    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt), sourcePromptVersion: prompt.version ?? 1 }, onImported)
   }
 
   const restoreControl = (
