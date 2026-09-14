@@ -33,6 +33,7 @@ import { useReportNameMode } from '../context/report-name-mode.context'
 import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 import { REPORT_ABNORMAL_TONE, REPORT_CATEGORY_TONE } from './report-color-roles'
 import { ReportSourceProgramBadge } from './ReportSourceProgramBadge'
+import { NhiMedicloudSourceIndicator } from './NhiMedicloudSourceIndicator'
 
 interface LabDayGroupCardProps {
   row: Row
@@ -171,15 +172,22 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
           </span>
           <span
             data-testid="lab-day-institution-slot"
-            className="col-span-2 col-start-2 row-start-2 flex min-w-0 w-full @min-[300px]:col-span-1 @min-[300px]:col-start-4 @min-[300px]:row-start-1"
+            className={cn(
+              'flex min-w-0 w-full',
+              row.sourceProvenance === 'nhi-medicloud'
+                ? '[grid-column:2/-1] [grid-row:2] @min-[900px]:[grid-column:4/5] @min-[900px]:[grid-row:1]'
+                : 'col-span-2 col-start-2 row-start-2 @min-[300px]:col-span-1 @min-[300px]:col-start-4 @min-[300px]:row-start-1',
+            )}
           >
-            {row.institution && (
+            {row.sourceProvenance === 'nhi-medicloud' ? (
+              <NhiMedicloudSourceIndicator institution={row.institution} className="min-w-0 max-w-full" />
+            ) : row.institution ? (
               <ReportInstitutionLabel
                 institution={row.institution}
                 locale={locale}
                 className="min-w-0 flex-1 max-w-full"
               />
-            )}
+            ) : null}
           </span>
         </span>
         <span

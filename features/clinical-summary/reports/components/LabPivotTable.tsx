@@ -18,6 +18,7 @@ import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
 import { preloadCumulativeLabTrendModule } from "./cumulative-lab-trend-loader"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 
 export interface OpenTrendTarget {
   categoryId: string
@@ -230,6 +231,21 @@ export const LabPivotTable = memo(function LabPivotTable({
           tables then read as one calm sheet instead of black stripes. */}
       <td className="sticky left-0 z-10 bg-card border-r px-2 py-1 font-medium whitespace-nowrap">
         {formatDateLabel(date)}
+        {flatTests.some(test => {
+          const cell = test.values.get(date)
+          return cell?.sourceProvenance === 'nhi-medicloud'
+            || cell?.sourceRecords?.some(record => record.provenance === 'nhi-medicloud')
+        }) && (
+          <InfoHint
+            aria-label={locale.startsWith('zh') ? '本日期含健保雲端圖形化查詢結果' : 'This date includes NHI MediCloud results'}
+            className="ml-1 -my-1 h-6 w-6 align-middle text-primary/80"
+            contentClassName="max-w-sm"
+          >
+            {locale.startsWith('zh')
+              ? '本日期包含健保雲端圖形化查詢結果'
+              : 'This date includes graphical lab results from NHI MediCloud'}
+          </InfoHint>
+        )}
         {flatTests.some(test => test.values.get(date)?.adultPreventive) && (
           <span className="ml-1 inline-flex"
             title={locale.startsWith('zh') ? '本日期包含成人健檢來源結果，不代表同日所有檢驗皆為成人健檢。' : 'This date includes adult preventive-care results; other same-day tests may have a different source.'}

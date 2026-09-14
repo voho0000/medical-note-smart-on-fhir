@@ -1208,6 +1208,17 @@ export const zhTW = {
     sourcePrograms: {
       adultPreventive: '成人健檢',
     },
+    sourceProvenance: {
+      nhiMedicloud: {
+        shortLabel: '健保雲端圖形化查詢',
+        formalName: '健保醫療資訊雲端查詢系統',
+        sourceLabel: '資料來源',
+        originalInstitutionLabel: '原檢驗院所',
+        institutionUnavailable: '未提供',
+        institutionUnavailableCompact: '院所未提供',
+        tooltip: '此筆取自健保醫療資訊雲端查詢系統的圖形化檢驗資料，僅供診療參考，並非原始檢驗報告。',
+      },
+    },
     adultPreventiveGroup: {
       itemCount: '{n} 項',
       expand: '展開成人健檢項目',
