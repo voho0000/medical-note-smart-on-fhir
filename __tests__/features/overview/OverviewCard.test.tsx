@@ -132,12 +132,14 @@ describe('OverviewCard (demo bundle)', () => {
       display,
       value,
       interpretation,
+      day = '2026-06-01',
     }: {
       id: string
       code: string
       display: string
       value: number
       interpretation?: string
+      day?: string
     }) => ({
       resourceType: 'Observation', id, status: 'final',
       category: [{ coding: [{
@@ -145,7 +147,7 @@ describe('OverviewCard (demo bundle)', () => {
         code: 'laboratory',
       }] }],
       code: { coding: [{ system: 'http://loinc.org', code, display }] },
-      effectiveDateTime: '2026-06-01T09:00:00+08:00',
+      effectiveDateTime: `${day}T09:00:00+08:00`,
       valueQuantity: { value, unit: code === '6690-2' ? 'K/uL' : 'U/L' },
       interpretation: interpretation
         ? [{ coding: [{
@@ -157,8 +159,9 @@ describe('OverviewCard (demo bundle)', () => {
     mockUseClinicalData.mockReturnValue({
       ...clinicalData,
       observations: [
-        // WBC belongs to 常用 and is normal; AST is outside 常用 but abnormal.
-        lab({ id: 'normal-common-wbc', code: '6690-2', display: 'Leukocytes', value: 5.5 }),
+        // A newer normal WBC belongs to 常用. The older AST is outside 常用
+        // but abnormal, and must not be displaced by the empty newer date.
+        lab({ id: 'normal-common-wbc', code: '6690-2', display: 'Leukocytes', value: 5.5, day: '2026-06-08' }),
         lab({ id: 'abnormal-non-common-ast', code: '1920-8', display: 'Aspartate aminotransferase', value: 987, interpretation: 'H' }),
       ],
     })
@@ -175,6 +178,8 @@ describe('OverviewCard (demo bundle)', () => {
 
     expect(labs.getByRole('button', { name: zhTW.overview.labs.abnormalOnly })).toHaveAttribute('aria-pressed', 'true')
     expect(labs.getByRole('button', { name: zhTW.overview.labs.pinned })).toHaveAttribute('aria-pressed', 'false')
+    expect(labs.getByText('06/01')).toBeInTheDocument()
+    expect(labs.queryByText('06/08')).not.toBeInTheDocument()
     expect(labs.getByText('987 ↑')).toBeInTheDocument()
     expect(labs.queryByText('5.5')).not.toBeInTheDocument()
   })

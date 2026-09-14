@@ -192,7 +192,7 @@ export function OverviewLabsSection({
     // Filter before applying the card's date budget so empty pinned days
     // cannot displace older days that actually contain common results.
     const eligibleIndexes = columns.map((_, index) => index).filter(index =>
-      effectiveMode !== 'pinned' || rows.some(row => Boolean(row.cells[index])),
+      rows.some(row => Boolean(row.cells[index])),
     )
     const visibleIndexes = expanded ? eligibleIndexes : eligibleIndexes.slice(-cardColumnCount)
     const visibleColumns = visibleIndexes.map(index => columns[index])
