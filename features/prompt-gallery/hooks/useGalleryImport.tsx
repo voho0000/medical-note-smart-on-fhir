@@ -28,14 +28,16 @@ export function useGalleryImport(options: Options) {
   const { locale } = useLanguage()
   const zh = locale !== 'en'
   const labels = zh ? {
-    identical: '你已經有完全相同的範本，未重複帶入。',
+    identicalTitle: '你已經有這份範本', acknowledge: '知道了',
+    identical: '已找到名稱、內容與輸出設定完全相同的範本，這次未重複帶入，也不會更動目前的輸入內容。',
     reused: '已在你的範本中，沿用既有範本', added: '已加入範本', copied: '已另存副本', updated: '已更新範本',
     copy: '另存副本', suffix: '（副本）', keep: '保留我的版本', update: '更新這份範本',
     changed: '來源範本有新內容', unknown: '來源與你的範本內容不同',
     description: '更新會取代這份範本的名稱、提示內容與來源提供的輸出設定。你可以保留自己的版本，或將來源另存副本。',
     mine: '我的版本', source: '來源版本', full: '無法新增範本，請確認範本數量或稍後再試。', missing: '這份範本已不存在，請重新帶入。',
   } : {
-    identical: 'You already have an identical template. Nothing was imported.',
+    identicalTitle: 'You already have this template', acknowledge: 'Got it',
+    identical: 'A template with the same title, content and output settings is already saved. Nothing was imported and your current input is unchanged.',
     reused: 'Already in your templates; using your saved version', added: 'Template added', copied: 'Copy added', updated: 'Template updated',
     copy: 'Save a copy', suffix: ' (copy)', keep: 'Keep my version', update: 'Update this template',
     changed: 'The source template has changed', unknown: 'The source differs from your template',
@@ -51,6 +53,7 @@ export function useGalleryImport(options: Options) {
   const [pending, setPending] = useState<{ value: GalleryImportValue; id: string; scope: string; known: boolean } | null>(null)
   const [notice, setNotice] = useState<{ message: string; value: GalleryImportValue; scope: string; copyable: boolean } | null>(null)
   const [error, setError] = useState('')
+  const [identicalScope, setIdenticalScope] = useState<string | null>(null)
   const livePending = pending?.scope === options.scope ? pending : null
   const existing = livePending ? options.items.find(item => item.id === livePending.id) : undefined
   const toastIds = useRef(new Set<string | number>())
@@ -58,6 +61,7 @@ export function useGalleryImport(options: Options) {
     // An account/role switch invalidates decisions and delayed toast actions.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPending(null)
+    setIdenticalScope(null)
     setNotice(null)
     setError('')
     const ids = toastIds.current
@@ -89,7 +93,7 @@ export function useGalleryImport(options: Options) {
     const importKey = JSON.stringify([o.scope, value.sourcePromptFingerprint])
     if (importsThisTick.current.has(importKey)
       || o.items.some(item => galleryFingerprint(item) === value.sourcePromptFingerprint)) {
-      feedback(labels.identical, value, o.scope, false)
+      setIdenticalScope(o.scope)
       return
     }
     const item = findGalleryTemplate(o.items, value.sourcePromptKey!, candidate => galleryFingerprint(candidate) === value.sourcePromptFingerprint)
@@ -117,6 +121,18 @@ export function useGalleryImport(options: Options) {
     setPending(null)
   }
   const dialog = (
+    <>
+    <Dialog open={identicalScope === options.scope} onOpenChange={open => { if (!open) setIdenticalScope(null) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{labels.identicalTitle}</DialogTitle>
+          <DialogDescription>{labels.identical}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button className="min-h-11" onClick={() => setIdenticalScope(null)}>{labels.acknowledge}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Dialog open={!!livePending} onOpenChange={open => { if (!open) setPending(null) }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl" onOpenAutoFocus={event => {
         event.preventDefault()
@@ -145,6 +161,7 @@ export function useGalleryImport(options: Options) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
   const noticeView = notice?.scope === options.scope && options.inline ? (
     <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2 text-sm">

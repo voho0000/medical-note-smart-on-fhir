@@ -59,6 +59,7 @@ it.each(['chat', 'summary'] as const)('%s manager reuses repeated selections, sa
   const imported = () => mode === 'chat' ? mockChats.filter(t => t.sourcePromptKey) : mockPanels.filter(p => p.sourcePromptKey)
   await openGallery()
   fireEvent.click(screen.getByRole('button', { name: 'Use gallery twice' }))
+    if (screen.queryByRole('button', { name: '知道了' })) fireEvent.click(screen.getByRole('button', { name: '知道了' }))
   await waitFor(() => expect(imported()).toHaveLength(1))
   const id = imported()[0].id
   const input = () => view.container.querySelector('textarea')!
@@ -66,6 +67,7 @@ it.each(['chat', 'summary'] as const)('%s manager reuses repeated selections, sa
   fireEvent.change(input(), { target: { value: 'My local edits' } })
   await openGallery()
   fireEvent.click(screen.getByRole('button', { name: 'Use gallery twice' }))
+    if (screen.queryByRole('button', { name: '知道了' })) fireEvent.click(screen.getByRole('button', { name: '知道了' }))
   await waitFor(() => expect(imported()[0]).toMatchObject(mode === 'chat' ? { content: 'My local edits' } : { prompt: 'My local edits' }))
   expect(imported()).toHaveLength(1)
   expect(input()).toHaveValue('My local edits')
@@ -73,6 +75,7 @@ it.each(['chat', 'summary'] as const)('%s manager reuses repeated selections, sa
   view = render(<Component />, { wrapper })
   await openGallery()
   fireEvent.click(screen.getByRole('button', { name: 'Use gallery twice' }))
+    if (screen.queryByRole('button', { name: '知道了' })) fireEvent.click(screen.getByRole('button', { name: '知道了' }))
   await waitFor(() => expect(input()).toHaveValue('My local edits'))
   expect(imported()).toHaveLength(1)
   expect(imported()[0].id).toBe(id)

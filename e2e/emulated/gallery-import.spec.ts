@@ -107,7 +107,9 @@ for (const entry of ['chat', 'chat-manager', 'summary-manager'] as const) {
       expect((await imported()).length).toBe(1)
     }
     await doImport(true)
-    await expect(page.getByText('你已經有完全相同的範本，未重複帶入。', { exact: true }).last()).toBeVisible()
+    const duplicateNotice = page.getByRole('dialog', { name: '你已經有這份範本', exact: true })
+    await expect(duplicateNotice).toBeVisible()
+    await duplicateNotice.getByRole('button', { name: '知道了', exact: true }).click()
     if (entry === 'chat') {
       await expect(await openChatInput(page)).toHaveValue(`${prompt}\n\n${prompt}`)
     }
