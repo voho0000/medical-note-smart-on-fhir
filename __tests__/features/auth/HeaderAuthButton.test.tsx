@@ -23,15 +23,20 @@ describe('HeaderAuthButton', () => {
     mockUseAuth.mockReturnValue({
       user: null,
       isAnonymous: false,
+      anonymousUid: null,
       loading: true,
+      signInWithGoogle: jest.fn(async () => undefined),
+      signInWithEmail: jest.fn(async () => undefined),
+      signUpWithEmail: jest.fn(async () => undefined),
       signOut: jest.fn(),
+      resetPassword: jest.fn(async () => undefined),
       dailyUsage: 0,
       dailyLimit: 0,
       perplexityUsage: 0,
       whisperUsage: 0,
       perplexityLimit: 0,
       whisperLimit: 0,
-    } as ReturnType<typeof useAuth>)
+    })
 
     render(<HeaderAuthButton />)
 
