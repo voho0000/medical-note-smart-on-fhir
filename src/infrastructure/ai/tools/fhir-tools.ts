@@ -59,7 +59,9 @@ import {
 } from '@/src/shared/utils/fhir-display-helpers'
 import { isNhiDrugCodeSystem } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
 import {
+  assessMedicationCurrentness,
   isMedicationCurrentlyInUse,
+  isMedicationCurrentnessUncertain,
   medicationExpectedEnd,
   normalizeClinicalStatus,
 } from '@/src/core/utils/clinical-context-selection.utils'
@@ -794,6 +796,7 @@ function medicationToolFields(
   const dispenseRequest = medication.dispenseRequest as any
   const expectedSupplyDuration = dispenseRequest?.expectedSupplyDuration
   const dispenseQuantity = dispenseRequest?.quantity
+  const currentness = assessMedicationCurrentness(medication, nowMs)
   return {
     ...medicationNameFields(medication),
     ...medicationClassificationFields(medication),
@@ -802,7 +805,8 @@ function medicationToolFields(
     ...(dosage ? { [dosageField]: dosage } : {}),
     ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),
     chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
-    current: isMedicationCurrentlyInUse(medication, nowMs),
+    current: currentness.current,
+    currentnessBasis: currentness.basis,
     ...(dispenseQuantity?.value !== undefined ? {
       dispenseQuantity: {
         value: dispenseQuantity.value,
@@ -833,13 +837,8 @@ function medicationGroundingRules(medications: MedicationEntity[]) {
       Boolean(medication.drugTerminology?.atcCode || medication.atcClassification?.atcCode),
     ),
     purposeOrIndicationProvided: false,
-    instruction: 'Copy medication, recordedName, dosage/dosageInstruction, status, dates, and terminology fields exactly. drugTerminology is an exact NHI-code/date match and may establish that row\'s ingredient, dose form, and ATC class. sourceAtcClassification may establish only the exact source WHO ATC hierarchy. recordedCategories are source/administrative labels, not proof of ingredient, mechanism, or indication. Never infer why the patient received a medicine, whether they actually took it, adherence, response, or outcome. A record with current=false or uncertain source status must not be called a current medication.',
+    instruction: 'Copy medication, recordedName, dosage/dosageInstruction, status, dates, current, currentnessBasis, and terminology fields exactly. current/currentnessBasis are deterministically computed from source lifecycle status and any computable supply window: an open supply window can resolve currentness when source status is missing or unknown. drugTerminology is an exact NHI-code/date match and may establish that row\'s ingredient, dose form, and ATC class. sourceAtcClassification may establish only the exact source WHO ATC hierarchy. recordedCategories are source/administrative labels, not proof of ingredient, mechanism, or indication. Never infer why the patient received a medicine, whether they actually took it, adherence, response, or outcome. A record with current=false or unresolved currentness must not be called a current medication.',
   }
-}
-
-function hasUncertainMedicationStatus(medication: MedicationEntity): boolean {
-  const status = normalizeClinicalStatus(medication.status)
-  return !status || status === 'unknown'
 }
 
 // ── factory ────────────────────────────────────────────────────────────────
@@ -1023,8 +1022,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const activeMedicationRecords = collection.medications.filter((medication) =>
           isMedicationCurrentlyInUse(medication, nowMs)
         )
-        const uncertainMedicationRecords = collection.medications.filter(
-          hasUncertainMedicationStatus,
+        const uncertainMedicationRecords = collection.medications.filter((medication) =>
+          isMedicationCurrentnessUncertain(medication, nowMs)
         )
         const allMedications = dedupMedicationRecords(
           activeMedicationRecords,
@@ -1092,7 +1091,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         return scrub({
           success: true,
           summary: allUncertainMedications.length > 0
-            ? 'Compact cross-domain health summary snapshot; one or more medication groups have unknown source status and are not presented as current'
+            ? 'Compact cross-domain health summary snapshot; one or more medication groups lack both usable lifecycle status and a computable supply window'
             : 'Compact cross-domain health summary snapshot',
           incomplete: queryIssues.length > 0,
           canConcludeAbsence: queryIssues.length === 0 && allUncertainMedications.length === 0,
@@ -1984,7 +1983,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     getActiveMedicationList: tool({
-      description: 'Shortcut for "what is the patient currently on?" — returns confirmed-current prescriptions using lifecycle status plus the computable supply window. Refill cycles collapse only when governed product identity, regimen, and source agree; unknown source status is returned separately and never promoted to current. Set chronicOnly to filter to 慢箋.',
+      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Refill cycles collapse only when governed product identity, regimen, and source agree. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
         const { collection } = getData()
@@ -2007,7 +2006,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         })
         const uncertain = list.filter((m: any) =>
           (!chronicOnly || isChronicByCourseOfTherapy(m.courseOfTherapyType))
-          && hasUncertainMedicationStatus(m)
+          && isMedicationCurrentnessUncertain(m, now)
         )
 
         const deduped = dedupMedicationRecords(active, list)
@@ -2022,8 +2021,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
         return scrub({
           success: true,
           summary: uncertainDeduped.length > 0
-            ? `${deduped.length} confirmed current medication(s); ${uncertainDeduped.length} medication group(s) have unknown source status and are not counted as current`
-            : `${deduped.length} confirmed current medication(s)`,
+            ? `${deduped.length} current medication(s); ${uncertainDeduped.length} medication group(s) lack both usable lifecycle status and a computable supply window`
+            : `${deduped.length} current medication(s)`,
           count: deduped.length,
           ...paginationMeta(deduped.length, currentPage.length),
           incomplete,

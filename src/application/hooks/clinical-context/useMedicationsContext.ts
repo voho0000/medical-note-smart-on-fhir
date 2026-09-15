@@ -1,7 +1,7 @@
 // Medications Context Hook
-// Matches the left panel "Currently in use" logic: status-based AND date-based.
-// A medication is currently in use if status is active/completed AND
-// (no end date computable OR endDate >= today).
+// Matches the left panel "Currently in use" logic shared with the FHIR tools.
+// Explicit lifecycle status is respected; MediCloud unknown/missing status uses
+// a computable source supply window, if present, to resolve currentness.
 import { useMemo, useState } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
