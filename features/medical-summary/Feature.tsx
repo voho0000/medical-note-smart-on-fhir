@@ -21,6 +21,7 @@ import {
 import { BookOpen, CircleHelp, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
@@ -132,6 +133,7 @@ function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
+  const { loading: authLoading } = useAuth()
   const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
   const { diagnosticReports, observations } = useClinicalData()
   const base = t.medicalSummary
@@ -237,6 +239,7 @@ export default function MedicalSummaryFeature() {
     safetyGenerationSlotKey,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
+    authLoading,
     hasPatient,
     // `result` is already scoped to the current patient, FHIR input signature,
     // locale, audience, and selected model cache slot. Matching provenance

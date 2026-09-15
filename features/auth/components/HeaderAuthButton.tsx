@@ -1,12 +1,12 @@
 // Header Authentication Button Component
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, User, Info, Gift } from 'lucide-react'
+import { LogIn, User, Info, Gift, Loader2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+
+const subscribeToHydration = () => () => undefined
+const getClientSnapshot = () => true
+const getServerSnapshot = () => false
 
 function MiniUsageRow({ label, used, limit }: { label: string; used: number; limit: number }) {
   return (
@@ -43,6 +47,7 @@ export function HeaderAuthButton() {
   const {
     user,
     isAnonymous,
+    loading,
     signOut,
     dailyUsage,
     dailyLimit,
@@ -52,6 +57,29 @@ export function HeaderAuthButton() {
     whisperLimit,
   } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientSnapshot,
+    getServerSnapshot,
+  )
+
+  if (!hydrated || loading) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="h-9 w-auto gap-2 px-3 shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
+        aria-label={t.auth.restoringSession}
+        title={t.auth.restoringSession}
+      >
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        <span className="max-md:hidden @max-[72rem]:hidden">
+          {t.auth.restoringSession}
+        </span>
+      </Button>
+    )
+  }
 
   // Anonymous (free-tier) visitor — `user` is null by design. Surface their
   // free usage and a CTA to sign in for the larger quota.
