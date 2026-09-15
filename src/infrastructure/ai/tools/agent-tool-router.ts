@@ -109,10 +109,59 @@ const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
   labs: [/(檢驗|檢查值|數值|趨勢|血糖|血球|腎功能|肝功能|肌酸酐|觀察值|lab|test result|trend|HbA1c|WBC|creatinine|eGFR|marker)/i],
   imaging: [/(影像|放射|超音波|電腦斷層|核磁|X\s*光|攝影|imaging|radiology|ultrasound|CT|MRI|X\s*[-–—]?\s*ray)/i],
   procedures: [/(手術|處置|治療程序|procedure|surgery|operation)/i],
-  medications: [/(藥|用藥|處方|服用|停藥|medication|medicine|prescription|drug)/i],
+  medications: [/(藥|用藥|處方|服用|停藥|用過|使用過|成分|學名|商品名|健保碼|哪一類藥|哪種藥|ATC|medication|medicine|prescription|drug|ingredient|generic name|brand name|drug class|taken|used)/i],
   allergies: [/(過敏|allerg)/i],
   immunizations: [/(疫苗|接種|immunization|vaccin)/i],
   literature: [/(文獻|研究|指引|證據|paper|literature|guideline|evidence)/i],
+}
+
+const MEDICATION_HISTORY_QUERY = /(?:過去|近(?:一|三|六|十?二|\d+)(?:個)?月|最近(?:一|三|六|十?二|\d+)(?:個)?月|曾經|用過|使用過|用藥歷史|用藥紀錄|處方紀錄|歷來|past|previous|history|ever (?:used|taken)|last\s+\d+\s+(?:days?|weeks?|months?|years?))/i
+const CURRENT_MEDICATION_QUERY = /(?:目前用藥|現用藥|現在(?:的)?用藥|現在(?:在)?(?:吃|服用)|正在(?:吃|服用)|current(?:ly)? (?:taking|using)|current medications?|on now)/i
+const MEDICATION_IDENTITY_QUERY = /(?:成分|學名|商品名|藥物種類|哪一類藥|哪種藥|ATC|是什麼藥|是不是.{0,20}藥|是否為.{0,20}藥|屬於.{0,20}藥|是.{0,20}(?:藥|劑)|ingredient|generic name|brand name|drug class|what (?:kind of )?(?:drug|medicine))/i
+
+function cleanMedicationQuery(value: string | undefined): string | undefined {
+  const cleaned = value
+    ?.normalize('NFKC')
+    .replace(/^(?:請問|請查(?:詢)?|幫我查(?:一下)?|幫我看(?:一下)?|查(?:一下)?|想知道|有沒有|是否有)\s*/i, '')
+    .replace(/^(?:(?:這位|這個|該)?(?:病人|患者|個案)|我的)(?:的|用的|服用的)?\s*/i, '')
+    .replace(/[，。！？?：:；;]+$/g, '')
+    .trim()
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 120) return undefined
+  if (/^(?:這個(?:藥|藥物)?|那個(?:藥|藥物)?|此藥|該藥|藥物|用藥|medicine|medication|drug)$/i.test(cleaned)) return undefined
+  return cleaned
+}
+
+export function extractMedicationRecordQuery(question: string): string | undefined {
+  const quoted = question.match(/[「『\"“]([^」』\"”]{2,120})[」』\"”]/)?.[1]
+  if (quoted) return cleanMedicationQuery(quoted)
+  const nhiCode = question.match(/\b[A-Z]{2}\d{8}\b/i)?.[0]
+  if (nhiCode) return nhiCode.toUpperCase()
+  if (MEDICATION_IDENTITY_QUERY.test(question)) {
+    const englishAfterPredicate = question.match(
+      /(?:what (?:is|kind of (?:drug|medicine) is)|ingredient of|drug class of|look up)\s+([a-z][a-z0-9 .+()\/-]{1,100}?)(?:[?.,;]|$)/i,
+    )?.[1]
+    if (englishAfterPredicate) return cleanMedicationQuery(englishAfterPredicate)
+    const latinBeforePredicate = question.match(
+      /([A-Za-z][A-Za-z0-9 .+()\/-]{1,100}?)\s*(?:的(?:成分|學名|商品名|藥物種類|分類|ATC)|是什麼藥|是哪一類藥|是哪種藥|是不是|是否為|屬於|是(?=[^？?。]{0,30}(?:藥|劑)))/i,
+    )?.[1]
+    if (latinBeforePredicate) return cleanMedicationQuery(latinBeforePredicate)
+    const beforePredicate = question.match(
+      /(?:請問|請查(?:詢)?|幫我查(?:一下)?|幫我看(?:一下)?|查(?:一下)?|想知道)?\s*([A-Za-z][A-Za-z0-9 .+()\/-]{1,100}?|[\u3400-\u9fff][\u3400-\u9fffA-Za-z0-9 .+()＋／/-]{1,100}?)\s*(?:的(?:成分|學名|商品名|藥物種類|分類|ATC)|是什麼藥|是哪一類藥|是哪種藥|是不是|是否為|屬於|是(?=[^？?。]{0,30}(?:藥|劑)))/i,
+    )?.[1]
+    if (beforePredicate) return cleanMedicationQuery(beforePredicate)
+  }
+  const latinBeforeRecord = question.match(
+    /([A-Za-z][A-Za-z0-9 .+()\/-]{1,100}?)\s*(?:的)?(?:用藥|處方)(?:紀錄|記錄)/i,
+  )?.[1]
+  if (latinBeforeRecord) return cleanMedicationQuery(latinBeforeRecord)
+  const chineseBeforeRecord = question.match(
+    /([\u3400-\u9fff][\u3400-\u9fffA-Za-z0-9 .+()＋／/-]{1,100}?)\s*(?:的)?(?:用藥|處方)(?:紀錄|記錄)/i,
+  )?.[1]
+  if (chineseBeforeRecord) return cleanMedicationQuery(chineseBeforeRecord)
+  const afterUse = question.match(
+    /(?:有沒有|是否|曾經)?\s*(?:用過|使用過|服用過|吃過|taken|used)\s*([A-Za-z][A-Za-z0-9 .+()\/-]{1,100}?|[\u3400-\u9fff][\u3400-\u9fffA-Za-z0-9 .+()＋／/-]{1,100}?)(?:[？?。，,;]|$)/i,
+  )?.[1]
+  return cleanMedicationQuery(afterUse)
 }
 
 export function selectAgentToolNames(
@@ -201,6 +250,9 @@ export function forcedInitialAgentToolName(
   if (selectedToolNames.length === 1) return selectedToolNames[0]
 
   const priority: string[] = []
+  if (MEDICATION_IDENTITY_QUERY.test(question) && extractMedicationRecordQuery(question)) {
+    priority.push('queryMedications')
+  }
   if (isMedicalEvidenceQuestion(question)) {
     priority.push('getHealthSummarySnapshot')
   }
@@ -213,8 +265,14 @@ export function forcedInitialAgentToolName(
   if (/(?:診斷|疾病|慢性病|condition|diagnos)/i.test(question)) {
     priority.push('queryConditions')
   }
-  if (/(?:目前用藥|現用藥|藥物|處方|medication|medicine|prescription|drug)/i.test(question)) {
-    priority.push('getActiveMedicationList', 'queryMedications')
+  if (/(?:藥|用藥|處方|服用|用過|使用過|medication|medicine|prescription|drug|taken|used)/i.test(question)) {
+    if (MEDICATION_HISTORY_QUERY.test(question)) {
+      priority.push('queryMedications', 'getActiveMedicationList')
+    } else if (CURRENT_MEDICATION_QUERY.test(question)) {
+      priority.push('getActiveMedicationList', 'queryMedications')
+    } else {
+      priority.push('getActiveMedicationList', 'queryMedications')
+    }
   }
   if (/(?:檢驗|檢查值|數值|lab|test result|marker)/i.test(question)) {
     priority.push('queryLabResultsByCategory', 'queryObservations')
@@ -243,6 +301,7 @@ const LOCAL_AGENT_PREFETCH_TOOLS = new Set([
   'getDataOverview',
   'getHealthSummarySnapshot',
   'getActiveMedicationList',
+  'queryMedications',
   'getRecentVisits',
   'queryImagingRecords',
 ])
@@ -262,6 +321,21 @@ export function localAgentPrefetchInput(
   question: string,
   initialToolName: string | undefined,
 ): Record<string, unknown> {
+  if (initialToolName === 'queryMedications') {
+    const input: Record<string, unknown> = {}
+    const query = extractMedicationRecordQuery(question)
+    if (query) input.query = query
+    if (/(?:過去|近|最近)\s*(?:三|3)\s*(?:個)?月|(?:last|past)\s*(?:three|3)\s*months?/i.test(question)) {
+      input.timeRange = 'last-90-days'
+    } else if (/(?:過去|近|最近)\s*(?:一|1)\s*(?:個)?月|(?:last|past)\s*(?:one|1)\s*month/i.test(question)) {
+      input.timeRange = 'last-30-days'
+    } else if (/(?:過去|近|最近)\s*(?:六|6)\s*(?:個)?月|(?:last|past)\s*(?:six|6)\s*months?/i.test(question)) {
+      input.timeRange = 'last-180-days'
+    } else if (/(?:過去|近|最近)\s*(?:一年|十二|12)\s*(?:個月)?|(?:last|past)\s*(?:one|1)\s*year/i.test(question)) {
+      input.timeRange = 'last-365-days'
+    }
+    return input
+  }
   if (initialToolName !== 'getRecentVisits') return {}
 
   const input: Record<string, unknown> = {}

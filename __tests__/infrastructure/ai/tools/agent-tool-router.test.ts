@@ -1,6 +1,7 @@
 import {
   asksForCurrentMedicalEvidence,
   explicitlyReferencesPatient,
+  extractMedicationRecordQuery,
   forcedInitialAgentToolName,
   implicitlyRequestsPatientRecord,
   isGeneralMedicalKnowledgeQuestion,
@@ -107,6 +108,49 @@ describe('agent tool router', () => {
       .toBe('searchMedicalLiterature')
   })
 
+  it.each([
+    ['Traceton 是什麼藥？', 'Traceton'],
+    ['Traceton 是抗組織胺藥物嗎？', 'Traceton'],
+    ['「服安痛膜衣錠」的成分是什麼？', '服安痛膜衣錠'],
+    ['AC56706100 的 ATC 分類', 'AC56706100'],
+    ['What kind of drug is Traceton?', 'Traceton'],
+    ['這位病人用的 Traceton 是什麼藥？', 'Traceton'],
+  ])('routes a named drug question to the matching patient medication row: %s', (question, query) => {
+    expect(extractMedicationRecordQuery(question)).toBe(query)
+    const selected = selectAgentToolNames(question, names, 'patient')
+    expect(selected).toEqual(['queryMedications', 'getActiveMedicationList'])
+    expect(forcedInitialAgentToolName(question, selected, 'patient'))
+      .toBe('queryMedications')
+    expect(localAgentPrefetchInput(question, 'queryMedications')).toEqual({ query })
+    expect(selectAgentToolNames(question, names, 'general')).toEqual([])
+  })
+
+  it('does not attach a medication query to an unnamed medication pronoun', () => {
+    const question = '這個藥是哪一類藥？'
+    expect(extractMedicationRecordQuery(question)).toBeUndefined()
+    expect(localAgentPrefetchInput(question, 'queryMedications')).toEqual({})
+  })
+
+  it('prefers medication history over the current-medication shortcut for a past range', () => {
+    const selected = selectAgentToolNames('請查這位病人過去三個月的用藥', names, 'patient')
+    expect(selected).toEqual(['queryMedications', 'getActiveMedicationList'])
+    expect(forcedInitialAgentToolName('請查這位病人過去三個月的用藥', selected, 'patient'))
+      .toBe('queryMedications')
+    expect(localAgentPrefetchInput('請查這位病人過去三個月的用藥', 'queryMedications'))
+      .toEqual({ timeRange: 'last-90-days' })
+  })
+
+  it('extracts a named product for deterministic patient medication-history search', () => {
+    const question = '這位病人有沒有用過 Traceton？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(extractMedicationRecordQuery(question)).toBe('Traceton')
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('queryMedications')
+    expect(localAgentPrefetchInput(question, 'queryMedications')).toEqual({ query: 'Traceton' })
+    expect(extractMedicationRecordQuery('這位病人有沒有 Traceton 的用藥紀錄？'))
+      .toBe('Traceton')
+  })
+
   it('allows a compact patient snapshot only when evidence advice is explicitly personalized', () => {
     const question = '請根據我的病歷，說明最新糖尿病 guideline 對我有什麼影響。'
     const selected = selectAgentToolNames(question, names, 'patient-literature')
@@ -166,6 +210,7 @@ describe('agent tool router', () => {
     expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getHealthSummarySnapshot')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getActiveMedicationList')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('queryMedications')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getRecentVisits')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('queryImagingRecords')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('searchObservationByName')).toBe(false)
