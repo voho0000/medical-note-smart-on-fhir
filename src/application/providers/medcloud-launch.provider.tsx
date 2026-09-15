@@ -53,16 +53,6 @@ function resetVghtpeRuntimeModelPreferences(): void {
   }
 }
 
-/** The no-site automatic route explicitly requests the ordinary defaults,
- * regardless of a model choice left behind by an earlier browser session. */
-function selectDefaultModelPreferences(): void {
-  const modelPrefs = useModelPrefsStore.getState()
-  modelPrefs.setModelFor('chat', MODEL_PREF_DEFAULTS.chat)
-  modelPrefs.setModelFor('insights', MODEL_PREF_DEFAULTS.insights)
-  useSummaryPrefsStore.getState().setModelId(MEDICAL_SUMMARY_MODEL_ID)
-  useSafetyPrefsStore.getState().setModelId(SAFETY_ALERTS_MODEL_ID)
-}
-
 export function MedcloudLaunchProvider({
   children,
   launchHref,
@@ -127,7 +117,7 @@ export function MedcloudLaunchProvider({
     useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
       VGTPE_TVGHBRAIN_PROFILE_ID,
     )
-    selectDefaultModelPreferences()
+    useMedcloudLaunchStore.getState().setRuntimeModelId(MEDICAL_SUMMARY_MODEL_ID)
     launchSummaryModelIdRef.current = MEDICAL_SUMMARY_MODEL_ID
     queueAutoSummaryIfReady()
   }, [credentialsHydrating, launchOptions, queueAutoSummaryIfReady])
@@ -165,11 +155,7 @@ export function MedcloudLaunchProvider({
         createVghtpeTvghbrainRuntimeProfile(apiKey),
       )
       const modelId = VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
-      const modelPrefs = useModelPrefsStore.getState()
-      modelPrefs.setModelFor('chat', modelId)
-      modelPrefs.setModelFor('insights', modelId)
-      useSummaryPrefsStore.getState().setModelId(modelId)
-      useSafetyPrefsStore.getState().setModelId(modelId)
+      useMedcloudLaunchStore.getState().setRuntimeModelId(modelId)
       summaryModelId = modelId
     } else {
       // The external-site route contains no VGH credential and must never
@@ -177,7 +163,7 @@ export function MedcloudLaunchProvider({
       useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
         VGTPE_TVGHBRAIN_PROFILE_ID,
       )
-      selectDefaultModelPreferences()
+      useMedcloudLaunchStore.getState().setRuntimeModelId(MEDICAL_SUMMARY_MODEL_ID)
     }
 
     launchSummaryModelIdRef.current = summaryModelId

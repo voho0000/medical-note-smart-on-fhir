@@ -26,6 +26,7 @@ import {
   isOpenAiCompatibleRuntimeReady,
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 
 export type ModelPrefConsumer = 'chat' | 'insights'
 
@@ -83,8 +84,11 @@ export const useModelPrefsStore = create<ModelPrefsState>()(
   ),
 )
 
-export const useModelPref = (consumer: ModelPrefConsumer) =>
-  useModelPrefsStore((s) => s.prefs[consumer])
+export const useModelPref = (consumer: ModelPrefConsumer) => {
+  const persistedModelId = useModelPrefsStore((s) => s.prefs[consumer])
+  const runtimeModelId = useMedcloudLaunchStore((s) => s.runtimeModelId)
+  return runtimeModelId ?? persistedModelId
+}
 
 export const useSetModelFor = () => useModelPrefsStore((s) => s.setModelFor)
 

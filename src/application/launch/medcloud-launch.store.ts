@@ -8,6 +8,10 @@ export interface MedcloudSummaryRequest {
 }
 
 interface MedcloudLaunchState {
+  /** Page-local model override selected by a trusted launch. This must never
+   * be persisted into the user's ordinary model preferences. */
+  runtimeModelId: string | null
+  setRuntimeModelId: (modelId: string | null) => void
   /** Request waiting for the Medical Summary feature to become data-ready.
    * The decrypted credential lives only in ai-config when the VGH site is
    * active and is never copied into this queue. */
@@ -18,6 +22,8 @@ interface MedcloudLaunchState {
 }
 
 export const useMedcloudLaunchStore = create<MedcloudLaunchState>((set, get) => ({
+  runtimeModelId: null,
+  setRuntimeModelId: (runtimeModelId) => set({ runtimeModelId }),
   pendingSummary: null,
   queueSummary: (request) => {
     if (!request.messageId || !request.modelId) return
@@ -28,5 +34,5 @@ export const useMedcloudLaunchStore = create<MedcloudLaunchState>((set, get) => 
     set({ pendingSummary: null })
     return true
   },
-  clear: () => set({ pendingSummary: null }),
+  clear: () => set({ pendingSummary: null, runtimeModelId: null }),
 }))
