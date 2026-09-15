@@ -1,7 +1,7 @@
 # MediPrisma 隱私權政策
 
-**生效／最後更新：2026-09-04**
-**適用程式基準：v0.43.0**
+**生效／最後更新：2026-09-15**
+**適用程式基準：v0.51.0**
 
 本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
 
@@ -75,10 +75,13 @@ Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplex
 
 若您使用「回報問題」，會傳送：
 
-- 您提供的 Email、問題類型、嚴重度、描述與重現步驟。
-- 時間、user agent、螢幕解析度、瀏覽器語言、目前 path 與 FHIR server URL。
+- 您提供的 Email、問題類型、影響程度、描述與重現步驟。
+- 您主動附加的問題畫面圖片（選填，最多三張且合計 8 MB）。
+- 時間、user agent、螢幕與視窗大小、像素比、根字級、主題、時區、瀏覽器語言、目前 path／檢視、app 版本、啟動來源／站點與 FHIR server origin。
 
-表單刻意不收 patientId，並提醒不要輸入姓名、病歷號等個資；自由文字仍由您控制。回饋可能經 Firebase Function 與 Resend 寄給維護者。
+表單刻意不收 patientId、完整 FHIR URL、launch query 或圖片本機檔名，並提醒不要輸入或保留姓名、病歷號等個資；自由文字與圖片內容仍由您控制。瀏覽器會先重編碼附圖以移除 EXIF 等中繼資料，介面不另設遮蔽確認勾選。附圖只在送出時傳給 feedback Function，通過格式與大小驗證後作為 Resend 郵件附件寄給維護者，不寫入 app storage、Firebase Storage 或 Firestore。郵件及服務端備份的保存期限由部署者與 Resend 政策決定。
+
+為限制濫用，正式 feedback Function 會以雜湊後的 Firebase uid 記錄每小時送出次數；該紀錄不包含回報文字、Email 或圖片。
 
 ### 2.7 一般裝置與網路資料
 
@@ -176,7 +179,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | Firestore chat history | 直到使用者在 history 刪除或依部署者政策刪除；codebase 無自動 TTL |
 | User templates／modules | 登入時可同步至帳號；訪客保留於目前瀏覽器，直到使用者刪除、重設或移除網站資料 |
 | Shared prompts | 直到作者／管理者刪除或依社群政策移除 |
-| Feedback email／service logs | 由部署者、Resend 與服務政策決定 |
+| Feedback email／附圖附件／service logs | 由部署者、Resend 與服務政策決定 |
 
 點選「清除本地資料」可刪除 app 管理的 Bundle、影像與 AI result caches。清除瀏覽器網站資料也可移除 local storage；這不會自動刪除 Firestore 或第三方已收到的請求。
 

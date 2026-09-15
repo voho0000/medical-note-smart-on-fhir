@@ -75,7 +75,7 @@
 - FHIR tools 不回傳 patient name、id、完整 birth date 或 provider display。
 - Tool payload 的每個字串會再做 patient literal／常見識別格式 scrub。
 - User message 在 UI／history 保留原文，但傳給 AI 的副本先遮罩已知病人識別文字。
-- 回饋表單不收 patientId；UI 提醒使用者不要輸入姓名、病歷號等資料。
+- 回饋表單不收 patientId 或完整 FHIR URL；附圖在瀏覽器重編碼以移除中繼資料，且不額外設置警示或遮蔽確認勾選。
 - Chat history 不儲存上傳圖片。
 
 這些是 best-effort minimization，不是正式匿名化。病摘、影像文字或使用者自由輸入仍可能含未辨識的 PHI。
@@ -94,10 +94,11 @@
 - 檢查 Origin／same-host。
 - 每個 server instance 對來源 IP 做每小時 5 次的記憶體 rate limit。
 - 驗證必要欄位、allowlist 類型與長度。
+- 附圖限制三張、解碼後合計 8 MB，並驗證 canonical base64、MIME allowlist 與實際檔頭；附件不寫入 app storage 或 database。
 - 對 caller 回傳 generic 500，詳細錯誤只留 server log。
-- 收件人由 `FEEDBACK_TO_EMAIL` 設定，不硬編個人信箱。
+- 收件人與寄件人由 `FEEDBACK_TO_EMAIL`、`FEEDBACK_FROM_EMAIL` 設定，不硬編個人信箱。
 
-限制：instance-local rate limit 不是分散式強制，也沒有登入驗證。正式 static deployment 應使用外部 Firebase Function，在後端加入 ID token、App Check 與集中式 rate limiting。
+限制：instance-local rate limit 不是分散式強制，也沒有登入驗證。正式 static deployment 使用外部 Firebase Function，在後端驗 Firebase ID token／App Check，並以雜湊 uid 做集中式 rate limiting，避免院內共用 IP 互相影響。
 
 ### Browser security headers
 
