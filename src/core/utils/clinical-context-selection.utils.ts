@@ -3,6 +3,18 @@ import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+export type MedicationCurrentnessBasis =
+  | 'source-status'
+  | 'source-status-and-supply-window'
+  | 'supply-window'
+  | 'insufficient-status-and-supply'
+
+export interface MedicationCurrentnessAssessment {
+  current: boolean
+  uncertain: boolean
+  basis: MedicationCurrentnessBasis
+}
+
 export function normalizeClinicalStatus(status: unknown): string {
   return typeof status === 'string' ? status.trim().toLowerCase() : ''
 }
@@ -33,23 +45,70 @@ export function medicationExpectedEnd(medication: any): string | undefined {
   return date.toISOString().slice(0, 10)
 }
 
-/**
- * A medication record is "current" only when both its lifecycle status and
- * computable supply window allow that interpretation. Unknown/draft/on-hold/
- * entered-in-error records remain available in the `all` view but are never
- * silently promoted to an active medicine.
- */
-export function isMedicationCurrentlyInUse(medication: any, nowMs: number): boolean {
-  const status = normalizeClinicalStatus(medication?.status)
-  if (!status || ['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'unknown', 'ended'].includes(status)) {
-    return false
-  }
-  if (status !== 'active' && status !== 'completed') return false
-
-  const end = medicationExpectedEnd(medication)
-  if (!end) return status === 'active'
+function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
   const endMs = Date.parse(end)
   return Number.isFinite(endMs) && endMs >= nowMs - DAY_MS
+}
+
+/**
+ * Resolve currentness from source-authored fields without rewriting status.
+ *
+ * MediCloud medication records use `unknown` as their normal lifecycle status.
+ * When those records carry enough source timing to calculate a supply end, the
+ * supply window is authoritative for whether the prescription still covers the
+ * current date. Only a missing/unknown status with no computable supply end is
+ * genuinely unresolved. Explicit negative statuses always remain not current.
+ */
+export function assessMedicationCurrentness(
+  medication: any,
+  nowMs: number,
+): MedicationCurrentnessAssessment {
+  const status = normalizeClinicalStatus(medication?.status)
+  const end = medicationExpectedEnd(medication)
+
+  if (!status || status === 'unknown') {
+    if (!end) {
+      return {
+        current: false,
+        uncertain: true,
+        basis: 'insufficient-status-and-supply',
+      }
+    }
+    return {
+      current: isMedicationSupplyWindowOpen(end, nowMs),
+      uncertain: false,
+      basis: 'supply-window',
+    }
+  }
+
+  if (['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended'].includes(status)) {
+    return { current: false, uncertain: false, basis: 'source-status' }
+  }
+  if (status !== 'active' && status !== 'completed') {
+    return { current: false, uncertain: false, basis: 'source-status' }
+  }
+
+  if (!end) {
+    return {
+      current: status === 'active',
+      uncertain: false,
+      basis: 'source-status',
+    }
+  }
+
+  return {
+    current: isMedicationSupplyWindowOpen(end, nowMs),
+    uncertain: false,
+    basis: 'source-status-and-supply-window',
+  }
+}
+
+export function isMedicationCurrentlyInUse(medication: any, nowMs: number): boolean {
+  return assessMedicationCurrentness(medication, nowMs).current
+}
+
+export function isMedicationCurrentnessUncertain(medication: any, nowMs: number): boolean {
+  return assessMedicationCurrentness(medication, nowMs).uncertain
 }
 
 export function isChronicMedicationRecord(medication: any): boolean {

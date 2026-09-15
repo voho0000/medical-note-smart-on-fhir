@@ -1087,26 +1087,50 @@ describe('createFhirTools (unified)', () => {
       })
     })
 
-    it('does not promote unknown-status records to current medications', async () => {
+    it('uses supply timing for missing/unknown status and leaves only unresolvable rows uncertain', async () => {
       jest.useFakeTimers().setSystemTime(new Date('2026-09-11T12:00:00+08:00'))
       try {
         const unknownStatusTools = createFhirTools(() => ({
           patient: samplePatient,
           collection: {
             ...sampleCollection,
-            medications: [{
-              id: 'unknown-med',
-              medicationCodeableConcept: {
-                text: 'TAGRISSO Film-coated Tablets 80 mg',
-                coding: [{ code: 'BC26968100', display: 'TAGRISSO Film-coated Tablets 80 mg' }],
+            medications: [
+              {
+                id: 'unknown-current-med',
+                medicationCodeableConcept: {
+                  text: 'Status-unknown current medicine',
+                },
+                status: 'unknown',
+                authoredOn: '2026-09-08',
+                dosageInstruction: [{ text: 'QD' }],
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 6, unit: 'days', code: 'd' },
+                },
               },
-              status: 'unknown',
-              authoredOn: '2026-09-08',
-              dosageInstruction: [{ text: 'QD' }],
-              dispenseRequest: {
-                expectedSupplyDuration: { value: 6, unit: 'days', code: 'd' },
+              {
+                id: 'missing-current-med',
+                medicationCodeableConcept: { text: 'Status-missing current medicine' },
+                authoredOn: '2026-09-09',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 5, unit: 'days', code: 'd' },
+                },
               },
-            } as any],
+              {
+                id: 'unknown-expired-med',
+                medicationCodeableConcept: { text: 'Status-unknown expired medicine' },
+                status: 'unknown',
+                authoredOn: '2026-09-01',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 3, unit: 'days', code: 'd' },
+                },
+              },
+              {
+                id: 'unknown-unresolvable-med',
+                medicationCodeableConcept: { text: 'Status-unknown unresolved medicine' },
+                status: 'unknown',
+                authoredOn: '2026-09-10',
+              },
+            ] as any,
           },
         }))
 
@@ -1114,16 +1138,33 @@ describe('createFhirTools (unified)', () => {
 
         expect(r).toMatchObject({
           success: true,
-          count: 0,
+          count: 2,
           canConcludeAbsence: false,
           uncertainCount: 1,
-          data: [],
         })
+        expect(r.data).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            medication: 'Status-unknown current medicine',
+            status: 'unknown',
+            current: true,
+            expectedSupplyEnd: '2026-09-14',
+            currentnessBasis: 'supply-window',
+          }),
+          expect.objectContaining({
+            medication: 'Status-missing current medicine',
+            current: true,
+            expectedSupplyEnd: '2026-09-14',
+            currentnessBasis: 'supply-window',
+          }),
+        ]))
+        expect(r.data).not.toEqual(expect.arrayContaining([
+          expect.objectContaining({ medication: 'Status-unknown expired medicine' }),
+        ]))
         expect(r.uncertainData[0]).toMatchObject({
-          medication: 'TAGRISSO Film-coated Tablets 80 mg',
+          medication: 'Status-unknown unresolved medicine',
           status: 'unknown',
           current: false,
-          expectedSupplyEnd: '2026-09-14',
+          currentnessBasis: 'insufficient-status-and-supply',
           currentness: 'uncertain-source-status',
         })
       } finally {
@@ -1169,6 +1210,7 @@ describe('createFhirTools (unified)', () => {
         expect(r.data[0]).toMatchObject({
           current: true,
           expectedSupplyEnd: '2026-09-17',
+          currentnessBasis: 'source-status-and-supply-window',
         })
       } finally {
         jest.useRealTimers()

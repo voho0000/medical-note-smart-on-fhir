@@ -2223,7 +2223,7 @@ export const zhTW = {
         listAvailableObservationCodes: '列出病人擁有的檢驗 / 觀察值名稱與次數。不確定病人有什麼可查時，先打這個',
         queryProcedures: '查詢處置 / 手術紀錄，支援 status 與時間範圍',
         queryMedications: '查詢用藥紀錄完整詳情，包含來源藥名、狀態、用法、供藥期限，以及可用的健保藥典／ATC 分類；支援商品名／成分／ATC 搜尋、status、chronic、明確日期與 last-90-days 等由程式換算的 timeRange。問「現在在吃什麼」請優先用 getActiveMedicationList',
-        getActiveMedicationList: '**「病人現在在吃什麼」的捷徑** — 只有狀態與可計算供藥期限都支持時才列為現用藥；來源狀態不明者會分開回傳，續領僅在同產品、同療程與同來源時合併。設 chronicOnly=true 只看慢箋',
+        getActiveMedicationList: '**「病人現在在吃什麼」的捷徑** — 有明確 lifecycle status 時以來源狀態為準；status 缺少或為 unknown 時，若可計算供藥期限就依期限判斷。只有兩者都無法判定才列為不明。續領僅在同產品、同療程與同來源時合併。設 chronicOnly=true 只看慢箋',
         queryAllergies: '查詢過敏 / 不耐受。支援 `severity` 過濾（high/moderate/low）',
         queryImmunizations: '查詢預防接種紀錄（FHIR Immunization），支援時間範圍',
         searchMedicalLiterature: '搜尋醫學文獻和臨床指引（用於研究、治療指引、藥物資訊，不用於查詢病人特定資料）。回傳結果含來源網址，回答時務必附上這些來源連結。',
