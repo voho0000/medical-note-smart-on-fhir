@@ -193,4 +193,44 @@ describe('useMedicationsContext full export', () => {
     )
     expect(activeOnly.result.current).toBeNull()
   })
+
+  it('uses the supply window for MediCloud-style unknown status', () => {
+    const clinicalData = {
+      medications: [
+        {
+          id: 'unknown-current',
+          status: 'unknown',
+          authoredOn: '2026-07-08',
+          medicationCodeableConcept: { text: 'Unknown status current drug' },
+          dispenseRequest: {
+            expectedSupplyDuration: { value: 5, unit: 'days' },
+          },
+        },
+        {
+          id: 'unknown-expired',
+          status: 'unknown',
+          authoredOn: '2026-06-01',
+          medicationCodeableConcept: { text: 'Unknown status expired drug' },
+          dispenseRequest: {
+            expectedSupplyDuration: { value: 5, unit: 'days' },
+          },
+        },
+      ],
+    }
+
+    const { result } = renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'all',
+      } as any, false, new Date('2026-07-10T12:00:00+08:00').getTime()),
+      { wrapper: Wrapper },
+    )
+
+    expect(result.current?.items).toContain('Currently in use (1):')
+    expect(result.current?.items.find((item) => item.includes('Unknown status current drug')))
+      .toContain('until 2026-07-13')
+    expect(result.current?.items.find((item) => item.includes('Unknown status expired drug')))
+      .toContain('last ended 2026-06-06')
+  })
 })
