@@ -686,6 +686,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   // If its slot is empty, the shared hook keeps the last visible summary until
   // this model succeeds; in-flight work still lands in the slot that owns it.
   const setModel = useCallback((id: string) => {
+    // The Medcloud launch model is an initial session choice, not a lock. A
+    // deliberate picker selection must take effect for both display and the
+    // next summary request instead of being saved silently for after exit.
+    useMedcloudLaunchStore.getState().setRuntimeModelId(null)
     setModelId(id)
   }, [setModelId])
 

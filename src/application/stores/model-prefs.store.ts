@@ -15,6 +15,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useCallback } from 'react'
 import {
   DEFAULT_MODEL_ID,
   gateModelForAgentSupport,
@@ -90,7 +91,16 @@ export const useModelPref = (consumer: ModelPrefConsumer) => {
   return runtimeModelId ?? persistedModelId
 }
 
-export const useSetModelFor = () => useModelPrefsStore((s) => s.setModelFor)
+export const useSetModelFor = () => {
+  const setModelFor = useModelPrefsStore((s) => s.setModelFor)
+  return useCallback((consumer: ModelPrefConsumer, id: string) => {
+    // A launch model is only the initial Medcloud choice. Once the user
+    // explicitly picks a model, release that override so the picker and the
+    // next request both use the newly saved selection immediately.
+    useMedcloudLaunchStore.getState().setRuntimeModelId(null)
+    setModelFor(consumer, id)
+  }, [setModelFor])
+}
 
 /**
  * The model a call will ACTUALLY run on (and the only thing UI should
