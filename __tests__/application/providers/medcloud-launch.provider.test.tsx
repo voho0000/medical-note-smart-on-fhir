@@ -94,12 +94,14 @@ describe('MedcloudLaunchProvider', () => {
       runtimeOnly: true,
       apiKey: 'runtime-secret',
     }))
+    expect(useMedcloudLaunchStore.getState().runtimeModelId)
+      .toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
     expect(useModelPrefsStore.getState().prefs).toEqual({
-      chat: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
-      insights: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+      chat: 'gemini-2.5-flash-lite',
+      insights: 'gemini-2.5-flash-lite',
     })
-    expect(useSummaryPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
-    expect(useSafetyPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    expect(useSummaryPrefsStore.getState().modelId).toBe('gemini-2.5-flash-lite')
+    expect(useSafetyPrefsStore.getState().modelId).toBe('gemini-2.5-flash-lite')
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
 
     settleImportedBundle()
@@ -118,6 +120,7 @@ describe('MedcloudLaunchProvider', () => {
 
     unmount()
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().runtimeModelId).toBeNull()
   })
 
   it('uses the ordinary default model for an external auto launch without installing VGH runtime', async () => {
@@ -133,10 +136,15 @@ describe('MedcloudLaunchProvider', () => {
     )
 
     await waitFor(() => {
-      expect(useModelPrefsStore.getState().prefs).toEqual(MODEL_PREF_DEFAULTS)
-      expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
-      expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
+      expect(useMedcloudLaunchStore.getState().runtimeModelId)
+        .toBe(MEDICAL_SUMMARY_MODEL_ID)
     })
+    expect(useModelPrefsStore.getState().prefs).toEqual({
+      chat: 'custom-chat',
+      insights: 'custom-insights',
+    })
+    expect(useSummaryPrefsStore.getState().modelId).toBe('custom-summary')
+    expect(useSafetyPrefsStore.getState().modelId).toBe('custom-safety')
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
     expect(postMessage).not.toHaveBeenCalled()
@@ -164,7 +172,9 @@ describe('MedcloudLaunchProvider', () => {
       useAiConfigStore.getState().openAiCompatibleProfiles[0]?.profileId,
     ).toBe(VGTPE_TVGHBRAIN_PROFILE_ID))
     settleImportedBundle()
-    expect(useSummaryPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    expect(useMedcloudLaunchStore.getState().runtimeModelId)
+      .toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    expect(useSummaryPrefsStore.getState().modelId).toBe('gemini-2.5-flash-lite')
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
     expect(postMessage).toHaveBeenCalledTimes(1)
   })
@@ -298,9 +308,13 @@ describe('MedcloudLaunchProvider', () => {
 
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
-    expect(useModelPrefsStore.getState().prefs).toEqual(MODEL_PREF_DEFAULTS)
-    expect(useSummaryPrefsStore.getState().modelId).toBe(MEDICAL_SUMMARY_MODEL_ID)
-    expect(useSafetyPrefsStore.getState().modelId).toBe(SAFETY_ALERTS_MODEL_ID)
+    expect(useMedcloudLaunchStore.getState().runtimeModelId).toBeNull()
+    expect(useModelPrefsStore.getState().prefs).toEqual({
+      chat: 'gemini-2.5-flash-lite',
+      insights: 'gemini-2.5-flash-lite',
+    })
+    expect(useSummaryPrefsStore.getState().modelId).toBe('gemini-2.5-flash-lite')
+    expect(useSafetyPrefsStore.getState().modelId).toBe('gemini-2.5-flash-lite')
   })
 
   it('recovers stale runtime-only preferences on a later launch without Medcloud parameters', async () => {

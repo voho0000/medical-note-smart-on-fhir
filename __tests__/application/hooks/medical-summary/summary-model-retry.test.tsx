@@ -4,6 +4,9 @@ import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-m
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import { createModelExecution, reportModelExecution, modelExecutionFallback } from '@/src/shared/utils/ai-model-execution'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
+import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcloud-launch-context'
 
 let mockSlotOptions: any
 let mockResult: any
@@ -57,6 +60,7 @@ jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
 beforeEach(() => {
   mockResult = undefined
   mockStream.mockReset()
+  useMedcloudLaunchStore.getState().clear()
   mockStream.mockImplementation(async (_messages, options) => {
     options.onChunk('NEW_MEDICATION_CARD')
     // Some providers report identity only in their last chunk.
@@ -66,6 +70,23 @@ beforeEach(() => {
 })
 
 afterEach(() => jest.restoreAllMocks())
+
+test('a manual summary model choice immediately releases the Medcloud override', () => {
+  act(() => {
+    useSummaryPrefsStore.setState({ modelId: 'gpt-5.4-nano' })
+    useMedcloudLaunchStore.getState().setRuntimeModelId(
+      VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    )
+  })
+  const { result } = renderHook(() => useMedicalSummary())
+  expect(result.current.model).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+
+  act(() => result.current.setModel('gemini-3.1-flash-lite'))
+
+  expect(result.current.model).toBe('gemini-3.1-flash-lite')
+  expect(useMedcloudLaunchStore.getState().runtimeModelId).toBeNull()
+  expect(useSummaryPrefsStore.getState().modelId).toBe('gemini-3.1-flash-lite')
+})
 
 test('retrying failed cards retains provenance for successful cards kept from the previous run', async () => {
   const clear = jest.spyOn(useAiExecutionDiagnosticsStore.getState(), 'clearOperationFeature')

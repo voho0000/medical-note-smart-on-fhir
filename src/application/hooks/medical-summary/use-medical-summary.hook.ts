@@ -50,6 +50,7 @@ import {
   SUMMARY_CACHE_MAX_AGE_MS,
 } from './medical-summary-store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import {
   useAiSlotGeneration,
   type AiSlotDemoContext,
@@ -161,7 +162,9 @@ export interface UseMedicalSummaryReturn {
 export function useMedicalSummary(): UseMedicalSummaryReturn {
   const autoGenerate = useSummaryPrefsStore((s) => s.autoGenerate)
   const setAutoGenerate = useSummaryPrefsStore((s) => s.setAutoGenerate)
-  const modelId = useSummaryPrefsStore((s) => s.modelId)
+  const persistedModelId = useSummaryPrefsStore((s) => s.modelId)
+  const runtimeModelId = useMedcloudLaunchStore((s) => s.runtimeModelId)
+  const modelId = runtimeModelId ?? persistedModelId
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
   const { demographicsReadyForAi } = useAiDemographicsGate()
@@ -683,6 +686,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   // If its slot is empty, the shared hook keeps the last visible summary until
   // this model succeeds; in-flight work still lands in the slot that owns it.
   const setModel = useCallback((id: string) => {
+    // The Medcloud launch model is an initial session choice, not a lock. A
+    // deliberate picker selection must take effect for both display and the
+    // next summary request instead of being saved silently for after exit.
+    useMedcloudLaunchStore.getState().setRuntimeModelId(null)
     setModelId(id)
   }, [setModelId])
 
