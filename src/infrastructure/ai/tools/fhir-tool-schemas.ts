@@ -17,8 +17,12 @@ export const conditionsSchema = z.object({
 })
 
 export const medicationsSchema = z.object({
+  query: z.string().trim().min(1).max(120).optional()
+    .describe('Case-insensitive substring search across recorded/canonical product name, NHI drug code, ingredient, dose form, ATC code, and ATC class. Use this for "has the patient used X?" questions.'),
   status: z.string().optional().describe('Filter by status (e.g., "active", "completed")'),
   chronic: z.boolean().optional().describe('Filter to chronic medications only (courseOfTherapyType=continuous, 慢箋)'),
+  timeRange: z.enum(['last-30-days', 'last-90-days', 'last-180-days', 'last-365-days', 'all']).optional()
+    .describe('Server-resolved rolling window ending today. Prefer last-90-days for「過去三個月」so a local model does not need to calculate dates. Explicit dateFrom/dateTo override the corresponding boundary.'),
   dateFrom: z.string().optional().describe('Filter by authoredOn from this date (YYYY-MM-DD)'),
   dateTo: z.string().optional().describe('Filter by authoredOn until this date (YYYY-MM-DD)'),
   limit: limitParam,

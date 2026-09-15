@@ -13,6 +13,7 @@ import type {
   ClinicalDataCollection,
   ClinicalDataQueryKey,
   ClinicalDataQueryStatus,
+  MedicationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import {
   conditionsSchema,
@@ -52,7 +53,16 @@ import {
 } from './_filter-helpers'
 import { scrubPii } from './_scrub-pii'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
-import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
+import {
+  medicationClinicalIdentityKey,
+  pickAiMedicationName,
+} from '@/src/shared/utils/fhir-display-helpers'
+import { isNhiDrugCodeSystem } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
+import {
+  isMedicationCurrentlyInUse,
+  medicationExpectedEnd,
+  normalizeClinicalStatus,
+} from '@/src/core/utils/clinical-context-selection.utils'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   imagingStudyModalityText,
@@ -107,6 +117,34 @@ function notFoundMessage(noun: string, dateFrom?: string, dateTo?: string): stri
     return `在指定時間範圍內（${dateFrom || '開始'} 至 ${dateTo || '現在'}）沒有找到${noun}`
   }
   return `沒有找到${noun}`
+}
+
+function localIsoDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function resolveMedicationDateRange(
+  timeRange: z.infer<typeof medicationsSchema>['timeRange'],
+  dateFrom?: string,
+  dateTo?: string,
+): { dateFrom?: string; dateTo?: string } {
+  if (!timeRange || timeRange === 'all') return { dateFrom, dateTo }
+  const daysByRange = {
+    'last-30-days': 30,
+    'last-90-days': 90,
+    'last-180-days': 180,
+    'last-365-days': 365,
+  } as const
+  const today = new Date()
+  const start = new Date(today)
+  start.setDate(start.getDate() - daysByRange[timeRange])
+  return {
+    dateFrom: dateFrom ?? localIsoDate(start),
+    dateTo: dateTo ?? localIsoDate(today),
+  }
 }
 
 function observationDate(observation: any): string | undefined {
@@ -552,29 +590,78 @@ function classifyEncounterType(enc: any):
   return 'other'
 }
 
-// Compact deduper for repeated refill cycles (mirrors useMedicationsContext).
-function dedupMedsByName(meds: any[]): Array<any & { refillCount: number }> {
-  const byName = new Map<string, any & { refillCount: number }>()
+function normalizedMedicationKeyPart(value: unknown): string {
+  if (value === undefined || value === null) return ''
+  return String(value).normalize('NFKC').trim().replace(/\s+/g, ' ').toUpperCase()
+}
+
+/**
+ * A refill-equivalence key, deliberately stricter than display name.
+ *
+ * Same-name records may be different strengths, routes, schedules or orders
+ * from different facilities. Collapsing those hides clinically important
+ * duplicates. Exact governed product identity remains the first component so
+ * NHI reimbursement/package variants of the same licensed product can still
+ * join when every regimen/source dimension also agrees.
+ */
+function medicationRegimenKey(medication: MedicationEntity): string {
+  const dosage = medication.dosageInstruction?.[0]
+  const dose = dosage?.doseAndRate?.[0]?.doseQuantity
+  const timing = dosage?.timing?.repeat
+  const identity = medicationClinicalIdentityKey(medication)
+    || pickAiMedicationName(
+      medication.medicationCodeableConcept,
+      medication.medicationReference?.display,
+    )
+
+  return [
+    identity,
+    dosage?.text,
+    dosage?.route?.text,
+    dose?.value,
+    dose?.unit,
+    timing?.frequency,
+    timing?.period,
+    timing?.periodUnit,
+    ...(timing?.when ?? []),
+    medication.requester?.reference || medication.requester?.display,
+    medication.informationSource?.reference || medication.informationSource?.display,
+  ].map(normalizedMedicationKeyPart).join('|')
+}
+
+function countsAsRefillRecord(medication: MedicationEntity): boolean {
+  return !['draft', 'cancelled', 'entered-in-error'].includes(
+    normalizeClinicalStatus(medication.status),
+  )
+}
+
+// Compact deduper for repeated refill cycles. `refillPool` may include older
+// completed cycles while `meds` contains only the currently-valid rows.
+function dedupMedicationRecords(
+  meds: MedicationEntity[],
+  refillPool: MedicationEntity[] = meds,
+): Array<MedicationEntity & { refillCount: number }> {
+  const refillCounts = new Map<string, number>()
+  for (const medication of refillPool) {
+    if (!countsAsRefillRecord(medication)) continue
+    const key = medicationRegimenKey(medication)
+    refillCounts.set(key, (refillCounts.get(key) ?? 0) + 1)
+  }
+
+  const byRegimen = new Map<string, MedicationEntity & { refillCount: number }>()
   for (const m of meds) {
-    const name = pickAiMedicationName(
-      m.medicationCodeableConcept,
-      m.medicationReference?.display,
-    ) || 'Unknown'
-    const existing = byName.get(name)
+    const key = medicationRegimenKey(m)
+    const existing = byRegimen.get(key)
     if (!existing) {
-      byName.set(name, { ...m, refillCount: 1 })
-    } else {
-      const refillCount = existing.refillCount + 1
-      if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
-        // Keep every displayed field (status, SIG, original name) from the
-        // same newest refill instead of updating the date alone.
-        byName.set(name, { ...m, refillCount })
-      } else {
-        existing.refillCount = refillCount
-      }
+      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
+      continue
+    }
+    if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
+      // Keep every displayed field from one newest source row.
+      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
     }
   }
-  return Array.from(byName.values())
+  return Array.from(byRegimen.values())
 }
 
 function medicationNameFields(medication: any): {
@@ -594,6 +681,165 @@ function medicationNameFields(medication: any): {
     medication: medicationName,
     ...(recordedName && recordedName !== medicationName ? { recordedName } : {}),
   }
+}
+
+function medicationClassificationFields(medication: MedicationEntity) {
+  const nhiDrugCode = medication.medicationCodeableConcept?.coding?.find(
+    (coding) => isNhiDrugCodeSystem(coding.system) && coding.code?.trim(),
+  )?.code?.trim()
+  const terminology = medication.drugTerminology
+  const atcClassification = terminology ? undefined : medication.atcClassification
+  const sourceName = medicationNameFields(medication).medication
+  const terminologyStatus = terminology
+    ? 'matched'
+    : atcClassification
+      ? 'source-atc-only'
+      : 'unmatched'
+  const medicationIdentity = terminology
+    ? [
+        sourceName,
+        terminology.officialNameEn,
+        terminology.officialNameZh,
+        terminology.ingredientText ? `ingredient: ${terminology.ingredientText}` : undefined,
+        terminology.atcCode ? `ATC ${terminology.atcCode}` : undefined,
+        [terminology.atcLevel2NameEn, terminology.atcLevel2NameZh].filter(Boolean).join(' / '),
+        [terminology.atcLevel4NameEn, terminology.atcLevel4NameZh].filter(Boolean).join(' / '),
+      ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index).join(' | ')
+    : undefined
+  const recordedCategories = (medication.category ?? []).flatMap((category) => {
+    const coding = category.coding?.find((candidate) =>
+      candidate?.code || candidate?.display,
+    )
+    const text = category.text?.trim()
+    if (!coding && !text) return []
+    return [{
+      ...(coding?.system ? { system: coding.system } : {}),
+      ...(coding?.code ? { code: coding.code } : {}),
+      ...(text ? { text } : {}),
+      ...(coding?.display ? { display: coding.display } : {}),
+      meaning: 'source-administrative-category' as const,
+    }]
+  })
+
+  return {
+    terminologyStatus,
+    ...(medicationIdentity ? { medicationIdentity } : {}),
+    ...(nhiDrugCode ? { nhiDrugCode } : {}),
+    ...(terminology ? {
+      drugTerminology: {
+        source: terminology.source,
+        snapshotId: terminology.snapshotId,
+        ...(terminology.officialNameZh ? { officialNameZh: terminology.officialNameZh } : {}),
+        ...(terminology.officialNameEn ? { officialNameEn: terminology.officialNameEn } : {}),
+        ...(terminology.ingredientText ? { ingredientText: terminology.ingredientText } : {}),
+        ...(terminology.doseForm ? { doseForm: terminology.doseForm } : {}),
+        ...(terminology.atcCode ? { atcCode: terminology.atcCode } : {}),
+        ...(terminology.atcNameZh ? { atcNameZh: terminology.atcNameZh } : {}),
+        ...(terminology.atcNameEn ? { atcNameEn: terminology.atcNameEn } : {}),
+        ...(terminology.atcLevel2Code ? { atcLevel2Code: terminology.atcLevel2Code } : {}),
+        ...(terminology.atcLevel2NameZh ? { atcLevel2NameZh: terminology.atcLevel2NameZh } : {}),
+        ...(terminology.atcLevel2NameEn ? { atcLevel2NameEn: terminology.atcLevel2NameEn } : {}),
+        ...(terminology.atcLevel3Code ? { atcLevel3Code: terminology.atcLevel3Code } : {}),
+        ...(terminology.atcLevel3NameZh ? { atcLevel3NameZh: terminology.atcLevel3NameZh } : {}),
+        ...(terminology.atcLevel3NameEn ? { atcLevel3NameEn: terminology.atcLevel3NameEn } : {}),
+        ...(terminology.atcLevel4Code ? { atcLevel4Code: terminology.atcLevel4Code } : {}),
+        ...(terminology.atcLevel4NameZh ? { atcLevel4NameZh: terminology.atcLevel4NameZh } : {}),
+        ...(terminology.atcLevel4NameEn ? { atcLevel4NameEn: terminology.atcLevel4NameEn } : {}),
+      },
+    } : {}),
+    ...(atcClassification ? { sourceAtcClassification: atcClassification } : {}),
+    ...(recordedCategories.length > 0 ? { recordedCategories } : {}),
+  }
+}
+
+function medicationToolFields(
+  medication: MedicationEntity,
+  nowMs: number,
+  dosageField: 'dosage' | 'dosageInstruction',
+) {
+  const dosageInstruction = medication.dosageInstruction?.[0]
+  const dosage = dosageInstruction?.text
+  const route = dosageInstruction?.route as any
+  const timing = dosageInstruction?.timing
+  const repeat = timing?.repeat
+  const doseQuantity = dosageInstruction?.doseAndRate?.[0]?.doseQuantity
+  const timingCode = timing?.code
+  const additionalInstructions = (dosageInstruction?.additionalInstruction ?? [])
+    .map((instruction) => instruction.text
+      || instruction.coding?.find((coding) => coding.display)?.display
+      || instruction.coding?.find((coding) => coding.code)?.code
+    )
+    .filter((instruction): instruction is string => Boolean(instruction))
+  const structuredDosage = {
+    ...(route?.text ? { route: route.text } : route?.coding?.[0]?.display
+      ? { route: route.coding[0].display }
+      : route?.coding?.[0]?.code ? { route: route.coding[0].code } : {}),
+    ...(doseQuantity?.value !== undefined ? {
+      doseQuantity: {
+        value: doseQuantity.value,
+        ...(doseQuantity.unit ? { unit: doseQuantity.unit } : {}),
+      },
+    } : {}),
+    ...(timingCode?.text ? { timing: timingCode.text } : timingCode?.coding?.[0]?.display
+      ? { timing: timingCode.coding[0].display }
+      : timingCode?.coding?.[0]?.code ? { timing: timingCode.coding[0].code } : {}),
+    ...(repeat?.frequency !== undefined ? { frequency: repeat.frequency } : {}),
+    ...(repeat?.period !== undefined ? { period: repeat.period } : {}),
+    ...(repeat?.periodUnit ? { periodUnit: repeat.periodUnit } : {}),
+    ...(repeat?.when?.length ? { when: repeat.when } : {}),
+    ...(additionalInstructions.length > 0 ? { additionalInstructions } : {}),
+  }
+  const hasStructuredDosage = Object.keys(structuredDosage).length > 0
+  const expectedSupplyEnd = medicationExpectedEnd(medication)
+  const dispenseRequest = medication.dispenseRequest as any
+  const expectedSupplyDuration = dispenseRequest?.expectedSupplyDuration
+  const dispenseQuantity = dispenseRequest?.quantity
+  return {
+    ...medicationNameFields(medication),
+    ...medicationClassificationFields(medication),
+    status: medication.status,
+    authoredOn: medication.authoredOn,
+    ...(dosage ? { [dosageField]: dosage } : {}),
+    ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),
+    chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
+    current: isMedicationCurrentlyInUse(medication, nowMs),
+    ...(dispenseQuantity?.value !== undefined ? {
+      dispenseQuantity: {
+        value: dispenseQuantity.value,
+        ...(dispenseQuantity.unit ? { unit: dispenseQuantity.unit } : {}),
+      },
+    } : {}),
+    ...(expectedSupplyDuration?.value !== undefined ? {
+      expectedSupplyDuration: {
+        value: expectedSupplyDuration.value,
+        ...(expectedSupplyDuration.unit ? { unit: expectedSupplyDuration.unit } : {}),
+        ...(expectedSupplyDuration.code ? { code: expectedSupplyDuration.code } : {}),
+      },
+    } : {}),
+    ...(expectedSupplyEnd ? { expectedSupplyEnd } : {}),
+    ...(medication._sourceResourceType
+      ? { sourceResourceType: medication._sourceResourceType }
+      : {}),
+  }
+}
+
+function medicationGroundingRules(medications: MedicationEntity[]) {
+  return {
+    providedFieldsOnly: true,
+    ingredientProvided: medications.some((medication) =>
+      Boolean(medication.drugTerminology?.ingredientText),
+    ),
+    drugClassProvided: medications.some((medication) =>
+      Boolean(medication.drugTerminology?.atcCode || medication.atcClassification?.atcCode),
+    ),
+    purposeOrIndicationProvided: false,
+    instruction: 'Copy medication, recordedName, dosage/dosageInstruction, status, dates, and terminology fields exactly. drugTerminology is an exact NHI-code/date match and may establish that row\'s ingredient, dose form, and ATC class. sourceAtcClassification may establish only the exact source WHO ATC hierarchy. recordedCategories are source/administrative labels, not proof of ingredient, mechanism, or indication. Never infer why the patient received a medicine, whether they actually took it, adherence, response, or outcome. A record with current=false or uncertain source status must not be called a current medication.',
+  }
+}
+
+function hasUncertainMedicationStatus(medication: MedicationEntity): boolean {
+  const status = normalizeClinicalStatus(medication.status)
+  return !status || status === 'unknown'
 }
 
 // ── factory ────────────────────────────────────────────────────────────────
@@ -740,21 +986,22 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: healthSummarySnapshotSchema,
       execute: async () => {
         const collection = getData().collection
-        const unavailable = unavailableQueryResult(
-          collection,
-          ['Condition', 'MedicationRequest', 'MedicationStatement', 'Observation'],
-          '健康摘要資料',
-        )
-        if (unavailable) return scrub(unavailable)
+        if (!collection) {
+          return scrub(unavailableQueryResult(
+            collection,
+            ['Condition', 'MedicationRequest', 'MedicationStatement', 'Observation'],
+            '健康摘要資料',
+          ))
+        }
 
-        const queryIssues = queryIssuesFor(collection!, [
+        const queryIssues = queryIssuesFor(collection, [
           'Condition',
           'MedicationRequest',
           'MedicationStatement',
           'Observation',
         ])
         const conditionByName = new Map<string, any>()
-        for (const condition of collection!.conditions) {
+        for (const condition of collection.conditions) {
           const name = pickName(condition.code) || 'Unknown'
           const key = name.normalize('NFKC').trim().toLowerCase()
           const existing = conditionByName.get(key)
@@ -772,35 +1019,50 @@ export function createFhirTools(getData: () => AgentDataSource) {
           date: condition.recordedDate,
         }))
 
-        const authoredTimes = collection!.medications
-          .map((medication: any) => Date.parse(medication.authoredOn || ''))
-          .filter(Number.isFinite)
-        const latestMedicationTime = authoredTimes.length > 0
-          ? Math.max(...authoredTimes)
-          : Date.now()
-        const recentMedicationCutoff = latestMedicationTime - 180 * 86_400_000
-        const activeMedicationRecords = collection!.medications.filter((medication: any) => {
-          const status = String(medication.status || '').toLowerCase()
-          if (['stopped', 'cancelled'].includes(status)) return false
-          if (status === 'active') return true
-          const authoredTime = Date.parse(medication.authoredOn || '')
-          return Number.isFinite(authoredTime) && authoredTime >= recentMedicationCutoff
-        })
-        const allMedications = dedupMedsByName(activeMedicationRecords)
+        const nowMs = Date.now()
+        const activeMedicationRecords = collection.medications.filter((medication) =>
+          isMedicationCurrentlyInUse(medication, nowMs)
+        )
+        const uncertainMedicationRecords = collection.medications.filter(
+          hasUncertainMedicationStatus,
+        )
+        const allMedications = dedupMedicationRecords(
+          activeMedicationRecords,
+          collection.medications,
+        )
           .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
+        const allUncertainMedications = dedupMedicationRecords(
+          uncertainMedicationRecords,
+          collection.medications,
+        ).sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
         const medications = allMedications.slice(0, 40).map((medication: any) => {
-          const names = medicationNameFields(medication)
+          const fields = medicationToolFields(medication, nowMs, 'dosage')
+          const { medication: name, ...rest } = fields
           return {
-            name: names.medication,
-            ...(names.recordedName ? { recordedName: names.recordedName } : {}),
-            dosage: medication.dosageInstruction?.[0]?.text,
-            date: medication.authoredOn,
-            chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
+            name,
+            ...rest,
+            refillCount: medication.refillCount,
           }
         })
+        const medicationsWithUncertainStatus = allUncertainMedications
+          .slice(0, 40)
+          .map((medication: any) => {
+            const fields = medicationToolFields(medication, nowMs, 'dosage')
+            const { medication: name, ...rest } = fields
+            return {
+              name,
+              ...rest,
+              currentness: 'uncertain-source-status',
+              refillCount: medication.refillCount,
+            }
+          })
+        const medicationRules = medicationGroundingRules([
+          ...activeMedicationRecords,
+          ...uncertainMedicationRecords,
+        ])
 
         const abnormalByAnalyte = new Map<string, any>()
-        for (const observation of collection!.observations.flatMap(item =>
+        for (const observation of collection.observations.flatMap(item =>
           expandObservationValues(item)
         )) {
           if (String(observation?.status ?? '').toLowerCase() === 'entered-in-error') continue
@@ -816,7 +1078,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const abnormalLabs = allAbnormalLabs.slice(0, 60).map(observationResult)
 
         const vitalByAnalyte = new Map<string, any>()
-        for (const vital of collection!.vitalSigns) {
+        for (const vital of collection.vitalSigns) {
           const key = labAnalyteKey(vital)
           const existing = vitalByAnalyte.get(key)
           if (!existing || (observationDate(vital) || '') > (observationDate(existing) || '')) {
@@ -829,30 +1091,37 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: 'Compact cross-domain health summary snapshot',
+          summary: allUncertainMedications.length > 0
+            ? 'Compact cross-domain health summary snapshot; one or more medication groups have unknown source status and are not presented as current'
+            : 'Compact cross-domain health summary snapshot',
           incomplete: queryIssues.length > 0,
-          canConcludeAbsence: queryIssues.length === 0,
+          canConcludeAbsence: queryIssues.length === 0 && allUncertainMedications.length === 0,
           queryIssues,
           counts: {
             conditions: allConditions.length,
             activeMedications: allMedications.length,
+            medicationsWithUncertainStatus: allUncertainMedications.length,
             abnormalLabs: allAbnormalLabs.length,
             recentVitals: allVitals.length,
           },
           truncated: {
             conditions: allConditions.length > conditions.length,
             activeMedications: allMedications.length > medications.length,
+            medicationsWithUncertainStatus:
+              allUncertainMedications.length > medicationsWithUncertainStatus.length,
             abnormalLabs: allAbnormalLabs.length > abnormalLabs.length,
             recentVitals: allVitals.length > recentVitals.length,
           },
           groundingRules: {
             medicationFieldsOnly: true,
+            ...medicationRules,
             normalityStatusIsAuthoritative: true,
-            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. For medications, name is the canonical coded label and recordedName is the literal source label when different; repeat both exactly and do not infer a translation, ingredient, purpose, or drug class. Do not add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Follow the system prompt language for the entire answer, including headings and table labels. Use sections for recent conditions/chronic diseases, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
+            instruction: medicationRules.instruction + ' Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. Keep medicationsWithUncertainStatus separate from confirmed current medications. Do not add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete or status-uncertain. Follow the system prompt language for the entire answer, including headings and table labels. Use sections for recent conditions/chronic diseases, confirmed current medications, status-uncertain medication records, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
           },
           data: {
             conditions,
             medications,
+            medicationsWithUncertainStatus,
             abnormalLabs,
             recentVitals,
           },
@@ -982,15 +1251,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
           label: pickName(rc) || rc.text,
         }))
 
-        const meds = collection.medications.filter((m: any) => matches(m.encounter)).map((m: any) => ({
-          medication: pickAiMedicationName(
-            m.medicationCodeableConcept,
-            m.medicationReference?.display,
-          ),
-          dosage: m.dosageInstruction?.[0]?.text,
-          status: m.status,
-          chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),
-        }))
+        const nowMs = Date.now()
+        const medicationRecords = collection.medications.filter((m: any) => matches(m.encounter))
+        const meds = medicationRecords.map((medication) =>
+          medicationToolFields(medication, nowMs, 'dosage')
+        )
 
         const obs = uniqueObservations(collection).filter((o: any) => matches(o.encounter)).map((o: any) => ({
           name: pickName(o.code),
@@ -1039,6 +1304,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             institution: encounterInstitution(enc),
             diagnoses,
             medications: meds,
+            medicationGroundingRules: medicationGroundingRules(medicationRecords),
             observations: obs,
             procedures: procs,
             reports,
@@ -1643,77 +1909,138 @@ export function createFhirTools(getData: () => AgentDataSource) {
     // ── Medications & Allergies ────────────────────────────────────────────
 
     queryMedications: tool({
-      description: 'Query medication prescriptions. Supports status / chronic / date range. For "what is the patient on right now" prefer getActiveMedicationList — it dedups refill cycles automatically.',
+      description: 'Query medication records with exact source name/status/dosage/supply fields plus governed NHI terminology or source WHO ATC classification when available. Supports product/ingredient/ATC search, status, chronic, explicit dates, and server-resolved timeRange presets such as last-90-days. For "what is the patient on right now" prefer getActiveMedicationList, which applies currentness rules and safely deduplicates refill cycles.',
       inputSchema: medicationsSchema,
-      execute: async ({ status, chronic, dateFrom, dateTo, limit }:
+      execute: async ({ query, status, chronic, timeRange, dateFrom, dateTo, limit }:
         z.infer<typeof medicationsSchema>) => {
-        const list = getData().collection?.medications ?? []
+        const { collection } = getData()
+        if (!collection) {
+          return scrub(unavailableQueryResult(
+            collection,
+            ['MedicationRequest', 'MedicationStatement'],
+            '用藥紀錄',
+          ))
+        }
+        const queryIssues = queryIssuesFor(
+          collection,
+          ['MedicationRequest', 'MedicationStatement'],
+        )
+        const list = collection.medications
         let filtered = list.filter((m: any) =>
           matchStatus(m.status, status) &&
           matchChronic(m.courseOfTherapyType, chronic)
         )
-        if (dateFrom || dateTo) {
-          filtered = filtered.filter((m: any) => isWithinDateRange(m.authoredOn, dateFrom, dateTo))
+        const resolvedDateRange = resolveMedicationDateRange(timeRange, dateFrom, dateTo)
+        if (resolvedDateRange.dateFrom || resolvedDateRange.dateTo) {
+          filtered = filtered.filter((m: any) => isWithinDateRange(
+            m.authoredOn,
+            resolvedDateRange.dateFrom,
+            resolvedDateRange.dateTo,
+          ))
+        }
+        if (query) {
+          filtered = filtered.filter((medication) => matchSubstring([
+            conceptSearchText(medication.medicationCodeableConcept),
+            medication.medicationReference?.display,
+            medication.drugTerminology?.officialNameZh,
+            medication.drugTerminology?.officialNameEn,
+            medication.drugTerminology?.ingredientText,
+            medication.drugTerminology?.doseForm,
+            medication.drugTerminology?.atcCode,
+            medication.drugTerminology?.atcNameZh,
+            medication.drugTerminology?.atcNameEn,
+            medication.drugTerminology?.atcLevel2NameZh,
+            medication.drugTerminology?.atcLevel2NameEn,
+            medication.drugTerminology?.atcLevel4NameZh,
+            medication.drugTerminology?.atcLevel4NameEn,
+            medication.atcClassification?.atcCode,
+            medication.atcClassification?.atcNameEn,
+            medication.atcClassification?.atcLevel2NameZh,
+            medication.atcClassification?.atcLevel2NameEn,
+            medication.atcClassification?.atcLevel4NameZh,
+            medication.atcClassification?.atcLevel4NameEn,
+          ].filter(Boolean).join(' '), query))
         }
         filtered = [...filtered].sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
         const capped = applyLimit(filtered, limit)
+        const nowMs = Date.now()
         return scrub({
           success: true,
-          summary: `Found ${filtered.length} MedicationRequest record(s)`,
+          summary: queryIssues.length > 0
+            ? `Found ${filtered.length} medication record(s), but one or more medication resource queries are incomplete`
+            : `Found ${filtered.length} medication record(s)`,
           count: filtered.length,
-          groundingRules: {
-            providedFieldsOnly: true,
-            ingredientPurposeDrugClassProvided: false,
-            instruction: 'Copy medication, recordedName, and dosage fields verbatim. medication is the canonical coded label; recordedName is the literal source label when different. Do not infer a translation, ingredient, purpose, drug class, formulation, or treatment target.',
-          },
-          data: capped.map((m: any) => ({
-            ...medicationNameFields(m),
-            status: m.status,
-            authoredOn: m.authoredOn,
-            dosageInstruction: m.dosageInstruction?.[0]?.text,
-            chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),
-          })),
+          ...paginationMeta(filtered.length, capped.length),
+          incomplete: queryIssues.length > 0,
+          canConcludeAbsence: queryIssues.length === 0,
+          queryIssues,
+          ...(timeRange ? { timeRange, resolvedDateRange } : {}),
+          groundingRules: medicationGroundingRules(capped),
+          data: capped.map((medication) =>
+            medicationToolFields(medication, nowMs, 'dosageInstruction')
+          ),
         })
       },
     }),
 
     getActiveMedicationList: tool({
-      description: 'Shortcut for "what is the patient currently on?" — returns the deduplicated list of currently-active prescriptions (NHI refills collapsed by drug name). Set chronicOnly to filter to 慢箋.',
+      description: 'Shortcut for "what is the patient currently on?" — returns confirmed-current prescriptions using lifecycle status plus the computable supply window. Refill cycles collapse only when governed product identity, regimen, and source agree; unknown source status is returned separately and never promoted to current. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
-        const list = getData().collection?.medications ?? []
+        const { collection } = getData()
+        if (!collection) {
+          return scrub(unavailableQueryResult(
+            collection,
+            ['MedicationRequest', 'MedicationStatement'],
+            '目前用藥',
+          ))
+        }
+        const queryIssues = queryIssuesFor(
+          collection,
+          ['MedicationRequest', 'MedicationStatement'],
+        )
+        const list = collection.medications
         const now = Date.now()
         const active = list.filter((m: any) => {
-          const status = String(m.status || '').toLowerCase()
-          if (['stopped', 'cancelled'].includes(status)) return false
           if (chronicOnly && !isChronicByCourseOfTherapy(m.courseOfTherapyType)) return false
-          // Heuristic: filter out clearly-expired refills (authoredOn > 1 year ago AND not chronic)
-          if (m.authoredOn && !isChronicByCourseOfTherapy(m.courseOfTherapyType)) {
-            const age = (now - Date.parse(m.authoredOn)) / 86400000
-            if (age > 365) return false
-          }
-          return true
+          return isMedicationCurrentlyInUse(m, now)
         })
+        const uncertain = list.filter((m: any) =>
+          (!chronicOnly || isChronicByCourseOfTherapy(m.courseOfTherapyType))
+          && hasUncertainMedicationStatus(m)
+        )
 
-        const deduped = dedupMedsByName(active)
+        const deduped = dedupMedicationRecords(active, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
+        const uncertainDeduped = dedupMedicationRecords(uncertain, list)
+          .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
+        const currentPage = deduped.slice(0, 50)
+        const uncertainPage = uncertainDeduped.slice(0, 50)
+        const incomplete = queryIssues.length > 0
+        const canConcludeAbsence = !incomplete && uncertainDeduped.length === 0
 
         return scrub({
           success: true,
-          summary: `${deduped.length} active medication(s)`,
+          summary: uncertainDeduped.length > 0
+            ? `${deduped.length} confirmed current medication(s); ${uncertainDeduped.length} medication group(s) have unknown source status and are not counted as current`
+            : `${deduped.length} confirmed current medication(s)`,
           count: deduped.length,
-          groundingRules: {
-            providedFieldsOnly: true,
-            ingredientPurposeDrugClassProvided: false,
-            instruction: 'Copy medication, recordedName, and dosage fields verbatim. medication is the canonical coded label; recordedName is the literal source label when different. Do not infer a translation, ingredient, purpose, drug class, formulation, or treatment target.',
-          },
-          data: deduped.map((m: any) => ({
-            ...medicationNameFields(m),
-            status: m.status,
-            dosage: m.dosageInstruction?.[0]?.text,
-            authoredOn: m.authoredOn,
-            chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),
-            refillCount: m.refillCount,
+          ...paginationMeta(deduped.length, currentPage.length),
+          incomplete,
+          canConcludeAbsence,
+          queryIssues,
+          uncertainCount: uncertainDeduped.length,
+          uncertainReturnedCount: uncertainPage.length,
+          uncertainTruncated: uncertainPage.length < uncertainDeduped.length,
+          groundingRules: medicationGroundingRules([...currentPage, ...uncertainPage]),
+          data: currentPage.map((medication) => ({
+            ...medicationToolFields(medication, now, 'dosage'),
+            refillCount: medication.refillCount,
+          })),
+          uncertainData: uncertainPage.map((medication) => ({
+            ...medicationToolFields(medication, now, 'dosage'),
+            currentness: 'uncertain-source-status',
+            refillCount: medication.refillCount,
           })),
         })
       },

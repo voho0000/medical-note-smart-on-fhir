@@ -1,0 +1,503 @@
+{
+  "resourceType": "Bundle",
+  "id": "fake-traceton-patient-bundle",
+  "meta": {
+    "lastUpdated": "2026-09-15T12:00:00+08:00",
+    "tag": [
+      {
+        "system": "https://mediprisma.app/fhir/CodeSystem/test-data",
+        "code": "synthetic",
+        "display": "Synthetic test data — not a real patient"
+      }
+    ]
+  },
+  "type": "collection",
+  "timestamp": "2026-09-15T12:00:00+08:00",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:fake-traceton-patient-001",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "fake-traceton-patient-001",
+        "meta": {
+          "tag": [
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/test-data",
+              "code": "synthetic",
+              "display": "Synthetic test patient"
+            }
+          ]
+        },
+        "name": [
+          {
+            "use": "usual",
+            "text": "Traceton 測試病人",
+            "family": "測試",
+            "given": ["病人"]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1985-01-01"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-traceton-encounter-001",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "fake-traceton-encounter-001",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "text": "測試門診"
+          }
+        ],
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "period": {
+          "start": "2026-09-15T10:00:00+08:00",
+          "end": "2026-09-15T10:30:00+08:00"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-traceton-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-traceton-medicationrequest-001",
+        "meta": {
+          "tag": [
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/test-data",
+              "code": "synthetic",
+              "display": "Synthetic medication record"
+            }
+          ]
+        },
+        "status": "active",
+        "intent": "order",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-category",
+                "code": "outpatient",
+                "display": "Outpatient"
+              }
+            ],
+            "text": "門診處方"
+          }
+        ],
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "AC56706100",
+              "display": "Traceton Film Coated Tablets"
+            }
+          ],
+          "text": "服安痛膜衣錠"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "encounter": {
+          "reference": "Encounter/fake-traceton-encounter-001"
+        },
+        "authoredOn": "2026-09-15T10:15:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "acute",
+              "display": "Short course (acute) therapy"
+            }
+          ],
+          "text": "短期處方"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 錠，每日 3 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 3,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "coding": [
+                {
+                  "system": "http://snomed.info/sct",
+                  "code": "26643006",
+                  "display": "Oral route"
+                }
+              ],
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "錠",
+                  "system": "http://unitsofmeasure.org",
+                  "code": "{tablet}"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 21,
+            "unit": "錠",
+            "system": "http://unitsofmeasure.org",
+            "code": "{tablet}"
+          }
+        },
+        "note": [
+          {
+            "text": "本紀錄僅供 AI Agent 與 FHIR 匯入測試，不代表醫療建議或真實處方。"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-norvasc-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-norvasc-medicationrequest-001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A034286100",
+              "display": "NORVASC TABLETS 5MG (AMLODIPINE)"
+            }
+          ],
+          "text": "脈優錠５公絲（安脈狄平）"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-01-15T09:00:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ],
+          "text": "長期用藥"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 錠，每日 1 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "錠"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-metformin-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-metformin-medicationrequest-001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A034096100",
+              "display": "GLUCOMINE F.C. TABLETS 500MG (METFORMIN)"
+            }
+          ],
+          "text": "立克醣膜衣錠５００毫克"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-01-15T09:05:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ],
+          "text": "長期用藥"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 錠，每日 2 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "錠"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-rosuvastatin-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-rosuvastatin-medicationrequest-001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A057194100",
+              "display": "Rozinin F.C. Tablets 10mg"
+            }
+          ],
+          "text": "絡益達膜衣錠10毫克"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-05-01T09:00:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "continuous",
+              "display": "Continuous long term therapy"
+            }
+          ],
+          "text": "長期用藥"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 錠，每日 1 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "錠"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-cetirizine-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-cetirizine-medicationrequest-001",
+        "status": "completed",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A042656100",
+              "display": "CETIZINE F.C. TABLET 10MG (CETIRIZINE)"
+            }
+          ],
+          "text": "思得寧膜衣錠１０毫克"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-08-10T14:00:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "acute",
+              "display": "Short course (acute) therapy"
+            }
+          ],
+          "text": "短期處方"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 錠，每日 1 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "錠"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 7,
+            "unit": "錠"
+          },
+          "expectedSupplyDuration": {
+            "value": 7,
+            "unit": "days",
+            "system": "http://unitsofmeasure.org",
+            "code": "d"
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-omeprazole-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-omeprazole-medicationrequest-001",
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A038692100",
+              "display": "QUICK CAPSULES 20MG (OMEPRAZOLE)"
+            }
+          ],
+          "text": "潰克膠囊20毫克（奧美拉唑）"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-09-10T11:00:00+08:00",
+        "dosageInstruction": [
+          {
+            "text": "來源狀態不明（合成測試資料）"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fake-amoxicillin-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fake-amoxicillin-medicationrequest-001",
+        "status": "stopped",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "code": "A007396100",
+              "display": "PAMOXICILLIN CAPSULES"
+            }
+          ],
+          "text": "泛廣黴素膠囊"
+        },
+        "subject": {
+          "reference": "Patient/fake-traceton-patient-001"
+        },
+        "authoredOn": "2026-06-01T16:00:00+08:00",
+        "courseOfTherapyType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy",
+              "code": "acute",
+              "display": "Short course (acute) therapy"
+            }
+          ],
+          "text": "短期處方"
+        },
+        "dosageInstruction": [
+          {
+            "text": "口服，每次 1 粒，每日 3 次（合成測試資料）",
+            "timing": {
+              "repeat": {
+                "frequency": 3,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "route": {
+              "text": "口服"
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "粒"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 21,
+            "unit": "粒"
+          },
+          "expectedSupplyDuration": {
+            "value": 7,
+            "unit": "days",
+            "system": "http://unitsofmeasure.org",
+            "code": "d"
+          }
+        }
+      }
+    }
+  ]
+}
