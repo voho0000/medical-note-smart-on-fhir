@@ -110,6 +110,7 @@ function classifyVitalByName(holder: CodeHolder): VitalKind | undefined {
   if (/systolic|收縮壓/.test(text)) return 'sbp'
   if (/body\s*weight|體重|^weight$/.test(text)) return 'weight'
   if (/body\s*height|身高|^height$/.test(text)) return 'height'
+  if (/waist\s*(circumference)?|腰圍/.test(text)) return 'waist'
   return undefined
 }
 /** Unit-dimension safety gate for a NAME-matched vital: only accept a value
@@ -117,7 +118,7 @@ function classifyVitalByName(holder: CodeHolder): VitalKind | undefined {
 function unitOkForVital(kind: VitalKind, unit: string): boolean {
   const u = unit.toLowerCase().replace(/[\s[\]]/g, '')
   if (kind === 'weight') return /^(kg|g|lb|lbs)$/.test(u)
-  if (kind === 'height') return /^(cm|m|in|inch|")$/.test(u)
+  if (kind === 'height' || kind === 'waist') return /^(cm|m|in|inch|")$/.test(u)
   return /^mmhg$/.test(u) // sbp
 }
 

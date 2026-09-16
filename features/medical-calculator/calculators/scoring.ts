@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'hpa-chronic-risk-reconstruction': {
+    formula: { en: 'Approximation: risk (%) ≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]. Separate sex-specific fits for each of five outcomes; not the published official coefficients.', zh: '近似式：風險（%）≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]。五項結果各依性別重建；β 不是官方公布係數。' },
+    note: { en: 'The attached 2022 IJERPH paper has CHD, stroke and MACE coefficients, but omits the other two diseases and does not specify all baseline survival terms; its MACE predictors differ from the current public V4 form. See the reconstruction note for the holdout audit.', zh: '所附 2022 年論文有冠心病、中風及 MACE 係數，但沒有另外兩病及全部基準存活率；MACE 變項也與目前公開 V4 表單不同。留出樣本驗算見重建說明。' },
+  },
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },

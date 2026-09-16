@@ -63,6 +63,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'egfr-mdrd': { purpose: ['formula'], diseases: [CKD] },
   'ckd-kdigo-risk': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'End-stage renal disease', zh: '末期腎病' }] },
   'who-cvd-2019': { purpose: ['prognosis', 'risk', 'screening'], diseases: [{ en: 'Cardiovascular disease', zh: '心血管疾病' }, { en: 'Primary prevention', zh: '初級預防' }] },
+  'hpa-chronic-risk-reconstruction': { purpose: ['risk', 'screening'], diseases: [{ en: 'Chronic disease', zh: '慢性病' }, { en: 'Taiwan HPA', zh: '國健署' }] },
   'meld-3': { purpose: ['prognosis'], diseases: [CIRRHOSIS, { en: 'End-stage liver disease', zh: '末期肝病' }] },
   'maddrey-df': { purpose: ['prognosis', 'severity'], diseases: [{ en: 'Alcoholic hepatitis', zh: '酒精性肝炎' }] },
   'hcc-risk-reveal': { purpose: ['prognosis', 'risk', 'screening'], diseases: [HEPATITIS, { en: 'Liver cancer / HCC', zh: '肝癌' }] },
