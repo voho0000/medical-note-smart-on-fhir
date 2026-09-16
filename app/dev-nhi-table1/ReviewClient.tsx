@@ -64,7 +64,17 @@ export default function Review() {
     facts: SCENARIOS[scenario].facts,
     nhiLipidReview: answers,
     medicationClassContexts: SCENARIOS[scenario].facts.statinTherapy
-      ? { statin: { state: 'confirmed-current' as const, medicationNames: [], factKey: 'statinTherapy' } }
+      ? {
+          statin: {
+            state: 'confirmed-current' as const,
+            medicationNames: [SCENARIOS[scenario].facts.statinTherapy.zh.replace('目前用藥中：', '')],
+            factKey: 'statinTherapy',
+            // Six months back, so the 6–8 week rung has something to read.
+            earliestObservedPrescriptionDate: '2026-03-04',
+            dataWindowStartDate: '2025-09-01',
+            lastPrescriptionDate: '2026-08-28',
+          },
+        }
       : {},
   } as unknown as CdssPatientProfile
 

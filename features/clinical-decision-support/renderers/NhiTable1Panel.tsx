@@ -68,7 +68,7 @@ function Criterion({
 }) {
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
-  const glyph = check.origin === 'physician' ? '✓' : fromCode ? '◐' : mark.glyph
+  const glyph = check.origin === 'physician' ? '✓' : fromCode && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
   const states: readonly CdssCoverageCheck['state'][] = ['yes', 'no', 'unknown']
   const interactive = Boolean(onAnswer && check.editable) || Boolean(check.detail)
 
@@ -208,6 +208,16 @@ export function NhiTable1Panel({
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Measured and not met' : '有數值且不符合'}</span>
       </div>
 
+      {summary.therapy ? (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs">
+          <span className="font-medium text-muted-foreground">{summary.therapy.label}</span>
+          <span className="font-medium tabular-nums">{summary.therapy.value}</span>
+          {summary.therapy.duration ? (
+            <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto">
         <div className="grid min-w-[62rem] grid-cols-5 gap-2">
           {tiers.map((tier) => (
@@ -340,15 +350,34 @@ export function NhiTable1Panel({
                 )}
               >
                 {(tier.prescribing ?? []).map((step) => (
-                  <p
-                    key={step}
-                    className={cn(
-                      'rounded px-2 py-1 text-xs leading-snug',
-                      tier.selected ? 'bg-primary/10 font-medium text-foreground' : 'text-muted-foreground',
-                    )}
-                  >
-                    {step}
-                  </p>
+                  <Popover key={step.text}>
+                    <PopoverTrigger
+                      className={cn(
+                        'flex w-full gap-1.5 rounded px-2 py-1 text-left text-xs leading-snug hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        step.state === 'yes'
+                          ? 'bg-primary/10 font-medium text-foreground'
+                          : step.state === 'no'
+                            ? 'text-muted-foreground/70 line-through decoration-muted-foreground/40'
+                            : 'text-muted-foreground',
+                      )}
+                    >
+                      <span aria-hidden="true" className={cn('shrink-0 font-semibold', step.state === 'yes' ? 'text-primary' : 'text-muted-foreground/70')}>
+                        {MARK[step.state].glyph}
+                      </span>
+                      <span className="min-w-0">{step.text}</span>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 space-y-1 text-xs leading-relaxed">
+                      <p className="text-sm font-medium">{step.text}</p>
+                      <p className="text-primary">
+                        {step.state === 'yes'
+                          ? isEnglish ? 'Supported by the record' : '紀錄支持走到這一階'
+                          : step.state === 'no'
+                            ? isEnglish ? 'Not reached' : '尚未走到這一階'
+                            : isEnglish ? 'The record cannot say' : '紀錄無法判讀'}
+                      </p>
+                      {step.evidence ? <p className="text-muted-foreground">{step.evidence}</p> : null}
+                    </PopoverContent>
+                  </Popover>
                 ))}
               </div>
             ))}
