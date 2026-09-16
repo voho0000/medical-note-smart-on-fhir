@@ -45,6 +45,7 @@ export const PURPOSE_LABELS: Record<Purpose, L> = {
 /** Measurement family used to auto-convert an auto-filled value into the
  *  calculator's expected unit. See units.ts. */
 export type ConvertDim =
+  | 'egfr'
   | 'electrolyte'
   | 'creatinine'
   | 'bilirubin'

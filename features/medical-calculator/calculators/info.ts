@@ -9,6 +9,10 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-ascvd': {
+    useWhen: { zh: '30–79 歲初級預防之 10 年 ASCVD 風險；30–59 歲另估 30 年。血脂治療判讀需核對 LDL-C 70–189 mg/dL 及疾病專屬適應症。', en: '10-year ASCVD risk for primary prevention at age 30–79; 30-year risk at age 30–59. Lipid treatment guidance requires LDL-C 70–189 mg/dL and review of disease-specific indications.' },
+    caveats: { zh: '本流程排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。採美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。缺值不補零，不以調整用藥輸入推算治療效益。', en: 'This pathway excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI. Missing values are not zero; changing treatment inputs does not estimate treatment benefit.' },
+  },
   'h2fpef': {
     useWhen: { en: 'Unexplained exertional dyspnea in adults with preserved EF.', zh: '成人射出分率保留，且有原因未明的活動性呼吸困難。' },
     caveats: { en: 'AF uses diagnosis codes first, then ECG history; a negative reflects available records only. Antihypertensives use deduplicated ingredients in valid prescriptions; confirm actual use. Auto-filled echo values come from one report; review its date, technique and source. A preserved EF alone does not establish HFpEF.', zh: 'AF 先查診斷碼，再查 EKG；「否」僅表示目前紀錄未見 AF，請核對病史。降壓藥按有效處方成分去重推算，請核對實際使用情形。心超值取自同一份報告，請核對日期、測量方式與原文；EF 保留本身不能確診 HFpEF。' },

@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-ascvd': {
+    formula: { zh: 'ASCVD 風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))。使用性別與預測年期專屬係數、年齡／血脂／血壓／eGFR 轉換及交互作用；不是簡單加點量表。', en: 'ASCVD risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)). Sex- and horizon-specific coefficients with transformed age, lipids, BP, eGFR and interactions; not a point score.' },
+    note: { zh: 'ASCVD 與 total CVD／HF 是不同模型。本計算機僅計算 ASCVD 基礎模型；ACC/AHA 治療分層請見高血脂照護指引。', en: 'ASCVD, total CVD and HF are distinct models. This calculator implements base ASCVD only; see dyslipidemia guidance for ACC/AHA treatment stratification.' },
+  },
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },

@@ -44,6 +44,7 @@ import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-ca
 import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/build-rationale-copy-text'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
+import { PreventRiskSummary } from './PreventRiskSummary'
 import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
 import {
   buildHeartFailureBoard,
@@ -2862,6 +2863,7 @@ export function ClinicalDecisionSupportView({
               </div>
 
               <NhiLipidCoverageSummary recommendation={recommendation} locale={locale} patientId={patientId} />
+                        <PreventRiskSummary recommendation={recommendation} locale={locale} patientId={patientId} />
               {isExpanded ? (
                 <div
                   id={detailId}

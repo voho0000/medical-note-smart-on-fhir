@@ -1,4 +1,8 @@
 "use client"
+import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
+import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
+import { PreventReadingContext } from './renderers/PreventRiskSummary'
+
 
 import { useEffect, useMemo, useState } from 'react'
 import { FileSearch, RotateCcw, ShieldCheck } from 'lucide-react'
@@ -250,6 +254,7 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   const patientId = patient?.id
   const nhiLipidReview = useNhiLipidReview(patientId)
+  const preventInputs = usePreventInputs(patientId)
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
@@ -374,9 +379,10 @@ export default function LiveClinicalDecisionSupportFeature() {
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
+  const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
-  ), [answeredProfile, hfpefReading])
+    answeredProfile ? applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading) : null
+  ), [answeredProfile, hfpefReading, preventReading])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -477,6 +483,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     clearEvidenceOverrides(patientId)
     clearClinicVitals(patientId)
     useNhiLipidReviewStore.getState().clear(patientId)
+    usePreventStore.getState().clear(patientId)
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
@@ -541,6 +548,7 @@ export default function LiveClinicalDecisionSupportFeature() {
       {result.clinicalHandoff && !isVisitFlow ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
+      <PreventReadingContext.Provider value={preventReading}>
       <ClinicalDecisionSupportView
         result={result}
         englishResult={englishResult ?? undefined}
@@ -567,6 +575,7 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
       />
+      </PreventReadingContext.Provider>
     </div>
   )
 }
