@@ -63,6 +63,16 @@ export default function Review() {
     eligibleDiseasePackIds: ['hyperlipidemia-poc'],
     facts: SCENARIOS[scenario].facts,
     nhiLipidReview: answers,
+    labSeries: SCENARIOS[scenario].facts.LDL
+      ? {
+          LDL: [
+            { date: '2026-08-30', numericValue: Number(SCENARIOS[scenario].facts.LDL.numericValue), unit: 'mg/dL', displayValue: `${SCENARIOS[scenario].facts.LDL.numericValue} mg/dL` },
+            { date: '2026-05-18', numericValue: 132, unit: 'mg/dL', displayValue: '132 mg/dL' },
+            { date: '2026-02-20', numericValue: 158, unit: 'mg/dL', displayValue: '158 mg/dL' },
+            { date: '2025-11-08', numericValue: 171, unit: 'mg/dL', displayValue: '171 mg/dL' },
+          ],
+        }
+      : undefined,
     medicationClassContexts: SCENARIOS[scenario].facts.statinTherapy
       ? {
           statin: {
