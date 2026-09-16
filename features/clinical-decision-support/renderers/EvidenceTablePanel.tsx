@@ -139,7 +139,7 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
 }
 
 const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk', { zh: string; en: string }> = {
-  'lipid-very-high-risk': { zh: '血脂極高風險證據', en: 'Very-high lipid risk evidence' },
+  'lipid-very-high-risk': { zh: 'ASCVD 極高風險：主要事件與高風險條件', en: 'Very-high-risk ASCVD: major events and high-risk conditions' },
   'af-diagnosis': { zh: 'AF 診斷', en: 'AF diagnosis' },
   'af-stroke-risk': { zh: '血栓風險計分依據', en: 'Stroke risk components' },
   'af-anticoagulation': { zh: '抗凝與抗栓依據', en: 'Anticoagulation evidence' },
