@@ -16,6 +16,7 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import { useNhiLipidReview, useNhiLipidReviewStore } from './stores/nhi-lipid-review.store'
 import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
@@ -249,6 +250,7 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   const patientId = patient?.id
   const evidenceOverrides = useEvidenceOverrides(patientId)
+  const nhiLipidReview = useNhiLipidReview(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
   const clinicVitals = useClinicVitals(patientId)
@@ -349,12 +351,17 @@ export default function LiveClinicalDecisionSupportFeature() {
   // profile, so every module that reads them recomputes.
   const answeredProfile = useMemo(() => (
     recordProfile
-      ? applyPhenotypeAnswer(
-          applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
-          phenotypeAnswer,
-        )
+      ? {
+          ...applyPhenotypeAnswer(
+            applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
+            phenotypeAnswer,
+          ),
+          // 表一's own conditions, as the clinician answered them: the pack
+          // regrades from the profile rather than the card being patched.
+          nhiLipidReview,
+        }
       : null
-  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+  ), [clinicVitals, evidenceOverrides, nhiLipidReview, phenotypeAnswer, recordProfile])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -473,6 +480,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   const resetVisitDefaults = () => {
     if (!patientId) return
     clearEvidenceOverrides(patientId)
+    useNhiLipidReviewStore.getState().clear(patientId)
     clearClinicVitals(patientId)
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)

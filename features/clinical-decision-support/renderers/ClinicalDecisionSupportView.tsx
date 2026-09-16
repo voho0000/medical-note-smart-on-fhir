@@ -44,6 +44,8 @@ import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-ca
 import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/build-rationale-copy-text'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
+import { NhiTable1Panel } from './NhiTable1Panel'
+import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
 import {
   buildHeartFailureBoard,
   HEART_FAILURE_LIST_STATUS_ORDER,
@@ -2856,6 +2858,16 @@ export function ClinicalDecisionSupportView({
                   />
                 </span>
               </div>
+
+              {'coverageSummary' in recommendation && recommendation.coverageSummary ? (
+                <NhiTable1Panel
+                  summary={recommendation.coverageSummary}
+                  locale={locale}
+                  onAnswer={patientId
+                    ? (id, state) => useNhiLipidReviewStore.getState().answer(patientId, id, state)
+                    : undefined}
+                />
+              ) : null}
 
               {isExpanded ? (
                 <div
