@@ -131,7 +131,10 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
 
         // The subtraction rules may move a phrase from the title into the
         // evidence column, but the row as a whole must still carry it.
-        const rendered = normalize(row.textContent ?? '')
+        // NHI puts its conclusion in the always-visible summary beside the
+        // trigger, within the same article. Verify that rendered surface too.
+        const summary = row.closest('article')?.querySelector('[data-testid="nhi-lipid-coverage-summary"]')
+        const rendered = normalize((row.textContent ?? '') + (summary?.textContent ?? ''))
         const dropped = informativePhrases(recommendation.title)
           .filter((phrase) => !rendered.includes(normalize(phrase)))
 

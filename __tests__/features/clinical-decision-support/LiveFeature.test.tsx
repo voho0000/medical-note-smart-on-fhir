@@ -230,15 +230,12 @@ describe('Live personalized-guidance pathway list', () => {
     expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
   })
 
-  it('lists heart failure alone and no pack the package does not ship', () => {
+  it('lists heart failure and lipid while keeping other pathways unlisted', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     const heartFailureButton = screen.getByTestId('cdss-disease-switch-heart-failure-cdss')
-    // Heart failure is the only pathway this host lists. This record carries
-    // governed CKD, diabetes and hyperlipidemia diagnoses as well, and none of
-    // them opens a switch — a pack the package does not ship, or one the host
-    // does not list, is not reachable from here.
-    for (const unlisted of ['ckd', 'dm-ckd', 'hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+    expect(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')).toBeInTheDocument()
+    for (const unlisted of ['ckd', 'dm-ckd', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
       expect(screen.queryByTestId(`cdss-disease-switch-${unlisted}-cdss`)).not.toBeInTheDocument()
     }
 

@@ -97,3 +97,7 @@ HF new-flow clinical information card: owner requested replacing the height tile
    and `__tests__/application/hooks/use-beta-features.test.tsx` are the pattern).
 
 - HF 門診流程：依使用者要求移除重複的「補完心超數值」按鈕；仍可點擊 HFA-PEFF／H₂FPEF 名稱開啟相同計算機並補填資料。
+
+## HMC dyslipidemia pilot
+
+2026-09-16: owner explicitly authorized the two pilot/hmc branches and preview overlay. The disease list now includes heart failure and dyslipidemia. Dyslipidemia retains its existing Beta/pilot visibility rule; the vghtpe hand-off honours Beta, while other unattended Medcloud routes continue to show released packs only. No existing clinical surface is removed.
