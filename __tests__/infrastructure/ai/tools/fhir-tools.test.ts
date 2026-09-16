@@ -654,6 +654,262 @@ describe('createFhirTools (unified)', () => {
       const r = await call('queryMedications', { dateFrom: '2026-04-01' })
       expect(r.count).toBe(1)
     })
+
+    it('resolves the past-three-month preset without asking the model to calculate dates', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-15T12:00:00+08:00'))
+      try {
+        const recentTools = createFhirTools(() => ({
+          patient: samplePatient,
+          collection: {
+            ...sampleCollection,
+            medications: [
+              { ...sampleCollection.medications[0], id: 'recent', authoredOn: '2026-09-01' },
+              { ...sampleCollection.medications[1], id: 'old', authoredOn: '2026-05-01' },
+            ],
+          },
+        }))
+
+        const r = await (recentTools.queryMedications as any).execute({ timeRange: 'last-90-days' })
+
+        expect(r.count).toBe(1)
+        expect(r.timeRange).toBe('last-90-days')
+        expect(r.resolvedDateRange).toEqual({ dateFrom: '2026-06-17', dateTo: '2026-09-15' })
+        expect(r.data[0].authoredOn).toBe('2026-09-01')
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('does not present an unloaded medication collection as a confirmed empty result', async () => {
+      const unloadedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: null,
+      }))
+
+      const r = await (unloadedTools.queryMedications as any).execute({})
+
+      expect(r).toMatchObject({
+        success: false,
+        count: 0,
+        incomplete: true,
+        canConcludeAbsence: false,
+      })
+    })
+
+    it('returns exact governed drug terminology and keeps source category separate', async () => {
+      const terminologyTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [{
+            ...sampleCollection.medications[0],
+            medicationCodeableConcept: {
+              text: '通舒錠',
+              coding: [{
+                system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
+                code: 'AC12345100',
+                display: 'Sotalol',
+              }],
+            },
+            category: [{
+              text: '心血管用藥',
+              coding: [{ code: 'cardiovascular', display: 'CARDIOVASCULAR' }],
+            }],
+            drugTerminology: {
+              source: 'nhi-official-drug-master',
+              snapshotId: 'nhi-drug-terminology-test',
+              officialNameZh: '通舒錠',
+              officialNameEn: 'Sotalol Tablets',
+              ingredientText: 'SOTALOL HCL 80 MG',
+              doseForm: '錠劑',
+              atcCode: 'C07AA07',
+              atcNameEn: 'sotalol',
+              atcLevel2Code: 'C07',
+              atcLevel2NameZh: '乙型阻斷劑',
+              atcLevel2NameEn: 'BETA BLOCKING AGENTS',
+              atcLevel4Code: 'C07AA',
+              atcLevel4NameZh: '非選擇性乙型阻斷劑',
+              atcLevel4NameEn: 'Beta blocking agents, non-selective',
+            },
+          }],
+        },
+      }))
+
+      const r = await (terminologyTools.queryMedications as any).execute({})
+
+      expect(r.groundingRules).toMatchObject({
+        ingredientProvided: true,
+        drugClassProvided: true,
+        purposeOrIndicationProvided: false,
+      })
+      expect(r.data[0]).toMatchObject({
+        medication: 'Sotalol',
+        recordedName: '通舒錠',
+        terminologyStatus: 'matched',
+        nhiDrugCode: 'AC12345100',
+        drugTerminology: {
+          ingredientText: 'SOTALOL HCL 80 MG',
+          doseForm: '錠劑',
+          atcCode: 'C07AA07',
+          atcLevel2NameZh: '乙型阻斷劑',
+          atcLevel4NameZh: '非選擇性乙型阻斷劑',
+        },
+        recordedCategories: [{
+          code: 'cardiovascular',
+          text: '心血管用藥',
+          meaning: 'source-administrative-category',
+        }],
+      })
+      expect(r.data[0].medicationIdentity).toContain('Sotalol')
+      expect(r.data[0].medicationIdentity).toContain('SOTALOL HCL 80 MG')
+      expect(r.data[0].medicationIdentity).toContain('ATC C07AA07')
+      expect(r.data[0]).not.toHaveProperty('modelInstruction')
+    })
+
+    it('filters patient medication records by governed ingredient or ATC class', async () => {
+      const terminologyTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [{
+            ...sampleCollection.medications[0],
+            drugTerminology: {
+              source: 'nhi-official-drug-master',
+              snapshotId: 'nhi-drug-terminology-test',
+              officialNameZh: '通舒錠',
+              officialNameEn: 'Sotalol Tablets',
+              ingredientText: 'SOTALOL HCL 80 MG',
+              doseForm: '錠劑',
+              atcCode: 'C07AA07',
+              atcLevel2Code: 'C07',
+              atcLevel2NameZh: '乙型阻斷劑',
+              atcLevel2NameEn: 'BETA BLOCKING AGENTS',
+              atcLevel4Code: 'C07AA',
+              atcLevel4NameZh: '非選擇性乙型阻斷劑',
+              atcLevel4NameEn: 'Beta blocking agents, non-selective',
+            },
+          }],
+        },
+      }))
+
+      const byIngredient = await (terminologyTools.queryMedications as any).execute({ query: 'SOTALOL HCL' })
+      const byClass = await (terminologyTools.queryMedications as any).execute({ query: '乙型阻斷劑' })
+      const absent = await (terminologyTools.queryMedications as any).execute({ query: 'antihistamine' })
+
+      expect(byIngredient.count).toBe(1)
+      expect(byClass.count).toBe(1)
+      expect(absent).toMatchObject({ count: 0, canConcludeAbsence: true })
+    })
+
+    it('surfaces a partial medication-source failure without discarding available records', async () => {
+      const partialTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          resourceQueryStatus: {
+            MedicationRequest: {
+              resourceType: 'MedicationRequest',
+              state: 'ok',
+              count: sampleCollection.medications.length,
+            },
+            MedicationStatement: {
+              resourceType: 'MedicationStatement',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+
+      const r = await (partialTools.queryMedications as any).execute({})
+
+      expect(r.success).toBe(true)
+      expect(r.count).toBe(3)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.queryIssues).toEqual([
+        expect.objectContaining({ resourceType: 'MedicationStatement', state: 'unsupported' }),
+      ])
+    })
+
+    it('returns governed source ATC classification when no NHI terminology match exists', async () => {
+      const atcTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [{
+            ...sampleCollection.medications[0],
+            drugTerminology: undefined,
+            atcClassification: {
+              source: 'source-who-atc',
+              atcCode: 'L01EB04',
+              atcNameEn: 'osimertinib',
+              atcLevel2Code: 'L01',
+              atcLevel2NameZh: '抗腫瘤劑',
+              atcLevel2NameEn: 'ANTINEOPLASTIC AGENTS',
+              atcLevel4Code: 'L01EB',
+              atcLevel4NameZh: 'EGFR 酪胺酸激酶抑制劑',
+              atcLevel4NameEn: 'Epidermal growth factor receptor tyrosine kinase inhibitors',
+              atcHierarchySnapshotId: 'atc-hierarchy-test',
+            },
+          }],
+        },
+      }))
+
+      const r = await (atcTools.queryMedications as any).execute({})
+
+      expect(r.groundingRules.drugClassProvided).toBe(true)
+      expect(r.data[0].sourceAtcClassification).toMatchObject({
+        atcCode: 'L01EB04',
+        atcLevel2NameZh: '抗腫瘤劑',
+        atcLevel4NameZh: 'EGFR 酪胺酸激酶抑制劑',
+      })
+    })
+
+    it('preserves structured dosage and supply when dosage text is absent', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-15T12:00:00+08:00'))
+      try {
+        const structuredTools = createFhirTools(() => ({
+          patient: samplePatient,
+          collection: {
+            ...sampleCollection,
+            medications: [{
+              id: 'structured-medication',
+              medicationCodeableConcept: { text: 'Structured medicine' },
+              status: 'active',
+              authoredOn: '2026-09-14',
+              dosageInstruction: [{
+                route: { text: 'PO' },
+                doseAndRate: [{ doseQuantity: { value: 1, unit: 'tablet' } }],
+                timing: { repeat: { frequency: 2, period: 1, periodUnit: 'd' } },
+              }],
+              dispenseRequest: {
+                quantity: { value: 14, unit: 'tablet' },
+                expectedSupplyDuration: { value: 7, unit: 'days', code: 'd' },
+              },
+            } as any],
+          },
+        }))
+
+        const r = await (structuredTools.queryMedications as any).execute({})
+
+        expect(r.data[0]).toMatchObject({
+          dosageDetails: {
+            route: 'PO',
+            doseQuantity: { value: 1, unit: 'tablet' },
+            frequency: 2,
+            period: 1,
+            periodUnit: 'd',
+          },
+          dispenseQuantity: { value: 14, unit: 'tablet' },
+          expectedSupplyDuration: { value: 7, unit: 'days', code: 'd' },
+          expectedSupplyEnd: '2026-09-21',
+          current: true,
+        })
+      } finally {
+        jest.useRealTimers()
+      }
+    })
   })
 
   describe('queryAllergies', () => {
@@ -830,6 +1086,169 @@ describe('createFhirTools (unified)', () => {
         refillCount: 2,
       })
     })
+
+    it('uses supply timing for missing/unknown status and leaves only unresolvable rows uncertain', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-11T12:00:00+08:00'))
+      try {
+        const unknownStatusTools = createFhirTools(() => ({
+          patient: samplePatient,
+          collection: {
+            ...sampleCollection,
+            medications: [
+              {
+                id: 'unknown-current-med',
+                medicationCodeableConcept: {
+                  text: 'Status-unknown current medicine',
+                },
+                status: 'unknown',
+                authoredOn: '2026-09-08',
+                dosageInstruction: [{ text: 'QD' }],
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 6, unit: 'days', code: 'd' },
+                },
+              },
+              {
+                id: 'missing-current-med',
+                medicationCodeableConcept: { text: 'Status-missing current medicine' },
+                authoredOn: '2026-09-09',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 5, unit: 'days', code: 'd' },
+                },
+              },
+              {
+                id: 'unknown-expired-med',
+                medicationCodeableConcept: { text: 'Status-unknown expired medicine' },
+                status: 'unknown',
+                authoredOn: '2026-09-01',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 3, unit: 'days', code: 'd' },
+                },
+              },
+              {
+                id: 'unknown-unresolvable-med',
+                medicationCodeableConcept: { text: 'Status-unknown unresolved medicine' },
+                status: 'unknown',
+                authoredOn: '2026-09-10',
+              },
+            ] as any,
+          },
+        }))
+
+        const r = await (unknownStatusTools.getActiveMedicationList as any).execute({})
+
+        expect(r).toMatchObject({
+          success: true,
+          count: 2,
+          canConcludeAbsence: false,
+          uncertainCount: 1,
+        })
+        expect(r.data).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            medication: 'Status-unknown current medicine',
+            status: 'unknown',
+            current: true,
+            expectedSupplyEnd: '2026-09-14',
+            currentnessBasis: 'supply-window',
+          }),
+          expect.objectContaining({
+            medication: 'Status-missing current medicine',
+            current: true,
+            expectedSupplyEnd: '2026-09-14',
+            currentnessBasis: 'supply-window',
+          }),
+        ]))
+        expect(r.data).not.toEqual(expect.arrayContaining([
+          expect.objectContaining({ medication: 'Status-unknown expired medicine' }),
+        ]))
+        expect(r.uncertainData[0]).toMatchObject({
+          medication: 'Status-unknown unresolved medicine',
+          status: 'unknown',
+          current: false,
+          currentnessBasis: 'insufficient-status-and-supply',
+          currentness: 'uncertain-source-status',
+        })
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('uses status plus supply end instead of a one-year age heuristic', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-15T12:00:00+08:00'))
+      try {
+        const supplyTools = createFhirTools(() => ({
+          patient: samplePatient,
+          collection: {
+            ...sampleCollection,
+            medications: [
+              {
+                id: 'expired',
+                medicationCodeableConcept: { text: 'Expired medicine' },
+                status: 'active',
+                authoredOn: '2026-05-13',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 3, unit: 'days', code: 'd' },
+                },
+              },
+              {
+                id: 'current-completed',
+                medicationCodeableConcept: { text: 'Current supplied medicine' },
+                status: 'completed',
+                authoredOn: '2026-09-14',
+                dispenseRequest: {
+                  expectedSupplyDuration: { value: 3, unit: 'days', code: 'd' },
+                },
+              },
+            ] as any,
+          },
+        }))
+
+        const r = await (supplyTools.getActiveMedicationList as any).execute({})
+
+        expect(r.data.map((medication: any) => medication.medication)).toEqual([
+          'Current supplied medicine',
+        ])
+        expect(r.data[0]).toMatchObject({
+          current: true,
+          expectedSupplyEnd: '2026-09-17',
+          currentnessBasis: 'source-status-and-supply-window',
+        })
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('keeps same-name prescriptions separate when the regimen differs', async () => {
+      const differentRegimenTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [
+            {
+              id: 'regimen-1',
+              medicationCodeableConcept: { text: 'Same drug' },
+              status: 'active',
+              authoredOn: '2026-09-01',
+              dosageInstruction: [{ text: '1 TAB QD' }],
+            },
+            {
+              id: 'regimen-2',
+              medicationCodeableConcept: { text: 'Same drug' },
+              status: 'active',
+              authoredOn: '2026-09-02',
+              dosageInstruction: [{ text: '2 TAB BID' }],
+            },
+          ] as any,
+        },
+      }))
+
+      const r = await (differentRegimenTools.getActiveMedicationList as any).execute({})
+
+      expect(r.count).toBe(2)
+      expect(r.data.map((medication: any) => medication.dosage)).toEqual([
+        '2 TAB BID',
+        '1 TAB QD',
+      ])
+    })
   })
 
   describe('getHealthSummarySnapshot', () => {
@@ -871,6 +1290,44 @@ describe('createFhirTools (unified)', () => {
 
       expect(serialized).not.toContain(samplePatient.id)
       expect(serialized).not.toContain('Dr. Wang')
+    })
+
+    it('keeps unknown-status medication records separate and returns other available domains', async () => {
+      const uncertainSnapshotTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [{
+            id: 'unknown-medication',
+            medicationCodeableConcept: { text: 'Status-unknown drug' },
+            status: 'unknown',
+            authoredOn: '2026-09-08',
+          } as any],
+          resourceQueryStatus: {
+            MedicationStatement: {
+              resourceType: 'MedicationStatement',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+
+      const r = await (uncertainSnapshotTools.getHealthSummarySnapshot as any).execute({})
+
+      expect(r.success).toBe(true)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.data.conditions).toHaveLength(1)
+      expect(r.data.medications).toEqual([])
+      expect(r.data.medicationsWithUncertainStatus).toEqual([
+        expect.objectContaining({
+          name: 'Status-unknown drug',
+          status: 'unknown',
+          current: false,
+          currentness: 'uncertain-source-status',
+        }),
+      ])
     })
   })
 

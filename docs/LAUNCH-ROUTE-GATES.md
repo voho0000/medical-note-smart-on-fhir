@@ -58,6 +58,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Medication duration | The 2×2 card omits prescribed supply days. | Stacked rows, expanded list, and medication hover details retain supply days. | Explicit chat approval, 2026-09-10 |
 | Report, medication, and visit rows | Stacked layouts also use single-line records; long text may be truncated. | Existing report dialogs, row tooltips, and destination tabs retain details. | Explicit chat approval, 2026-09-10 |
 
+## Medical Summary display rules (all launch routes)
+
+| Surface | Compact presentation | Where the full recovery action remains | Owner decision |
+|---|---|---|---|
+| Care reminders and safety card | Do not render an empty card for a failed first scan, and do not repeat its error or retry action inside a card that still has prior successful content. | The Medical Summary error banner lists the safety failure with other failed cards and offers one retry action; that action reruns only failed cards and preserves successful cards. | Explicit Before/After approval in chat, 2026-09-15 |
+
 ## HF visit action list (all launch routes)
 
 | Surface | Behaviour | Owner decision |

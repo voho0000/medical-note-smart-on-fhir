@@ -9,33 +9,11 @@ import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
-import { referenceId } from '@/src/core/utils/observation-selectors'
-import { isPreventiveMedicineComposition } from '@/features/clinical-summary/document-summary/utils/loinc-document-types'
-
-type CompositionSectionLike = {
-  entry?: Array<{ reference?: string }>
-  section?: CompositionSectionLike[]
-}
-
-function collectAdultPreventiveObservationIds(compositions: any[]): Set<string> {
-  const ids = new Set<string>()
-
-  const visitSection = (section: CompositionSectionLike) => {
-    for (const entry of section.entry ?? []) {
-      const id = referenceId(entry.reference)
-      if (id) ids.add(id)
-    }
-    for (const child of section.section ?? []) visitSection(child)
-  }
-
-  for (const composition of compositions) {
-    if (!isPreventiveMedicineComposition(composition)
-      && !isAdultPreventiveHealthExamResource(composition)) continue
-    for (const section of composition.section ?? []) visitSection(section)
-  }
-
-  return ids
-}
+import { collectAdultPreventiveObservationIds } from '../utils/adult-preventive-source'
+import {
+  getNhiMedicloudOriginalInstitution,
+  isNhiMedicloudObservation,
+} from '@/src/shared/utils/observation-provenance.utils'
 
 export function useOrphanObservations(
   observations: any[],
@@ -83,7 +61,9 @@ export function useOrphanObservations(
       "|" +
       (getCodeableConceptText(o.code) || "Observation") +
       "|" +
-      (isAdultPreventiveObservation(o) ? 'adult-preventive' : '')
+      (isAdultPreventiveObservation(o) ? 'adult-preventive' : '') +
+      "|" +
+      (isNhiMedicloudObservation(o) ? 'nhi-medicloud' : '')
 
     const groups = new Map<string, Observation[]>()
     for (const o of panels) {
@@ -95,8 +75,13 @@ export function useOrphanObservations(
 
     return Array.from(groups.entries()).map(([k, lst]) => {
       const first = lst[0]
-      const institution = (first as any).performer?.[0]?.display
       const group = inferGroupFromObservation(first)
+      const sourceProvenance = group === 'lab' && lst.length > 0 && lst.every(isNhiMedicloudObservation)
+        ? 'nhi-medicloud' as const
+        : undefined
+      const institution = sourceProvenance
+        ? lst.map(getNhiMedicloudOriginalInstitution).find((candidate): candidate is string => !!candidate)
+        : (first as any).performer?.[0]?.display
       const displayObservations = group === 'cancer-screening'
         ? lst.map((observation) => ({
             ...observation,
@@ -121,6 +106,7 @@ export function useOrphanObservations(
         sourceProgram: lst.some(isAdultPreventiveObservation)
           ? 'adult-preventive' as const
           : undefined,
+        sourceProvenance,
         effectiveDate: first.effectiveDateTime,
       }
     })

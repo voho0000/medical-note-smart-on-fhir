@@ -93,7 +93,7 @@ function rowCategoryId(row: Row): string {
 }
 
 function clusterKey(row: Row): string {
-  return `${dayKey(row.effectiveDate)}|${(row.institution ?? '').trim()}|${rowCategoryId(row)}|${row.sourceProgram ?? ''}`
+  return `${dayKey(row.effectiveDate)}|${(row.institution ?? '').trim()}|${rowCategoryId(row)}|${row.sourceProgram ?? ''}|${row.sourceProvenance ?? ''}`
 }
 
 // Category rank lookup — index in LAB_CATEGORIES so members sort in the same
@@ -212,6 +212,9 @@ export function groupLabReportsByDay(rows: Row[]): Row[] {
     const sa = a.sourceProgram ?? ''
     const sb = b.sourceProgram ?? ''
     if (sa !== sb) return sa.localeCompare(sb)
+    const pa = a.sourceProvenance ?? ''
+    const pb = b.sourceProvenance ?? ''
+    if (pa !== pb) return pa.localeCompare(pb)
     return groupCategoryRank(a) - groupCategoryRank(b)
   })
   return out

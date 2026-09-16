@@ -1,8 +1,9 @@
 import { test, expect } from '../fixtures/test'
-import { importBundle, openChatInput } from '../fixtures/import'
+import { importBundle, openChatInput, openFeaturePanel } from '../fixtures/import'
 
 test('chat restore applies after confirmation and remains recoverable after reload', async ({ page }, testInfo) => {
   await importBundle(page)
+  await openFeaturePanel(page)
   const toast = page.getByRole('button', { name: 'Close toast', exact: true }).first()
   if (await toast.isVisible()) await toast.click()
   await openChatInput(page)
@@ -36,6 +37,7 @@ test('chat restore applies after confirmation and remains recoverable after relo
   await expect(page.locator('[data-sonner-toast]').filter({ hasText: '已還原系統範本。' })).toBeVisible()
   await manager.screenshot({ path: testInfo.outputPath('restore-notification.png'), animations: 'disabled' })
   await page.reload()
+  await openFeaturePanel(page)
   await openChatInput(page)
   await page.getByRole('button', { name: '管理範本', exact: true }).click()
   await manager.getByRole('button', { name: '找回還原前的版本' }).click()
@@ -47,6 +49,7 @@ test('chat restore applies after confirmation and remains recoverable after relo
 
 test('custom summary restores directly and recovers complete module content', async ({ page }) => {
   await importBundle(page)
+  await openFeaturePanel(page)
   await page.getByRole('tab', { name: '醫療摘要', exact: true }).click()
   await page.getByRole('tab', { name: '自訂摘要', exact: true }).click()
   await page.getByRole('button', { name: '管理模組', exact: true }).click()

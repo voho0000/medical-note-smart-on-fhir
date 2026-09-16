@@ -10,6 +10,7 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
+import type { Ref } from "react"
 import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
@@ -41,6 +42,8 @@ import {
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
   modelId: string
+  /** Keep the raw selection on the trigger when its credentials are missing. */
+  preserveSelection?: boolean
   /** The feature's free default — where the gate lands without a key. */
   fallbackModelId: string
   onSelect: (id: string) => void
@@ -53,10 +56,15 @@ interface ModelPickerProps {
   compact?: boolean
   /** Optional host-specific trigger sizing without changing other AI features. */
   triggerClassName?: string
+  /** Optional external control for recovery flows that reveal this picker. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  triggerRef?: Ref<HTMLButtonElement>
 }
 
 export function ModelPicker({
   modelId,
+  preserveSelection = false,
   fallbackModelId,
   onSelect,
   tooltip,
@@ -64,6 +72,9 @@ export function ModelPicker({
   align = "end",
   compact = false,
   triggerClassName,
+  open,
+  onOpenChange,
+  triggerRef,
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
@@ -91,9 +102,10 @@ export function ModelPicker({
     },
     fallbackModelId,
   )
+  const credentialGatedModelId = preserveSelection ? modelId : keyGatedModelId
   const effectiveModelId = agentModeActive
-    ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
-    : keyGatedModelId
+    ? gateModelForAgentSupport(credentialGatedModelId, fallbackModelId)
+    : credentialGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
   const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
   const usesStandardChat = (candidateModelId: string) => {
@@ -112,9 +124,10 @@ export function ModelPicker({
   ]
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           data-testid="model-picker-trigger"
           title={tooltip}

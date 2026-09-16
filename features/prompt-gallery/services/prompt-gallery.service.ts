@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, deleteField,
+  collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, deleteField, runTransaction,
   query, where, limit, startAfter, increment, Timestamp,
   type QueryConstraint, type QueryDocumentSnapshot,
 } from 'firebase/firestore'
@@ -9,7 +9,7 @@ import {
   splitTemplateText, writeTemplateText,
 } from '@/src/application/composition.template-text'
 import { getPromptSpecialtyFilterValues, PROMPT_SPECIALTY_GROUPS } from '../constants/prompt-specialties'
-import { normalizePromptTypes, PROMPT_CATEGORIES, type SharedPrompt, type PromptGalleryFilter, type PromptGallerySort } from '../types/prompt.types'
+import { coerceTemplateVersion, normalizePromptTypes, PROMPT_CATEGORIES, type SharedPrompt, type PromptGalleryFilter, type PromptGallerySort } from '../types/prompt.types'
 import { coerceInsightLanguagePolicy, coerceInsightOutputFormat } from '@/src/shared/constants/clinical-insights.constants'
 
 const COLLECTION_NAME = 'sharedPrompts'
@@ -50,6 +50,7 @@ export function convertToSharedPrompt(id: string, data: Record<string, unknown>)
       tags: (data.tags ?? []) as string[],
       outputFormat: data.outputFormat === undefined ? undefined : coerceInsightOutputFormat(data.outputFormat),
       languagePolicy: data.languagePolicy === undefined ? undefined : coerceInsightLanguagePolicy(data.languagePolicy),
+      version: coerceTemplateVersion(data.version),
       exampleOutput: typeof data.exampleOutput === 'string' && data.exampleOutput ? data.exampleOutput : undefined,
       // Records published before visibility controls were introduced are public.
       isPublic: data.isPublic !== false,
@@ -138,7 +139,7 @@ export async function getSharedPrompt(id: string): Promise<SharedPrompt | null> 
   return prompt ? loadSharedPromptContent(prompt) : null
 }
 
-export type NewPrompt = Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt' | 'body' | 'tenantName'>
+export type NewPrompt = Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt' | 'body' | 'tenantName' | 'version'>
 export function validatePrompt(prompt: NewPrompt) {
   if (typeof prompt.title !== 'string' || !prompt.title.trim() || prompt.title.length > 100
     || typeof prompt.prompt !== 'string' || !prompt.prompt.trim()
@@ -164,7 +165,7 @@ export async function createSharedPrompt(input: NewPrompt): Promise<string> {
   const normalized = { ...prompt, isPublic: prompt.isPublic !== false }
   validatePrompt(normalized)
   const now = Timestamp.now()
-  const data = Object.fromEntries(Object.entries({ ...normalized, usageCount: 0, createdAt: now, updatedAt: now,
+  const data = Object.fromEntries(Object.entries({ ...normalized, version: 1, usageCount: 0, createdAt: now, updatedAt: now,
     authorName: normalized.isAnonymous ? undefined : normalized.authorName }).filter(([, value]) => value !== undefined))
   if (splitTemplateText(normalized.prompt).length === 1) return (await addDoc(collection(db, COLLECTION_NAME), data)).id
   const ref = doc(collection(db, COLLECTION_NAME))
@@ -197,18 +198,41 @@ export async function updateSharedPrompt(id: string, updates: Partial<NewPrompt>
   const full = await loadSharedPromptContent(current)
   const next = { ...full, ...updates }
   validatePrompt(next)
-  const { id: _id, body: _body, ...data } = next
-  const body = splitTemplateText(next.prompt).length > 1 ? await writeTemplateText(next.prompt, next.authorId!, id) : undefined
+  const promptChanged = updates.prompt !== undefined && next.prompt !== full.prompt
+  const body = promptChanged && splitTemplateText(next.prompt).length > 1
+    ? await writeTemplateText(next.prompt, next.authorId!, id) : undefined
   try {
     // Keep system fields untouched even if a usage increment lands concurrently.
-    const payload = Object.fromEntries(allowed.filter(key => key in data).map(key => [key, data[key as keyof typeof data]]).filter(([, value]) => value !== undefined))
-    await updateDoc(ref, { ...payload, prompt: body ? next.prompt.slice(0, 180) : next.prompt,
-      body: body ?? deleteField(), authorName: next.isAnonymous ? deleteField() : next.authorName ?? deleteField(), updatedAt: Timestamp.now() })
+    const payload = Object.fromEntries(allowed.filter(key => key !== 'prompt' && key in updates)
+      .map(key => [key, updates[key as keyof typeof updates]]).filter(([, value]) => value !== undefined))
+    // An empty description is submitted as undefined; omitting it from an
+    // update would leave the previous description in Firestore.
+    if ('description' in updates && updates.description === undefined) payload.description = deleteField()
+    await runTransaction(db, async transaction => {
+      const latestSnapshot = await transaction.get(ref)
+      const latest = latestSnapshot.exists() ? convertToSharedPrompt(id, latestSnapshot.data()) : null
+      if (!latest) throw new Error('Template unavailable')
+      // Refuse to overwrite another material edit that landed while a large body was prepared.
+      if ((promptChanged && (latest.prompt !== current.prompt || latest.body?.id !== current.body?.id))
+        || (updates.outputFormat !== undefined && latest.outputFormat !== current.outputFormat)
+        || (updates.languagePolicy !== undefined && latest.languagePolicy !== current.languagePolicy)) {
+        throw new Error('Template changed; reload and try again')
+      }
+      const materialChanged = next.prompt !== full.prompt || next.outputFormat !== full.outputFormat
+        || next.languagePolicy !== full.languagePolicy
+      const effectiveAnonymous = 'isAnonymous' in updates ? updates.isAnonymous === true : latest.isAnonymous === true
+      const effectiveAuthorName = 'authorName' in updates ? updates.authorName : latest.authorName
+      transaction.update(ref, { ...payload,
+        ...(promptChanged ? { prompt: body ? next.prompt.slice(0, 180) : next.prompt, body: body ?? deleteField() } : {}),
+        ...(('isAnonymous' in updates || 'authorName' in updates)
+          ? { authorName: effectiveAnonymous ? deleteField() : effectiveAuthorName ?? deleteField() } : {}),
+        version: coerceTemplateVersion(latest.version) + (materialChanged ? 1 : 0), updatedAt: Timestamp.now() })
+    })
   } catch (error) {
     if (body) await removeTemplateText(body.id).catch(() => {})
     throw error
   }
-  if (current.body) await removeTemplateText(current.body.id).catch(() => {})
+  if (promptChanged && current.body) await removeTemplateText(current.body.id).catch(() => {})
 }
 
 export async function incrementPromptUsage(id: string): Promise<void> {

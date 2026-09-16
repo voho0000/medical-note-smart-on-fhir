@@ -93,4 +93,17 @@ jobs:
           fi
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           git commit -m "chore: sync /app from medical-note-smart-on-fhir@${SHA:0:7}"
-          git push origin main
+
+          # The HMC preview publishes to this same branch from its own
+          # concurrency group, so the two can be in flight together and this
+          # push can arrive second. It touches static/app and the other touches
+          # static/app-hmc, so replaying on top of it is always clean.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebasing onto whatever landed first."
+            git pull --rebase origin main
+          done
+          echo "Could not push /app after three attempts."
+          exit 1

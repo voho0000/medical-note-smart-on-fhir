@@ -1,6 +1,9 @@
 // Refactored Medical Chat Component
 "use client"
 
+import { useAudience } from "@/src/application/providers/audience.provider"
+import { useGalleryImport } from "@/features/prompt-gallery/hooks/useGalleryImport"
+import { gallerySourceKey } from "@/src/shared/utils/gallery-template.utils"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { AlertCircle, Info, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
@@ -132,6 +135,7 @@ function useRuntimeBoundaryGuard(identity: string, credential: string | null) {
 }
 
 export default function MedicalChat() {
+  const { audience } = useAudience()
   const { t } = useLanguage()
   const { user, isAnonymous, loading: authLoading } = useAuth()
   // The chat's own persisted pick, already key-gated (what will actually run).
@@ -181,7 +185,7 @@ export default function MedicalChat() {
   const cloudChatHistoryEnabled = !!user && !isCustomEndpoint &&
     !runtimeTransitionPending
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
-  const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
+  const { addTemplate, updateTemplate, saveTemplates, templates } = useChatTemplates()
   const input = useChatInput()
   const imageUpload = useImageUpload()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -226,9 +230,6 @@ export default function MedicalChat() {
     debounceMs: 5000,
     enabled: cloudChatHistoryEnabled,
   })
-
-  // AI smart title generation (after first response)
-  useSmartTitleGeneration({ enabled: cloudChatHistoryEnabled })
 
   // Temporary / incognito chat mode (ChatGPT-style)
   const isTemporaryMode = useIsTemporaryMode()
@@ -288,6 +289,12 @@ export default function MedicalChat() {
     forceSave,
     chatDataScope,
   )
+
+  // Wait for the full first response and a persisted session before naming it.
+  useSmartTitleGeneration({
+    enabled: cloudChatHistoryEnabled && !isTemporaryMode,
+    isStreaming: chat.isLoading,
+  })
 
   // "Next step" suggestion chips, generated after each answer completes.
   const {
@@ -635,28 +642,19 @@ export default function MedicalChat() {
     downloadMedicalChatExecution(chat.latestExecution)
   }, [chat.latestExecution])
 
-  // Handle prompt selection from gallery
-  const handleSelectPrompt = useCallback((prompt: SharedPrompt, useAs?: PromptType) => {
-    // Insert prompt content into chat input
-    input.insertTextWithTrim(prompt.prompt)
-    scrollTextareaToBottom()
-    
-    // Also add to chat templates if useAs is 'chat' or undefined
-    if (useAs !== 'summary' && templates.length < maxTemplates) {
-      const newTemplateId = addTemplate()
-      if (newTemplateId) {
-        updateTemplate(newTemplateId, {
-          label: prompt.title,
-          content: prompt.prompt,
-        })
-        
-        // Auto-save to Firestore after adding template
-        setTimeout(async () => {
-          await saveTemplates()
-        }, 200)
-      }
-    }
-  }, [input, scrollTextareaToBottom, addTemplate, updateTemplate, saveTemplates, templates.length, maxTemplates])
+  const galleryImport = useGalleryImport({
+    scope: `${user?.uid ?? 'guest'}:${audience}:chat`,
+    items: templates.map(item => ({ ...item, title: item.label })),
+    add: value => addTemplate({ label: value.title, content: value.content, sourcePromptKey: value.sourcePromptKey, sourcePromptFingerprint: value.sourcePromptFingerprint, sourcePromptVersion: value.sourcePromptVersion }),
+    update: (id, value) => updateTemplate(id, { label: value.title, content: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint, sourcePromptVersion: value.sourcePromptVersion }),
+    save: saveTemplates,
+    insert: content => { input.insertTextWithTrim(content); scrollTextareaToBottom() },
+  })
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
+    if (useAs === 'summary') return
+    setShowPromptGallery(false)
+    galleryImport.importPrompt({ title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt), sourcePromptVersion: prompt.version ?? 1 }, onImported)
+  }
 
   // Keyboard shortcuts
   useKeyboardShortcuts(isExpanded, expandable.collapse)
@@ -959,6 +957,7 @@ export default function MedicalChat() {
           onCollapse={expandable.collapse}
           placeholderText={t.chat.expandedMode}
         />
+        {galleryImport.dialog}
         <PromptGalleryDialog
           open={showPromptGallery}
           onOpenChange={setShowPromptGallery}
@@ -983,6 +982,7 @@ export default function MedicalChat() {
   return (
     <>
       {chatContent}
+      {galleryImport.dialog}
       <PromptGalleryDialog
         open={showPromptGallery}
         onOpenChange={setShowPromptGallery}

@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/test'
+import { openFeaturePanel } from '../fixtures/import'
 import type { Page } from '@playwright/test'
 
 const HAN_TEXT = /\p{Script=Han}/u
@@ -59,7 +60,9 @@ test('English demo keeps UI and de-identified demo labels in English', async ({ 
   await page.keyboard.press('Escape')
 
   await page.getByTestId('welcome-demo-card').click()
+
   await expect(page.getByRole('button', { name: /Exit demo/ })).toBeVisible({ timeout: 90_000 })
+  await openFeaturePanel(page)
   await expect(page.getByText('○-Ming Chen', { exact: true }).first()).toBeVisible()
 
   for (const tab of ['Patient Info', 'Visit History', 'Reports', 'Medications', 'Documents']) {
@@ -69,13 +72,18 @@ test('English demo keeps UI and de-identified demo labels in English', async ({ 
     await expectVisiblePageHasNoHanText(page)
   }
 
+  // Scope each check to its own panel: the cumulative report keeps tiny
+  // institution labels mounted in an inactive tab, so a page-wide `.first()`
+  // resolves to a hidden copy.
   await page.getByRole('tab', { name: 'Patient Info', exact: true }).click()
+  const patientPanel = page.getByRole('tabpanel', { name: 'Patient Info' })
   await expect(page.getByText('Early-stage chronic kidney disease follow-up')).toBeVisible()
-  await expect(page.getByText('C Hospital', { exact: true }).first()).toBeVisible()
+  await expect(patientPanel.getByText('C Hospital', { exact: true }).first()).toBeVisible()
 
   await page.getByRole('tab', { name: 'Visit History', exact: true }).click()
-  await expect(page.getByText('A Hospital', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('A Pharmacy', { exact: true }).first()).toBeVisible()
+  const visitsPanel = page.getByRole('tabpanel', { name: 'Visit History' })
+  await expect(visitsPanel.getByText('A Hospital', { exact: true }).first()).toBeVisible()
+  await expect(visitsPanel.getByText('A Pharmacy', { exact: true }).first()).toBeVisible()
 
   await page.getByRole('tab', { name: 'Documents', exact: true }).click()
   await expect(page.getByText('NHI-FHIR Bridge (system-generated)', { exact: false })).toBeVisible()

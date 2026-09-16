@@ -21,6 +21,7 @@ import {
 import { BookOpen, CircleHelp, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
@@ -91,6 +92,7 @@ import {
   buildInvestigationCumulativeTargets,
   type InvestigationCumulativeTarget,
 } from "./utils/investigation-cumulative-target"
+import { consolidateCardErrors } from "./utils/consolidate-card-errors"
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
@@ -131,6 +133,7 @@ function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
+  const { loading: authLoading } = useAuth()
   const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
   const { diagnosticReports, observations } = useClinicalData()
   const base = t.medicalSummary
@@ -213,6 +216,7 @@ export default function MedicalSummaryFeature() {
     hasPatient,
     dataReady,
     model,
+    modelUnavailable,
     autoGenerate,
     setModel,
     setAutoGenerate,
@@ -235,6 +239,7 @@ export default function MedicalSummaryFeature() {
     safetyGenerationSlotKey,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
+    authLoading,
     hasPatient,
     // `result` is already scoped to the current patient, FHIR input signature,
     // locale, audience, and selected model cache slot. Matching provenance
@@ -320,17 +325,36 @@ export default function MedicalSummaryFeature() {
     })
     const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
       ? [{
-          label: ms.prioritiesTitle,
+          label: modelUnavailable ? t.modelPicker.label : ms.prioritiesTitle,
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    return [...failedCards, ...genericSummaryError]
+    // A legacy/restored safety slot can still expose its error separately from
+    // result.cardErrors. Surface it in the same banner without duplicating an
+    // integrated safety-card error.
+    const standaloneSafetyError = safetyError && !cardErrors.safety
+      ? [{
+          label: cardLabels.safety,
+          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
+        }]
+      : []
+    // Consolidation counts against the standard card ids, so the standalone
+    // slot stays outside it. `safety` is one of those ids, so the two are
+    // mutually exclusive anyway: consolidating needs cardErrors.safety set.
+    return [
+      ...consolidateCardErrors(failedCards, ms.title),
+      ...standaloneSafetyError,
+      ...genericSummaryError,
+    ]
   }, [
     cardErrors,
     cardLabels,
     ms,
+    safetyError,
+    modelUnavailable,
     safetyText.parseError,
     summaryError,
+    t.modelPicker.label,
   ])
   const displayedGenerationErrors = useMemo(() => {
     if (
@@ -494,27 +518,32 @@ export default function MedicalSummaryFeature() {
     .replace("{org}", String(coverage?.organizations ?? 0))
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
+  const [summaryModelPickerOpen, setSummaryModelPickerOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<MedicalSummaryCardId | null>(null)
+  const summaryModelPickerTriggerRef = useRef<HTMLButtonElement>(null)
   const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
+
+  const revealSummaryModelPicker = useCallback(() => {
+    const trigger = summaryModelPickerTriggerRef.current
+    if (!trigger) return
+    trigger.scrollIntoView({ block: "center" })
+    trigger.focus({ preventScroll: true })
+    setSummaryModelPickerOpen(true)
+  }, [])
 
   const cardSucceeded = useCallback(
     (cardId: GeneratedCardId) => Boolean(
       result &&
       (!result.completedCardIds || result.completedCardIds.includes(cardId)) &&
-      !cardErrors[cardId]
+      !result.cardErrors?.[cardId]
     ),
-    [cardErrors, result],
+    [result],
   )
-  // A failed safety scan has to stay visible: it is the ONE card whose absence
-  // reads as "nothing to worry about". The banner above never listed
-  // `safetyError` (it only walks `result.cardErrors`, which the separate safety
-  // pipeline never writes), so without this the scan could fail in complete
-  // silence.
-  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety") || safetyError)
-  // 'PARSE_FAILED' is an internal sentinel — SafetyAlertsPanel maps it to the
-  // audience-aware wording; every other value is already a user-facing message.
-  const safetyCardError = safetyError ?? cardErrors.safety ?? null
+  // Errors and their retry action live in the shared generation banner. Keep a
+  // safety card only when it has content, so a failed first scan does not leave
+  // behind an empty card that repeats the same failure.
+  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety"))
   const moduleSucceeded = useCallback(
     (moduleId: MedicalSummaryModuleId) => cardSucceeded(moduleId),
     [cardSucceeded],
@@ -734,11 +763,8 @@ export default function MedicalSummaryFeature() {
         <CareRemindersSafetyCard
           result={safetyResult}
           isScanning={isSafetyGenerating}
-          error={safetyCardError}
           hasPatient={hasPatient}
           renderSources={renderSafetySources}
-          onRetry={() => void retryFailed()}
-          retryLabel={t.errors.retry}
           title={ms.careSafetyTitle}
         />
       </div>
@@ -892,8 +918,12 @@ export default function MedicalSummaryFeature() {
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
+              preserveSelection
               fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
               onSelect={setModel}
+              open={summaryModelPickerOpen}
+              onOpenChange={setSummaryModelPickerOpen}
+              triggerRef={summaryModelPickerTriggerRef}
               tooltip={t.safetyAlerts.modelTooltip}
               compact
               triggerClassName="min-h-[44px] min-w-0 flex-1 basis-24 text-[clamp(12px,2cqw,15px)] shadow-none lg:min-h-8"
@@ -1149,12 +1179,17 @@ export default function MedicalSummaryFeature() {
           {displayedGenerationErrors.length > 0 && generationActivity.showGenerationErrors ? (
             <GenerationErrorBanner
               key={displayedGenerationErrors.map((item) => `${item.label}:${item.message}`).join("|")}
-              title={contextOverflowIssue ? ms.contextOverflowTitle : ms.partialGenerationError}
+              title={contextOverflowIssue
+                ? ms.contextOverflowTitle
+                : modelUnavailable
+                  ? ms.modelUnavailableTitle
+                  : ms.partialGenerationError}
               errors={displayedGenerationErrors}
               retryLabel={t.errors.retry}
               closeLabel={t.common.close}
               isBusy={generationActivity.actionBusy}
               onRetry={() => void retryFailed()}
+              showRetry={!modelUnavailable}
               actions={contextOverflowIssue ? [
                 {
                   label: ms.adjustDataScope,
@@ -1174,7 +1209,10 @@ export default function MedicalSummaryFeature() {
                   icon: <Settings2 className="h-3 w-3" />,
                   variant: "outline" as const,
                 }] : []),
-              ] : undefined}
+              ] : [{
+                label: t.modelPicker.switchModel,
+                onClick: revealSummaryModelPicker,
+              }]}
             />
           ) : null}
 

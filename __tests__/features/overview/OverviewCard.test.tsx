@@ -92,6 +92,50 @@ describe('OverviewCard (demo bundle)', () => {
     mockUseClinicalData.mockReturnValue(clinicalData)
   })
 
+  it('shows ongoing medication before finished medication in card and dialog', () => {
+    const medication = (id: string, title: string, start: string, days: number) => ({
+      resourceType: 'MedicationRequest', id, status: 'active', intent: 'order',
+      authoredOn: start,
+      medicationCodeableConcept: { text: title },
+      dispenseRequest: { expectedSupplyDuration: { value: days, unit: 'days', code: 'd' } },
+    })
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, medications: [
+      medication('finished', 'Synthetic finished medication', '2026-06-01', 7),
+      medication('ongoing', 'Synthetic ongoing medication', '2026-06-01', 28),
+    ] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-meds')!
+    const expectOngoingFirst = (container: HTMLElement) => {
+      const ongoing = within(container).getByText('Synthetic ongoing medication')
+      const finished = within(container).getByText('Synthetic finished medication')
+      expect(ongoing.compareDocumentPosition(finished) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    expectOngoingFirst(card)
+    expect(within(card).getByText('已用完 7 天')).toBeInTheDocument()
+    fireEvent.click(within(card).getByRole('button', { name: zhTW.overview.expandList }))
+    expectOngoingFirst(screen.getByRole('dialog'))
+  })
+
+  it('does not call an ingredient-equivalent brand switch a new therapy', () => {
+    const medication = (id: string, code: string, title: string, start: string) => ({
+      resourceType: 'MedicationRequest', id, status: 'active', intent: 'order', authoredOn: start,
+      medicationCodeableConcept: { text: title, coding: [
+        { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code', code },
+        { system: 'http://www.whocc.no/atc', code: 'M04AA03', display: 'febuxostat' },
+      ] },
+      drugTerminology: { ingredientText: ' Febuxostat ' },
+      dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days', code: 'd' } },
+    })
+    mockUseClinicalData.mockReturnValue({ ...clinicalData, medications: [
+      medication('old-brand', 'BC25427100', 'Feburic 80 mg', '2026-03-01'),
+      medication('new-brand', 'AC61850100', 'Fekuton 80 mg', '2026-06-01'),
+    ] })
+    render(<OverviewCard />)
+    const card = document.getElementById('overview-section-meds')!
+    expect(within(card).getByText('Febuxostat')).toBeInTheDocument()
+    expect(within(card).queryByText(zhTW.overview.meds.added)).not.toBeInTheDocument()
+  })
+
   it('keeps all seven collection days and an older-only analyte in the expanded list', () => {
     const days = ['2026-04-01', '2026-04-08', '2026-04-15', '2026-05-01', '2026-05-08', '2026-06-01', '2026-06-08']
     const draws = days.map((day, index) => ({
@@ -123,6 +167,65 @@ describe('OverviewCard (demo bundle)', () => {
     fireEvent.click(dialog.getByRole('button', { name: '全部' }))
     expect(dialog.getByText('04/02')).toBeInTheDocument()
     expect(dialog.getByText('No growth')).toBeInTheDocument()
+  })
+
+  it('shows abnormal non-common analytes when switching from 常用 to 只看異常', () => {
+    const lab = ({
+      id,
+      code,
+      display,
+      value,
+      interpretation,
+      day = '2026-06-01',
+    }: {
+      id: string
+      code: string
+      display: string
+      value: number
+      interpretation?: string
+      day?: string
+    }) => ({
+      resourceType: 'Observation', id, status: 'final',
+      category: [{ coding: [{
+        system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+        code: 'laboratory',
+      }] }],
+      code: { coding: [{ system: 'http://loinc.org', code, display }] },
+      effectiveDateTime: `${day}T09:00:00+08:00`,
+      valueQuantity: { value, unit: code === '6690-2' ? 'K/uL' : 'U/L' },
+      interpretation: interpretation
+        ? [{ coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation',
+          code: interpretation,
+        }] }]
+        : undefined,
+    })
+    mockUseClinicalData.mockReturnValue({
+      ...clinicalData,
+      observations: [
+        // A newer normal WBC belongs to 常用. The older AST is outside 常用
+        // but abnormal, and must not be displaced by the empty newer date.
+        lab({ id: 'normal-common-wbc', code: '6690-2', display: 'Leukocytes', value: 5.5, day: '2026-06-08' }),
+        lab({ id: 'abnormal-non-common-ast', code: '1920-8', display: 'Aspartate aminotransferase', value: 987, interpretation: 'H' }),
+      ],
+    })
+
+    render(<OverviewCard />)
+
+    const card = document.getElementById('overview-section-labs')!
+    const labs = within(card)
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.pinned })).toHaveAttribute('aria-pressed', 'true')
+    expect(labs.getByText('5.5')).toBeInTheDocument()
+    expect(labs.queryByText('987 ↑')).not.toBeInTheDocument()
+
+    fireEvent.click(labs.getByRole('button', { name: zhTW.overview.labs.abnormalOnly }))
+
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.abnormalOnly })).toHaveAttribute('aria-pressed', 'true')
+    expect(labs.getByRole('button', { name: zhTW.overview.labs.pinned })).toHaveAttribute('aria-pressed', 'false')
+    expect(labs.getByText('06/01')).toBeInTheDocument()
+    expect(labs.queryByText('06/08')).not.toBeInTheDocument()
+    expect(labs.getByText('987 ↑')).toBeInTheDocument()
+    expect(labs.queryByText('5.5')).not.toBeInTheDocument()
   })
 
   it('exposes the complete narrative laboratory result on click', async () => {

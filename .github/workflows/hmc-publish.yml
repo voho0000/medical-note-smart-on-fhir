@@ -1,0 +1,292 @@
+name: Publish HMC pilot preview
+
+# The half of the preview that stays on protected master, because it is the
+# half that holds a credential.
+#
+# `HMC preview build` runs on pilot/hmc and decides whether a build is fit to
+# show a clinician — the overlay, its smoke check, typecheck, lint, Jest, the
+# export. All of that is the pilot's to fix, which is the point: a wrong gate
+# there used to stop the preview for days, and nobody downstream could edit it.
+#
+# This workflow does one thing with what that run produced: copy it into
+# static/app-hmc of the site repository, and nowhere else. The deploy key that
+# allows it is an environment secret on `mediprisma-site-publish`, whose branch
+# policy admits protected branches only, so no workflow on pilot/hmc can read
+# it however that branch is edited.
+#
+# What arrives here is therefore untrusted output built from a branch someone
+# else controls. Three things are checked before it is copied: that the run
+# came from this repository and from the pilot ref, that the tree carries no
+# symlink that could resolve outside the directory, and that its marker names
+# the commits it claims. The destination is written literally and never read
+# from the artifact.
+on:
+  workflow_run:
+    workflows:
+      - HMC preview build
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+# A publish is a push to another repository: let one finish rather than
+# cancelling it half-copied. The build side cancels its own supersedes.
+concurrency:
+  group: hmc-pilot-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && (github.event.workflow_run.head_branch == 'pilot/hmc'
+      || github.event.workflow_run.head_branch == 'hmc-personalization-trigger') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: mediprisma-site-publish
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      app_sha: ${{ steps.marker.outputs.app_sha }}
+      personalization_sha: ${{ steps.marker.outputs.personalization_sha }}
+      tests: ${{ steps.marker.outputs.tests }}
+      test_summary: ${{ steps.marker.outputs.test_summary }}
+    steps:
+      - name: Download the build the pilot branch produced
+        uses: actions/download-artifact@v8
+        with:
+          name: hmc-preview
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: incoming
+
+      - name: Refuse a tree that could write outside /app-hmc
+        shell: bash
+        run: |
+          if [ ! -d incoming/app/out ]; then
+            echo "The artifact does not contain app/out."
+            exit 1
+          fi
+          # The copy below preserves links, and a link is the one kind of entry
+          # that can resolve outside the directory it lands in. The build side
+          # refuses to upload one; this is the same check on the receiving end,
+          # where the credential is.
+          links="$(find incoming -type l)"
+          if [ -n "$links" ]; then
+            echo "Refusing to publish: the artifact contains symlinks."
+            echo "$links"
+            exit 1
+          fi
+
+      - name: Read what the build says it is
+        id: marker
+        env:
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          # Through the environment rather than interpolated into the script:
+          # a ref name is attacker-shaped data in the general case, even though
+          # the job guard above already narrows it to two literals.
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          marker=incoming/app/out/hmc-build.json
+          if [ ! -f "$marker" ]; then
+            echo "The build did not include hmc-build.json."
+            exit 1
+          fi
+
+          app_sha="$(jq -r '.appSha // empty' "$marker")"
+          personalization_sha="$(jq -r '.personalizationSha // empty' "$marker")"
+          if [ -z "$app_sha" ] || [ -z "$personalization_sha" ]; then
+            echo "The marker does not name both commits:"
+            cat "$marker"
+            exit 1
+          fi
+          # A push build is the commit it ran on; a personalization relay tag is
+          # not, so only the first is worth asserting.
+          if [ "$RUN_HEAD_BRANCH" = 'pilot/hmc' ] && [ "$app_sha" != "$RUN_HEAD_SHA" ]; then
+            echo "The marker names $app_sha but the run built $RUN_HEAD_SHA."
+            exit 1
+          fi
+
+          echo "app_sha=$app_sha" >> "$GITHUB_OUTPUT"
+          echo "personalization_sha=$personalization_sha" >> "$GITHUB_OUTPUT"
+
+          # The pilot build records its Jest result rather than gating on it.
+          summary=incoming/test-summary.txt
+          outcome=unknown
+          if [ -f "$summary" ]; then
+            outcome="$(sed -n 's/^outcome=//p' "$summary" | head -1)"
+            {
+              echo 'test_summary<<TEST_SUMMARY'
+              grep -v '^outcome=' "$summary" || true
+              echo TEST_SUMMARY
+            } >> "$GITHUB_OUTPUT"
+          fi
+          echo "tests=${outcome:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout mediprisma.tw site
+        uses: actions/checkout@v7
+        with:
+          repository: voho0000/mediprisma-site
+          ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
+          path: docs-site
+          ref: main
+
+      - name: Publish /app-hmc to the site repository
+        env:
+          APP_SHA: ${{ steps.marker.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ steps.marker.outputs.personalization_sha }}
+        working-directory: docs-site
+        shell: bash
+        run: |
+          # The destination is written here, literally, and never taken from
+          # the artifact.
+          rm -rf static/app-hmc
+          mkdir -p static/app-hmc
+          cp -R ../incoming/app/out/. static/app-hmc/
+
+          git config user.name "mediprisma-hmc-preview[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/app-hmc
+          if git diff --cached --quiet; then
+            echo "HMC preview output is unchanged."
+            exit 0
+          fi
+
+          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
+
+          # `Sync app to mediprisma.tw/app` publishes to this same branch from
+          # its own concurrency group, so the two can be in flight together and
+          # this push can arrive second. Without this, losing that race fails
+          # the job and opens an issue against the pilot for something that has
+          # nothing to do with them. The two touch static/app-hmc and
+          # static/app, so replaying on top of the other is always clean.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebasing onto whatever landed first."
+            git pull --rebase origin main
+          done
+          echo "Could not push /app-hmc after three attempts."
+          exit 1
+
+  report:
+    # A pilot push never learns its own fate, so the deploy says it itself.
+    #
+    # GitHub's failure mail follows the triggering actor. Two signals seconds
+    # apart mean the run an HMC push starts is usually the cancelled one, and
+    # the run that survives is attributed to the personalization relay's token,
+    # so the mail reaches the app owner and never the person whose commit is
+    # being built. Runs #25, #27 and #29 were all HMC pushes: two cancelled,
+    # one green, none ever reported to whoever pushed them.
+    #
+    # One issue for three states, kept current with a comment and closed when
+    # there is nothing left to say: did not publish, published over a red Jest
+    # run, clear.
+    needs: publish
+    # Deliberately not gated on the build having succeeded: a build that failed
+    # is the case most worth reporting, and `publish` is skipped then. The repo
+    # and ref guard is repeated here because that one is about trust, not about
+    # outcome.
+    if: >-
+      ${{ always()
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && (github.event.workflow_run.head_branch == 'pilot/hmc'
+      || github.event.workflow_run.head_branch == 'hmc-personalization-trigger') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Say whether the preview moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_URL: ${{ github.event.workflow_run.html_url }}
+          BUILD_RESULT: ${{ github.event.workflow_run.conclusion }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          TESTS_RESULT: ${{ needs.publish.outputs.tests }}
+          TEST_SUMMARY: ${{ needs.publish.outputs.test_summary }}
+          APP_SHA: ${{ needs.publish.outputs.app_sha }}
+          PERSONALIZATION_SHA: ${{ needs.publish.outputs.personalization_sha }}
+          PILOT_AUTHOR: hmcheng0913
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          title='HMC pilot preview needs attention'
+          number="$(gh issue list --state open --limit 100 --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
+
+          # Nothing to say: the preview is current and the suite is clean.
+          if [ "$PUBLISH_RESULT" = 'success' ] && [ "$TESTS_RESULT" != 'failure' ]; then
+            if [ -n "$number" ]; then
+              cat > note.md <<EOF
+          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with personalization \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
+
+          ${RUN_URL}
+          EOF
+              gh issue comment "$number" --body-file note.md
+              gh issue close "$number"
+            fi
+            exit 0
+          fi
+
+          if [ "$BUILD_RESULT" != 'success' ]; then
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The build on \`pilot/hmc\` did not finish, so nothing reached /app-hmc.** https://mediprisma.tw/app-hmc is still serving an older build.
+
+          Build run (\`${BUILD_RESULT}\`): ${BUILD_URL}
+
+          A step before the upload stopped it. The Jest run cannot be the cause: it reports and does not gate.
+
+          Which half it is, is worth checking before assuming:
+
+          - **Yours** — the personalization build, the overlay or its check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so they are yours to change without waiting for anyone.
+          - **The owner's** — either checkout step, or \`Install app dependencies\` failing on a 401 or 403. Those use this repository's credentials (the packages token, the personalization deploy key), which expire and are not visible from your branch. Say so rather than digging: nothing on \`pilot/hmc\` can fix them.
+          EOF
+          elif [ "$PUBLISH_RESULT" = 'success' ]; then
+            # Published over a red suite. Worth saying out loud, not worth
+            # holding a clinic preview for.
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, personalization \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
+
+          \`\`\`
+          ${TEST_SUMMARY:-see the build run}
+          \`\`\`
+
+          Build: ${BUILD_URL}
+
+          The Jest run reports; it does not gate. The overlay check, typecheck, lint and the export do — those failing means the preview would not run, and then nothing is published. Both the suite and the step that runs it live on \`pilot/hmc\`, so a red run here is yours to fix or to ignore deliberately.
+          EOF
+          else
+            cat > note.md <<EOF
+          @${PILOT_AUTHOR} **The build did not reach /app-hmc, so https://mediprisma.tw/app-hmc is still serving an older build.**
+
+          | | |
+          | --- | --- |
+          | pilot app | \`${APP_SHA:-unknown}\` |
+          | pilot personalization | \`${PERSONALIZATION_SHA:-unknown}\` |
+          | publish | \`${PUBLISH_RESULT}\` |
+
+          Publish run: ${RUN_URL}
+          Build run: ${BUILD_URL}
+
+          The build itself succeeded — this workflow refused or failed to copy what it produced. The checks it makes are: the run came from this repository and from the pilot ref, the tree carries no symlink, and \`hmc-build.json\` names the commits it was built from.
+          EOF
+          fi
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file note.md
+            exit 0
+          fi
+
+          created="$(gh issue create --title "$title" --body-file note.md)"
+          echo "$created"
+          gh issue edit "${created##*/}" --add-assignee "$PILOT_AUTHOR" || true

@@ -129,4 +129,46 @@ describe('LabDayGroupCard source-program provenance', () => {
     expect(screen.getByTestId('lab-day-category')).toHaveTextContent('生化')
     expect(screen.getByTestId('lab-day-institution-slot')).toHaveTextContent('示範長青醫院')
   })
+
+  it('shows the compact MediCloud source and an explicit missing-institution label', () => {
+    const member: Row = {
+      id: 'medicloud-creatinine',
+      title: 'CREA',
+      meta: 'Observation Group',
+      group: 'lab',
+      sourceProvenance: 'nhi-medicloud',
+      effectiveDate: '2026-09-14T08:00:00+08:00',
+      obs: [{
+        id: 'medicloud-creatinine-observation',
+        code: { text: 'CREA' },
+        valueQuantity: { value: 1.2, unit: 'mg/dL' },
+      }],
+    }
+    const row: Row = {
+      ...member,
+      id: 'labday:medicloud-creatinine',
+      obs: [],
+      dayGroup: true,
+      dayGroupCategoryId: 'chem',
+      dayGroupLabelIds: ['chem'],
+      groupedRows: [member],
+    }
+
+    render(
+      <LanguageProvider>
+        <AudienceProvider>
+          <LabDayGroupCard row={row} defaultOpen={[]} />
+        </AudienceProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByTestId('lab-day-institution-slot'))
+      .toHaveTextContent('健保雲端圖形化查詢｜院所未提供')
+    expect(screen.getByTestId('lab-day-institution-slot')).toHaveClass(
+      '[grid-column:2/-1]',
+      '[grid-row:2]',
+    )
+    expect(screen.getByTestId('lab-day-institution-slot'))
+      .not.toHaveClass('@min-[300px]:row-start-1')
+  })
 })

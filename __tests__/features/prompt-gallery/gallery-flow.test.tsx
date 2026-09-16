@@ -5,7 +5,8 @@ import { PromptPreviewDialog } from '@/features/prompt-gallery/components/Prompt
 import { PromptCard } from '@/features/prompt-gallery/components/PromptCard'
 import { SharePromptDialog } from '@/features/prompt-gallery/components/SharePromptDialog'
 import { usePromptGallery } from '@/features/prompt-gallery/hooks/usePromptGallery'
-import { createSharedPrompt, getSharedPrompts, getMySharedPrompts, loadSharedPromptContent, updateSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { incrementPromptUsage, createSharedPrompt, getSharedPrompts, getMySharedPrompts, loadSharedPromptContent, updateSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
+import { incrementTenantPromptUsage } from '@/features/prompt-gallery/services/tenant-prompts.service'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import type { SharedPrompt } from '@/features/prompt-gallery/types/prompt.types'
 
@@ -215,4 +216,23 @@ it('returns keyboard focus to the originating card after preview closes', async 
   fireEvent.keyDown(card, { key: 'Enter' })
   fireEvent.click(screen.getByRole('button', { name: '關閉' }))
   await waitFor(() => expect(card).toHaveFocus())
+})
+
+it.each([undefined, 'hospital'])('counts usage only after the consumer accepts an import (tenant=%s)', async tenantId => {
+  const source = { ...template, tenantId }
+  jest.mocked(getSharedPrompts).mockResolvedValue([source])
+  jest.mocked(loadSharedPromptContent).mockResolvedValue(source)
+  let complete: (() => void) | undefined
+  render(<PromptGalleryDialog open mode="summary" onOpenChange={jest.fn()}
+    onSelectPrompt={(_prompt, _mode, onImported) => { complete = onImported }} />)
+  fireEvent.click(await screen.findByRole('button', { name: '帶入: 範本' }))
+  await waitFor(() => expect(complete).toBeDefined())
+  expect(incrementPromptUsage).not.toHaveBeenCalled()
+  expect(incrementTenantPromptUsage).not.toHaveBeenCalled()
+  await act(async () => { complete!(); complete!() })
+  const used = tenantId ? incrementTenantPromptUsage : incrementPromptUsage
+  const unused = tenantId ? incrementPromptUsage : incrementTenantPromptUsage
+  expect(used).toHaveBeenCalledTimes(1)
+  expect(used).toHaveBeenCalledWith('source')
+  expect(unused).not.toHaveBeenCalled()
 })

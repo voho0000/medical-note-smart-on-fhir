@@ -4,6 +4,9 @@ import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-m
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import { createModelExecution, reportModelExecution, modelExecutionFallback } from '@/src/shared/utils/ai-model-execution'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
+import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcloud-launch-context'
 
 let mockSlotOptions: any
 let mockResult: any
@@ -33,11 +36,22 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
   },
 }))
 jest.mock('@/src/core/use-cases/medical-summary/medical-summary-card-registry', () => {
-  const card = {
+  const medications = {
     id: 'medications', hasCompleteBatchBlock: () => true, parseBatch: () => 'NEW_MEDICATION_CARD',
     apply: (aggregate: any, parsed: any) => ({ ...aggregate, summary: { ...aggregate.summary, medications: parsed } }),
   }
-  return { MEDICAL_SUMMARY_CARD_REGISTRY: { medications: card }, registeredMedicalSummaryCards: () => [card] }
+  const safety = {
+    id: 'safety', hasCompleteBatchBlock: () => true,
+    parseBatch: () => ({ alerts: [], scannedCount: 1 }),
+    apply: (aggregate: any, parsed: any) => ({ ...aggregate, safety: parsed }),
+  }
+  const cards = { medications, safety }
+  return {
+    MEDICAL_SUMMARY_CARD_REGISTRY: cards,
+    registeredMedicalSummaryCards: (_input: any, enabledIds?: string[]) => (
+      Object.values(cards).filter((card: any) => !enabledIds || enabledIds.includes(card.id))
+    ),
+  }
 })
 jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
   runWithContextWindowRetry: async (options: any) => ({ value: await options.execute([]), clinicalContext: 'synthetic data' }),
@@ -46,6 +60,7 @@ jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
 beforeEach(() => {
   mockResult = undefined
   mockStream.mockReset()
+  useMedcloudLaunchStore.getState().clear()
   mockStream.mockImplementation(async (_messages, options) => {
     options.onChunk('NEW_MEDICATION_CARD')
     // Some providers report identity only in their last chunk.
@@ -55,6 +70,23 @@ beforeEach(() => {
 })
 
 afterEach(() => jest.restoreAllMocks())
+
+test('a manual summary model choice immediately releases the Medcloud override', () => {
+  act(() => {
+    useSummaryPrefsStore.setState({ modelId: 'gpt-5.4-nano' })
+    useMedcloudLaunchStore.getState().setRuntimeModelId(
+      VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    )
+  })
+  const { result } = renderHook(() => useMedicalSummary())
+  expect(result.current.model).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+
+  act(() => result.current.setModel('gemini-3.1-flash-lite'))
+
+  expect(result.current.model).toBe('gemini-3.1-flash-lite')
+  expect(useMedcloudLaunchStore.getState().runtimeModelId).toBeNull()
+  expect(useSummaryPrefsStore.getState().modelId).toBe('gemini-3.1-flash-lite')
+})
 
 test('retrying failed cards retains provenance for successful cards kept from the previous run', async () => {
   const clear = jest.spyOn(useAiExecutionDiagnosticsStore.getState(), 'clearOperationFeature')
@@ -94,4 +126,26 @@ test('replaces only the retried card provenance instead of retaining an obsolete
   expect(mockResult.problems).toBe('RETAINED_FLASH_CARD')
   expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-3.8-flash'])
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(false)
+})
+
+test('retrying a failed safety card preserves successful summary cards', async () => {
+  medicalSummaryStore.setState({ byKey: { 'audit-slot': {
+    problems: 'RETAINED_PROBLEM_CARD',
+    cardErrors: { safety: 'PARSE_FAILED' },
+    completedCardIds: ['problems'],
+    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash',
+      generatedAt: 1, modelExecution: createModelExecution('gemini-3.8-flash') },
+  } as any } })
+
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => result.current.retryFailedModules())
+
+  expect(mockResult.problems).toBe('RETAINED_PROBLEM_CARD')
+  expect(mockResult.safety).toEqual({
+    alerts: [],
+    scannedCount: 1,
+    generation: expect.any(Object),
+  })
+  expect(mockResult.cardErrors).toBeUndefined()
+  expect(mockResult.completedCardIds).toEqual(expect.arrayContaining(['problems', 'safety']))
 })

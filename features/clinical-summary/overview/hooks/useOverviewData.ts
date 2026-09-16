@@ -200,6 +200,38 @@ function reportNarrative(row: Row): string {
 const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed'])
 
 /**
+ * Identity used only for medication change detection. A refill can switch NHI
+ * product/package codes while continuing the same ingredient; treating that
+ * switch as a new medicine produces a false 新增 badge. Keep the stricter
+ * product identity for rendered-row grouping. Prefer the governed ingredient
+ * name here, with ATC5 as a fallback when the terminology lacks one.
+ */
+function medicationChangeIdentityKey(medication: any): string {
+  const sourceIngredient = medication?.drugTerminology?.ingredientText
+  const ingredient = typeof sourceIngredient === 'string'
+    ? sourceIngredient
+      .normalize('NFKC')
+      .trim()
+      .toLocaleLowerCase('en')
+      .replace(/\s*([+/,])\s*/g, '$1')
+      .replace(/\s+/g, ' ')
+    : ''
+  if (ingredient) return `ingredient|${ingredient}`
+
+  const concept = medication?.medicationCodeableConcept
+    || medication?.code
+    || medication?.resource?.code
+  const atc = Array.isArray(concept?.coding)
+    ? concept.coding.find((coding: any) => (
+      typeof coding?.code === 'string'
+      && /(?:whocc\.no\/atc|atc)/i.test(coding?.system ?? '')
+      && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/i.test(coding.code.trim())
+    ))?.code.trim().toUpperCase()
+    : undefined
+  return atc ? `atc5|${atc}` : medicationClinicalIdentityKey(medication)
+}
+
+/**
  * How long a finished prescription stays on the overview's medication list.
  *
  * The card answers "what is this patient on?", and over a three-month window
@@ -534,11 +566,12 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   // Change detection reads the RAW prescriptions (every refill, including those
   // before the window) so "first ever record" and "dose before the window" are
   // real answers rather than window artefacts.
-  const { medicationFacts, medicationDaysByRowId } = useMemo(() => {
+  const { medicationFacts, medicationDaysByRowId, medicationChangeKeyByRowId } = useMemo(() => {
     const inactiveStatuses = MEDICATION_INACTIVE_STATUSES
     const activeById = new Map<string, MedicationRow>()
     for (const row of medicationRows) activeById.set(row.id, row)
     const days = new Map<string, { startDay?: string; endDay?: string }>()
+    const changeKeys = new Map<string, string>()
     const facts = identifiedMedications.map((medication: any) => {
       // Ids are pinned above, so this round-trips whether or not the record
       // became a row. Dates stay raw ISO (never the locale-formatted display
@@ -557,8 +590,10 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         : ''
       const { startDay, endDay } = medicationWindowDays(medication, status)
       days.set(rowId, { startDay, endDay })
+      const changeKey = medicationChangeIdentityKey(medication)
+      changeKeys.set(rowId, changeKey)
       return {
-        key: medicationClinicalIdentityKey(medication)
+        key: changeKey
           || (typeof medication?.medicationCodeableConcept?.text === 'string'
             ? medication.medicationCodeableConcept.text
             : rowId),
@@ -571,8 +606,12 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         doseSignature: signature || undefined,
       } satisfies OverviewMedFact
     })
-    return { medicationFacts: facts, medicationDaysByRowId: days }
-  }, [identifiedMedications, medicationRows, window.endDay])
+    return {
+      medicationFacts: facts,
+      medicationDaysByRowId: days,
+      medicationChangeKeyByRowId: changeKeys,
+    }
+  }, [identifiedMedications, medicationRows, window])
 
   const medChanges = useMemo(
     () => classifyMedicationChanges(medicationFacts, window),
@@ -591,7 +630,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
     const items: OverviewMedItem[] = []
     for (const row of candidates) {
       const key = row.drugKey || row.title
-      const change = medChanges.get(key)
+      const change = medChanges.get(medicationChangeKeyByRowId.get(row.id) ?? key)
       const { startDay, endDay } = medicationDaysByRowId.get(row.id) ?? {}
       // A prescription belongs to this window when it was written inside it or
       // when its supply period still overlaps it (an ongoing chronic script).
@@ -626,9 +665,10 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       })
     }
 
-    // Changed therapies lead — they are the reason to open this card — then the
-    // rest by most recent prescription.
+    // Ongoing therapies precede finished/stopped therapies. Within each group,
+    // show changes first, then the most recent prescription.
     items.sort((a, b) => {
+      if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1
       const aChanged = a.change ? 0 : 1
       const bChanged = b.change ? 0 : 1
       if (aChanged !== bChanged) return aChanged - bChanged
@@ -642,7 +682,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       count: items.filter((item) => item.isCurrent).length,
       changeCount: items.filter((item) => !!item.change).length,
     }
-  }, [activeMedications, inactiveMedicationGroups, medChanges, medicationDaysByRowId, window])
+  }, [activeMedications, inactiveMedicationGroups, medChanges, medicationDaysByRowId, medicationChangeKeyByRowId, window])
 
   // ── 就診 ────────────────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)

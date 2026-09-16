@@ -143,6 +143,10 @@ export interface AiSlotGenerationConfig<T> {
    *  retained result is presentation-only while that target slot is empty or
    *  its encrypted cache is still being restored. */
   retainResultOnModelChange?: boolean
+  /** Keep an unavailable selected model visible and block generation instead
+   *  of silently substituting the feature default. Opt in only where the UI
+   *  provides a clear recovery path. */
+  blockUnavailableSelectedModel?: boolean
 }
 
 export interface AiSlotGenerationReturn<T> {
@@ -156,6 +160,9 @@ export interface AiSlotGenerationReturn<T> {
   slotKey: string
   resolvedModelId: string
   resolvedModelName: string
+  /** True when this feature opted out of fallback and the selected model
+   *  currently lacks the key or endpoint needed to run. */
+  modelUnavailable: boolean
   clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
   result: T | undefined
@@ -224,17 +231,15 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   } = useAllApiKeys()
   const { audience } = useAudience()
 
-  // The model actually used — user pick (key-gated → free base) → default. A
-  // stranded premium pick falls back to the free base. It's part of the slot
-  // key, so every model keeps its OWN result / loading / error slot, and an
-  // in-flight generation keeps running and lands in its own model's slot.
-  // Features may retain the last result as a presentation fallback while the
-  // newly selected model waits for an explicit run.
+  // The model actually used normally follows user pick (key-gated → free
+  // base) → default. A feature with an explicit recovery UI may instead keep
+  // an unavailable selection visible and block the request. Model identity is
+  // part of the slot key, so every model keeps its own result/loading/error.
   const selectedOpenAiCompatible = useMemo(
     () => resolveOpenAiCompatibleProfile(selectedModelId, openAiCompatibleProfiles),
     [selectedModelId, openAiCompatibleProfiles],
   )
-  const resolvedModelId = useMemo(() => gateModelForKeys(
+  const availableModelId = useMemo(() => gateModelForKeys(
     selectedModelId,
     {
       openAiKey: apiKey,
@@ -244,6 +249,14 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     },
     defaultModelId,
   ), [selectedModelId, apiKey, geminiKey, claudeKey, selectedOpenAiCompatible, defaultModelId])
+  const selectedModelUnavailable = availableModelId !== selectedModelId || (
+    getModelDefinition(selectedModelId)?.provider === 'custom' &&
+    !isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible)
+  )
+  const modelUnavailable = Boolean(
+    config.blockUnavailableSelectedModel && selectedModelUnavailable,
+  )
+  const resolvedModelId = modelUnavailable ? selectedModelId : availableModelId
 
   const openAiCompatible = useMemo(
     () => resolveOpenAiCompatibleProfile(resolvedModelId, openAiCompatibleProfiles),
@@ -258,6 +271,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => modelDisplayLabel(resolvedModelId, openAiCompatible),
     [resolvedModelId, openAiCompatible],
   )
+  const modelAccessError = modelUnavailable
+    ? locale === 'zh-TW'
+      ? `所選的 ${resolvedModelName} 需要有效的金鑰或連線設定。本次未送出任何資料。`
+      : `The selected ${resolvedModelName} requires a valid key or connection. No data was sent.`
+    : null
   const resolvedContextLimit = useMemo(
     () => modelContextLimit(resolvedModelId, openAiCompatible),
     [resolvedModelId, openAiCompatible],
@@ -299,8 +317,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
-  const selectedModelReady = selectedModelProvider !== 'custom' ||
+  const selectedModelReady = !modelUnavailable && (
+    selectedModelProvider !== 'custom' ||
     isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible)
+  )
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds a provider connection). This identity deliberately
   // describes all available access, not the selected model: moving the picker
@@ -473,7 +493,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // consent gate, results are cached 12h per patient, and the 50/day free quota
   // is still enforced server-side.
   const generate = useCallback(async () => {
-    if (!slotKey) return
+    if (modelUnavailable || !slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
@@ -533,7 +553,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
+  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -715,6 +735,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     slotKey,
     resolvedModelId,
     resolvedModelName,
+    modelUnavailable,
     clinicalData: scopedClinicalData,
     catalog,
     result,
@@ -722,7 +743,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     resultOwnerRuntimeId,
     isRunning,
     isAnyRunning,
-    error,
+    error: modelAccessError ?? error,
     issue,
     contextLimit: resolvedContextLimit,
     contextAdaptation,

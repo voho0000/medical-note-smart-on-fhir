@@ -7,6 +7,37 @@ import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/g
 describe('useMedcloudAutoSummary', () => {
   beforeEach(() => useMedcloudLaunchStore.getState().clear())
 
+  it('keeps the launch pending until the persisted account state is resolved', async () => {
+    const generate = jest.fn(async () => undefined)
+    useMedcloudLaunchStore.getState().queueSummary({
+      messageId: 'message-auth',
+      modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+    })
+    const { rerender } = renderHook((props: { authLoading: boolean }) =>
+      useMedcloudAutoSummary({
+        authLoading: props.authLoading,
+        hasPatient: true,
+        summaryModelId: null,
+        dataReady: true,
+        isGenerating: false,
+        isRestoring: false,
+        generationSlotKey: 'summary-slot-auth',
+        modelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
+        generate,
+      }), {
+        initialProps: { authLoading: true },
+      })
+
+    expect(generate).not.toHaveBeenCalled()
+    expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId)
+      .toBe('message-auth')
+
+    rerender({ authLoading: false })
+
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
+
   it('waits for the FHIR summary runtime, then claims and generates once', async () => {
     const generate = jest.fn(async () => undefined)
     useMedcloudLaunchStore.getState().queueSummary({
@@ -17,6 +48,7 @@ describe('useMedcloudAutoSummary', () => {
       dataReady: boolean
       isRestoring: boolean
     }) => useMedcloudAutoSummary({
+      authLoading: false,
       hasPatient: true,
       summaryModelId: null,
       dataReady: props.dataReady,
@@ -48,6 +80,7 @@ describe('useMedcloudAutoSummary', () => {
     })
 
     renderHook(() => useMedcloudAutoSummary({
+      authLoading: false,
       hasPatient: true,
       summaryModelId: null,
       dataReady: true,
@@ -70,6 +103,7 @@ describe('useMedcloudAutoSummary', () => {
     })
 
     renderHook(() => useMedcloudAutoSummary({
+      authLoading: false,
       hasPatient: true,
       summaryModelId: null,
       dataReady: true,
@@ -92,6 +126,7 @@ describe('useMedcloudAutoSummary', () => {
     })
 
     renderHook(() => useMedcloudAutoSummary({
+      authLoading: false,
       hasPatient: true,
       summaryModelId: VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
       dataReady: true,
@@ -121,6 +156,7 @@ describe('useMedcloudAutoSummary', () => {
       isRestoring: boolean
       generate: () => Promise<void>
     }) => useMedcloudAutoSummary({
+      authLoading: false,
       hasPatient: true,
       summaryModelId: null,
       dataReady: true,

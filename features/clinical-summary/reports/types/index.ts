@@ -16,6 +16,7 @@ export type {
 
 export type ReportGroup = "lab" | "imaging" | "pathology" | "cancer-screening" | "procedures" | "vitals" | "other"
 export type ReportSourceProgram = 'adult-preventive'
+export type ReportSourceProvenance = 'nhi-medicloud'
 
 /** Image attachment from DiagnosticReport.presentedForm (bridge v0.14.0+).
  *  Decoded to a Blob URL lazily by the viewer (ReportImageDialog), never
@@ -71,6 +72,8 @@ export type Row = {
   /** Explicit source-program provenance supplied by the source resource.
    *  Never infer this from the analyte name or value. */
   sourceProgram?: ReportSourceProgram
+  /** Exact source marker supplied by the linked Observation(s). */
+  sourceProvenance?: ReportSourceProvenance
   effectiveDate?: string  // ISO date string for smart date display
   showTime?: boolean           // true when multiple same-name results share the same date
   isPossibleDuplicate?: boolean // true when same title+date+institution+value appears >1 time

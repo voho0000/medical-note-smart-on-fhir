@@ -34,7 +34,12 @@ import {
   getNhiViewerActions,
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
-import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
+import {
+  getNhiMedicloudOriginalInstitution,
+  isAdultPreventiveHealthExamResource,
+  isNhiAuthorityDisplay,
+  isNhiMedicloudObservation,
+} from '@/src/shared/utils/observation-provenance.utils'
 import {
   qualifyingSharedEchoFamilyKeys,
   qualifyingSharedReportKeys,
@@ -74,9 +79,27 @@ function deriveGroupTitle(text: string): string {
 // imaging DRs typically have no linked Observations and put performer on the
 // DiagnosticReport itself. Fall through both before giving up.
 function getDrInstitution(dr: any): string | undefined {
-  return dr?._observations?.[0]?.performer?.[0]?.display
-    || dr?.performer?.[0]?.display
-    || undefined
+  const observations = Array.isArray(dr?._observations) ? dr._observations : []
+  const hasCloudObservation = observations.some(isNhiMedicloudObservation)
+  const cloudInstitution = observations
+    .map(getNhiMedicloudOriginalInstitution)
+    .find((institution: string | undefined): institution is string => !!institution)
+  const ordinaryInstitution = observations
+    .filter((observation: any) => !isNhiMedicloudObservation(observation))
+    .flatMap((observation: any) => observation?.performer ?? [])
+    .map((performer: any) => performer?.display?.trim())
+    .find((institution: unknown): institution is string => typeof institution === 'string' && !!institution)
+  const reportInstitution = (dr?.performer ?? [])
+    .map((performer: any) => performer?.display?.trim())
+    .find((institution: unknown): institution is string =>
+      typeof institution === 'string' && !!institution && !isNhiAuthorityDisplay(institution))
+  if (hasCloudObservation) return cloudInstitution || ordinaryInstitution || reportInstitution
+  return ordinaryInstitution || reportInstitution
+}
+
+function isNhiMedicloudReport(dr: any): boolean {
+  const observations = Array.isArray(dr?._observations) ? dr._observations : []
+  return observations.length > 0 && observations.every(isNhiMedicloudObservation)
 }
 
 // Single source of truth for a report's date: prefer effectiveDateTime (the
@@ -237,7 +260,8 @@ export function buildReportsData(
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
       const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const key = `${text}|${date}|${inst}|${sourceProgram}|${dr.id || `split-${splitGroupIndex++}`}`
+      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
+      const key = `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}|${dr.id || `split-${splitGroupIndex++}`}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       viewerReportsByKey.set(key, [dr])
@@ -255,6 +279,7 @@ export function buildReportsData(
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
       const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
+      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
       const sharedKey = sharedReportGroupingKey(dr)
       const ownSharedKey = sharedKey && qualifyingSharedKeys.has(sharedKey)
         ? sharedKey
@@ -267,7 +292,7 @@ export function buildReportsData(
         : null
       const key = ownSharedKey || companionSharedKey
         ? `shared-report|${ownSharedKey || companionSharedKey}`
-        : `${text}|${date}|${inst}|${sourceProgram}`
+        : `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}`
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
         naturalOrder.push(key)
@@ -789,6 +814,9 @@ export function buildReportsData(
         || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
       const isLinkedImagingStudy = rowStudyIds.size > 0
       const reportGroup = inferReportDisplayGroup(head)
+      const sourceProvenance = reportGroup === 'lab' && grp.every(isNhiMedicloudReport)
+        ? 'nhi-medicloud' as const
+        : undefined
       const inferredImagingLabel = locale === 'zh-TW'
         ? '影像（依檢查名稱／代碼辨識）'
         : 'Imaging (inferred from test name/code)'
@@ -821,6 +849,7 @@ export function buildReportsData(
         sourceProgram: grp.some(isAdultPreventiveReport)
           ? 'adult-preventive'
           : undefined,
+        sourceProvenance,
         effectiveDate: rawDate,
         images: images.length > 0 ? images : undefined,
         viewerActions: viewerActions.length > 0 ? viewerActions : undefined,

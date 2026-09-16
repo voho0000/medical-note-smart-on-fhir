@@ -81,7 +81,7 @@ Prompt Gallery 的 `chat` prompt 可加入個人模板；同時支援 `summary` 
 
 ### 語音
 
-`useVoiceRecording()` 經瀏覽器 MediaRecorder 錄音，`TranscriptionService` 使用 Whisper user key 或 proxy。完成後只把轉錄文字插入輸入框，由使用者確認後再送出。
+`MedicalChat` 使用 `useVoiceRecording()` 經瀏覽器 MediaRecorder 錄音；該 hook 直接依所選模型設定呼叫 Whisper 或自訂 OpenAI-compatible 語音端點，並處理請求中止與病人匯入切換。正式路徑不經舊的 `TranscriptionService`。完成後只把轉錄文字插入輸入框，由使用者確認後再送出。
 
 ### 圖片
 

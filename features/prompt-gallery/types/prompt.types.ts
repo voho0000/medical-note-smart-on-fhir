@@ -54,6 +54,11 @@ export function normalizePromptTypes(promptId: string, rawTypes: unknown): Promp
 
 export type PromptAudience = 'medical' | 'patient'
 
+/** Legacy or malformed stored versions are displayed and compared as the V1 baseline. */
+export function coerceTemplateVersion(value: unknown): number {
+  return Number.isSafeInteger(value) && (value as number) >= 1 ? value as number : 1
+}
+
 export const PROMPT_CATEGORIES = ['soap', 'admission', 'discharge', 'safety', 'summary', 'progress', 'consult', 'procedure', 'other'] as const
 
 export type PromptCategory = 
@@ -124,6 +129,8 @@ export interface SharedPrompt {
   outputFormat?: InsightOutputFormat
   /** Summary-module language contract. Missing on legacy/chat-only records. */
   languagePolicy?: InsightLanguagePolicy
+  /** Content revision; existing records without this field use the V1 baseline. */
+  version?: number
   /** Author-supplied sample output generated from de-identified data. */
   exampleOutput?: string
   /** Public templates appear in the shared gallery. Private templates remain visible only to their author in My Prompts. */

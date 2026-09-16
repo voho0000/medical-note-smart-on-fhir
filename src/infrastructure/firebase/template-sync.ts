@@ -6,6 +6,9 @@ export type TemplateAudience = 'medical' | 'patient'
 
 export interface ChatTemplate {
   id: string
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
+  sourcePromptVersion?: number
   label: string
   content: string
   /** Optional "/shortcut" trigger keyword for the slash-template menu. */
@@ -18,6 +21,9 @@ export interface ChatTemplate {
 
 interface FirestoreChatTemplate {
   id: string
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
+  sourcePromptVersion?: number
   label: string
   content: string
   shortcut?: string | null
@@ -36,6 +42,9 @@ const templateSync = createUserCollectionSync<ChatTemplate, FirestoreChatTemplat
   getId: template => template.id,
   fromDoc: (id, data) => ({
     id,
+    sourcePromptFingerprint: typeof data.sourcePromptFingerprint === "string" ? data.sourcePromptFingerprint : undefined,
+    sourcePromptKey: typeof data.sourcePromptKey === "string" ? data.sourcePromptKey : undefined,
+    sourcePromptVersion: Number.isSafeInteger(data.sourcePromptVersion) && (data.sourcePromptVersion as number) >= 1 ? data.sourcePromptVersion : undefined,
     label: data.label,
     content: data.content,
     order: data.order || 0,
@@ -46,6 +55,9 @@ const templateSync = createUserCollectionSync<ChatTemplate, FirestoreChatTemplat
   }),
   toDoc: (template, now) => ({
     id: template.id,
+    ...(template.sourcePromptFingerprint ? { sourcePromptFingerprint: template.sourcePromptFingerprint } : {}),
+    ...(template.sourcePromptKey ? { sourcePromptKey: template.sourcePromptKey } : {}),
+    ...(template.sourcePromptVersion ? { sourcePromptVersion: template.sourcePromptVersion } : {}),
     label: template.label,
     content: template.content,
     order: template.order,

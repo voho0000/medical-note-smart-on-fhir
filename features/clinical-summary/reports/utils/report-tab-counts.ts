@@ -1,3 +1,5 @@
+import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
+import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
@@ -36,6 +38,7 @@ export interface ReportTabCounts {
 }
 
 interface CountRow {
+  adultPreventive?: boolean
   group: ReportDisplayGroup
   rawTitle: string
   effectiveDate?: string
@@ -63,11 +66,16 @@ function reportObservations(reports: any[]): any[] {
   ))
 }
 
+function isAdultReport(report: any): boolean {
+  return isAdultPreventiveHealthExamResource(report)
+    || (report?._observations ?? []).some(isAdultPreventiveHealthExamResource)
+}
+
 function reportNaturalKey(report: any): string {
   const title = (getCodeableConceptText(report?.code) || '').trim()
   const date = (reportDate(report) || '').slice(0, 10)
   const institution = (reportInstitution(report) || '').trim()
-  return `${title}|${date}|${institution}`
+  return `${title}|${date}|${institution}|${isAdultReport(report) ? 'adult-preventive' : ''}`
 }
 
 function isCtReport(report: any): boolean {
@@ -163,6 +171,7 @@ function createDiagnosticReportRows(
     const rawTitle = (getCodeableConceptText(head?.code) || '').trim()
       || (study ? imagingStudyTitle(study) : '')
     return {
+      adultPreventive: reports.some(isAdultReport),
       group: inferReportDisplayGroup(head),
       rawTitle,
       effectiveDate: reportDate(head) || study?.started,
@@ -203,9 +212,12 @@ function orphanGroupDay(value?: string): string {
 function createOrphanObservationRows(
   observations: any[],
   diagnosticReports: any[],
+  compositions: any[],
 ): CountRow[] {
   // Union standard result references and enriched _observations so a report
   // member cannot be counted again as a standalone Observation row.
+  const adultIds = collectAdultPreventiveObservationIds(compositions)
+  const isAdultObservation = (observation: any) => isAdultPreventiveHealthExamResource(observation) || adultIds.has(observation.id)
   const reportMemberIds = collectReportMemberIds(diagnosticReports)
   const groups = new Map<string, any[]>()
 
@@ -225,6 +237,7 @@ function createOrphanObservationRows(
       observation.encounter?.reference || '',
       orphanGroupDay(observation.effectiveDateTime),
       getCodeableConceptText(observation.code) || 'Observation',
+      isAdultObservation(observation) ? 'adult-preventive' : '',
     ].join('|')
     const group = groups.get(key)
     if (group) group.push(observation)
@@ -234,6 +247,7 @@ function createOrphanObservationRows(
   return [...groups.values()].map((group) => {
     const first = group[0]
     return {
+      adultPreventive: group.some(isAdultObservation),
       group: inferGroupFromObservation(first),
       rawTitle: getCodeableConceptText(first?.code),
       effectiveDate: first?.effectiveDateTime,
@@ -346,6 +360,7 @@ export function calculateReportTabCounts(
   imagingStudies: any[] = [],
   observations: any[] = [],
   procedures: any[] = [],
+  compositions: any[] = [],
 ): ReportTabCounts {
   const reports = Array.isArray(diagnosticReports) ? diagnosticReports : []
   const studies = Array.isArray(imagingStudies) ? imagingStudies : []
@@ -354,7 +369,7 @@ export function calculateReportTabCounts(
 
   const rows = [
     ...createDiagnosticReportRows(reports, studies),
-    ...createOrphanObservationRows(standaloneObservations, reports),
+    ...createOrphanObservationRows(standaloneObservations, reports, compositions),
     ...createProcedureRows(procedureResources),
     ...createStandaloneImagingStudyRows(studies, reports),
   ]
@@ -366,8 +381,21 @@ export function calculateReportTabCounts(
     cancerScreeningRows.map((row) => cancerScreeningProgramKey(row.rawTitle)),
   ).size
 
+  // Match the All tab's adult-exam display units without rendering documents.
+  const adultGroups = new Set<string>()
+  let all = 0
+  for (const row of rows) {
+    const day = row.effectiveDate?.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (row.adultPreventive && day) {
+      const key = `${day}|${(row.institution ?? '').normalize('NFKC').trim().toLocaleLowerCase()}`
+      if (adultGroups.has(key)) continue
+      adultGroups.add(key)
+    }
+    all++
+  }
+
   return {
-    all: rows.length - cancerScreeningRows.length + cancerScreeningPrograms,
+    all: all - cancerScreeningRows.length + cancerScreeningPrograms,
     lab: countLabDayRows(labRows),
     imaging: countReportRows(imagingRows),
     pathology: countReportRows(pathologyRows),

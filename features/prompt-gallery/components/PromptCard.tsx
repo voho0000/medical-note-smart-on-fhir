@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardList, Flame, MessageSquare } from 'lucide-react'
 import type { SharedPrompt } from '../types/prompt.types'
+import { coerceTemplateVersion } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { getPromptSource } from '../constants/prompt-source'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
@@ -154,6 +155,8 @@ export function PromptCard({ prompt, onPreview, currentUserId, isFavorite, onTog
         </div>
 
         <div className="flex items-center gap-1 text-[0.625rem] text-muted-foreground h-[16px]">
+          <span className="tabular-nums">V{coerceTemplateVersion(prompt.version)}</span>
+          <span aria-hidden="true">·</span>
           <span className="tabular-nums">{t.promptGallery.updatedAt} {formatPromptDate(prompt.updatedAt)}</span>
           <span aria-hidden="true">·</span>
           {isPopular ? (

@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { getPromptSource } from '../constants/prompt-source'
-import type { PromptGallerySort, SharedPrompt } from '../types/prompt.types'
+import { coerceTemplateVersion, type PromptGallerySort, type SharedPrompt } from '../types/prompt.types'
 import { formatPromptDate } from '../utils/prompt-filter.utils'
 import { FavoriteButton } from './FavoriteButton'
 import { PromptSourceBadge } from './PromptSourceBadge'
@@ -89,6 +89,7 @@ export function PromptTable({
         <TableRow className="hover:bg-transparent">
           {onToggleFavorite && <TableHead className="w-10"><span className="sr-only">{t.promptGallery.favorites}</span></TableHead>}
           <SortableHead field="title" label={t.promptGallery.columnTemplate} {...headProps} />
+          <TableHead className="w-[4rem] text-xs">{t.promptGallery.columnVersion}</TableHead>
           <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnType}</TableHead>
           <TableHead className="w-[6.5rem] text-xs">{t.promptGallery.columnCategory}</TableHead>
           <TableHead className="w-[7rem] text-xs">{t.promptGallery.columnSpecialty}</TableHead>
@@ -137,6 +138,7 @@ export function PromptTable({
                 </div>
                 <p className="truncate text-[0.6875rem] leading-tight text-muted-foreground">{prompt.description || prompt.prompt}</p>
               </TableCell>
+              <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">V{coerceTemplateVersion(prompt.version)}</TableCell>
               <TableCell className="whitespace-normal py-1.5">
                 <div className="flex flex-wrap gap-1">
                   {prompt.types.map((type) => {

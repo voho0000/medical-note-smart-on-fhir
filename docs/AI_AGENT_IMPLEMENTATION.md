@@ -78,6 +78,15 @@ UI 另外接收 `status`、`content`、`tool-call`、`tool-result` 與 `final` e
 
 工具定義在 `src/infrastructure/ai/tools/fhir-tools.ts`，schema 在 `fhir-tool-schemas.ts`。它們支援日期、狀態、類別、部門、院所、異常值與 limit 等 filter；回傳結構化的 `{ success, summary, count, data }`。
 
+用藥工具另有下列資料忠實度規則：
+
+- `queryMedications` 保留逐筆來源狀態、日期、文字／結構化用法、供藥量與可計算的供藥截止日；可依來源／官方商品名、健保碼、成分、劑型及 ATC 查詢。`timeRange=last-90-days` 由程式換算「過去三個月」，不要求地端模型自行算日期。若本機精確對到健保碼與日期，同行的 `medicationIdentity` 會把商品名、成分與 ATC 綁在同一字串，並另保留結構化欄位。
+- `getActiveMedicationList` 與用藥頁共用同一套 currentness 規則：可用的明確 lifecycle status 優先；來源 status 缺少或為 `unknown`、但供藥截止日可計算時，依 supply window 判斷。只有 status 不可用且供藥期限也算不出來時才放入 `uncertainData`、令 `canConcludeAbsence=false`。逐筆 `currentnessBasis` 會指出判定來自來源狀態、供藥期限或兩者。
+- 續領合併使用受治理的產品 identity 加上劑量／途徑／頻率與來源；同名但不同規格、療程或院所的處方不合併。`refillCount` 可包含同一療程較早的有效歷史週期。
+- `MedicationRequest.category` 僅以 `recordedCategories` 呈現並標成來源／行政分類；它不能取代精確藥典成分或 ATC，也不能單獨證明機轉或適應症。
+- `MedicationRequest` 與 `MedicationStatement` 任一查詢失敗時，仍可回傳另一來源已取得的資料，但會標示 `incomplete=true`、`canConcludeAbsence=false` 與 `queryIssues`；臨床 collection 尚未載入時則不得回傳成功的空清單。
+- 工具不在每筆藥物加入 `modelInstruction`。安全限制集中在程式比對規則、`terminologyStatus` 與全域 system contract，避免自然語言指令和相鄰藥物錯誤關聯。
+
 `queryPatientInfo` 只回傳性別與年齡，不回傳姓名、id 或完整生日。其他 tools 會在回傳前經 `scrubPii()` 與 `scrubFreeText()`。
 
 ### 文獻 tool（1 個）

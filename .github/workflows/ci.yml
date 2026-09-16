@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: voho0000/firebase-smart-on-fhir
-          ref: 2771a3aad9f302cf2e7df1273d6b71ed4cd9f7fe
+          ref: e3af56253c816acf3fb704b8d9b25e0f98f4374c
           path: .gallery-backend
       - run: npm ci --prefix .gallery-backend
       - run: npm ci --prefix .gallery-backend/functions
@@ -63,7 +63,7 @@ jobs:
       - name: Migration and gallery browser regression
         working-directory: .gallery-backend
         run: npx firebase emulators:exec --config firebase.gallery-test.json --only auth,firestore --project demo-mediprisma "node --test tests/prompt-visibility-migration.test.mjs && cd .. && npx playwright test -c playwright.gallery.config.ts"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: gallery-regression-results

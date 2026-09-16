@@ -18,9 +18,14 @@ import {
   type InsightOutputFormat,
 } from "@/src/shared/constants/clinical-insights.constants"
 
+import { findGalleryTemplate } from "@/src/shared/utils/gallery-template.utils"
+
 export { MAX_AUTO_INSIGHT_MODULES, MAX_SUMMARY_INSIGHT_MODULES }
 
 export type InsightPanelConfig = {
+  sourcePromptKey?: string
+  sourcePromptFingerprint?: string
+  sourcePromptVersion?: number
   id: string
   title: string
   prompt: string
@@ -309,6 +314,9 @@ function getPanelFingerprint(panel: InsightPanelConfig): string {
     order: panel.order,
     audience: panel.audience,
     templateLibraryRevision: panel.templateLibraryRevision,
+    sourcePromptKey: panel.sourcePromptKey,
+    sourcePromptFingerprint: panel.sourcePromptFingerprint,
+    sourcePromptVersion: panel.sourcePromptVersion,
   })
 }
 
@@ -373,7 +381,7 @@ type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
   guestEditingApproved: boolean
   approveGuestEditing: () => void
-  addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy">>) => string | null
+  addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">>) => string | null
   updatePanel: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => void
   updatePanelAndSave: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => Promise<void>
   removePanel: (id: string) => void
@@ -705,13 +713,26 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     return () => window.removeEventListener("beforeunload", handleBeforeUnload)
   }, [pendingMutationVersion, user?.uid])
 
-  const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy">>) => {
+  const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate" | "outputFormat" | "languagePolicy" | "sourcePromptKey" | "sourcePromptFingerprint" | "sourcePromptVersion">>) => {
     if (isLoading) return null
-    const audienceCount = allPanelsRef.current.filter((p) => p.audience === audience).length
+    const audiencePanels = allPanelsRef.current.filter(p => p.audience === audience)
+    if (initial?.sourcePromptKey) {
+      const existing = findGalleryTemplate(audiencePanels, initial.sourcePromptKey,
+        p => p.title === initial.title && p.prompt === initial.prompt
+          && p.outputFormat === initial.outputFormat && p.languagePolicy === initial.languagePolicy)
+      if (existing) {
+        commitLocalPanels(current => current.map(p => p === existing ? { ...p, sourcePromptKey: initial.sourcePromptKey, sourcePromptFingerprint: existing.sourcePromptFingerprint ?? initial.sourcePromptFingerprint, sourcePromptVersion: existing.sourcePromptVersion ?? initial.sourcePromptVersion } : p))
+        return existing.id
+      }
+    }
+    const audienceCount = audiencePanels.length
     if (audienceCount >= MAX_PANELS) return null
     const suffix = audienceCount + 1
     const newPanel: InsightPanelConfig = {
       id: generatePanelId(),
+      sourcePromptKey: initial?.sourcePromptKey,
+      sourcePromptFingerprint: initial?.sourcePromptFingerprint,
+      sourcePromptVersion: initial?.sourcePromptVersion,
       title: initial?.title ?? `Custom Panel ${suffix}`,
       prompt: initial?.prompt ?? "Describe the key clinical insights for this focus area using the provided context.",
       showInSummary: initial?.showInSummary ?? false,

@@ -65,6 +65,7 @@ interface ArrangeOptions {
   safetyRunningSlotKey?: string | null
   summaryModel?: string
   summaryResolvedModelName?: string
+  summaryModelUnavailable?: boolean
   safetyModel?: string
   summaryAuto?: boolean
   safetyAuto?: boolean
@@ -94,6 +95,7 @@ function arrange({
   safetyRunningSlotKey = safetyGenerating ? safetyGenerationSlotKey : null,
   summaryModel = 'gemini-3.1-flash-lite',
   summaryResolvedModelName = 'Gemini 3.1 Flash-Lite',
+  summaryModelUnavailable = false,
   safetyModel = 'gemini-3.1-flash-lite',
   summaryAuto = true,
   safetyAuto = true,
@@ -143,6 +145,7 @@ function arrange({
     setAutoGenerate: setSummaryAuto,
     model: summaryModel,
     resolvedModelName: summaryResolvedModelName,
+    modelUnavailable: summaryModelUnavailable,
     setModel: setSummaryModel,
     recordGenerationCompletion,
     generate: summaryGenerate,
@@ -183,6 +186,21 @@ describe('useMedicalSummaryOrchestrator', () => {
 
   afterEach(() => {
     jest.useRealTimers()
+  })
+
+  it('exposes a selected-model access block to the Medical Summary surface', () => {
+    arrange({
+      summaryModel: 'gpt-5.6-terra',
+      summaryResolvedModelName: 'GPT-5.6 Terra',
+      summaryModelUnavailable: true,
+      summaryError: '所選的 GPT-5.6 Terra 需要有效的金鑰或連線設定。本次未送出任何資料。',
+    })
+
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    expect(result.current.model).toBe('gpt-5.6-terra')
+    expect(result.current.modelUnavailable).toBe(true)
+    expect(result.current.summaryError).toContain('本次未送出任何資料')
   })
 
   it('runs all six cards through one briefing generation call', async () => {
@@ -475,6 +493,34 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(result.current.result).toBe(summaryB)
     expect(result.current.safetyResult).toBe(safetyB)
     expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
+  it('shows new model failures while retaining the previous coherent summary', () => {
+    const previousSummary = { headline: 'previous valid summary' }
+    const previousSafety = { alerts: [] }
+    arrange({ summaryResult: previousSummary, safetyResult: previousSafety })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    arrange({
+      summaryResult: { headline: '', cardErrors: { priorities: 'API Key error' } },
+      safetyResult: previousSafety,
+      summaryResultOwnerRuntimeId: 'new-model',
+      safetyResultOwnerRuntimeId: 'old-model',
+    })
+    rerender()
+
+    expect(result.current.result).toBe(previousSummary)
+    expect(result.current.cardErrors).toEqual({ priorities: 'API Key error' })
+
+    // A stale failed result must not be attributed to a newly selected slot.
+    readSummaryGenerationSlot.mockReturnValue({
+      result: undefined,
+      isRunning: false,
+      error: null,
+      issue: null,
+    })
+    rerender()
+    expect(result.current.cardErrors).toEqual({})
   })
 
   it('captures the last coherent pair when regeneration starts during partial cache hydration', async () => {

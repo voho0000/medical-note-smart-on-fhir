@@ -259,6 +259,7 @@ export function MedicationList({
                       <MedicationHistoryDetails
                         id={historyDetailsId}
                         medications={history.medications}
+                        nameMode={nameMode}
                         className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
                       />
                     )}

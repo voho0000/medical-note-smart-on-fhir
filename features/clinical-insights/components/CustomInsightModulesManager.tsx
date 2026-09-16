@@ -1,6 +1,8 @@
 // Custom Summary Modules Manager
 "use client"
 
+import { useGalleryImport } from "@/features/prompt-gallery/hooks/useGalleryImport"
+import { gallerySourceKey } from "@/src/shared/utils/gallery-template.utils"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -153,23 +155,35 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
     })
   }
 
-  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType) => {
-    if (guidedPreview) return
-    if (useAs === "chat" || !canAddPanel) return
-    await requestCustomization(async () => {
-      const newPanelId = addPanel({
-        title: prompt.title,
-        prompt: prompt.prompt,
-        showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES,
-        autoGenerate: false,
-        outputFormat: prompt.outputFormat ?? "markdown",
-        languagePolicy: prompt.languagePolicy ?? "interface-language",
-      })
-      if (!newPanelId) return
-      setActiveId(newPanelId)
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      await savePanels()
-    })
+  const galleryImport = useGalleryImport({
+    inline: true,
+    scope: `${user?.uid ?? 'guest'}:${audience}:summary`,
+    items: panels.map(item => ({ ...item, content: item.prompt })),
+    add: value => addPanel({
+      title: value.title, prompt: value.content, sourcePromptKey: value.sourcePromptKey,
+      sourcePromptFingerprint: value.sourcePromptFingerprint,
+      sourcePromptVersion: value.sourcePromptVersion,
+      showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES, autoGenerate: false,
+      outputFormat: value.outputFormat as InsightPanelConfig['outputFormat'],
+      languagePolicy: value.languagePolicy as InsightPanelConfig['languagePolicy'],
+    }),
+    update: (id, value) => updatePanel(id, {
+      title: value.title, prompt: value.content, sourcePromptFingerprint: value.sourcePromptFingerprint,
+      sourcePromptVersion: value.sourcePromptVersion,
+      outputFormat: value.outputFormat as InsightPanelConfig['outputFormat'],
+      languagePolicy: value.languagePolicy as InsightPanelConfig['languagePolicy'],
+    }),
+    save: savePanels,
+    select: setActiveId,
+  })
+  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType, onImported?: () => void) => {
+    if (guidedPreview || useAs === "chat") return
+    setShowGalleryDialog(false)
+    await requestCustomization(() => galleryImport.importPrompt({
+      title: prompt.title, content: prompt.prompt, sourcePromptKey: gallerySourceKey(prompt),
+      sourcePromptVersion: prompt.version ?? 1,
+      outputFormat: prompt.outputFormat ?? 'markdown', languagePolicy: prompt.languagePolicy ?? 'interface-language',
+    }, onImported))
   }
 
   const handleContinueAsGuest = () => {
@@ -209,6 +223,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
 
   return (
     <div className="space-y-4">
+      {galleryImport.notice}
       <div className="rounded-xl border bg-muted/20 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -410,6 +425,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
         guidedPreview={guidedPreview}
       />
 
+      {galleryImport.dialog}
       <PromptGalleryDialog
         open={guidedPreview ? isCustomSummaryGalleryTourStep(tourStep) : showGalleryDialog}
         onOpenChange={(open) => { if (!guidedPreview) setShowGalleryDialog(open) }}

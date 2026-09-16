@@ -1,5 +1,5 @@
 import { labReportsCategory } from '@/src/core/categories/lab-reports.category'
-import { observationsCategory } from '@/src/core/categories/observations.category'
+import { selectOtherObservations } from '@/src/core/utils/observation-selectors'
 
 // Creatinine measured 3× (trending up), Hemoglobin + CRP once, plus a narrative
 // microbiology report with no numeric result.
@@ -101,7 +101,7 @@ describe('labReportsCategory — per-analyte trend', () => {
       ],
     } as any
     const labs = labReportsCategory.extractData(clinicalData) as any[]
-    const others = observationsCategory.extractData(clinicalData) as any[]
+    const others = selectOtherObservations(clinicalData)
 
     expect(labs.map((item) => item.id)).toEqual([])
     expect(others.map((item) => item.id)).toEqual(['other-1'])

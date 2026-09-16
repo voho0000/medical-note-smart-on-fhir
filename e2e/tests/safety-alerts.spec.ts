@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/test'
 import { type Page } from '@playwright/test'
-import { enableSummaryAutoGenerate, importBundle } from '../fixtures/import'
+import { enableSummaryAutoGenerate, importBundle, openFeaturePanel } from '../fixtures/import'
 import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 
 // The Medical Summary action generates all registered cards in one validated
@@ -69,6 +69,7 @@ test.describe('safety alerts (mocked)', () => {
   test('manual summary generation renders the integrated safety card', async ({ page }) => {
     await mockUnifiedSummary(page)
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await summaryPanel.getByTestId('medical-summary-empty-generate').click()
@@ -89,6 +90,7 @@ test.describe('safety alerts (mocked)', () => {
 
   test('model picker lists gated models and persists the unified summary choice', async ({ page }) => {
     await importBundle(page)
+    await openFeaturePanel(page)
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
 
     // The picker shows the default model; open it.
@@ -117,6 +119,7 @@ test.describe('safety alerts (mocked)', () => {
   test('auto-generation runs the integrated safety analysis', async ({ page }) => {
     await mockUnifiedSummary(page, true)
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
@@ -130,6 +133,7 @@ test.describe('safety alerts (mocked)', () => {
     // itself, which the seeded specs above deliberately bypass.
     await mockUnifiedSummary(page)
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByTestId('medical-summary-empty-generate')).toBeVisible()
@@ -143,6 +147,7 @@ test.describe('safety alerts (mocked)', () => {
   test('a cached unified summary is reused after a page reload — no re-bill', async ({ page }) => {
     await mockUnifiedSummary(page, true)
     await importBundle(page)
+    await openFeaturePanel(page)
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
@@ -152,6 +157,7 @@ test.describe('safety alerts (mocked)', () => {
     // The unified result comes back from encrypted cache. The mock counter
     // resets per navigation, so 0 proves the batch was not billed again.
     await page.reload()
+    await openFeaturePanel(page)
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()

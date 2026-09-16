@@ -15,6 +15,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useCallback } from 'react'
 import {
   DEFAULT_MODEL_ID,
   gateModelForAgentSupport,
@@ -26,6 +27,7 @@ import {
   isOpenAiCompatibleRuntimeReady,
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 
 export type ModelPrefConsumer = 'chat' | 'insights'
 
@@ -83,10 +85,22 @@ export const useModelPrefsStore = create<ModelPrefsState>()(
   ),
 )
 
-export const useModelPref = (consumer: ModelPrefConsumer) =>
-  useModelPrefsStore((s) => s.prefs[consumer])
+export const useModelPref = (consumer: ModelPrefConsumer) => {
+  const persistedModelId = useModelPrefsStore((s) => s.prefs[consumer])
+  const runtimeModelId = useMedcloudLaunchStore((s) => s.runtimeModelId)
+  return runtimeModelId ?? persistedModelId
+}
 
-export const useSetModelFor = () => useModelPrefsStore((s) => s.setModelFor)
+export const useSetModelFor = () => {
+  const setModelFor = useModelPrefsStore((s) => s.setModelFor)
+  return useCallback((consumer: ModelPrefConsumer, id: string) => {
+    // A launch model is only the initial Medcloud choice. Once the user
+    // explicitly picks a model, release that override so the picker and the
+    // next request both use the newly saved selection immediately.
+    useMedcloudLaunchStore.getState().setRuntimeModelId(null)
+    setModelFor(consumer, id)
+  }, [setModelFor])
+}
 
 /**
  * The model a call will ACTUALLY run on (and the only thing UI should

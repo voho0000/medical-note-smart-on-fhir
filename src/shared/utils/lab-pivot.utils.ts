@@ -21,7 +21,12 @@ import {
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
-import { isInferredObservationUnit, isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
+import {
+  getNhiMedicloudOriginalInstitution,
+  isInferredObservationUnit,
+  isAdultPreventiveHealthExamResource,
+  isNhiMedicloudObservation,
+} from '@/src/shared/utils/observation-provenance.utils'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 
 export interface LabCell {
@@ -35,6 +40,14 @@ export interface LabCell {
   effectiveDateTime?: string
   status?: string
   unitInferred?: boolean
+  sourceProvenance?: 'nhi-medicloud'
+  sourceInstitution?: string
+  /** Per-result provenance retained when a same-day cell contains multiple values. */
+  sourceRecords?: Array<{
+    value: string
+    provenance?: 'nhi-medicloud'
+    institution?: string
+  }>
 }
 
 export interface LabRow {
@@ -568,7 +581,14 @@ export function buildLabPivots(
         effectiveDateTime: obs.effectiveDateTime,
         status,
         unitInferred,
+        sourceProvenance: isNhiMedicloudObservation(obs) ? 'nhi-medicloud' : undefined,
+        sourceInstitution: getNhiMedicloudOriginalInstitution(obs),
       }
+      cell.sourceRecords = [{
+        value: cell.value,
+        provenance: cell.sourceProvenance,
+        institution: cell.sourceInstitution,
+      }]
       // Same analyte, same day: default is last-write-wins (a revised result
       // supersedes the earlier one). EXCEPTION — a qualitative + quantitative
       // PAIR: e.g. Anti-HBc ships both a Presence result "Reactive"
@@ -589,6 +609,9 @@ export function buildLabPivots(
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
           unitInferred: !!prev.unitInferred || !!cell.unitInferred,
+          sourceProvenance: prev.sourceProvenance === cell.sourceProvenance ? cell.sourceProvenance : undefined,
+          sourceInstitution: prev.sourceInstitution === cell.sourceInstitution ? cell.sourceInstitution : undefined,
+          sourceRecords: [...(prev.sourceRecords ?? []), ...(cell.sourceRecords ?? [])],
         })
       } else if (prev && incomingNumeric !== isNumericCellValue(prev.value)) {
         const qual = incomingNumeric ? prev : cell
@@ -600,6 +623,9 @@ export function buildLabPivots(
           effectiveDateTime: cell.effectiveDateTime || prev.effectiveDateTime,
           status: qual.status === quant.status ? qual.status : [qual.status, quant.status].filter(Boolean).join('|') || undefined,
           unitInferred: !!qual.unitInferred || !!quant.unitInferred,
+          sourceProvenance: qual.sourceProvenance === quant.sourceProvenance ? qual.sourceProvenance : undefined,
+          sourceInstitution: qual.sourceInstitution === quant.sourceInstitution ? qual.sourceInstitution : undefined,
+          sourceRecords: [...(qual.sourceRecords ?? []), ...(quant.sourceRecords ?? [])],
         })
       } else if (prev) {
         // Never overwrite a same-analyte/same-day source record. A pivot cell is
@@ -613,6 +639,9 @@ export function buildLabPivots(
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
           unitInferred: !!prev.unitInferred || !!cell.unitInferred,
+          sourceProvenance: prev.sourceProvenance === cell.sourceProvenance ? cell.sourceProvenance : undefined,
+          sourceInstitution: prev.sourceInstitution === cell.sourceInstitution ? cell.sourceInstitution : undefined,
+          sourceRecords: [...(prev.sourceRecords ?? []), ...(cell.sourceRecords ?? [])],
         })
       } else {
         row.values.set(date, cell)

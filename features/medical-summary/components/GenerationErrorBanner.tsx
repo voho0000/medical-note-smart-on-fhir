@@ -25,6 +25,7 @@ interface GenerationErrorBannerProps {
   isBusy: boolean
   onRetry: () => void
   actions?: GenerationErrorAction[]
+  showRetry?: boolean
 }
 
 /** A dismissible alert for partial failures or an actionable preflight block. */
@@ -36,6 +37,7 @@ export function GenerationErrorBanner({
   isBusy,
   onRetry,
   actions,
+  showRetry = true,
 }: GenerationErrorBannerProps) {
   const [dismissed, setDismissed] = useState(false)
   const hasActions = Boolean(actions?.length)
@@ -76,7 +78,7 @@ export function GenerationErrorBanner({
               {action.label}
             </Button>
           ))}
-          {!isBusy ? (
+          {showRetry && !isBusy ? (
             <Button
               type="button"
               onClick={onRetry}

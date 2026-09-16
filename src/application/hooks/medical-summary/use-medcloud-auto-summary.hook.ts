@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 
 interface UseMedcloudAutoSummaryOptions {
+  authLoading: boolean
   hasPatient: boolean
   summaryModelId: string | null
   dataReady: boolean
@@ -18,6 +19,7 @@ interface UseMedcloudAutoSummaryOptions {
  * Keeping the request in a small in-memory store lets it safely arrive before
  * the lazy Medical Summary feature or the complete FHIR dataset is ready. */
 export function useMedcloudAutoSummary({
+  authLoading,
   hasPatient,
   summaryModelId,
   dataReady,
@@ -33,6 +35,7 @@ export function useMedcloudAutoSummary({
   useEffect(() => {
     if (
       !request ||
+      authLoading ||
       !hasPatient ||
       !dataReady ||
       isRestoring ||
@@ -60,6 +63,7 @@ export function useMedcloudAutoSummary({
     return () => window.clearTimeout(timer)
   }, [
     claimSummary,
+    authLoading,
     dataReady,
     generate,
     generationSlotKey,
