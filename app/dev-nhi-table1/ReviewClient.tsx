@@ -85,12 +85,12 @@ export default function Review() {
             lastPrescriptionDate: '2026-08-28',
             // A dose escalation the ladder can be read against.
             prescriptions: [
-              { date: '2026-03-04', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
-              { date: '2026-04-02', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
-              { date: '2026-05-06', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
-              { date: '2026-06-03', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
-              { date: '2026-07-01', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
-              { date: '2026-08-28', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
+              { date: '2026-03-04', name: 'Atorvastatin 20 mg', ingredient: 'atorvastatin', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-04-02', name: 'Atorvastatin 20 mg', ingredient: 'atorvastatin', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-05-06', name: 'Atorvastatin 20 mg', ingredient: 'atorvastatin', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-06-03', name: 'Atorvastatin 40 mg', ingredient: 'atorvastatin', dailyDose: 40, doseUnit: 'mg' },
+              { date: '2026-07-01', name: 'Atorvastatin 40 mg', ingredient: 'atorvastatin', dailyDose: 40, doseUnit: 'mg' },
+              { date: '2026-08-28', name: 'Atorvastatin 40 mg', ingredient: 'atorvastatin', dailyDose: 40, doseUnit: 'mg' },
             ],
           },
         }
@@ -107,8 +107,8 @@ export default function Review() {
             medicationNames: ['Ezetimibe 10 mg'],
             factKey: 'ezetimibeTherapy',
             prescriptions: [
-              { date: '2026-07-01', name: 'Ezetimibe 10 mg', dailyDose: 10, doseUnit: 'mg' },
-              { date: '2026-08-28', name: 'Ezetimibe 10 mg', dailyDose: 10, doseUnit: 'mg' },
+              { date: '2026-07-01', name: 'Ezetimibe 10 mg', ingredient: 'ezetimibe', dailyDose: 10, doseUnit: 'mg' },
+              { date: '2026-08-28', name: 'Ezetimibe 10 mg', ingredient: 'ezetimibe', dailyDose: 10, doseUnit: 'mg' },
             ],
           },
         },

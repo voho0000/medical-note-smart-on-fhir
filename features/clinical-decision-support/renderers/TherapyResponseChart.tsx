@@ -167,7 +167,7 @@ export function TherapyResponseChart({
               {window.met === false ? (
                 <text
                   x={(x1 + x2) / 2}
-                  y={PAD.top - 1}
+                  y={bottom - 3}
                   textAnchor="middle"
                   className="fill-muted-foreground"
                   style={{ fontSize: 9 }}
@@ -271,7 +271,7 @@ export function TherapyResponseChart({
                           y: baseline - height,
                           title: span.label,
                           lines: [
-                            span.dose ?? (isEnglish ? 'No daily dose stated' : '處方未載每日劑量'),
+                            [span.intensityLabel, span.dose ?? (isEnglish ? 'No daily dose stated' : '處方未載每日劑量')].filter(Boolean).join(' · '),
                             `${span.from} – ${span.to}`,
                             isEnglish ? `${span.count} prescriptions` : `${span.count} 筆處方`,
                           ],
@@ -286,6 +286,7 @@ export function TherapyResponseChart({
                           style={{ fontSize: 10, fontWeight: span.changed ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}
                         >
                           {span.changed ? '↗ ' : ''}
+                          {span.intensityLabel ? `${span.intensityLabel} · ` : ''}
                           {span.dose ?? (isEnglish ? 'dose not stated' : '劑量未載')}
                         </text>
                       ) : null}
