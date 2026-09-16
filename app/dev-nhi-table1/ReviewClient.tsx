@@ -97,8 +97,26 @@ export default function Review() {
       : {},
   } as unknown as CdssPatientProfile
 
+  const withAdjunct = SCENARIOS[scenario].facts.statinTherapy
+    ? {
+        ...profile,
+        medicationClassContexts: {
+          ...profile.medicationClassContexts,
+          ezetimibe: {
+            state: 'confirmed-current' as const,
+            medicationNames: ['Ezetimibe 10 mg'],
+            factKey: 'ezetimibeTherapy',
+            prescriptions: [
+              { date: '2026-07-01', name: 'Ezetimibe 10 mg', dailyDose: 10, doseUnit: 'mg' },
+              { date: '2026-08-28', name: 'Ezetimibe 10 mg', dailyDose: 10, doseUnit: 'mg' },
+            ],
+          },
+        },
+      } as unknown as CdssPatientProfile
+    : profile
+
   const locale = english ? 'en' : 'zh-TW'
-  const card = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile, locale })
+  const card = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile: withAdjunct, locale })
     .recommendations.find(item => item.id === 'dyslipidemia-risk-and-target')
   const summary = card?.coverageSummary
 

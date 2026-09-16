@@ -210,30 +210,6 @@ export function NhiTable1Panel({
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Measured and not met' : '有數值且不符合'}</span>
       </div>
 
-      {summary.therapy ? (
-        <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
-            <span className="font-medium text-muted-foreground">{summary.therapy.label}</span>
-            <span className="font-medium tabular-nums">{summary.therapy.value}</span>
-            {summary.therapy.duration ? (
-              <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
-            ) : null}
-          </div>
-          <TherapyResponseChart
-            therapy={summary.therapy}
-            goal={selected ? threshold(selected.initiation) : undefined}
-            locale={locale}
-          />
-          {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              {isEnglish
-                ? 'Prescribing and laboratory records. A span ends at its last prescription, not at a stop; a daily dose appears only where the prescription stated one; and the left edge is where the data window begins, not where treatment did.'
-                : '為處方與檢驗紀錄。一段的結束是最後一筆處方，不代表停藥；每日劑量只在處方本身寫明時顯示；左端是資料窗起點，不是療程起點。'}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="overflow-x-auto">
         <div className="grid min-w-[62rem] grid-cols-5 gap-2">
           {tiers.map((tier) => (
@@ -400,6 +376,30 @@ export function NhiTable1Panel({
           </div>
         </div>
       </div>
+
+      {summary.therapy ? (
+        <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+            <span className="font-medium text-muted-foreground">{summary.therapy.label}</span>
+            <span className="font-medium tabular-nums">{summary.therapy.value}</span>
+            {summary.therapy.duration ? (
+              <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
+            ) : null}
+          </div>
+          <TherapyResponseChart
+            therapy={summary.therapy}
+            goal={selected ? threshold(selected.initiation) : undefined}
+            locale={locale}
+          />
+          {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {isEnglish
+                ? 'Prescribing and laboratory records. A span ends at its last prescription, not at a stop; a daily dose appears only where the prescription stated one; and the left edge is where the data window begins, not where treatment did.'
+                : '為處方與檢驗紀錄。一段的結束是最後一筆處方，不代表停藥；每日劑量只在處方本身寫明時顯示；左端是資料窗起點，不是療程起點。'}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-1 border-t border-border pt-3">
         <p className="text-xs font-medium">{isEnglish ? 'Pending verification' : '待核對與可能升級條件'}</p>
