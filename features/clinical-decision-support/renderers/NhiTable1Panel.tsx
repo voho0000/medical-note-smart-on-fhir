@@ -211,7 +211,10 @@ export function NhiTable1Panel({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="grid min-w-[62rem] grid-cols-5 gap-2">
+        <div className="grid min-w-[69rem] grid-cols-[7rem_repeat(5,minmax(0,1fr))] gap-2">
+          <div className="self-end pb-2 text-right text-xs font-medium leading-snug">
+            {isEnglish ? 'Table 1 criteria' : '表一條件'}
+          </div>
           {tiers.map((tier) => (
             <div
               key={tier.id}
@@ -230,6 +233,7 @@ export function NhiTable1Panel({
             </div>
           ))}
 
+          <div aria-hidden="true" />
           <div className="col-span-2 space-y-2 rounded-b-md border border-t-0 border-border bg-card p-3">
             <p className="text-center text-xs font-medium leading-relaxed">
               {isEnglish
@@ -271,7 +275,7 @@ export function NhiTable1Panel({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[62rem] space-y-2">
+        <div className="min-w-[69rem] space-y-2">
           <div className="grid grid-cols-[7rem_repeat(5,minmax(0,1fr))] items-end gap-2">
             <p className="pb-1 text-right text-xs font-medium leading-snug">
               {isEnglish ? 'LDL-C treatment goal' : '治療目標值'}
