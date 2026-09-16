@@ -73,6 +73,15 @@ export default function Review() {
             earliestObservedPrescriptionDate: '2026-03-04',
             dataWindowStartDate: '2025-09-01',
             lastPrescriptionDate: '2026-08-28',
+            // A dose escalation the ladder can be read against.
+            prescriptions: [
+              { date: '2026-03-04', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-04-02', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-05-06', name: 'Atorvastatin 20 mg', dailyDose: 20, doseUnit: 'mg' },
+              { date: '2026-06-03', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
+              { date: '2026-07-01', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
+              { date: '2026-08-28', name: 'Atorvastatin 40 mg', dailyDose: 40, doseUnit: 'mg' },
+            ],
           },
         }
       : {},

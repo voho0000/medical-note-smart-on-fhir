@@ -209,11 +209,44 @@ export function NhiTable1Panel({
       </div>
 
       {summary.therapy ? (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs">
-          <span className="font-medium text-muted-foreground">{summary.therapy.label}</span>
-          <span className="font-medium tabular-nums">{summary.therapy.value}</span>
-          {summary.therapy.duration ? (
-            <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
+        <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+            <span className="font-medium text-muted-foreground">{summary.therapy.label}</span>
+            <span className="font-medium tabular-nums">{summary.therapy.value}</span>
+            {summary.therapy.duration ? (
+              <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
+            ) : null}
+          </div>
+          {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
+            <ol className="flex flex-wrap items-stretch gap-1.5">
+              {summary.therapy.timeline.map((span) => (
+                <li
+                  key={`${span.from}-${span.label}`}
+                  className={cn(
+                    'flex min-w-0 flex-col gap-0.5 rounded border px-2.5 py-1.5',
+                    span.changed ? 'border-primary bg-primary/10' : 'border-border bg-muted/30',
+                  )}
+                >
+                  <span className={cn('text-xs font-medium', span.changed && 'text-primary')}>
+                    {span.changed ? '↗ ' : ''}{span.label}
+                    {span.dose ? <span className="ml-1.5 font-normal tabular-nums">{span.dose}</span> : null}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {span.from}
+                    {span.to !== span.from ? ` – ${span.to}` : ''}
+                    {' · '}
+                    {span.count} {isEnglish ? 'prescriptions' : '筆處方'}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {isEnglish
+                ? 'Prescribing events from the claims record, folded where nothing changed. A span ends at its last prescription, not at a stop, and a daily dose appears only where the prescription stated one.'
+                : '為申報紀錄的處方事件，品項未變者併為一段。一段的結束是最後一筆處方，不代表停藥；每日劑量只在處方本身寫明時顯示。'}
+            </p>
           ) : null}
         </div>
       ) : null}
