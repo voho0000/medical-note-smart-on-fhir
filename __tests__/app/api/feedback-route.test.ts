@@ -101,4 +101,20 @@ describe("feedback Next route", () => {
     expect(response.status).toBe(413)
     expect(sendEmail).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ["reporter.example.test", "192.0.2.4"],
+    ["@example.test", "192.0.2.5"],
+    ["reporter@localhost", "192.0.2.6"],
+    ["reporter@@example.test", "192.0.2.7"],
+    ["reporter @example.test", "192.0.2.8"],
+  ])("rejects malformed email %s", async (email, ip) => {
+    const response = await POST(feedbackRequest({
+      ...validBody,
+      email,
+    }, ip))
+
+    expect(response.status).toBe(400)
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
 })

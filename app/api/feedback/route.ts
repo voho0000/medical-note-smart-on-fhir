@@ -47,8 +47,9 @@ function escapeHtml(value: unknown): string {
 
 const ISSUE_TYPES = new Set(["bug", "ai", "ui", "data", "performance", "privacy", "feature", "other"])
 const SEVERITIES = new Set(["low", "medium", "high", "critical"])
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMAIL_WHITESPACE_PATTERN = /\s/
 const REPORT_ID_PATTERN = /^FB-\d{8}-[A-Z0-9]{8}$/
+const MAX_EMAIL_LENGTH = 320
 const MAX_SYSTEM_FIELD_LENGTH = 1000
 
 // 瀏覽器發出的跨站請求帶 Origin — 擋掉非本站的網頁；curl 可偽造，但配合
@@ -85,6 +86,21 @@ function createReportId(): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function hasValidEmailFormat(value: string): boolean {
+  if (
+    value.length === 0 ||
+    value.length > MAX_EMAIL_LENGTH ||
+    EMAIL_WHITESPACE_PATTERN.test(value)
+  ) return false
+
+  const atIndex = value.indexOf("@")
+  if (atIndex <= 0 || atIndex !== value.lastIndexOf("@")) return false
+
+  const domain = value.slice(atIndex + 1)
+  const dotIndex = domain.lastIndexOf(".")
+  return dotIndex > 0 && dotIndex < domain.length - 1
 }
 
 function hasValidSystemInfo(value: unknown): boolean {
@@ -137,8 +153,8 @@ export async function POST(request: NextRequest) {
 
     const { email, issueType, severity, description, steps, images, systemInfo, reportId: submittedReportId } = body
 
-    // Bound attacker-controlled input before the polynomial email regex runs.
-    if (typeof email === "string" && email.length > 320) {
+    // Reject oversized attacker-controlled input before any format scanning.
+    if (typeof email === "string" && email.length > MAX_EMAIL_LENGTH) {
       return NextResponse.json(
         { error: "Payload too large" },
         { status: 413 }
@@ -146,7 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      typeof email !== "string" || !EMAIL_PATTERN.test(email) ||
+      typeof email !== "string" || !hasValidEmailFormat(email) ||
       typeof issueType !== "string" || !ISSUE_TYPES.has(issueType) ||
       typeof severity !== "string" || !SEVERITIES.has(severity) ||
       typeof description !== "string" || description.trim().length < 20 ||
