@@ -46,6 +46,8 @@ import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
 import { PreventRiskSummary } from './PreventRiskSummary'
 import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
+import { NhiTable1Panel } from './NhiTable1Panel'
+import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
 import {
   buildHeartFailureBoard,
   HEART_FAILURE_LIST_STATUS_ORDER,
@@ -2926,7 +2928,7 @@ export function ClinicalDecisionSupportView({
               </div>
 
               <NhiLipidCoverageSummary recommendation={recommendation} locale={locale} patientId={patientId} />
-                        <PreventRiskSummary recommendation={recommendation} locale={locale} patientId={patientId} />
+              <PreventRiskSummary recommendation={recommendation} locale={locale} patientId={patientId} />
               {isExpanded ? (
                 <div
                   id={detailId}
