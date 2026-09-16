@@ -211,9 +211,9 @@ export function NhiTable1Panel({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="grid min-w-[69rem] grid-cols-[7rem_repeat(5,minmax(0,1fr))] gap-2">
+        <div className="grid min-w-[66rem] grid-cols-[5rem_repeat(5,minmax(0,1fr))] gap-2">
           <div className="self-end pb-2 text-right text-xs font-medium leading-snug">
-            {isEnglish ? 'Table 1 criteria' : '表一條件'}
+            {isEnglish ? 'Criteria' : '表一條件'}
           </div>
           {tiers.map((tier) => (
             <div
@@ -275,10 +275,10 @@ export function NhiTable1Panel({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[69rem] space-y-2">
-          <div className="grid grid-cols-[7rem_repeat(5,minmax(0,1fr))] items-end gap-2">
+        <div className="min-w-[66rem] space-y-2">
+          <div className="grid grid-cols-[5rem_repeat(5,minmax(0,1fr))] items-end gap-2">
             <p className="pb-1 text-right text-xs font-medium leading-snug">
-              {isEnglish ? 'LDL-C treatment goal' : '治療目標值'}
+              {isEnglish ? <>LDL-C<br />goal</> : '治療目標值'}
               <span className="block font-normal text-muted-foreground">mg/dL</span>
             </p>
             {tiers.map((tier) => (
@@ -301,9 +301,9 @@ export function NhiTable1Panel({
             ))}
           </div>
 
-          <div className="grid grid-cols-[7rem_repeat(5,minmax(0,1fr))] items-stretch gap-2">
+          <div className="grid grid-cols-[5rem_repeat(5,minmax(0,1fr))] items-stretch gap-2">
             <p className="pt-2 text-right text-xs font-medium leading-snug">
-              {isEnglish ? 'Drug initiation level' : '起始藥物治療血脂值'}
+              {isEnglish ? <>Drug<br />initiation</> : <>起始藥物<br />治療血脂值</>}
             </p>
             {tiers.map((tier) => (
               <div
@@ -327,14 +327,11 @@ export function NhiTable1Panel({
             ))}
           </div>
 
-          <div className="grid grid-cols-[7rem_repeat(5,minmax(0,1fr))] items-stretch gap-2">
+          <div className="grid grid-cols-[5rem_repeat(5,minmax(0,1fr))] items-stretch gap-2">
             <p className="pt-2 text-right text-xs font-medium leading-snug">
-              {isEnglish ? 'Prescribing rule' : '處方規定'}
+              {isEnglish ? 'Prescribing' : '處方規定'}
               <span className="block font-normal text-primary">
-                {isEnglish ? 'Lit = allowed at this tier' : '亮 = 表一此級允許'}
-              </span>
-              <span className="block font-normal text-muted-foreground">
-                {isEnglish ? 'not a coverage approval' : '非給付核准'}
+                {isEnglish ? 'lit = allowed' : '亮＝允許'}
               </span>
             </p>
             {tiers.map((tier) => (
