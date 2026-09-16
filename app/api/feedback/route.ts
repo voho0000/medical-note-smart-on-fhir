@@ -137,6 +137,14 @@ export async function POST(request: NextRequest) {
 
     const { email, issueType, severity, description, steps, images, systemInfo, reportId: submittedReportId } = body
 
+    // Bound attacker-controlled input before the polynomial email regex runs.
+    if (typeof email === "string" && email.length > 320) {
+      return NextResponse.json(
+        { error: "Payload too large" },
+        { status: 413 }
+      )
+    }
+
     if (
       typeof email !== "string" || !EMAIL_PATTERN.test(email) ||
       typeof issueType !== "string" || !ISSUE_TYPES.has(issueType) ||
@@ -155,7 +163,6 @@ export async function POST(request: NextRequest) {
     const reportId = submittedReportId || createReportId()
 
     if (
-      String(email).length > 320 ||
       String(description).length > MAX_FIELD_LENGTH ||
       String(steps ?? "").length > MAX_FIELD_LENGTH
     ) {

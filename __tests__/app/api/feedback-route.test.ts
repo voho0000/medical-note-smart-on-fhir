@@ -91,4 +91,14 @@ describe("feedback Next route", () => {
     expect(response.status).toBe(400)
     expect(sendEmail).not.toHaveBeenCalled()
   })
+
+  it("rejects an oversized email before running format validation", async () => {
+    const response = await POST(feedbackRequest({
+      ...validBody,
+      email: `a@${".".repeat(160_000)} `,
+    }, "192.0.2.3"))
+
+    expect(response.status).toBe(413)
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
 })
