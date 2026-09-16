@@ -1,0 +1,277 @@
+{
+  "calibrationCount": 828,
+  "roundingDecimals": 2,
+  "useRatioConstraints": true,
+  "margins": {
+    "female/chd": 3.934015446871442e-05,
+    "female/diabetes": 2.1576997665473385e-05,
+    "female/hypertension": 2.7266426142868768e-05,
+    "female/stroke": 6.228630243980189e-05,
+    "female/mace": 2.2089126866742248e-05,
+    "male/chd": 3.8478147633843884e-05,
+    "male/diabetes": 3.5727913694879195e-05,
+    "male/hypertension": 2.8016956117538072e-05,
+    "male/stroke": 2.596778091357166e-05,
+    "male/mace": 2.8660817293978175e-05
+  },
+  "violatedConstraints": {
+    "female/chd": [],
+    "female/diabetes": [],
+    "female/hypertension": [],
+    "female/stroke": [],
+    "female/mace": [],
+    "male/chd": [],
+    "male/diabetes": [],
+    "male/hypertension": [],
+    "male/stroke": [],
+    "male/mace": []
+  },
+  "allHistorical": {
+    "total": {
+      "eligible": 1666,
+      "exact": 1666,
+      "levels": 1666
+    },
+    "byOutcome": {
+      "chd": {
+        "eligible": 348,
+        "exact": 348,
+        "levels": 348
+      },
+      "diabetes": {
+        "eligible": 323,
+        "exact": 323,
+        "levels": 323
+      },
+      "hypertension": {
+        "eligible": 299,
+        "exact": 299,
+        "levels": 299
+      },
+      "stroke": {
+        "eligible": 348,
+        "exact": 348,
+        "levels": 348
+      },
+      "mace": {
+        "eligible": 348,
+        "exact": 348,
+        "levels": 348
+      }
+    },
+    "mismatches": []
+  },
+  "calibration": {
+    "total": {
+      "eligible": 3979,
+      "exact": 3979,
+      "levels": 3979
+    },
+    "byOutcome": {
+      "chd": {
+        "eligible": 828,
+        "exact": 828,
+        "levels": 828
+      },
+      "diabetes": {
+        "eligible": 803,
+        "exact": 803,
+        "levels": 803
+      },
+      "hypertension": {
+        "eligible": 692,
+        "exact": 692,
+        "levels": 692
+      },
+      "stroke": {
+        "eligible": 828,
+        "exact": 828,
+        "levels": 828
+      },
+      "mace": {
+        "eligible": 828,
+        "exact": 828,
+        "levels": 828
+      }
+    },
+    "mismatches": []
+  },
+  "models": {
+    "female/chd": {
+      "keys": [
+        "age",
+        "hdlc",
+        "waist",
+        "sbp",
+        "chol",
+        "tg"
+      ],
+      "beta": [
+        -2.323256710999502,
+        0.8154059494360152,
+        0.42473783208445715,
+        0.03005069065888188,
+        0.35804511381140747,
+        0.010022519522472378
+      ]
+    },
+    "female/diabetes": {
+      "keys": [
+        "age",
+        "height",
+        "weight",
+        "tg",
+        "glu",
+        "hdlc",
+        "waist"
+      ],
+      "beta": [
+        -1.245909843910272,
+        0.2512532337251047,
+        0.36149301487748414,
+        0.16000253133045866,
+        0.6680110829714139,
+        -0.18000520951692847,
+        0.1949896666375335
+      ]
+    },
+    "female/hypertension": {
+      "keys": [
+        "age",
+        "height",
+        "weight",
+        "sbp",
+        "glu",
+        "tg",
+        "smoke"
+      ],
+      "beta": [
+        -0.4930058269278576,
+        0.3582388812273921,
+        0.32353334421371704,
+        0.6260344816749898,
+        0.059999221674660895,
+        0.2399999924395351,
+        0.3865837583072489
+      ]
+    },
+    "female/stroke": {
+      "keys": [
+        "age",
+        "sbp",
+        "waist",
+        "hbp",
+        "diabetes",
+        "smoke"
+      ],
+      "beta": [
+        -2.5125139203641953,
+        0.4445643534161555,
+        0.2779611040435833,
+        0.2300886795772344,
+        0.49071671627770064,
+        0.5791639048897412,
+        0.7793659486063895
+      ]
+    },
+    "female/mace": {
+      "keys": [
+        "age",
+        "sbp",
+        "hdlc",
+        "waist",
+        "chol",
+        "smoke"
+      ],
+      "beta": [
+        -2.040293406861228,
+        0.5978781950615035,
+        0.2559665343878947,
+        0.25702878550779334,
+        0.3054056696046772,
+        0.19239457937004012
+      ]
+    },
+    "male/chd": {
+      "keys": [
+        "age",
+        "hdlc",
+        "waist",
+        "hbp"
+      ],
+      "beta": [
+        -2.4014547579669383,
+        0.7215985975054477,
+        -0.1619711376612632,
+        0.1630401993140659,
+        0.6715141225682584
+      ]
+    },
+    "male/diabetes": {
+      "keys": [
+        "age",
+        "height",
+        "weight",
+        "tg",
+        "glu",
+        "chol"
+      ],
+      "beta": [
+        -1.6954432948068994,
+        0.37925494882160854,
+        0.640470061020549,
+        0.24001145799906656,
+        0.6640907010694881,
+        0.09999237386199046
+      ]
+    },
+    "male/hypertension": {
+      "keys": [
+        "age",
+        "height",
+        "weight",
+        "sbp",
+        "hdlc",
+        "ldlc"
+      ],
+      "beta": [
+        -0.7124529291885574,
+        0.5793413675424826,
+        0.18402104955719065,
+        0.447985556426261,
+        -0.22597233479190512,
+        0.03997733670542025
+      ]
+    },
+    "male/stroke": {
+      "keys": [
+        "age",
+        "sbp",
+        "glu",
+        "tg"
+      ],
+      "beta": [
+        -2.3653399702503717,
+        0.7792501601470588,
+        0.47601999173723786,
+        0.0920026569726338,
+        0.17001549962778886
+      ]
+    },
+    "male/mace": {
+      "keys": [
+        "age",
+        "sbp",
+        "hdlc",
+        "waist"
+      ],
+      "beta": [
+        -1.808168887853205,
+        0.6353342388383039,
+        0.5400100233348151,
+        -0.09003218267236374,
+        0.11399951837396965
+      ]
+    }
+  }
+}

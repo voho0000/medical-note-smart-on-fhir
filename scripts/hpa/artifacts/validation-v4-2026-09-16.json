@@ -1,0 +1,59 @@
+{
+  "candidateSha256": "409de5bb43b965083d5c5a65df3a90cc3493165085ef3bfbb6ae8fc674781f87",
+  "datasets": [
+    {
+      "path": "__tests__/features/medical-calculator/fixtures/hpa-official-validation-4-2026-09-16.json",
+      "profiles": 530,
+      "total": {
+        "eligible": 2587,
+        "exact": 2587,
+        "levels": 2587
+      },
+      "byOutcome": {
+        "chd": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "diabetes": {
+          "eligible": 507,
+          "exact": 507,
+          "levels": 507
+        },
+        "hypertension": {
+          "eligible": 490,
+          "exact": 490,
+          "levels": 490
+        },
+        "stroke": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "mace": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        }
+      },
+      "mismatches": [],
+      "byKind": {
+        "fresh-validation-htn-boundary": {
+          "eligible": 1440,
+          "exact": 1440,
+          "levels": 1440
+        },
+        "fresh-validation-random": {
+          "eligible": 1137,
+          "exact": 1137,
+          "levels": 1137
+        },
+        "repeated-drift-anchor": {
+          "eligible": 10,
+          "exact": 10,
+          "levels": 10
+        }
+      }
+    }
+  ]
+}

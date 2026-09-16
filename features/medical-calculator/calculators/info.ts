@@ -67,6 +67,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Primary-prevention 10-year CVD risk in adults aged 40–80 without known cardiovascular disease; a patient-facing estimate.', zh: '40–80 歲、無已知心血管疾病成人之10年心血管疾病風險（初級預防）；民眾可自用的估算。' },
     caveats: { en: 'This is the WHO 2019 model, NOT Taiwan\'s official NHI 健保 algorithm (whose coefficients are unpublished) — numbers may differ from 健保存摺. Uses the pooled, un-recalibrated baseline (not East-Asia-specific). Total cholesterol taken in mg/dL and converted to mmol/L. Not for people with established CVD; validated for ages 40–80. A screen, not a diagnosis.', zh: '此為 WHO 2019 模型，非健保署官方演算法（其係數未公開）— 數值可能與健保存摺不同。採用未經區域校正的合併基準（非東亞專屬）。總膽固醇以 mg/dL 輸入並換算為 mmol/L。不適用於已有心血管疾病者；驗證範圍為 40–80 歲。為風險評估非診斷。' },
   },
+  'hpa-chronic-risk-reconstruction': {
+    useWhen: { en: 'A local, approximate 10-year estimate for Taiwanese adults 35–70, corresponding to the HPA website’s five outcomes.', zh: '35–70 歲成人之五項慢性病未來 10 年風險本地近似估計。' },
+    caveats: { en: 'Not the HPA formula or a live official result. Fitted against synthetic examples and only checked within the displayed ranges; results can differ by several percentage points and the category may change near a cut point. Use a fasting glucose result, confirm source dates, and do not use to diagnose or replace the official website.', zh: '非國健署原始公式或即時官方結果。僅用合成案例重建、限標示範圍內驗算，個別數值可能差數個百分點，接近分級界線時更可能跨級。須確認空腹血糖與資料日期；不可據此診斷或取代官方網站。' },
+  },
   'child-pugh': {
     useWhen: { en: 'Cirrhosis severity, surgical risk, and prognosis.', zh: '肝硬化嚴重度、手術風險與預後。' },
     caveats: { en: 'Ascites and encephalopathy grading is subjective; less objective than MELD. Not for acute liver failure.', zh: '腹水與肝腦病變分級較主觀；客觀性不如 MELD。不適用於急性肝衰竭。' },

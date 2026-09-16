@@ -1,0 +1,10014 @@
+{
+  "source": "https://cdrc.hpa.gov.tw/hra-openservice-menupage.jsp?all",
+  "collectedAt": "2026-09-16T08:30:50.759Z",
+  "syntheticOnly": true,
+  "count": 248,
+  "records": [
+    {
+      "kind": "baseline",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 0,
+        "age": 35,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        2,
+        16,
+        27,
+        3,
+        4
+      ],
+      "populationAvg": [
+        1.37,
+        13.07,
+        18.17,
+        3.03,
+        3.16
+      ],
+      "multipleDiff": [
+        1.65,
+        1.28,
+        1.52,
+        1.19,
+        1.39
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 0,
+        "age": 42,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        4,
+        20,
+        36,
+        5,
+        7
+      ],
+      "populationAvg": [
+        2.66,
+        20.5,
+        31.22,
+        4.86,
+        5.34
+      ],
+      "multipleDiff": [
+        1.76,
+        1.01,
+        1.15,
+        1.1,
+        1.39
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 0,
+        "age": 58,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        16,
+        29,
+        54,
+        10,
+        18
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        1.36,
+        0.91,
+        0.99,
+        0.65,
+        1.03
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 0,
+        "age": 70,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        32,
+        35,
+        67,
+        15,
+        29
+      ],
+      "populationAvg": [
+        37.57,
+        46.59,
+        77.9,
+        27.91,
+        43.52
+      ],
+      "multipleDiff": [
+        0.85,
+        0.76,
+        0.86,
+        0.56,
+        0.69
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 150,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        37,
+        61,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        1.49,
+        1.28,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 160,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        30,
+        52,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        1.19,
+        1.1,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 180,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        21,
+        40,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.83,
+        0.84,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 190,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        18,
+        36,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.72,
+        0.75,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 45,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        14,
+        29,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.56,
+        0.61,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 55,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        17,
+        35,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.71,
+        0.74,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 90,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        37,
+        61,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        1.49,
+        1.28,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 115,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        58,
+        81,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        2.32,
+        1.69,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 60,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        3,
+        16,
+        45,
+        4,
+        6
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        0.59,
+        0.64,
+        0.95,
+        0.53,
+        0.68
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 72,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        5,
+        20,
+        45,
+        5,
+        8
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        0.97,
+        0.79,
+        0.95,
+        0.69,
+        0.91
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 105,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        20,
+        34,
+        45,
+        12,
+        19
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        3.62,
+        1.36,
+        0.95,
+        1.43,
+        2.01
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 125,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        41,
+        46,
+        45,
+        18,
+        30
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        7.33,
+        1.84,
+        0.95,
+        2.19,
+        3.13
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 90,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        25,
+        21,
+        5,
+        8
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.58,
+        0.99,
+        0.44,
+        0.62,
+        0.87
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 105,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        31,
+        6,
+        10
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.61,
+        0.99,
+        0.66,
+        0.76,
+        1.05
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 132,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        58,
+        9,
+        14
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.68,
+        0.99,
+        1.23,
+        1.08,
+        1.45
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 139,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        66,
+        10,
+        15
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.69,
+        0.99,
+        1.39,
+        1.19,
+        1.57
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 70,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        13,
+        43,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.54,
+        0.91,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 80,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        18,
+        44,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.73,
+        0.93,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 110,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        42,
+        47,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        1.69,
+        0.99,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 125,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        60,
+        49,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        2.38,
+        1.03,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 120,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        6,
+        25,
+        45,
+        7,
+        8
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.09,
+        0.99,
+        0.95,
+        0.93,
+        0.89
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 150,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        7,
+        25,
+        45,
+        7,
+        10
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.34,
+        0.99,
+        0.95,
+        0.93,
+        1.05
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 230,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        13,
+        25,
+        45,
+        7,
+        16
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        2.31,
+        0.99,
+        0.95,
+        0.93,
+        1.66
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 300,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        20,
+        25,
+        45,
+        7,
+        23
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        3.65,
+        0.99,
+        0.95,
+        0.93,
+        2.44
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 45,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        23,
+        41,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.64,
+        0.91,
+        0.86,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 75,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        24,
+        43,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.64,
+        0.95,
+        0.91,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 250,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        30,
+        58,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.67,
+        1.21,
+        1.21,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 400,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        37,
+        71,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.7,
+        1.46,
+        1.49,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 45,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 75,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 160,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 220,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        7,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        0.93,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 25,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        29,
+        30,
+        45,
+        7,
+        32
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        5.28,
+        1.19,
+        0.95,
+        0.93,
+        3.32
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 35,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        15,
+        28,
+        45,
+        7,
+        18
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        2.76,
+        1.11,
+        0.95,
+        0.93,
+        1.93
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        6,
+        21,
+        45,
+        7,
+        9
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.16,
+        0.84,
+        0.95,
+        0.93,
+        0.93
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 95,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        5,
+        17,
+        45,
+        7,
+        7
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        0.92,
+        0.69,
+        0.95,
+        0.93,
+        0.76
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "diabetes",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        13,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        1.6,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hbp",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        25,
+        45,
+        12,
+        12
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        0.95,
+        1.47,
+        1.25
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "smoke",
+      "input": {
+        "gender": 0,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1
+      },
+      "official": [
+        9,
+        25,
+        59,
+        16,
+        14
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        1.65,
+        0.99,
+        1.23,
+        1.92,
+        1.5
+      ]
+    },
+    {
+      "kind": "baseline",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 1,
+        "age": 35,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        2,
+        8,
+        16,
+        2,
+        5
+      ],
+      "populationAvg": [
+        3.24,
+        9.17,
+        13.85,
+        2.89,
+        5.78
+      ],
+      "multipleDiff": [
+        0.76,
+        0.97,
+        1.16,
+        0.8,
+        0.89
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 1,
+        "age": 42,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        4,
+        12,
+        25,
+        4,
+        8
+      ],
+      "populationAvg": [
+        5.22,
+        13.96,
+        19.94,
+        5.54,
+        9.7
+      ],
+      "multipleDiff": [
+        0.9,
+        0.89,
+        1.28,
+        0.84,
+        0.93
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 1,
+        "age": 58,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        14,
+        21,
+        52,
+        15,
+        23
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        0.93,
+        0.83,
+        1.03,
+        0.66,
+        0.75
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "age",
+      "input": {
+        "gender": 1,
+        "age": 70,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        26,
+        29,
+        72,
+        29,
+        37
+      ],
+      "populationAvg": [
+        35.02,
+        29.94,
+        75.35,
+        40.05,
+        53.01
+      ],
+      "multipleDiff": [
+        0.75,
+        0.98,
+        0.97,
+        0.73,
+        0.72
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 150,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        35,
+        46,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.77,
+        1.39,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 160,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        23,
+        42,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.18,
+        1.26,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 180,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        12,
+        35,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.61,
+        1.07,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "height",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 190,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        9,
+        33,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.47,
+        1,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 45,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        5,
+        30,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.29,
+        0.89,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 55,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        9,
+        33,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.45,
+        0.99,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 90,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        35,
+        46,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.78,
+        1.39,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "weight",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 115,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        74,
+        58,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        3.66,
+        1.72,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 60,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        5,
+        16,
+        38,
+        8,
+        11
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.65,
+        0.83,
+        1.15,
+        0.73,
+        0.71
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 72,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        7,
+        16,
+        38,
+        8,
+        13
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.79,
+        0.83,
+        1.15,
+        0.73,
+        0.8
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 105,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        11,
+        16,
+        38,
+        8,
+        18
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.31,
+        0.83,
+        1.15,
+        0.73,
+        1.13
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "waist",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 125,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        15,
+        16,
+        38,
+        8,
+        22
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.78,
+        0.83,
+        1.15,
+        0.73,
+        1.39
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 90,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        22,
+        4,
+        7
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        0.66,
+        0.37,
+        0.43
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 105,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        29,
+        6,
+        10
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        0.88,
+        0.52,
+        0.63
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 132,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        47,
+        11,
+        20
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.4,
+        0.96,
+        1.23
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "sbp",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 139,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        52,
+        13,
+        23
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.57,
+        1.12,
+        1.46
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 70,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        9,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.45,
+        1.15,
+        0.67,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 80,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        12,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.61,
+        1.15,
+        0.7,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 110,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        29,
+        38,
+        9,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.48,
+        1.15,
+        0.8,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "glu",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 125,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        44,
+        38,
+        10,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        2.2,
+        1.15,
+        0.85,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 120,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        15,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.74,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 150,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        15,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.79,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 230,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        18,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.91,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "chol",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 300,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        20,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.03,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 45,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        14,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.73,
+        1.15,
+        0.67,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 75,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        15,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.79,
+        1.15,
+        0.7,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 250,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        23,
+        38,
+        11,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.14,
+        1.15,
+        0.93,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "tg",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 400,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        31,
+        38,
+        14,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        1.55,
+        1.15,
+        1.18,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 45,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        37,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.11,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 75,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.13,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 160,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        40,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.19,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "ldlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 220,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        41,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.24,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 25,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        10,
+        16,
+        47,
+        8,
+        16
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.17,
+        0.83,
+        1.42,
+        0.73,
+        1.02
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 35,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        9,
+        16,
+        44,
+        8,
+        16
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.08,
+        0.83,
+        1.31,
+        0.73,
+        0.98
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        7,
+        16,
+        32,
+        8,
+        13
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.83,
+        0.83,
+        0.96,
+        0.73,
+        0.85
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hdlc",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 95,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        6,
+        16,
+        25,
+        8,
+        12
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.68,
+        0.83,
+        0.76,
+        0.73,
+        0.76
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "diabetes",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0
+      },
+      "official": [
+        8,
+        16,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "hbp",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0
+      },
+      "official": [
+        16,
+        16,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.81,
+        0.83,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "one-factor",
+      "factor": "smoke",
+      "input": {
+        "gender": 1,
+        "age": 50,
+        "height": 170,
+        "weight": 70,
+        "waist": 85,
+        "sbp": 120,
+        "glu": 90,
+        "chol": 180,
+        "tg": 100,
+        "ldlc": 100,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1
+      },
+      "official": [
+        8,
+        16,
+        38,
+        8,
+        15
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.96,
+        0.83,
+        1.15,
+        0.73,
+        0.92
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 56,
+        "height": 177,
+        "weight": 92,
+        "waist": 79,
+        "sbp": 104,
+        "glu": 115,
+        "chol": 206,
+        "tg": 324,
+        "ldlc": 111,
+        "hdlc": 65,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        9,
+        70,
+        68,
+        7,
+        10
+      ],
+      "populationAvg": [
+        9.99,
+        26.93,
+        51.02,
+        12.56,
+        15.25
+      ],
+      "multipleDiff": [
+        0.98,
+        2.63,
+        1.35,
+        0.56,
+        0.69
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 60,
+        "height": 176,
+        "weight": 102,
+        "waist": 105,
+        "sbp": 109,
+        "glu": 107,
+        "chol": 200,
+        "tg": 176,
+        "ldlc": 90,
+        "hdlc": 43,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        22,
+        82,
+        61,
+        16,
+        24
+      ],
+      "populationAvg": [
+        17.74,
+        27.66,
+        55.86,
+        24.91,
+        31.34
+      ],
+      "multipleDiff": [
+        1.28,
+        2.98,
+        1.11,
+        0.66,
+        0.78
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 179,
+        "weight": 82,
+        "waist": 60,
+        "sbp": 98,
+        "glu": 125,
+        "chol": 241,
+        "tg": 189,
+        "ldlc": 70,
+        "hdlc": 48,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        2,
+        44,
+        28,
+        2,
+        4
+      ],
+      "populationAvg": [
+        2.66,
+        20.5,
+        31.22,
+        4.86,
+        5.34
+      ],
+      "multipleDiff": [
+        1,
+        2.18,
+        0.92,
+        0.46,
+        0.87
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 39,
+        "height": 168,
+        "weight": 81,
+        "waist": 62,
+        "sbp": 93,
+        "glu": 97,
+        "chol": 238,
+        "tg": 377,
+        "ldlc": 115,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        2,
+        42,
+        14,
+        3,
+        2
+      ],
+      "populationAvg": [
+        4.25,
+        14.21,
+        17.62,
+        4.52,
+        7.71
+      ],
+      "multipleDiff": [
+        0.59,
+        3.02,
+        0.82,
+        0.68,
+        0.35
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 176,
+        "weight": 98,
+        "waist": 75,
+        "sbp": 118,
+        "glu": 104,
+        "chol": 198,
+        "tg": 237,
+        "ldlc": 183,
+        "hdlc": 38,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        7,
+        55,
+        81,
+        10,
+        14
+      ],
+      "populationAvg": [
+        3.88,
+        22.54,
+        36.75,
+        8.37,
+        7.21
+      ],
+      "multipleDiff": [
+        2.03,
+        2.46,
+        2.23,
+        1.28,
+        1.95
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 62,
+        "height": 158,
+        "weight": 92,
+        "waist": 109,
+        "sbp": 103,
+        "glu": 88,
+        "chol": 238,
+        "tg": 215,
+        "ldlc": 99,
+        "hdlc": 75,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        21,
+        85,
+        52,
+        16,
+        21
+      ],
+      "populationAvg": [
+        20.33,
+        31.89,
+        63.5,
+        29.63,
+        34.72
+      ],
+      "multipleDiff": [
+        1.04,
+        2.68,
+        0.83,
+        0.54,
+        0.62
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 51,
+        "height": 190,
+        "weight": 111,
+        "waist": 99,
+        "sbp": 104,
+        "glu": 85,
+        "chol": 201,
+        "tg": 207,
+        "ldlc": 86,
+        "hdlc": 85,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        11,
+        36,
+        66,
+        18,
+        12
+      ],
+      "populationAvg": [
+        6.23,
+        30.45,
+        53.81,
+        9.84,
+        10.49
+      ],
+      "multipleDiff": [
+        1.84,
+        1.2,
+        1.24,
+        1.88,
+        1.19
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 70,
+        "height": 160,
+        "weight": 49,
+        "waist": 81,
+        "sbp": 107,
+        "glu": 71,
+        "chol": 242,
+        "tg": 80,
+        "ldlc": 55,
+        "hdlc": 55,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        24,
+        9,
+        52,
+        20,
+        26
+      ],
+      "populationAvg": [
+        35.02,
+        29.94,
+        75.35,
+        40.05,
+        53.01
+      ],
+      "multipleDiff": [
+        0.69,
+        0.33,
+        0.69,
+        0.51,
+        0.51
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 175,
+        "weight": 63,
+        "waist": 103,
+        "sbp": 122,
+        "glu": 96,
+        "chol": 198,
+        "tg": 155,
+        "ldlc": 98,
+        "hdlc": 59,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        9,
+        27,
+        36,
+        8,
+        11
+      ],
+      "populationAvg": [
+        2.92,
+        16.83,
+        27.79,
+        4.99,
+        5.76
+      ],
+      "multipleDiff": [
+        3.42,
+        1.63,
+        1.32,
+        1.73,
+        2.04
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 176,
+        "weight": 66,
+        "waist": 105,
+        "sbp": 115,
+        "glu": 107,
+        "chol": 169,
+        "tg": 155,
+        "ldlc": 158,
+        "hdlc": 69,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        16,
+        28,
+        40,
+        16,
+        23
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        1.08,
+        1.08,
+        0.78,
+        0.69,
+        0.76
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 158,
+        "weight": 52,
+        "waist": 103,
+        "sbp": 130,
+        "glu": 104,
+        "chol": 201,
+        "tg": 225,
+        "ldlc": 48,
+        "hdlc": 46,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        21,
+        45,
+        72,
+        24,
+        27
+      ],
+      "populationAvg": [
+        4.69,
+        21.56,
+        42.97,
+        8.24,
+        8.38
+      ],
+      "multipleDiff": [
+        4.57,
+        2.13,
+        1.69,
+        2.97,
+        3.25
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 40,
+        "height": 166,
+        "weight": 90,
+        "waist": 73,
+        "sbp": 91,
+        "glu": 108,
+        "chol": 238,
+        "tg": 122,
+        "ldlc": 176,
+        "hdlc": 51,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        3,
+        53,
+        17,
+        2,
+        3
+      ],
+      "populationAvg": [
+        4.55,
+        11.5,
+        20.25,
+        4.35,
+        8.36
+      ],
+      "multipleDiff": [
+        0.71,
+        4.64,
+        0.86,
+        0.51,
+        0.38
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 159,
+        "weight": 78,
+        "waist": 110,
+        "sbp": 125,
+        "glu": 110,
+        "chol": 155,
+        "tg": 134,
+        "ldlc": 166,
+        "hdlc": 62,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        9,
+        67,
+        74,
+        31,
+        12
+      ],
+      "populationAvg": [
+        2.66,
+        20.5,
+        31.22,
+        4.86,
+        5.34
+      ],
+      "multipleDiff": [
+        3.4,
+        3.29,
+        2.38,
+        6.41,
+        2.37
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 158,
+        "weight": 66,
+        "waist": 90,
+        "sbp": 116,
+        "glu": 112,
+        "chol": 189,
+        "tg": 273,
+        "ldlc": 86,
+        "hdlc": 73,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        60,
+        38,
+        16,
+        17
+      ],
+      "populationAvg": [
+        12.63,
+        23.3,
+        40.87,
+        15.73,
+        23.53
+      ],
+      "multipleDiff": [
+        0.86,
+        2.61,
+        0.95,
+        1.07,
+        0.74
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 39,
+        "height": 175,
+        "weight": 62,
+        "waist": 76,
+        "sbp": 137,
+        "glu": 75,
+        "chol": 143,
+        "tg": 98,
+        "ldlc": 160,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        1,
+        7,
+        38,
+        4,
+        4
+      ],
+      "populationAvg": [
+        2,
+        16.17,
+        26.75,
+        3.91,
+        4.27
+      ],
+      "multipleDiff": [
+        0.88,
+        0.46,
+        1.45,
+        1.2,
+        1.04
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 180,
+        "weight": 51,
+        "waist": 87,
+        "sbp": 120,
+        "glu": 102,
+        "chol": 284,
+        "tg": 309,
+        "ldlc": 67,
+        "hdlc": 76,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        3,
+        12,
+        14,
+        6,
+        8
+      ],
+      "populationAvg": [
+        5.22,
+        13.96,
+        19.94,
+        5.54,
+        9.7
+      ],
+      "multipleDiff": [
+        0.76,
+        0.9,
+        0.73,
+        1.25,
+        0.85
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 163,
+        "weight": 93,
+        "waist": 108,
+        "sbp": 125,
+        "glu": 92,
+        "chol": 239,
+        "tg": 166,
+        "ldlc": 139,
+        "hdlc": 57,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        16,
+        59,
+        72,
+        10,
+        17
+      ],
+      "populationAvg": [
+        2.92,
+        16.83,
+        27.79,
+        4.99,
+        5.76
+      ],
+      "multipleDiff": [
+        5.54,
+        3.54,
+        2.61,
+        2.01,
+        3.02
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 182,
+        "weight": 69,
+        "waist": 91,
+        "sbp": 122,
+        "glu": 81,
+        "chol": 165,
+        "tg": 286,
+        "ldlc": 111,
+        "hdlc": 75,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        13,
+        16,
+        41,
+        20,
+        23
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        0.84,
+        0.62,
+        0.8,
+        0.88,
+        0.76
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 53,
+        "height": 180,
+        "weight": 89,
+        "waist": 105,
+        "sbp": 139,
+        "glu": 99,
+        "chol": 162,
+        "tg": 224,
+        "ldlc": 144,
+        "hdlc": 60,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        19,
+        58,
+        87,
+        28,
+        22
+      ],
+      "populationAvg": [
+        7.52,
+        25.62,
+        49.45,
+        11.28,
+        12.18
+      ],
+      "multipleDiff": [
+        2.62,
+        2.27,
+        1.77,
+        2.56,
+        1.82
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 35,
+        "height": 177,
+        "weight": 82,
+        "waist": 104,
+        "sbp": 111,
+        "glu": 120,
+        "chol": 162,
+        "tg": 384,
+        "ldlc": 118,
+        "hdlc": 83,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        2,
+        46,
+        10,
+        3,
+        4
+      ],
+      "populationAvg": [
+        3.24,
+        9.17,
+        13.85,
+        2.89,
+        5.78
+      ],
+      "multipleDiff": [
+        0.8,
+        5.03,
+        0.73,
+        1.19,
+        0.75
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 54,
+        "height": 174,
+        "weight": 97,
+        "waist": 78,
+        "sbp": 119,
+        "glu": 87,
+        "chol": 175,
+        "tg": 236,
+        "ldlc": 118,
+        "hdlc": 52,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        8,
+        41,
+        78,
+        7,
+        11
+      ],
+      "populationAvg": [
+        8.27,
+        29.06,
+        60.95,
+        14.44,
+        13.13
+      ],
+      "multipleDiff": [
+        1.07,
+        1.43,
+        1.29,
+        0.54,
+        0.9
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 170,
+        "weight": 91,
+        "waist": 89,
+        "sbp": 122,
+        "glu": 81,
+        "chol": 254,
+        "tg": 153,
+        "ldlc": 118,
+        "hdlc": 61,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        7,
+        34,
+        41,
+        8,
+        14
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        0.94,
+        2.08,
+        1.28,
+        0.87,
+        0.94
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 40,
+        "height": 189,
+        "weight": 85,
+        "waist": 110,
+        "sbp": 113,
+        "glu": 86,
+        "chol": 148,
+        "tg": 203,
+        "ldlc": 164,
+        "hdlc": 73,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        6,
+        25,
+        33,
+        13,
+        6
+      ],
+      "populationAvg": [
+        2.2,
+        13.07,
+        26.18,
+        4.58,
+        4.6
+      ],
+      "multipleDiff": [
+        2.86,
+        1.91,
+        1.27,
+        2.9,
+        1.5
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 69,
+        "height": 161,
+        "weight": 50,
+        "waist": 77,
+        "sbp": 127,
+        "glu": 106,
+        "chol": 236,
+        "tg": 262,
+        "ldlc": 154,
+        "hdlc": 79,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        18,
+        39,
+        59,
+        42,
+        35
+      ],
+      "populationAvg": [
+        32.72,
+        31.43,
+        64.12,
+        42.57,
+        47.76
+      ],
+      "multipleDiff": [
+        0.56,
+        1.26,
+        0.94,
+        1,
+        0.75
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 56,
+        "height": 168,
+        "weight": 72,
+        "waist": 108,
+        "sbp": 100,
+        "glu": 81,
+        "chol": 177,
+        "tg": 127,
+        "ldlc": 112,
+        "hdlc": 46,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        35,
+        36,
+        36,
+        12,
+        24
+      ],
+      "populationAvg": [
+        9.99,
+        26.93,
+        51.02,
+        12.56,
+        15.25
+      ],
+      "multipleDiff": [
+        3.56,
+        1.36,
+        0.71,
+        1,
+        1.58
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 175,
+        "weight": 72,
+        "waist": 73,
+        "sbp": 126,
+        "glu": 115,
+        "chol": 244,
+        "tg": 270,
+        "ldlc": 174,
+        "hdlc": 81,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        2,
+        36,
+        20,
+        7,
+        7
+      ],
+      "populationAvg": [
+        4.87,
+        14.24,
+        22.24,
+        4.86,
+        9.09
+      ],
+      "multipleDiff": [
+        0.57,
+        2.55,
+        0.92,
+        1.49,
+        0.82
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 37,
+        "height": 187,
+        "weight": 51,
+        "waist": 122,
+        "sbp": 121,
+        "glu": 72,
+        "chol": 275,
+        "tg": 363,
+        "ldlc": 190,
+        "hdlc": 32,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        57,
+        17,
+        40,
+        19,
+        53
+      ],
+      "populationAvg": [
+        1.66,
+        14.07,
+        21.93,
+        3.43,
+        3.68
+      ],
+      "multipleDiff": [
+        34.48,
+        1.28,
+        1.84,
+        5.64,
+        14.61
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 35,
+        "height": 190,
+        "weight": 105,
+        "waist": 114,
+        "sbp": 117,
+        "glu": 73,
+        "chol": 212,
+        "tg": 240,
+        "ldlc": 129,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        3,
+        13,
+        18,
+        2,
+        6
+      ],
+      "populationAvg": [
+        3.24,
+        9.17,
+        13.85,
+        2.89,
+        5.78
+      ],
+      "multipleDiff": [
+        1.21,
+        1.5,
+        1.31,
+        0.87,
+        1.13
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 164,
+        "weight": 61,
+        "waist": 88,
+        "sbp": 103,
+        "glu": 109,
+        "chol": 152,
+        "tg": 112,
+        "ldlc": 170,
+        "hdlc": 74,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        2,
+        28,
+        21,
+        7,
+        3
+      ],
+      "populationAvg": [
+        2.42,
+        16.43,
+        30.35,
+        4.3,
+        4.96
+      ],
+      "multipleDiff": [
+        1.13,
+        1.71,
+        0.72,
+        1.76,
+        0.77
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 161,
+        "weight": 93,
+        "waist": 83,
+        "sbp": 100,
+        "glu": 106,
+        "chol": 231,
+        "tg": 114,
+        "ldlc": 101,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        13,
+        87,
+        50,
+        10,
+        13
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        0.87,
+        3.38,
+        0.99,
+        0.46,
+        0.45
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 37,
+        "height": 161,
+        "weight": 93,
+        "waist": 65,
+        "sbp": 105,
+        "glu": 122,
+        "chol": 121,
+        "tg": 263,
+        "ldlc": 132,
+        "hdlc": 76,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        0,
+        60,
+        67,
+        4,
+        1
+      ],
+      "populationAvg": [
+        1.66,
+        14.07,
+        21.93,
+        3.43,
+        3.68
+      ],
+      "multipleDiff": [
+        0.36,
+        4.29,
+        3.09,
+        1.32,
+        0.46
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 154,
+        "weight": 71,
+        "waist": 108,
+        "sbp": 110,
+        "glu": 97,
+        "chol": 267,
+        "tg": 68,
+        "ldlc": 92,
+        "hdlc": 47,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        20,
+        38,
+        35,
+        5,
+        13
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        2.6,
+        2.35,
+        1.11,
+        0.61,
+        0.9
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 61,
+        "height": 183,
+        "weight": 61,
+        "waist": 106,
+        "sbp": 124,
+        "glu": 114,
+        "chol": 194,
+        "tg": 167,
+        "ldlc": 96,
+        "hdlc": 59,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        38,
+        56,
+        57,
+        19,
+        32
+      ],
+      "populationAvg": [
+        16.04,
+        33.49,
+        63.17,
+        17.45,
+        22.18
+      ],
+      "multipleDiff": [
+        2.4,
+        1.68,
+        0.9,
+        1.11,
+        1.45
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 50,
+        "height": 165,
+        "weight": 69,
+        "waist": 103,
+        "sbp": 100,
+        "glu": 111,
+        "chol": 180,
+        "tg": 253,
+        "ldlc": 163,
+        "hdlc": 47,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        45,
+        29,
+        8,
+        11
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.3,
+        2.27,
+        0.89,
+        0.65,
+        0.68
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 59,
+        "height": 170,
+        "weight": 96,
+        "waist": 95,
+        "sbp": 97,
+        "glu": 76,
+        "chol": 169,
+        "tg": 186,
+        "ldlc": 72,
+        "hdlc": 88,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        14,
+        34,
+        71,
+        20,
+        13
+      ],
+      "populationAvg": [
+        13.27,
+        28.74,
+        59.36,
+        16.33,
+        19.1
+      ],
+      "multipleDiff": [
+        1.09,
+        1.2,
+        1.2,
+        1.27,
+        0.73
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 62,
+        "height": 169,
+        "weight": 110,
+        "waist": 98,
+        "sbp": 126,
+        "glu": 92,
+        "chol": 189,
+        "tg": 262,
+        "ldlc": 189,
+        "hdlc": 58,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        36,
+        93,
+        82,
+        28,
+        34
+      ],
+      "populationAvg": [
+        20.33,
+        31.89,
+        63.5,
+        29.63,
+        34.72
+      ],
+      "multipleDiff": [
+        1.77,
+        2.94,
+        1.3,
+        0.96,
+        1
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 52,
+        "height": 177,
+        "weight": 58,
+        "waist": 104,
+        "sbp": 125,
+        "glu": 105,
+        "chol": 202,
+        "tg": 120,
+        "ldlc": 176,
+        "hdlc": 81,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        16,
+        31,
+        57,
+        27,
+        19
+      ],
+      "populationAvg": [
+        6.84,
+        27.69,
+        47.48,
+        10.59,
+        11.3
+      ],
+      "multipleDiff": [
+        2.35,
+        1.13,
+        1.21,
+        2.59,
+        1.74
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 172,
+        "weight": 85,
+        "waist": 75,
+        "sbp": 127,
+        "glu": 113,
+        "chol": 262,
+        "tg": 253,
+        "ldlc": 167,
+        "hdlc": 63,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        6,
+        55,
+        29,
+        7,
+        8
+      ],
+      "populationAvg": [
+        4.87,
+        14.24,
+        22.24,
+        4.86,
+        9.09
+      ],
+      "multipleDiff": [
+        1.32,
+        3.93,
+        1.32,
+        1.47,
+        0.93
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 180,
+        "weight": 45,
+        "waist": 81,
+        "sbp": 121,
+        "glu": 110,
+        "chol": 203,
+        "tg": 110,
+        "ldlc": 178,
+        "hdlc": 78,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        8,
+        19,
+        34,
+        8,
+        11
+      ],
+      "populationAvg": [
+        9.09,
+        22.16,
+        47.66,
+        13.42,
+        14.15
+      ],
+      "multipleDiff": [
+        0.9,
+        0.89,
+        0.72,
+        0.66,
+        0.78
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 49,
+        "height": 154,
+        "weight": 59,
+        "waist": 98,
+        "sbp": 106,
+        "glu": 71,
+        "chol": 183,
+        "tg": 246,
+        "ldlc": 219,
+        "hdlc": 32,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        13,
+        37,
+        7,
+        12
+      ],
+      "populationAvg": [
+        8.4,
+        23.32,
+        35.48,
+        10.4,
+        16.63
+      ],
+      "multipleDiff": [
+        1.35,
+        0.58,
+        1.05,
+        0.68,
+        0.75
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 157,
+        "weight": 79,
+        "waist": 105,
+        "sbp": 116,
+        "glu": 80,
+        "chol": 159,
+        "tg": 198,
+        "ldlc": 99,
+        "hdlc": 59,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        11,
+        40,
+        61,
+        16,
+        11
+      ],
+      "populationAvg": [
+        3.88,
+        22.54,
+        36.75,
+        8.37,
+        7.21
+      ],
+      "multipleDiff": [
+        2.88,
+        1.8,
+        1.66,
+        1.97,
+        1.59
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 59,
+        "height": 180,
+        "weight": 100,
+        "waist": 80,
+        "sbp": 100,
+        "glu": 88,
+        "chol": 220,
+        "tg": 275,
+        "ldlc": 127,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        12,
+        59,
+        40,
+        13,
+        13
+      ],
+      "populationAvg": [
+        16.58,
+        25.33,
+        48.64,
+        22.8,
+        28.41
+      ],
+      "multipleDiff": [
+        0.73,
+        2.36,
+        0.84,
+        0.6,
+        0.46
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 69,
+        "height": 151,
+        "weight": 71,
+        "waist": 92,
+        "sbp": 106,
+        "glu": 97,
+        "chol": 134,
+        "tg": 221,
+        "ldlc": 180,
+        "hdlc": 73,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        22,
+        63,
+        77,
+        14,
+        18
+      ],
+      "populationAvg": [
+        34.18,
+        33.68,
+        74.71,
+        24.86,
+        40.38
+      ],
+      "multipleDiff": [
+        0.67,
+        1.89,
+        1.04,
+        0.6,
+        0.45
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 66,
+        "height": 154,
+        "weight": 96,
+        "waist": 108,
+        "sbp": 119,
+        "glu": 88,
+        "chol": 163,
+        "tg": 229,
+        "ldlc": 62,
+        "hdlc": 90,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        22,
+        95,
+        69,
+        28,
+        34
+      ],
+      "populationAvg": [
+        26.68,
+        31.7,
+        66.1,
+        34.16,
+        38.24
+      ],
+      "multipleDiff": [
+        0.86,
+        3.01,
+        1.06,
+        0.83,
+        0.89
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 166,
+        "weight": 82,
+        "waist": 86,
+        "sbp": 119,
+        "glu": 103,
+        "chol": 216,
+        "tg": 311,
+        "ldlc": 146,
+        "hdlc": 66,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        6,
+        53,
+        72,
+        6,
+        9
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        1.63,
+        2.18,
+        1.84,
+        0.94,
+        1.21
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 59,
+        "height": 171,
+        "weight": 71,
+        "waist": 74,
+        "sbp": 116,
+        "glu": 107,
+        "chol": 160,
+        "tg": 138,
+        "ldlc": 110,
+        "hdlc": 74,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        37,
+        42,
+        17,
+        17
+      ],
+      "populationAvg": [
+        16.58,
+        25.33,
+        48.64,
+        22.8,
+        28.41
+      ],
+      "multipleDiff": [
+        0.65,
+        1.48,
+        0.88,
+        0.75,
+        0.63
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 59,
+        "height": 167,
+        "weight": 72,
+        "waist": 113,
+        "sbp": 138,
+        "glu": 97,
+        "chol": 231,
+        "tg": 98,
+        "ldlc": 99,
+        "hdlc": 41,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        73,
+        60,
+        90,
+        63,
+        71
+      ],
+      "populationAvg": [
+        13.27,
+        28.74,
+        59.36,
+        16.33,
+        19.1
+      ],
+      "multipleDiff": [
+        5.57,
+        2.12,
+        1.53,
+        3.92,
+        3.73
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 38,
+        "height": 172,
+        "weight": 52,
+        "waist": 118,
+        "sbp": 109,
+        "glu": 77,
+        "chol": 199,
+        "tg": 165,
+        "ldlc": 179,
+        "hdlc": 34,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        12,
+        3,
+        15,
+        2,
+        7
+      ],
+      "populationAvg": [
+        3.98,
+        13.12,
+        18.84,
+        4.06,
+        7.01
+      ],
+      "multipleDiff": [
+        3.03,
+        0.28,
+        0.84,
+        0.64,
+        1.09
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 181,
+        "weight": 87,
+        "waist": 95,
+        "sbp": 110,
+        "glu": 94,
+        "chol": 178,
+        "tg": 150,
+        "ldlc": 118,
+        "hdlc": 48,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        24,
+        46,
+        53,
+        11,
+        21
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        2.04,
+        1.44,
+        0.97,
+        0.71,
+        1.2
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 52,
+        "height": 167,
+        "weight": 58,
+        "waist": 100,
+        "sbp": 100,
+        "glu": 81,
+        "chol": 208,
+        "tg": 285,
+        "ldlc": 166,
+        "hdlc": 59,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        14,
+        25,
+        8,
+        11
+      ],
+      "populationAvg": [
+        10.3,
+        21.65,
+        41.7,
+        18.5,
+        24.77
+      ],
+      "multipleDiff": [
+        1.13,
+        0.67,
+        0.61,
+        0.46,
+        0.47
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 38,
+        "height": 172,
+        "weight": 56,
+        "waist": 84,
+        "sbp": 95,
+        "glu": 101,
+        "chol": 241,
+        "tg": 355,
+        "ldlc": 199,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        4,
+        25,
+        20,
+        3,
+        5
+      ],
+      "populationAvg": [
+        1.82,
+        15.19,
+        25.2,
+        3.64,
+        3.96
+      ],
+      "multipleDiff": [
+        2.52,
+        1.69,
+        0.82,
+        0.82,
+        1.44
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 50,
+        "height": 166,
+        "weight": 85,
+        "waist": 97,
+        "sbp": 136,
+        "glu": 79,
+        "chol": 275,
+        "tg": 364,
+        "ldlc": 191,
+        "hdlc": 85,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        7,
+        49,
+        47,
+        18,
+        21
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        0.89,
+        2.44,
+        1.42,
+        1.51,
+        1.33
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 61,
+        "height": 162,
+        "weight": 79,
+        "waist": 86,
+        "sbp": 101,
+        "glu": 105,
+        "chol": 180,
+        "tg": 324,
+        "ldlc": 109,
+        "hdlc": 69,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        14,
+        68,
+        71,
+        9,
+        13
+      ],
+      "populationAvg": [
+        16.04,
+        33.49,
+        63.17,
+        17.45,
+        22.18
+      ],
+      "multipleDiff": [
+        0.92,
+        2.04,
+        1.13,
+        0.54,
+        0.59
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 53,
+        "height": 166,
+        "weight": 65,
+        "waist": 92,
+        "sbp": 115,
+        "glu": 104,
+        "chol": 155,
+        "tg": 133,
+        "ldlc": 92,
+        "hdlc": 79,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        9,
+        26,
+        30,
+        11,
+        15
+      ],
+      "populationAvg": [
+        11.02,
+        21.71,
+        40.74,
+        12.96,
+        17.87
+      ],
+      "multipleDiff": [
+        0.86,
+        1.23,
+        0.75,
+        0.86,
+        0.85
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 39,
+        "height": 174,
+        "weight": 46,
+        "waist": 76,
+        "sbp": 108,
+        "glu": 96,
+        "chol": 158,
+        "tg": 345,
+        "ldlc": 84,
+        "hdlc": 81,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        1,
+        11,
+        24,
+        5,
+        2
+      ],
+      "populationAvg": [
+        2,
+        16.17,
+        26.75,
+        3.91,
+        4.27
+      ],
+      "multipleDiff": [
+        0.67,
+        0.73,
+        0.9,
+        1.31,
+        0.59
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 50,
+        "height": 164,
+        "weight": 69,
+        "waist": 114,
+        "sbp": 94,
+        "glu": 107,
+        "chol": 121,
+        "tg": 75,
+        "ldlc": 57,
+        "hdlc": 89,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        27,
+        16,
+        5,
+        9
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.12,
+        1.37,
+        0.49,
+        0.42,
+        0.55
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 52,
+        "height": 174,
+        "weight": 99,
+        "waist": 93,
+        "sbp": 115,
+        "glu": 103,
+        "chol": 198,
+        "tg": 181,
+        "ldlc": 103,
+        "hdlc": 65,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        12,
+        63,
+        70,
+        9,
+        13
+      ],
+      "populationAvg": [
+        6.84,
+        27.69,
+        47.48,
+        10.59,
+        11.3
+      ],
+      "multipleDiff": [
+        1.81,
+        2.28,
+        1.49,
+        0.89,
+        1.17
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 163,
+        "weight": 96,
+        "waist": 86,
+        "sbp": 101,
+        "glu": 84,
+        "chol": 257,
+        "tg": 157,
+        "ldlc": 80,
+        "hdlc": 69,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        50,
+        22,
+        3,
+        5
+      ],
+      "populationAvg": [
+        5.58,
+        14.23,
+        23.92,
+        5.48,
+        9.44
+      ],
+      "multipleDiff": [
+        0.8,
+        3.52,
+        0.94,
+        0.64,
+        0.58
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 174,
+        "weight": 78,
+        "waist": 122,
+        "sbp": 119,
+        "glu": 73,
+        "chol": 265,
+        "tg": 109,
+        "ldlc": 84,
+        "hdlc": 42,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        45,
+        28,
+        37,
+        11,
+        36
+      ],
+      "populationAvg": [
+        2.66,
+        20.5,
+        31.22,
+        4.86,
+        5.34
+      ],
+      "multipleDiff": [
+        17.19,
+        1.37,
+        1.19,
+        2.45,
+        6.8
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 162,
+        "weight": 81,
+        "waist": 112,
+        "sbp": 126,
+        "glu": 124,
+        "chol": 280,
+        "tg": 373,
+        "ldlc": 56,
+        "hdlc": 52,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        21,
+        98,
+        64,
+        30,
+        34
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        1.36,
+        3.78,
+        1.26,
+        1.29,
+        1.11
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 63,
+        "height": 171,
+        "weight": 88,
+        "waist": 110,
+        "sbp": 119,
+        "glu": 82,
+        "chol": 190,
+        "tg": 253,
+        "ldlc": 111,
+        "hdlc": 66,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        43,
+        55,
+        84,
+        21,
+        32
+      ],
+      "populationAvg": [
+        19.38,
+        32.23,
+        64.75,
+        18.39,
+        25.77
+      ],
+      "multipleDiff": [
+        2.24,
+        1.72,
+        1.3,
+        1.15,
+        1.25
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 56,
+        "height": 174,
+        "weight": 88,
+        "waist": 105,
+        "sbp": 105,
+        "glu": 115,
+        "chol": 158,
+        "tg": 167,
+        "ldlc": 126,
+        "hdlc": 48,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        17,
+        66,
+        45,
+        12,
+        18
+      ],
+      "populationAvg": [
+        13.52,
+        23.63,
+        50.92,
+        18.72,
+        27.09
+      ],
+      "multipleDiff": [
+        1.29,
+        2.81,
+        0.89,
+        0.64,
+        0.67
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 63,
+        "height": 168,
+        "weight": 79,
+        "waist": 85,
+        "sbp": 101,
+        "glu": 100,
+        "chol": 299,
+        "tg": 346,
+        "ldlc": 195,
+        "hdlc": 58,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        35,
+        62,
+        70,
+        9,
+        27
+      ],
+      "populationAvg": [
+        19.38,
+        32.23,
+        64.75,
+        18.39,
+        25.77
+      ],
+      "multipleDiff": [
+        1.83,
+        1.93,
+        1.08,
+        0.54,
+        1.08
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 40,
+        "height": 158,
+        "weight": 80,
+        "waist": 64,
+        "sbp": 108,
+        "glu": 78,
+        "chol": 269,
+        "tg": 288,
+        "ldlc": 159,
+        "hdlc": 48,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        2,
+        33,
+        24,
+        3,
+        4
+      ],
+      "populationAvg": [
+        4.55,
+        11.5,
+        20.25,
+        4.35,
+        8.36
+      ],
+      "multipleDiff": [
+        0.63,
+        2.94,
+        1.21,
+        0.87,
+        0.54
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 44,
+        "height": 170,
+        "weight": 88,
+        "waist": 109,
+        "sbp": 127,
+        "glu": 97,
+        "chol": 225,
+        "tg": 228,
+        "ldlc": 114,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        18,
+        60,
+        84,
+        22,
+        22
+      ],
+      "populationAvg": [
+        3.21,
+        20.31,
+        28.7,
+        6.27,
+        6.21
+      ],
+      "multipleDiff": [
+        5.7,
+        2.96,
+        2.94,
+        3.59,
+        3.67
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 178,
+        "weight": 62,
+        "waist": 90,
+        "sbp": 120,
+        "glu": 86,
+        "chol": 222,
+        "tg": 133,
+        "ldlc": 102,
+        "hdlc": 42,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        5,
+        7,
+        25,
+        5,
+        10
+      ],
+      "populationAvg": [
+        5.58,
+        14.23,
+        23.92,
+        5.48,
+        9.44
+      ],
+      "multipleDiff": [
+        1.06,
+        0.53,
+        1.06,
+        0.96,
+        1.12
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 63,
+        "height": 163,
+        "weight": 78,
+        "waist": 99,
+        "sbp": 104,
+        "glu": 78,
+        "chol": 156,
+        "tg": 232,
+        "ldlc": 88,
+        "hdlc": 46,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        34,
+        46,
+        64,
+        13,
+        24
+      ],
+      "populationAvg": [
+        19.38,
+        32.23,
+        64.75,
+        18.39,
+        25.77
+      ],
+      "multipleDiff": [
+        1.76,
+        1.45,
+        1,
+        0.76,
+        0.96
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 57,
+        "height": 179,
+        "weight": 46,
+        "waist": 64,
+        "sbp": 119,
+        "glu": 117,
+        "chol": 182,
+        "tg": 71,
+        "ldlc": 73,
+        "hdlc": 77,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        7,
+        14,
+        29,
+        15,
+        15
+      ],
+      "populationAvg": [
+        14.47,
+        25.07,
+        47.54,
+        20.64,
+        26.83
+      ],
+      "multipleDiff": [
+        0.55,
+        0.56,
+        0.62,
+        0.74,
+        0.58
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 177,
+        "weight": 80,
+        "waist": 73,
+        "sbp": 120,
+        "glu": 80,
+        "chol": 169,
+        "tg": 172,
+        "ldlc": 99,
+        "hdlc": 48,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        8,
+        20,
+        59,
+        11,
+        11
+      ],
+      "populationAvg": [
+        9.09,
+        22.16,
+        47.66,
+        13.42,
+        14.15
+      ],
+      "multipleDiff": [
+        0.9,
+        0.93,
+        1.25,
+        0.87,
+        0.82
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 63,
+        "height": 173,
+        "weight": 97,
+        "waist": 93,
+        "sbp": 119,
+        "glu": 97,
+        "chol": 239,
+        "tg": 233,
+        "ldlc": 100,
+        "hdlc": 51,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        21,
+        79,
+        71,
+        25,
+        30
+      ],
+      "populationAvg": [
+        21.76,
+        29.55,
+        60.87,
+        30.64,
+        36.9
+      ],
+      "multipleDiff": [
+        0.97,
+        2.69,
+        1.17,
+        0.83,
+        0.82
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 51,
+        "height": 156,
+        "weight": 107,
+        "waist": 102,
+        "sbp": 134,
+        "glu": 96,
+        "chol": 139,
+        "tg": 332,
+        "ldlc": 84,
+        "hdlc": 91,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        10,
+        87,
+        99,
+        14,
+        12
+      ],
+      "populationAvg": [
+        6.23,
+        30.45,
+        53.81,
+        9.84,
+        10.49
+      ],
+      "multipleDiff": [
+        1.65,
+        2.88,
+        1.85,
+        1.43,
+        1.21
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 159,
+        "weight": 104,
+        "waist": 77,
+        "sbp": 96,
+        "glu": 108,
+        "chol": 236,
+        "tg": 355,
+        "ldlc": 129,
+        "hdlc": 87,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        3,
+        98,
+        19,
+        4,
+        3
+      ],
+      "populationAvg": [
+        5.22,
+        13.96,
+        19.94,
+        5.54,
+        9.7
+      ],
+      "multipleDiff": [
+        0.59,
+        7.07,
+        0.98,
+        0.8,
+        0.39
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 170,
+        "weight": 75,
+        "waist": 96,
+        "sbp": 122,
+        "glu": 89,
+        "chol": 243,
+        "tg": 252,
+        "ldlc": 86,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        27,
+        41,
+        83,
+        37,
+        31
+      ],
+      "populationAvg": [
+        9.09,
+        22.16,
+        47.66,
+        13.42,
+        14.15
+      ],
+      "multipleDiff": [
+        3.04,
+        1.89,
+        1.76,
+        2.81,
+        2.21
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 165,
+        "weight": 88,
+        "waist": 81,
+        "sbp": 109,
+        "glu": 89,
+        "chol": 261,
+        "tg": 260,
+        "ldlc": 164,
+        "hdlc": 77,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        17,
+        64,
+        41,
+        12,
+        13
+      ],
+      "populationAvg": [
+        12.63,
+        23.3,
+        40.87,
+        15.73,
+        23.53
+      ],
+      "multipleDiff": [
+        1.36,
+        2.77,
+        1,
+        0.81,
+        0.55
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 67,
+        "height": 173,
+        "weight": 112,
+        "waist": 78,
+        "sbp": 121,
+        "glu": 104,
+        "chol": 193,
+        "tg": 173,
+        "ldlc": 180,
+        "hdlc": 95,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        12,
+        67,
+        98,
+        37,
+        17
+      ],
+      "populationAvg": [
+        28.29,
+        48.55,
+        74.63,
+        25.8,
+        34.77
+      ],
+      "multipleDiff": [
+        0.46,
+        1.39,
+        1.33,
+        1.47,
+        0.52
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 169,
+        "weight": 74,
+        "waist": 62,
+        "sbp": 90,
+        "glu": 105,
+        "chol": 160,
+        "tg": 197,
+        "ldlc": 105,
+        "hdlc": 75,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        34,
+        16,
+        4,
+        4
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        0.55,
+        2.08,
+        0.51,
+        0.5,
+        0.29
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 175,
+        "weight": 60,
+        "waist": 76,
+        "sbp": 114,
+        "glu": 96,
+        "chol": 244,
+        "tg": 199,
+        "ldlc": 161,
+        "hdlc": 47,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        8,
+        20,
+        35,
+        5,
+        12
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        2.05,
+        0.86,
+        0.89,
+        0.7,
+        1.56
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 168,
+        "weight": 65,
+        "waist": 86,
+        "sbp": 109,
+        "glu": 101,
+        "chol": 204,
+        "tg": 219,
+        "ldlc": 158,
+        "hdlc": 78,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        3,
+        19,
+        14,
+        4,
+        5
+      ],
+      "populationAvg": [
+        4.87,
+        14.24,
+        22.24,
+        4.86,
+        9.09
+      ],
+      "multipleDiff": [
+        0.72,
+        1.37,
+        0.66,
+        0.87,
+        0.62
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 154,
+        "weight": 86,
+        "waist": 96,
+        "sbp": 122,
+        "glu": 104,
+        "chol": 231,
+        "tg": 65,
+        "ldlc": 45,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        13,
+        67,
+        68,
+        8,
+        15
+      ],
+      "populationAvg": [
+        3.88,
+        22.54,
+        36.75,
+        8.37,
+        7.21
+      ],
+      "multipleDiff": [
+        3.4,
+        2.98,
+        1.88,
+        1.02,
+        2.16
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 60,
+        "height": 164,
+        "weight": 45,
+        "waist": 90,
+        "sbp": 107,
+        "glu": 104,
+        "chol": 244,
+        "tg": 397,
+        "ldlc": 154,
+        "hdlc": 52,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        17,
+        30,
+        38,
+        21,
+        19
+      ],
+      "populationAvg": [
+        17.74,
+        27.66,
+        55.86,
+        24.91,
+        31.34
+      ],
+      "multipleDiff": [
+        0.96,
+        1.11,
+        0.68,
+        0.88,
+        0.62
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 181,
+        "weight": 73,
+        "waist": 75,
+        "sbp": 126,
+        "glu": 96,
+        "chol": 259,
+        "tg": 203,
+        "ldlc": 185,
+        "hdlc": 73,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        4,
+        19,
+        67,
+        12,
+        10
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        1.14,
+        0.82,
+        1.7,
+        1.7,
+        1.31
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 173,
+        "weight": 63,
+        "waist": 77,
+        "sbp": 100,
+        "glu": 102,
+        "chol": 153,
+        "tg": 236,
+        "ldlc": 90,
+        "hdlc": 49,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        3,
+        15,
+        14,
+        3,
+        4
+      ],
+      "populationAvg": [
+        4.87,
+        14.24,
+        22.24,
+        4.86,
+        9.09
+      ],
+      "multipleDiff": [
+        0.79,
+        1.06,
+        0.66,
+        0.72,
+        0.5
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 53,
+        "height": 161,
+        "weight": 111,
+        "waist": 111,
+        "sbp": 108,
+        "glu": 107,
+        "chol": 271,
+        "tg": 153,
+        "ldlc": 186,
+        "hdlc": 93,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        25,
+        92,
+        84,
+        20,
+        18
+      ],
+      "populationAvg": [
+        7.52,
+        25.62,
+        49.45,
+        11.28,
+        12.18
+      ],
+      "multipleDiff": [
+        3.34,
+        3.61,
+        1.71,
+        1.84,
+        1.56
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 174,
+        "weight": 82,
+        "waist": 74,
+        "sbp": 129,
+        "glu": 117,
+        "chol": 182,
+        "tg": 109,
+        "ldlc": 196,
+        "hdlc": 41,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        39,
+        40,
+        7,
+        11
+      ],
+      "populationAvg": [
+        5.58,
+        14.23,
+        23.92,
+        5.48,
+        9.44
+      ],
+      "multipleDiff": [
+        0.83,
+        2.77,
+        1.68,
+        1.31,
+        1.19
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 181,
+        "weight": 74,
+        "waist": 101,
+        "sbp": 106,
+        "glu": 111,
+        "chol": 156,
+        "tg": 168,
+        "ldlc": 145,
+        "hdlc": 57,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        11,
+        50,
+        45,
+        17,
+        12
+      ],
+      "populationAvg": [
+        4.69,
+        21.56,
+        42.97,
+        8.24,
+        8.38
+      ],
+      "multipleDiff": [
+        2.38,
+        2.34,
+        1.06,
+        2.12,
+        1.51
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 44,
+        "height": 177,
+        "weight": 100,
+        "waist": 84,
+        "sbp": 106,
+        "glu": 81,
+        "chol": 254,
+        "tg": 289,
+        "ldlc": 143,
+        "hdlc": 53,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        5,
+        40,
+        28,
+        5,
+        7
+      ],
+      "populationAvg": [
+        5.98,
+        13.93,
+        24.34,
+        5.4,
+        9.23
+      ],
+      "multipleDiff": [
+        0.89,
+        2.92,
+        1.15,
+        0.98,
+        0.76
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 70,
+        "height": 164,
+        "weight": 45,
+        "waist": 113,
+        "sbp": 134,
+        "glu": 70,
+        "chol": 263,
+        "tg": 357,
+        "ldlc": 80,
+        "hdlc": 55,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        86,
+        27,
+        84,
+        32,
+        71
+      ],
+      "populationAvg": [
+        37.57,
+        46.59,
+        77.9,
+        27.91,
+        43.52
+      ],
+      "multipleDiff": [
+        2.31,
+        0.6,
+        1.08,
+        1.17,
+        1.64
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 170,
+        "weight": 96,
+        "waist": 116,
+        "sbp": 95,
+        "glu": 75,
+        "chol": 124,
+        "tg": 88,
+        "ldlc": 175,
+        "hdlc": 42,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        11,
+        23,
+        29,
+        3,
+        9
+      ],
+      "populationAvg": [
+        6.85,
+        22.86,
+        31.94,
+        9.45,
+        14.32
+      ],
+      "multipleDiff": [
+        1.63,
+        1.01,
+        0.94,
+        0.36,
+        0.63
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 183,
+        "weight": 80,
+        "waist": 84,
+        "sbp": 122,
+        "glu": 93,
+        "chol": 241,
+        "tg": 291,
+        "ldlc": 145,
+        "hdlc": 39,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        35,
+        42,
+        73,
+        10,
+        35
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        2.96,
+        1.31,
+        1.32,
+        0.66,
+        2.03
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 61,
+        "height": 165,
+        "weight": 74,
+        "waist": 89,
+        "sbp": 129,
+        "glu": 103,
+        "chol": 166,
+        "tg": 224,
+        "ldlc": 185,
+        "hdlc": 53,
+        "diabetes": 1,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        31,
+        54,
+        70,
+        28,
+        33
+      ],
+      "populationAvg": [
+        18.99,
+        23.74,
+        55.05,
+        29.03,
+        34.29
+      ],
+      "multipleDiff": [
+        1.66,
+        2.3,
+        1.29,
+        0.97,
+        0.97
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 174,
+        "weight": 84,
+        "waist": 73,
+        "sbp": 117,
+        "glu": 112,
+        "chol": 182,
+        "tg": 309,
+        "ldlc": 180,
+        "hdlc": 89,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        1,
+        39,
+        60,
+        4,
+        3
+      ],
+      "populationAvg": [
+        2.92,
+        16.83,
+        27.79,
+        4.99,
+        5.76
+      ],
+      "multipleDiff": [
+        0.63,
+        2.33,
+        2.19,
+        0.83,
+        0.62
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 35,
+        "height": 177,
+        "weight": 67,
+        "waist": 112,
+        "sbp": 108,
+        "glu": 98,
+        "chol": 289,
+        "tg": 181,
+        "ldlc": 91,
+        "hdlc": 90,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        2,
+        12,
+        7,
+        2,
+        4
+      ],
+      "populationAvg": [
+        3.24,
+        9.17,
+        13.85,
+        2.89,
+        5.78
+      ],
+      "multipleDiff": [
+        0.85,
+        1.31,
+        0.53,
+        0.72,
+        0.74
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 51,
+        "height": 177,
+        "weight": 87,
+        "waist": 101,
+        "sbp": 130,
+        "glu": 112,
+        "chol": 196,
+        "tg": 252,
+        "ldlc": 122,
+        "hdlc": 80,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        13,
+        65,
+        81,
+        13,
+        15
+      ],
+      "populationAvg": [
+        6.23,
+        30.45,
+        53.81,
+        9.84,
+        10.49
+      ],
+      "multipleDiff": [
+        2.14,
+        2.14,
+        1.51,
+        1.33,
+        1.46
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 170,
+        "weight": 62,
+        "waist": 106,
+        "sbp": 107,
+        "glu": 92,
+        "chol": 247,
+        "tg": 243,
+        "ldlc": 82,
+        "hdlc": 79,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        8,
+        18,
+        18,
+        7,
+        10
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        1.06,
+        1.12,
+        0.58,
+        0.75,
+        0.71
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 40,
+        "height": 177,
+        "weight": 48,
+        "waist": 107,
+        "sbp": 100,
+        "glu": 112,
+        "chol": 144,
+        "tg": 343,
+        "ldlc": 63,
+        "hdlc": 93,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        4,
+        30,
+        21,
+        6,
+        4
+      ],
+      "populationAvg": [
+        2.2,
+        13.07,
+        26.18,
+        4.58,
+        4.6
+      ],
+      "multipleDiff": [
+        2.13,
+        2.35,
+        0.8,
+        1.31,
+        1.03
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 57,
+        "height": 190,
+        "weight": 99,
+        "waist": 98,
+        "sbp": 139,
+        "glu": 114,
+        "chol": 262,
+        "tg": 397,
+        "ldlc": 101,
+        "hdlc": 36,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        18,
+        84,
+        76,
+        36,
+        40
+      ],
+      "populationAvg": [
+        14.47,
+        25.07,
+        47.54,
+        20.64,
+        26.83
+      ],
+      "multipleDiff": [
+        1.26,
+        3.39,
+        1.61,
+        1.77,
+        1.5
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 45,
+        "height": 183,
+        "weight": 59,
+        "waist": 103,
+        "sbp": 120,
+        "glu": 83,
+        "chol": 221,
+        "tg": 234,
+        "ldlc": 106,
+        "hdlc": 38,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        26,
+        21,
+        35,
+        9,
+        25
+      ],
+      "populationAvg": [
+        3.53,
+        21.15,
+        33.4,
+        5.82,
+        6.69
+      ],
+      "multipleDiff": [
+        7.48,
+        1.02,
+        1.08,
+        1.59,
+        3.84
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 173,
+        "weight": 63,
+        "waist": 75,
+        "sbp": 100,
+        "glu": 98,
+        "chol": 195,
+        "tg": 119,
+        "ldlc": 163,
+        "hdlc": 74,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        20,
+        29,
+        10,
+        11
+      ],
+      "populationAvg": [
+        15.49,
+        26,
+        51.23,
+        23.35,
+        30.67
+      ],
+      "multipleDiff": [
+        0.66,
+        0.78,
+        0.57,
+        0.45,
+        0.38
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 58,
+        "height": 185,
+        "weight": 60,
+        "waist": 65,
+        "sbp": 133,
+        "glu": 104,
+        "chol": 157,
+        "tg": 58,
+        "ldlc": 122,
+        "hdlc": 79,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        4,
+        15,
+        51,
+        8,
+        8
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        0.35,
+        0.47,
+        0.93,
+        0.5,
+        0.47
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 43,
+        "height": 182,
+        "weight": 101,
+        "waist": 61,
+        "sbp": 91,
+        "glu": 72,
+        "chol": 258,
+        "tg": 156,
+        "ldlc": 128,
+        "hdlc": 25,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        8,
+        20,
+        24,
+        2,
+        3
+      ],
+      "populationAvg": [
+        5.58,
+        14.23,
+        23.92,
+        5.48,
+        9.44
+      ],
+      "multipleDiff": [
+        1.46,
+        1.42,
+        1.03,
+        0.48,
+        0.41
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 50,
+        "height": 162,
+        "weight": 59,
+        "waist": 94,
+        "sbp": 100,
+        "glu": 115,
+        "chol": 235,
+        "tg": 158,
+        "ldlc": 178,
+        "hdlc": 73,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        11,
+        46,
+        30,
+        7,
+        10
+      ],
+      "populationAvg": [
+        5.66,
+        25.38,
+        48.03,
+        8.42,
+        9.73
+      ],
+      "multipleDiff": [
+        2.03,
+        1.82,
+        0.63,
+        0.86,
+        1.1
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 176,
+        "weight": 65,
+        "waist": 87,
+        "sbp": 112,
+        "glu": 84,
+        "chol": 195,
+        "tg": 238,
+        "ldlc": 171,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        6,
+        11,
+        26,
+        6,
+        9
+      ],
+      "populationAvg": [
+        6.85,
+        22.86,
+        31.94,
+        9.45,
+        14.32
+      ],
+      "multipleDiff": [
+        0.98,
+        0.5,
+        0.82,
+        0.71,
+        0.69
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 44,
+        "height": 174,
+        "weight": 111,
+        "waist": 64,
+        "sbp": 138,
+        "glu": 85,
+        "chol": 283,
+        "tg": 192,
+        "ldlc": 167,
+        "hdlc": 42,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        7,
+        34,
+        90,
+        4,
+        15
+      ],
+      "populationAvg": [
+        3.21,
+        20.31,
+        28.7,
+        6.27,
+        6.21
+      ],
+      "multipleDiff": [
+        2.28,
+        1.69,
+        3.15,
+        0.75,
+        2.51
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 41,
+        "height": 150,
+        "weight": 84,
+        "waist": 88,
+        "sbp": 104,
+        "glu": 99,
+        "chol": 257,
+        "tg": 155,
+        "ldlc": 191,
+        "hdlc": 39,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        9,
+        70,
+        31,
+        3,
+        5
+      ],
+      "populationAvg": [
+        4.87,
+        14.24,
+        22.24,
+        4.86,
+        9.09
+      ],
+      "multipleDiff": [
+        1.94,
+        4.93,
+        1.42,
+        0.69,
+        0.66
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 42,
+        "height": 169,
+        "weight": 91,
+        "waist": 109,
+        "sbp": 120,
+        "glu": 97,
+        "chol": 212,
+        "tg": 172,
+        "ldlc": 186,
+        "hdlc": 55,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        13,
+        58,
+        73,
+        18,
+        17
+      ],
+      "populationAvg": [
+        2.66,
+        20.5,
+        31.22,
+        4.86,
+        5.34
+      ],
+      "multipleDiff": [
+        5.14,
+        2.83,
+        2.34,
+        3.87,
+        3.2
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 56,
+        "height": 181,
+        "weight": 58,
+        "waist": 87,
+        "sbp": 130,
+        "glu": 90,
+        "chol": 263,
+        "tg": 277,
+        "ldlc": 142,
+        "hdlc": 65,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        16,
+        44,
+        22,
+        25
+      ],
+      "populationAvg": [
+        13.52,
+        23.63,
+        50.92,
+        18.72,
+        27.09
+      ],
+      "multipleDiff": [
+        0.87,
+        0.69,
+        0.87,
+        1.18,
+        0.94
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 68,
+        "height": 176,
+        "weight": 66,
+        "waist": 87,
+        "sbp": 107,
+        "glu": 123,
+        "chol": 200,
+        "tg": 252,
+        "ldlc": 181,
+        "hdlc": 79,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        22,
+        65,
+        60,
+        20,
+        18
+      ],
+      "populationAvg": [
+        31.1,
+        47.52,
+        72.81,
+        29.79,
+        37.47
+      ],
+      "multipleDiff": [
+        0.72,
+        1.37,
+        0.83,
+        0.69,
+        0.5
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 52,
+        "height": 180,
+        "weight": 76,
+        "waist": 107,
+        "sbp": 119,
+        "glu": 104,
+        "chol": 241,
+        "tg": 282,
+        "ldlc": 155,
+        "hdlc": 84,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        39,
+        31,
+        14,
+        18
+      ],
+      "populationAvg": [
+        10.3,
+        21.65,
+        41.7,
+        18.5,
+        24.77
+      ],
+      "multipleDiff": [
+        1.04,
+        1.81,
+        0.74,
+        0.78,
+        0.73
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 160,
+        "weight": 101,
+        "waist": 89,
+        "sbp": 122,
+        "glu": 85,
+        "chol": 178,
+        "tg": 190,
+        "ldlc": 83,
+        "hdlc": 82,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        5,
+        46,
+        93,
+        15,
+        9
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        1.25,
+        1.93,
+        2.37,
+        2.18,
+        1.18
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 63,
+        "height": 179,
+        "weight": 63,
+        "waist": 79,
+        "sbp": 116,
+        "glu": 80,
+        "chol": 169,
+        "tg": 321,
+        "ldlc": 154,
+        "hdlc": 55,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        16,
+        17,
+        51,
+        25,
+        24
+      ],
+      "populationAvg": [
+        21.76,
+        29.55,
+        60.87,
+        30.64,
+        36.9
+      ],
+      "multipleDiff": [
+        0.76,
+        0.58,
+        0.85,
+        0.83,
+        0.66
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 38,
+        "height": 169,
+        "weight": 65,
+        "waist": 101,
+        "sbp": 94,
+        "glu": 110,
+        "chol": 225,
+        "tg": 344,
+        "ldlc": 81,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        5,
+        45,
+        24,
+        4,
+        5
+      ],
+      "populationAvg": [
+        1.82,
+        15.19,
+        25.2,
+        3.64,
+        3.96
+      ],
+      "multipleDiff": [
+        2.9,
+        2.98,
+        0.99,
+        1.19,
+        1.35
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 65,
+        "height": 177,
+        "weight": 114,
+        "waist": 73,
+        "sbp": 133,
+        "glu": 105,
+        "chol": 169,
+        "tg": 225,
+        "ldlc": 207,
+        "hdlc": 62,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        15,
+        95,
+        87,
+        37,
+        35
+      ],
+      "populationAvg": [
+        24.93,
+        25.71,
+        60.28,
+        33.22,
+        41.82
+      ],
+      "multipleDiff": [
+        0.64,
+        3.72,
+        1.45,
+        1.13,
+        0.86
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 180,
+        "weight": 102,
+        "waist": 75,
+        "sbp": 128,
+        "glu": 93,
+        "chol": 172,
+        "tg": 315,
+        "ldlc": 93,
+        "hdlc": 74,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        3,
+        37,
+        85,
+        9,
+        6
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        0.75,
+        1.52,
+        2.14,
+        1.33,
+        0.78
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 45,
+        "height": 169,
+        "weight": 90,
+        "waist": 88,
+        "sbp": 122,
+        "glu": 86,
+        "chol": 199,
+        "tg": 139,
+        "ldlc": 168,
+        "hdlc": 38,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        6,
+        31,
+        45,
+        6,
+        12
+      ],
+      "populationAvg": [
+        6.4,
+        14.49,
+        26.76,
+        6.66,
+        11.39
+      ],
+      "multipleDiff": [
+        1.08,
+        2.19,
+        1.68,
+        0.99,
+        1.11
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 47,
+        "height": 161,
+        "weight": 63,
+        "waist": 60,
+        "sbp": 127,
+        "glu": 116,
+        "chol": 194,
+        "tg": 87,
+        "ldlc": 185,
+        "hdlc": 72,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        1,
+        27,
+        51,
+        6,
+        4
+      ],
+      "populationAvg": [
+        4.27,
+        24.4,
+        39.65,
+        7.32,
+        7.77
+      ],
+      "multipleDiff": [
+        0.44,
+        1.11,
+        1.29,
+        0.94,
+        0.59
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 46,
+        "height": 163,
+        "weight": 71,
+        "waist": 74,
+        "sbp": 107,
+        "glu": 76,
+        "chol": 284,
+        "tg": 239,
+        "ldlc": 105,
+        "hdlc": 62,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        20,
+        24,
+        5,
+        7
+      ],
+      "populationAvg": [
+        6.85,
+        22.86,
+        31.94,
+        9.45,
+        14.32
+      ],
+      "multipleDiff": [
+        0.72,
+        0.91,
+        0.76,
+        0.61,
+        0.5
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 55,
+        "height": 167,
+        "weight": 86,
+        "waist": 97,
+        "sbp": 110,
+        "glu": 105,
+        "chol": 261,
+        "tg": 275,
+        "ldlc": 169,
+        "hdlc": 47,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        38,
+        77,
+        85,
+        33,
+        36
+      ],
+      "populationAvg": [
+        9.09,
+        22.16,
+        47.66,
+        13.42,
+        14.15
+      ],
+      "multipleDiff": [
+        4.23,
+        3.49,
+        1.79,
+        2.5,
+        2.59
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 56,
+        "height": 172,
+        "weight": 58,
+        "waist": 76,
+        "sbp": 127,
+        "glu": 91,
+        "chol": 227,
+        "tg": 169,
+        "ldlc": 163,
+        "hdlc": 74,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        9,
+        15,
+        41,
+        17,
+        20
+      ],
+      "populationAvg": [
+        13.52,
+        23.63,
+        50.92,
+        18.72,
+        27.09
+      ],
+      "multipleDiff": [
+        0.68,
+        0.66,
+        0.82,
+        0.95,
+        0.76
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 48,
+        "height": 159,
+        "weight": 49,
+        "waist": 117,
+        "sbp": 126,
+        "glu": 108,
+        "chol": 165,
+        "tg": 68,
+        "ldlc": 220,
+        "hdlc": 93,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        15,
+        34,
+        38,
+        15,
+        14
+      ],
+      "populationAvg": [
+        4.69,
+        21.56,
+        42.97,
+        8.24,
+        8.38
+      ],
+      "multipleDiff": [
+        3.31,
+        1.6,
+        0.9,
+        1.88,
+        1.78
+      ]
+    },
+    {
+      "kind": "random",
+      "input": {
+        "age": 60,
+        "height": 179,
+        "weight": 111,
+        "waist": 124,
+        "sbp": 125,
+        "glu": 84,
+        "chol": 185,
+        "tg": 197,
+        "ldlc": 188,
+        "hdlc": 27,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        54,
+        64,
+        85,
+        21,
+        43
+      ],
+      "populationAvg": [
+        17.74,
+        27.66,
+        55.86,
+        24.91,
+        31.34
+      ],
+      "multipleDiff": [
+        3.05,
+        2.32,
+        1.52,
+        0.88,
+        1.4
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 49,
+        "height": 177,
+        "weight": 95,
+        "waist": 80,
+        "sbp": 125,
+        "glu": 103,
+        "chol": 214,
+        "tg": 253,
+        "ldlc": 177,
+        "hdlc": 65,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        6,
+        49,
+        78,
+        11,
+        9
+      ],
+      "populationAvg": [
+        5.15,
+        22.05,
+        42.91,
+        8.68,
+        9.03
+      ],
+      "multipleDiff": [
+        1.25,
+        2.24,
+        1.83,
+        1.31,
+        1.1
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 42,
+        "height": 178,
+        "weight": 79,
+        "waist": 73,
+        "sbp": 114,
+        "glu": 86,
+        "chol": 184,
+        "tg": 193,
+        "ldlc": 99,
+        "hdlc": 43,
+        "diabetes": 1,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        7,
+        14,
+        24,
+        4,
+        6
+      ],
+      "populationAvg": [
+        5.22,
+        13.96,
+        19.94,
+        5.54,
+        9.7
+      ],
+      "multipleDiff": [
+        1.51,
+        1.06,
+        1.25,
+        0.84,
+        0.72
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 48,
+        "height": 184,
+        "weight": 48,
+        "waist": 81,
+        "sbp": 118,
+        "glu": 74,
+        "chol": 229,
+        "tg": 238,
+        "ldlc": 95,
+        "hdlc": 37,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        16,
+        9,
+        30,
+        6,
+        20
+      ],
+      "populationAvg": [
+        4.69,
+        21.56,
+        42.97,
+        8.24,
+        8.38
+      ],
+      "multipleDiff": [
+        3.49,
+        0.44,
+        0.72,
+        0.77,
+        2.39
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 63,
+        "height": 162,
+        "weight": 86,
+        "waist": 60,
+        "sbp": 132,
+        "glu": 114,
+        "chol": 204,
+        "tg": 267,
+        "ldlc": 66,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        94,
+        73,
+        36,
+        27
+      ],
+      "populationAvg": [
+        21.76,
+        29.55,
+        60.87,
+        30.64,
+        36.9
+      ],
+      "multipleDiff": [
+        0.51,
+        3.21,
+        1.21,
+        1.2,
+        0.75
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 58,
+        "height": 179,
+        "weight": 101,
+        "waist": 95,
+        "sbp": 110,
+        "glu": 114,
+        "chol": 257,
+        "tg": 232,
+        "ldlc": 153,
+        "hdlc": 76,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        22,
+        78,
+        74,
+        11,
+        19
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        1.85,
+        2.44,
+        1.34,
+        0.71,
+        1.09
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 55,
+        "height": 166,
+        "weight": 101,
+        "waist": 92,
+        "sbp": 118,
+        "glu": 101,
+        "chol": 194,
+        "tg": 302,
+        "ldlc": 166,
+        "hdlc": 67,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        92,
+        57,
+        17,
+        19
+      ],
+      "populationAvg": [
+        12.63,
+        23.3,
+        40.87,
+        15.73,
+        23.53
+      ],
+      "multipleDiff": [
+        0.93,
+        3.97,
+        1.4,
+        1.11,
+        0.81
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 39,
+        "height": 153,
+        "weight": 96,
+        "waist": 113,
+        "sbp": 93,
+        "glu": 122,
+        "chol": 197,
+        "tg": 173,
+        "ldlc": 212,
+        "hdlc": 92,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        6,
+        93,
+        47,
+        5,
+        5
+      ],
+      "populationAvg": [
+        2,
+        16.17,
+        26.75,
+        3.91,
+        4.27
+      ],
+      "multipleDiff": [
+        3.24,
+        5.79,
+        1.79,
+        1.51,
+        1.31
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 38,
+        "height": 189,
+        "weight": 62,
+        "waist": 124,
+        "sbp": 104,
+        "glu": 105,
+        "chol": 283,
+        "tg": 286,
+        "ldlc": 53,
+        "hdlc": 63,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        5,
+        13,
+        9,
+        3,
+        6
+      ],
+      "populationAvg": [
+        3.98,
+        13.12,
+        18.84,
+        4.06,
+        7.01
+      ],
+      "multipleDiff": [
+        1.4,
+        1.02,
+        0.5,
+        0.79,
+        0.9
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 55,
+        "height": 167,
+        "weight": 90,
+        "waist": 100,
+        "sbp": 105,
+        "glu": 94,
+        "chol": 256,
+        "tg": 178,
+        "ldlc": 167,
+        "hdlc": 62,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        27,
+        59,
+        60,
+        10,
+        21
+      ],
+      "populationAvg": [
+        9.09,
+        22.16,
+        47.66,
+        13.42,
+        14.15
+      ],
+      "multipleDiff": [
+        3.06,
+        2.69,
+        1.27,
+        0.81,
+        1.54
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 45,
+        "height": 179,
+        "weight": 62,
+        "waist": 104,
+        "sbp": 126,
+        "glu": 109,
+        "chol": 224,
+        "tg": 263,
+        "ldlc": 174,
+        "hdlc": 41,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        8,
+        21,
+        33,
+        9,
+        16
+      ],
+      "populationAvg": [
+        6.4,
+        14.49,
+        26.76,
+        6.66,
+        11.39
+      ],
+      "multipleDiff": [
+        1.36,
+        1.5,
+        1.25,
+        1.48,
+        1.43
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 39,
+        "height": 162,
+        "weight": 46,
+        "waist": 76,
+        "sbp": 101,
+        "glu": 82,
+        "chol": 274,
+        "tg": 243,
+        "ldlc": 105,
+        "hdlc": 85,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        2,
+        7,
+        17,
+        2,
+        3
+      ],
+      "populationAvg": [
+        2,
+        16.17,
+        26.75,
+        3.91,
+        4.27
+      ],
+      "multipleDiff": [
+        1.03,
+        0.46,
+        0.66,
+        0.73,
+        0.79
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 61,
+        "height": 162,
+        "weight": 68,
+        "waist": 111,
+        "sbp": 125,
+        "glu": 122,
+        "chol": 283,
+        "tg": 258,
+        "ldlc": 61,
+        "hdlc": 73,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        20,
+        82,
+        53,
+        29,
+        34
+      ],
+      "populationAvg": [
+        18.99,
+        23.74,
+        55.05,
+        29.03,
+        34.29
+      ],
+      "multipleDiff": [
+        1.1,
+        3.46,
+        0.98,
+        1.01,
+        1.02
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 60,
+        "height": 180,
+        "weight": 78,
+        "waist": 76,
+        "sbp": 127,
+        "glu": 99,
+        "chol": 157,
+        "tg": 159,
+        "ldlc": 134,
+        "hdlc": 54,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        10,
+        34,
+        70,
+        10,
+        14
+      ],
+      "populationAvg": [
+        14.59,
+        34.57,
+        56.57,
+        16.1,
+        20.58
+      ],
+      "multipleDiff": [
+        0.72,
+        1.01,
+        1.25,
+        0.64,
+        0.71
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 55,
+        "height": 170,
+        "weight": 88,
+        "waist": 75,
+        "sbp": 113,
+        "glu": 88,
+        "chol": 211,
+        "tg": 221,
+        "ldlc": 162,
+        "hdlc": 56,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        9,
+        47,
+        49,
+        13,
+        14
+      ],
+      "populationAvg": [
+        12.63,
+        23.3,
+        40.87,
+        15.73,
+        23.53
+      ],
+      "multipleDiff": [
+        0.78,
+        2.05,
+        1.21,
+        0.83,
+        0.63
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 35,
+        "height": 155,
+        "weight": 66,
+        "waist": 124,
+        "sbp": 106,
+        "glu": 124,
+        "chol": 274,
+        "tg": 150,
+        "ldlc": 165,
+        "hdlc": 87,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        9,
+        69,
+        37,
+        14,
+        10
+      ],
+      "populationAvg": [
+        1.37,
+        13.07,
+        18.17,
+        3.03,
+        3.16
+      ],
+      "multipleDiff": [
+        6.98,
+        5.35,
+        2.07,
+        4.92,
+        3.23
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 40,
+        "height": 166,
+        "weight": 97,
+        "waist": 93,
+        "sbp": 103,
+        "glu": 104,
+        "chol": 212,
+        "tg": 305,
+        "ldlc": 204,
+        "hdlc": 84,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        6,
+        74,
+        17,
+        3,
+        4
+      ],
+      "populationAvg": [
+        4.55,
+        11.5,
+        20.25,
+        4.35,
+        8.36
+      ],
+      "multipleDiff": [
+        1.46,
+        6.47,
+        0.87,
+        0.89,
+        0.56
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 56,
+        "height": 170,
+        "weight": 96,
+        "waist": 109,
+        "sbp": 100,
+        "glu": 89,
+        "chol": 255,
+        "tg": 184,
+        "ldlc": 106,
+        "hdlc": 65,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        37,
+        62,
+        58,
+        12,
+        25
+      ],
+      "populationAvg": [
+        9.99,
+        26.93,
+        51.02,
+        12.56,
+        15.25
+      ],
+      "multipleDiff": [
+        3.78,
+        2.32,
+        1.14,
+        1.02,
+        1.65
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 48,
+        "height": 180,
+        "weight": 67,
+        "waist": 76,
+        "sbp": 106,
+        "glu": 96,
+        "chol": 222,
+        "tg": 122,
+        "ldlc": 135,
+        "hdlc": 59,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        6,
+        14,
+        22,
+        5,
+        8
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        0.77,
+        0.85,
+        0.71,
+        0.61,
+        0.55
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 62,
+        "height": 180,
+        "weight": 72,
+        "waist": 68,
+        "sbp": 103,
+        "glu": 74,
+        "chol": 194,
+        "tg": 256,
+        "ldlc": 116,
+        "hdlc": 47,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        12,
+        16,
+        61,
+        14,
+        16
+      ],
+      "populationAvg": [
+        17.63,
+        38.12,
+        68.72,
+        20.72,
+        23.91
+      ],
+      "multipleDiff": [
+        0.72,
+        0.43,
+        0.89,
+        0.68,
+        0.7
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 39,
+        "height": 155,
+        "weight": 97,
+        "waist": 95,
+        "sbp": 139,
+        "glu": 104,
+        "chol": 242,
+        "tg": 99,
+        "ldlc": 220,
+        "hdlc": 57,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        80,
+        49,
+        5,
+        12
+      ],
+      "populationAvg": [
+        4.25,
+        14.21,
+        17.62,
+        4.52,
+        7.71
+      ],
+      "multipleDiff": [
+        0.95,
+        5.66,
+        2.78,
+        1.28,
+        1.64
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 58,
+        "height": 171,
+        "weight": 82,
+        "waist": 95,
+        "sbp": 113,
+        "glu": 104,
+        "chol": 202,
+        "tg": 136,
+        "ldlc": 91,
+        "hdlc": 52,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        26,
+        60,
+        74,
+        24,
+        27
+      ],
+      "populationAvg": [
+        12.07,
+        32.31,
+        55.64,
+        16.35,
+        17.72
+      ],
+      "multipleDiff": [
+        2.16,
+        1.86,
+        1.34,
+        1.5,
+        1.53
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 53,
+        "height": 172,
+        "weight": 93,
+        "waist": 87,
+        "sbp": 127,
+        "glu": 94,
+        "chol": 209,
+        "tg": 142,
+        "ldlc": 145,
+        "hdlc": 50,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        20,
+        49,
+        60,
+        14,
+        21
+      ],
+      "populationAvg": [
+        11.02,
+        21.71,
+        40.74,
+        12.96,
+        17.87
+      ],
+      "multipleDiff": [
+        1.84,
+        2.3,
+        1.47,
+        1.09,
+        1.21
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 41,
+        "height": 172,
+        "weight": 111,
+        "waist": 84,
+        "sbp": 138,
+        "glu": 113,
+        "chol": 223,
+        "tg": 264,
+        "ldlc": 172,
+        "hdlc": 35,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        11,
+        84,
+        98,
+        13,
+        22
+      ],
+      "populationAvg": [
+        2.42,
+        16.43,
+        30.35,
+        4.3,
+        4.96
+      ],
+      "multipleDiff": [
+        4.59,
+        5.12,
+        3.24,
+        3.09,
+        4.45
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 44,
+        "height": 172,
+        "weight": 93,
+        "waist": 87,
+        "sbp": 110,
+        "glu": 70,
+        "chol": 186,
+        "tg": 371,
+        "ldlc": 140,
+        "hdlc": 95,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        4,
+        30,
+        19,
+        6,
+        6
+      ],
+      "populationAvg": [
+        5.98,
+        13.93,
+        24.34,
+        5.4,
+        9.23
+      ],
+      "multipleDiff": [
+        0.67,
+        2.18,
+        0.81,
+        1.17,
+        0.73
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 54,
+        "height": 162,
+        "weight": 92,
+        "waist": 88,
+        "sbp": 123,
+        "glu": 86,
+        "chol": 265,
+        "tg": 322,
+        "ldlc": 165,
+        "hdlc": 70,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        15,
+        53,
+        92,
+        16,
+        17
+      ],
+      "populationAvg": [
+        8.27,
+        29.06,
+        60.95,
+        14.44,
+        13.13
+      ],
+      "multipleDiff": [
+        1.86,
+        1.84,
+        1.52,
+        1.11,
+        1.35
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 52,
+        "height": 163,
+        "weight": 76,
+        "waist": 90,
+        "sbp": 101,
+        "glu": 103,
+        "chol": 170,
+        "tg": 315,
+        "ldlc": 132,
+        "hdlc": 67,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        17,
+        58,
+        30,
+        10,
+        10
+      ],
+      "populationAvg": [
+        10.3,
+        21.65,
+        41.7,
+        18.5,
+        24.77
+      ],
+      "multipleDiff": [
+        1.7,
+        2.7,
+        0.72,
+        0.55,
+        0.42
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 51,
+        "height": 167,
+        "weight": 115,
+        "waist": 76,
+        "sbp": 129,
+        "glu": 85,
+        "chol": 286,
+        "tg": 290,
+        "ldlc": 197,
+        "hdlc": 62,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        10,
+        58,
+        98,
+        7,
+        15
+      ],
+      "populationAvg": [
+        6.23,
+        30.45,
+        53.81,
+        9.84,
+        10.49
+      ],
+      "multipleDiff": [
+        1.64,
+        1.91,
+        1.82,
+        0.76,
+        1.47
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 51,
+        "height": 177,
+        "weight": 84,
+        "waist": 85,
+        "sbp": 129,
+        "glu": 75,
+        "chol": 191,
+        "tg": 369,
+        "ldlc": 138,
+        "hdlc": 56,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        8,
+        27,
+        49,
+        16,
+        19
+      ],
+      "populationAvg": [
+        9.62,
+        19.82,
+        36.49,
+        10.45,
+        16.27
+      ],
+      "multipleDiff": [
+        0.92,
+        1.36,
+        1.34,
+        1.62,
+        1.2
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 63,
+        "height": 160,
+        "weight": 87,
+        "waist": 101,
+        "sbp": 105,
+        "glu": 114,
+        "chol": 260,
+        "tg": 198,
+        "ldlc": 151,
+        "hdlc": 44,
+        "diabetes": 0,
+        "hbp": 1,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        67,
+        94,
+        77,
+        22,
+        47
+      ],
+      "populationAvg": [
+        19.38,
+        32.23,
+        64.75,
+        18.39,
+        25.77
+      ],
+      "multipleDiff": [
+        3.48,
+        2.94,
+        1.19,
+        1.24,
+        1.86
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 56,
+        "height": 181,
+        "weight": 86,
+        "waist": 85,
+        "sbp": 111,
+        "glu": 109,
+        "chol": 177,
+        "tg": 230,
+        "ldlc": 105,
+        "hdlc": 52,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 1
+      },
+      "official": [
+        12,
+        52,
+        44,
+        14,
+        16
+      ],
+      "populationAvg": [
+        13.52,
+        23.63,
+        50.92,
+        18.72,
+        27.09
+      ],
+      "multipleDiff": [
+        0.93,
+        2.24,
+        0.87,
+        0.79,
+        0.62
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 66,
+        "height": 172,
+        "weight": 78,
+        "waist": 121,
+        "sbp": 138,
+        "glu": 107,
+        "chol": 144,
+        "tg": 200,
+        "ldlc": 169,
+        "hdlc": 51,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        66,
+        86,
+        98,
+        61,
+        59
+      ],
+      "populationAvg": [
+        25.74,
+        34.36,
+        74.33,
+        25.44,
+        32.26
+      ],
+      "multipleDiff": [
+        2.59,
+        2.51,
+        1.32,
+        2.43,
+        1.85
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 52,
+        "height": 178,
+        "weight": 81,
+        "waist": 80,
+        "sbp": 138,
+        "glu": 78,
+        "chol": 210,
+        "tg": 315,
+        "ldlc": 147,
+        "hdlc": 38,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        24,
+        64,
+        20,
+        25
+      ],
+      "populationAvg": [
+        10.3,
+        21.65,
+        41.7,
+        18.5,
+        24.77
+      ],
+      "multipleDiff": [
+        0.98,
+        1.13,
+        1.54,
+        1.11,
+        1.05
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 62,
+        "height": 165,
+        "weight": 83,
+        "waist": 93,
+        "sbp": 116,
+        "glu": 84,
+        "chol": 225,
+        "tg": 293,
+        "ldlc": 132,
+        "hdlc": 40,
+        "diabetes": 1,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        49,
+        57,
+        84,
+        23,
+        41
+      ],
+      "populationAvg": [
+        17.63,
+        38.12,
+        68.72,
+        20.72,
+        23.91
+      ],
+      "multipleDiff": [
+        2.83,
+        1.5,
+        1.23,
+        1.13,
+        1.73
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 48,
+        "height": 182,
+        "weight": 96,
+        "waist": 99,
+        "sbp": 115,
+        "glu": 94,
+        "chol": 214,
+        "tg": 179,
+        "ldlc": 99,
+        "hdlc": 41,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        10,
+        36,
+        40,
+        7,
+        14
+      ],
+      "populationAvg": [
+        7.85,
+        16.52,
+        32.23,
+        9.74,
+        14.96
+      ],
+      "multipleDiff": [
+        1.28,
+        2.24,
+        1.25,
+        0.82,
+        0.95
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 61,
+        "height": 168,
+        "weight": 46,
+        "waist": 89,
+        "sbp": 130,
+        "glu": 122,
+        "chol": 193,
+        "tg": 206,
+        "ldlc": 87,
+        "hdlc": 59,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        21,
+        51,
+        77,
+        29,
+        27
+      ],
+      "populationAvg": [
+        16.04,
+        33.49,
+        63.17,
+        17.45,
+        22.18
+      ],
+      "multipleDiff": [
+        1.32,
+        1.53,
+        1.23,
+        1.68,
+        1.25
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 36,
+        "height": 188,
+        "weight": 67,
+        "waist": 110,
+        "sbp": 92,
+        "glu": 83,
+        "chol": 245,
+        "tg": 253,
+        "ldlc": 107,
+        "hdlc": 57,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        3,
+        6,
+        7,
+        1,
+        3
+      ],
+      "populationAvg": [
+        3.47,
+        10.78,
+        16.2,
+        2.98,
+        5.92
+      ],
+      "multipleDiff": [
+        1.11,
+        0.59,
+        0.46,
+        0.56,
+        0.58
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 45,
+        "height": 174,
+        "weight": 100,
+        "waist": 113,
+        "sbp": 125,
+        "glu": 90,
+        "chol": 185,
+        "tg": 247,
+        "ldlc": 165,
+        "hdlc": 61,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 0
+      },
+      "official": [
+        16,
+        61,
+        77,
+        12,
+        16
+      ],
+      "populationAvg": [
+        3.53,
+        21.15,
+        33.4,
+        5.82,
+        6.69
+      ],
+      "multipleDiff": [
+        4.54,
+        2.89,
+        2.32,
+        2.11,
+        2.4
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 50,
+        "height": 174,
+        "weight": 74,
+        "waist": 109,
+        "sbp": 124,
+        "glu": 92,
+        "chol": 152,
+        "tg": 301,
+        "ldlc": 125,
+        "hdlc": 56,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        11,
+        26,
+        40,
+        13,
+        20
+      ],
+      "populationAvg": [
+        8.99,
+        20.22,
+        33.71,
+        12.27,
+        16.45
+      ],
+      "multipleDiff": [
+        1.33,
+        1.32,
+        1.19,
+        1.11,
+        1.27
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 63,
+        "height": 187,
+        "weight": 52,
+        "waist": 63,
+        "sbp": 134,
+        "glu": 70,
+        "chol": 143,
+        "tg": 296,
+        "ldlc": 199,
+        "hdlc": 58,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 1,
+        "gender": 0
+      },
+      "official": [
+        6,
+        7,
+        82,
+        19,
+        14
+      ],
+      "populationAvg": [
+        19.38,
+        32.23,
+        64.75,
+        18.39,
+        25.77
+      ],
+      "multipleDiff": [
+        0.34,
+        0.25,
+        1.27,
+        1.06,
+        0.54
+      ]
+    },
+    {
+      "kind": "fresh-holdout",
+      "input": {
+        "age": 64,
+        "height": 184,
+        "weight": 87,
+        "waist": 103,
+        "sbp": 95,
+        "glu": 120,
+        "chol": 198,
+        "tg": 246,
+        "ldlc": 155,
+        "hdlc": 68,
+        "diabetes": 0,
+        "hbp": 0,
+        "smoke": 0,
+        "gender": 1
+      },
+      "official": [
+        22,
+        75,
+        40,
+        18,
+        18
+      ],
+      "populationAvg": [
+        23.29,
+        31.28,
+        62.27,
+        32.59,
+        42.9
+      ],
+      "multipleDiff": [
+        0.97,
+        2.42,
+        0.65,
+        0.55,
+        0.44
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 "use client"
 
 import { ScoreInterpretation } from './ScoreInterpretation'
+import { HpaRiskResults } from './HpaRiskResults'
 import { useMemo, useState, useCallback } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -302,6 +303,7 @@ export function CalculatorDetail({
       )}
 
       {/* Result — compact so it doesn't dominate the panel. */}
+      {calc.id === 'hpa-chronic-risk-reconstruction' ? <HpaRiskResults values={values} locale={locale} mixedDates={!!coherence} /> : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
           <div className="absolute right-2 top-2 flex items-center gap-1">
@@ -359,6 +361,7 @@ export function CalculatorDetail({
           </div>
         )}
       </div>
+      )}
 
       {/* Inputs */}
       <div className="space-y-3">

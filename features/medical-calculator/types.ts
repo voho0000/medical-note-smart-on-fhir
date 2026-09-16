@@ -76,7 +76,7 @@ export type ConvertDim =
  */
 /** Vital signs live outside the canonical lab map; a `vital` source is matched
  *  by LOINC first, then (fallback) by display-name for imports that omit LOINC. */
-export type VitalKind = 'sbp' | 'weight' | 'height'
+export type VitalKind = 'sbp' | 'weight' | 'height' | 'waist'
 
 export type AutofillSource =
   | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey }
