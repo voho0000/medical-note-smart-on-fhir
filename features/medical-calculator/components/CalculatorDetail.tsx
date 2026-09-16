@@ -2,7 +2,7 @@
 
 import { ScoreInterpretation } from './ScoreInterpretation'
 import { HpaRiskResults } from './HpaRiskResults'
-import { useMemo, useState, useCallback } from "react"
+import { useMemo, useState, useCallback, useRef } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -176,6 +176,15 @@ export function CalculatorDetail({
   const { copied, copy } = useCopyToClipboard()
 
   const zh = locale === "zh-TW"
+  const isHpa = calc.id === 'hpa-chronic-risk-reconstruction'
+  const detailRef = useRef<HTMLDivElement>(null)
+  const hpaResultRef = useRef<HTMLDivElement>(null)
+  const inputGroups = isHpa ? [
+    { key: 'basic', title: zh ? '基本資料' : 'Basic information', hint: zh ? '本地已驗算年齡為 35–70 歲。' : 'Locally checked for ages 35–70.', keys: ['gender', 'age', 'height', 'weight', 'waist'] },
+    { key: 'history', title: zh ? '病史與吸菸' : 'History and smoking', hint: zh ? '病史請依曾經確診的情形填寫，不以這次血壓或血糖判定；不確定可先留空。' : 'Use previously diagnosed conditions, not today’s BP or glucose. Leave unknown history unanswered.', keys: ['diabetes', 'hbp', 'smoke', 'prior_cvd'] },
+    { key: 'labs', title: zh ? '血壓與檢驗' : 'Blood pressure and labs', hint: zh ? '核對數值、單位與來源日期；血糖請使用空腹檢驗。' : 'Check values, units and source dates; use a fasting glucose result.', keys: ['sbp', 'glu', 'chol', 'tg', 'ldlc', 'hdlc'] },
+  ].map((group) => ({ ...group, inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)) }))
+    : [{ key: 'all', title: '', hint: '', inputs: calc.inputs }]
 
   // Jump to the source report in the left panel (reuses the shared nav store
   // that medical-summary's citations use — switches to the reports tab and
@@ -209,16 +218,16 @@ export function CalculatorDetail({
   }, [calc, result, values, displayUnits, filled, locale])
 
   return (
-    <div className="space-y-4">
+    <div ref={detailRef} className="space-y-4">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onBack} className="h-8 gap-1 px-2">
           <ArrowLeft className="h-4 w-4" />
           {zh ? "返回" : "Back"}
         </Button>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{tr(locale, calc.name)}</div>
+          <div className={`${isHpa ? 'break-words' : 'truncate'} text-sm font-semibold`}>{tr(locale, calc.name)}</div>
           {trAlt(locale, calc.name) && (
-            <div className="truncate text-xs font-normal text-muted-foreground">{trAlt(locale, calc.name)}</div>
+            <div className={`${isHpa ? 'break-words' : 'truncate'} text-xs font-normal text-muted-foreground`}>{trAlt(locale, calc.name)}</div>
           )}
         </div>
         <Button
@@ -295,7 +304,9 @@ export function CalculatorDetail({
         <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50/70 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
-            {zh
+            {isHpa ? (zh
+              ? `提醒：檢驗日期相差 ${coherence.spanDays} 天（${coherence.earliest} ～ ${coherence.latest}）。仍會顯示可估算的結果，請核對這些數值是否能代表目前狀況。`
+              : `Lab dates are ${coherence.spanDays} days apart (${coherence.earliest} – ${coherence.latest}). Available estimates remain visible; check whether these values reflect the current situation.`) : zh
               ? `注意：自動帶入的數值來自相差 ${coherence.spanDays} 天的不同報告（${coherence.earliest} ～ ${coherence.latest}）。此公式應使用同一次／同日的檢驗，請確認一致性。`
               : `Heads-up: the auto-filled values are from reports ${coherence.spanDays} days apart (${coherence.earliest} – ${coherence.latest}). This formula expects one same-day draw — verify they belong together.`}
           </div>
@@ -303,7 +314,11 @@ export function CalculatorDetail({
       )}
 
       {/* Result — compact so it doesn't dominate the panel. */}
-      {calc.id === 'hpa-chronic-risk-reconstruction' ? <HpaRiskResults values={values} locale={locale} mixedDates={!!coherence} /> : (
+      {isHpa ? (
+        <div ref={hpaResultRef} tabIndex={-1}>
+          <HpaRiskResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+        </div>
+      ) : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
           <div className="absolute right-2 top-2 flex items-center gap-1">
@@ -365,7 +380,11 @@ export function CalculatorDetail({
 
       {/* Inputs */}
       <div className="space-y-3">
-        {calc.inputs.map((input) => {
+        {inputGroups.map((group) => (
+        <fieldset key={group.key} className="min-w-0 space-y-3">
+          {group.title && <legend className="mb-1 pt-2 text-sm font-semibold">{group.title}</legend>}
+          {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
+        {group.inputs.map((input) => {
           const fill = filled[input.key]
           const expectedUnit = input.type === "number" ? input.unit : undefined
           const unit = input.type === "number" ? (displayUnits[input.key] || input.unit) : undefined
@@ -408,7 +427,7 @@ export function CalculatorDetail({
               </div>
               {input.type === "select" ? (
                 <Select value={values[input.key] ?? ""} onValueChange={(v) => setValue(input.key, v)}>
-                  <SelectTrigger id={`calc-${input.key}`} className="h-9">
+                  <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9'}>
                     <SelectValue placeholder={zh ? "請選擇…" : "Select…"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -429,7 +448,7 @@ export function CalculatorDetail({
                     value={values[input.key] ?? ""}
                     onChange={(e) => setValue(input.key, e.target.value)}
                     placeholder={placeholder}
-                    className={`h-9 ${implausible ? "border-amber-500 focus-visible:ring-amber-500/50" : ""}`}
+                    className={`${isHpa ? 'h-11 sm:h-9' : 'h-9'} ${implausible ? "border-amber-500 focus-visible:ring-amber-500/50" : ""}`}
                     aria-invalid={implausible || undefined}
                   />
                   {implausible && (
@@ -465,7 +484,16 @@ export function CalculatorDetail({
             </div>
           )
         })}
+        </fieldset>
+        ))}
       </div>
+
+      {isHpa && (
+        <Button variant="outline" className="min-h-11 w-full" onClick={() => {
+          hpaResultRef.current?.focus({ preventScroll: true })
+          hpaResultRef.current?.scrollIntoView({ block: 'start' })
+        }}>{zh ? '回到風險結果' : 'Back to risk results'}</Button>
+      )}
 
       {/* Pearls / pitfalls — caveats & when NOT to rely on this (MDCalc-style). */}
       {info.caveats && (

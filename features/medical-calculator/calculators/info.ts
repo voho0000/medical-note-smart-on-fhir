@@ -69,7 +69,7 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   },
   'hpa-chronic-risk-reconstruction': {
     useWhen: { en: 'A local, approximate 10-year estimate for Taiwanese adults 35–70, corresponding to the HPA website’s five outcomes.', zh: '35–70 歲成人之五項慢性病未來 10 年風險本地近似估計。' },
-    caveats: { en: 'Not the HPA formula or a live official result. Fitted against synthetic examples and only checked within the displayed ranges; results can differ by several percentage points and the category may change near a cut point. Use a fasting glucose result, confirm source dates, and do not use to diagnose or replace the official website.', zh: '非國健署原始公式或即時官方結果。僅用合成案例重建、限標示範圍內驗算，個別數值可能差數個百分點，接近分級界線時更可能跨級。須確認空腹血糖與資料日期；不可據此診斷或取代官方網站。' },
+    caveats: { en: 'The reconstructed model matched official displayed percentages and grades in the checked synthetic cases, not a clinical validation or a guarantee for all inputs. Ranges describe local testing, not normal values; do not alter a correct value just to obtain a result. Confirm history, fasting status and dates before interpretation.', zh: '重建公式在已驗算的合成案例中，顯示百分比與分級均與官網一致；這不是臨床準確率，也不保證所有輸入。驗算範圍不是正常值範圍，請勿為取得結果而改小或改大正確數值。判讀前請核對病史、空腹狀態與日期。' },
   },
   'child-pugh': {
     useWhen: { en: 'Cirrhosis severity, surgical risk, and prognosis.', zh: '肝硬化嚴重度、手術風險與預後。' },

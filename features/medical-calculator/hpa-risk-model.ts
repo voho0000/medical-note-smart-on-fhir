@@ -10,7 +10,7 @@ import type { CalcValues } from './types'
  * See docs/HPA-RISK-RECONSTRUCTION.md for sampling, holdout and limitations.
  */
 export type HpaOutcome = 'chd' | 'diabetes' | 'hypertension' | 'stroke' | 'mace'
-export type HpaStatus = 'estimated' | 'missing' | 'outside' | 'existing'
+export type HpaStatus = 'estimated' | 'missing' | 'outside' | 'existing' | 'review'
 export type HpaLevel = 'low' | 'moderate' | 'high'
 
 export interface HpaRiskResult {
@@ -28,7 +28,8 @@ export interface HpaRiskResult {
 
 export const HPA_OUTCOMES: HpaOutcome[] = ['chd', 'diabetes', 'hypertension', 'stroke', 'mace']
 
-const LIMITS: Record<string, [number, number]> = {
+/** Sampling limits, NOT normal ranges or diagnostic thresholds. */
+export const HPA_VALIDATED_RANGES: Readonly<Record<string, readonly [number, number]>> = {
   age: [35, 70], height: [150, 190], weight: [45, 115], waist: [60, 125],
   sbp: [90, 139], glu: [70, 125], chol: [120, 300], tg: [45, 400],
   ldlc: [45, 220], hdlc: [25, 95],
@@ -114,9 +115,11 @@ export function calculateHpaRisks(values: CalcValues): HpaRiskResult[] {
 
   return HPA_OUTCOMES.map((outcome) => {
     if (outcome === 'diabetes' && values.diabetes === 'yes') return { outcome, status: 'existing', reason: 'known' }
-    if (outcome === 'diabetes' && (valueOf(values, 'glu') ?? 0) >= 126) return { outcome, status: 'existing', reason: 'threshold' }
+    if (outcome === 'diabetes' && (valueOf(values, 'glu') ?? 0) >= 126) return { outcome, status: 'review', reason: 'threshold' }
     if (outcome === 'hypertension' && values.hbp === 'yes') return { outcome, status: 'existing', reason: 'known' }
-    if (outcome === 'hypertension' && (valueOf(values, 'sbp') ?? 0) >= 140) return { outcome, status: 'existing', reason: 'threshold' }
+    // The official v4/hra-allmodel.jsp also withholds these two incident-risk
+    // percentages at these values. A single measurement is NOT known disease.
+    if (outcome === 'hypertension' && (valueOf(values, 'sbp') ?? 0) >= 140) return { outcome, status: 'review', reason: 'threshold' }
     if (['chd', 'stroke', 'mace'].includes(outcome) && values.prior_cvd === 'yes') return { outcome, status: 'existing', reason: 'prior-cvd' }
 
     const keys = sex ? MODELS[sex][outcome].keys : []
@@ -129,7 +132,7 @@ export function calculateHpaRisks(values: CalcValues): HpaRiskResult[] {
 
     const outside = keys.filter((key) => {
       const n = valueOf(values, key)!
-      const range = LIMITS[key]
+      const range = HPA_VALIDATED_RANGES[key]
       return range && (n < range[0] || n > range[1])
     })
     if (age !== null && !Number.isInteger(age)) outside.push('age')

@@ -58,6 +58,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Medication duration | The 2×2 card omits prescribed supply days. | Stacked rows, expanded list, and medication hover details retain supply days. | Explicit chat approval, 2026-09-10 |
 | Report, medication, and visit rows | Stacked layouts also use single-line records; long text may be truncated. | Existing report dialogs, row tooltips, and destination tabs retain details. | Explicit chat approval, 2026-09-10 |
 
+## Medical calculator display rules (all launch routes)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| 國健署五項慢性病風險 at `/`, `/app/`, `/app-hmc/` and their launch-query variants | Autofilled laboratory dates more than 7 days apart produce the existing source-date warning only; they no longer hide eligible risk percentages or grades. Known disease, diagnostic thresholds, missing inputs and validation-range checks remain unchanged. | Explicit owner request to remove the date-based blocker, 2026-09-16 |
+
 ## Medical Summary display rules (all launch routes)
 
 | Surface | Compact presentation | Where the full recovery action remains | Owner decision |
