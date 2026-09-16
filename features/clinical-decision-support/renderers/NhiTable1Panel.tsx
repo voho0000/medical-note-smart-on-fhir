@@ -2,6 +2,7 @@
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { TherapyResponseChart } from './TherapyResponseChart'
 import type { CdssCoverageCheck, CdssCoverageSummary } from '../types'
 
 /**
@@ -175,6 +176,7 @@ export function NhiTable1Panel({
   if (tiers.length === 0) return null
 
   const tallest = Math.max(...tiers.map((tier) => threshold(tier.initiation)), 1)
+  const selected = tiers.find((tier) => tier.selected)
   const forTier = (id: string) => summary.diseaseChecks.filter((check) => check.tier === id)
   const groupsOf = (id: string) => {
     const checks = forTier(id)
@@ -217,35 +219,16 @@ export function NhiTable1Panel({
               <span className="tabular-nums text-primary">{summary.therapy.duration}</span>
             ) : null}
           </div>
-          {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
-            <ol className="flex flex-wrap items-stretch gap-1.5">
-              {summary.therapy.timeline.map((span) => (
-                <li
-                  key={`${span.from}-${span.label}`}
-                  className={cn(
-                    'flex min-w-0 flex-col gap-0.5 rounded border px-2.5 py-1.5',
-                    span.changed ? 'border-primary bg-primary/10' : 'border-border bg-muted/30',
-                  )}
-                >
-                  <span className={cn('text-xs font-medium', span.changed && 'text-primary')}>
-                    {span.changed ? '↗ ' : ''}{span.label}
-                    {span.dose ? <span className="ml-1.5 font-normal tabular-nums">{span.dose}</span> : null}
-                  </span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {span.from}
-                    {span.to !== span.from ? ` – ${span.to}` : ''}
-                    {' · '}
-                    {span.count} {isEnglish ? 'prescriptions' : '筆處方'}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : null}
+          <TherapyResponseChart
+            therapy={summary.therapy}
+            goal={selected ? threshold(selected.initiation) : undefined}
+            locale={locale}
+          />
           {summary.therapy.timeline && summary.therapy.timeline.length > 0 ? (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {isEnglish
-                ? 'Prescribing events from the claims record, folded where nothing changed. A span ends at its last prescription, not at a stop, and a daily dose appears only where the prescription stated one.'
-                : '為申報紀錄的處方事件，品項未變者併為一段。一段的結束是最後一筆處方，不代表停藥；每日劑量只在處方本身寫明時顯示。'}
+                ? 'Prescribing and laboratory records. A span ends at its last prescription, not at a stop; a daily dose appears only where the prescription stated one; and the left edge is where the data window begins, not where treatment did.'
+                : '為處方與檢驗紀錄。一段的結束是最後一筆處方，不代表停藥；每日劑量只在處方本身寫明時顯示；左端是資料窗起點，不是療程起點。'}
             </p>
           ) : null}
         </div>
