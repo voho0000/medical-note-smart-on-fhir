@@ -44,6 +44,7 @@ import { buildPhysicianSemanticCard } from '../utils/build-physician-semantic-ca
 import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/build-rationale-copy-text'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
+import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
 import {
   buildHeartFailureBoard,
   HEART_FAILURE_LIST_STATUS_ORDER,
@@ -2597,6 +2598,7 @@ export function ClinicalDecisionSupportView({
             )
             ? conciseAssessment
             : undefined
+          const hasCoverageSummary = 'coverageSummary' in recommendation && Boolean(recommendation.coverageSummary)
           const nextStepPreviewText = recommendation.nextActions[0]
 
           return (
@@ -2619,7 +2621,7 @@ export function ClinicalDecisionSupportView({
                   recommendation.status === 'no-action'
                     ? 'hover:bg-emerald-100/50 dark:hover:bg-emerald-500/10'
                     : 'hover:bg-muted/30',
-                  board
+                  hasCoverageSummary ? 'grid-cols-[minmax(0,1fr)_auto] items-center' : board
                     ? '@min-[40rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3'
                     : '@min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3',
                   isExpanded && 'bg-muted/25',
@@ -2661,7 +2663,9 @@ export function ClinicalDecisionSupportView({
                   setRequestedExpandedId(isExpanded ? null : recommendation.id)
                 }}
               >
-                {board ? (
+                {hasCoverageSummary ? (
+                  <span className="font-semibold text-foreground" data-testid={`cdss-module-cell-${recommendation.id}`}>{moduleName}</span>
+                ) : board ? (
                   <>
                     <span
                       className="min-w-0 cursor-text"
@@ -2857,6 +2861,7 @@ export function ClinicalDecisionSupportView({
                 </span>
               </div>
 
+              <NhiLipidCoverageSummary recommendation={recommendation} locale={locale} patientId={patientId} />
               {isExpanded ? (
                 <div
                   id={detailId}

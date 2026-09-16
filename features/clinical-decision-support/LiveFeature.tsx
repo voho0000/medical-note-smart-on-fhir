@@ -16,6 +16,7 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import { useNhiLipidReview, useNhiLipidReviewStore } from './stores/nhi-lipid-review.store'
 import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
@@ -248,6 +249,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const nhiLipidReview = useNhiLipidReview(patientId)
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
@@ -349,12 +351,12 @@ export default function LiveClinicalDecisionSupportFeature() {
   // profile, so every module that reads them recomputes.
   const answeredProfile = useMemo(() => (
     recordProfile
-      ? applyPhenotypeAnswer(
+      ? { ...applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
           phenotypeAnswer,
-        )
+        ), nhiLipidReview }
       : null
-  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -474,6 +476,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     if (!patientId) return
     clearEvidenceOverrides(patientId)
     clearClinicVitals(patientId)
+    useNhiLipidReviewStore.getState().clear(patientId)
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
