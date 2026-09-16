@@ -392,6 +392,41 @@ export function TherapyResponseChart({
         </div>
       ) : null}
 
+      {therapy.intensityReference ? (
+        <details className="text-xs">
+          <summary className="min-h-11 cursor-pointer py-2 text-muted-foreground">
+            {therapy.intensityReference.title}
+          </summary>
+          <p className="pb-2 leading-relaxed text-muted-foreground">{therapy.intensityReference.note}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[22rem] text-left">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground">
+                  {therapy.intensityReference.columns.map((column) => (
+                    <th key={column} className="py-1 pr-3 font-medium">{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {therapy.intensityReference.rows.map((row) => (
+                  <tr
+                    key={row.ingredient}
+                    className={row.current ? 'border-b border-border/60 bg-primary/10 font-medium' : 'border-b border-border/60 last:border-0'}
+                  >
+                    <td className="py-1 pr-3">
+                      {row.current ? <span aria-hidden="true" className="mr-1 text-primary">●</span> : null}
+                      {row.ingredient}
+                    </td>
+                    <td className="py-1 pr-3">{row.high}</td>
+                    <td className="py-1">{row.moderate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
+
       <details className="text-xs">
         <summary className="min-h-11 cursor-pointer py-2 text-muted-foreground">
           {isEnglish ? 'The same data as a table' : '以表格檢視同一組資料'}
