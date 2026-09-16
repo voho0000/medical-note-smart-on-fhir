@@ -20,12 +20,14 @@ import type { CdssCoverageSummary } from '../types'
 
 type Therapy = NonNullable<CdssCoverageSummary['therapy']>
 
-const PAD = { left: 46, right: 14, top: 10, bottom: 22 }
-const DOSE_H = 54
-const GAP = 26
+const PAD = { left: 62, right: 14, top: 10, bottom: 22 }
+/** One lane per lipid class the record holds; the statin's is taller because
+ *  its height carries a dose, while an adjunct's carries only presence. */
+const STATIN_LANE = 52
+const ADJUNCT_LANE = 22
+const GAP = 24
 const LDL_H = 86
 const W = 820
-const H = PAD.top + DOSE_H + GAP + LDL_H + PAD.bottom
 
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
 
@@ -63,6 +65,24 @@ export function TherapyResponseChart({
   const [hover, setHover] = useState<{ x: number; y: number; title: string; lines: string[] } | null>(null)
 
   const spans = useMemo(() => (therapy.timeline ?? []).filter((s) => s.from && s.to), [therapy.timeline])
+  const lanes = useMemo(() => {
+    const order: string[] = []
+    for (const span of spans) if (!order.includes(span.classId)) order.push(span.classId)
+    let top = PAD.top
+    return order.map((classId) => {
+      const height = classId === 'statin' ? STATIN_LANE : ADJUNCT_LANE
+      const lane = {
+        classId,
+        label: spans.find((span) => span.classId === classId)!.classLabel,
+        top,
+        height,
+      }
+      top += height + 6
+      return lane
+    })
+  }, [spans])
+  const lanesHeight = lanes.reduce((total, lane) => total + lane.height + 6, 0)
+  const H = PAD.top + lanesHeight + GAP + LDL_H + PAD.bottom
   const readings = useMemo(
     () => (therapy.response ?? []).filter((r) => Number.isFinite(r.value)),
     [therapy.response],
@@ -87,7 +107,7 @@ export function TherapyResponseChart({
     const values = readings.map((r) => r.value)
     const ldlMax = Math.max(...values, goal ?? 0) * 1.12
     const ldlMin = Math.min(...values, goal ?? Infinity) * 0.85
-    const ldlTop = PAD.top + DOSE_H + GAP
+    const ldlTop = PAD.top + lanesHeight + GAP
     const y = (value: number) =>
       ldlTop + LDL_H - ((value - ldlMin) / Math.max(ldlMax - ldlMin, 1)) * LDL_H
 
@@ -95,11 +115,11 @@ export function TherapyResponseChart({
       ? [...new Set([Math.round(Math.max(...values)), Math.round(Math.min(...values))])]
       : []
     return { from, to, x, y, doseMax, ldlTop, ldlTicks, ticks: monthTicks(from, to) }
-  }, [spans, readings, goal])
+  }, [spans, readings, goal, lanesHeight])
 
   if (!scale || (spans.length === 0 && readings.length === 0)) return null
 
-  const doseBaseline = PAD.top + DOSE_H
+
   const points = readings.map((r) => ({ ...r, cx: scale.x(day(r.date)), cy: scale.y(r.value) }))
   const path = points.map((p, index) => `${index === 0 ? 'M' : 'L'}${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(' ')
 
@@ -108,7 +128,9 @@ export function TherapyResponseChart({
       <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="font-medium">{isEnglish ? 'Statin dose and LDL-C response' : 'Statin 劑量與 LDL-C 反應'}</span>
         <span className="text-muted-foreground">
-          {isEnglish ? 'Prescribing and laboratory records on one time axis' : '處方與檢驗紀錄，同一條時間軸'}
+          {isEnglish
+            ? 'Prescribing and laboratory records on one time axis; the banded columns are 表一\u2019s 6–8 week recheck after each change'
+            : '處方與檢驗紀錄，同一條時間軸；帶狀區間是表一在每次變動後的 6–8 週複驗窗'}
         </span>
       </figcaption>
 
@@ -125,13 +147,67 @@ export function TherapyResponseChart({
           </clipPath>
         </defs>
 
+        {spans.filter((span) => span.recheck).map((span) => {
+          const window = span.recheck!
+          const x1 = scale.x(day(window.from))
+          const x2 = Math.max(scale.x(day(window.to)), x1 + 3)
+          const bottom = PAD.top + lanesHeight + GAP + LDL_H
+          return (
+            <g key={`recheck-${span.classId}-${span.from}`} clipPath={`url(#${clipId})`}>
+              <rect
+                x={x1}
+                y={PAD.top}
+                width={x2 - x1}
+                height={bottom - PAD.top}
+                fill="var(--primary)"
+                fillOpacity="0.07"
+              />
+              <line x1={x1} x2={x1} y1={PAD.top} y2={bottom} stroke="var(--primary)" strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1={x2} x2={x2} y1={PAD.top} y2={bottom} stroke="var(--primary)" strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3 3" />
+              {window.met === false ? (
+                <text
+                  x={(x1 + x2) / 2}
+                  y={PAD.top - 1}
+                  textAnchor="middle"
+                  className="fill-muted-foreground"
+                  style={{ fontSize: 9 }}
+                >
+                  {isEnglish ? 'no recheck' : '未見複驗'}
+                </text>
+              ) : null}
+              <rect
+                x={x1}
+                y={PAD.top}
+                width={x2 - x1}
+                height={bottom - PAD.top}
+                fill="transparent"
+                onMouseEnter={() => setHover({
+                  x: (x1 + x2) / 2,
+                  y: PAD.top,
+                  title: window.label,
+                  lines: [
+                    `${window.from} – ${window.to}`,
+                    `${span.classLabel} · ${span.label}`,
+                    window.met === true
+                      ? (isEnglish ? 'A reading landed in the window' : '窗內有複驗紀錄')
+                      : window.met === false
+                        ? (isEnglish ? 'The window closed with no reading' : '窗已過，未見複驗')
+                        : (isEnglish ? 'The window has not closed yet' : '窗尚未結束'),
+                  ],
+                })}
+                onMouseLeave={() => setHover(null)}
+              />
+            </g>
+          )
+        })}
+
         {scale.ticks.map((tick) => (
           <g key={tick.at}>
             <line
               x1={scale.x(tick.at)}
               x2={scale.x(tick.at)}
               y1={PAD.top}
-              y2={PAD.top + DOSE_H + GAP + LDL_H}
+              y2={PAD.top + lanesHeight + GAP + LDL_H}
               stroke="var(--border)"
               strokeWidth="1"
             />
@@ -147,61 +223,79 @@ export function TherapyResponseChart({
           </g>
         ))}
 
-        <text x={PAD.left - 8} y={PAD.top + 10} textAnchor="end" className="fill-muted-foreground" style={{ fontSize: 10 }}>
-          mg
-        </text>
-        <line x1={PAD.left} x2={W - PAD.right} y1={doseBaseline} y2={doseBaseline} stroke="var(--border)" strokeWidth="1" />
-
-        <g clipPath={`url(#${clipId})`}>
-          {spans.map((span) => {
-            const stated = Number(span.dose?.replace(/[^0-9.]/g, '')) || 0
-            const x1 = scale.x(day(span.from))
-            const x2 = Math.max(scale.x(day(span.to)), x1 + 6)
-            const height = stated > 0 ? Math.max((stated / scale.doseMax) * (DOSE_H - 8), 6) : 10
-            return (
-              <g key={`${span.from}-${span.label}`}>
-                <rect
-                  x={x1}
-                  y={doseBaseline - height}
-                  width={Math.max(x2 - x1 - 2, 4)}
-                  height={height}
-                  rx="3"
-                  fill={stated > 0 ? 'var(--primary)' : 'var(--muted-foreground)'}
-                  fillOpacity={stated > 0 ? (span.changed ? 0.95 : 0.55) : 0.25}
-                  stroke="var(--card)"
-                  strokeWidth="2"
-                />
-                <rect
-                  x={x1}
-                  y={PAD.top}
-                  width={Math.max(x2 - x1, 8)}
-                  height={DOSE_H}
-                  fill="transparent"
-                  onMouseEnter={() => setHover({
-                    x: (x1 + x2) / 2,
-                    y: doseBaseline - height,
-                    title: span.label,
-                    lines: [
-                      span.dose ?? (isEnglish ? 'No daily dose stated' : '處方未載每日劑量'),
-                      `${span.from} – ${span.to}`,
-                      isEnglish ? `${span.count} prescriptions` : `${span.count} 筆處方`,
-                    ],
-                  })}
-                  onMouseLeave={() => setHover(null)}
-                />
-                <text
-                  x={x1 + 3}
-                  y={doseBaseline - height - 4}
-                  className={span.changed ? 'fill-foreground' : 'fill-muted-foreground'}
-                  style={{ fontSize: 10, fontWeight: span.changed ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {span.changed ? '↗ ' : ''}
-                  {span.dose ?? (isEnglish ? 'dose not stated' : '劑量未載')}
-                </text>
+        {lanes.map((lane) => {
+          const baseline = lane.top + lane.height
+          return (
+            <g key={lane.classId}>
+              <text
+                x={PAD.left - 8}
+                y={baseline - 2}
+                textAnchor="end"
+                className="fill-muted-foreground"
+                style={{ fontSize: 10 }}
+              >
+                {lane.label}
+              </text>
+              <line x1={PAD.left} x2={W - PAD.right} y1={baseline} y2={baseline} stroke="var(--border)" strokeWidth="1" />
+              <g clipPath={`url(#${clipId})`}>
+                {spans.filter((span) => span.classId === lane.classId).map((span) => {
+                  const stated = Number(span.dose?.replace(/[^0-9.]/g, '')) || 0
+                  const x1 = scale.x(day(span.from))
+                  const x2 = Math.max(scale.x(day(span.to)), x1 + 6)
+                  const height = lane.classId !== 'statin'
+                    ? lane.height - 8
+                    : stated > 0
+                      ? Math.max((stated / scale.doseMax) * (lane.height - 8), 6)
+                      : 10
+                  return (
+                    <g key={`${span.from}-${span.label}`}>
+                      <rect
+                        x={x1}
+                        y={baseline - height}
+                        width={Math.max(x2 - x1 - 2, 4)}
+                        height={height}
+                        rx="3"
+                        fill={stated > 0 || lane.classId !== 'statin' ? 'var(--primary)' : 'var(--muted-foreground)'}
+                        fillOpacity={lane.classId !== 'statin' ? 0.5 : stated > 0 ? (span.changed ? 0.95 : 0.55) : 0.25}
+                        stroke="var(--card)"
+                        strokeWidth="2"
+                      />
+                      <rect
+                        x={x1}
+                        y={lane.top}
+                        width={Math.max(x2 - x1, 8)}
+                        height={lane.height}
+                        fill="transparent"
+                        onMouseEnter={() => setHover({
+                          x: (x1 + x2) / 2,
+                          y: baseline - height,
+                          title: span.label,
+                          lines: [
+                            span.dose ?? (isEnglish ? 'No daily dose stated' : '處方未載每日劑量'),
+                            `${span.from} – ${span.to}`,
+                            isEnglish ? `${span.count} prescriptions` : `${span.count} 筆處方`,
+                          ],
+                        })}
+                        onMouseLeave={() => setHover(null)}
+                      />
+                      {lane.classId === 'statin' ? (
+                        <text
+                          x={x1 + 3}
+                          y={baseline - height - 4}
+                          className={span.changed ? 'fill-foreground' : 'fill-muted-foreground'}
+                          style={{ fontSize: 10, fontWeight: span.changed ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}
+                        >
+                          {span.changed ? '↗ ' : ''}
+                          {span.dose ?? (isEnglish ? 'dose not stated' : '劑量未載')}
+                        </text>
+                      ) : null}
+                    </g>
+                  )
+                })}
               </g>
-            )
-          })}
-        </g>
+            </g>
+          )
+        })}
 
         {goal !== undefined ? (
           <g>
