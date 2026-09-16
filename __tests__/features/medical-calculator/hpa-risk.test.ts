@@ -143,11 +143,13 @@ describe('HPA five-risk offline reconstruction', () => {
     expect(calculateHpaRisks({ ...baseline, ldlc: '' }).map((r) => r.status)).toEqual(['estimated', 'estimated', 'missing', 'estimated', 'estimated'])
   })
 
-  it('suppresses incident-risk estimates for known disease or diagnostic thresholds', () => {
+  it('distinguishes known disease from measurements requiring review at official display thresholds', () => {
     expect(calculateHpaRisks({ ...baseline, diabetes: 'yes' })[1]).toMatchObject({ status: 'existing', reason: 'known' })
-    expect(calculateHpaRisks({ ...baseline, glu: '126' })[1]).toMatchObject({ status: 'existing', reason: 'threshold' })
+    expect(calculateHpaRisks({ ...baseline, glu: '126' })[1]).toMatchObject({ status: 'review', reason: 'threshold' })
     expect(calculateHpaRisks({ ...baseline, hbp: 'yes' })[2]).toMatchObject({ status: 'existing', reason: 'known' })
-    expect(calculateHpaRisks({ ...baseline, sbp: '140' })[2]).toMatchObject({ status: 'existing', reason: 'threshold' })
+    expect(calculateHpaRisks({ ...baseline, sbp: '140' })[2]).toMatchObject({ status: 'review', reason: 'threshold' })
+    expect(calculateHpaRisks({ ...baseline, sbp: '154', hbp: 'yes' })[2]).toMatchObject({ status: 'existing', reason: 'known' })
+    expect(calculateHpaRisks({ ...baseline, glu: '150', diabetes: 'yes' })[1]).toMatchObject({ status: 'existing', reason: 'known' })
     const prior = calculateHpaRisks({ ...baseline, prior_cvd: 'yes' })
     expect([prior[0], prior[3], prior[4]].map((r) => r.status)).toEqual(['existing', 'existing', 'existing'])
   })
