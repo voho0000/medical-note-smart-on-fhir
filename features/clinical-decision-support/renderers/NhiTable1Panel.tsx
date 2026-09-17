@@ -1,9 +1,33 @@
 "use client"
 
+import { useMemo } from 'react'
+import { Check, LoaderCircle, Sparkles, X } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { TherapyResponseChart } from './TherapyResponseChart'
 import type { CdssCoverageCheck, CdssCoverageSummary } from '../types'
+import {
+  selectNhiLipidAiCriteria,
+  type NhiLipidAiDecision,
+  type NhiLipidAiSuggestion,
+} from '../ai/nhi-lipid-ai-assist'
+import {
+  useNhiLipidAiAssist,
+  type NhiLipidAiAssist,
+} from '../hooks/use-nhi-lipid-ai-assist.hook'
 
 /**
  * 表一 as the published table draws it, with this patient's position on it.
@@ -62,10 +86,14 @@ function Criterion({
   check,
   isEnglish,
   onAnswer,
+  aiSuggestion,
+  aiDecision,
 }: {
   check: CdssCoverageCheck
   isEnglish: boolean
   onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
+  aiSuggestion?: NhiLipidAiSuggestion
+  aiDecision?: NhiLipidAiDecision
 }) {
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
@@ -97,6 +125,14 @@ function Criterion({
             ? ` · ${isEnglish ? 'physician verified' : '醫師核對'}`
             : ''}
         </span>
+        {aiSuggestion && aiSuggestion.state !== 'unknown' && !aiDecision ? (
+          <span className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
+            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            {isEnglish
+              ? `AI suggests ${aiSuggestion.state === 'yes' ? 'met' : 'not met'} · not applied`
+              : `AI 建議${aiSuggestion.state === 'yes' ? '符合' : '不符合'} · 尚未採用`}
+          </span>
+        ) : null}
       </span>
     </>
   )
@@ -160,16 +196,276 @@ function Criterion({
   )
 }
 
-export function NhiTable1Panel({
-  summary,
-  locale,
+const AI_STATE_LABEL: Record<NhiLipidAiSuggestion['state'], [zh: string, en: string]> = {
+  yes: ['建議符合', 'Suggested met'],
+  no: ['建議不符合', 'Suggested not met'],
+  unknown: ['仍無法判斷', 'Still unknown'],
+}
+
+const AI_CONFIDENCE_LABEL: Record<NhiLipidAiSuggestion['confidence'], [zh: string, en: string]> = {
+  high: ['高信心', 'High confidence'],
+  medium: ['中信心', 'Medium confidence'],
+  low: ['低信心', 'Low confidence'],
+}
+
+function AiSuggestionCard({
+  suggestion,
+  check,
+  decision,
+  isEnglish,
+  onAccept,
+  onReject,
+}: {
+  suggestion: NhiLipidAiSuggestion
+  check?: CdssCoverageCheck
+  decision?: NhiLipidAiDecision
+  isEnglish: boolean
+  onAccept?: () => void
+  onReject: () => void
+}) {
+  return (
+    <article
+      className="space-y-2 rounded-md border border-border bg-background p-3"
+      data-testid={`nhi-lipid-ai-suggestion-${suggestion.criterionId}`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1 text-sm font-semibold">{check?.label ?? suggestion.criterionId}</p>
+        <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
+          {AI_STATE_LABEL[suggestion.state][isEnglish ? 1 : 0]}
+        </Badge>
+        <span className="text-[11px] text-muted-foreground">
+          {AI_CONFIDENCE_LABEL[suggestion.confidence][isEnglish ? 1 : 0]}
+        </span>
+      </div>
+      {suggestion.rationale ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{suggestion.rationale}</p>
+      ) : null}
+      {suggestion.evidence.map((evidence) => (
+        <blockquote
+          key={`${evidence.sourceKey}-${evidence.excerpt}`}
+          className="space-y-1 border-l-2 border-primary/40 pl-3 text-xs leading-relaxed"
+        >
+          <p>「{evidence.excerpt}」</p>
+          <footer className="text-[11px] text-muted-foreground">
+            {evidence.sourceLabel}{evidence.date ? ` · ${evidence.date}` : ''}
+          </footer>
+        </blockquote>
+      ))}
+      {decision ? (
+        <p className={cn(
+          'flex min-h-11 items-center gap-1.5 text-xs font-medium',
+          decision === 'accepted' ? 'text-primary' : 'text-muted-foreground',
+        )}>
+          {decision === 'accepted'
+            ? <Check className="h-4 w-4" aria-hidden="true" />
+            : <X className="h-4 w-4" aria-hidden="true" />}
+          {decision === 'accepted'
+            ? isEnglish ? 'Accepted; the tier was recalculated.' : '已採用，風險分級已重新計算。'
+            : isEnglish ? 'Rejected; the tier was not changed.' : '已否決，不影響風險分級。'}
+        </p>
+      ) : (
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11"
+            onClick={onReject}
+            data-testid={`nhi-lipid-ai-reject-${suggestion.criterionId}`}
+          >
+            {isEnglish ? 'Reject' : '否決'}
+          </Button>
+          {suggestion.state !== 'unknown' && onAccept ? (
+            <Button
+              type="button"
+              className="min-h-11"
+              onClick={onAccept}
+              data-testid={`nhi-lipid-ai-accept-${suggestion.criterionId}`}
+            >
+              {isEnglish ? 'Accept and recalculate' : '採用並重算'}
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </article>
+  )
+}
+
+function NhiLipidAiReview({
+  ai,
+  checks,
+  reviewableCount,
+  patientId,
+  isEnglish,
   onAnswer,
 }: {
-  summary: CdssCoverageSummary
-  locale: string
+  ai: NhiLipidAiAssist
+  checks: readonly CdssCoverageCheck[]
+  reviewableCount: number
+  patientId?: string
+  isEnglish: boolean
   onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
 }) {
+  const checkById = new Map(checks.map((check) => [check.id, check]))
+  const allSuggestions = Object.values(ai.suggestions)
+  const decisive = allSuggestions.filter((suggestion) => suggestion.state !== 'unknown')
+  const unknown = allSuggestions.filter((suggestion) => suggestion.state === 'unknown')
+  const disabled = !patientId || !ai.isDataReady || ai.isRunning || reviewableCount === 0
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3" data-testid="nhi-lipid-ai-review">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+            {isEnglish ? 'AI-assisted evidence review' : 'AI 協助判讀'}
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {isEnglish
+              ? 'Only runs after confirmation. AI suggestions do not change the tier until you accept them.'
+              : '只在確認後送出；AI 建議不會直接改變分級，須由醫師逐項採用。'}
+          </p>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              disabled={disabled}
+              className="min-h-11 gap-1.5 px-3 shadow-none"
+              data-testid="nhi-lipid-ai-run"
+            >
+              {ai.isRunning
+                ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+              {ai.isRunning
+                ? isEnglish ? 'Reviewing…' : 'AI 判讀中…'
+                : allSuggestions.length > 0
+                  ? isEnglish ? 'Review again' : '重新判讀'
+                  : isEnglish ? 'Start AI review' : 'AI 協助判讀'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {isEnglish ? 'Send a de-identified clinical summary?' : '送出去識別化病歷摘要？'}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2 text-left leading-relaxed">
+                <span className="block">
+                  {isEnglish
+                    ? `The Table 1 criteria and selected clinical summary will be sent to the configured AI service (${ai.modelName}).`
+                    : `表一條件與目前選定的病歷摘要將送至已設定的 AI 服務（${ai.modelName}）。`}
+                </span>
+                <span className="block">
+                  {isEnglish
+                    ? 'Name, national ID and medical-record number are removed. Diagnoses, tests, medications and relevant note excerpts remain because they are needed for this review.'
+                    : '姓名、身分證與病歷號會移除；診斷、檢驗、用藥及相關病歷原文因判讀需要仍會送出。'}
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{isEnglish ? 'Cancel' : '取消'}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (!patientId) return
+                  void ai.runConfirmed({ patientId, modelId: ai.modelId, confirmedAt: Date.now() })
+                }}
+                data-testid="nhi-lipid-ai-confirm"
+              >
+                {isEnglish ? 'Agree and start' : '同意並開始'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      {!ai.isDataReady && patientId ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {isEnglish ? 'Preparing the selected clinical data…' : '正在準備目前選定的病歷資料…'}
+        </p>
+      ) : null}
+      {ai.isRunning ? (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {isEnglish ? 'Comparing the record with each Table 1 criterion…' : '正在逐項比對病歷與表一條件…'}
+        </p>
+      ) : null}
+      {ai.error ? (
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive" role="alert">
+          {ai.error}
+        </p>
+      ) : null}
+
+      {allSuggestions.length > 0 ? (
+        <div className="space-y-3" aria-live="polite">
+          <p className="text-xs font-medium">
+            {isEnglish
+              ? `${decisive.length} suggestions to review; ${unknown.length} remain unknown.`
+              : `${decisive.length} 項可審閱建議；${unknown.length} 項仍無法判斷。`}
+          </p>
+          <div className="grid gap-2 lg:grid-cols-2">
+            {decisive.map((suggestion) => (
+              <AiSuggestionCard
+                key={suggestion.criterionId}
+                suggestion={suggestion}
+                check={checkById.get(suggestion.criterionId)}
+                decision={ai.decisions[suggestion.criterionId]}
+                isEnglish={isEnglish}
+                onAccept={onAnswer ? () => {
+                  onAnswer(suggestion.criterionId, suggestion.state)
+                  ai.decide(suggestion.criterionId, 'accepted')
+                } : undefined}
+                onReject={() => ai.decide(suggestion.criterionId, 'rejected')}
+              />
+            ))}
+          </div>
+          {unknown.length > 0 ? (
+            <details className="rounded-md border border-border bg-background px-3">
+              <summary className="min-h-11 cursor-pointer py-3 text-xs font-medium text-primary">
+                {isEnglish ? `Why ${unknown.length} items remain unknown` : `查看 ${unknown.length} 項仍待補資料原因`}
+              </summary>
+              <div className="space-y-2 border-t border-border py-3">
+                {unknown.map((suggestion) => (
+                  <div key={suggestion.criterionId} className="text-xs leading-relaxed">
+                    <p className="font-medium">{checkById.get(suggestion.criterionId)?.label ?? suggestion.criterionId}</p>
+                    <p className="text-muted-foreground">
+                      {suggestion.rationale}
+                      {suggestion.missing.length > 0 ? ` ${suggestion.missing.join('；')}` : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">
+            {isEnglish
+              ? `Generated by ${allSuggestions[0]?.modelName}. Evidence excerpts must be checked against the source record.`
+              : `由 ${allSuggestions[0]?.modelName} 產生；引用片段仍須回查原始病歷。`}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+export interface NhiTable1PanelProps {
+  summary: CdssCoverageSummary
+  locale: string
+  patientId?: string
+  onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
+  /** Development/review injection. Production omits this and uses the
+   * patient-scoped connected wrapper below. */
+  aiAssist?: NhiLipidAiAssist
+}
+
+function NhiTable1PanelContent({
+  summary,
+  locale,
+  patientId,
+  onAnswer,
+  aiAssist,
+}: NhiTable1PanelProps) {
   const isEnglish = locale === 'en'
+  const allChecks = [...summary.factors, ...summary.metabolicChecks, ...summary.diseaseChecks]
   const tiers = COLUMNS.map((id) => summary.tiers.find((tier) => tier.id === id)).filter(
     (tier): tier is CdssCoverageSummary['tiers'][number] => Boolean(tier),
   )
@@ -187,6 +483,10 @@ export function NhiTable1Panel({
     }
     return order.map((key) => ({ key, checks: checks.filter((check) => (check.group ?? '') === key) }))
   }
+  const criterionProps = (check: CdssCoverageCheck) => ({
+    aiSuggestion: aiAssist?.suggestions[check.id],
+    aiDecision: aiAssist?.decisions[check.id],
+  })
 
   return (
     <section className="space-y-3 px-3 pb-4" aria-label={summary.title} data-testid="nhi-table1-panel">
@@ -209,6 +509,17 @@ export function NhiTable1Panel({
         <span className="text-muted-foreground"><span className="font-semibold">○</span> {isEnglish ? 'Not in the record — unknown, not absent' : '紀錄讀不到 — 未知，不等於沒有'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Measured and not met' : '有數值且不符合'}</span>
       </div>
+
+      {aiAssist ? (
+        <NhiLipidAiReview
+          ai={aiAssist}
+          checks={allChecks}
+          reviewableCount={selectNhiLipidAiCriteria(allChecks).length}
+          patientId={patientId}
+          isEnglish={isEnglish}
+          onAnswer={onAnswer}
+        />
+      ) : null}
 
       <div className="overflow-x-auto">
         <div className="grid min-w-[66rem] grid-cols-[5rem_repeat(5,minmax(0,1fr))] gap-2">
@@ -242,7 +553,7 @@ export function NhiTable1Panel({
             </p>
             <div className="grid gap-x-4 sm:grid-cols-2">
               {summary.factors.map((check) => (
-                <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} />
+                <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} {...criterionProps(check)} />
               ))}
             </div>
             <details className="border-t border-border pt-1">
@@ -251,7 +562,7 @@ export function NhiTable1Panel({
               </summary>
               <div className="grid gap-x-4 sm:grid-cols-2">
                 {summary.metabolicChecks.map((check) => (
-                  <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} />
+                  <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} {...criterionProps(check)} />
                 ))}
               </div>
             </details>
@@ -265,7 +576,7 @@ export function NhiTable1Panel({
                     <p className="pt-1 text-xs font-semibold leading-snug">{group.key}</p>
                   ) : null}
                   {group.checks.map((check) => (
-                    <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} />
+                    <Criterion key={check.id} check={check} isEnglish={isEnglish} onAnswer={onAnswer} {...criterionProps(check)} />
                   ))}
                 </div>
               ))}
@@ -412,4 +723,32 @@ export function NhiTable1Panel({
       </div>
     </section>
   )
+}
+
+function ConnectedNhiTable1Panel(props: NhiTable1PanelProps & { patientId: string }) {
+  const criteria = useMemo(
+    () => selectNhiLipidAiCriteria([
+      ...props.summary.factors,
+      ...props.summary.metabolicChecks,
+      ...props.summary.diseaseChecks,
+    ]),
+    [props.summary.diseaseChecks, props.summary.factors, props.summary.metabolicChecks],
+  )
+  const aiAssist = useNhiLipidAiAssist({
+    patientId: props.patientId,
+    criteria,
+    locale: props.locale,
+  })
+  return <NhiTable1PanelContent {...props} aiAssist={aiAssist} />
+}
+
+/**
+ * Keep the renderer usable in development fixtures and static reviews without
+ * mounting the application's patient/AI providers. The live CDSS always passes
+ * a patient id and therefore takes the connected branch.
+ */
+export function NhiTable1Panel(props: NhiTable1PanelProps) {
+  if (props.aiAssist) return <NhiTable1PanelContent {...props} />
+  if (props.patientId) return <ConnectedNhiTable1Panel {...props} patientId={props.patientId} />
+  return <NhiTable1PanelContent {...props} />
 }
