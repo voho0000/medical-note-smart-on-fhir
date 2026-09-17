@@ -55,13 +55,33 @@ export function NhiLipidCoverageSummary({ recommendation, locale, patientId, pre
   recommendation: CdssRecommendation
   locale: string
   patientId?: string
-  presentation?: 'all' | 'diagnosis' | 'prognosis' | 'treatment'
+  presentation?: 'all' | 'diagnosis' | 'follow-up' | 'prognosis' | 'treatment'
 }) {
   const { copied, copy } = useCopyToClipboard()
   const [copyError, setCopyError] = useState(false)
   const data = (recommendation as CdssRecommendation & { coverageSummary?: CoverageSummary }).coverageSummary
   if (!data) return null
   const en = locale === 'en'
+  if (presentation === 'follow-up') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-follow-up" aria-label={en ? 'Lipid treatment goal follow-up' : '血脂治療標的追蹤'}>
+    <h4 className="font-semibold">{en ? 'Lipid treatment goal follow-up' : '血脂治療標的追蹤'}</h4>
+    <p className="text-xs text-muted-foreground">{en ? 'Compare the latest measurement with the goal for the minimum supported tier. Check the sampling date and treatment; switch to Diagnosis to review the classification.' : '依目前最低已知分層，比較最新檢驗與治療標的。請核對採檢日期與當時用藥；需確認分層時可切回「診斷」。'}</p>
+    <dl className="divide-y divide-border">
+      {/* The pack owns the goal, freshness guard and assessment. Do not infer
+          attainment from numbers or translated prose in the renderer. */}
+      {[3, 2, 5, 0, 7].map(index => data.rows[index]).filter(Boolean).map(row => <div key={row.label} className="space-y-1 py-3">
+        <dt className="text-muted-foreground">{row.label}</dt>
+        <dd className="break-words font-semibold tabular-nums">{row.value}</dd>
+      </div>)}
+    </dl>
+    {!data.rows.length ? <p data-cdss-action="">{en ? 'Measurement and treatment goal are pending; attainment cannot be assessed.' : '檢驗與治療標的資料待補，目前無法判定是否達標。'}</p> : null}
+    <details className="border-t border-border">
+      <summary className="min-h-11 cursor-pointer py-3 font-medium">{en ? 'Assessment basis and references' : '判讀依據與參考資料'}</summary>
+      <p>{data.conclusion}</p>
+      {data.basis ? <p className="mt-2">{data.basis}</p> : null}
+      <ul className="my-3 list-disc space-y-1 pl-5">{data.caveats.map(item => <li key={item}>{item}</li>)}</ul>
+      <a className="inline-block min-h-11 py-3 text-primary underline" href={data.sourceUrl} target="_blank" rel="noreferrer">{data.source}</a>
+    </details>
+  </section>
   if (presentation === 'diagnosis') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-diagnosis-confirmation" aria-label={en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}>
     <h4 className="font-semibold">{en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}</h4>
     <p className="text-xs text-muted-foreground">{en ? 'Review the NHI classification criteria below. Unconfirmed does not mean absent; verification recalculates the classification.' : '核對下列健保危險分層條件；未確認不代表沒有，修改後會重新計算分層。'}</p>

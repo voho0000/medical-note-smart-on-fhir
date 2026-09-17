@@ -3,6 +3,12 @@
   gap: 1.25rem;
 }
 
+.sectionDisclosure > summary { list-style: none; }
+.sectionDisclosure > summary::-webkit-details-marker { display: none; }
+.sectionDisclosure > summary .disclosureOpen { display: none; }
+.sectionDisclosure[open] > summary .disclosureOpen { display: block; }
+.sectionDisclosure[open] > summary .disclosureClosed { display: none; }
+
 .section {
   --section-surface: #eff6ff;
   --section-heading: #dbeafe;

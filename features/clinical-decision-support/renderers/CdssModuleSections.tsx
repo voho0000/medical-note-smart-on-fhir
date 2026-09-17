@@ -55,21 +55,30 @@ export function CdssModuleSections({ recommendations, isEnglish, renderDetail, s
   return (
     <div className={styles.poster} data-testid="cdss-three-sections">
       {groupCdssSections(recommendations).map((section, index) => {
-        const archived = followUp && section.id === 'diagnosis' ? section.modules.filter(item => item.id !== 'heart-failure-monitoring') : []
+        const archived = followUp && section.id === 'diagnosis' ? section.modules.filter(item => item.id.startsWith('heart-failure-') && item.id !== 'heart-failure-monitoring') : []
         const visible = section.modules.filter(item => !archived.includes(item))
         const active = visible.filter(item => item.status !== 'no-action' && !isOverviewModule(item))
         const other = visible.filter(item => item.status === 'no-action' || isOverviewModule(item))
         const title = section.id === 'diagnosis' ? diagnosisTitle : isEnglish ? section.en : section.zh
         return (
           <section key={section.id} aria-labelledby={`${instanceId}-${section.id}`} className={styles.section} data-section={section.id} data-testid={`cdss-section-${section.id}`}>
-            <div className={styles.heading}>
+            <details className={styles.sectionDisclosure} data-testid={`cdss-section-disclosure-${section.id}`}>
+            <summary className={cn(styles.heading, 'min-h-11 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset')}>
               <span className={styles.number} aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
               <div className={styles.title}>
                 <h3 id={`${instanceId}-${section.id}`}>{title}{!isEnglish ? <span className={styles.english}>{section.id === 'diagnosis' && followUp ? 'Follow-up' : section.en}</span> : null}</h3>
                 <span className={styles.meta}>{sectionSummary?.[section.id] ?? (active.length ? (isEnglish ? `${active.length} modules to review` : `${active.length} 個待處理模組`) : section.modules.length ? (isEnglish ? 'No pending module actions' : '目前無模組待辦') : (isEnglish ? 'Not evaluated' : '尚未評估'))}</span>
-                {section.id === 'diagnosis' ? diagnosisModeControl : null}
+                <span className={cn(styles.meta, styles.disclosureClosed)}>{isEnglish ? 'Expand details' : '點擊展開'}</span>
+                <span className={cn(styles.meta, styles.disclosureOpen)}>{isEnglish ? 'Collapse details' : '點擊收合'}</span>
+                {active.length ? <span className={styles.disclosureClosed}>
+                  {active.map(item => <span key={item.id} data-cdss-action="" className="mt-2 block break-words text-sm">
+                    {item.domain === 'safety' && item.priority === 'high' ? (isEnglish ? 'Priority safety review: ' : '優先安全處理：') : ''}
+                    {item.nextActions[0] ?? item.title}
+                  </span>)}
+                </span> : null}
               </div>
-            </div>
+            </summary>
+            {section.id === 'diagnosis' && diagnosisModeControl ? <div className="px-4 pb-3">{diagnosisModeControl}</div> : null}
             {section.id === 'diagnosis' && context ? <p className={styles.intro} data-testid="cdss-diagnosis-context">{context.basis}</p> : null}
             {sectionContent?.[section.id]}
             {followUp && section.id === 'diagnosis' && !diagnosisModeControl ? <details key="confirmed-diagnosis" className="border-t border-border" data-testid="cdss-diagnosis-review">
@@ -81,6 +90,7 @@ export function CdssModuleSections({ recommendations, isEnglish, renderDetail, s
             {other.length ? <details className="border-t border-border" data-testid={`cdss-section-other-${section.id}`}><summary className="min-h-11 cursor-pointer px-3 py-3 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{isEnglish ? 'Other modules: ' : '其他模組：'}{other.map(item => item.moduleName ?? item.title).join('、')}</summary>{other.map(moduleRow)}</details> : null}
             {section.modules.length === 0 && !sectionContent?.[section.id] ? <p className="px-3 pb-3 text-sm text-muted-foreground">{section.id === 'prognosis' ? (isEnglish ? 'This care pack does not currently provide an outcome-risk estimate.' : '本照護模組目前未提供預後風險估計。') : (isEnglish ? 'No module result is available for this section.' : '本區目前沒有可用的模組判讀。')}</p> : null}
             {sectionFooter?.[section.id]}
+            </details>
           </section>
         )
       })}

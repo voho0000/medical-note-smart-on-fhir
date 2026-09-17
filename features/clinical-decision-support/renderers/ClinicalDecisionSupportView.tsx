@@ -53,6 +53,7 @@ import {
 } from './heart-failure-board'
 import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { CdssModuleSections } from './CdssModuleSections'
+import { LipidModuleSections } from './LipidModuleSections'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
@@ -2104,6 +2105,7 @@ export function ClinicalDecisionSupportView({
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
   const isSections = layout === 'sections'
+  const ModuleSections = result.packId === 'hyperlipidemia-cdss' ? LipidModuleSections : CdssModuleSections
   const isVisitFlow = (layout === 'flow' || isSections) && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
   const visitFlow = useMemo(() => (
     isVisitFlow && board
@@ -2450,8 +2452,10 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
-      {isSections && !isVisitFlow ? <CdssModuleSections
+      {isSections && !isVisitFlow ? <ModuleSections
         key={`${patientId ?? 'no-patient'}-${result.packId}`}
+        locale={locale}
+        patientId={patientId}
         recommendations={displayRecommendations}
         isEnglish={isEnglish}
         sectionContent={result.packId === 'hyperlipidemia-cdss' ? {

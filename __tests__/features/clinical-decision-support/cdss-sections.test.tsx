@@ -10,6 +10,26 @@ function item(id: string, fields: Partial<CdssRecommendation> = {}): CdssRecomme
 }
 
 describe('shared CDSS sections', () => {
+  it('starts all sections closed, retains pending actions and expands each independently', () => {
+    render(<CdssModuleSections recommendations={[item('urgent', { domain: 'safety', priority: 'high' })]} isEnglish renderDetail={() => null}
+      sectionContent={{ diagnosis: <input aria-label="Visit note" defaultValue="Retained" />, prognosis: <p>Risk details</p> }} />)
+    const diagnosis = screen.getByTestId('cdss-section-disclosure-diagnosis')
+    const treatment = screen.getByTestId('cdss-section-disclosure-treatment')
+    const prognosis = screen.getByTestId('cdss-section-disclosure-prognosis')
+    for (const section of [diagnosis, treatment, prognosis]) expect(section).not.toHaveAttribute('open')
+    expect(within(treatment.querySelector('summary')!).getByText('Priority safety review: Act on urgent')).toBeVisible()
+    expect(screen.getByText('Risk details')).not.toBeVisible()
+    fireEvent.click(diagnosis.querySelector('summary')!)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Visit note' }), { target: { value: 'Updated' } })
+    fireEvent.click(prognosis.querySelector('summary')!)
+    expect(diagnosis).toHaveAttribute('open')
+    expect(prognosis).toHaveAttribute('open')
+    expect(treatment).not.toHaveAttribute('open')
+    fireEvent.click(diagnosis.querySelector('summary')!)
+    fireEvent.click(diagnosis.querySelector('summary')!)
+    expect(screen.getByRole('textbox', { name: 'Visit note' })).toHaveValue('Updated')
+  })
+
   it('assigns every module once, preserves safety responsibility and respects pack metadata', () => {
     const modules = [item('diagnosis', { domain: 'diagnosis' }), item('safety', { domain: 'safety', moduleGroup: 'monitoring' }), item('risk', { kind: 'risk-stratification' }), item('future')]
     const groups = groupCdssSections([...modules, modules[0]])
@@ -24,6 +44,7 @@ describe('shared CDSS sections', () => {
     render(<CdssModuleSections recommendations={modules} isEnglish renderDetail={module => <div>Reference {module.id}</div>} decisionLabel={() => 'Deferred'} />)
     const safety = screen.getByTestId('cdss-section-module-safety')
     const medication = screen.getByTestId('cdss-section-module-medication')
+    fireEvent.click(screen.getByTestId('cdss-section-disclosure-treatment').querySelector('summary')!)
     fireEvent.click(safety.querySelector('summary')!)
     fireEvent.click(medication.querySelector('summary')!)
     expect(safety).toHaveAttribute('open')
