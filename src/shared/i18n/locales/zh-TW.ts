@@ -133,7 +133,7 @@ export const zhTW = {
       labs: '檢驗',
       reports: '影像／檢查報告',
       meds: '用藥',
-      visits: '就診',
+      visits: '就診/領藥',
     },
     units: {
       labs: '項',
