@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/NhiTable1Panel'
+import type { NhiLipidAiSuggestion } from '@/features/clinical-decision-support/ai/nhi-lipid-ai-assist'
+import type { NhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
 
 const fact = (value: number | string, unit = '') => ({
   zh: `${value}${unit ? ' ' + unit : ''}`,
@@ -55,6 +57,8 @@ export default function Review() {
   const [scenario, setScenario] = useState<string>('ascvd-code')
   const [answers, setAnswers] = useState<Record<string, 'yes' | 'no' | 'unknown'>>({})
   const [english, setEnglish] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, NhiLipidAiSuggestion>>({})
+  const [aiDecisions, setAiDecisions] = useState<NhiLipidAiAssist['decisions']>({})
 
   const profile = {
     id: `synthetic-table1-${scenario}`,
@@ -119,6 +123,56 @@ export default function Review() {
   const card = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile: withAdjunct, locale })
     .recommendations.find(item => item.id === 'dyslipidemia-risk-and-target')
   const summary = card?.coverageSummary
+  const aiAssist: NhiLipidAiAssist = {
+    suggestions: aiSuggestions,
+    decisions: aiDecisions,
+    isRunning: false,
+    isDataReady: true,
+    error: null,
+    modelId: 'synthetic-review-model',
+    modelName: english ? 'Synthetic review model (no data sent)' : '合成測試模型（不送出資料）',
+    runConfirmed: async () => {
+      setAiDecisions({})
+      setAiSuggestions({
+        smoking: {
+          criterionId: 'smoking',
+          state: 'yes',
+          confidence: 'high',
+          rationale: english
+            ? 'The note explicitly documents current daily smoking.'
+            : '病歷明確記載目前每日吸菸。',
+          missing: [],
+          evidence: [{
+            sourceKey: 'D1',
+            sourceResourceType: 'DocumentReference',
+            sourceResourceId: 'synthetic-smoking-note',
+            sourceLabel: english ? 'Synthetic outpatient note' : '合成門診紀錄',
+            date: '2026-08-30',
+            excerpt: english ? 'Currently smokes one pack daily.' : '目前每日抽菸一包。',
+          }],
+          modelId: 'synthetic-review-model',
+          modelName: english ? 'Synthetic review model' : '合成測試模型',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+        'family-history': {
+          criterionId: 'family-history',
+          state: 'unknown',
+          confidence: 'low',
+          rationale: english
+            ? 'No age-at-event information was found for first-degree relatives.'
+            : '未找到一等親冠心病發病年齡。',
+          missing: [english ? 'Family member and age at onset' : '親屬關係與發病年齡'],
+          evidence: [],
+          modelId: 'synthetic-review-model',
+          modelName: english ? 'Synthetic review model' : '合成測試模型',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+      })
+    },
+    decide: (criterionId, decision) => {
+      setAiDecisions((current) => ({ ...current, [criterionId]: decision }))
+    },
+  }
 
   return (
     <main className="mx-auto max-w-[80rem] p-3">
@@ -127,7 +181,12 @@ export default function Review() {
         <select
           aria-label="案例"
           value={scenario}
-          onChange={event => { setScenario(event.target.value); setAnswers({}) }}
+          onChange={event => {
+            setScenario(event.target.value)
+            setAnswers({})
+            setAiSuggestions({})
+            setAiDecisions({})
+          }}
           className="min-h-11 rounded border bg-background p-2 text-sm"
         >
           {Object.entries(SCENARIOS).map(([id, item]) => (
@@ -143,6 +202,8 @@ export default function Review() {
           <NhiTable1Panel
             summary={summary}
             locale={locale}
+            patientId={`synthetic-table1-${scenario}`}
+            aiAssist={aiAssist}
             onAnswer={(id, state) => setAnswers(current => {
               const next = { ...current }
               if (state === undefined) delete next[id]

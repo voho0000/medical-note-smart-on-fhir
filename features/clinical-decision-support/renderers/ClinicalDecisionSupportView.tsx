@@ -2863,6 +2863,7 @@ export function ClinicalDecisionSupportView({
                 <NhiTable1Panel
                   summary={recommendation.coverageSummary}
                   locale={locale}
+                  patientId={patientId}
                   onAnswer={patientId
                     ? (id, state) => useNhiLipidReviewStore.getState().answer(patientId, id, state)
                     : undefined}
