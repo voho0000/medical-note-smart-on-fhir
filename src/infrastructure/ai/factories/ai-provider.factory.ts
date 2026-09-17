@@ -17,11 +17,11 @@ import {
   type ModelProvider,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
-import { isOpenAiCompatibleRuntimeReady, resolveOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { proxyFetchInterceptor } from '../interceptors/proxy-fetch.interceptor'
 import {
+  createOpenAiCompatibleChatModel,
   createConfiguredOpenAiCompatibleFetch,
-  openAiCompatibleSdkKey,
 } from '../openai-compatible/openai-compatible.client'
 
 export interface ProviderConfig {
@@ -153,15 +153,15 @@ export class AiProviderFactory {
     if (!isOpenAiCompatibleRuntimeReady(config)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
     }
-    const sdk = createOpenAI({
-      baseURL: resolveOpenAiCompatibleBaseUrl(config.baseUrl),
-      apiKey: openAiCompatibleSdkKey(config.apiKey),
-      fetch: createConfiguredOpenAiCompatibleFetch(config),
-    })
     // Chat Completions is the compatibility contract used by vLLM, Ollama,
     // LM Studio and hospital gateways. The user's real upstream id is sent;
     // the logical sentinel never leaves the browser.
-    return { model: sdk.chat(config.modelId), isGemini: false }
+    return {
+      model: createOpenAiCompatibleChatModel(config, {
+        fetchImpl: createConfiguredOpenAiCompatibleFetch(config),
+      }),
+      isGemini: false,
+    }
   }
 
   /**
