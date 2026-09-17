@@ -21,6 +21,9 @@ function Patient({ confirmed = false }: { confirmed?: boolean }) {
 
 it('requires confirmation, then opens follow-up and lets the physician reopen diagnosis', () => {
   render(<Patient />)
+  const section = screen.getByTestId('cdss-section-disclosure-diagnosis')
+  expect(section).not.toHaveAttribute('open')
+  fireEvent.click(section.querySelector('summary')!)
   fireEvent.click(screen.getByRole('button', { name: '確認診斷並進入追蹤' }))
   fireEvent.click(screen.getByRole('button', { name: '取消' }))
   expect(screen.queryByTestId('cdss-diagnosis-review')).not.toBeInTheDocument()
@@ -40,8 +43,10 @@ it('requires confirmation, then opens follow-up and lets the physician reopen di
   expect(screen.getByTestId('cdss-diagnosis-confirmation')).toHaveTextContent('沿用既有確診')
 })
 
-it('opens follow-up immediately for a previously confirmed HFpEF diagnosis', () => {
+it('defaults to follow-up inside the collapsed section for a confirmed HFpEF diagnosis', () => {
   render(<Patient confirmed />)
+  expect(screen.getByTestId('cdss-followup-priorities')).not.toBeVisible()
+  fireEvent.click(screen.getByTestId('cdss-section-disclosure-diagnosis').querySelector('summary')!)
   expect(screen.getByTestId('cdss-followup-priorities')).toBeVisible()
   expect(screen.getByRole('button', { name: '追蹤' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.queryByTestId('cdss-diagnosis-review')).not.toBeInTheDocument()
