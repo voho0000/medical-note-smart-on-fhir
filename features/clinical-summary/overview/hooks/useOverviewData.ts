@@ -603,6 +603,8 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         // supply window — and fall back to the raw status when a raw record
         // has no matching row (defensive; ids come from the same array).
         isActive: row ? !row.isInactive : !inactiveStatuses.has(status) && (!endDay || endDay >= window.endDay),
+        dose: dose || undefined,
+        frequency: frequency || undefined,
         doseSignature: signature || undefined,
       } satisfies OverviewMedFact
     })
