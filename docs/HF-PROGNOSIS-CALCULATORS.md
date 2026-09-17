@@ -51,4 +51,6 @@ Next implementation steps:
    method and data requirements are supplied. No remote inference is called by
    the current implementation.
 
-Changes remain local for physician review; no commit or push is part of this work.
+The UI and integration seam were committed and pushed to the HMC pilot in
+September 2026. Formula implementation and AI-SaMD connection remain pending.
+See [the cross-machine handoff](HMC-CDSS-HANDOFF.md) for current setup and limits.
