@@ -205,8 +205,58 @@ export interface OverviewMedFact {
   startDay?: string
   endDay?: string
   isActive: boolean
+  /** Dose and frequency stay separate so display-only SIG suffixes do not
+   *  masquerade as a clinical adjustment. */
+  dose?: string
+  frequency?: string
   /** Normalised "dose · frequency"; absent when the source stated neither. */
   doseSignature?: string
+}
+
+function normalizedDirectionPart(value: string | undefined): string {
+  return value?.normalize('NFKC').trim().toUpperCase().replace(/\s+/g, '') ?? ''
+}
+
+function frequencyOpening(value: string): string {
+  return value.match(
+    /^(?:Q\d+(?:\.\d+)?H|QOD|QHS|QAM|QPM|QID|BID|TID|QD|QN|QW|QM|HS|PRN|STAT)/,
+  )?.[0] ?? ''
+}
+
+/**
+ * Some hospital SIGs append meal timing and route to the same frequency code:
+ * QD → QDACPO, QOD → QODPCPO, HS → HSPCPO. Those strings describe
+ * the same dosing frequency. Compare the recognized opening so QDACPO and
+ * QDPCPO also remain one frequency, while QD/QOD and Q1H/Q12H stay different.
+ */
+function sameFrequencyOpening(previous: string | undefined, latest: string | undefined): boolean {
+  const left = normalizedDirectionPart(previous)
+  const right = normalizedDirectionPart(latest)
+  if (!left || !right) return left === right
+  if (left === right) return true
+  const leftOpening = frequencyOpening(left)
+  const rightOpening = frequencyOpening(right)
+  if (leftOpening && rightOpening) return leftOpening === rightOpening
+
+  // Preserve the intended prefix behavior for an unfamiliar local code, but
+  // never collapse numeric intervals merely because their text shares Q1/Q2.
+  const [shorter, longer] = left.length < right.length ? [left, right] : [right, left]
+  return longer.startsWith(shorter) && /^[A-Z]+$/.test(longer.slice(shorter.length))
+}
+
+function sameMedicationDirection(previous: OverviewMedFact, latest: OverviewMedFact): boolean {
+  if (previous.doseSignature === latest.doseSignature) return true
+
+  // Older callers may only supply the combined signature. Preserve their
+  // exact comparison until dose and frequency are available independently.
+  const hasStructuredDirection = previous.dose !== undefined
+    || latest.dose !== undefined
+    || previous.frequency !== undefined
+    || latest.frequency !== undefined
+  if (!hasStructuredDirection) return false
+
+  return normalizedDirectionPart(previous.dose) === normalizedDirectionPart(latest.dose)
+    && sameFrequencyOpening(previous.frequency, latest.frequency)
 }
 
 /**
@@ -266,7 +316,7 @@ export function classifyMedicationChanges(
     const latest = inWindow[inWindow.length - 1]
     const previous = beforeWindow[beforeWindow.length - 1]
     if (!latest || !previous) return
-    if (latest.doseSignature === previous.doseSignature) return
+    if (sameMedicationDirection(previous, latest)) return
     verdicts.set(key, { kind: 'adjusted', previousDose: previous.doseSignature })
   })
 
