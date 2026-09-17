@@ -13,6 +13,8 @@ const FIBROSIS: L = { en: 'Liver fibrosis', zh: '肝纖維化' }
 const HEPATITIS: L = { en: 'Hepatitis', zh: '肝炎' }
 const AFIB: L = { en: 'Atrial fibrillation', zh: '心房顫動' }
 const DOSING: L = { en: 'Drug dosing', zh: '藥物劑量' }
+const HEART_FAILURE: L = { en: 'Heart failure', zh: '心衰竭' }
+const HFPEF_DISEASE: L = { en: 'HFpEF', zh: '射出分率保留型心衰竭' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
   'egfr-ckd-epi-2021': { purpose: ['formula'], diseases: [CKD] },
@@ -29,8 +31,10 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
-  'h2fpef': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
-  'hfa-peff': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
+  'h2fpef': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
+  'hfa-peff': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
+  'maggic-hf': { purpose: ['prognosis', 'risk'], diseases: [HEART_FAILURE] },
+  'life-preserved': { purpose: ['prognosis', 'risk'], diseases: [HFPEF_DISEASE, HEART_FAILURE] },
   'map': { purpose: ['formula'], diseases: [{ en: 'Shock', zh: '休克' }, { en: 'Hypotension', zh: '低血壓' }] },
   'has-bled': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Anticoagulation', zh: '抗凝治療' }] },
   'curb-65': { purpose: ['severity', 'prognosis'], diseases: [{ en: 'Pneumonia', zh: '肺炎' }] },
