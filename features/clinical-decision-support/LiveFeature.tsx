@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { hfFollowUpHistory } from './utils/hf-follow-up'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import {
@@ -179,7 +180,7 @@ function DiseaseSwitcher({
 }
 
 /**
- * The two faces of the heart-failure guidance, side by side in the header so
+ * The available layouts, side by side in the header so
  * a pilot user can flip between them on the same patient. Same pack, same
  * result; only the placement differs.
  */
@@ -194,6 +195,11 @@ function LayoutSwitcher({
 }) {
   const isEnglish = locale === 'en'
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
+    {
+      id: 'sections',
+      label: isEnglish ? 'Three sections' : '三區塊',
+      title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
+    },
     {
       id: 'flow',
       label: isEnglish ? 'Visit flow' : '新版流程',
@@ -475,7 +481,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
-  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
+  const isVisitFlow = (layout === 'flow' || layout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -506,7 +512,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             {result.title}
           </h2>
         </div>
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
@@ -514,7 +520,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             selectedPackId={selectedPack.id}
             onSelect={setRequestedPackId}
           />
-          {result.packId === HEART_FAILURE_PACK_ID ? (
+          {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
             <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
           ) : null}
           {isVisitFlow && patientId ? (
@@ -555,6 +561,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
+        followUpHistory={hfFollowUpHistory(clinicalData.observations)}
         layout={layout}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}

@@ -1,0 +1,128 @@
+.poster {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.section {
+  --section-surface: #eff6ff;
+  --section-heading: #dbeafe;
+  --section-ink: #1e3a5f;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--section-surface);
+  color: var(--foreground);
+}
+
+.section[data-section='treatment'] {
+  --section-surface: #eef9f5;
+  --section-heading: #d5eee5;
+  --section-ink: #164e43;
+}
+
+.section[data-section='prognosis'] {
+  --section-surface: #f5f2fc;
+  --section-heading: #e8dff7;
+  --section-ink: #503774;
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 1.25rem 1rem;
+  background: var(--section-heading);
+  color: var(--section-ink);
+}
+
+.number {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.title {
+  min-width: 0;
+  flex: 1;
+}
+
+.title h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.english {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
+.meta {
+  display: block;
+  margin-top: 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.intro {
+  padding: 0.875rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1.7;
+  color: var(--section-ink);
+}
+
+.moduleSummary {
+  padding: 1rem;
+  transition: background-color 120ms ease;
+}
+
+.moduleSummary:hover {
+  background: rgb(255 255 255 / 45%);
+}
+
+.detail {
+  background: var(--card);
+  padding: 1rem;
+}
+
+.poster :global([data-cdss-action]) {
+  color: #b42318;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+:global(.dark) .section {
+  --section-surface: #152538;
+  --section-heading: #203952;
+  --section-ink: #c9e2ff;
+}
+
+:global(.dark) .section[data-section='treatment'] {
+  --section-surface: #142b27;
+  --section-heading: #204039;
+  --section-ink: #c4eee0;
+}
+
+:global(.dark) .section[data-section='prognosis'] {
+  --section-surface: #282239;
+  --section-heading: #3b3153;
+  --section-ink: #e7dbff;
+}
+
+:global(.dark) .poster :global([data-cdss-action]) {
+  color: #fda29b;
+}
+
+:global(.dark) .moduleSummary:hover {
+  background: rgb(255 255 255 / 4%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moduleSummary { transition: none; }
+}

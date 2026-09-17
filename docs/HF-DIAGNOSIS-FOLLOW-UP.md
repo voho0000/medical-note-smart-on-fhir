@@ -1,0 +1,17 @@
+# HF diagnosis → follow-up
+
+The three-section view opens follow-up for a pack-established diagnosis, an existing physician-confirmed HFpEF diagnosis, or an explicit physician HF confirmation. The **診斷 / 追蹤** buttons in the 01 section header switch the title and content. Symptoms, signs, NYHA and compensation remain in the initially expanded follow-up assessment. Diagnosis shows diagnostic questions and original module references. Switching views preserves confirmation and answers; reload defaults to follow-up for confirmed patients. Before confirmation, the follow-up button is disabled and the confirmation dialog remains available.
+
+For other patients, **確認診斷並進入追蹤** opens a review dialog with the available basis, confirmation method (current visit / existing diagnosis) and an optional source note. Cancelling changes nothing. Confirmation preserves existing answers, records its time and basis, and supplies a generic HF diagnosis fact when the record lacks one. It does not infer LVEF or HFpEF. Missing phenotype data and a pack-requested reassessment remain visible as action reminders; neither revokes the confirmation automatically.
+
+Confirmation uses the existing patient-keyed encrypted phenotype-answer repository. It survives reload in the same tab session and remains isolated from other patients. Cross-session / cross-visit server persistence is not implemented. The page's explicit answer reset also clears this confirmation.
+
+The legacy flow and board layouts remain available; the diagnosis archive and automatically expanded follow-up are features of the three-section view.
+
+## Follow-up priorities
+
+The compact panel offers symptom change as worse/stable/improved (惡化／穩定／進步). Existing resolved entries remain readable. Symptom notes, additional complaint entry, and weight records are initially collapsed. Weight records expand to the graph, source list and entry form. The separate increased/unchanged/decreased weight selection is an explicitly reported, dated assessment; it never fabricates a measured weight or auto-selects from the numeric difference.
+
+The default follow-up view starts with chief complaints and weight. The latest prior dated chief complaints are shown verbatim with source/date; their prior change selections are never carried forward as today's assessment. Explicit chief-complaint observations and clinician-entered complaints are supported. Encounter diagnosis codes are not treated as chief complaints. Without a prior complaint the clinician can add one, including a dated retrospective entry. Each item supports improved/unchanged/worse/resolved and an optional note; breathlessness has a quick entry and a link to the existing symptom assessment. Other symptoms, signs and NYHA are collapsed below.
+
+Weight reads dated body-weight observations with recognized units, converts to kg, and includes the shared clinic weight entry/history. Unknown units and cancelled/error observations are omitted. Clinic corrections take precedence on the same calendar day; the plot uses up to 12 dated points, with sources in an expandable list. Old measurements are labelled as latest, never as today's weight. Saving uses the existing vitals path so the care pack receives the measurement. Chief-complaint changes are descriptive follow-up records, not inferred symptom-presence or risk classifications. All new entries use the same patient-keyed tab-session encryption and reset as clinic vitals; server persistence across visits remains pending.

@@ -52,11 +52,15 @@ import {
   HEART_FAILURE_PACK_ID,
 } from './heart-failure-board'
 import { HeartRhythmPanel } from './HeartRhythmPanel'
+import { CdssModuleSections } from './CdssModuleSections'
+import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
+import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
+import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
 import { isCongestionGroupPresent } from '../utils/apply-clinic-vitals'
@@ -89,6 +93,7 @@ interface ClinicalDecisionSupportViewProps {
    * prescription state from them when the pack produced no module for it.
    */
   profileFacts?: CdssPatientProfile['facts']
+  followUpHistory?: HfFollowUpHistory
   /**
    * `classic` renders every pack the module-first way, board or not; `board`
    * (the default) lets the heart-failure pack open with its status board.
@@ -1178,7 +1183,7 @@ function ClassificationActionPlan({
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           {nextStepLabel}
         </h5>
-        <p className="min-w-0 font-medium text-foreground">{integratedPrimaryAction}</p>
+        <p data-cdss-action="" className="min-w-0 font-medium text-foreground">{integratedPrimaryAction}</p>
       </div>
 
     </section>
@@ -1842,7 +1847,7 @@ function RecommendationDetail({
                 <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                 {label.nextStep}
               </h5>
-              <div className="min-w-0 text-foreground">
+              <div data-cdss-action="" className="min-w-0 text-foreground">
                 {displayNextActions.length === 1 ? (
                   <span>{displayNextActions[0]}</span>
                 ) : (
@@ -2044,6 +2049,7 @@ export function ClinicalDecisionSupportView({
   locale,
   patientId,
   profileFacts,
+  followUpHistory,
   layout = 'flow',
   clinicVitals,
   onSaveClinicVitals,
@@ -2097,7 +2103,8 @@ export function ClinicalDecisionSupportView({
   )
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
-  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
+  const isSections = layout === 'sections'
+  const isVisitFlow = (layout === 'flow' || isSections) && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
   const visitFlow = useMemo(() => (
     isVisitFlow && board
       ? buildHeartFailureVisitFlow({
@@ -2109,10 +2116,11 @@ export function ClinicalDecisionSupportView({
         phenotypeAnswer,
         decisions: physicianDecisions ?? {},
         patientId,
+        includeAllModules: isSections,
       })
       : undefined
   ), [
-    board, clinicVitals, isEnglish, isVisitFlow, now, patientId, phenotypeAnswer,
+    board, clinicVitals, isEnglish, isVisitFlow, isSections, now, patientId, phenotypeAnswer,
     physicianDecisions, result,
   ])
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
@@ -2253,7 +2261,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && (
+  const showClinicalSummary = !board && !isSections && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2397,6 +2405,10 @@ export function ClinicalDecisionSupportView({
 
       {isVisitFlow && visitFlow && board ? (
         <HeartFailureVisitFlow
+          followUpHistory={followUpHistory}
+          key={patientId ?? 'no-patient'}
+          sectionRecommendations={isSections ? displayRecommendations : undefined}
+          prognosisContent={isSections ? <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} /> : undefined}
           rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
           flow={visitFlow}
           board={board}
@@ -2424,11 +2436,11 @@ export function ClinicalDecisionSupportView({
               patientId={patientId}
               copyProvenance={copyProvenance}
               phenotypeAnswer={phenotypeAnswer}
-              onAnswerPhenotype={onAnswerPhenotype}
+              onAnswerPhenotype={isSections ? undefined : onAnswerPhenotype}
               clinicVitals={clinicVitals}
               onSaveClinicVitals={onSaveClinicVitals}
               physicianRowsReadOnly
-              hideEvidenceTables={recommendation.id === 'heart-failure-congestion-diuretic'}
+              hideEvidenceTables={!isSections && recommendation.id === 'heart-failure-congestion-diuretic'}
               onEditPhysicianRow={(question) => focusVisitFlowTarget({
                 kind: 'question',
                 questionId: question,
@@ -2438,7 +2450,37 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
-      {board && !isVisitFlow ? (
+      {isSections && !isVisitFlow ? <CdssModuleSections
+        key={`${patientId ?? 'no-patient'}-${result.packId}`}
+        recommendations={displayRecommendations}
+        isEnglish={isEnglish}
+        sectionContent={result.packId === 'hyperlipidemia-cdss' ? {
+          diagnosis: displayRecommendations.filter(item => item.id === 'dyslipidemia-risk-and-target').map(item => <NhiLipidCoverageSummary key={item.id} recommendation={item} locale={locale} patientId={patientId} presentation="diagnosis" />),
+          prognosis: displayRecommendations.filter(item => item.id === 'dyslipidemia-risk-and-target').map(item => <div key={item.id}>
+            <NhiLipidCoverageSummary recommendation={item} locale={locale} patientId={patientId} presentation="prognosis" />
+            <div className="px-3 pb-4"><PreventRiskSummary recommendation={item} locale={locale} patientId={patientId} /></div>
+          </div>),
+        } : undefined}
+        sectionSummary={result.packId === 'hyperlipidemia-cdss' ? { diagnosis: isEnglish ? 'Verify diagnoses and risk factors' : '逐項確認相關診斷與危險因子', prognosis: isEnglish ? 'Classification basis · PREVENT assessment' : '危險分層依據・PREVENT 評估' } : undefined}
+        renderDetail={recommendation => <>
+          <NhiLipidCoverageSummary recommendation={recommendation} locale={locale} patientId={patientId} presentation="treatment" />
+          {result.packId !== 'hyperlipidemia-cdss' ? <PreventRiskSummary recommendation={recommendation} locale={locale} patientId={patientId} /> : null}
+          <RecommendationDetail
+          recommendation={recommendation} englishRecommendation={englishRecommendations.get(recommendation.id)}
+          isEnglish={isEnglish} onNavigate={navigateToResource} label={label}
+          patientId={patientId} copyProvenance={copyProvenance}
+        /></>}
+      /> : null}
+      {isSections && standaloneAutomatedChecks.length > 0 ? <details className="rounded-lg border border-border bg-card">
+        <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm">{isEnglish ? 'Additional completed checks' : '其他已完成檢查'}</summary>
+        <ul className="space-y-2 px-3 pb-3 text-sm">{standaloneAutomatedChecks.map(check => <li key={check.id}>
+          <p className="font-medium">{check.label}</p>
+          <p className="text-xs text-muted-foreground">{check.value}</p>
+          {check.sources?.length ? <EvidenceSources sources={check.sources} isEnglish={isEnglish} evidenceLabel={check.label} evidenceValue={check.value} onNavigate={navigateToResource} compact /> : null}
+        </li>)}</ul>
+      </details> : null}
+
+      {board && !isVisitFlow && !isSections ? (
         <HeartFailureStatusBoard
           board={board}
           isEnglish={isEnglish}
@@ -2474,7 +2516,7 @@ export function ClinicalDecisionSupportView({
         do and carrying a decision on every row; a second copy of the same rows
         underneath is the duplication it removed.
       */}
-      {isVisitFlow ? null : (
+      {isVisitFlow || isSections ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}

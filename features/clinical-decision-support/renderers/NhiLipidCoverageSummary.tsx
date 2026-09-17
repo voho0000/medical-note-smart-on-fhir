@@ -51,16 +51,41 @@ function CheckRow({ row, patientId, en }: { row: CoverageCheck; patientId?: stri
   </div>
 }
 
-export function NhiLipidCoverageSummary({ recommendation, locale, patientId }: {
+export function NhiLipidCoverageSummary({ recommendation, locale, patientId, presentation = 'all' }: {
   recommendation: CdssRecommendation
   locale: string
   patientId?: string
+  presentation?: 'all' | 'diagnosis' | 'prognosis' | 'treatment'
 }) {
   const { copied, copy } = useCopyToClipboard()
   const [copyError, setCopyError] = useState(false)
   const data = (recommendation as CdssRecommendation & { coverageSummary?: CoverageSummary }).coverageSummary
   if (!data) return null
   const en = locale === 'en'
+  if (presentation === 'diagnosis') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-diagnosis-confirmation" aria-label={en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}>
+    <h4 className="font-semibold">{en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}</h4>
+    <p className="text-xs text-muted-foreground">{en ? 'Review the NHI classification criteria below. Unconfirmed does not mean absent; verification recalculates the classification.' : '核對下列健保危險分層條件；未確認不代表沒有，修改後會重新計算分層。'}</p>
+    {[[en ? 'Diseases and higher-risk criteria' : '相關疾病與高風險條件', data.diseaseChecks ?? []], [en ? 'Cardiovascular risk factors' : '心血管危險因子', data.factors], [en ? 'Metabolic syndrome components' : '代謝症候群細項', data.metabolicChecks ?? []]].map(([title, checks]) => <div key={title as string}>
+      <h5 className="border-b border-border py-2 font-medium">{title as string}</h5>
+      {(checks as readonly CoverageCheck[]).map(row => <details key={row.id} className="border-b border-border">
+        <summary className="min-h-11 cursor-pointer py-3"><span>{row.label}</span><span data-cdss-action={row.state === 'unknown' ? '' : undefined} className="ml-2 font-medium">{row.state === 'yes' ? (en ? '✓ Met' : '✓ 符合') : row.state === 'no' ? (en ? '× Not met' : '× 不符合') : (en ? '? Unconfirmed' : '? 待確認')}</span></summary>
+        <CheckRow row={row} patientId={patientId} en={en} />
+      </details>)}
+    </div>)}
+    <a className="inline-block min-h-11 py-3 text-xs text-primary underline" href={data.sourceUrl} target="_blank" rel="noreferrer">{data.source}</a>
+  </section>
+  if (presentation === 'prognosis') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-risk-basis" aria-label={en ? 'Risk classification and basis' : '危險分層與依據'}>
+    <h4 className="font-semibold">{en ? 'Risk classification and basis' : '危險分層與依據'}</h4>
+    <p className="font-medium">{data.conclusion}</p>
+    {data.basis ? <p>{data.basis}</p> : null}
+    {data.tiers.filter(tier => tier.selected).map(tier => <p key={tier.id}><strong>{tier.label}</strong> · {tier.criteria}</p>)}
+    <p className="text-xs text-muted-foreground">{en ? 'This classification follows NHI criteria. PREVENT is a separate risk estimate; the two are presented independently.' : '此分層依健保條件判讀；PREVENT 為另一項風險估計，兩者分別呈現。'}</p>
+    <details><summary className="min-h-11 cursor-pointer py-3 font-medium">{en ? 'Classification definitions and caveats' : '危險分層定義與待核對依據'}</summary>
+      <dl className="space-y-2">{data.tiers.map(tier => <div key={tier.id}><dt className="font-medium">{tier.label}</dt><dd>{tier.criteria}</dd></div>)}</dl>
+      <ul className="mt-3 list-disc space-y-1 pl-4">{data.caveats.map(caveat => <li key={caveat}>{caveat}</li>)}</ul>
+    </details>
+    <a className="inline-block min-h-11 py-3 text-xs text-primary underline" href={data.sourceUrl} target="_blank" rel="noreferrer">{data.source}</a>
+  </section>
   return (
     <section className="space-y-3 px-3 pb-4 text-sm" aria-label={data.title} data-testid="nhi-lipid-coverage-summary">
       <p className="font-medium leading-relaxed">{data.conclusion}</p>
@@ -87,18 +112,18 @@ export function NhiLipidCoverageSummary({ recommendation, locale, patientId }: {
         </table>
       </div>
       <dl className="space-y-2">{data.rows.slice(4).map(row => <div key={row.label}><dt className="font-medium">{row.label}</dt><dd className="mt-0.5 leading-relaxed text-muted-foreground">{row.value}</dd></div>)}</dl>
-      <details className="border-t border-border pt-1">
+      {presentation !== 'treatment' ? <details className="border-t border-border pt-1">
         <summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">{en ? 'Review six cardiovascular risk factors' : '檢核六項心血管風險因子'}</summary>
         <p className="text-xs leading-relaxed text-muted-foreground">{en ? 'Met / Not met / Unconfirmed. Changes recalculate the tier and are kept only for this patient visit.' : '符合／不符合／未確認。修改後重新計算分級；人工核對僅保留於本次病人工作階段。'}</p>
         {data.factors.map(row => <CheckRow key={row.id ?? row.label} row={row} patientId={patientId} en={en} />)}
         <details className="border-t border-border"><summary className="min-h-11 cursor-pointer py-3 font-medium">{en ? 'Review the five metabolic components' : '檢核代謝症候群五項細節'}</summary>
           {data.metabolicChecks?.map(row => <CheckRow key={row.id} row={row} patientId={patientId} en={en} />)}
         </details>
-      </details>
-      <details className="border-t border-border pt-1"><summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">{en ? 'Review disease and higher-tier criteria' : '檢核疾病與可能升級條件'}</summary>
+      </details> : null}
+      {presentation !== 'treatment' ? <details className="border-t border-border pt-1"><summary className="min-h-11 cursor-pointer py-3 font-medium text-primary">{en ? 'Review disease and higher-tier criteria' : '檢核疾病與可能升級條件'}</summary>
         {data.diseaseChecks?.map(row => <CheckRow key={row.id} row={row} patientId={patientId} en={en} />)}
         <details><summary className="min-h-11 cursor-pointer py-3 font-medium">{en ? 'Six-tier definitions' : '六級定義對照'}</summary><dl className="space-y-2 pb-3">{data.tiers.map(tier => <div key={tier.id}><dt className="font-medium">{tier.label}</dt><dd className="text-muted-foreground">{tier.criteria}</dd></div>)}</dl></details>
-      </details>
+      </details> : null}
       {data.documentationNote ? <details className="border-t border-border pt-1"><summary className="min-h-11 cursor-pointer py-3 font-medium">{en ? 'Chart documentation draft' : '病歷註記提醒與草稿'}</summary>
         <p className="mb-2 text-xs text-muted-foreground">{en ? 'Record the confirmation date and supporting evidence. Copying does not save to the medical record.' : '請於病歷記載確認日期、判斷結果與佐證來源。複製不會自動寫入病歷。'}</p>
         <textarea readOnly aria-label={en ? 'Chart note draft' : '病歷註記草稿'} value={data.documentationNote} rows={7} className="w-full rounded-md border border-border bg-background p-2 text-xs leading-relaxed" />

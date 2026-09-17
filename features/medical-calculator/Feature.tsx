@@ -15,6 +15,8 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { CALCULATORS, getCalcTags } from "./calculators"
 import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Severity } from "./types"
 import { CalculatorDetail } from "./components/CalculatorDetail"
+import { HfPrognosisModels } from './prognosis/HfPrognosisModels'
+import { prognosisAutofillEvidence } from './prognosis/autofill-evidence'
 import { useLabAutofill, type Autofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
 import { computeAutofilledResult, relevanceScore } from "./autofill-compute"
@@ -107,6 +109,10 @@ export default function MedicalCalculatorFeature() {
       </div>
 
       {/* Filter chips — Favorites / Recent (MDCalc-style) + specialty (科別) */}
+      {audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|maggic|shfm|gwtg|心衰|預後|prognos/i.test(query)) ? <details className="rounded-lg border border-border" data-testid="calculator-hf-prognosis">
+        <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring">{zh ? 'HF 預後模型・公式待串接' : 'HF prognosis models · formulas pending'}</summary>
+        <HfPrognosisModels locale={locale} evidence={prognosisAutofillEvidence(autofill)} />
+      </details> : null}
       <div className="-mx-1 flex flex-wrap gap-1 px-1 pb-1">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
           {zh ? "全部" : "All"}
