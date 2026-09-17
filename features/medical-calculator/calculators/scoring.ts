@@ -86,6 +86,26 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     ],
     note: { en: 'Maximum 2 points per domain. 0–1: unlikely; 2–4: functional testing; 5–6: supports HFpEF. Missing measurements yield a conservative range, not a validated complete score. The published E/e′ 9–14 band is implemented as 9 ≤ E/e′ <15 for decimal values.', zh: '每領域取最高分，最多 2 分。0–1：可能性低；2–4：功能性檢查；5–6：支持 HFpEF。缺值顯示保守範圍，並非已驗證的完整分數。文獻 E/e′ 9–14 區間以 9 ≤ E/e′ <15 處理小數。' },
   },
+  'maggic-hf': {
+    formula: {
+      en: 'MAGGIC score = LVEF points + age×LVEF points + SBP×LVEF points + BMI points + creatinine points + NYHA points + male (1) + current smoker (1) + diabetes (3) + COPD (2) + HF duration ≥18 months (2) + no beta-blocker (3) + no ACEI/ARB (1).',
+      zh: 'MAGGIC 總分 = LVEF 分數 + 年齡×LVEF 分數 + 收縮壓×LVEF 分數 + BMI 分數 + 肌酸酐分數 + NYHA 分數 + 男性（1）+ 目前吸菸（1）+ 糖尿病（3）+ COPD（2）+ 心衰病程 ≥18 個月（2）+ 未用 β 阻斷劑（3）+ 未用 ACEI/ARB（1）。',
+    },
+    note: {
+      en: 'Age and systolic-BP points interact with LVEF; creatinine is converted to µmol/L for the published bands. One- and three-year all-cause mortality are looked up directly from Pocock 2013 Table 4 for scores 0–50, without interpolation, extrapolation or capping.',
+      zh: '年齡與收縮壓分數會依 LVEF 層級而變；肌酸酐先換算為 µmol/L 套用原始分層。1 年與 3 年全因死亡率直接查 Pocock 2013 Table 4（0–50 分），不內插、不外推，也不截斷高分。',
+    },
+  },
+  'life-preserved': {
+    formula: {
+      en: 'For each 3-month age interval: S(HF/CV) = S₀(HF/CV)^exp(LP(HF/CV)); S(non-CV) = S₀(non-CV)^exp(LP(non-CV)); cumulative HF hospitalization/CV-death risk adds prior event-free survival × [1 − S(HF/CV)].',
+      zh: '每個 3 個月年齡區間：S（心衰住院／心血管死亡）= S₀^exp（相對風險線性預測值）；S（非心血管死亡）= S₀^exp（相對風險線性預測值）；心衰住院／心血管死亡累積風險逐期加上「前一期無事件存活率 ×［1 − 該期原因別存活率］」。',
+    },
+    note: {
+      en: 'Uses the published sex-specific coefficients and 200 age-specific quarterly baseline survivals (ages 40.00–89.75) from Supplementary Tables S7–S8. Predictors are age, sex, diabetes, smoking, prior/recent HF hospitalization, COPD, AF, NYHA III/IV, ischemic heart disease, NT-proBNP, BMI, heart rate, hemoglobin and eGFR. Eligibility requires no documented LVEF <50%. Non-CV death is a competing event; recent HF hospitalization modifies only the first four intervals. Values outside the author calculator’s displayed ranges are not extrapolated.',
+      zh: '採補充資料 Tables S7–S8 公布的性別專屬係數，以及 40.00–89.75 歲共 200 個年齡別季度基準存活率。預測因子含年齡、性別、糖尿病、吸菸、既往／近期心衰住院、COPD、AF、NYHA III/IV、缺血性心臟病、NT-proBNP、BMI、心率、血色素與 eGFR；適用者不得有任何 LVEF <50% 的既往紀錄。非心血管死亡以競爭事件處理；近期心衰住院只修正最初四個季度。超出作者計算機顯示範圍的值不予外推。',
+    },
+  },
   // Liver-cancer (HCC) risk — transcribed from the NHI 健保存摺 計算說明 table.
   'hcc-risk-reveal': {
     factors: [

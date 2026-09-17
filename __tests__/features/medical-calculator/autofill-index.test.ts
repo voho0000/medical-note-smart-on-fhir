@@ -62,6 +62,23 @@ describe('buildAutofill — ACR / PCR by LOINC', () => {
   })
 })
 
+describe('buildAutofill — eGFR equation identity', () => {
+  const ckdEpiSource = { kind: 'lab' as const, keys: ['EGFR(EPI)'] }
+
+  it('uses a CKD-EPI result and does not substitute MDRD', () => {
+    const both = buildAutofill([
+      labLoinc('77147-7', 45, 'mL/min/1.73m2', '2026-01-01'),
+      labLoinc('62238-1', 50, 'mL/min/1.73m2', '2026-01-02'),
+    ], {})
+    expect(both.resolve(ckdEpiSource)?.value).toBe(50)
+
+    const mdrdOnly = buildAutofill([
+      labLoinc('77147-7', 45, 'mL/min/1.73m2', '2026-01-01'),
+    ], {})
+    expect(mdrdOnly.resolve(ckdEpiSource)).toBeUndefined()
+  })
+})
+
 describe('buildAutofill — source-report provenance capture', () => {
   it('captures testName, LOINC, facility and obsId on the resolved value', () => {
     const obs = {
