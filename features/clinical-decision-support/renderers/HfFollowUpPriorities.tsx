@@ -15,7 +15,7 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const [weight, setWeight] = useState('')
   const [weightDate, setWeightDate] = useState(today)
   const local = vitals?.hfFollowUp ?? EMPTY_HF_HISTORY
-  const complaints = [...history.complaints, ...local.complaints].filter(item => item.date <= today)
+  const complaints = [...new Map([...history.complaints, ...local.complaints].filter(item => item.date <= today).map(item => [JSON.stringify([item.date, item.text]), item])).values()]
   const previousDate = complaints.filter(item => item.date < today).map(item => item.date).sort().at(-1)
   const previous = complaints.filter(item => item.date === previousDate)
   const current = complaints.filter(item => item.date === today)
@@ -35,7 +35,29 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const xy = range.map(point => `${10 + (Date.parse(point.date) - start) / Math.max(1, end - start) * 280},${70 - (point.value - low) / Math.max(1, high - low) * 50}`).join(' ')
   const choices: [SymptomChange, string, string][] = [['worse', '惡化', 'Worse'], ['unchanged', '穩定', 'Stable'], ['improved', '進步', 'Improved']]
   const sourceName = (source: string) => source === 'clinic' ? (isEnglish ? 'Clinic entry' : '門診輸入') : source
+  const weightChanges = new Map([...(history.weightChanges ?? []), ...(local.weightChanges ?? [])].filter(item => item.date <= today).map(item => [item.date, item.value]))
+  const dates = [...new Set([...complaints.map(item => item.date), ...points.map(item => item.date), ...weightChanges.keys()])].sort()
+  const changeName = (change?: SymptomChange) => change === 'resolved' ? (isEnglish ? 'Resolved' : '已消失') : choices.find(([value]) => value === change)?.[isEnglish ? 2 : 1] ?? (isEnglish ? 'Change not assessed' : '未評估變化')
   return <div className="space-y-4 px-3 py-3" data-testid="cdss-followup-priorities">
+    <section aria-label={isEnglish ? 'Follow-up history' : '歷次追蹤變化'} className="space-y-2">
+      <h4 className="font-semibold">{isEnglish ? 'Follow-up history · oldest to newest' : '歷次追蹤變化・由早到晚'}</h4>
+      {dates.length ? <ol className="divide-y divide-border" data-testid="cdss-followup-history">{dates.map(day => {
+        const pointIndex = points.findIndex(point => point.date === day)
+        const point = points[pointIndex]
+        const preceding = points[pointIndex - 1]
+        const reported = weightChanges.get(day)
+        return <li key={day} className="space-y-1 py-3 text-sm" data-date={day}>
+          <time dateTime={day} className="font-medium tabular-nums">{day}</time>
+          {complaints.filter(item => item.date === day).map(item => <div key={item.text} className="break-words">
+            <p>{item.text} · {changeName(item.change)}{item.comparedWith ? ` (${isEnglish ? 'compared with' : '相較'} ${item.comparedWith})` : ''}</p>
+            {item.note ? <p>{item.note}</p> : null}
+            <p className="text-xs text-muted-foreground">{sourceName(item.source)}</p>
+          </div>)}
+          {point ? <p className="break-words">{isEnglish ? 'Weight' : '體重'}：{point.value.toFixed(1)} kg{preceding ? ` · ${isEnglish ? 'Change since' : '相較'} ${preceding.date}：${point.value - preceding.value > 0 ? '+' : ''}${(point.value - preceding.value).toFixed(1)} kg` : ''}<span className="block text-xs text-muted-foreground">{sourceName(point.source)}</span></p> : null}
+          {reported ? <p>{isEnglish ? 'Reported weight change' : '回報體重變化'}：{reported === 'increased' ? (isEnglish ? 'Increased' : '增加') : reported === 'decreased' ? (isEnglish ? 'Decreased' : '減少') : (isEnglish ? 'Unchanged' : '不變')}</p> : null}
+        </li>
+      })}</ol> : <p className="text-sm text-muted-foreground">{isEnglish ? 'No follow-up records yet.' : '尚無追蹤紀錄。'}</p>}
+    </section>
     <section className="space-y-3" aria-label={isEnglish ? 'Chief complaint follow-up' : '主訴追蹤'}>
       <h4 className="font-semibold">{isEnglish ? 'Chief complaint · change since last visit' : '主要主訴・與上次相比'}</h4>
       <p className="text-xs text-muted-foreground">{previousDate ? `${isEnglish ? 'Previous record' : '上次紀錄'}：${previousDate}` : (isEnglish ? 'No previous chief complaint available. Add the symptom to follow.' : '未取得上次主訴，請新增要追蹤的症狀。')}</p>

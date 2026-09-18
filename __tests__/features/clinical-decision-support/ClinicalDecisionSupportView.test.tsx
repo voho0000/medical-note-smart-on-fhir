@@ -80,6 +80,23 @@ function result(): CdssResult {
 }
 
 describe('clinical decision summary', () => {
+  it('shows the patient-specific lipid treatment recommendation before the guideline', () => {
+    const id = 'dyslipidemia-lipid-lowering-therapy'
+    const advice = '建議評估開始 statin 治療；同步補驗完整血脂。'
+    const therapy = { ...recommendation(id, { domain: 'medication', recommendation: advice }), treatmentCriteria: {
+      risk: 'ASCVD；極高風險待確認', initiation: '確認臨床 ASCVD 即評估 statin', target: 'LDL-C <70 mg/dL；non-HDL-C <100 mg/dL', source: 'ACC／AHA 2026', sourceUrl: 'https://doi.org/10.1161/CIR.0000000000001423',
+    } }
+    render(<ClinicalDecisionSupportView result={{ ...result(), recommendations: [therapy] }} locale="zh-TW" />)
+    fireEvent.click(screen.getByTestId(`cdss-recommendation-trigger-${id}`))
+    const patientAdvice = screen.getByTestId('lipid-treatment-recommendation')
+    expect(patientAdvice).toBeVisible()
+    expect(patientAdvice).toHaveTextContent(advice)
+    const criteria = screen.getByTestId('lipid-treatment-criteria')
+    for (const label of ['風險分層', '起始治療標準', '治療標的']) expect(within(criteria).getByText(label)).toBeVisible()
+    expect(criteria).toHaveTextContent(therapy.treatmentCriteria.target)
+    expect(patientAdvice.compareDocumentPosition(screen.getByTestId(`cdss-semantic-card-${id}`)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('separates actionable guidance from semantically deduplicated missing inputs', () => {
     const summary = buildClinicalDecisionSummary(result(), 'zh-TW')
 

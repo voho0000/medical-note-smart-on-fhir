@@ -35,7 +35,7 @@ export function CdssModuleSections({ recommendations, isEnglish, renderDetail, s
     const safety = item.domain === 'safety' && item.priority === 'high' && item.status !== 'no-action'
     const decision = decisionLabel?.(item)
     return (
-      <details key={item.id} id={`cdss-hf-action-${item.id}`} className="group/module border-t border-border" data-testid={`cdss-section-module-${item.id}`}>
+      <details key={item.id} open={diagnosisModeControl && !followUp && item.domain === 'diagnosis' ? true : undefined} id={`cdss-hf-action-${item.id}`} className="group/module border-t border-border" data-testid={`cdss-section-module-${item.id}`}>
         <summary className={cn(styles.moduleSummary, 'min-h-11 cursor-pointer text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset', safety && 'bg-destructive/5')}>
           <span className="inline-flex max-w-full flex-wrap items-center gap-2 align-middle">
             {safety ? <span className="font-semibold text-destructive">{isEnglish ? 'Priority safety review' : '優先安全處理'}</span> : null}
@@ -57,8 +57,10 @@ export function CdssModuleSections({ recommendations, isEnglish, renderDetail, s
       {groupCdssSections(recommendations).map((section, index) => {
         const archived = followUp && section.id === 'diagnosis' ? section.modules.filter(item => item.id.startsWith('heart-failure-') && item.id !== 'heart-failure-monitoring') : []
         const visible = section.modules.filter(item => !archived.includes(item))
-        const active = visible.filter(item => item.status !== 'no-action' && !isOverviewModule(item))
-        const other = visible.filter(item => item.status === 'no-action' || isOverviewModule(item))
+        const keepDiagnosisOpen = section.id === 'diagnosis' && diagnosisModeControl && !followUp
+        const active = visible.filter(item => keepDiagnosisOpen || (item.status !== 'no-action' && !isOverviewModule(item)))
+        const other = visible.filter(item => !active.includes(item))
+        const pending = active.filter(item => item.status !== 'no-action' && !isOverviewModule(item))
         const title = section.id === 'diagnosis' ? diagnosisTitle : isEnglish ? section.en : section.zh
         return (
           <section key={section.id} aria-labelledby={`${instanceId}-${section.id}`} className={styles.section} data-section={section.id} data-testid={`cdss-section-${section.id}`}>
@@ -67,11 +69,11 @@ export function CdssModuleSections({ recommendations, isEnglish, renderDetail, s
               <span className={styles.number} aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
               <div className={styles.title}>
                 <h3 id={`${instanceId}-${section.id}`}>{title}{!isEnglish ? <span className={styles.english}>{section.id === 'diagnosis' && followUp ? 'Follow-up' : section.en}</span> : null}</h3>
-                <span className={styles.meta}>{sectionSummary?.[section.id] ?? (active.length ? (isEnglish ? `${active.length} modules to review` : `${active.length} 個待處理模組`) : section.modules.length ? (isEnglish ? 'No pending module actions' : '目前無模組待辦') : (isEnglish ? 'Not evaluated' : '尚未評估'))}</span>
+                <span className={styles.meta}>{sectionSummary?.[section.id] ?? (pending.length ? (isEnglish ? `${pending.length} modules to review` : `${pending.length} 個待處理模組`) : section.modules.length ? (isEnglish ? 'No pending module actions' : '目前無模組待辦') : (isEnglish ? 'Not evaluated' : '尚未評估'))}</span>
                 <span className={cn(styles.meta, styles.disclosureClosed)}>{isEnglish ? 'Expand details' : '點擊展開'}</span>
                 <span className={cn(styles.meta, styles.disclosureOpen)}>{isEnglish ? 'Collapse details' : '點擊收合'}</span>
-                {active.length ? <span className={styles.disclosureClosed}>
-                  {active.map(item => <span key={item.id} data-cdss-action="" className="mt-2 block break-words text-sm">
+                {pending.length ? <span className={styles.disclosureClosed}>
+                  {pending.map(item => <span key={item.id} data-cdss-action="" className="mt-2 block break-words text-sm">
                     {item.domain === 'safety' && item.priority === 'high' ? (isEnglish ? 'Priority safety review: ' : '優先安全處理：') : ''}
                     {item.nextActions[0] ?? item.title}
                   </span>)}

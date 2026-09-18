@@ -17,8 +17,18 @@ test('diagnosis lists all supplied checks and preserves patient-scoped verificat
   render(<NhiLipidCoverageSummary recommendation={recommendation} locale="zh-TW" patientId="synthetic" presentation="diagnosis" />)
   const panel = screen.getByTestId('lipid-diagnosis-confirmation')
   expect(panel.querySelectorAll('details')).toHaveLength(3)
-  fireEvent.click(within(panel).getAllByText('糖尿病')[0])
+  for (const group of panel.querySelectorAll('details')) expect(group).not.toHaveAttribute('open')
+  for (const [title, label] of [['相關疾病與高風險條件', '糖尿病'], ['心血管危險因子', '高血壓'], ['代謝症候群細項', '腰圍']]) {
+    fireEvent.click(within(panel).getByText(title))
+    expect(screen.getByRole('group', { name: label })).toBeVisible()
+  }
+  expect(within(screen.getByRole('group', { name: '糖尿病' })).getByRole('button', { name: '? 未確認' })).toBeVisible()
+  expect(within(screen.getByRole('group', { name: '糖尿病' })).getByRole('button', { name: '? 未確認' })).toHaveAttribute('aria-pressed', 'true')
   fireEvent.click(within(screen.getByRole('group', { name: '糖尿病' })).getByRole('button', { name: '✓ 符合' }))
+  expect(useNhiLipidReviewStore.getState().answers.diabetes).toBe('yes')
+  fireEvent.click(within(panel).getByText('相關疾病與高風險條件'))
+  expect(screen.getByText('糖尿病')).not.toBeVisible()
+  expect(screen.getByRole('group', { name: '高血壓' })).toBeVisible()
   expect(useNhiLipidReviewStore.getState().answers.diabetes).toBe('yes')
 })
 
@@ -35,6 +45,7 @@ test('lipid follow-up and diagnosis switch without clearing physician review', (
   expect(screen.getByTestId('lipid-follow-up')).toBeInTheDocument()
   expect(screen.queryByTestId('lipid-diagnosis-confirmation')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '診斷' }))
+  fireEvent.click(screen.getByText('相關疾病與高風險條件'))
   fireEvent.click(within(screen.getByRole('group', { name: '糖尿病' })).getByRole('button', { name: '✓ 符合' }))
   fireEvent.click(screen.getByRole('button', { name: '追蹤' }))
   expect(screen.getByRole('button', { name: '追蹤' })).toHaveAttribute('aria-pressed', 'true')
@@ -53,4 +64,26 @@ test.each(['歷史值達門檻與否不能代表今日；先複驗', '目前有�
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent(assessment)
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('2018-02-12')
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('LDL-C <115 mg/dL')
+})
+
+test('follow-up draws dated LDL-C values and the selected tier target', () => {
+  const fixture = {
+    ...recommendation,
+    patientEvidence: [{ label: 'LDL-C', value: '最新', factKeys: ['LDL'], sources: [
+      { resourceType: 'Observation', resourceId: 'ldl-old', date: '2024-01-15', value: 123 },
+      { resourceType: 'Observation', resourceId: 'ldl-new', date: '2025-02-12', value: 88 },
+    ] }],
+    coverageSummary: {
+      ...recommendation.coverageSummary,
+      rows: [{ label: '最新 LDL-C', value: '88 mg/dL · 2025-02-12' }],
+      tiers: [{ id: 'moderate', label: '中風險', status: 'selected', initiation: '≥115', target: 'LDL-C <100 mg/dL', criteria: '兩項因子', selected: true }],
+    },
+  } as unknown as CdssRecommendation
+  render(<NhiLipidCoverageSummary recommendation={fixture} locale="zh-TW" presentation="follow-up" />)
+  const chart = screen.getByTestId('lipid-trend-chart')
+  expect(chart).toHaveTextContent('個人標的 <100 mg/dL')
+  expect(chart).toHaveAttribute('aria-label', 'LDL-C 趨勢與個人治療標的')
+  expect(chart.querySelector('line[stroke-dasharray="7 5"]')).toBeTruthy()
+  expect(chart).toHaveTextContent('01/15')
+  expect(chart).toHaveTextContent('02/12')
 })

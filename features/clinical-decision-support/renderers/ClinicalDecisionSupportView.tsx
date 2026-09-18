@@ -1682,11 +1682,17 @@ function RecommendationDetail({
     recommendation.clinicalReviewItems,
     integratedNextStepActions(
       recommendation.missingData,
-      recommendation.nextActions,
+      recommendation.id === 'dyslipidemia-lipid-lowering-therapy'
+        ? recommendation.nextActions.filter(action => action !== recommendation.recommendation)
+        : recommendation.nextActions,
       isEnglish,
     ),
     isEnglish,
   )
+  // Additive pack contract; older installed releases may omit these criteria.
+  const treatmentCriteria = (recommendation as CdssRecommendation & {
+    treatmentCriteria?: { risk: string; initiation: string; target: string; source: string; sourceUrl: string }
+  }).treatmentCriteria
   const hasActionPlan = displayNextActions.length > 0
   const classificationThresholds = isCompactClassification
     ? recommendation.nextActions.slice(1)
@@ -1716,6 +1722,25 @@ function RecommendationDetail({
 
   return (
     <div className="space-y-2 px-3 py-2.5 @min-[36rem]:px-4">
+      {recommendation.id === 'dyslipidemia-lipid-lowering-therapy' ? (
+        <section className="border-b border-border pb-3" aria-label={isEnglish ? 'Patient-specific treatment recommendation' : '本次治療建議'}>
+          <h5 className="text-sm font-semibold text-foreground">{isEnglish ? 'Patient-specific treatment recommendation' : '本次治療建議'}</h5>
+          {treatmentCriteria ? <>
+            <dl className="mt-2 divide-y divide-border text-sm" data-testid="lipid-treatment-criteria">
+              {[
+                [isEnglish ? 'Risk classification' : '風險分層', treatmentCriteria.risk],
+                [isEnglish ? 'When to start treatment' : '起始治療標準', treatmentCriteria.initiation],
+                [isEnglish ? 'Treatment targets' : '治療標的', treatmentCriteria.target],
+              ].map(([heading, value]) => <div key={heading} className="grid gap-1 py-2 @min-[36rem]:grid-cols-[8rem_minmax(0,1fr)] @min-[36rem]:gap-3">
+                <dt className="font-medium text-muted-foreground">{heading}</dt>
+                <dd className="min-w-0 break-words leading-relaxed text-foreground">{value}</dd>
+              </div>)}
+            </dl>
+            <a className="text-xs text-muted-foreground underline underline-offset-2" href={treatmentCriteria.sourceUrl} target="_blank" rel="noreferrer">{treatmentCriteria.source}</a>
+          </> : null}
+          <p className="mt-1.5 break-words text-sm leading-relaxed text-foreground" data-testid="lipid-treatment-recommendation">{recommendation.recommendation}</p>
+        </section>
+      ) : null}
       <section
         className="rounded-md border border-primary/20 bg-primary/[0.025] px-3 py-2.5"
         aria-label={isEnglish ? 'Automatically generated physician semantic card' : '自動產生的醫師語意卡片'}

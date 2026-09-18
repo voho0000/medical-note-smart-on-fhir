@@ -19,16 +19,24 @@ function Patient({ confirmed = false }: { confirmed?: boolean }) {
   return <HeartFailureVisitFlow flow={{ ...flow, readOnly: false }} board={board} now={now} isEnglish={false} expandedId={null} onToggle={() => {}} renderDetail={() => <p>診斷參考資料</p>} packVersion="2.1.0" sectionRecommendations={result.recommendations} phenotypeAnswer={answer} onAnswerPhenotype={setAnswer} />
 }
 
-it('requires confirmation, then opens follow-up and lets the physician reopen diagnosis', () => {
+it('keeps diagnosis editable after confirmation and switches to follow-up only on request', () => {
   render(<Patient />)
   const section = screen.getByTestId('cdss-section-disclosure-diagnosis')
   expect(section).not.toHaveAttribute('open')
   fireEvent.click(section.querySelector('summary')!)
-  fireEvent.click(screen.getByRole('button', { name: '確認診斷並進入追蹤' }))
+  fireEvent.click(screen.getByRole('button', { name: '檢視並確認診斷' }))
   fireEvent.click(screen.getByRole('button', { name: '取消' }))
   expect(screen.queryByTestId('cdss-diagnosis-review')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: '確認診斷並進入追蹤' }))
-  fireEvent.click(screen.getByRole('button', { name: '確認並進入追蹤' }))
+  fireEvent.click(screen.getByRole('button', { name: '檢視並確認診斷' }))
+  fireEvent.click(screen.getByRole('button', { name: '確認診斷' }))
+  expect(screen.getByText('診斷參考資料')).toBeVisible()
+  expect(screen.getByTestId('cdss-condition-assessment')).toHaveAttribute('open')
+  expect(screen.getByRole('button', { name: '診斷' })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(screen.getByRole('button', { name: '修改診斷確認紀錄' }))
+  fireEvent.change(screen.getByLabelText('診斷來源／備註（選填）'), { target: { value: '補充診斷依據' } })
+  fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
+  expect(screen.getByTestId('cdss-diagnosis-confirmation')).toHaveTextContent('補充診斷依據')
+  fireEvent.click(screen.getByRole('button', { name: '追蹤' }))
   expect(screen.getByTestId('cdss-followup-priorities')).toBeVisible()
   expect(screen.getByRole('button', { name: '追蹤' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.queryByTestId('cdss-section-module-heart-failure-phenotype')).not.toBeInTheDocument()
@@ -36,7 +44,6 @@ it('requires confirmation, then opens follow-up and lets the physician reopen di
   fireEvent.click(screen.getByRole('button', { name: '診斷' }))
   expect(screen.getByRole('button', { name: '診斷' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('heading', { name: '診斷評估 Diagnosis' })).toBeVisible()
-  fireEvent.click(screen.getByTestId('cdss-section-module-heart-failure-phenotype').querySelector('summary')!)
   expect(screen.getByText('診斷參考資料')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: '追蹤' }))
   expect(screen.getByRole('heading', { name: '病況追蹤 Follow-up' })).toBeVisible()

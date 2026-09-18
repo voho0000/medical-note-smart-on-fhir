@@ -32,13 +32,69 @@ interface CoverageSummary {
   caveats: readonly string[]
 }
 
+type LipidPoint = { date: string; value: number }
+
+function lipidPoints(recommendation: CdssRecommendation, rows: readonly { label: string; value: string }[]): LipidPoint[] {
+  const evidence = recommendation.patientEvidence?.find(item => item.factKeys.includes('LDL'))
+  const sourcePoints = (evidence?.sources ?? [])
+    .filter(source => source.date && typeof source.value === 'number' && Number.isFinite(source.value))
+    .map(source => ({ date: source.date!, value: source.value as number }))
+  if (sourcePoints.length) return [...new Map(sourcePoints.map(point => [point.date, point])).values()].sort((a, b) => a.date.localeCompare(b.date))
+  const latest = rows.find(row => /最新\s*LDL-C|latest\s*LDL-C/i.test(row.label))
+  const match = latest?.value.match(/(-?\d+(?:\.\d+)?)\s*mg\/dL\s*[·•|]\s*(\d{4}-\d{2}-\d{2})/i)
+  return match ? [{ value: Number(match[1]), date: match[2] }] : []
+}
+
+function targetValue(tiers?: CoverageSummary['tiers']): number | undefined {
+  const selected = tiers?.find(tier => tier.selected)
+  const match = selected?.target?.match(/(?:LDL-C\s*[<≤]\s*)(\d+(?:\.\d+)?)/i) ?? selected?.target?.match(/<\s*(\d+(?:\.\d+)?)/)
+  return match ? Number(match[1]) : undefined
+}
+
+function LipidTrendChart({ points, target, en }: { points: LipidPoint[]; target?: number; en: boolean }) {
+  if (!points.length && target === undefined) return null
+  const width = 720
+  const height = 230
+  const pad = { left: 52, right: 18, top: 22, bottom: 42 }
+  const values = [...points.map(point => point.value), ...(target === undefined ? [] : [target])]
+  const min = Math.max(0, Math.floor((Math.min(...values) - 15) / 10) * 10)
+  const max = Math.ceil((Math.max(...values) + 15) / 10) * 10
+  const span = Math.max(1, max - min)
+  const x = (index: number) => pad.left + (points.length <= 1 ? (width - pad.left - pad.right) / 2 : index / (points.length - 1) * (width - pad.left - pad.right))
+  const y = (value: number) => pad.top + (max - value) / span * (height - pad.top - pad.bottom)
+  const line = points.map((point, index) => `${x(index)},${y(point.value)}`).join(' ')
+  const label = (date: string) => date.slice(5).replace('-', '/')
+  return <section className="space-y-2 rounded-lg border border-border bg-background p-3" data-testid="lipid-trend-chart" aria-label={en ? 'LDL-C trend and individual target' : 'LDL-C 趨勢與個人治療標的'}>
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h5 className="font-semibold">{en ? 'LDL-C trend' : 'LDL-C 趨勢'}</h5>
+      {target !== undefined ? <p className="text-xs font-medium text-red-700 dark:text-red-300">{en ? `Target <${target} mg/dL` : `個人標的 <${target} mg/dL`}</p> : null}
+    </div>
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={en ? 'Dated LDL-C chart' : '依日期排列的 LDL-C 圖表'}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-56 min-w-[34rem] w-full" role="img" aria-label={en ? 'LDL-C measurements by date with target line' : '依時間排列的 LDL-C 數值與標的線'}>
+        <line x1={pad.left} x2={width - pad.right} y1={height - pad.bottom} y2={height - pad.bottom} className="stroke-border" />
+        <line x1={pad.left} x2={pad.left} y1={pad.top} y2={height - pad.bottom} className="stroke-border" />
+        {target !== undefined ? <line x1={pad.left} x2={width - pad.right} y1={y(target)} y2={y(target)} stroke="currentColor" className="text-red-600 dark:text-red-400" strokeWidth="2" strokeDasharray="7 5" /> : null}
+        {points.length > 1 ? <polyline points={line} fill="none" stroke="currentColor" className="text-primary" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" /> : null}
+        {points.map((point, index) => <g key={`${point.date}-${point.value}`}>
+          <circle cx={x(index)} cy={y(point.value)} r="5" fill="currentColor" className="text-primary" />
+          <text x={x(index)} y={y(point.value) - 10} textAnchor="middle" className="fill-foreground text-[12px] font-semibold">{point.value}</text>
+          <text x={x(index)} y={height - 16} textAnchor="middle" className="fill-muted-foreground text-[11px]">{label(point.date)}</text>
+        </g>)}
+        {target !== undefined ? <text x={width - pad.right} y={y(target) - 7} textAnchor="end" className="fill-red-700 text-[11px] font-semibold dark:fill-red-300">{en ? 'Target' : '標的'}</text> : null}
+        <text x="16" y={pad.top + (height - pad.top - pad.bottom) / 2} transform={`rotate(-90 16 ${pad.top + (height - pad.top - pad.bottom) / 2})`} textAnchor="middle" className="fill-muted-foreground text-[11px]">mg/dL</text>
+      </svg>
+    </div>
+    <p className="text-xs text-muted-foreground">{en ? 'The red dashed line is the target for the selected risk tier; dates are collection dates.' : '紅色虛線為目前選定風險分層的治療標的；橫軸為採檢日期。'}</p>
+  </section>
+}
+
 function CheckRow({ row, patientId, en }: { row: CoverageCheck; patientId?: string; en: boolean }) {
   const answer = useNhiLipidReviewStore(state => state.answer)
   const options: readonly [NhiLipidAnswer, string][] = [
     ['yes', en ? '✓ Met' : '✓ 符合'], ['no', en ? '× Not met' : '× 不符合'], ['unknown', en ? '? Unconfirmed' : '? 未確認'],
   ]
-  return <div className="space-y-1.5 border-b border-border py-3 last:border-0">
-    <p className="font-medium">{row.label}</p>
+  return <div className="min-w-0 space-y-1.5 border-b border-border py-3 last:border-0">
+    <p className="break-words font-medium">{row.label}{row.state === 'unknown' ? <span data-cdss-action="" className="ml-2 text-xs text-muted-foreground">{en ? 'Pending confirmation' : '待醫師確認'}</span> : null}</p>
     <p className="text-xs leading-relaxed text-muted-foreground">{row.value}</p>
     {row.editable ? <div className="flex flex-wrap items-center gap-1" role="group" aria-label={row.label}>
       {options.map(([state, label]) => <button key={state} type="button" disabled={!patientId} aria-pressed={row.state === state}
@@ -65,6 +121,7 @@ export function NhiLipidCoverageSummary({ recommendation, locale, patientId, pre
   if (presentation === 'follow-up') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-follow-up" aria-label={en ? 'Lipid treatment goal follow-up' : '血脂治療標的追蹤'}>
     <h4 className="font-semibold">{en ? 'Lipid treatment goal follow-up' : '血脂治療標的追蹤'}</h4>
     <p className="text-xs text-muted-foreground">{en ? 'Compare the latest measurement with the goal for the minimum supported tier. Check the sampling date and treatment; switch to Diagnosis to review the classification.' : '依目前最低已知分層，比較最新檢驗與治療標的。請核對採檢日期與當時用藥；需確認分層時可切回「診斷」。'}</p>
+    <LipidTrendChart points={lipidPoints(recommendation, data.rows)} target={targetValue(data.tiers)} en={en} />
     <dl className="divide-y divide-border">
       {/* The pack owns the goal, freshness guard and assessment. Do not infer
           attainment from numbers or translated prose in the renderer. */}
@@ -82,16 +139,17 @@ export function NhiLipidCoverageSummary({ recommendation, locale, patientId, pre
       <a className="inline-block min-h-11 py-3 text-primary underline" href={data.sourceUrl} target="_blank" rel="noreferrer">{data.source}</a>
     </details>
   </section>
-  if (presentation === 'diagnosis') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-diagnosis-confirmation" aria-label={en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}>
+  if (presentation === 'diagnosis') return <section className="@container space-y-3 px-3 py-4 text-sm" data-testid="lipid-diagnosis-confirmation" aria-label={en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}>
     <h4 className="font-semibold">{en ? 'Diagnoses and criteria for risk classification' : '危險分層相關診斷與條件確認'}</h4>
     <p className="text-xs text-muted-foreground">{en ? 'Review the NHI classification criteria below. Unconfirmed does not mean absent; verification recalculates the classification.' : '核對下列健保危險分層條件；未確認不代表沒有，修改後會重新計算分層。'}</p>
-    {[[en ? 'Diseases and higher-risk criteria' : '相關疾病與高風險條件', data.diseaseChecks ?? []], [en ? 'Cardiovascular risk factors' : '心血管危險因子', data.factors], [en ? 'Metabolic syndrome components' : '代謝症候群細項', data.metabolicChecks ?? []]].map(([title, checks]) => <div key={title as string}>
-      <h5 className="border-b border-border py-2 font-medium">{title as string}</h5>
-      {(checks as readonly CoverageCheck[]).map(row => <details key={row.id} className="border-b border-border">
-        <summary className="min-h-11 cursor-pointer py-3"><span>{row.label}</span><span data-cdss-action={row.state === 'unknown' ? '' : undefined} className="ml-2 font-medium">{row.state === 'yes' ? (en ? '✓ Met' : '✓ 符合') : row.state === 'no' ? (en ? '× Not met' : '× 不符合') : (en ? '? Unconfirmed' : '? 待確認')}</span></summary>
-        <CheckRow row={row} patientId={patientId} en={en} />
-      </details>)}
-    </div>)}
+    <div className="space-y-4">
+    {[[en ? 'Diseases and higher-risk criteria' : '相關疾病與高風險條件', data.diseaseChecks ?? []], [en ? 'Cardiovascular risk factors' : '心血管危險因子', data.factors], [en ? 'Metabolic syndrome components' : '代謝症候群細項', data.metabolicChecks ?? []]].map(([title, checks]) => <details key={title as string} className="min-w-0">
+      <summary className="min-h-11 cursor-pointer border-b border-border py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{title as string}</summary>
+      <div className="grid items-start gap-x-4 @min-[36rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
+        {(checks as readonly CoverageCheck[]).map(row => <CheckRow key={row.id} row={row} patientId={patientId} en={en} />)}
+      </div>
+    </details>)}
+    </div>
     <a className="inline-block min-h-11 py-3 text-xs text-primary underline" href={data.sourceUrl} target="_blank" rel="noreferrer">{data.source}</a>
   </section>
   if (presentation === 'prognosis') return <section className="space-y-3 px-3 py-4 text-sm" data-testid="lipid-risk-basis" aria-label={en ? 'Risk classification and basis' : '危險分層與依據'}>

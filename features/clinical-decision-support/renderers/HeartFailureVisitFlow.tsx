@@ -232,11 +232,12 @@ export function HeartFailureVisitFlow({
   const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
   const diagnosisContext = sectionRecommendations?.map(diagnosisContextOf).find(Boolean)
   const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
-  const [selectedMode, setSelectedMode] = useState<{ confirmed: boolean; diagnosis: boolean } | null>(null)
-  const showFollowUp = followUp && !(selectedMode?.confirmed === followUp && selectedMode.diagnosis)
+  // Confirmation must not close the assessment the clinician is editing.
+  const [diagnosisSelected, setDiagnosisSelected] = useState(() => !followUp)
+  const showFollowUp = followUp && !diagnosisSelected
   const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
   const subset = (questions: VisitQuestion[]) => ({ ...flow, questions, openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length })
-  const assessmentFlow = followUp ? subset(flow.questions.filter(question => showFollowUp ? !diagnosticIds.includes(question.id) : diagnosticIds.includes(question.id))) : flow
+  const assessmentFlow = showFollowUp ? subset(flow.questions.filter(question => !diagnosticIds.includes(question.id))) : flow
   const renderQuestions = (questionFlow: VisitFlowModel) => <QuestionsCard
     flow={questionFlow} isEnglish={isEnglish} now={now} clinicVitals={clinicVitals}
     onSaveClinicVitals={onSaveClinicVitals} phenotypeAnswer={phenotypeAnswer}
@@ -329,8 +330,8 @@ export function HeartFailureVisitFlow({
           renderDetail={renderDetail}
           followUp={showFollowUp}
           diagnosisModeControl={<div role="group" aria-label={isEnglish ? 'Diagnosis or follow-up' : '診斷或追蹤'} className="mt-3 flex flex-wrap gap-1">
-            <Button variant={!showFollowUp ? 'default' : 'outline'} aria-pressed={!showFollowUp} className="min-h-11" onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
-            <Button variant={showFollowUp ? 'default' : 'outline'} aria-pressed={showFollowUp} className="min-h-11" disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
+            <Button variant={!showFollowUp ? 'default' : 'outline'} aria-pressed={!showFollowUp} className="min-h-11" onClick={() => setDiagnosisSelected(true)}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
+            <Button variant={showFollowUp ? 'default' : 'outline'} aria-pressed={showFollowUp} className="min-h-11" disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setDiagnosisSelected(false)}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
           </div>}
           sectionSummary={prognosisContent ? { prognosis: isEnglish ? 'Medical calculators · formulas pending' : '醫學計算機・公式待串接' } : undefined}
           sectionContent={{ prognosis: prognosisContent, diagnosis: <>
@@ -338,7 +339,7 @@ export function HeartFailureVisitFlow({
             {followUp && diagnosisContext?.mode === 'reassessment' ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'New evidence requires review. Open diagnostic evidence; the prior confirmation is retained.' : '新資料需核對，請開啟診斷依據；既有確診紀錄仍保留。'}</p> : null}
             {followUp && flow.questions.some(question => question.id === 'lvef-phenotype' && question.state === 'open') ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'HF phenotype pending: review LVEF in diagnostic evidence when available.' : '心衰竭分型待補：取得 LVEF 後可開啟診斷依據補充。'}</p> : null}
             {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} /> : null}
-            <details key={showFollowUp ? 'follow-up' : 'diagnosis'} open={followUp && !showFollowUp} className="border-t border-border" data-testid="cdss-condition-assessment">
+            <details key={showFollowUp ? 'follow-up' : 'diagnosis'} open={!showFollowUp} className="border-t border-border" data-testid="cdss-condition-assessment">
               <summary data-cdss-action={assessmentFlow.openQuestionCount > 0 ? '' : undefined} className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium text-primary focus-visible:ring-2 focus-visible:ring-ring">{showFollowUp ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA') : (isEnglish ? 'Diagnostic assessment' : '診斷評估')} · {isEnglish ? `${assessmentFlow.openQuestionCount} questions pending` : `${assessmentFlow.openQuestionCount} 題待補`}</summary>
               {renderQuestions(assessmentFlow)}
             </details>

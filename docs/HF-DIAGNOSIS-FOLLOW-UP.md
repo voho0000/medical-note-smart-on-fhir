@@ -2,13 +2,15 @@
 
 The three-section view opens follow-up for a pack-established diagnosis, an existing physician-confirmed HFpEF diagnosis, or an explicit physician HF confirmation. The **診斷 / 追蹤** buttons in the 01 section header switch the title and content. Chief complaints and weight are shown first; detailed symptom, sign, NYHA and compensation assessment is initially collapsed. Diagnosis shows diagnostic questions and original module references. Switching views preserves confirmation and answers; reload defaults to follow-up for confirmed patients. Before confirmation, the follow-up button is disabled and the confirmation dialog remains available.
 
-For other patients, **確認診斷並進入追蹤** opens a review dialog with the available basis, confirmation method (current visit / existing diagnosis) and an optional source note. Cancelling changes nothing. Confirmation preserves existing answers, records its time and basis, and supplies a generic HF diagnosis fact when the record lacks one. It does not infer LVEF or HFpEF. Missing phenotype data and a pack-requested reassessment remain visible as action reminders; neither revokes the confirmation automatically.
+For other patients, **檢視並確認診斷** opens a review dialog with the available basis, confirmation method (current visit / existing diagnosis) and an optional source note. Cancelling changes nothing. Confirmation keeps the current diagnosis view and evidence open for further editing; entering follow-up requires selecting 追蹤. The saved confirmation method and basis can be edited with 修改診斷確認紀錄. Confirmation preserves existing answers, records its time and basis, and supplies a generic HF diagnosis fact when the record lacks one. It does not infer LVEF or HFpEF. Missing phenotype data and a pack-requested reassessment remain visible as action reminders; neither revokes the confirmation automatically.
 
 Confirmation uses the existing patient-keyed encrypted phenotype-answer repository. It survives reload in the same tab session and remains isolated from other patients. Cross-session / cross-visit server persistence is not implemented. The page's explicit answer reset also clears this confirmation.
 
 The legacy flow and board layouts remain available; the header diagnosis/follow-up switch and compact follow-up panel are features of the three-section view.
 
 ## Follow-up priorities
+
+All available dated complaint and weight records are grouped by date from oldest to newest in 歷次追蹤變化. Each entry shows the recorded symptom change, comparison date, notes and source, measured weight difference from the previous measurement, and separately reported weight change. Same-day local corrections take precedence, future dates are excluded, and missing symptom change is labelled as unassessed. The timeline includes all records; only the weight chart is limited to 12 points.
 
 The compact panel offers symptom change as worse/stable/improved (惡化／穩定／進步). Existing resolved entries remain readable. Symptom notes, additional complaint entry, and weight records are initially collapsed. Weight records expand to the graph, source list and entry form. The separate increased/unchanged/decreased weight selection is an explicitly reported, dated assessment; it never fabricates a measured weight or auto-selects from the numeric difference.
 
