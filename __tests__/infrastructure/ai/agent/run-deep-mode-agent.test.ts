@@ -1,5 +1,8 @@
 /** @jest-environment node */
-import { runDeepModeAgent } from '@/src/infrastructure/ai/agent/run-deep-mode-agent'
+import {
+  repeatedToolCallIs,
+  runDeepModeAgent,
+} from '@/src/infrastructure/ai/agent/run-deep-mode-agent'
 import { StreamIdleTimeoutError } from '@/src/infrastructure/ai/streaming/stream-idle-timeout'
 
 const mockStreamText = jest.fn()
@@ -140,5 +143,33 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
     await expect(run).rejects.toBeInstanceOf(StreamIdleTimeoutError)
     expect(mockStreamText).toHaveBeenCalledTimes(2)
     expect(execute).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('repeatedToolCallIs', () => {
+  const step = (toolName: string, input: unknown) => ({
+    toolCalls: [{ toolName, input }],
+  }) as never
+
+  it('stops consecutive equivalent calls even when object key order differs', () => {
+    const stop = repeatedToolCallIs(2)
+
+    expect(stop({ steps: [
+      step('queryMedications', { status: 'active', range: { end: 2, start: 1 } }),
+      step('queryMedications', { range: { start: 1, end: 2 }, status: 'active' }),
+    ] })).toBe(true)
+  })
+
+  it('allows a model to refine the tool or its arguments', () => {
+    const stop = repeatedToolCallIs(2)
+
+    expect(stop({ steps: [
+      step('queryMedications', { status: 'active' }),
+      step('queryMedications', { status: 'completed' }),
+    ] })).toBe(false)
+    expect(stop({ steps: [
+      step('queryMedications', { status: 'active' }),
+      step('queryLabResultsByCategory', { status: 'active' }),
+    ] })).toBe(false)
   })
 })
