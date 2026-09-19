@@ -65,6 +65,10 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     formula: { en: 'Approximation: risk (%) ≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]. Separate sex-specific fits for each of five outcomes; not the published official coefficients.', zh: '近似式：風險（%）≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]。五項結果各依性別重建；β 不是官方公布係數。' },
     note: { en: 'The attached 2022 IJERPH paper has CHD, stroke and MACE coefficients, but omits the other two diseases and does not specify all baseline survival terms; its MACE predictors differ from the current public V4 form. See the reconstruction note for the holdout audit.', zh: '所附 2022 年論文有冠心病、中風及 MACE 係數，但沒有另外兩病及全部基準存活率；MACE 變項也與目前公開 V4 表單不同。留出樣本驗算見重建說明。' },
   },
+  'prevent-ascvd': {
+    formula: { zh: 'ASCVD 風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))。使用性別與預測年期專屬係數、年齡／血脂／血壓／eGFR 轉換及交互作用；不是簡單加點量表。', en: 'ASCVD risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)). Sex- and horizon-specific coefficients with transformed age, lipids, BP, eGFR and interactions; not a point score.' },
+    note: { zh: 'ASCVD 與 total CVD／HF 是不同模型。本計算機僅計算 ASCVD 基礎模型；ACC/AHA 治療分層請見高血脂照護指引。', en: 'ASCVD, total CVD and HF are distinct models. This calculator implements base ASCVD only; see dyslipidemia guidance for ACC/AHA treatment stratification.' },
+  },
   'h2fpef': {
     formula: { en: 'Score = 2×(BMI >30) + (≥2 antihypertensives) + 3×AF + (PASP >35) + (age >60) + (E/e′ >9).', zh: '分數 = 2×(BMI >30) + (≥2 種降壓藥) + 3×AF + (PASP >35) + (年齡 >60) + (E/e′ >9)。' },
     note: { en: 'Each condition is 1 when present, 0 when absent. Point score: 0–1 low, 2–5 intermediate, 6–9 high probability.', zh: '各條件成立為 1、不成立為 0。加總分數：0–1 低、2–5 中間、6–9 高可能性。' },
@@ -506,6 +510,15 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       ],
     },
     note: { en: 'Ethanol (mg/dL) is optional; the /3.7 term is only added when entered.', zh: '乙醇（mg/dL）為選填；僅在輸入時才加入 /3.7 項。' },
+  },
+  'cha2ds2-va': {
+    formula: { zh: '心衰竭 1 + 高血壓 1 + 年齡 65–74 歲 1 或 ≥75 歲 2 + 糖尿病 1 + 中風／TIA／動脈栓塞 2 + 血管疾病 1（不计性別，0–8 分）', en: 'HF 1 + hypertension 1 + age 65–74: 1 or ≥75: 2 + diabetes 1 + stroke/TIA/arterial embolism 2 + vascular disease 1. No sex point (0–8).' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: 'ESC 2024 抗凝評估', en: 'ESC 2024 OAC assessment' }, rows: [
+      { score: '0', outcome: { zh: '低分，需完整病史及臨床評估', en: 'Low score; requires complete history and clinical assessment' } },
+      { score: '1', outcome: { zh: '應考慮抗凝', en: 'OAC should be considered' } },
+      { score: '≥2', outcome: { zh: '建議抗凝', en: 'OAC recommended' } },
+    ] },
+    note: { zh: '缺項維持未知並顯示範圍，不以最低分做低風險分類。來源：ESC 2024 Table 10／Recommendation Table 6。', en: 'Missing inputs remain unknown and show a range; do not label low risk from the floor. ESC 2024 Table 10 / Recommendation Table 6.' },
   },
   'cha2ds2-vasc': {
     factors: [

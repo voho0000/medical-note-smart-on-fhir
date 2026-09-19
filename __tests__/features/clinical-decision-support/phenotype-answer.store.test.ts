@@ -87,6 +87,20 @@ describe('the phenotype answer store', () => {
     expect(answerOf('p1')).toMatchObject({ choice: 'reduced', lvef: 30 })
   })
 
+  it('persists physician confirmation separately from subtype and isolates patients', async () => {
+    const diagnosisConfirmation = { method: 'existing' as const, confirmedAt: AT.toISOString(), basis: 'Outside diagnosis reviewed' }
+    store().setAnswer('p1', { ...REDUCED, diagnosisConfirmation }, AT)
+    const raw = await storedCiphertext(phenotypeAnswerStorageKey('p1'))
+    expectSealedEnvelope(raw, ['Outside diagnosis reviewed', 'diagnosisConfirmation'])
+    usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    store().hydrate('p1')
+    await until(() => hydrated('p1'), 'confirmed patient to hydrate')
+    expect(answerOf('p1')?.diagnosisConfirmation).toEqual(diagnosisConfirmation)
+    expect(answerOf('p2')).toBeUndefined()
+    store().setAnswer('p1', { ...answerOf('p1')!, lvef: 55 }, AT)
+    expect(answerOf('p1')?.diagnosisConfirmation).toEqual(diagnosisConfirmation)
+  })
+
   it('is not hydrated until the read resolves, and writes nothing meanwhile', async () => {
     store().setAnswer('p1', REDUCED, AT)
     const sealed = await storedCiphertext(phenotypeAnswerStorageKey('p1'))

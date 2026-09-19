@@ -11,8 +11,7 @@
  * a pack that exists on a rules branch and nowhere else, so naming a real id
  * would tie these cases to whichever care-pack build the machine happens to
  * carry: green where `node_modules` holds that branch's build, red everywhere
- * else — including the HMC preview, whose overlay keeps the published `bundled`
- * registry and so sees the released packs alone.
+ * else. The HMC preview now installs the complete pilot registry.
  */
 let mockMedcloudLaunchRoute = false
 
@@ -49,7 +48,7 @@ jest.mock('@voho0000/personalized-care', () => {
 type Registry = typeof import('@/features/clinical-decision-support/guideline-packs/registry')
 type BetaStore = typeof import('@/src/application/stores/beta-features.store')
 
-const HOST_PACK_IDS = ['heart-failure-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss']
 const EXTRA = 'stub-extra-cdss'
 
 /** A fresh module graph loaded under the given environment. */

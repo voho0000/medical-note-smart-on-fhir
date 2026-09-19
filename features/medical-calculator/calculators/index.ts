@@ -10,6 +10,7 @@ import { GI } from './gi'
 import { ELECTROLYTE } from './electrolyte'
 import { HFPEF } from './hfpef'
 import { CARDIAC } from './cardiac'
+import { PREVENT } from './prevent'
 import { PULMONARY } from './pulmonary'
 import { HEME } from './heme'
 import { NEURO } from './neuro'
@@ -24,6 +25,7 @@ export const CALCULATORS: CalculatorDef[] = [
   ...GI,
   ...ELECTROLYTE,
   ...CARDIAC,
+  PREVENT,
   ...HFPEF,
   ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,

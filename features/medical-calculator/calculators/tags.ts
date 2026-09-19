@@ -17,6 +17,7 @@ const HEART_FAILURE: L = { en: 'Heart failure', zh: '心衰竭' }
 const HFPEF_DISEASE: L = { en: 'HFpEF', zh: '射出分率保留型心衰竭' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
+  'prevent-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'Dyslipidemia', zh: '血脂異常' }, { en: 'ASCVD prevention', zh: 'ASCVD 預防' }] },
   'egfr-ckd-epi-2021': { purpose: ['formula'], diseases: [CKD] },
   'kfre-4-variable': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'Kidney failure', zh: '腎衰竭' }] },
   'crcl-cockcroft-gault': { purpose: ['formula'], diseases: [CKD, DOSING] },
@@ -30,6 +31,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'anion-gap': { purpose: ['diagnosis', 'formula'], diseases: [{ en: 'Metabolic acidosis', zh: '代謝性酸中毒' }] },
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
+  'cha2ds2-va': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'h2fpef': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
   'hfa-peff': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
