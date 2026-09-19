@@ -212,6 +212,25 @@ describe('Live personalized-guidance pathway list', () => {
     expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
   })
 
+  it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
+
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-nhi')).toHaveTextContent('健保表一')
+    expect(screen.getByTestId('cdss-layout-switch-board')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'nhi')
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
+    expect(screen.getByTestId('cdss-layout-switch-flow')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-nhi')).not.toBeInTheDocument()
+  })
+
   it('restores every physician-entered HF value to the page defaults in one click', () => {
     const patientId = 'switch-patient'
     useEvidenceOverridesStore.setState({ byPatientId: { [patientId]: { congestion: true } } })

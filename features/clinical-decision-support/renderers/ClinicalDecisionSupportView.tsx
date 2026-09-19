@@ -2115,6 +2115,10 @@ export function ClinicalDecisionSupportView({
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
   const isSections = layout === 'sections' && !afBoard
+  const isNhiTable = layout === 'nhi' && result.packId === 'hyperlipidemia-cdss'
+  const nhiSummary = isNhiTable
+    ? result.recommendations.find((item) => item.id === 'dyslipidemia-risk-and-target')?.coverageSummary
+    : undefined
   const ModuleSections = result.packId === 'hyperlipidemia-cdss' ? LipidModuleSections : CdssModuleSections
   const isVisitFlow = (layout === 'flow' || isSections) && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
   const visitFlow = useMemo(() => (
@@ -2273,7 +2277,7 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && !isSections && !afBoard && (
+  const showClinicalSummary = !board && !isSections && !isNhiTable && !afBoard && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
@@ -2471,6 +2475,30 @@ export function ClinicalDecisionSupportView({
         />
       ) : null}
 
+      {isNhiTable ? (
+        <div
+          className="rounded-lg border border-border bg-card py-3"
+          data-testid="nhi-table1-layout"
+        >
+          {nhiSummary ? (
+            <NhiTable1Panel
+              summary={nhiSummary}
+              locale={locale}
+              patientId={patientId}
+              onAnswer={patientId
+                ? (id, state) => useNhiLipidReviewStore.getState().answer(patientId, id, state)
+                : undefined}
+            />
+          ) : (
+            <p className="px-3 text-sm text-muted-foreground" data-cdss-action="">
+              {isEnglish
+                ? 'NHI Table 1 assessment is not available for this record.'
+                : '本次資料沒有可顯示的健保表一判讀。'}
+            </p>
+          )}
+        </div>
+      ) : null}
+
       {isSections && !isVisitFlow ? <ModuleSections
         key={`${patientId ?? 'no-patient'}-${result.packId}`}
         locale={locale}
@@ -2539,7 +2567,7 @@ export function ClinicalDecisionSupportView({
         do and carrying a decision on every row; a second copy of the same rows
         underneath is the duplication it removed.
       */}
-      {isVisitFlow || isSections || afBoard ? null : (
+      {isVisitFlow || isSections || isNhiTable || afBoard ? null : (
       <section
         className="overflow-hidden rounded-lg border border-border"
         aria-label={isEnglish ? 'Patient decision overview' : '個案決策總覽'}

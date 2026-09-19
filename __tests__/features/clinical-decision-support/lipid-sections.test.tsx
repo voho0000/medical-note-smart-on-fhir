@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
+import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { NhiLipidCoverageSummary } from '@/features/clinical-decision-support/renderers/NhiLipidCoverageSummary'
 import { LipidModuleSections } from '@/features/clinical-decision-support/renderers/LipidModuleSections'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
@@ -53,4 +55,24 @@ test.each(['歷史值達門檻與否不能代表今日；先複驗', '目前有�
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent(assessment)
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('2018-02-12')
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('LDL-C <115 mg/dL')
+})
+
+test('dedicated NHI layout renders Table 1 once instead of the generic module list', () => {
+  const profile: CdssPatientProfile = {
+    id: 'synthetic-table1-layout',
+    evaluatedAt: '2026-09-20T00:00:00+08:00',
+    demographics: { sex: 'male' },
+    facts: {
+      age: { zh: '60 歲', en: '60 years', numericValue: 60 },
+      LDL: { zh: '118 mg/dL', en: '118 mg/dL', numericValue: 118 },
+    },
+  }
+  const result = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+
+  render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="nhi" />)
+
+  expect(screen.getByTestId('nhi-table1-layout')).toBeInTheDocument()
+  expect(screen.getByTestId('nhi-table1-panel')).toBeInTheDocument()
+  expect(screen.queryByLabelText('個案決策總覽')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('cdss-section-diagnosis')).not.toBeInTheDocument()
 })

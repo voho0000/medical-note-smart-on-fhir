@@ -46,7 +46,12 @@ import {
   usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
-import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
+import {
+  CDSS_SWITCHABLE_LAYOUTS,
+  LIPID_SWITCHABLE_LAYOUTS,
+  type CdssLayout,
+  useCdssLayoutStore,
+} from './stores/layout-preference.store'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -189,34 +194,43 @@ function DiseaseSwitcher({
 function LayoutSwitcher({
   locale,
   layout,
+  packId,
   onSelect,
 }: {
   locale: CdssLocale
   layout: CdssLayout
+  packId: string
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const options: readonly { id: CdssLayout; label: string; title: string }[] = [
-    {
-      id: 'sections',
+  const labels: Record<'sections' | 'flow' | 'nhi' | 'board', { label: string; title: string }> = {
+    sections: {
       label: isEnglish ? 'Three sections' : '三區塊',
       title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
     },
-    {
-      id: 'flow',
+    flow: {
       label: isEnglish ? 'Visit flow' : '新版流程',
       title: isEnglish
         ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
         : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
     },
-    {
-      id: 'board',
+    nhi: {
+      label: isEnglish ? 'NHI Table 1' : '健保表一',
+      title: isEnglish
+        ? 'Review the NHI lipid tier, supporting criteria and treatment response'
+        : '核對健保血脂分級、支持條件與治療反應',
+    },
+    board: {
       label: isEnglish ? 'Original board' : '原版看板',
       title: isEnglish
         ? 'The status board: safety inputs, the four pillars, then the module rows'
         : '原本的看板：安全數據、四支柱，再列模組',
     },
-  ]
+  }
+  const layoutIds = packId === 'hyperlipidemia-cdss'
+    ? LIPID_SWITCHABLE_LAYOUTS
+    : CDSS_SWITCHABLE_LAYOUTS
+  const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
       <span className="text-xs font-medium text-muted-foreground">
@@ -485,7 +499,14 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
-  const isVisitFlow = (layout === 'flow' || layout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
+  // A layout can be remembered while the clinician moves between diseases.
+  // Map a disease-specific choice to its closest valid view without rewriting
+  // the stored preference; returning to that disease restores the choice.
+  const effectiveLayout: CdssLayout = result.packId === 'hyperlipidemia-cdss'
+    ? layout === 'flow' ? 'sections' : layout
+    : layout === 'nhi' ? 'sections' : layout
+  const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
+  const isNhiTable = effectiveLayout === 'nhi' && result.packId === 'hyperlipidemia-cdss'
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -525,7 +546,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             onSelect={setRequestedPackId}
           />
           {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
-            <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
+            <LayoutSwitcher locale={cdssLocale} layout={effectiveLayout} packId={result.packId} onSelect={setLayout} />
           ) : null}
           {isVisitFlow && patientId ? (
             <Button
@@ -555,7 +576,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy
         button for it sits beside the one for this visit's summary.
       */}
-      {result.clinicalHandoff && !isVisitFlow ? (
+      {result.clinicalHandoff && !isVisitFlow && !isNhiTable ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
@@ -568,7 +589,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         patientId={patientId}
         profileFacts={profile.facts}
         followUpHistory={hfFollowUpHistory(clinicalData.observations)}
-        layout={layout}
+        layout={effectiveLayout}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
