@@ -12,17 +12,15 @@
  * infrastructure. The pure pieces it relies on (stream post-processing) remain
  * in core and are imported here.
  *
- * This is a VERBATIM extraction of the existing orchestration — the three
- * streamText rounds (main → follow-up → synthesis), the AI-SDK native
- * multi-step loop (stopWhen: stepCountIs(10)), tool-result summarisation and
- * citation post-processing are unchanged, so the eval measures the REAL current
- * harness as the v0 baseline. The only thing left behind in the hook is pure UI
+ * The UI and eval harness share these same three streamText rounds (main →
+ * follow-up → synthesis), tool-loop limits, tool-result summarisation and
+ * citation post-processing. The only thing left behind in the hook is pure UI
  * rendering: every setChatMessages call becomes an `onEvent` emission, and the
  * 100ms update throttling (a main-thread-blocking guard, not agent behaviour)
- * stays in the hook's event handler. Agent output is byte-identical.
+ * stays in the hook's event handler.
  */
 
-import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type ToolSet } from "ai"
+import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type StopCondition, type ToolSet } from "ai"
 import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
 import { withIdleTimeout } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -119,6 +117,43 @@ export interface RunDeepModeAgentResult {
   usage: AgentRunUsage
 }
 
+function stableToolInput(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableToolInput).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableToolInput(entry)}`)
+      .join(',')}}`
+  }
+  const serialized = JSON.stringify(value)
+  return serialized === undefined ? String(value) : serialized
+}
+
+/** Stop a model that asks for the exact same tool data on consecutive steps.
+ * Smaller OpenAI-compatible models can otherwise keep receiving and requesting
+ * the same record until the generic ten-step ceiling, which looks like an
+ * endless spinner and needlessly repeats hospital queries. The second result
+ * is already available for the normal no-text follow-up/synthesis path. */
+export function repeatedToolCallIs(
+  consecutiveSteps = 2,
+): StopCondition<ToolSet> {
+  return ({ steps }) => {
+    if (consecutiveSteps < 2 || steps.length < consecutiveSteps) return false
+    const recent = steps.slice(-consecutiveSteps)
+    const signatures = recent.map((step) => {
+      if (step.toolCalls.length === 0) return null
+      return step.toolCalls
+        .map((call) => `${call.toolName}:${stableToolInput(call.input)}`)
+        .sort()
+        .join('|')
+    })
+    const first = signatures[0]
+    return first !== null && signatures.every((signature) => signature === first)
+  }
+}
+
 /**
  * Run the deep-mode agent once and return its final answer + trajectory.
  * Throws on stream error / abort (callers keep their own try/catch, exactly as
@@ -202,7 +237,7 @@ export async function runDeepModeAgent(
       model,
       messages: messages as ModelMessage[],
       tools,
-      stopWhen: stepCountIs(10),
+      stopWhen: [stepCountIs(10), repeatedToolCallIs(2)],
       ...reasoningOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
