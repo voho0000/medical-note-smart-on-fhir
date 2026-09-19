@@ -22,6 +22,15 @@ const profile: CdssPatientProfile = {
 }
 
 describe('applyPhenotypeAnswer', () => {
+  it('records explicit HF confirmation without inventing a subtype or replacing source evidence', () => {
+    const answer = { answeredOn: '2026-09-09', diagnosisConfirmation: { method: 'existing' as const, confirmedAt: '2026-09-08T09:00:00Z', basis: 'Reviewed outside record' } }
+    const next = applyPhenotypeAnswer(profile, answer)
+    expect(next.facts.heartFailureDiagnosis?.date).toBe('2026-09-08')
+    expect(next.facts.physicianConfirmedHfpEf).toBeUndefined()
+    expect(next.facts.LVEF).toBeUndefined()
+    const recorded = { ...profile, facts: { ...profile.facts, heartFailureDiagnosis: { zh: '原始診斷', en: 'Original diagnosis', date: '2025-01-01' } } }
+    expect(applyPhenotypeAnswer(recorded, answer).facts.heartFailureDiagnosis).toBe(recorded.facts.heartFailureDiagnosis)
+  })
   it('returns the profile untouched when nothing has been answered', () => {
     expect(applyPhenotypeAnswer(profile, undefined)).toBe(profile)
     expect(applyPhenotypeAnswer(profile, { answeredOn: '2026-09-09' })).toBe(profile)

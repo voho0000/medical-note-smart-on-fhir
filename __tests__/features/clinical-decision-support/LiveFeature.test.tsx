@@ -195,10 +195,10 @@ describe('Live personalized-guidance pathway list', () => {
     })
   })
 
-  it('offers both faces of the heart-failure guidance, and remembers the choice', () => {
+  it('defaults to three sections and remembers the selected layout', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
     fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
     expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
@@ -206,8 +206,8 @@ describe('Live personalized-guidance pathway list', () => {
       .toMatchObject({ state: { layout: 'board' } })
     fireEvent.click(screen.getByTestId('cdss-layout-switch-flow'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
-    // The switcher offers the visit flow and the original board; neither the
-    // retired direction C nor the module-first 「classic」 face is in the header.
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
     expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
   })
@@ -230,15 +230,12 @@ describe('Live personalized-guidance pathway list', () => {
     expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
   })
 
-  it('lists heart failure alone and no pack the package does not ship', () => {
+  it('lists heart failure and lipid while keeping other pathways unlisted', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     const heartFailureButton = screen.getByTestId('cdss-disease-switch-heart-failure-cdss')
-    // Heart failure is the only pathway this host lists. This record carries
-    // governed CKD, diabetes and hyperlipidemia diagnoses as well, and none of
-    // them opens a switch — a pack the package does not ship, or one the host
-    // does not list, is not reachable from here.
-    for (const unlisted of ['ckd', 'dm-ckd', 'hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+    expect(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')).toBeInTheDocument()
+    for (const unlisted of ['ckd', 'dm-ckd', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
       expect(screen.queryByTestId(`cdss-disease-switch-${unlisted}-cdss`)).not.toBeInTheDocument()
     }
 

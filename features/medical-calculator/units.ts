@@ -33,6 +33,8 @@ export function normUnit(u: string | undefined): string {
 
 /** Source-unit → factor to the dimension's base (expected) unit. */
 const FACTORS: Record<ConvertDim, Record<string, number>> = {
+  // Indexed eGFR only; absolute mL/min is deliberately not interchangeable.
+  egfr: { 'ml/min/1.73m^2': 1, 'ml/min/1.73m2': 1, 'ml/min/{1.73_m2}': 1 },
   // Monovalent electrolytes: mmol/L ≡ mEq/L (Na, K, Cl, HCO₃/CO₂).
   electrolyte: { 'mmol/l': 1, 'meq/l': 1 },
   // Creatinine: base mg/dL. 1 mg/dL = 88.42 µmol/L.

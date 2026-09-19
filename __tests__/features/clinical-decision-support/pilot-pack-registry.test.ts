@@ -1,21 +1,4 @@
-/**
- * The composition root is what decides which care packs a browser sees, and it
- * decides two things.
- *
- * WHICH: `@voho0000/personalized-care` develops one pathway per branch, and the
- * released package ships the heart-failure pack alone, so the host lists that
- * one pack and nothing else the package carries is reachable — a pack that
- * leaks into the switcher is guidance nobody signed off on. A pack the host
- * lists that the package does not ship is a wiring mistake and throws, rather
- * than silently shortening the switcher.
- *
- * WHETHER: the gate is still here for the next unreleased pathway. Heart
- * failure is released (`enabled: true`), so it needs neither the Beta switch
- * nor a pilot id — the 個人化照護指引 tab is itself `beta: true`, which is the
- * gate a reader actually passes today. What the pilot gate still has to
- * guarantee is the negative: a pilot id for a pack this host does not list
- * never opens anything.
- */
+/** HMC lists HF and lipid; existing route and Beta gates remain in force. */
 let mockMedcloudLaunchRoute = false
 let mockVghtpeUnattendedLaunch = false
 
@@ -41,17 +24,16 @@ import {
 } from '@/src/application/stores/beta-features.store'
 
 /** What the host lists, in switcher order. */
-const HOST_PACK_IDS = ['heart-failure-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss']
+const RELEASED_PACK_IDS = ['heart-failure-cdss']
 /** Names the package has carried at one time or another, none of them listed here. */
 const UNLISTED_PACK_IDS = [
   'ckd-cdss',
   'dm-ckd-cdss',
   'hypertension-cdss',
-  'hyperlipidemia-cdss',
   'cirrhosis-cdss',
   'aki-alert-cdss',
   'renal-safety-cdss',
-  'atrial-fibrillation-cdss',
   'ckd-anemia-cdss',
 ]
 
@@ -71,36 +53,32 @@ describe('care pack visibility', () => {
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
 
-  it('lists heart failure, and nothing else', () => {
+  it('lists heart failure, dyslipidemia and AF', () => {
     expect(HOST_CARE_PACKS.map((pack) => pack.id)).toEqual(HOST_PACK_IDS)
   })
 
   it('shows the listed pack to a browser with nothing turned on', () => {
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
   })
 
-  it('does not change what is listed when Beta features go on', () => {
+  it('reveals dyslipidemia and AF when Beta features go on', () => {
     enableBeta()
 
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
   })
 
   it('reads a signed-out visitor\'s Beta switch the same way', () => {
-    // Beta no longer asks for an account, so the switch a guest browser flipped
-    // is stored under the guest key. It reveals nothing extra today, and it
-    // must not hide anything either.
+    // A guest's Beta switch also reveals the pilot lipid pathway.
     useBetaFeaturesStore.getState().setBetaFeaturesEnabled(GUEST_BETA_FEATURES_KEY, true)
 
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
   })
 
   it('leaves the listed pack marked released, which is what the 試辦 chip reads', () => {
-    // The chip is drawn from `pack.enabled`. Heart failure is released, so no
-    // pathway on this host is labelled 試辦 — the label returns with the next
-    // pack the package ships disabled.
+    // Preserve the released HF status and the pilot lipid label.
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.enabled).toBe(true)
-    expect(HOST_CARE_PACKS.every((pack) => pack.enabled)).toBe(true)
+    expect(HOST_CARE_PACKS.find(pack => pack.id === 'hyperlipidemia-cdss')?.enabled).toBe(false)
   })
 
   it('never shows a pack this host does not list', () => {
@@ -116,7 +94,7 @@ describe('care pack visibility', () => {
   it('ignores an unknown pilot id', () => {
     writePilotPackIds(['not-a-pack'])
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
     expect(getClinicalGuidelinePack('not-a-pack')).toBeUndefined()
   })
 
@@ -124,22 +102,23 @@ describe('care pack visibility', () => {
     // Nothing may cache the pre-hydration answer: the module graph loads long
     // before the persisted Beta value is read back, and a user can flip the
     // switch mid-session.
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
 
     enableBeta()
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
 
     useBetaFeaturesStore.getState().setBetaFeaturesEnabled('user-a', false)
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
   })
 
   it('shows the released pack on the Medcloud launch route, and nothing more', () => {
     // That route shows released guidance only, whatever a tester left switched
     // on in this browser earlier.
-    writePilotPackIds([...UNLISTED_PACK_IDS])
+    enableBeta()
+    writePilotPackIds([...UNLISTED_PACK_IDS, 'hyperlipidemia-cdss'])
     mockMedcloudLaunchRoute = true
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
     for (const id of UNLISTED_PACK_IDS) {
       expect(getClinicalGuidelinePack(id)).toBeUndefined()
     }
@@ -149,7 +128,7 @@ describe('care pack visibility', () => {
     mockMedcloudLaunchRoute = true
     mockVghtpeUnattendedLaunch = true
 
-    expect(visibleIds()).toEqual(HOST_PACK_IDS)
+    expect(visibleIds()).toEqual(RELEASED_PACK_IDS)
     enableBeta()
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
   })

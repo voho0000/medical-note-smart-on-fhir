@@ -48,6 +48,8 @@ export interface PhenotypeAnswerTimestamps {
 }
 
 export interface PhenotypeAnswer {
+  /** Explicit physician confirmation; does not infer an HF subtype. */
+  diagnosisConfirmation?: { method: 'current' | 'existing'; confirmedAt: string; basis: string }
   /**
    * DP-00. Absent means nobody has been asked yet, which the pack never reads
    * as 「不懷疑」 — it is the difference between a quiet card and a closed one.
@@ -119,6 +121,7 @@ function sameAnswer(a: PhenotypeAnswer | undefined, b: PhenotypeAnswer): boolean
     && a?.lvef === b.lvef
     && a?.measuredOn === b.measuredOn
     && a?.hfpEfConfirmed === b.hfpEfConfirmed
+    && JSON.stringify(a?.diagnosisConfirmation) === JSON.stringify(b.diagnosisConfirmation)
 }
 
 /**
@@ -163,10 +166,14 @@ function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
   try {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
     const record = parsed as Record<string, unknown>
+    const confirmation = record.diagnosisConfirmation as PhenotypeAnswer['diagnosisConfirmation']
     const stamps = (record.modifiedAt ?? {}) as Record<string, unknown>
     const stamp = (key: string) => (typeof stamps[key] === 'string' ? { [key]: stamps[key] } : {})
     return {
       answeredOn: typeof record.answeredOn === 'string' ? record.answeredOn : '',
+      ...(confirmation && ['current', 'existing'].includes(confirmation.method)
+        && typeof confirmation.confirmedAt === 'string' && Number.isFinite(Date.parse(confirmation.confirmedAt))
+        && typeof confirmation.basis === 'string' ? { diagnosisConfirmation: confirmation } : {}),
       ...(isSuspicion(record.hfSuspicion) ? { hfSuspicion: record.hfSuspicion } : {}),
       ...(isChoice(record.choice) ? { choice: record.choice } : {}),
       ...(typeof record.lvef === 'number' && Number.isFinite(record.lvef) ? { lvef: record.lvef } : {}),

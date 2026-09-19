@@ -23,6 +23,7 @@
 import { clinicalModuleLabel } from '@voho0000/personalized-care'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import { physicianInputRequestsOf } from '../physician-input-contract'
+import { diagnosisContextOf } from './cdss-sections'
 import type {
   CdssClinicalHandoff,
   CdssRecommendation,
@@ -262,6 +263,8 @@ export interface HeartFailureVisitFlow {
 }
 
 export interface HeartFailureVisitFlowInput {
+  /** Three-section layout keeps all module decisions reachable. */
+  includeAllModules?: boolean
   board: HeartFailureBoardModel
   result: CdssResult
   isEnglish: boolean
@@ -557,9 +560,9 @@ export function buildHeartFailureVisitFlow(
     .flatMap((recommendation) => recommendation.patientEvidence)
     .some((evidence) => evidence.factKeys.includes('heartFailureDiagnosis'))
   const lvefValue = Number.parseFloat(board.lvef?.value ?? '')
-  const establishedHfrEF = establishedHeartFailure
+  const establishedHfrEF = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || (input.includeAllModules && diagnosisContextOf(phenotypeCard)?.mode === 'follow-up') || (establishedHeartFailure
     && Number.isFinite(lvefValue)
-    && lvefValue < 50
+    && lvefValue < 50)
   const suspicion = establishedHfrEF ? 'suspected' : phenotypeAnswer?.hfSuspicion
   const suspected = suspicion === 'suspected'
   const notSuspected = suspicion === 'not-suspected'
@@ -799,13 +802,13 @@ export function buildHeartFailureVisitFlow(
     && item.id !== GDMT_MODULE_ID
     // The diagnosis question and HFpEF calculator already present the same
     // eligibility evidence; a second read-only treatment card adds no action.
-    && item.id !== 'heart-failure-hfpef-treatment'
+    && (input.includeAllModules || item.id !== 'heart-failure-hfpef-treatment')
     // Each additional therapy already has its own evidence table and physician
     // fields. The umbrella card only asks the clinician to repeat that work.
-    && item.id !== 'heart-failure-additional-medical-therapy'
-    && !isGenericMonitoringReminder(item)
+    && (input.includeAllModules || item.id !== 'heart-failure-additional-medical-therapy')
+    && (input.includeAllModules || !isGenericMonitoringReminder(item))
     // Exercise clearance belongs to the rehabilitation assessment, not this HF visit.
-    && item.id !== 'cardiac-rehabilitation-safety'
+    && (input.includeAllModules || item.id !== 'cardiac-rehabilitation-safety')
   ))
 
   const groupOrder: readonly VisitActionGroupId[] = [

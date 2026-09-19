@@ -25,6 +25,7 @@
  * phase 2. Nothing is written to the record and nothing leaves the browser.
  */
 import { create } from 'zustand'
+import { parseHfHistory, type HfFollowUpHistory } from '../utils/hf-follow-up'
 import {
   createHydrationGuard,
   discardEncryptedAnswers,
@@ -108,6 +109,7 @@ export interface AnsweredField<T> {
 }
 
 export interface ClinicVitals {
+  hfFollowUp?: HfFollowUpHistory
   entries: Readonly<Partial<Record<ClinicVitalsEntryKey, MeasuredEntry>>>
   /** The NYHA class graded in the room; absent means nobody has been asked. */
   nyhaClass?: AnsweredField<NyhaAnswerValue>
@@ -134,6 +136,7 @@ export const EMPTY_CLINIC_VITALS: ClinicVitals = Object.freeze({
  * a no-op, so 「最後修改」 dates the change rather than the click.
  */
 export interface ClinicVitalsPatch {
+  hfFollowUp?: HfFollowUpHistory
   entries?: Partial<Record<ClinicVitalsEntryKey, { value: number; measuredOn?: string } | null>>
   nyhaClass?: NyhaAnswerValue | null
   signAnswers?: Readonly<Record<string, SignAnswerValue | null>>
@@ -199,7 +202,26 @@ export function mergeClinicVitals(
     changed = true
   }
 
-  const next: ClinicVitals = { entries, signAnswers }
+  let hfFollowUp = patch.hfFollowUp ? parseHfHistory(patch.hfFollowUp) : base.hfFollowUp
+  const previousWeight = base.entries.bodyWeight
+  const newWeight = entries.bodyWeight
+  if (patch.entries?.bodyWeight === null && previousWeight && hfFollowUp) {
+    hfFollowUp = { ...hfFollowUp, weights: hfFollowUp.weights.filter(point => point.source !== 'clinic' || point.date !== previousWeight.measuredOn) }
+  }
+  if (newWeight && newWeight !== previousWeight) {
+    const history = hfFollowUp ?? { complaints: [], weights: [] }
+    const weights = [...history.weights]
+    for (const entry of [previousWeight, newWeight]) {
+      if (!entry) continue
+      const index = weights.findIndex(point => point.date === entry.measuredOn && point.source === 'clinic')
+      const point = { value: entry.value, date: entry.measuredOn, source: 'clinic' }
+      if (index < 0) weights.push(point)
+      else weights[index] = point
+    }
+    hfFollowUp = { ...history, weights }
+  }
+  if (JSON.stringify(hfFollowUp) !== JSON.stringify(base.hfFollowUp)) changed = true
+  const next: ClinicVitals = { entries, signAnswers, ...(hfFollowUp ? { hfFollowUp } : {}) }
 
   const carryAnswer = <T extends string>(
     key: 'nyhaClass' | 'compensationStatus',
@@ -324,6 +346,7 @@ function toClinicVitals(parsed: unknown): ClinicVitals {
     return {
       entries,
       signAnswers,
+      ...(record.hfFollowUp ? { hfFollowUp: parseHfHistory(record.hfFollowUp) } : {}),
       ...(nyhaClass ? { nyhaClass } : {}),
       ...(compensationStatus ? { compensationStatus } : {}),
     }
@@ -339,6 +362,8 @@ function isEmptyVitals(vitals: ClinicVitals): boolean {
     && Object.keys(vitals.signAnswers).length === 0
     && !vitals.nyhaClass
     && !vitals.compensationStatus
+    && !vitals.hfFollowUp?.complaints.length && !vitals.hfFollowUp?.weights.length
+    && !vitals.hfFollowUp?.weightChanges?.length
 }
 
 function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
