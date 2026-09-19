@@ -140,6 +140,13 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
 
 const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk', { zh: string; en: string }> = {
   'lipid-very-high-risk': { zh: '血脂極高風險證據', en: 'Very-high lipid risk evidence' },
+  'af-diagnosis': { zh: 'AF 診斷', en: 'AF diagnosis' },
+  'af-stroke-risk': { zh: '血栓風險計分依據', en: 'Stroke risk components' },
+  'af-anticoagulation': { zh: '抗凝與抗栓依據', en: 'Anticoagulation evidence' },
+  'af-drug-safety': { zh: 'AF 用藥安全', en: 'AF medication safety' },
+  'af-rate-rhythm': { zh: '心率與節律依據', en: 'Rate and rhythm evidence' },
+  'af-monitoring': { zh: 'AF 追蹤資料', en: 'AF monitoring' },
+  'af-comorbidity': { zh: '共病與風險因子', en: 'Comorbidities and risk factors' },
   'hf-diagnosis': { zh: '心衰竭診斷證據', en: 'Heart-failure diagnosis evidence' },
   'ckd-diagnosis': { zh: '慢性腎臟病診斷證據', en: 'CKD diagnosis evidence' },
   congestion: { zh: '鬱血證據', en: 'Congestion evidence' },

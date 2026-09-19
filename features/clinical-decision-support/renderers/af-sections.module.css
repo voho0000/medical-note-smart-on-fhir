@@ -1,0 +1,48 @@
+/* Section colors shared with the HF and lipid CDSS poster design. */
+.section {
+  --section-surface: #eff6ff;
+  --section-heading: #dbeafe;
+  --section-ink: #1e3a5f;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--section-surface);
+  color: var(--foreground);
+}
+
+.section[data-section='treatment'] {
+  --section-surface: #eef9f5;
+  --section-heading: #d5eee5;
+  --section-ink: #164e43;
+}
+
+.section[data-section='prognosis'] {
+  --section-surface: #f5f2fc;
+  --section-heading: #e8dff7;
+  --section-ink: #503774;
+}
+
+.heading {
+  background: var(--section-heading);
+  color: var(--section-ink);
+}
+.heading:hover { filter: brightness(0.98); }
+.summary { color: var(--section-ink); }
+
+:global(.dark) .section {
+  --section-surface: #152538;
+  --section-heading: #203952;
+  --section-ink: #c9e2ff;
+}
+
+:global(.dark) .section[data-section='treatment'] {
+  --section-surface: #142b27;
+  --section-heading: #204039;
+  --section-ink: #c4eee0;
+}
+
+:global(.dark) .section[data-section='prognosis'] {
+  --section-surface: #282239;
+  --section-heading: #3b3153;
+  --section-ink: #e7dbff;
+}

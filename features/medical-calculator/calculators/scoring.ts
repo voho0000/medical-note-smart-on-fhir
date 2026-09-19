@@ -487,6 +487,15 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     },
     note: { en: 'Ethanol (mg/dL) is optional; the /3.7 term is only added when entered.', zh: '乙醇（mg/dL）為選填；僅在輸入時才加入 /3.7 項。' },
   },
+  'cha2ds2-va': {
+    formula: { zh: '心衰竭 1 + 高血壓 1 + 年齡 65–74 歲 1 或 ≥75 歲 2 + 糖尿病 1 + 中風／TIA／動脈栓塞 2 + 血管疾病 1（不计性別，0–8 分）', en: 'HF 1 + hypertension 1 + age 65–74: 1 or ≥75: 2 + diabetes 1 + stroke/TIA/arterial embolism 2 + vascular disease 1. No sex point (0–8).' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: 'ESC 2024 抗凝評估', en: 'ESC 2024 OAC assessment' }, rows: [
+      { score: '0', outcome: { zh: '低分，需完整病史及臨床評估', en: 'Low score; requires complete history and clinical assessment' } },
+      { score: '1', outcome: { zh: '應考慮抗凝', en: 'OAC should be considered' } },
+      { score: '≥2', outcome: { zh: '建議抗凝', en: 'OAC recommended' } },
+    ] },
+    note: { zh: '缺項維持未知並顯示範圍，不以最低分做低風險分類。來源：ESC 2024 Table 10／Recommendation Table 6。', en: 'Missing inputs remain unknown and show a range; do not label low risk from the floor. ESC 2024 Table 10 / Recommendation Table 6.' },
+  },
   'cha2ds2-vasc': {
     factors: [
       { label: { en: 'Age', zh: '年齡' }, options: [ { label: { en: '< 65 y', zh: '< 65 歲' }, points: '0' }, { label: { en: '65–74 y', zh: '65–74 歲' }, points: '1' }, { label: { en: '≥ 75 y', zh: '≥ 75 歲' }, points: '2' } ] },

@@ -47,10 +47,12 @@ import {
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
+import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
@@ -261,6 +263,8 @@ export default function LiveClinicalDecisionSupportFeature() {
   const patientId = patient?.id
   const nhiLipidReview = useNhiLipidReview(patientId)
   const preventInputs = usePreventInputs(patientId)
+  const afAnswers = useAfAnswers(patientId)
+  useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
@@ -363,11 +367,11 @@ export default function LiveClinicalDecisionSupportFeature() {
   const answeredProfile = useMemo(() => (
     recordProfile
       ? { ...applyPhenotypeAnswer(
-          applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
+          applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
         ), nhiLipidReview }
       : null
-  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
+  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -387,7 +391,7 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
   const profile = useMemo(() => (
-    answeredProfile ? applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading) : null
+    answeredProfile ? applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)) : null
   ), [answeredProfile, hfpefReading, preventReading])
 
   const applicablePacks = useMemo(() => (
@@ -556,6 +560,8 @@ export default function LiveClinicalDecisionSupportFeature() {
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
       <ClinicalDecisionSupportView
+        afAnswers={afAnswers}
+        onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
         englishResult={englishResult ?? undefined}
         locale={cdssLocale}

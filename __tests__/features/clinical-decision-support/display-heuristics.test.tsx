@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { CARE_PACKS, type CdssLocale, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 
@@ -106,6 +106,9 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         <ClinicalDecisionSupportView result={result} locale={locale} layout="board" />,
       )
 
+      if (result.packId === 'atrial-fibrillation-cdss') {
+        for (const id of ['diagnosis','treatment','prognosis']) fireEvent.click(within(screen.getByTestId(`cdss-af-${id}`)).getByRole('button'))
+      }
       const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"]')
       expect(cells.length).toBeGreaterThan(0)
 

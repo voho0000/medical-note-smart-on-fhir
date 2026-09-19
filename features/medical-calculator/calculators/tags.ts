@@ -29,6 +29,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'anion-gap': { purpose: ['diagnosis', 'formula'], diseases: [{ en: 'Metabolic acidosis', zh: '代謝性酸中毒' }] },
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
+  'cha2ds2-va': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'h2fpef': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
   'hfa-peff': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },

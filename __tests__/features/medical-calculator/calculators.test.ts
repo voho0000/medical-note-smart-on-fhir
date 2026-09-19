@@ -246,8 +246,8 @@ describe('HAS-BLED', () => {
   const allNo = { htn: 'no', renal: 'no', liver: 'no', stroke: 'no', bleeding: 'no', inr: 'no', elderly: 'no', drugs: 'no', alcohol: 'no' }
   it('stays incomplete until all 9 answered', () => {
     const partial = run('has-bled', { ...allNo, alcohol: '' })
-    expect(partial!.value).toBe('8 / 9')
-    expect(partial!.severity).toBeUndefined()
+    expect(partial!.value).toBe('0–1')
+    expect(partial!.completeness).toMatchObject({complete:false,missingKeys:['alcohol']})
   })
   it('all no → 0/9 low risk', () => {
     const r = run('has-bled', allNo)

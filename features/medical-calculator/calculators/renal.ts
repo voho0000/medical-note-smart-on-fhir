@@ -71,7 +71,7 @@ export const RENAL: CalculatorDef[] = [
 
   // ── Creatinine clearance — Cockcroft-Gault ──────────────────────────────
     {
-      id: 'crcl-cockcroft-gault',
+      id: 'crcl-cockcroft-gault', version: 'v2',
       name: { en: 'Creatinine Clearance (Cockcroft-Gault)', zh: '肌酸酐廓清率 (Cockcroft-Gault)' },
       category: 'renal',
       blurb: { en: 'Estimated CrCl for drug dosing.', zh: '藥物劑量調整用之肌酸酐廓清率估算。' },
@@ -83,7 +83,7 @@ export const RENAL: CalculatorDef[] = [
       ],
       compute: (v) => {
         const scr = n(v, 'scr'); const age = n(v, 'age'); const wt = n(v, 'weight'); const female = v.sex === 'female'
-        if (scr === undefined || age === undefined || wt === undefined || scr <= 0 || age <= 0 || wt <= 0) return null
+        if (scr === undefined || age === undefined || wt === undefined || scr <= 0 || age < 18 || age > 120 || wt <= 0 || ![scr, age, wt].every(Number.isFinite)) return null
         if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const crcl = ((140 - age) * wt * (female ? 0.85 : 1)) / (72 * scr)
         const val = round(crcl)
@@ -91,7 +91,7 @@ export const RENAL: CalculatorDef[] = [
         if (val < 30) severity = 'high'
         else if (val < 60) severity = 'moderate'
         return {
-          value: String(val), unit: 'mL/min', severity,
+          value: String(val), numericValue: crcl, unit: 'mL/min', severity,
           interpretation: val < 30
             ? { en: 'Severe impairment — check renal dosing', zh: '嚴重不足 — 注意腎臟劑量調整' }
             : val < 60
