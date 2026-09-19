@@ -52,3 +52,44 @@ test('guest apply persists complete templates including shortcuts across reloads
   const next = renderHook(useChatTemplates, { wrapper })
   await waitFor(() => expect(next.result.current.templates).toEqual([custom]))
 })
+
+test('collapses only unambiguous persisted duplicates and keeps intentional manual copies', async () => {
+  const gallery = {
+    ...custom,
+    id: 'gallery-original',
+    sourcePromptKey: 'shared:soap',
+    label: 'SOAP from gallery',
+  }
+  account = [
+    gallery,
+    { ...gallery, id: 'gallery-race-copy', order: 1 },
+    { ...custom, id: 'manual-copy-1', order: 2 },
+    { ...custom, id: 'manual-copy-2', order: 3 },
+    { ...custom, id: 'manual-copy-2', label: 'stale duplicate id', order: 4 },
+    ...getDefaultChatTemplates('en', 'patient'),
+  ]
+
+  const { result } = renderHook(useChatTemplates, { wrapper })
+  await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+  expect(result.current.templates.map(template => template.id)).toEqual([
+    'gallery-original',
+    'manual-copy-1',
+    'manual-copy-2',
+  ])
+})
+
+test('collapses a duplicated browser template list without merging audiences', async () => {
+  mockAuth.mockReturnValue({ user: null })
+  const medical = getDefaultChatTemplates('en', 'medical')
+  const patient = getDefaultChatTemplates('en', 'patient')
+  localStorage.setItem(
+    'medical-chat-templates',
+    JSON.stringify([...medical, ...patient, ...medical, ...patient]),
+  )
+
+  const { result } = renderHook(useChatTemplates, { wrapper })
+
+  await waitFor(() => expect(result.current.isLoading).toBe(false))
+  expect(result.current.templates).toEqual(medical)
+})
