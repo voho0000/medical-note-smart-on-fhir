@@ -101,3 +101,7 @@ HF new-flow clinical information card: owner requested replacing the height tile
 ## HMC dyslipidemia pilot
 
 2026-09-16: owner explicitly authorized the two pilot/hmc branches and preview overlay. The disease list now includes heart failure and dyslipidemia. Dyslipidemia retains its existing Beta/pilot visibility rule; the vghtpe hand-off honours Beta, while other unattended Medcloud routes continue to show released packs only. No existing clinical surface is removed.
+
+## AF pilot preview
+
+AF is listed alongside HF and lipid in the HMC host, including production builds for `/app-hmc/`. The existing Beta and unattended launch rules apply; HF remains the default. Owner authorized AF integration and deployment on 2026-09-19.

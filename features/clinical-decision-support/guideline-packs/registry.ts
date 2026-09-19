@@ -16,7 +16,7 @@
  *
  * Two host decisions live below, and they are separate questions.
  *
- * WHICH packs: HMC lists heart failure and dyslipidemia. The preview builds
+ * WHICH packs: HMC lists heart failure, dyslipidemia, and atrial fibrillation. The preview builds
  * both from the personalization pilot branch. Local development may add
  * further branch packs through DEV_EXTRA_PACK_IDS below.
  *
@@ -39,7 +39,7 @@ import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
 /** HMC disease switcher; keep heart failure as the existing default. */
-const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss'] as const
+const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss'] as const
 
 /**
  * Local development only: the packs a disease-branch start-of-session script
