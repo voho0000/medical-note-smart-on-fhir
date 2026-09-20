@@ -135,7 +135,7 @@ ${clinicalContext}
     }
     const toolsList = [
       toolSection('Patient & Overview', ['queryPatientInfo', 'getDataOverview']),
-      toolSection('Visits', ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'listEncounterDepartments']),
+      toolSection('Visits', ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'listEncounterDepartments', 'searchEncountersByDiagnosis']),
       toolSection('Diagnoses & Conditions', ['queryConditions']),
       toolSection('Reports / Labs / Imaging / Procedures', [
         'queryDiagnosticReports',

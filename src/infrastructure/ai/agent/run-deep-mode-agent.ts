@@ -49,6 +49,10 @@ export interface AgentRunTranslations {
   /** Appended to the follow-up instruction in the same case, so the model
    * knows why it was cut off and does not repeat the query again. */
   repeatedQueryHint?: string
+  /** Same pair for the generic step ceiling (`stepCountIs`): the loop ended
+   * because the budget ran out, not because the search was complete. */
+  stepLimitReached?: string
+  stepLimitHint?: string
   synthesizeResults: string
   queryResult: string
   queryFailed: string
@@ -147,6 +151,10 @@ function stableToolInput(value: unknown): string {
  * (a retry after a partial result, a re-read before answering) and then move
  * on to a different query. Stopping there would cut off the rest of the
  * investigation; a third identical batch is a loop. */
+/** Generic ceiling on tool-calling steps per turn. Every step re-sends the
+ * whole context, so cost and latency grow roughly quadratically with it. */
+export const MAX_TOOL_STEPS = 10
+
 export function repeatedToolCallIs(
   consecutiveSteps = 3,
 ): StopCondition<ToolSet> {
@@ -216,15 +224,20 @@ export async function runDeepModeAgent(
 
   let accumulatedContent = ""
 
-  // Set by the repeated-query stop condition below; read by the follow-up
-
-  // prompt and the reader-facing note once the loop has ended.
-
+  // Set by the stop conditions below; read by the follow-up prompt and the
+  // reader-facing note once the loop has ended.
   let stoppedByRepeat = false
+  let stoppedByStepLimit = false
+  let stepCount = 0
+  let lastStepHadToolCalls = false
+  const loopStopNote = (): string | undefined =>
+    stoppedByRepeat ? t.repeatedQueryStopped : stoppedByStepLimit ? t.stepLimitReached : undefined
+  const repeatNote = (text: string): string => {
+    const note = loopStopNote()
+    return note && text.length > 0 ? `${text}
 
-  const repeatNote = (text: string): string =>
-
-    stoppedByRepeat && t.repeatedQueryStopped && text.length > 0 ? `${text}\n\n_${t.repeatedQueryStopped}_` : text
+_${note}_` : text
+  }
   const toolResults: Array<{ toolName: string; result: unknown }> = []
   const usedToolNames: string[] = []
 
@@ -260,7 +273,7 @@ export async function runDeepModeAgent(
       messages: messages as ModelMessage[],
       tools,
       stopWhen: [
-        stepCountIs(10),
+        stepCountIs(MAX_TOOL_STEPS),
         (context) => {
           if (!repeatStop(context)) return false
           stoppedByRepeat = true
@@ -275,6 +288,8 @@ export async function runDeepModeAgent(
         : undefined,
       abortSignal: abortController.signal,
       onStepFinish: ({ toolCalls }) => {
+        stepCount += 1
+        lastStepHadToolCalls = Boolean(toolCalls && toolCalls.length > 0)
         if (toolCalls && toolCalls.length > 0) {
           const toolNames = toolCalls
             .map((tc) => getToolDisplayName(tc?.toolName || "", t.toolNames))
@@ -317,9 +332,11 @@ export async function runDeepModeAgent(
       }
     }
     addUsage(await result.usage)
-    if (stoppedByRepeat && t.repeatedQueryStopped) {
-      emit({ type: "status", state: `⚠️ ${t.repeatedQueryStopped}` })
-    }
+    // The SDK continues after any step that called tools, so ending on the
+    // ceiling with tool calls means the ceiling stopped it, not the model.
+    stoppedByStepLimit = !stoppedByRepeat && stepCount >= MAX_TOOL_STEPS && lastStepHadToolCalls
+    const stopNote = loopStopNote()
+    if (stopNote) emit({ type: "status", state: `⚠️ ${stopNote}` })
   }
 
   if (accumulatedContent.length > 0) {
@@ -347,7 +364,7 @@ export async function runDeepModeAgent(
       (literatureCitations.length > 0
         ? t.answerQuestion + (t.answerQuestionCitationsHint ?? "")
         : t.answerQuestion) +
-      (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : "")
+      (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : stoppedByStepLimit ? (t.stepLimitHint ?? "") : "")
     const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
       messages,
       toolResultsSummary,
