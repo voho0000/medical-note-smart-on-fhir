@@ -1,6 +1,7 @@
 import type {
   ClinicalDataCollection,
   DiagnosticReportEntity,
+  ImagingStudyEntity,
   MedicationEntity,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
@@ -19,6 +20,10 @@ const OBSERVATION_CODE = new Set([
 const OBSERVATION_TEXT = /\b(?:total cholesterol|cholesterol,? total|ldl(?:-c)?|hdl(?:-c)?|triglycerides?|glucose|blood sugar|hba1c|hemoglobin a1c|glycated h(?:a)?emoglobin|blood pressure|systolic|diastolic|waist circumference|creatinine|eGFR|glomerular filtration|uacr|albumin.?creatinine ratio|smoking status|tobacco use|coronary artery calcium|calcium score|cac score)\b|總膽固醇|低密度脂蛋白|高密度脂蛋白|三酸甘油脂|三酸甘油酯|血糖|糖化血色素|血壓|收縮壓|舒張壓|腰圍|肌酸酐|腎絲球過濾率|尿白蛋白.*肌酸酐|吸菸狀態|冠狀動脈鈣化|冠脈鈣化|鈣化積分/i
 const MEDICATION_TEXT = /\b(?:statin|atorvastatin|rosuvastatin|simvastatin|pravastatin|pitavastatin|fluvastatin|lovastatin|ezetimibe|evolocumab|alirocumab|inclisiran|bempedoic|fibrate|fenofibrate|gemfibrozil|omega.?3|niacin|cholestyramine|bile acid sequestrant|pcsk9|metformin|insulin|sulfonylurea|gliclazide|glimepiride|glinide|gliptin|flozin|sglt2|glp.?1|thiazolidinedione|pioglitazone|antihypertensive|hypotensive|ace inhibitor|angiotensin receptor blocker|\barb\b|losartan|valsartan|telmisartan|irbesartan|candesartan|olmesartan|lisinopril|enalapril|ramipril|perindopril|captopril|beta.?blocker|carvedilol|metoprolol|bisoprolol|atenolol|propranolol|calcium channel blocker|amlodipine|felodipine|nifedipine|diuretic|hydrochlorothiazide|indapamide|spironolactone)\b|降血脂|降膽固醇|降血糖|糖尿病用藥|胰島素|降血壓|降壓藥/i
 const DIALYSIS_TEXT = /\b(?:dialysis|ha?emodialysis|peritoneal dialysis|kidney replacement|renal replacement)\b|透析|洗腎|腎臟替代/i
+const IMAGING_TEXT = /\b(?:imaging|radiology|radiological|x[ -]?ray|radiograph(?:y|ic)?|plain film|computed tomography|\bct\b|magnetic resonance|\bmri?\b|ultrasound|ultrasonograph|sonograph|echograph|angiograph|mammograph|fluoroscop|pet(?:[ -]?ct)?|spect|nuclear medicine|bone scan)\b|影像|放射科|放射診斷|X\s*光|電腦斷層|磁振造影|核磁共振|超音波|血管攝影|乳房攝影|核醫|骨骼掃描/i
+const XRAY_TEXT = /\b(?:x[ -]?ray|radiograph(?:y|ic)?|plain film|plain radiography)\b|X\s*光|一般攝影|單純攝影/i
+const XRAY_MODALITY_CODES = new Set(['CR', 'DX', 'DR', 'RG', 'XR'])
+const IMAGING_CATEGORY_CODES = new Set(['RAD', 'RADIOLOGY', 'IMAGING'])
 
 function collectText(value: unknown): string {
   const parts: string[] = []
@@ -113,6 +118,151 @@ function referenceId(reference?: string): string | undefined {
   return reference?.split('/').pop()
 }
 
+function resourceTime(...dates: Array<string | undefined>): number {
+  let latest = Number.NEGATIVE_INFINITY
+  for (const date of dates) {
+    if (!date) continue
+    const parsed = Date.parse(date)
+    if (Number.isFinite(parsed)) latest = Math.max(latest, parsed)
+  }
+  return latest
+}
+
+function reportTime(report: DiagnosticReportEntity): number {
+  return resourceTime(
+    report.effectiveDateTime,
+    report.effectivePeriod?.end,
+    report.effectivePeriod?.start,
+    report.issued,
+  )
+}
+
+function studyTime(study: ImagingStudyEntity): number {
+  return resourceTime(
+    study.started,
+    ...(study.series ?? []).map((series) => series.started),
+  )
+}
+
+function isPathologyReport(report: DiagnosticReportEntity): boolean {
+  return PATHOLOGY_TEXT.test(collectText({ code: report.code, category: report.category }))
+}
+
+function isImagingReport(report: DiagnosticReportEntity): boolean {
+  if ((report.imagingStudy ?? []).length > 0) return true
+  if (normalizedCodes(report.category).some((code) => IMAGING_CATEGORY_CODES.has(code))) return true
+  return IMAGING_TEXT.test(collectText({
+    code: report.code,
+    category: report.category,
+    conclusionCode: report.conclusionCode,
+  }))
+}
+
+function isXrayReport(report: DiagnosticReportEntity): boolean {
+  const descriptor = {
+    code: report.code,
+    category: report.category,
+    presentedForm: report.presentedForm?.map(({ title, contentType }) => ({ title, contentType })),
+  }
+  return normalizedCodes(descriptor).some((code) => XRAY_MODALITY_CODES.has(code))
+    || XRAY_TEXT.test(collectText(descriptor))
+}
+
+function isXrayStudy(study?: ImagingStudyEntity): boolean {
+  if (!study) return false
+  const descriptor = {
+    modality: study.modality,
+    procedureCode: study.procedureCode,
+    procedureReference: study.procedureReference,
+    description: study.description,
+    series: study.series?.map((series) => ({
+      modality: series.modality,
+      description: series.description,
+      instance: series.instance?.map((instance) => ({ title: instance.title })),
+    })),
+  }
+  return normalizedCodes(descriptor).some((code) => XRAY_MODALITY_CODES.has(code))
+    || XRAY_TEXT.test(collectText(descriptor))
+}
+
+interface XrayGroup {
+  studyIds: Set<string>
+  reportIds: Set<string>
+  latestTime: number
+  order: number
+}
+
+function withoutInlineImagingPayload(report: DiagnosticReportEntity): DiagnosticReportEntity {
+  if (!(report.presentedForm ?? []).some((form) => form.data || form.url)) return report
+  return {
+    ...report,
+    presentedForm: report.presentedForm?.map(({ data: _data, url: _url, ...metadata }) => metadata),
+  }
+}
+
+function selectImaging(input: Partial<ClinicalDataCollection>): {
+  studyIds: ReadonlySet<string>
+  reportIds: ReadonlySet<string>
+} {
+  const studies = input.imagingStudies ?? []
+  const studyById = new Map(studies.map((study) => [study.id, study]))
+  const retainedStudyIds = new Set<string>()
+  const retainedReportIds = new Set<string>()
+  const xrayGroups = new Map<string, XrayGroup>()
+  let groupOrder = 0
+  const group = (key: string): XrayGroup => {
+    const existing = xrayGroups.get(key)
+    if (existing) return existing
+    const created: XrayGroup = {
+      studyIds: new Set(),
+      reportIds: new Set(),
+      latestTime: Number.NEGATIVE_INFINITY,
+      order: groupOrder++,
+    }
+    xrayGroups.set(key, created)
+    return created
+  }
+
+  for (const study of studies) {
+    if (!isXrayStudy(study)) {
+      retainedStudyIds.add(study.id)
+      continue
+    }
+    const candidate = group(`study:${study.id}`)
+    candidate.studyIds.add(study.id)
+    candidate.latestTime = Math.max(candidate.latestTime, studyTime(study))
+  }
+
+  for (const report of input.diagnosticReports ?? []) {
+    if (isPathologyReport(report) || !isImagingReport(report)) continue
+    const linkedStudyIds = (report.imagingStudy ?? [])
+      .map((reference) => referenceId(reference.reference))
+      .filter((id): id is string => typeof id === 'string' && studyById.has(id))
+    const linkedXrayStudyId = linkedStudyIds.find((id) => isXrayStudy(studyById.get(id)))
+    if (linkedXrayStudyId) {
+      const candidate = group(`study:${linkedXrayStudyId}`)
+      candidate.studyIds.add(linkedXrayStudyId)
+      candidate.reportIds.add(report.id)
+      candidate.latestTime = Math.max(candidate.latestTime, reportTime(report))
+    } else if (isXrayReport(report)) {
+      const candidate = group(`report:${report.id}`)
+      candidate.reportIds.add(report.id)
+      candidate.latestTime = Math.max(candidate.latestTime, reportTime(report))
+    } else {
+      retainedReportIds.add(report.id)
+      linkedStudyIds.forEach((id) => retainedStudyIds.add(id))
+    }
+  }
+
+  const latestXray = [...xrayGroups.values()].sort((a, b) => (
+    b.latestTime - a.latestTime || a.order - b.order
+  ))[0]
+  latestXray?.studyIds.forEach((id) => retainedStudyIds.add(id))
+  latestXray?.reportIds.forEach((id) => retainedReportIds.add(id))
+
+  return { studyIds: retainedStudyIds, reportIds: retainedReportIds }
+}
+
 function linkedEncounterIds(records: readonly unknown[]): Set<string> {
   const ids = new Set<string>()
   for (const record of records) {
@@ -141,7 +291,7 @@ function filteredReport(
     conclusionCode: report.conclusionCode,
     note: report.note,
   })
-  const pathology = PATHOLOGY_TEXT.test(collectText({ code: report.code, category: report.category }))
+  const pathology = isPathologyReport(report)
   const narrativeRelevant = !pathology && VASCULAR_TEXT.test(reportText)
   const observations = (report._observations ?? []).filter((observation) => relevantObservation(observation))
   const results = (report.result ?? []).filter((result) => {
@@ -177,25 +327,22 @@ export function scopeClinicalDataForNhiLipidAi(
       .map((observation) => observation.id)
       .filter((id): id is string => Boolean(id)),
   )
+  const selectedImaging = selectImaging(input)
   const diagnosticReports = (input.diagnosticReports ?? [])
-    .map((report) => filteredReport(report, relevantObservationIds))
-    .filter((report): report is DiagnosticReportEntity => Boolean(report))
-  const linkedImagingStudyIds = new Set(
-    diagnosticReports.flatMap((report) => report.imagingStudy ?? [])
-      .map((reference) => referenceId(reference.reference))
-      .filter((id): id is string => Boolean(id)),
-  )
-  const imagingStudies = (input.imagingStudies ?? []).filter((study) => {
-    const studyText = collectText({
-      procedureCode: study.procedureCode,
-      procedureReference: study.procedureReference,
-      description: study.description,
-      series: study.series,
-      note: study.note,
+    .map((report) => {
+      if (isPathologyReport(report)) return null
+      if (isImagingReport(report)) {
+        return selectedImaging.reportIds.has(report.id)
+          ? withoutInlineImagingPayload(report)
+          : null
+      }
+      const filtered = filteredReport(report, relevantObservationIds)
+      return filtered ? withoutInlineImagingPayload(filtered) : null
     })
-    return linkedImagingStudyIds.has(study.id)
-      || (!PATHOLOGY_TEXT.test(studyText) && VASCULAR_TEXT.test(studyText))
-  })
+    .filter((report): report is DiagnosticReportEntity => Boolean(report))
+  const imagingStudies = (input.imagingStudies ?? []).filter((study) => (
+    selectedImaging.studyIds.has(study.id)
+  ))
   const procedures = (input.procedures ?? []).filter((procedure) => {
     const procedureText = collectText({
       category: procedure.category,

@@ -41,8 +41,47 @@ const mockData = {
     },
   ],
   vitalSigns: [],
-  diagnosticReports: [],
-  imagingStudies: [],
+  diagnosticReports: [
+    {
+      id: 'abdominal-ct-report',
+      code: { text: 'CT abdomen' },
+      effectiveDateTime: '2026-08-01',
+      imagingStudy: [{ reference: 'ImagingStudy/abdominal-ct' }],
+      conclusion: 'Abdominal CT found incidental aortic calcification and a simple renal cyst.',
+    },
+    {
+      id: 'old-xray-report',
+      code: { text: 'Chest radiograph' },
+      effectiveDateTime: '2025-01-01',
+      imagingStudy: [{ reference: 'ImagingStudy/old-xray' }],
+      conclusion: 'Old chest X-ray narrative.',
+    },
+    {
+      id: 'latest-xray-report',
+      code: { text: 'Knee X-ray' },
+      effectiveDateTime: '2026-08-02',
+      imagingStudy: [{ reference: 'ImagingStudy/latest-xray' }],
+      conclusion: 'Latest knee X-ray narrative.',
+    },
+  ],
+  imagingStudies: [
+    {
+      id: 'abdominal-ct',
+      started: '2026-08-01',
+      modality: [{ code: 'CT', display: 'Computed Tomography' }],
+      description: 'Unrelated abdominal CT',
+    },
+    {
+      id: 'old-xray',
+      started: '2025-01-01',
+      modality: [{ code: 'DX', display: 'Digital Radiography' }],
+    },
+    {
+      id: 'latest-xray',
+      started: '2026-08-02',
+      modality: [{ code: 'CR', display: 'Computed Radiography' }],
+    },
+  ],
   procedures: [],
   encounters: [],
   documentReferences: [],
@@ -97,6 +136,15 @@ describe('NHI lipid clinical AI input', () => {
     expect(result.current.lipid.catalog.map((source) => source.resourceId)).not.toContain('wbc')
     expect(result.current.lipid.clinicalData?.observations?.map((observation) => observation.id))
       .toEqual(['ldl'])
+    expect(result.current.lipid.clinicalData?.imagingStudies?.map((study) => study.id))
+      .toEqual(['abdominal-ct', 'latest-xray'])
+    expect(result.current.lipid.clinicalData?.diagnosticReports?.map((report) => report.id))
+      .toEqual(['abdominal-ct-report', 'latest-xray-report'])
+    expect(result.current.lipid.clinicalContext).toContain(
+      'Abdominal CT found incidental aortic calcification and a simple renal cyst.',
+    )
+    expect(result.current.lipid.clinicalContext).toContain('Latest knee X-ray narrative.')
+    expect(result.current.lipid.clinicalContext).not.toContain('Old chest X-ray narrative.')
 
     expect(result.current.summary.dataReady).toBe(true)
     expect(result.current.summary.clinicalContext).toMatch(/White blood cell|WBC/)
@@ -104,5 +152,10 @@ describe('NHI lipid clinical AI input', () => {
     expect(result.current.summary.catalog.map((source) => source.resourceId)).toContain('wbc')
     expect(result.current.summary.clinicalData?.observations?.map((observation) => observation.id))
       .toEqual(['ldl', 'wbc'])
+    expect(result.current.summary.clinicalData?.imagingStudies?.map((study) => study.id))
+      .toEqual(['abdominal-ct', 'old-xray', 'latest-xray'])
+    expect(result.current.summary.clinicalData?.diagnosticReports?.map((report) => report.id))
+      .toEqual(['abdominal-ct-report', 'old-xray-report', 'latest-xray-report'])
+    expect(result.current.summary.clinicalContext).toContain('Old chest X-ray narrative.')
   })
 })

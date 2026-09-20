@@ -193,7 +193,7 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
       code: undefined,
       conclusion: undefined,
     })
-    expect(ids(scoped.imagingStudies)).toEqual(['carotid-study'])
+    expect(ids(scoped.imagingStudies)).toEqual(['carotid-study', 'knee-xray'])
     expect(ids(scoped.procedures)).toEqual(['pci', 'dialysis'])
     expect(ids(scoped.encounters)).toEqual(['lipid-visit'])
     expect(ids(scoped.compositions)).toEqual(['vascular-note'])
@@ -228,11 +228,134 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
       'sodium',
       'cbc-only',
       'pathology-report',
-      'knee-xray',
       'cataract',
       'skin-note',
       'pathology-note',
     ]))
     expect(catalogText).not.toMatch(/WBC|CBC|Sodium|pathology|Biopsy/i)
+  })
+
+  it('keeps every non-X-ray exam and only the latest paired X-ray with intact narratives', () => {
+    const abdominalCtReport = {
+      id: 'abdominal-ct-report',
+      code: { text: 'CT abdomen and pelvis' },
+      effectiveDateTime: '2025-03-01T10:00:00Z',
+      imagingStudy: [{ reference: 'ImagingStudy/abdominal-ct' }],
+      conclusion: 'No acute abdominal process. Incidental calcification of the abdominal aorta.',
+      note: [{ text: 'Narrative must remain complete, including unrelated abdominal findings.' }],
+      presentedForm: [{
+        title: 'CT image',
+        contentType: 'image/jpeg',
+        data: 'BASE64_PIXEL_DATA_MUST_NOT_ENTER_THE_PROMPT',
+      }],
+    }
+    const renalUltrasoundReport = {
+      id: 'renal-ultrasound-report',
+      code: { text: 'Renal ultrasound' },
+      effectiveDateTime: '2024-06-01',
+      imagingStudy: [{ reference: 'ImagingStudy/renal-ultrasound' }],
+      conclusion: 'Simple left renal cyst. Otherwise unremarkable.',
+    }
+    const brainMriReport = {
+      id: 'brain-mri-report',
+      code: { text: 'Brain MRI' },
+      effectiveDateTime: '2024-07-01',
+      imagingStudy: [{ reference: 'ImagingStudy/brain-mri' }],
+      conclusion: 'No acute intracranial lesion. Compared with a prior X-ray.',
+    }
+    const oldXrayReport = {
+      id: 'old-xray-report',
+      code: { text: 'Chest radiograph' },
+      effectiveDateTime: '2025-01-02',
+      imagingStudy: [{ reference: 'ImagingStudy/old-xray' }],
+      conclusion: 'Old chest radiograph narrative.',
+    }
+    const latestXrayReport = {
+      id: 'latest-xray-report',
+      code: { text: 'Plain film of the knee' },
+      // The report date is the newest available date for the paired exam,
+      // even though the study metadata itself carries an older timestamp.
+      issued: '2026-04-03T08:30:00Z',
+      imagingStudy: [{ reference: 'ImagingStudy/latest-xray' }],
+      conclusion: 'Latest knee radiograph narrative.',
+    }
+    const pathologyReport = {
+      id: 'pathology-report',
+      code: { text: 'Surgical pathology' },
+      issued: '2026-09-01',
+      conclusion: 'Biopsy specimen with no malignancy.',
+    }
+    const input = {
+      imagingStudies: [
+        {
+          id: 'abdominal-ct',
+          started: '2025-03-01T09:30:00Z',
+          modality: [{ code: 'CT', display: 'Computed Tomography' }],
+          description: 'CT abdomen and pelvis',
+        },
+        {
+          id: 'renal-ultrasound',
+          started: '2024-06-01',
+          modality: [{ code: 'US', display: 'Ultrasound' }],
+          description: 'Unrelated renal ultrasound',
+        },
+        {
+          id: 'brain-mri',
+          started: '2024-07-01',
+          modality: [{ code: 'MR', display: 'Magnetic Resonance' }],
+          description: 'Unrelated brain MRI',
+        },
+        {
+          id: 'old-xray',
+          started: '2025-01-02',
+          modality: [{ code: 'DX', display: 'Digital Radiography' }],
+        },
+        {
+          id: 'latest-xray',
+          started: '2026-01-01',
+          modality: [{ code: 'CR', display: 'Computed Radiography' }],
+        },
+      ],
+      diagnosticReports: [
+        abdominalCtReport,
+        renalUltrasoundReport,
+        brainMriReport,
+        oldXrayReport,
+        latestXrayReport,
+        pathologyReport,
+      ],
+    } as unknown as ClinicalDataCollection
+
+    const scoped = scopeClinicalDataForNhiLipidAi(input)
+
+    expect(ids(scoped.imagingStudies)).toEqual([
+      'abdominal-ct',
+      'renal-ultrasound',
+      'brain-mri',
+      'latest-xray',
+    ])
+    expect(ids(scoped.diagnosticReports)).toEqual([
+      'abdominal-ct-report',
+      'renal-ultrasound-report',
+      'brain-mri-report',
+      'latest-xray-report',
+    ])
+    expect(scoped.diagnosticReports?.[0]?.conclusion).toBe(abdominalCtReport.conclusion)
+    expect(scoped.diagnosticReports?.[0]?.note).toEqual(abdominalCtReport.note)
+    expect(scoped.diagnosticReports?.[0]?.presentedForm).toEqual([{
+      title: 'CT image',
+      contentType: 'image/jpeg',
+    }])
+
+    const catalog = getSourceCatalog(scoped, 'en')
+    const catalogText = catalog.map((source) => source.getContentText?.() ?? '').join('\n')
+    expect(catalogText).toContain(abdominalCtReport.conclusion)
+    expect(catalogText).toContain(abdominalCtReport.note[0].text)
+    expect(catalogText).toContain(renalUltrasoundReport.conclusion)
+    expect(catalogText).toContain(brainMriReport.conclusion)
+    expect(catalogText).toContain(latestXrayReport.conclusion)
+    expect(catalogText).not.toContain(oldXrayReport.conclusion)
+    expect(catalogText).not.toContain(pathologyReport.conclusion)
+    expect(catalogText).not.toContain('BASE64_PIXEL_DATA_MUST_NOT_ENTER_THE_PROMPT')
   })
 })
