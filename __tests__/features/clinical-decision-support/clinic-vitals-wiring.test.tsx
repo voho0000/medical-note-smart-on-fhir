@@ -28,6 +28,22 @@ jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))
 
+// This unit renders the feature below its production provider boundary. The
+// AI hook is covered separately; keep this suite focused on vitals hydration.
+jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
+  useNhiLipidAiAssist: () => ({
+    suggestions: {},
+    decisions: {},
+    isRunning: false,
+    isDataReady: false,
+    error: null,
+    modelId: 'test',
+    modelName: 'Test',
+    run: jest.fn(async () => undefined),
+    decide: jest.fn(),
+  }),
+}))
+
 jest.mock('@/features/clinical-decision-support/guideline-packs/registry', () => {
   const stubPack = {
     id: 'stub-pack',

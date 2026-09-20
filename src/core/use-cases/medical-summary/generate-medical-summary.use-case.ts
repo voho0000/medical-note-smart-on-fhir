@@ -357,6 +357,49 @@ export function classifyEncounterClass(
 }
 
 /**
+ * Flatten one source resource without JSON escaping its narrative strings.
+ *
+ * The AI must quote the source verbatim. JSON.stringify changes embedded
+ * newlines and quotes into escape sequences, which makes a faithful excerpt
+ * look absent. Keeping primitive leaves in their decoded form preserves the
+ * resource boundary while allowing multiline clinical narrative to match.
+ */
+function sourceOwnedContentText(value: unknown): string {
+  const leaves: string[] = []
+  const seen = new WeakSet<object>()
+  const visit = (current: unknown) => {
+    if (typeof current === 'string') {
+      leaves.push(current)
+      return
+    }
+    if (typeof current === 'number' || typeof current === 'boolean') {
+      leaves.push(String(current))
+      return
+    }
+    if (!current || typeof current !== 'object' || seen.has(current)) return
+    seen.add(current)
+    if (Array.isArray(current)) {
+      current.forEach(visit)
+      return
+    }
+    // Preserve human-readable phrases within a single FHIR object, without
+    // joining unrelated fields or resources across the record separator.
+    const fields = current as Record<string, unknown>
+    if (typeof fields.code === 'string' && typeof fields.display === 'string') {
+      leaves.push(`${fields.code} - ${fields.display}`)
+    }
+    if (typeof fields.value === 'number' && typeof fields.unit === 'string') {
+      leaves.push(`${fields.value} ${fields.unit}`)
+    }
+    Object.values(current).forEach(visit)
+  }
+  visit(value)
+  // A visible record separator prevents the normalizer from joining the end
+  // of one field to the start of another into an excerpt that never existed.
+  return leaves.join('\n␞\n')
+}
+
+/**
  * Build the citable source catalog deterministically from the bundle.
  * Key prefixes: E=Encounter, M=MedicationRequest, P=Procedure,
  * L=DiagnosticReport, C=Condition, K=CarePlan, D=clinical document.
@@ -394,6 +437,7 @@ export function buildSourceCatalog(
         endDate: day(e.period?.end),
         organization: e.serviceProvider?.display,
         encounterClass: classifyEncounterClass(e.class),
+        getContentText: () => sourceOwnedContentText(e),
       })
     })
 
@@ -409,6 +453,7 @@ export function buildSourceCatalog(
         ) || 'Medication',
         date: day(m.authoredOn),
         organization: m.requester?.display,
+        getContentText: () => sourceOwnedContentText(m),
       })
     })
 
@@ -421,6 +466,7 @@ export function buildSourceCatalog(
         display: codeText(p.code, locale) ?? 'Procedure',
         date: day(p.performedDateTime ?? p.performedPeriod?.start),
         organization: p.performer?.[0]?.actor?.display ?? p.performer?.[0]?.display,
+        getContentText: () => sourceOwnedContentText(p),
       })
     })
 
@@ -444,6 +490,7 @@ export function buildSourceCatalog(
           reportObservations.length > 0
             ? reportObservations.some(observationSupportsNormalityAssessment)
             : undefined,
+        getContentText: () => sourceOwnedContentText({ report: r, observations: reportObservations }),
       })
     })
 
@@ -458,6 +505,7 @@ export function buildSourceCatalog(
         date: day(observation.effectiveDateTime),
         organization: observation.performer?.[0]?.display,
         supportsNormalityAssessment: observationSupportsNormalityAssessment(observation),
+        getContentText: () => sourceOwnedContentText(observation),
       })
     })
 
@@ -469,6 +517,7 @@ export function buildSourceCatalog(
         resourceId: c.id,
         display: diagnosisCodeText(c.code, locale) ?? 'Condition',
         date: day(c.recordedDate ?? c.onsetDateTime),
+        getContentText: () => sourceOwnedContentText(c),
       })
     })
 
@@ -480,6 +529,7 @@ export function buildSourceCatalog(
         resourceId: allergy.id,
         display: codeText(allergy.code, locale) ?? 'Allergy',
         date: day(allergy.recordedDate ?? allergy.onsetDateTime),
+        getContentText: () => sourceOwnedContentText(allergy),
       })
     })
 
@@ -492,6 +542,7 @@ export function buildSourceCatalog(
         display: codeText(immunization.vaccineCode, locale) ?? 'Immunization',
         date: day(immunization.occurrenceDateTime),
         organization: immunization.performer?.[0]?.actor?.display,
+        getContentText: () => sourceOwnedContentText(immunization),
       })
     })
 
@@ -504,6 +555,7 @@ export function buildSourceCatalog(
         display: codeText(consent.category?.[0], locale) ?? codeText(consent.scope, locale) ?? 'Advance directive',
         date: day(consent.dateTime),
         organization: consent.organization?.[0]?.display,
+        getContentText: () => sourceOwnedContentText(consent),
       })
     })
 
@@ -516,6 +568,7 @@ export function buildSourceCatalog(
         display: codeText(device.type, locale) ?? device.deviceName?.[0]?.name ?? 'Device',
         date: day(device.manufactureDate),
         organization: device.owner?.display,
+        getContentText: () => sourceOwnedContentText(device),
       })
     })
 
@@ -530,6 +583,7 @@ export function buildSourceCatalog(
           : study.description || codeText(study.procedureCode?.[0], locale) || study.modality?.[0]?.display || 'Imaging study',
         date: day(study.started),
         organization: study.location?.display,
+        getContentText: () => sourceOwnedContentText(study),
       })
     })
 
@@ -545,6 +599,7 @@ export function buildSourceCatalog(
         display: cp.title?.trim() || codeText(cp.category?.[0], locale) || cp.description?.trim() || 'CarePlan',
         date: day(cp.period?.start ?? cp.created),
         organization: cp.author?.display?.trim() || undefined,
+        getContentText: () => sourceOwnedContentText(cp),
       })
     })
 

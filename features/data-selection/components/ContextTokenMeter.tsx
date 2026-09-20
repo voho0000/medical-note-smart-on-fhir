@@ -235,6 +235,10 @@ function ContextTokenMeterView({ snapshot, overflowIssue, consumer = 'insights' 
       <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
         {isExternalExport
           ? externalCopy.externalTokenHint
+          : consumer === 'nhiLipid'
+            ? locale === 'zh-TW'
+              ? '表一判讀還會加入條件定義、輸出格式與來源索引；實際送出範圍會依模型容量調整。'
+              : 'Table 1 review also includes criterion definitions, output format, and the source index; the actual request is fitted to model capacity.'
           : ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
       </p>
       {showsAdaptedScope && fittedClinicalInput.contextAdaptation ? (

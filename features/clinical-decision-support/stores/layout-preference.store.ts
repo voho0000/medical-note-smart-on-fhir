@@ -22,12 +22,15 @@ import { persist } from 'zustand/middleware'
  * view so nothing that reads them breaks, and neither is offered in the
  * switch. A browser that stored `c` reads as `sections`.
  */
-export type CdssLayout = 'sections' | 'flow' | 'c' | 'board' | 'classic'
+export type CdssLayout = 'sections' | 'flow' | 'nhi' | 'c' | 'board' | 'classic'
 
 export const CDSS_LAYOUT_STORAGE_KEY = 'cdss-layout-preference'
 
 /** The layouts offered by the switch. */
 export const CDSS_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'flow', 'board']
+
+/** Dyslipidemia has a dedicated Table 1 review instead of a second generic flow. */
+export const LIPID_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'nhi', 'board']
 
 interface LayoutPreferenceState {
   layout: CdssLayout

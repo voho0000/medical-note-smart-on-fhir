@@ -21,7 +21,13 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
-import { useNhiLipidReview, useNhiLipidReviewStore } from './stores/nhi-lipid-review.store'
+import {
+  useNhiLipidReview,
+  useNhiLipidReviewProvenance,
+  useNhiLipidReviewStore,
+} from './stores/nhi-lipid-review.store'
+import { selectNhiLipidAiCriteria } from './ai/nhi-lipid-ai-assist'
+import { useNhiLipidAiAssist } from './hooks/use-nhi-lipid-ai-assist.hook'
 import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
@@ -46,7 +52,12 @@ import {
   usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
-import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
+import {
+  CDSS_SWITCHABLE_LAYOUTS,
+  LIPID_SWITCHABLE_LAYOUTS,
+  type CdssLayout,
+  useCdssLayoutStore,
+} from './stores/layout-preference.store'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -189,34 +200,43 @@ function DiseaseSwitcher({
 function LayoutSwitcher({
   locale,
   layout,
+  packId,
   onSelect,
 }: {
   locale: CdssLocale
   layout: CdssLayout
+  packId: string
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const options: readonly { id: CdssLayout; label: string; title: string }[] = [
-    {
-      id: 'sections',
+  const labels: Record<'sections' | 'flow' | 'nhi' | 'board', { label: string; title: string }> = {
+    sections: {
       label: isEnglish ? 'Three sections' : '三區塊',
       title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
     },
-    {
-      id: 'flow',
+    flow: {
       label: isEnglish ? 'Visit flow' : '新版流程',
       title: isEnglish
         ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
         : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
     },
-    {
-      id: 'board',
+    nhi: {
+      label: isEnglish ? 'NHI Table 1' : '健保表一',
+      title: isEnglish
+        ? 'Review the NHI lipid tier, supporting criteria and treatment response'
+        : '核對健保血脂分級、支持條件與治療反應',
+    },
+    board: {
       label: isEnglish ? 'Original board' : '原版看板',
       title: isEnglish
         ? 'The status board: safety inputs, the four pillars, then the module rows'
         : '原本的看板：安全數據、四支柱，再列模組',
     },
-  ]
+  }
+  const layoutIds = packId === 'hyperlipidemia-cdss'
+    ? LIPID_SWITCHABLE_LAYOUTS
+    : CDSS_SWITCHABLE_LAYOUTS
+  const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
       <span className="text-xs font-medium text-muted-foreground">
@@ -259,9 +279,11 @@ export default function LiveClinicalDecisionSupportFeature() {
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
+  const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
   const nhiLipidReview = useNhiLipidReview(patientId)
+  const nhiLipidReviewProvenance = useNhiLipidReviewProvenance(patientId)
   const preventInputs = usePreventInputs(patientId)
   const afAnswers = useAfAnswers(patientId)
   useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
@@ -369,9 +391,23 @@ export default function LiveClinicalDecisionSupportFeature() {
       ? { ...applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
-        ), nhiLipidReview }
+        ),
+        nhiLipidReview,
+        nhiLipidReviewProvenance: Object.fromEntries(
+          Object.entries(nhiLipidReviewProvenance).map(([criterionId, provenance]) => [
+            criterionId,
+            {
+              source: provenance.source,
+              ...(provenance.runId ? { runId: provenance.runId } : {}),
+              ...(provenance.inputSignature ? { inputSignature: provenance.inputSignature } : {}),
+              ...(provenance.sourceScopeSignature ? { sourceScopeSignature: provenance.sourceScopeSignature } : {}),
+              ...(provenance.promptVersion ? { promptVersion: provenance.promptVersion } : {}),
+            },
+          ]),
+        ),
+      }
       : null
-  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
+  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -422,6 +458,38 @@ export default function LiveClinicalDecisionSupportFeature() {
     if (cdssLocale === 'en') return result
     return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
   }, [cdssLocale, profile, result, selectedPack])
+
+  // Keep the AI scope watcher mounted for the whole clinical workspace. A
+  // chart revision must retire AI-derived tiering even while another lipid
+  // layout is open; the Table 1 panel is only one view of the same profile.
+  const nhiCoverageSummary = result?.packId === 'hyperlipidemia-cdss'
+    ? result.recommendations.find((item) => item.id === 'dyslipidemia-risk-and-target')?.coverageSummary
+    : undefined
+  const nhiAiCriteria = useMemo(() => {
+    if (!nhiCoverageSummary) return []
+    const checks = [
+      ...nhiCoverageSummary.factors,
+      ...nhiCoverageSummary.metabolicChecks,
+      ...nhiCoverageSummary.diseaseChecks,
+    ]
+    const selected = selectNhiLipidAiCriteria(checks).filter(
+      (check) => nhiLipidReviewProvenance[check.id]?.source !== 'manual',
+    )
+    const selectedIds = new Set(selected.map((check) => check.id))
+    for (const check of checks) {
+      if (
+        check.editable
+        && nhiLipidReviewProvenance[check.id]?.source === 'ai'
+        && !selectedIds.has(check.id)
+      ) selected.push(check)
+    }
+    return selected
+  }, [nhiCoverageSummary, nhiLipidReviewProvenance])
+  const nhiLipidAiAssist = useNhiLipidAiAssist({
+    patientId,
+    criteria: nhiAiCriteria,
+    locale: cdssLocale,
+  })
 
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
@@ -485,11 +553,25 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
-  const isVisitFlow = (layout === 'flow' || layout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
+  // A layout can be remembered while the clinician moves between diseases.
+  // Map a disease-specific choice to its closest valid view without rewriting
+  // the stored preference; returning to that disease restores the choice.
+  const effectiveLayout: CdssLayout = result.packId === 'hyperlipidemia-cdss'
+    ? layout === 'flow' ? 'sections' : layout
+    : layout === 'nhi' ? 'sections' : layout
+  const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
+  const isNhiTable = effectiveLayout === 'nhi' && result.packId === 'hyperlipidemia-cdss'
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
     if (!patientId) return
+    if (isNhiTable) {
+      useNhiLipidReviewStore.getState().clear(patientId)
+      // The same in-memory reset removes answers and their retained evidence.
+      setNhiPageResetKey((current) => current + 1)
+      toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
+      return
+    }
     clearEvidenceOverrides(patientId)
     clearClinicVitals(patientId)
     useNhiLipidReviewStore.getState().clear(patientId)
@@ -525,16 +607,16 @@ export default function LiveClinicalDecisionSupportFeature() {
             onSelect={setRequestedPackId}
           />
           {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
-            <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
+            <LayoutSwitcher locale={cdssLocale} layout={effectiveLayout} packId={result.packId} onSelect={setLayout} />
           ) : null}
-          {isVisitFlow && patientId ? (
+          {(isVisitFlow || isNhiTable) && patientId ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="h-8 gap-1.5 px-2.5 text-xs shadow-none"
               onClick={resetVisitDefaults}
-              data-testid="cdss-hf-reset-page-defaults"
+              data-testid={isNhiTable ? 'cdss-nhi-reset-page-defaults' : 'cdss-hf-reset-page-defaults'}
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
@@ -555,7 +637,7 @@ export default function LiveClinicalDecisionSupportFeature() {
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy
         button for it sits beside the one for this visit's summary.
       */}
-      {result.clinicalHandoff && !isVisitFlow ? (
+      {result.clinicalHandoff && !isVisitFlow && !isNhiTable ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
@@ -566,9 +648,11 @@ export default function LiveClinicalDecisionSupportFeature() {
         englishResult={englishResult ?? undefined}
         locale={cdssLocale}
         patientId={patientId}
+        nhiLipidAiAssist={nhiLipidAiAssist}
+        nhiLipidAnswerProvenance={nhiLipidReviewProvenance}
         profileFacts={profile.facts}
         followUpHistory={hfFollowUpHistory(clinicalData.observations)}
-        layout={layout}
+        layout={effectiveLayout}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}
         onClearClinicVitals={patientId ? () => clearClinicVitals(patientId) : undefined}
@@ -584,6 +668,7 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
           : undefined}
         hfpefReading={hfpefReading}
+        nhiPageResetKey={nhiPageResetKey}
         onSaveHfpefInputs={patientId
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}

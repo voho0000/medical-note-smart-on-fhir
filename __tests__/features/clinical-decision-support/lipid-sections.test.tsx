@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
+import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { NhiLipidCoverageSummary } from '@/features/clinical-decision-support/renderers/NhiLipidCoverageSummary'
 import { LipidModuleSections } from '@/features/clinical-decision-support/renderers/LipidModuleSections'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
@@ -20,6 +22,24 @@ test('diagnosis lists all supplied checks and preserves patient-scoped verificat
   fireEvent.click(within(panel).getAllByText('糖尿病')[0])
   fireEvent.click(within(screen.getByRole('group', { name: '糖尿病' })).getByRole('button', { name: '✓ 符合' }))
   expect(useNhiLipidReviewStore.getState().answers.diabetes).toBe('yes')
+})
+
+test('diagnosis names AI-origin answers and lets the clinician restore the record layer', () => {
+  useNhiLipidReviewStore.getState().activate('synthetic-ai-origin')
+  useNhiLipidReviewStore.getState().answer('synthetic-ai-origin', 'diabetes', 'yes', { source: 'ai' })
+  const aiRecommendation = {
+    ...recommendation,
+    coverageSummary: {
+      ...(recommendation as unknown as { coverageSummary: Record<string, unknown> }).coverageSummary,
+      diseaseChecks: [{ id: 'diabetes', label: '糖尿病', value: 'AI 判讀符合', state: 'yes', origin: 'ai', editable: true }],
+    },
+  } as unknown as CdssRecommendation
+
+  render(<NhiLipidCoverageSummary recommendation={aiRecommendation} locale="zh-TW" patientId="synthetic-ai-origin" presentation="diagnosis" />)
+
+  expect(screen.getByText('AI 判讀自動帶入 · 可由醫師修正')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '恢復資料判讀' }))
+  expect(useNhiLipidReviewStore.getState().answers.diabetes).toBeUndefined()
 })
 
 test('prognosis shows classification basis without duplicating diagnostic inputs', () => {
@@ -53,4 +73,24 @@ test.each(['歷史值達門檻與否不能代表今日；先複驗', '目前有�
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent(assessment)
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('2018-02-12')
   expect(screen.getByTestId('lipid-follow-up')).toHaveTextContent('LDL-C <115 mg/dL')
+})
+
+test('dedicated NHI layout renders Table 1 once instead of the generic module list', () => {
+  const profile: CdssPatientProfile = {
+    id: 'synthetic-table1-layout',
+    evaluatedAt: '2026-09-20T00:00:00+08:00',
+    demographics: { sex: 'male' },
+    facts: {
+      age: { zh: '60 歲', en: '60 years', numericValue: 60 },
+      LDL: { zh: '118 mg/dL', en: '118 mg/dL', numericValue: 118 },
+    },
+  }
+  const result = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+
+  render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="nhi" />)
+
+  expect(screen.getByTestId('nhi-table1-layout')).toBeInTheDocument()
+  expect(screen.getByTestId('nhi-table1-panel')).toBeInTheDocument()
+  expect(screen.queryByLabelText('個案決策總覽')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('cdss-section-diagnosis')).not.toBeInTheDocument()
 })

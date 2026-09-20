@@ -9,6 +9,21 @@ import { useClinicVitalsStore } from '@/features/clinical-decision-support/store
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
+import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+
+jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
+  useNhiLipidAiAssist: () => ({
+    suggestions: {},
+    decisions: {},
+    isRunning: false,
+    isDataReady: false,
+    error: null,
+    modelId: 'test',
+    modelName: 'Test',
+    run: jest.fn(async () => undefined),
+    decide: jest.fn(),
+  }),
+}))
 
 const ICD10_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
 
@@ -44,14 +59,16 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
   ClinicalDecisionSupportView: ({
     result,
     layout,
+    nhiPageResetKey,
   }: {
     result: {
       title: string
       knowledgePacks?: Array<{ id: string }>
     }
     layout?: string
+    nhiPageResetKey?: number
   }) => (
-    <div data-testid="mock-cdss-result" data-layout={layout}>
+    <div data-testid="mock-cdss-result" data-layout={layout} data-nhi-reset-key={nhiPageResetKey}>
       <span>{result.title}</span>
       <span>{result.knowledgePacks?.map((source) => source.id).join(',')}</span>
     </div>
@@ -212,6 +229,25 @@ describe('Live personalized-guidance pathway list', () => {
     expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
   })
 
+  it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
+
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-nhi')).toHaveTextContent('健保表一')
+    expect(screen.getByTestId('cdss-layout-switch-board')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'nhi')
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
+    expect(screen.getByTestId('cdss-layout-switch-flow')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-nhi')).not.toBeInTheDocument()
+  })
+
   it('restores every physician-entered HF value to the page defaults in one click', () => {
     const patientId = 'switch-patient'
     useEvidenceOverridesStore.setState({ byPatientId: { [patientId]: { congestion: true } } })
@@ -228,6 +264,28 @@ describe('Live personalized-guidance pathway list', () => {
     expect(useHfpefInputsStore.getState().byPatientId[patientId]).toEqual({ entries: {} })
     expect(usePhenotypeAnswerStore.getState().byPatientId[patientId]).toBeUndefined()
     expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
+  })
+
+  it('restores the NHI page to record-only defaults without clearing HF work', () => {
+    const patientId = 'switch-patient'
+    useNhiLipidReviewStore.setState({
+      patientId,
+      answers: { smoking: 'yes' },
+      provenance: { smoking: { source: 'ai', modelName: 'GPT Test' } },
+    })
+    useEvidenceOverridesStore.setState({ byPatientId: { [patientId]: { congestion: true } } })
+
+    render(<LiveClinicalDecisionSupportFeature />)
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
+    fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
+
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-nhi-reset-key', '0')
+    fireEvent.click(screen.getByTestId('cdss-nhi-reset-page-defaults'))
+
+    expect(useNhiLipidReviewStore.getState().answers).toEqual({})
+    expect(useNhiLipidReviewStore.getState().provenance).toEqual({})
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-nhi-reset-key', '1')
+    expect(useEvidenceOverridesStore.getState().byPatientId[patientId]).toEqual({ congestion: true })
   })
 
   it('lists heart failure and lipid while keeping other pathways unlisted', () => {
