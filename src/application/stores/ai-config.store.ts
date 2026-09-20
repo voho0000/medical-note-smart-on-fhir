@@ -523,6 +523,21 @@ const connectionIdentityChanged = (
   sanitizeApiKey(previous.apiKey) !== next.apiKey
 )
 
+/** Runtime launch messages may be delivered more than once while the hospital
+ * extension waits for its acknowledgement. Re-installing an identical profile
+ * would still publish a new array/object through Zustand; active custom-model
+ * requests treat that identity change as a credential replacement and abort.
+ * All profile fields are scalar, so a shallow comparison is sufficient. */
+const openAiCompatibleProfilesEqual = (
+  left: OpenAiCompatibleProfile,
+  right: OpenAiCompatibleProfile,
+): boolean => {
+  const leftKeys = Object.keys(left) as Array<keyof OpenAiCompatibleProfile>
+  const rightKeys = Object.keys(right) as Array<keyof OpenAiCompatibleProfile>
+  return leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => Object.is(left[key], right[key]))
+}
+
 const toOpenAiCompatibleProfile = (
   profileId: string,
   config: OpenAiCompatibleConfig,
@@ -792,6 +807,10 @@ export const useAiConfigStore = create<AiConfigState>()(
             : {}),
         }
         const current = get().openAiCompatibleProfiles
+        if (
+          current[0]?.profileId === normalized.profileId &&
+          openAiCompatibleProfilesEqual(current[0], normalized)
+        ) return
         const next = [
           normalized,
           ...current.filter((candidate) => candidate.profileId !== normalized.profileId),
