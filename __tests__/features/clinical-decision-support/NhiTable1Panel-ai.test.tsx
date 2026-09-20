@@ -243,6 +243,54 @@ describe('NhiTable1Panel AI review', () => {
     })
   })
 
+  it('records confirming a preselected claim-code row as a clinician selection', () => {
+    const onAnswer = jest.fn()
+    const base = coverageSummary()
+    const summary = {
+      ...base,
+      diseaseChecks: base.diseaseChecks.map((check) => check.id === 'cad'
+        ? { ...check, state: 'yes' as const, origin: 'record' as const, evidenceKind: 'code' as const, value: 'I25.9' }
+        : check),
+    }
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={onAnswer}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '冠狀動脈疾病' }))
+    fireEvent.click(screen.getByRole('button', { name: '符合' }))
+    expect(onAnswer).toHaveBeenCalledWith('cad', 'yes', {
+      source: 'manual',
+      manualAction: 'selected',
+      recordState: 'yes',
+      overrides: 'record',
+    })
+  })
+
+  it('does not mislabel a derived compound result as record autofill', () => {
+    const base = coverageSummary()
+    const summary = {
+      ...base,
+      diseaseChecks: base.diseaseChecks.map((check) => check.id === 'acs-diabetes'
+        ? { ...check, state: 'yes' as const, origin: 'derived' as const }
+        : check),
+    }
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+      />,
+    )
+
+    expect(screen.queryByTestId('nhi-criterion-provenance-acs-diabetes')).not.toBeInTheDocument()
+  })
+
   it('keeps an explicit clinician correction visible when it overrides AI with unknown', () => {
     const onAnswer = jest.fn()
     const summary = coverageSummary()

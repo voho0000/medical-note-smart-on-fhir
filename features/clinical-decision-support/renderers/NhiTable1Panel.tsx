@@ -141,7 +141,7 @@ function Criterion({
     ? 'ai'
     : manuallyChanged
       ? answerProvenance?.manualAction === 'selected' ? 'manual-selected' : 'manual-modified'
-      : check.state !== 'unknown'
+      : check.origin === 'record' && check.state !== 'unknown'
         ? 'record'
         : undefined
   const glyph = manuallyChanged ? '✓' : fromCode && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
@@ -152,16 +152,27 @@ function Criterion({
   const overridesAi = answerProvenance?.source === 'ai' || answerProvenance?.overrides === 'ai'
   const answerManually = (state: CdssCoverageCheck['state']) => {
     if (!onAnswer) return
+    const confirmsRecordCode = !answerProvenance
+      && check.origin === 'record'
+      && check.evidenceKind === 'code'
+      && check.state === 'yes'
+      && state === check.state
+    // Re-clicking an already reviewed answer is a no-op. The exception is a
+    // record-code positive: clicking its preselected 「符合」 is the explicit
+    // clinical confirmation the ◐ marker says is still missing.
+    if (state === check.state && !confirmsRecordCode) return
     // Selecting the record's original value is a restore, not another manual
     // assertion. An AI override is the exception: choosing the record value is
     // still a clinician correction of that AI assessment and remains visible.
-    if (recordState !== undefined && state === recordState && !overridesAi) {
+    // Confirming a record code is also not a restore: its value stays yes while
+    // its evidence layer changes from claim support to explicit review.
+    if (recordState !== undefined && state === recordState && !overridesAi && !confirmsRecordCode) {
       onAnswer(check.id, undefined)
       return
     }
-    const manualAction = overridesAi || recordState === undefined || recordState !== 'unknown'
-      ? 'modified'
-      : 'selected'
+    const manualAction = confirmsRecordCode || (!overridesAi && recordState === 'unknown')
+      ? 'selected'
+      : 'modified'
     onAnswer(check.id, state, {
       source: 'manual',
       manualAction,
