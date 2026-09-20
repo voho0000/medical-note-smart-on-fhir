@@ -160,6 +160,16 @@ describe('repeatedToolCallIs', () => {
     ] })).toBe(true)
   })
 
+  it('lets a model repeat a query once by default and stops on the third identical batch', () => {
+    const stop = repeatedToolCallIs()
+    const same = step('queryMedications', { status: 'active' })
+    const other = step('queryLabResultsByCategory', { status: 'active' })
+
+    expect(stop({ steps: [same, same] })).toBe(false)
+    expect(stop({ steps: [same, same, other] })).toBe(false)
+    expect(stop({ steps: [other, same, same, same] })).toBe(true)
+  })
+
   it('allows a model to refine the tool or its arguments', () => {
     const stop = repeatedToolCallIs(2)
 

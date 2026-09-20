@@ -134,10 +134,15 @@ function stableToolInput(value: unknown): string {
 /** Stop a model that asks for the exact same tool data on consecutive steps.
  * Smaller OpenAI-compatible models can otherwise keep receiving and requesting
  * the same record until the generic ten-step ceiling, which looks like an
- * endless spinner and needlessly repeats hospital queries. The second result
- * is already available for the normal no-text follow-up/synthesis path. */
+ * endless spinner and needlessly repeats hospital queries. The result is
+ * already available for the normal no-text follow-up/synthesis path.
+ *
+ * Three, not two: a single repeat is something capable models do on purpose
+ * (a retry after a partial result, a re-read before answering) and then move
+ * on to a different query. Stopping there would cut off the rest of the
+ * investigation; a third identical batch is a loop. */
 export function repeatedToolCallIs(
-  consecutiveSteps = 2,
+  consecutiveSteps = 3,
 ): StopCondition<ToolSet> {
   return ({ steps }) => {
     if (consecutiveSteps < 2 || steps.length < consecutiveSteps) return false
@@ -237,7 +242,7 @@ export async function runDeepModeAgent(
       model,
       messages: messages as ModelMessage[],
       tools,
-      stopWhen: [stepCountIs(10), repeatedToolCallIs(2)],
+      stopWhen: [stepCountIs(10), repeatedToolCallIs(3)],
       ...reasoningOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
