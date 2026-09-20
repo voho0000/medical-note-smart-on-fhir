@@ -727,6 +727,8 @@ export function useAgentChat(
             queriedFhirData: t.agent.queriedFhirData,
             answerQuestion: t.agent.answerQuestion,
             answerQuestionCitationsHint: (t.agent as any).answerQuestionCitationsHint,
+            repeatedQueryStopped: t.agent.repeatedQueryStopped,
+            repeatedQueryHint: t.agent.repeatedQueryHint,
             synthesizeResults: t.agent.synthesizeResults,
             queryResult: t.agent.queryResult,
             queryFailed: t.agent.queryFailed,

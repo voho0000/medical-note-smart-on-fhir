@@ -183,3 +183,69 @@ describe('repeatedToolCallIs', () => {
     ] })).toBe(false)
   })
 })
+
+describe('runDeepModeAgent repeated-query stop', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const usage = Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 })
+  const same = { toolCalls: [{ toolName: 'queryMedications', input: { status: 'active' } }] } as never
+
+  it('tells the model and the reader when the tool loop was stopped for repeating a query', async () => {
+    const events: Array<{ type: string; state?: string }> = []
+    async function* round1() {
+      yield { type: 'tool-call', toolName: 'queryMedications', input: { status: 'active' } }
+      yield { type: 'tool-result', toolName: 'queryMedications', result: { success: true, data: [] } }
+      // The SDK evaluates stopWhen after each step; simulate the third identical one.
+      const stopWhen = mockStreamText.mock.calls[0][0].stopWhen as Array<(c: unknown) => boolean>
+      expect(stopWhen[1]({ steps: [same, same, same] })).toBe(true)
+    }
+    mockStreamText
+      .mockReturnValueOnce({ fullStream: round1(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Answer from retrieved data'), usage })
+
+    const result = await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Q' }],
+      tools: {} as never,
+      translations: { ...translations, repeatedQueryStopped: 'Stopped: repeated query', repeatedQueryHint: '\n\nHINT' },
+      idleMs: 1000,
+      abortController: new AbortController(),
+      onEvent: (e) => events.push(e as never),
+    })
+
+    expect(events.some((e) => e.type === 'status' && e.state?.includes('Stopped: repeated query'))).toBe(true)
+    const followUp = mockStreamText.mock.calls[1][0].messages as Array<{ role: string; content: string }>
+    expect(followUp[followUp.length - 1].content).toContain('HINT')
+    expect(result.answer).toBe('Answer from retrieved data\n\n_Stopped: repeated query_')
+  })
+
+  it('stays silent when the loop ended for another reason', async () => {
+    const events: Array<{ type: string; state?: string }> = []
+    async function* round1() {
+      yield { type: 'tool-call', toolName: 'queryMedications', input: { status: 'active' } }
+      yield { type: 'tool-result', toolName: 'queryMedications', result: { success: true, data: [] } }
+      const stopWhen = mockStreamText.mock.calls[0][0].stopWhen as Array<(c: unknown) => boolean>
+      expect(stopWhen[1]({ steps: [same] })).toBe(false)
+    }
+    mockStreamText
+      .mockReturnValueOnce({ fullStream: round1(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Plain answer'), usage })
+
+    const result = await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Q' }],
+      tools: {} as never,
+      translations: { ...translations, repeatedQueryStopped: 'Stopped: repeated query', repeatedQueryHint: '\n\nHINT' },
+      idleMs: 1000,
+      abortController: new AbortController(),
+      onEvent: (e) => events.push(e as never),
+    })
+
+    expect(events.some((e) => e.state?.includes('Stopped: repeated query'))).toBe(false)
+    const followUp = mockStreamText.mock.calls[1][0].messages as Array<{ role: string; content: string }>
+    expect(followUp[followUp.length - 1].content).not.toContain('HINT')
+    expect(result.answer).toBe('Plain answer')
+  })
+})

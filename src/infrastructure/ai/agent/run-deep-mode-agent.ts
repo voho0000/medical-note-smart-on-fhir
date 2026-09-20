@@ -43,6 +43,12 @@ export interface AgentRunTranslations {
   queriedFhirData: string
   answerQuestion: string
   answerQuestionCitationsHint?: string
+  /** Shown to the reader (status trail + answer footnote) when the tool loop
+   * was stopped by `repeatedToolCallIs`. Optional: eval harnesses omit it. */
+  repeatedQueryStopped?: string
+  /** Appended to the follow-up instruction in the same case, so the model
+   * knows why it was cut off and does not repeat the query again. */
+  repeatedQueryHint?: string
   synthesizeResults: string
   queryResult: string
   queryFailed: string
@@ -209,6 +215,16 @@ export async function runDeepModeAgent(
   }
 
   let accumulatedContent = ""
+
+  // Set by the repeated-query stop condition below; read by the follow-up
+
+  // prompt and the reader-facing note once the loop has ended.
+
+  let stoppedByRepeat = false
+
+  const repeatNote = (text: string): string =>
+
+    stoppedByRepeat && t.repeatedQueryStopped && text.length > 0 ? `${text}\n\n_${t.repeatedQueryStopped}_` : text
   const toolResults: Array<{ toolName: string; result: unknown }> = []
   const usedToolNames: string[] = []
 
@@ -238,11 +254,19 @@ export async function runDeepModeAgent(
     // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step loop:
     // after a tool call the SDK feeds the result back to the model automatically
     // and continues, up to N steps.
+    const repeatStop = repeatedToolCallIs(3)
     const result = await streamText({
       model,
       messages: messages as ModelMessage[],
       tools,
-      stopWhen: [stepCountIs(10), repeatedToolCallIs(3)],
+      stopWhen: [
+        stepCountIs(10),
+        (context) => {
+          if (!repeatStop(context)) return false
+          stoppedByRepeat = true
+          return true
+        },
+      ],
       ...reasoningOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
@@ -293,9 +317,13 @@ export async function runDeepModeAgent(
       }
     }
     addUsage(await result.usage)
+    if (stoppedByRepeat && t.repeatedQueryStopped) {
+      emit({ type: "status", state: `⚠️ ${t.repeatedQueryStopped}` })
+    }
   }
 
   if (accumulatedContent.length > 0) {
+    accumulatedContent = repeatNote(accumulatedContent)
     trajectory.push({ round: 1, kind: "text", text: accumulatedContent })
     emit({
       type: "final",
@@ -316,9 +344,10 @@ export async function runDeepModeAgent(
     // Only inject the citation-preservation hint when literature search actually
     // produced numbered references — otherwise the LLM hallucinates [1][2] tags.
     const answerQuestionText =
-      literatureCitations.length > 0
+      (literatureCitations.length > 0
         ? t.answerQuestion + (t.answerQuestionCitationsHint ?? "")
-        : t.answerQuestion
+        : t.answerQuestion) +
+      (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : "")
     const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
       messages,
       toolResultsSummary,
@@ -448,6 +477,7 @@ export async function runDeepModeAgent(
       })
       finalDisplayContent = processedContent
     }
+    finalDisplayContent = repeatNote(finalDisplayContent)
 
     emit({
       type: "final",

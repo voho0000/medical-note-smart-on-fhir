@@ -2161,6 +2161,8 @@ export const en = {
   agent: {
     thinking: 'Thinking...',
     organizingResults: 'Organizing query results...',
+    repeatedQueryStopped: 'Stopped after the same query was repeated three times in a row; this answer is organized from the data already retrieved.',
+    repeatedQueryHint: '\n\nNote: the previous round was stopped because the same query was repeated three times in a row. If you still need other data, query it directly and do not repeat that same query. If something could not be retrieved, say so in your answer.',
     noTextGenerated: 'AI executed the query but did not generate a response. Please try again or rephrase your question.',
     apiKeyRequired: '⚠️ AI Chat Unavailable\n\nAI chat needs either a signed-in session (guest free tier included) to use the Firebase Proxy, or your own OpenAI, Gemini, or Claude API Key in the "Settings" page.\n\nPlease sign in or configure an API key, then retry.',
     geminiRequiresApiKey: 'Gemini models require an API key for AI chat. Please add your Gemini API key in Settings or switch to an OpenAI model.',
