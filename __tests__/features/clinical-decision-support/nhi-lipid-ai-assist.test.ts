@@ -250,6 +250,37 @@ describe('NHI lipid AI evidence extraction', () => {
     expect(result![0].rationale).toContain('請醫師覆核')
   })
 
+  it.each([
+    ['cad', '冠狀動脈攝影報告', 'Coronary artery disease is confirmed.'],
+    ['recent-mi', '心導管檢查報告', 'Acute myocardial infarction event occurred on 2026-04-18.'],
+  ])('accepts an explicit %s conclusion from a non-ECG diagnostic report', (id, display, excerpt) => {
+    const result = parseNhiLipidAiResponse({
+      raw: JSON.stringify({ suggestions: [{
+        criterionId: id,
+        state: 'yes',
+        confidence: 'high',
+        evidence: [{ source: 'L1', excerpt }],
+      }] }),
+      criteria: [{ ...smoking, id }],
+      catalog: [{
+        key: 'L1',
+        resourceId: 'cardiovascular-report',
+        resourceType: 'DiagnosticReport',
+        display,
+        getContentText: () => excerpt,
+      }],
+      clinicalContext: '',
+      modelId: 'test',
+      modelName: 'test',
+    })
+
+    expect(result![0]).toMatchObject({
+      state: 'yes',
+      confidence: 'high',
+      evidence: [expect.objectContaining({ sourceResourceId: 'cardiovascular-report' })],
+    })
+  })
+
   it('instructs the model that missing mention is unknown rather than negative', () => {
     const messages = buildNhiLipidAiMessages({
       criteria: [smoking],

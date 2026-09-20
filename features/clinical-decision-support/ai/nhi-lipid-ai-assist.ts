@@ -9,7 +9,7 @@ export type NhiLipidAiConfidence = 'high' | 'medium' | 'low'
 export type NhiLipidAiDecision = 'applied'
 
 /** Bump whenever the extraction contract or grounding policy changes. */
-export const NHI_LIPID_AI_PROMPT_VERSION = 'nhi-lipid-ai-v6'
+export const NHI_LIPID_AI_PROMPT_VERSION = 'nhi-lipid-ai-v7'
 
 export interface NhiLipidAiEvidence {
   sourceKey: string
@@ -180,6 +180,19 @@ function isTraceableExcerpt(
   return needle.length >= 4 && comparableText(sourceOwnedText).includes(needle)
 }
 
+const ECG_REPORT_LABEL = /心電圖|\bECG\b|\bEKG\b|electrocardio/i
+
+function canConfirmClinicalHistory(item: NhiLipidAiEvidence): boolean {
+  if (['DocumentReference', 'Composition', 'Condition'].includes(item.sourceResourceType)) {
+    return true
+  }
+  // A report conclusion may explicitly diagnose CAD, an MI, or another
+  // clinical history item. ECG interpretations remain excluded because an
+  // infarct pattern does not establish a clinically confirmed event/history.
+  return item.sourceResourceType === 'DiagnosticReport'
+    && !ECG_REPORT_LABEL.test(item.sourceLabel)
+}
+
 /**
  * Validate both shape and provenance. Unknown criterion ids and catalog keys
  * are dropped. A decisive row without a traceable verbatim passage is retained
@@ -237,7 +250,7 @@ export function parseNhiLipidAiResponse(input: {
 
     const clinicalHistoryIds = new Set(['cad', 'acs', 'recent-mi', 'recurrent-mi', 'stroke-atherosclerosis', 'qualifying-pad'])
     const needsClinicalConfirmation = row.state === 'yes' && clinicalHistoryIds.has(row.criterionId)
-      && !evidence.some(item => ['DocumentReference', 'Composition', 'Condition'].includes(item.sourceResourceType))
+      && !evidence.some(canConfirmClinicalHistory)
     const decisiveWithoutEvidence = row.state !== 'unknown' && evidence.length === 0
     const rejected = decisiveWithoutEvidence || needsClinicalConfirmation
     const missing = [...row.missing]
