@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   // development resources. This is development-only; production builds do
   // not use the dev-origin allow-list.
   ...(process.env.NODE_ENV === 'development'
-    ? { allowedDevOrigins: ['192.168.1.112'] }
+    ? { allowedDevOrigins: ['127.0.0.1', '192.168.1.112'] }
     : {}),
   // Static export is only required for the GitHub Pages deploy. In dev mode
   // (and on Vercel) we want the full Next.js server so dynamic API routes
