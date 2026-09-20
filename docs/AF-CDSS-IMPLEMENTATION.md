@@ -34,7 +34,7 @@ Recording a decision does not suppress a finding or modify a prescription.
 - Development preview: `/dev/af`, synthetic patients only; unavailable in production.
 - The host lists HF first, then AF. HF remains the released default. AF retains the
   existing Beta/pilot and launch-route rules; see `LAUNCH-ROUTE-GATES.md`.
-- `vendor/af-cdss` contains the unpublished package builds and integrity manifest.
+- The rules come from the published `@voho0000/personalized-care` 2.1.0 and `@voho0000/personalized-care-fhir` 1.7.0 on GitHub Packages (the interim `vendor/af-cdss` tarballs were removed once those were released).
 
 ## Scope
 
