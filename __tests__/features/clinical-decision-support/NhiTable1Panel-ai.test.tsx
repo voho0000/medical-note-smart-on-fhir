@@ -168,8 +168,7 @@ describe('NhiTable1Panel AI review', () => {
         onAnswer={jest.fn()}
       />,
     )
-    expect(screen.getByText('AI 判讀')).toBeInTheDocument()
-    expect(screen.queryByText('醫師修正')).not.toBeInTheDocument()
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('AI 判讀')
 
     rerender(
       <NhiTable1Panel
@@ -180,7 +179,6 @@ describe('NhiTable1Panel AI review', () => {
         onAnswer={jest.fn()}
       />,
     )
-    expect(screen.getByText('醫師修正')).toBeInTheDocument()
-    expect(screen.queryByText('AI 判讀')).not.toBeInTheDocument()
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('醫師修正')
   })
 })

@@ -134,6 +134,8 @@ interface ClinicalDecisionSupportViewProps {
    */
   hfpefReading?: HfpefReading
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
+  /** Changes when the NHI page returns to its record-only default state. */
+  nhiPageResetKey?: number
 }
 
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
@@ -2071,6 +2073,7 @@ export function ClinicalDecisionSupportView({
   onClearDecision,
   hfpefReading,
   onSaveHfpefInputs,
+  nhiPageResetKey = 0,
 }: ClinicalDecisionSupportViewProps) {
   const englishRecommendations = new Map([
     ...(englishResult?.recommendations ?? []),
@@ -2482,6 +2485,7 @@ export function ClinicalDecisionSupportView({
         >
           {nhiSummary ? (
             <NhiTable1Panel
+              key={`${patientId ?? 'no-patient'}:${nhiPageResetKey}`}
               summary={nhiSummary}
               locale={locale}
               patientId={patientId}

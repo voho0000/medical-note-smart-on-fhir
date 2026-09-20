@@ -273,6 +273,7 @@ export default function LiveClinicalDecisionSupportFeature() {
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
+  const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
   const nhiLipidReview = useNhiLipidReview(patientId)
@@ -511,6 +512,15 @@ export default function LiveClinicalDecisionSupportFeature() {
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
     if (!patientId) return
+    if (isNhiTable) {
+      useNhiLipidReviewStore.getState().clear(patientId)
+      // The AI suggestions live inside the connected Table 1 panel rather
+      // than in the patient answer store. Remounting that panel cancels any
+      // in-flight request and restores its untouched, record-only state.
+      setNhiPageResetKey((current) => current + 1)
+      toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
+      return
+    }
     clearEvidenceOverrides(patientId)
     clearClinicVitals(patientId)
     useNhiLipidReviewStore.getState().clear(patientId)
@@ -548,14 +558,14 @@ export default function LiveClinicalDecisionSupportFeature() {
           {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
             <LayoutSwitcher locale={cdssLocale} layout={effectiveLayout} packId={result.packId} onSelect={setLayout} />
           ) : null}
-          {isVisitFlow && patientId ? (
+          {(isVisitFlow || isNhiTable) && patientId ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="h-8 gap-1.5 px-2.5 text-xs shadow-none"
               onClick={resetVisitDefaults}
-              data-testid="cdss-hf-reset-page-defaults"
+              data-testid={isNhiTable ? 'cdss-nhi-reset-page-defaults' : 'cdss-hf-reset-page-defaults'}
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
@@ -605,6 +615,7 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? (moduleId) => clearPhysicianDecision(patientId, moduleId)
           : undefined}
         hfpefReading={hfpefReading}
+        nhiPageResetKey={nhiPageResetKey}
         onSaveHfpefInputs={patientId
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}

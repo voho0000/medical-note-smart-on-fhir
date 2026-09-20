@@ -124,12 +124,18 @@ function Criterion({
         <span className={cn('block text-xs tabular-nums', mark.lit ? 'text-primary' : 'text-muted-foreground')}>
           {check.value}
           {aiApplied ? (
-            <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1 py-0.5 font-medium text-primary">
+            <span
+              className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1 py-0.5 font-medium text-primary"
+              data-testid={`nhi-criterion-provenance-${check.id}`}
+            >
               <Sparkles className="h-3 w-3" aria-hidden="true" />
               {isEnglish ? 'AI assessment' : 'AI 判讀'}
             </span>
           ) : manuallyChanged ? (
-            <span className="ml-1 rounded border border-foreground/20 bg-muted/40 px-1 py-0.5 font-medium text-foreground">
+            <span
+              className="ml-1 rounded border border-foreground/20 bg-muted/40 px-1 py-0.5 font-medium text-foreground"
+              data-testid={`nhi-criterion-provenance-${check.id}`}
+            >
               {isEnglish ? 'Clinician changed' : '醫師修正'}
             </span>
           ) : null}
@@ -467,10 +473,15 @@ function NhiTable1PanelContent({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
         <span className="font-medium text-muted-foreground">{isEnglish ? 'Key' : '符號'}</span>
-        <span><span className="font-semibold text-primary">●</span> {isEnglish ? 'Established' : '資料可證'}</span>
-        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Claims code; confirm clinically' : '申報碼支持，須臨床確認'}</span>
+        <span><span className="font-semibold text-primary">●</span> {isEnglish ? 'Autofilled from the record' : '病歷資料自動帶入'}</span>
+        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Autofilled from a claims code; confirm clinically' : '申報碼自動帶入，須臨床確認'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">○</span> {isEnglish ? 'Not in the record — unknown, not absent' : '紀錄讀不到 — 未知，不等於沒有'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Measured and not met' : '有數值且不符合'}</span>
+        <span className="inline-flex items-center gap-1 text-primary">
+          <Sparkles className="h-3 w-3" aria-hidden="true" />
+          {isEnglish ? 'AI assessment' : 'AI 判讀'}
+        </span>
+        <span><span className="font-semibold">✓</span> {isEnglish ? 'Clinician changed' : '醫師修正'}</span>
       </div>
 
       {aiAssist ? (
