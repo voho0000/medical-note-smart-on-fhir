@@ -485,6 +485,27 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.queryByText('有數值且不符合')).not.toBeInTheDocument()
   })
 
+  it('shows the pack-owned clinician action points without rewording them', () => {
+    const summary = {
+      ...coverageSummary(),
+      clinicianActionPoints: [
+        { id: 'confirm-tier', kind: 'confirm' as const, label: '本次確認', text: '確認未確認的高風險條件與採檢時用藥。' },
+        { id: 'treatment', kind: 'treatment' as const, label: '處置', text: '依目前分層與表一門檻核對現行降脂治療。' },
+        { id: 'follow-up', kind: 'follow-up' as const, label: '複驗', text: '治療更動後 1–3 個月複驗血脂。' },
+      ],
+    }
+
+    render(<NhiTable1Panel summary={summary} locale="zh-TW" />)
+
+    const actions = screen.getByTestId('nhi-table1-action-points')
+    expect(actions).toHaveAccessibleName('建議處置')
+    expect(actions).toHaveTextContent('本次確認確認未確認的高風險條件與採檢時用藥。')
+    expect(actions).toHaveTextContent('處置依目前分層與表一門檻核對現行降脂治療。')
+    expect(actions).toHaveTextContent('複驗治療更動後 1–3 個月複驗血脂。')
+    expect(actions.querySelectorAll('[data-action-id]')).toHaveLength(3)
+    expect(actions.querySelector('[data-action-kind="treatment"]')).toHaveTextContent('依目前分層與表一門檻核對現行降脂治療。')
+  })
+
   it('states the effective no answer directly on the criterion row', () => {
     const base = coverageSummary()
     const criterion = base.diseaseChecks.find((check) => check.label === '慢性腎臟病')!

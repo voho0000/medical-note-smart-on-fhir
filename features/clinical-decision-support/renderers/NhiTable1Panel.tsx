@@ -1,7 +1,7 @@
 "use client"
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Bug, Check, Database, LoaderCircle, Settings2, Sparkles } from 'lucide-react'
+import { Bug, Check, Database, ListChecks, LoaderCircle, Settings2, Sparkles } from 'lucide-react'
 import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutionDiagnosticsDialog'
 import { downloadAiExecutionDiagnostics } from '@/src/shared/utils/ai-execution-diagnostics'
 import { locales } from '@/src/shared/i18n/i18n.config'
@@ -895,6 +895,7 @@ function NhiTable1PanelContent({
   const clinicalSummaryRows = [3, 2, 5]
     .map((index) => summary.rows[index])
     .filter((row): row is CdssCoverageSummary['rows'][number] => Boolean(row))
+  const actionPoints = summary.clinicianActionPoints
   const forTier = (id: string) => summary.diseaseChecks.filter((check) => check.tier === id)
   const groupsOf = (id: string) => {
     const checks = forTier(id)
@@ -966,6 +967,34 @@ function NhiTable1PanelContent({
             </div>
           ))}
         </dl>
+      ) : null}
+
+      {actionPoints.length > 0 ? (
+        <section
+          className="space-y-2 rounded-md border border-primary/20 bg-primary/[0.04] px-3 py-2.5"
+          aria-label={isEnglish ? 'Suggested actions' : '建議處置'}
+          data-testid="nhi-table1-action-points"
+        >
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <ListChecks className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            {isEnglish ? 'Suggested actions' : '建議處置'}
+          </p>
+          <dl className="grid gap-2 text-xs lg:grid-cols-3">
+            {actionPoints.map((action) => (
+              <div
+                key={action.id}
+                className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2"
+                data-action-id={action.id}
+                data-action-kind={action.kind}
+              >
+                <dt className="rounded bg-background px-1.5 py-0.5 font-medium text-primary ring-1 ring-inset ring-primary/20">
+                  {action.label}
+                </dt>
+                <dd className="break-words leading-relaxed text-foreground">{action.text}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
