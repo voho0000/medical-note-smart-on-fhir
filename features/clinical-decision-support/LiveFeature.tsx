@@ -21,7 +21,13 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
-import { useNhiLipidReview, useNhiLipidReviewStore } from './stores/nhi-lipid-review.store'
+import {
+  useNhiLipidReview,
+  useNhiLipidReviewProvenance,
+  useNhiLipidReviewStore,
+} from './stores/nhi-lipid-review.store'
+import { selectNhiLipidAiCriteria } from './ai/nhi-lipid-ai-assist'
+import { useNhiLipidAiAssist } from './hooks/use-nhi-lipid-ai-assist.hook'
 import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
@@ -277,6 +283,7 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   const patientId = patient?.id
   const nhiLipidReview = useNhiLipidReview(patientId)
+  const nhiLipidReviewProvenance = useNhiLipidReviewProvenance(patientId)
   const preventInputs = usePreventInputs(patientId)
   const afAnswers = useAfAnswers(patientId)
   useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
@@ -384,9 +391,23 @@ export default function LiveClinicalDecisionSupportFeature() {
       ? { ...applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
-        ), nhiLipidReview }
+        ),
+        nhiLipidReview,
+        nhiLipidReviewProvenance: Object.fromEntries(
+          Object.entries(nhiLipidReviewProvenance).map(([criterionId, provenance]) => [
+            criterionId,
+            {
+              source: provenance.source,
+              ...(provenance.runId ? { runId: provenance.runId } : {}),
+              ...(provenance.inputSignature ? { inputSignature: provenance.inputSignature } : {}),
+              ...(provenance.sourceScopeSignature ? { sourceScopeSignature: provenance.sourceScopeSignature } : {}),
+              ...(provenance.promptVersion ? { promptVersion: provenance.promptVersion } : {}),
+            },
+          ]),
+        ),
+      }
       : null
-  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
+  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -437,6 +458,38 @@ export default function LiveClinicalDecisionSupportFeature() {
     if (cdssLocale === 'en') return result
     return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
   }, [cdssLocale, profile, result, selectedPack])
+
+  // Keep the AI scope watcher mounted for the whole clinical workspace. A
+  // chart revision must retire AI-derived tiering even while another lipid
+  // layout is open; the Table 1 panel is only one view of the same profile.
+  const nhiCoverageSummary = result?.packId === 'hyperlipidemia-cdss'
+    ? result.recommendations.find((item) => item.id === 'dyslipidemia-risk-and-target')?.coverageSummary
+    : undefined
+  const nhiAiCriteria = useMemo(() => {
+    if (!nhiCoverageSummary) return []
+    const checks = [
+      ...nhiCoverageSummary.factors,
+      ...nhiCoverageSummary.metabolicChecks,
+      ...nhiCoverageSummary.diseaseChecks,
+    ]
+    const selected = selectNhiLipidAiCriteria(checks).filter(
+      (check) => nhiLipidReviewProvenance[check.id]?.source !== 'manual',
+    )
+    const selectedIds = new Set(selected.map((check) => check.id))
+    for (const check of checks) {
+      if (
+        check.editable
+        && nhiLipidReviewProvenance[check.id]?.source === 'ai'
+        && !selectedIds.has(check.id)
+      ) selected.push(check)
+    }
+    return selected
+  }, [nhiCoverageSummary, nhiLipidReviewProvenance])
+  const nhiLipidAiAssist = useNhiLipidAiAssist({
+    patientId,
+    criteria: nhiAiCriteria,
+    locale: cdssLocale,
+  })
 
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />
@@ -514,9 +567,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     if (!patientId) return
     if (isNhiTable) {
       useNhiLipidReviewStore.getState().clear(patientId)
-      // The AI suggestions live inside the connected Table 1 panel rather
-      // than in the patient answer store. Remounting that panel cancels any
-      // in-flight request and restores its untouched, record-only state.
+      // The same in-memory reset removes answers and their retained evidence.
       setNhiPageResetKey((current) => current + 1)
       toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
       return
@@ -597,6 +648,8 @@ export default function LiveClinicalDecisionSupportFeature() {
         englishResult={englishResult ?? undefined}
         locale={cdssLocale}
         patientId={patientId}
+        nhiLipidAiAssist={nhiLipidAiAssist}
+        nhiLipidAnswerProvenance={nhiLipidReviewProvenance}
         profileFacts={profile.facts}
         followUpHistory={hfFollowUpHistory(clinicalData.observations)}
         layout={effectiveLayout}

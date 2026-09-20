@@ -18,6 +18,7 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled exports', (
     act(() => result.current.updateSelection('medications', false))
     expect(result.current.getProfile('chat').selection.medications).toBe(false)
     expect(result.current.getProfile('insights').selection.medications).toBe(false)
+    expect(result.current.getProfile('nhiLipid').selection.medications).toBe(true)
     expect(result.current.getProfile('ips').selection.medications).toBe(true) // untouched
     expect(result.current.getProfile('aiExport').selection.medications).toBe(true)
   })

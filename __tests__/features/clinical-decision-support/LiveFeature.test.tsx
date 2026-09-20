@@ -11,6 +11,20 @@ import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/st
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 
+jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
+  useNhiLipidAiAssist: () => ({
+    suggestions: {},
+    decisions: {},
+    isRunning: false,
+    isDataReady: false,
+    error: null,
+    modelId: 'test',
+    modelName: 'Test',
+    run: jest.fn(async () => undefined),
+    decide: jest.fn(),
+  }),
+}))
+
 const ICD10_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
 
 // `@voho0000/personalized-care` develops one pathway per branch and the

@@ -7,6 +7,33 @@ jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.ho
   useNhiLipidAiAssist: jest.fn(),
 }))
 
+jest.mock('@/features/data-selection', () => ({
+  DataSelectionDrawer: ({ open, title, description }: { open: boolean; title: string; description: string }) => open ? (
+    <div role="dialog" aria-label={title}>{description}</div>
+  ) : null,
+}))
+
+jest.mock('@/src/shared/components/ModelPicker', () => ({
+  ModelPicker: ({
+    modelId,
+    disabled,
+    onSelect,
+  }: {
+    modelId: string
+    disabled?: boolean
+    onSelect: (modelId: string) => void
+  }) => (
+    <button
+      type="button"
+      data-testid="nhi-model-picker"
+      disabled={disabled}
+      onClick={() => onSelect('model-next')}
+    >
+      {modelId}
+    </button>
+  ),
+}))
+
 const mockedUseAiAssist = jest.mocked(useNhiLipidAiAssist)
 
 function coverageSummary() {
@@ -43,6 +70,17 @@ describe('NhiTable1Panel AI review', () => {
     })
   })
 
+  it('opens the independent Table 1 data scope without starting AI', () => {
+    mockedUseAiAssist.mockReturnValue({ suggestions: {}, decisions: {}, isRunning: false, isDataReady: true, error: null, modelId: 'test', modelName: 'Test', run, decide })
+    render(<NhiTable1Panel summary={coverageSummary()} locale="zh-TW" patientId="patient-1" onAnswer={jest.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'AI 判讀設定' }))
+    expect(screen.getByRole('button', { name: '查看 AI 執行紀錄' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '資料範圍' }))
+    expect(screen.getByRole('dialog', { name: 'AI 判讀資料範圍' })).toBeVisible()
+    expect(screen.getByText('選擇表一 AI 判讀要納入的病歷資料；此範圍獨立於 AI 摘要。')).toBeVisible()
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('starts the AI review directly from the visible action', () => {
     render(
       <NhiTable1Panel
@@ -57,6 +95,95 @@ describe('NhiTable1Panel AI review', () => {
     fireEvent.click(screen.getByTestId('nhi-lipid-ai-run'))
     expect(run).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('送出去識別化病歷摘要？')).not.toBeInTheDocument()
+  })
+
+  it('bulk reviews only known editable answers, preserving AI evidence and manual answers', () => {
+    const base = coverageSummary()
+    const onAnswer = jest.fn()
+    const summary = { ...base, factors: base.factors.map(check => check.id === 'smoking'
+      ? { ...check, state: 'yes' as const, origin: 'ai' as const }
+      : check) }
+    render(<NhiTable1Panel summary={summary} locale="zh-TW" patientId="patient-1"
+      onAnswer={onAnswer} answerProvenance={{
+        age: { source: 'manual', manualAction: 'selected' },
+        smoking: { source: 'ai', modelName: 'Evidence model', recordState: 'unknown' },
+      }} />)
+    fireEvent.click(screen.getByRole('button', { name: /一鍵覆核目前結果/ }))
+    expect(onAnswer).toHaveBeenCalledWith('smoking', 'yes', expect.objectContaining({
+      source: 'manual', manualAction: 'reviewed', modelName: 'Evidence model',
+      recordState: 'unknown', overrides: 'ai', reviewedAt: expect.any(String),
+    }))
+    expect(onAnswer.mock.calls.some(([id]) => id === 'age' || id === 'family-history' || id === 'metabolic')).toBe(false)
+  })
+
+  it('locks the selected model while running and shows the run model and duration', () => {
+    const selectModel = jest.fn()
+    const runMetadata = {
+      runId: 'run-1',
+      inputSignature: 'input-1',
+      sourceScopeSignature: 'scope-1',
+      promptVersion: 'prompt-1',
+      startedAt: '2026-09-20T10:00:00.000Z',
+      modelId: 'model-routed',
+      modelName: 'Routed Model',
+      inputSummary: { criteriaCount: 20, sourceCount: 46, sourceCounts: { Encounter: 40, Observation: 6 }, earliestDate: '2018-02-12', latestDate: '2026-08-25' },
+    }
+    const runningAssist = {
+      suggestions: {},
+      decisions: {},
+      isRunning: true,
+      isDataReady: true,
+      error: null,
+      latestAttempt: runMetadata,
+      modelId: 'model-routed',
+      modelName: 'Routed Model',
+      selectedModelId: 'model-selected',
+      fallbackModelId: 'model-fallback',
+      selectModel,
+      run,
+      decide,
+    }
+    const view = render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+        aiAssist={runningAssist}
+      />,
+    )
+
+    expect(screen.getByTestId('nhi-model-picker')).toBeDisabled()
+    expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('Routed Model')
+    expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('已等待')
+    expect(screen.getByText('已整理 20 項表一條件、46 筆來源。')).toBeVisible()
+    expect(screen.getByText('就醫 40 · 檢驗／量測 6')).toBeVisible()
+    expect(screen.getByText('來源日期：2018-02-12 ～ 2026-08-25')).toBeVisible()
+    expect(screen.getByText(/目前模型不回報逐項進度/)).toBeVisible()
+
+    view.rerender(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+        aiAssist={{
+          ...runningAssist,
+          isRunning: false,
+          latestAttempt: { ...runMetadata, completedAt: '2026-09-20T10:01:05.000Z' },
+          lastCompleted: {
+            ...runMetadata,
+            completedAt: '2026-09-20T10:01:05.000Z',
+            modelId: 'model-actual',
+            modelName: 'Actual Model',
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('nhi-model-picker')).not.toBeDisabled()
+    expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('Actual Model')
+    expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('耗時 01:05')
   })
 
   it('shows criterion details on mouse hover without requiring a click', () => {
@@ -334,5 +461,111 @@ describe('NhiTable1Panel AI review', () => {
       recordState: 'unknown',
       overrides: 'ai',
     })
+  })
+
+  it('keeps all six tiers while compacting the zero-factor tier beside low risk', () => {
+    const summary = coverageSummary()
+    render(<NhiTable1Panel summary={summary} locale="zh-TW" />)
+
+    expect(screen.getByText('代謝性症候群五項細節').closest('details')).toHaveAttribute('open')
+    expect(screen.getByTestId('nhi-zero-tier-compact')).toHaveAttribute('data-testid', 'nhi-zero-tier-compact')
+    expect(screen.getByLabelText('0 項心血管風險因子')).toBeInTheDocument()
+    expect(screen.getByTestId('nhi-zero-tier-compact')).toHaveTextContent('0 項')
+    expect(screen.getByTestId('nhi-zero-tier-compact')).toHaveTextContent('低風險')
+    expect(screen.getByTestId('nhi-lower-tier-prescribing')).toHaveTextContent('0 項、低風險與中風險共用')
+    expect(screen.getAllByText('生活型態改變，並處置心血管風險因子 3–6 個月')).toHaveLength(1)
+    expect(screen.getAllByText('<160').length).toBeGreaterThan(0)
+    expect(screen.getByText('non-HDL-C <160')).toBeInTheDocument()
+    expect(screen.getAllByTestId('nhi-table1-scroll')).toHaveLength(1)
+    expect(screen.getByTestId('nhi-table1-clinical-summary')).toHaveTextContent(summary.rows[3].label)
+    expect(screen.getByTestId('nhi-table1-clinical-summary')).toHaveTextContent(summary.rows[3].value)
+    expect(screen.getByTestId('nhi-table1-clinical-summary')).toHaveTextContent(summary.rows[2].value)
+    expect(screen.getByTestId('nhi-table1-clinical-summary')).toHaveTextContent(summary.rows[5].value)
+    expect(screen.getByText('不符合')).toBeInTheDocument()
+    expect(screen.queryByText('有數值且不符合')).not.toBeInTheDocument()
+  })
+
+  it('states the effective no answer directly on the criterion row', () => {
+    const base = coverageSummary()
+    const criterion = base.diseaseChecks.find((check) => check.label === '慢性腎臟病')!
+    const summary = {
+      ...base,
+      diseaseChecks: base.diseaseChecks.map((check) => check.id === criterion.id
+        ? { ...check, state: 'no' as const, origin: 'physician' as const, value: '未找到可判讀資料' }
+        : check),
+    }
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        answerProvenance={{ [criterion.id]: { source: 'manual' } }}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: criterion.label })).toHaveTextContent('不符合 · 未找到可判讀資料')
+  })
+
+  it('reports clinician corrections in the AI card and opens its exact source', () => {
+    const base = coverageSummary()
+    const summary = {
+      ...base,
+      factors: base.factors.map((check) => check.id === 'smoking'
+        ? { ...check, state: 'no' as const, origin: 'physician' as const, value: '不符合' }
+        : check),
+    }
+    const onNavigate = jest.fn()
+    const aiAssist = {
+      suggestions: {
+        smoking: {
+          criterionId: 'smoking',
+          state: 'yes' as const,
+          confidence: 'high' as const,
+          rationale: '病歷記載目前抽菸。',
+          missing: [],
+          evidence: [{
+            sourceKey: 'D1',
+            sourceResourceType: 'DocumentReference',
+            sourceResourceId: 'doc-smoking',
+            sourceLabel: '出院病歷摘要',
+            date: '2026-09-16',
+            excerpt: '目前每日抽菸一包。',
+          }],
+          modelId: 'gpt-test',
+          modelName: 'GPT Test',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+      },
+      decisions: { smoking: 'applied' as const },
+      isRunning: false,
+      isDataReady: true,
+      error: null,
+      modelId: 'gpt-test',
+      modelName: 'GPT Test',
+      run,
+      decide,
+    }
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'manual', overrides: 'ai' } }}
+        onAnswer={jest.fn()}
+        onNavigate={onNavigate}
+        aiAssist={aiAssist}
+      />,
+    )
+
+    expect(screen.getByText('0 項符合 · 1 項不符合 · 0 項未確認 · 1 項醫師修改。')).toBeInTheDocument()
+    expect(screen.getByText('醫師已改為不符合。')).toBeInTheDocument()
+    expect(screen.getByText('醫師已改為不符合。')).not.toBeVisible()
+    fireEvent.click(screen.getByText('查看判讀結果與依據'))
+    fireEvent.click(screen.getByText('判讀依據'))
+    fireEvent.click(screen.getByRole('button', { name: /開啟原始病歷/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'DocumentReference',
+      resourceId: 'doc-smoking',
+      evidenceQuote: '目前每日抽菸一包。',
+    }))
   })
 })

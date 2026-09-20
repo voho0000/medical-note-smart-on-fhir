@@ -24,6 +24,24 @@ test('diagnosis lists all supplied checks and preserves patient-scoped verificat
   expect(useNhiLipidReviewStore.getState().answers.diabetes).toBe('yes')
 })
 
+test('diagnosis names AI-origin answers and lets the clinician restore the record layer', () => {
+  useNhiLipidReviewStore.getState().activate('synthetic-ai-origin')
+  useNhiLipidReviewStore.getState().answer('synthetic-ai-origin', 'diabetes', 'yes', { source: 'ai' })
+  const aiRecommendation = {
+    ...recommendation,
+    coverageSummary: {
+      ...(recommendation as unknown as { coverageSummary: Record<string, unknown> }).coverageSummary,
+      diseaseChecks: [{ id: 'diabetes', label: '糖尿病', value: 'AI 判讀符合', state: 'yes', origin: 'ai', editable: true }],
+    },
+  } as unknown as CdssRecommendation
+
+  render(<NhiLipidCoverageSummary recommendation={aiRecommendation} locale="zh-TW" patientId="synthetic-ai-origin" presentation="diagnosis" />)
+
+  expect(screen.getByText('AI 判讀自動帶入 · 可由醫師修正')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '恢復資料判讀' }))
+  expect(useNhiLipidReviewStore.getState().answers.diabetes).toBeUndefined()
+})
+
 test('prognosis shows classification basis without duplicating diagnostic inputs', () => {
   render(<NhiLipidCoverageSummary recommendation={recommendation} locale="zh-TW" presentation="prognosis" />)
   expect(screen.getByTestId('lipid-risk-basis')).toHaveTextContent('兩項危險因子')

@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { RightPanelProvider } from '@/src/application/providers/right-panel.provider'
 import ReviewClient from './ReviewClient'
 
 /**
@@ -9,5 +11,11 @@ import ReviewClient from './ReviewClient'
  */
 export default function NhiTable1ReviewPage() {
   if (process.env.NODE_ENV !== 'development') notFound()
-  return <ReviewClient />
+  return (
+    <LanguageProvider>
+      <RightPanelProvider>
+        <ReviewClient />
+      </RightPanelProvider>
+    </LanguageProvider>
+  )
 }

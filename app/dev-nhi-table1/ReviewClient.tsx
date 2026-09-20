@@ -5,9 +5,12 @@ import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/N
 import type { NhiLipidAiSuggestion } from '@/features/clinical-decision-support/ai/nhi-lipid-ai-assist'
 import type { NhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
 import type {
+  NhiLipidAiRunMetadata,
   NhiLipidAnswerProvenance,
   NhiLipidAnswerProvenanceById,
 } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+import { MODEL_PREF_DEFAULTS } from '@/src/application/stores/model-prefs.store'
+import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 const fact = (value: number | string, unit = '') => ({
   zh: `${value}${unit ? ' ' + unit : ''}`,
@@ -64,6 +67,10 @@ export default function Review() {
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, NhiLipidAiSuggestion>>({})
   const [aiDecisions, setAiDecisions] = useState<NhiLipidAiAssist['decisions']>({})
   const [answerProvenance, setAnswerProvenance] = useState<NhiLipidAnswerProvenanceById>({})
+  const [selectedModelId, setSelectedModelId] = useState(MODEL_PREF_DEFAULTS.insights)
+  const [aiRunning, setAiRunning] = useState(false)
+  const [latestAttempt, setLatestAttempt] = useState<NhiLipidAiRunMetadata>()
+  const [lastCompleted, setLastCompleted] = useState<NhiLipidAiRunMetadata>()
 
   const profile = {
     id: `synthetic-table1-${scenario}`,
@@ -72,6 +79,18 @@ export default function Review() {
     eligibleDiseasePackIds: ['hyperlipidemia-poc'],
     facts: SCENARIOS[scenario].facts,
     nhiLipidReview: answers,
+    nhiLipidReviewProvenance: Object.fromEntries(
+      Object.entries(answerProvenance).map(([criterionId, provenance]) => [
+        criterionId,
+        {
+          source: provenance.source,
+          ...(provenance.runId ? { runId: provenance.runId } : {}),
+          ...(provenance.inputSignature ? { inputSignature: provenance.inputSignature } : {}),
+          ...(provenance.sourceScopeSignature ? { sourceScopeSignature: provenance.sourceScopeSignature } : {}),
+          ...(provenance.promptVersion ? { promptVersion: provenance.promptVersion } : {}),
+        },
+      ]),
+    ),
     labSeries: SCENARIOS[scenario].facts.LDL
       ? {
           LDL: [
@@ -128,16 +147,40 @@ export default function Review() {
   const card = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile: withAdjunct, locale })
     .recommendations.find(item => item.id === 'dyslipidemia-risk-and-target')
   const summary = card?.coverageSummary
+  const syntheticModelName = `${modelDisplayLabel(selectedModelId)} · ${english ? 'synthetic test (no data sent)' : '合成測試（不送資料）'}`
   const aiAssist: NhiLipidAiAssist = {
     suggestions: aiSuggestions,
     decisions: aiDecisions,
-    isRunning: false,
+    isRunning: aiRunning,
     isDataReady: true,
     error: null,
-    modelId: 'synthetic-review-model',
-    modelName: english ? 'Synthetic review model (no data sent)' : '合成測試模型（不送出資料）',
+    latestAttempt,
+    lastCompleted,
+    modelId: selectedModelId,
+    modelName: syntheticModelName,
+    selectedModelId,
+    fallbackModelId: MODEL_PREF_DEFAULTS.insights,
+    selectModel: setSelectedModelId,
     run: async () => {
+      if (aiRunning) return
+      const runModelId = selectedModelId
+      const runModelName = syntheticModelName
+      const startedAt = new Date().toISOString()
+      const metadata: NhiLipidAiRunMetadata = {
+        runId: `synthetic-review:${Date.now()}`,
+        inputSignature: `synthetic-input:${scenario}`,
+        sourceScopeSignature: `synthetic-scope:${scenario}`,
+        promptVersion: 'synthetic-review-v1',
+        startedAt,
+        modelId: runModelId,
+        modelName: runModelName,
+      }
+      setAiRunning(true)
+      setLatestAttempt(metadata)
       setAiDecisions({})
+      // Keep the local review visibly running long enough to inspect the
+      // timer and locked model picker. This page never invokes an AI service.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 2_200))
       setAiSuggestions({
         smoking: {
           criterionId: 'smoking',
@@ -155,9 +198,9 @@ export default function Review() {
             date: '2026-08-30',
             excerpt: english ? 'Currently smokes one pack daily.' : '目前每日抽菸一包。',
           }],
-          modelId: 'synthetic-review-model',
-          modelName: english ? 'Synthetic review model' : '合成測試模型',
-          generatedAt: '2026-09-18T10:00:00+08:00',
+          modelId: runModelId,
+          modelName: runModelName,
+          generatedAt: startedAt,
         },
         'family-history': {
           criterionId: 'family-history',
@@ -168,11 +211,15 @@ export default function Review() {
             : '未找到一等親冠心病發病年齡。',
           missing: [english ? 'Family member and age at onset' : '親屬關係與發病年齡'],
           evidence: [],
-          modelId: 'synthetic-review-model',
-          modelName: english ? 'Synthetic review model' : '合成測試模型',
-          generatedAt: '2026-09-18T10:00:00+08:00',
+          modelId: runModelId,
+          modelName: runModelName,
+          generatedAt: startedAt,
         },
       })
+      const completed = { ...metadata, completedAt: new Date().toISOString() }
+      setLatestAttempt(completed)
+      setLastCompleted(completed)
+      setAiRunning(false)
     },
     decide: (criterionId, decision) => {
       setAiDecisions((current) => ({ ...current, [criterionId]: decision }))
@@ -183,6 +230,9 @@ export default function Review() {
     <main className="mx-auto max-w-[80rem] p-3">
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
         <strong className="text-sm">合成案例 · 健保表一判級</strong>
+        <span className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200">
+          合成測試，不送資料、不呼叫外部 AI
+        </span>
         <select
           aria-label="案例"
           value={scenario}
@@ -192,6 +242,8 @@ export default function Review() {
             setAnswerProvenance({})
             setAiSuggestions({})
             setAiDecisions({})
+            setLatestAttempt(undefined)
+            setLastCompleted(undefined)
           }}
           className="min-h-11 rounded border bg-background p-2 text-sm"
         >

@@ -47,7 +47,11 @@ import { EvidenceTablePanel } from './EvidenceTablePanel'
 import { PreventRiskSummary } from './PreventRiskSummary'
 import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
 import { NhiTable1Panel } from './NhiTable1Panel'
-import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
+import {
+  useNhiLipidReviewStore,
+  type NhiLipidAnswerProvenanceById,
+} from '../stores/nhi-lipid-review.store'
+import type { NhiLipidAiAssist } from '../hooks/use-nhi-lipid-ai-assist.hook'
 import {
   buildHeartFailureBoard,
   HEART_FAILURE_LIST_STATUS_ORDER,
@@ -96,6 +100,8 @@ interface ClinicalDecisionSupportViewProps {
    * one person, so they are stored per patient and never carried across.
    */
   patientId?: string
+  nhiLipidAiAssist?: NhiLipidAiAssist
+  nhiLipidAnswerProvenance?: NhiLipidAnswerProvenanceById
   /**
    * The facts the pack read. The heart-failure board shows a pillar's
    * prescription state from them when the pack produced no module for it.
@@ -2060,6 +2066,8 @@ export function ClinicalDecisionSupportView({
   englishResult,
   locale,
   patientId,
+  nhiLipidAiAssist,
+  nhiLipidAnswerProvenance,
   profileFacts,
   followUpHistory,
   layout = 'flow',
@@ -2492,6 +2500,9 @@ export function ClinicalDecisionSupportView({
               onAnswer={patientId
                 ? (id, state, provenance) => useNhiLipidReviewStore.getState().answer(patientId, id, state, provenance)
                 : undefined}
+              aiAssist={nhiLipidAiAssist}
+              answerProvenance={nhiLipidAnswerProvenance}
+              onNavigate={navigateToResource}
             />
           ) : (
             <p className="px-3 text-sm text-muted-foreground" data-cdss-action="">
