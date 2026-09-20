@@ -358,4 +358,35 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
     expect(catalogText).not.toContain(pathologyReport.conclusion)
     expect(catalogText).not.toContain('BASE64_PIXEL_DATA_MUST_NOT_ENTER_THE_PROMPT')
   })
+  it('reads cross-institution lab names through the shared dictionary and keeps vascular sentences whole', () => {
+    const input = {
+      observations: [
+        { id: 'tg-bare', code: { text: 'TG', coding: [{ system: 'https://cloud.example.invalid/lab', code: 'TG' }] }, valueQuantity: { value: 180 } },
+        { id: 'lipo-hdl', code: { text: 'Lipo_HDL', coding: [{ system: 'https://cloud.example.invalid/lab', code: 'Lipo_HDL' }] }, valueQuantity: { value: 42 } },
+        { id: 'glu-ac', code: { text: 'GLU AC' }, valueQuantity: { value: 110 } },
+        { id: 'wbc', code: { text: 'WBC', coding: [{ system: 'http://loinc.org', code: '6690-2' }] }, valueQuantity: { value: 8 } },
+      ],
+      conditions: [
+        { id: 'old-cva', code: { text: 'Old CVA' } },
+        { id: 'nstemi', code: { text: 'NSTEMI, s/p PCI' } },
+        { id: 'gout', code: { text: 'Gout' } },
+      ],
+      compositions: [
+        {
+          id: 'cath-note',
+          title: 'Cardiac catheterization',
+          text: { div: '<div>s/p PCI to LAD in 2024, RCA 80% stenosis untreated.<br/>Sodium 140.</div>' },
+        },
+      ],
+    } as unknown as ClinicalDataCollection
+
+    const scoped = scopeClinicalDataForNhiLipidAi(input)
+
+    expect(ids(scoped.observations)).toEqual(['tg-bare', 'lipo-hdl', 'glu-ac'])
+    expect(ids(scoped.conditions)).toEqual(['old-cva', 'nstemi'])
+    const documentText = listClinicalDocuments(scoped).map((document) => document.text).join('\n')
+    expect(documentText).toContain('RCA 80% stenosis untreated')
+    expect(documentText).not.toContain('Sodium')
+  })
+
 })
