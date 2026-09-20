@@ -43,6 +43,7 @@ export interface BuildAgentSystemPromptInput {
       getRecentVisits: string
       getEncounterDetails: string
       listEncounterDepartments: string
+      searchEncountersByDiagnosis: string
       queryConditions: string
       queryObservations: string
       queryDiagnosticReports: string
