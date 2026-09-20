@@ -20,6 +20,44 @@ async function call(toolName: keyof typeof tools, args: any = {}): Promise<any> 
 }
 
 describe('createFhirTools (unified)', () => {
+  describe('searchEncountersByDiagnosis — one call for "when did X first appear"', () => {
+    it('matches an ICD code with or without the dot, oldest first, with first/latest dates', async () => {
+      const dotted = await call('searchEncountersByDiagnosis', { query: 'I50.9' })
+      const plain = await call('searchEncountersByDiagnosis', { query: 'I509' })
+      expect(dotted.success).toBe(true)
+      expect(dotted.count).toBe(1)
+      expect(dotted.data[0].encounterId).toBe('enc-inpatient-1')
+      expect(dotted.data[0].matchedDiagnoses[0].code).toBe('I50.9')
+      expect(dotted.firstOccurrence).toBe(dotted.data[0].date)
+      expect(dotted.latestOccurrence).toBe(dotted.data[0].date)
+      expect(plain.data.map((r: any) => r.encounterId)).toEqual(dotted.data.map((r: any) => r.encounterId))
+    })
+
+    it('matches diagnosis text and secondary reason codes, and a code prefix', async () => {
+      const text = await call('searchEncountersByDiagnosis', { query: '心臟衰竭' })
+      expect(text.data.map((r: any) => r.encounterId)).toEqual(['enc-inpatient-1'])
+      const secondary = await call('searchEncountersByDiagnosis', { query: 'E11' })
+      expect(secondary.data.map((r: any) => r.encounterId)).toEqual(['enc-inpatient-1'])
+      expect(secondary.data[0].matchedDiagnoses.map((d: any) => d.code)).toEqual(['E11.9'])
+    })
+
+    it('returns matching problem-list conditions beside the visits', async () => {
+      const r = await call('searchEncountersByDiagnosis', { query: 'I10' })
+      expect(r.data.map((x: any) => x.encounterId)).toEqual(['enc-amb-1'])
+      expect(r.conditions).toHaveLength(1)
+      expect(r.conditions[0].recordedDate).toBe('2020-01-15')
+    })
+
+    it('reports zero matches as a successful empty result, not an error', async () => {
+      const r = await call('searchEncountersByDiagnosis', { query: 'R35.0' })
+      expect(r.success).toBe(true)
+      expect(r.count).toBe(0)
+      expect(r.data).toEqual([])
+      expect(r.firstOccurrence).toBeUndefined()
+      expect(r.summary).toContain('No visit')
+    })
+  })
+
   describe('queryEncounters — class aliases (HL7 ↔ friendly)', () => {
     it('class="inpatient" matches IMP', async () => {
       const r = await call('queryEncounters', { class: 'inpatient' })

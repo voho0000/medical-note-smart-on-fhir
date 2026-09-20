@@ -29,6 +29,7 @@ import {
   patientInfoSchema,
   healthSummarySnapshotSchema,
   encounterDetailsSchema,
+  encounterDiagnosisSearchSchema,
   activeMedicationsSchema,
   observationSearchSchema,
   recentVisitsSchema,
@@ -547,6 +548,13 @@ function calculateAge(birthDate?: string): number | null {
     && (m < 0 || (birthDate.length === 10 && m === 0 && today.getDate() < birth.getDate()))
   ) age--
   return age
+}
+
+/** Lower-case, NFKC, and strip the separators that vary between how an ICD
+ * code is written (R35.0 / R350 / r35-0) so a code or a diagnosis label can be
+ * matched as a plain substring. */
+function normalizeDiagnosisTerm(value: string): string {
+  return value.normalize('NFKC').toLowerCase().replace(/[\s.\-–—_·]/g, '')
 }
 
 function refToId(ref: string | undefined): string | undefined {
@@ -1333,6 +1341,59 @@ export function createFhirTools(getData: () => AgentDataSource) {
           summary: `${data.length} distinct departments`,
           count: data.length,
           data,
+        })
+      },
+    }),
+
+    searchEncountersByDiagnosis: tool({
+      description: 'Find every visit whose recorded diagnosis / reason (ICD code or text) matches, across the whole record, oldest first, with the first and latest occurrence. ONE call answers "when did X first appear", "how many visits carried X", "was X ever recorded" — do not page through visits with getEncounterDetails for that. Matching ignores case, dots, spaces and dashes (R350, R35.0 and 頻尿 all work) and a code matches as a prefix. Also returns matching problem-list Conditions. Visit-level codes are billing/reason codes, not confirmed diagnoses.',
+      inputSchema: encounterDiagnosisSearchSchema,
+      execute: async ({ query, dateFrom, dateTo, limit }: z.infer<typeof encounterDiagnosisSearchSchema>) => {
+        const { collection } = getData()
+        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
+        const needle = normalizeDiagnosisTerm(query)
+        if (!needle) return scrub({ success: false, summary: 'Empty query', data: [] })
+
+        const conceptMatches = (concept: any): boolean => {
+          const texts: unknown[] = [concept?.text, ...((concept?.coding ?? []) as any[]).flatMap((c) => [c?.code, c?.display])]
+          return texts.some((v) => typeof v === 'string' && normalizeDiagnosisTerm(v).includes(needle))
+        }
+
+        const hits: Array<{ encounterId: string; date?: string; type: string; department: string; matchedDiagnoses: Array<{ code?: string; label?: string }> }> = []
+        for (const e of collection.encounters as any[]) {
+          const date = encounterDate(e)
+          if ((dateFrom || dateTo) && !isWithinDateRange(date, dateFrom, dateTo)) continue
+          const matched = ((e.reasonCode ?? []) as any[]).filter(conceptMatches)
+          if (matched.length === 0) continue
+          hits.push({
+            encounterId: e.id,
+            date: date?.slice(0, 10),
+            type: classifyEncounterType(e),
+            department: encounterDeptText(e),
+            matchedDiagnoses: matched.map((rc: any) => ({ code: rc.coding?.[0]?.code, label: pickName(rc) || rc.text })),
+          })
+        }
+        hits.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+
+        const conditions = ((collection.conditions ?? []) as any[]).filter((c) => conceptMatches(c.code)).map((c) => ({
+          code: pickName(c.code),
+          clinicalStatus: typeof c.clinicalStatus === 'string' ? c.clinicalStatus : c.clinicalStatus?.coding?.[0]?.code,
+          recordedDate: c.recordedDate,
+          onsetDateTime: c.onsetDateTime,
+        }))
+
+        const first = hits[0]?.date
+        const latest = hits[hits.length - 1]?.date
+        return scrub({
+          success: true,
+          summary: hits.length > 0
+            ? `Found ${hits.length} visit(s) with a diagnosis matching "${query}" (first ${first ?? 'unknown date'}, latest ${latest ?? 'unknown date'}); ${conditions.length} matching problem-list Condition(s)`
+            : `No visit carries a diagnosis matching "${query}"; ${conditions.length} matching problem-list Condition(s)`,
+          count: hits.length,
+          firstOccurrence: first,
+          latestOccurrence: latest,
+          data: applyLimit(hits, limit, 100),
+          conditions,
         })
       },
     }),

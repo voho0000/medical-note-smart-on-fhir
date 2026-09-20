@@ -249,3 +249,67 @@ describe('runDeepModeAgent repeated-query stop', () => {
     expect(result.answer).toBe('Plain answer')
   })
 })
+
+describe('runDeepModeAgent step-limit stop', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const usage = Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 })
+  const toolStep = { toolCalls: [{ toolName: 'getEncounterDetails', input: { encounterId: 'e' } }] }
+
+  it('tells the model and the reader when the step ceiling ended the loop', async () => {
+    const events: Array<{ type: string; state?: string }> = []
+    async function* round1() {
+      yield { type: 'tool-call', toolName: 'getEncounterDetails', input: { encounterId: 'e' } }
+      yield { type: 'tool-result', toolName: 'getEncounterDetails', result: { success: true, data: {} } }
+      // The SDK reports every finished step; ten tool-calling steps is the ceiling.
+      const onStepFinish = mockStreamText.mock.calls[0][0].onStepFinish as (s: unknown) => void
+      for (let i = 0; i < 10; i += 1) onStepFinish(toolStep)
+    }
+    mockStreamText
+      .mockReturnValueOnce({ fullStream: round1(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Partial answer'), usage })
+
+    const result = await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Q' }],
+      tools: {} as never,
+      translations: { ...translations, stepLimitReached: 'Stopped: step limit', stepLimitHint: '\n\nLIMIT-HINT' },
+      idleMs: 1000,
+      abortController: new AbortController(),
+      onEvent: (e) => events.push(e as never),
+    })
+
+    expect(events.some((e) => e.type === 'status' && e.state?.includes('Stopped: step limit'))).toBe(true)
+    const followUp = mockStreamText.mock.calls[1][0].messages as Array<{ role: string; content: string }>
+    expect(followUp[followUp.length - 1].content).toContain('LIMIT-HINT')
+    expect(result.answer).toBe('Partial answer\n\n_Stopped: step limit_')
+  })
+
+  it('does not treat a model that finished with tool calls before the ceiling as cut off', async () => {
+    const events: Array<{ type: string; state?: string }> = []
+    async function* round1() {
+      yield { type: 'tool-call', toolName: 'getEncounterDetails', input: { encounterId: 'e' } }
+      yield { type: 'tool-result', toolName: 'getEncounterDetails', result: { success: true, data: {} } }
+      const onStepFinish = mockStreamText.mock.calls[0][0].onStepFinish as (s: unknown) => void
+      for (let i = 0; i < 3; i += 1) onStepFinish(toolStep)
+    }
+    mockStreamText
+      .mockReturnValueOnce({ fullStream: round1(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Plain answer'), usage })
+
+    const result = await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'system', content: 'sys' }, { role: 'user', content: 'Q' }],
+      tools: {} as never,
+      translations: { ...translations, stepLimitReached: 'Stopped: step limit', stepLimitHint: '\n\nLIMIT-HINT' },
+      idleMs: 1000,
+      abortController: new AbortController(),
+      onEvent: (e) => events.push(e as never),
+    })
+
+    expect(events.some((e) => e.state?.includes('Stopped: step limit'))).toBe(false)
+    expect(result.answer).toBe('Plain answer')
+  })
+})
