@@ -1,18 +1,7 @@
 "use client"
 
-import { useMemo } from 'react'
-import { Check, LoaderCircle, Sparkles, X } from 'lucide-react'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { useEffect, useMemo } from 'react'
+import { Check, LoaderCircle, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -28,6 +17,11 @@ import {
   useNhiLipidAiAssist,
   type NhiLipidAiAssist,
 } from '../hooks/use-nhi-lipid-ai-assist.hook'
+import {
+  useNhiLipidReviewProvenance,
+  type NhiLipidAnswerProvenance,
+  type NhiLipidAnswerProvenanceById,
+} from '../stores/nhi-lipid-review.store'
 
 /**
  * 表一 as the published table draws it, with this patient's position on it.
@@ -88,16 +82,24 @@ function Criterion({
   onAnswer,
   aiSuggestion,
   aiDecision,
+  answerProvenance,
 }: {
   check: CdssCoverageCheck
   isEnglish: boolean
-  onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
+  onAnswer?: (
+    id: string,
+    state: CdssCoverageCheck['state'] | undefined,
+    provenance?: NhiLipidAnswerProvenance,
+  ) => void
   aiSuggestion?: NhiLipidAiSuggestion
   aiDecision?: NhiLipidAiDecision
+  answerProvenance?: NhiLipidAnswerProvenance
 }) {
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
-  const glyph = check.origin === 'physician' ? '✓' : fromCode && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
+  const aiApplied = check.origin === 'physician' && answerProvenance?.source === 'ai'
+  const manuallyChanged = check.origin === 'physician' && !aiApplied
+  const glyph = manuallyChanged ? '✓' : fromCode && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
   const states: readonly CdssCoverageCheck['state'][] = ['yes', 'no', 'unknown']
   const interactive = Boolean(onAnswer && check.editable) || Boolean(check.detail)
 
@@ -121,16 +123,23 @@ function Criterion({
         </span>
         <span className={cn('block text-xs tabular-nums', mark.lit ? 'text-primary' : 'text-muted-foreground')}>
           {check.value}
-          {check.origin === 'physician'
-            ? ` · ${isEnglish ? 'physician verified' : '醫師核對'}`
-            : ''}
+          {aiApplied ? (
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1 py-0.5 font-medium text-primary">
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              {isEnglish ? 'AI assessment' : 'AI 判讀'}
+            </span>
+          ) : manuallyChanged ? (
+            <span className="ml-1 rounded border border-foreground/20 bg-muted/40 px-1 py-0.5 font-medium text-foreground">
+              {isEnglish ? 'Clinician changed' : '醫師修正'}
+            </span>
+          ) : null}
         </span>
-        {aiSuggestion && aiSuggestion.state !== 'unknown' && !aiDecision ? (
+        {aiSuggestion && aiSuggestion.state !== 'unknown' && (aiApplied || !aiDecision) ? (
           <span className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
             <Sparkles className="h-3 w-3" aria-hidden="true" />
             {isEnglish
-              ? `AI suggests ${aiSuggestion.state === 'yes' ? 'met' : 'not met'} · not applied`
-              : `AI 建議${aiSuggestion.state === 'yes' ? '符合' : '不符合'} · 尚未採用`}
+              ? `AI assessed ${aiSuggestion.state === 'yes' ? 'met' : 'not met'} · included in tier`
+              : `AI 判讀${aiSuggestion.state === 'yes' ? '符合' : '不符合'} · 已納入分級`}
           </span>
         ) : null}
       </span>
@@ -159,8 +168,8 @@ function Criterion({
           <div className="space-y-2 border-t border-border pt-2">
             <p className="text-muted-foreground">
               {isEnglish
-                ? 'Answering recalculates the tier and is kept for this visit only.'
-                : '回答後重新計算分級；僅保留於本次看診。'}
+                ? 'A change recalculates the tier immediately and overrides the AI assessment for this visit.'
+                : '修改後立即重新計算分級，並覆蓋本次看診的 AI 判讀。'}
             </p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label={check.label}>
               {states.map((state) => (
@@ -197,8 +206,8 @@ function Criterion({
 }
 
 const AI_STATE_LABEL: Record<NhiLipidAiSuggestion['state'], [zh: string, en: string]> = {
-  yes: ['建議符合', 'Suggested met'],
-  no: ['建議不符合', 'Suggested not met'],
+  yes: ['判讀符合', 'Assessed met'],
+  no: ['判讀不符合', 'Assessed not met'],
   unknown: ['仍無法判斷', 'Still unknown'],
 }
 
@@ -211,17 +220,11 @@ const AI_CONFIDENCE_LABEL: Record<NhiLipidAiSuggestion['confidence'], [zh: strin
 function AiSuggestionCard({
   suggestion,
   check,
-  decision,
   isEnglish,
-  onAccept,
-  onReject,
 }: {
   suggestion: NhiLipidAiSuggestion
   check?: CdssCoverageCheck
-  decision?: NhiLipidAiDecision
   isEnglish: boolean
-  onAccept?: () => void
-  onReject: () => void
 }) {
   return (
     <article
@@ -251,41 +254,12 @@ function AiSuggestionCard({
           </footer>
         </blockquote>
       ))}
-      {decision ? (
-        <p className={cn(
-          'flex min-h-11 items-center gap-1.5 text-xs font-medium',
-          decision === 'accepted' ? 'text-primary' : 'text-muted-foreground',
-        )}>
-          {decision === 'accepted'
-            ? <Check className="h-4 w-4" aria-hidden="true" />
-            : <X className="h-4 w-4" aria-hidden="true" />}
-          {decision === 'accepted'
-            ? isEnglish ? 'Accepted; the tier was recalculated.' : '已採用，風險分級已重新計算。'
-            : isEnglish ? 'Rejected; the tier was not changed.' : '已否決，不影響風險分級。'}
-        </p>
-      ) : (
-        <div className="flex flex-wrap justify-end gap-2 pt-1">
-          <Button
-            type="button"
-            variant="ghost"
-            className="min-h-11"
-            onClick={onReject}
-            data-testid={`nhi-lipid-ai-reject-${suggestion.criterionId}`}
-          >
-            {isEnglish ? 'Reject' : '否決'}
-          </Button>
-          {suggestion.state !== 'unknown' && onAccept ? (
-            <Button
-              type="button"
-              className="min-h-11"
-              onClick={onAccept}
-              data-testid={`nhi-lipid-ai-accept-${suggestion.criterionId}`}
-            >
-              {isEnglish ? 'Accept and recalculate' : '採用並重算'}
-            </Button>
-          ) : null}
-        </div>
-      )}
+      <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+        <Check className="h-4 w-4" aria-hidden="true" />
+        {isEnglish
+          ? 'Included in the tier automatically. Select the criterion below only if it needs correction.'
+          : '已自動納入風險分級；僅在需要更正時點選下方表一條件。'}
+      </p>
     </article>
   )
 }
@@ -303,13 +277,35 @@ function NhiLipidAiReview({
   reviewableCount: number
   patientId?: string
   isEnglish: boolean
-  onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
+  onAnswer?: (
+    id: string,
+    state: CdssCoverageCheck['state'] | undefined,
+    provenance?: NhiLipidAnswerProvenance,
+  ) => void
 }) {
+  const suggestions = ai.suggestions
+  const decisions = ai.decisions
+  const decide = ai.decide
   const checkById = new Map(checks.map((check) => [check.id, check]))
-  const allSuggestions = Object.values(ai.suggestions)
+  const allSuggestions = Object.values(suggestions)
   const decisive = allSuggestions.filter((suggestion) => suggestion.state !== 'unknown')
   const unknown = allSuggestions.filter((suggestion) => suggestion.state === 'unknown')
-  const disabled = !patientId || !ai.isDataReady || ai.isRunning || reviewableCount === 0
+  const disabled = !patientId || !onAnswer || !ai.isDataReady || ai.isRunning || reviewableCount === 0
+
+  useEffect(() => {
+    if (!onAnswer) return
+    for (const suggestion of Object.values(suggestions)) {
+      if (suggestion.state === 'unknown' || decisions[suggestion.criterionId]) continue
+      onAnswer(suggestion.criterionId, suggestion.state, {
+        source: 'ai',
+        modelId: suggestion.modelId,
+        modelName: suggestion.modelName,
+        generatedAt: suggestion.generatedAt,
+        confidence: suggestion.confidence,
+      })
+      decide(suggestion.criterionId, 'applied')
+    }
+  }, [decide, decisions, onAnswer, suggestions])
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3" data-testid="nhi-lipid-ai-review">
@@ -321,61 +317,27 @@ function NhiLipidAiReview({
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {isEnglish
-              ? 'Only runs after confirmation. AI suggestions do not change the tier until you accept them.'
-              : '只在確認後送出；AI 建議不會直接改變分級，須由醫師逐項採用。'}
+              ? 'Runs on click. Traceable AI assessments are included in the tier automatically; change only rows that need correction.'
+              : '點擊後直接判讀；有可回查證據的結果會自動納入分級，醫師只需修正不正確的項目。'}
           </p>
         </div>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              disabled={disabled}
-              className="min-h-11 gap-1.5 px-3 shadow-none"
-              data-testid="nhi-lipid-ai-run"
-            >
-              {ai.isRunning
-                ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-                : <Sparkles className="h-4 w-4" aria-hidden="true" />}
-              {ai.isRunning
-                ? isEnglish ? 'Reviewing…' : 'AI 判讀中…'
-                : allSuggestions.length > 0
-                  ? isEnglish ? 'Review again' : '重新判讀'
-                  : isEnglish ? 'Start AI review' : 'AI 協助判讀'}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {isEnglish ? 'Send a de-identified clinical summary?' : '送出去識別化病歷摘要？'}
-              </AlertDialogTitle>
-              <AlertDialogDescription className="space-y-2 text-left leading-relaxed">
-                <span className="block">
-                  {isEnglish
-                    ? `The Table 1 criteria and selected clinical summary will be sent to the configured AI service (${ai.modelName}).`
-                    : `表一條件與目前選定的病歷摘要將送至已設定的 AI 服務（${ai.modelName}）。`}
-                </span>
-                <span className="block">
-                  {isEnglish
-                    ? 'Name, national ID and medical-record number are removed. Diagnoses, tests, medications and relevant note excerpts remain because they are needed for this review.'
-                    : '姓名、身分證與病歷號會移除；診斷、檢驗、用藥及相關病歷原文因判讀需要仍會送出。'}
-                </span>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{isEnglish ? 'Cancel' : '取消'}</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  if (!patientId) return
-                  void ai.runConfirmed({ patientId, modelId: ai.modelId, confirmedAt: Date.now() })
-                }}
-                data-testid="nhi-lipid-ai-confirm"
-              >
-                {isEnglish ? 'Agree and start' : '同意並開始'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          type="button"
+          size="sm"
+          disabled={disabled}
+          className="min-h-11 gap-1.5 px-3 shadow-none"
+          data-testid="nhi-lipid-ai-run"
+          onClick={() => { void ai.run() }}
+        >
+          {ai.isRunning
+            ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+          {ai.isRunning
+            ? isEnglish ? 'Reviewing…' : 'AI 判讀中…'
+            : allSuggestions.length > 0
+              ? isEnglish ? 'Review again' : '重新判讀'
+              : isEnglish ? 'Start AI review' : 'AI 協助判讀'}
+        </Button>
       </div>
 
       {!ai.isDataReady && patientId ? (
@@ -399,8 +361,8 @@ function NhiLipidAiReview({
         <div className="space-y-3" aria-live="polite">
           <p className="text-xs font-medium">
             {isEnglish
-              ? `${decisive.length} suggestions to review; ${unknown.length} remain unknown.`
-              : `${decisive.length} 項可審閱建議；${unknown.length} 項仍無法判斷。`}
+              ? `${decisive.length} assessments included automatically; ${unknown.length} remain unknown.`
+              : `${decisive.length} 項已自動納入分級；${unknown.length} 項仍無法判斷。`}
           </p>
           <div className="grid gap-2 lg:grid-cols-2">
             {decisive.map((suggestion) => (
@@ -408,13 +370,7 @@ function NhiLipidAiReview({
                 key={suggestion.criterionId}
                 suggestion={suggestion}
                 check={checkById.get(suggestion.criterionId)}
-                decision={ai.decisions[suggestion.criterionId]}
                 isEnglish={isEnglish}
-                onAccept={onAnswer ? () => {
-                  onAnswer(suggestion.criterionId, suggestion.state)
-                  ai.decide(suggestion.criterionId, 'accepted')
-                } : undefined}
-                onReject={() => ai.decide(suggestion.criterionId, 'rejected')}
               />
             ))}
           </div>
@@ -451,7 +407,12 @@ export interface NhiTable1PanelProps {
   summary: CdssCoverageSummary
   locale: string
   patientId?: string
-  onAnswer?: (id: string, state: CdssCoverageCheck['state'] | undefined) => void
+  onAnswer?: (
+    id: string,
+    state: CdssCoverageCheck['state'] | undefined,
+    provenance?: NhiLipidAnswerProvenance,
+  ) => void
+  answerProvenance?: NhiLipidAnswerProvenanceById
   /** Development/review injection. Production omits this and uses the
    * patient-scoped connected wrapper below. */
   aiAssist?: NhiLipidAiAssist
@@ -462,6 +423,7 @@ function NhiTable1PanelContent({
   locale,
   patientId,
   onAnswer,
+  answerProvenance,
   aiAssist,
 }: NhiTable1PanelProps) {
   const isEnglish = locale === 'en'
@@ -486,6 +448,7 @@ function NhiTable1PanelContent({
   const criterionProps = (check: CdssCoverageCheck) => ({
     aiSuggestion: aiAssist?.suggestions[check.id],
     aiDecision: aiAssist?.decisions[check.id],
+    answerProvenance: answerProvenance?.[check.id],
   })
 
   return (
@@ -726,20 +689,29 @@ function NhiTable1PanelContent({
 }
 
 function ConnectedNhiTable1Panel(props: NhiTable1PanelProps & { patientId: string }) {
-  const criteria = useMemo(
-    () => selectNhiLipidAiCriteria([
+  const storedProvenance = useNhiLipidReviewProvenance(props.patientId)
+  const answerProvenance = props.answerProvenance ?? storedProvenance
+  const criteria = useMemo(() => {
+    const checks = [
       ...props.summary.factors,
       ...props.summary.metabolicChecks,
       ...props.summary.diseaseChecks,
-    ]),
-    [props.summary.diseaseChecks, props.summary.factors, props.summary.metabolicChecks],
-  )
+    ]
+    const selected = selectNhiLipidAiCriteria(checks)
+    const selectedIds = new Set(selected.map((check) => check.id))
+    for (const check of checks) {
+      if (check.editable && answerProvenance[check.id]?.source === 'ai' && !selectedIds.has(check.id)) {
+        selected.push(check)
+      }
+    }
+    return selected
+  }, [answerProvenance, props.summary.diseaseChecks, props.summary.factors, props.summary.metabolicChecks])
   const aiAssist = useNhiLipidAiAssist({
     patientId: props.patientId,
     criteria,
     locale: props.locale,
   })
-  return <NhiTable1PanelContent {...props} aiAssist={aiAssist} />
+  return <NhiTable1PanelContent {...props} aiAssist={aiAssist} answerProvenance={answerProvenance} />
 }
 
 /**

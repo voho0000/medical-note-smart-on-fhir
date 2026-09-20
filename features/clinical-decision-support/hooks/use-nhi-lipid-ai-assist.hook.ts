@@ -19,12 +19,6 @@ import {
   type NhiLipidAiSuggestion,
 } from '../ai/nhi-lipid-ai-assist'
 
-export interface NhiLipidAiTransmissionConfirmation {
-  patientId: string
-  modelId: string
-  confirmedAt: number
-}
-
 export interface NhiLipidAiAssist {
   suggestions: Readonly<Record<string, NhiLipidAiSuggestion>>
   decisions: Readonly<Record<string, NhiLipidAiDecision>>
@@ -33,13 +27,12 @@ export interface NhiLipidAiAssist {
   error: string | null
   modelId: string
   modelName: string
-  runConfirmed: (confirmation: NhiLipidAiTransmissionConfirmation) => Promise<void>
+  run: () => Promise<void>
   decide: (criterionId: string, decision: NhiLipidAiDecision) => void
 }
 
 const EMPTY_SUGGESTIONS: Readonly<Record<string, NhiLipidAiSuggestion>> = Object.freeze({})
 const EMPTY_DECISIONS: Readonly<Record<string, NhiLipidAiDecision>> = Object.freeze({})
-const CONFIRMATION_WINDOW_MS = 30_000
 
 interface ReviewState {
   patientId?: string
@@ -61,9 +54,9 @@ const EMPTY_REVIEW: ReviewState = Object.freeze({
  * live only in this mounted hook: they are not browser-persisted, never run on
  * chart load, and are cleared/cancelled when the patient changes.
  *
- * The only network entry point requires a fresh token created by the review
- * panel's transmission-confirmation dialog. A click on the visible AI button
- * merely opens that dialog and does not send clinical data.
+ * The visible AI action is the network entry point. The app's entry flow owns
+ * disclosure of AI data use, so this review does not interrupt clinicians with
+ * a second confirmation dialog.
  */
 export function useNhiLipidAiAssist(input: {
   patientId?: string
@@ -112,25 +105,18 @@ export function useNhiLipidAiAssist(input: {
       && clinicalInput.clinicalContext.trim(),
   )
 
-  const runConfirmed = useCallback(async (
-    confirmation: NhiLipidAiTransmissionConfirmation,
-  ) => {
-    const elapsed = Date.now() - confirmation.confirmedAt
-    const freshConfirmation = confirmation.patientId === input.patientId
-      && confirmation.modelId === modelId
-      && elapsed >= 0
-      && elapsed <= CONFIRMATION_WINDOW_MS
-    if (!freshConfirmation || !isDataReady || input.criteria.length === 0 || activeReview.isRunning) return
+  const run = useCallback(async () => {
+    if (!input.patientId || !isDataReady || input.criteria.length === 0 || activeReview.isRunning) return
 
     const runId = ++runIdRef.current
     stopAi(operationKey)
-    setReview((current) => ({
+    setReview({
       patientId: input.patientId,
-      suggestions: current.patientId === input.patientId ? current.suggestions : EMPTY_SUGGESTIONS,
+      suggestions: EMPTY_SUGGESTIONS,
       decisions: EMPTY_DECISIONS,
       isRunning: true,
       error: null,
-    }))
+    })
 
     try {
       const messages = buildNhiLipidAiMessages({
@@ -220,7 +206,7 @@ export function useNhiLipidAiAssist(input: {
     error: activeReview.error,
     modelId,
     modelName,
-    runConfirmed,
+    run,
     decide,
   }
 }

@@ -4,6 +4,10 @@ import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho000
 import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/NhiTable1Panel'
 import type { NhiLipidAiSuggestion } from '@/features/clinical-decision-support/ai/nhi-lipid-ai-assist'
 import type { NhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
+import type {
+  NhiLipidAnswerProvenance,
+  NhiLipidAnswerProvenanceById,
+} from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 
 const fact = (value: number | string, unit = '') => ({
   zh: `${value}${unit ? ' ' + unit : ''}`,
@@ -59,6 +63,7 @@ export default function Review() {
   const [english, setEnglish] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, NhiLipidAiSuggestion>>({})
   const [aiDecisions, setAiDecisions] = useState<NhiLipidAiAssist['decisions']>({})
+  const [answerProvenance, setAnswerProvenance] = useState<NhiLipidAnswerProvenanceById>({})
 
   const profile = {
     id: `synthetic-table1-${scenario}`,
@@ -131,7 +136,7 @@ export default function Review() {
     error: null,
     modelId: 'synthetic-review-model',
     modelName: english ? 'Synthetic review model (no data sent)' : '合成測試模型（不送出資料）',
-    runConfirmed: async () => {
+    run: async () => {
       setAiDecisions({})
       setAiSuggestions({
         smoking: {
@@ -184,6 +189,7 @@ export default function Review() {
           onChange={event => {
             setScenario(event.target.value)
             setAnswers({})
+            setAnswerProvenance({})
             setAiSuggestions({})
             setAiDecisions({})
           }}
@@ -193,7 +199,10 @@ export default function Review() {
             <option key={id} value={id}>{item.label}</option>
           ))}
         </select>
-        <button type="button" className="min-h-11 text-sm underline" onClick={() => setAnswers({})}>清除醫師回答</button>
+        <button type="button" className="min-h-11 text-sm underline" onClick={() => {
+          setAnswers({})
+          setAnswerProvenance({})
+        }}>清除回答</button>
         <button type="button" className="min-h-11 text-sm underline" onClick={() => setEnglish(!english)}>中文 / English</button>
         <button type="button" className="min-h-11 text-sm underline" onClick={() => document.documentElement.classList.toggle('dark')}>明 / 暗</button>
       </div>
@@ -204,12 +213,21 @@ export default function Review() {
             locale={locale}
             patientId={`synthetic-table1-${scenario}`}
             aiAssist={aiAssist}
-            onAnswer={(id, state) => setAnswers(current => {
+            answerProvenance={answerProvenance}
+            onAnswer={(id, state, provenance?: NhiLipidAnswerProvenance) => {
+              setAnswerProvenance(current => {
+                const next = { ...current }
+                if (state === undefined) delete next[id]
+                else next[id] = provenance ?? { source: 'manual' }
+                return next
+              })
+              setAnswers(current => {
               const next = { ...current }
               if (state === undefined) delete next[id]
               else next[id] = state
               return next
-            })}
+              })
+            }}
           />
         ) : (
           <p className="px-3 text-sm text-muted-foreground">本案例沒有健保分層卡。</p>

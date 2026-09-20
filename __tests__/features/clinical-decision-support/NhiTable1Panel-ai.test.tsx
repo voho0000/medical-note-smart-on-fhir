@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/NhiTable1Panel'
 import { useNhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
@@ -25,7 +25,7 @@ function coverageSummary() {
 }
 
 describe('NhiTable1Panel AI review', () => {
-  const runConfirmed = jest.fn(async () => undefined)
+  const run = jest.fn(async () => undefined)
   const decide = jest.fn()
 
   beforeEach(() => {
@@ -38,12 +38,12 @@ describe('NhiTable1Panel AI review', () => {
       error: null,
       modelId: 'gpt-test',
       modelName: 'GPT Test',
-      runConfirmed,
+      run,
       decide,
     })
   })
 
-  it('opens a disclosure before the AI request and sends only after confirmation', () => {
+  it('starts the AI review directly from the visible action', () => {
     render(
       <NhiTable1Panel
         summary={coverageSummary()}
@@ -53,21 +53,13 @@ describe('NhiTable1Panel AI review', () => {
       />,
     )
 
-    expect(runConfirmed).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
     fireEvent.click(screen.getByTestId('nhi-lipid-ai-run'))
-    expect(screen.getByText('送出去識別化病歷摘要？')).toBeInTheDocument()
-    expect(screen.getByText(/GPT Test/)).toBeInTheDocument()
-    expect(runConfirmed).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByTestId('nhi-lipid-ai-confirm'))
-    expect(runConfirmed).toHaveBeenCalledWith(expect.objectContaining({
-      patientId: 'patient-1',
-      modelId: 'gpt-test',
-      confirmedAt: expect.any(Number),
-    }))
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('送出去識別化病歷摘要？')).not.toBeInTheDocument()
   })
 
-  it('changes the physician answer only when a suggestion is accepted', () => {
+  it('automatically includes a traceable AI assessment in the tier with provenance', async () => {
     const onAnswer = jest.fn()
     mockedUseAiAssist.mockReturnValue({
       suggestions: {
@@ -96,7 +88,7 @@ describe('NhiTable1Panel AI review', () => {
       error: null,
       modelId: 'gpt-test',
       modelName: 'GPT Test',
-      runConfirmed,
+      run,
       decide,
     })
 
@@ -109,30 +101,27 @@ describe('NhiTable1Panel AI review', () => {
       />,
     )
 
-    expect(screen.getByText('AI 建議符合 · 尚未採用')).toBeInTheDocument()
-    expect(onAnswer).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByTestId('nhi-lipid-ai-accept-smoking'))
-    expect(onAnswer).toHaveBeenCalledWith('smoking', 'yes')
-    expect(decide).toHaveBeenCalledWith('smoking', 'accepted')
+    expect(screen.getByText('AI 判讀符合 · 已納入分級')).toBeInTheDocument()
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith('smoking', 'yes', expect.objectContaining({
+      source: 'ai',
+      modelId: 'gpt-test',
+      confidence: 'high',
+    })))
+    expect(decide).toHaveBeenCalledWith('smoking', 'applied')
+    expect(screen.queryByText('採用並重算')).not.toBeInTheDocument()
   })
 
-  it('rejects a suggestion without writing the opposite answer', () => {
+  it('does not write an answer when AI remains uncertain', () => {
     const onAnswer = jest.fn()
     mockedUseAiAssist.mockReturnValue({
       suggestions: {
         smoking: {
           criterionId: 'smoking',
-          state: 'yes',
-          confidence: 'medium',
-          rationale: '需人工核對。',
-          missing: [],
-          evidence: [{
-            sourceKey: 'D1',
-            sourceResourceType: 'DocumentReference',
-            sourceResourceId: 'doc-smoking',
-            sourceLabel: '門診紀錄',
-            excerpt: '目前仍有吸菸。',
-          }],
+          state: 'unknown',
+          confidence: 'low',
+          rationale: '病歷沒有足夠資料。',
+          missing: ['目前吸菸狀態'],
+          evidence: [],
           modelId: 'gpt-test',
           modelName: 'GPT Test',
           generatedAt: '2026-09-18T10:00:00+08:00',
@@ -144,7 +133,7 @@ describe('NhiTable1Panel AI review', () => {
       error: null,
       modelId: 'gpt-test',
       modelName: 'GPT Test',
-      runConfirmed,
+      run,
       decide,
     })
 
@@ -157,8 +146,41 @@ describe('NhiTable1Panel AI review', () => {
       />,
     )
 
-    fireEvent.click(screen.getByTestId('nhi-lipid-ai-reject-smoking'))
-    expect(decide).toHaveBeenCalledWith('smoking', 'rejected')
     expect(onAnswer).not.toHaveBeenCalled()
+    expect(decide).not.toHaveBeenCalled()
+    expect(screen.getByText('查看 1 項仍待補資料原因')).toBeInTheDocument()
+  })
+
+  it('distinguishes an AI-filled row from a clinician correction', () => {
+    const summary = coverageSummary()
+    const answered = {
+      ...summary,
+      factors: summary.factors.map((check) => check.id === 'smoking'
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '符合' }
+        : check),
+    }
+    const { rerender } = render(
+      <NhiTable1Panel
+        summary={answered}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'ai', modelName: 'GPT Test' } }}
+        onAnswer={jest.fn()}
+      />,
+    )
+    expect(screen.getByText('AI 判讀')).toBeInTheDocument()
+    expect(screen.queryByText('醫師修正')).not.toBeInTheDocument()
+
+    rerender(
+      <NhiTable1Panel
+        summary={answered}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'manual' } }}
+        onAnswer={jest.fn()}
+      />,
+    )
+    expect(screen.getByText('醫師修正')).toBeInTheDocument()
+    expect(screen.queryByText('AI 判讀')).not.toBeInTheDocument()
   })
 })

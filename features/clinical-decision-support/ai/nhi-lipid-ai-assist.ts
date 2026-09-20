@@ -6,7 +6,7 @@ import type { CdssCoverageCheck } from '../types'
 
 export type NhiLipidAiState = 'yes' | 'no' | 'unknown'
 export type NhiLipidAiConfidence = 'high' | 'medium' | 'low'
-export type NhiLipidAiDecision = 'accepted' | 'rejected'
+export type NhiLipidAiDecision = 'applied'
 
 export interface NhiLipidAiEvidence {
   sourceKey: string

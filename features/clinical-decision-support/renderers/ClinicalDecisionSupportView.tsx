@@ -2486,7 +2486,7 @@ export function ClinicalDecisionSupportView({
               locale={locale}
               patientId={patientId}
               onAnswer={patientId
-                ? (id, state) => useNhiLipidReviewStore.getState().answer(patientId, id, state)
+                ? (id, state, provenance) => useNhiLipidReviewStore.getState().answer(patientId, id, state, provenance)
                 : undefined}
             />
           ) : (
