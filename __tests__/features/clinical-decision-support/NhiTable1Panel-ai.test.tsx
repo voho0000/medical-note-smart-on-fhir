@@ -59,6 +59,22 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.queryByText('送出去識別化病歷摘要？')).not.toBeInTheDocument()
   })
 
+  it('shows criterion details on mouse hover without requiring a click', () => {
+    render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+      />,
+    )
+
+    fireEvent.pointerEnter(screen.getAllByRole('button', { name: '低 HDL-C' })[0], { pointerType: 'mouse' })
+
+    expect(screen.getByTestId('nhi-criterion-popover-low-hdl')).toBeVisible()
+    expect(screen.getByText('男 <40 mg/dL；女 <50 mg/dL')).toBeVisible()
+  })
+
   it('automatically includes a traceable AI assessment in the tier with provenance', async () => {
     const onAnswer = jest.fn()
     mockedUseAiAssist.mockReturnValue({
