@@ -1,4 +1,8 @@
 "use client"
+import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
+import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
+import { PreventReadingContext } from './renderers/PreventRiskSummary'
+
 
 import { useEffect, useMemo, useState } from 'react'
 import { FileSearch, RotateCcw, ShieldCheck } from 'lucide-react'
@@ -7,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { hfFollowUpHistory } from './utils/hf-follow-up'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import {
@@ -16,6 +21,7 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import { useNhiLipidReview, useNhiLipidReviewStore } from './stores/nhi-lipid-review.store'
 import {
   useEvidenceOverrides,
   useEvidenceOverridesStore,
@@ -41,10 +47,12 @@ import {
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
 import { type CdssLayout, useCdssLayoutStore } from './stores/layout-preference.store'
+import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
+import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
@@ -174,7 +182,7 @@ function DiseaseSwitcher({
 }
 
 /**
- * The two faces of the heart-failure guidance, side by side in the header so
+ * The available layouts, side by side in the header so
  * a pilot user can flip between them on the same patient. Same pack, same
  * result; only the placement differs.
  */
@@ -189,6 +197,11 @@ function LayoutSwitcher({
 }) {
   const isEnglish = locale === 'en'
   const options: readonly { id: CdssLayout; label: string; title: string }[] = [
+    {
+      id: 'sections',
+      label: isEnglish ? 'Three sections' : '三區塊',
+      title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
+    },
     {
       id: 'flow',
       label: isEnglish ? 'Visit flow' : '新版流程',
@@ -248,6 +261,10 @@ export default function LiveClinicalDecisionSupportFeature() {
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
 
   const patientId = patient?.id
+  const nhiLipidReview = useNhiLipidReview(patientId)
+  const preventInputs = usePreventInputs(patientId)
+  const afAnswers = useAfAnswers(patientId)
+  useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
@@ -349,12 +366,12 @@ export default function LiveClinicalDecisionSupportFeature() {
   // profile, so every module that reads them recomputes.
   const answeredProfile = useMemo(() => (
     recordProfile
-      ? applyPhenotypeAnswer(
-          applyClinicVitals({ ...recordProfile, evidenceOverrides }, clinicVitals),
+      ? { ...applyPhenotypeAnswer(
+          applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
-        )
+        ), nhiLipidReview }
       : null
-  ), [clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile])
+  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -372,9 +389,10 @@ export default function LiveClinicalDecisionSupportFeature() {
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
+  const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
   const profile = useMemo(() => (
-    answeredProfile ? applyHfpefReading(answeredProfile, hfpefReading) : null
-  ), [answeredProfile, hfpefReading])
+    answeredProfile ? applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)) : null
+  ), [answeredProfile, hfpefReading, preventReading])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -467,13 +485,15 @@ export default function LiveClinicalDecisionSupportFeature() {
     )
   }
 
-  const isVisitFlow = layout === 'flow' && result.packId === HEART_FAILURE_PACK_ID
+  const isVisitFlow = (layout === 'flow' || layout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
     if (!patientId) return
     clearEvidenceOverrides(patientId)
     clearClinicVitals(patientId)
+    useNhiLipidReviewStore.getState().clear(patientId)
+    usePreventStore.getState().clear(patientId)
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
@@ -496,7 +516,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             {result.title}
           </h2>
         </div>
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-3">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
@@ -504,7 +524,7 @@ export default function LiveClinicalDecisionSupportFeature() {
             selectedPackId={selectedPack.id}
             onSelect={setRequestedPackId}
           />
-          {result.packId === HEART_FAILURE_PACK_ID ? (
+          {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
             <LayoutSwitcher locale={cdssLocale} layout={layout} onSelect={setLayout} />
           ) : null}
           {isVisitFlow && patientId ? (
@@ -538,12 +558,16 @@ export default function LiveClinicalDecisionSupportFeature() {
       {result.clinicalHandoff && !isVisitFlow ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
+      <PreventReadingContext.Provider value={preventReading}>
       <ClinicalDecisionSupportView
+        afAnswers={afAnswers}
+        onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
         englishResult={englishResult ?? undefined}
         locale={cdssLocale}
         patientId={patientId}
         profileFacts={profile.facts}
+        followUpHistory={hfFollowUpHistory(clinicalData.observations)}
         layout={layout}
         clinicVitals={clinicVitals}
         onSaveClinicVitals={patientId ? (patch) => setClinicVitals(patientId, patch) : undefined}
@@ -564,6 +588,7 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
       />
+      </PreventReadingContext.Provider>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { CARE_PACKS, type CdssLocale, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 
@@ -106,6 +106,9 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
         <ClinicalDecisionSupportView result={result} locale={locale} layout="board" />,
       )
 
+      if (result.packId === 'atrial-fibrillation-cdss') {
+        for (const id of ['diagnosis','treatment','prognosis']) fireEvent.click(within(screen.getByTestId(`cdss-af-${id}`)).getByRole('button'))
+      }
       const cells = container.querySelectorAll('[data-testid^="cdss-module-cell-"]')
       expect(cells.length).toBeGreaterThan(0)
 
@@ -131,7 +134,10 @@ describe.each(CARE_PACKS.map((pack) => [pack.id, pack] as const))(
 
         // The subtraction rules may move a phrase from the title into the
         // evidence column, but the row as a whole must still carry it.
-        const rendered = normalize(row.textContent ?? '')
+        // NHI puts its conclusion in the always-visible summary beside the
+        // trigger, within the same article. Verify that rendered surface too.
+        const summary = row.closest('article')?.querySelector('[data-testid="nhi-lipid-coverage-summary"]')
+        const rendered = normalize((row.textContent ?? '') + (summary?.textContent ?? ''))
         const dropped = informativePhrases(recommendation.title)
           .filter((phrase) => !rendered.includes(normalize(phrase)))
 

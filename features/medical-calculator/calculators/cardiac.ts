@@ -1,5 +1,7 @@
+import { HAS_BLED } from './af-followup'
+import { AF_STROKE } from './af-stroke'
 import type { CalculatorDef, L } from '../types'
-import { n, round, SEX_INPUT, AGE_INPUT, yesNoQuestionnaire, scoredQuestionnaire, ynItem } from './_shared'
+import { n, round, SEX_INPUT, AGE_INPUT, scoredQuestionnaire, ynItem } from './_shared'
 
 // ── WHO 2019 laboratory-based CVD risk model ────────────────────────────────
 // Two sex-specific Cox sub-models (MI/CHD + stroke), each 1 − S0^exp(L), then
@@ -40,55 +42,7 @@ function who2019Cvd(sex: 'male' | 'female', age: number, chol: number, sbp: numb
 }
 
 export const CARDIAC: CalculatorDef[] = [
-  // ── CHA₂DS₂-VASc ────────────────────────────────────────────────────────
-    {
-      id: 'cha2ds2-vasc',
-      name: { en: 'CHA₂DS₂-VASc Score', zh: 'CHA₂DS₂-VASc 分數' },
-      category: 'cardiac',
-      blurb: { en: 'Stroke risk in atrial fibrillation.', zh: '心房顫動之中風風險。' },
-      inputs: [
-        AGE_INPUT,
-        SEX_INPUT,
-        { key: 'chf', type: 'select', label: { en: 'CHF / LV dysfunction', zh: '心衰竭／左心室功能不良' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'htn', type: 'select', label: { en: 'Hypertension', zh: '高血壓' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'stroke', type: 'select', label: { en: 'Prior stroke / TIA / thromboembolism', zh: '曾中風／TIA／血栓栓塞' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'vascular', type: 'select', label: { en: 'Vascular disease', zh: '血管疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-      ],
-      compute: (v) => {
-        const age = n(v, 'age')
-        if (age === undefined) return null
-        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
-        let s = 0
-        if (age >= 75) s += 2
-        else if (age >= 65) s += 1
-        if (v.sex === 'female') s += 1
-        if (v.chf === 'yes') s += 1
-        if (v.htn === 'yes') s += 1
-        if (v.dm === 'yes') s += 1
-        if (v.stroke === 'yes') s += 2
-        if (v.vascular === 'yes') s += 1
-        // Adjusted annual ischemic stroke rate (%) by score — Friberg 2012
-        // (n=170 291), the table MDCalc reports. Verified 2026-07-04.
-        const risk = ['0.2', '0.6', '2.2', '3.2', '4.8', '7.2', '9.7', '11.2', '10.8', '12.2'][Math.min(s, 9)]
-        let cat: L; let severity: 'normal' | 'moderate' | 'high'
-        if (s === 0) { cat = { en: 'Low risk', zh: '低風險' }; severity = 'normal' }
-        else if (s === 1) { cat = { en: 'Low–moderate risk', zh: '低至中度風險' }; severity = 'moderate' }
-        else { cat = { en: 'High risk', zh: '高風險' }; severity = 'high' }
-        return {
-          value: String(s),
-          interpretation: cat,
-          severity,
-          extra: [{ label: { en: 'Adjusted annual ischemic stroke rate', zh: '校正後每年缺血性中風率' }, value: `${risk}%` }],
-          notes: s >= 2
-            ? { en: 'Oral anticoagulation is generally recommended (men ≥ 2, women ≥ 3). Weigh against bleeding risk (see HAS-BLED).', zh: '一般建議口服抗凝（男性 ≥ 2、女性 ≥ 3）。需與出血風險權衡（參見 HAS-BLED）。' }
-            : s === 1
-              ? { en: 'Anticoagulation may be considered (men) — shared decision-making. Women scoring 1 for sex alone are low risk.', zh: '可考慮抗凝（男性）— 共同決策。女性若僅因性別得 1 分屬低風險。' }
-              : { en: 'No antithrombotic therapy needed; reassess as risk factors change.', zh: '不需抗栓治療;危險因子改變時再評估。' },
-        }
-      },
-      reference: 'Lip GYH, et al. Chest 2010 (score); Friberg L, et al. Eur Heart J 2012 (risk rates). Age ≥75 & prior stroke = 2 pts each.',
-    },
+  ...AF_STROKE,
 
   // ── Mean arterial pressure ──────────────────────────────────────────────
     {
@@ -116,32 +70,7 @@ export const CARDIAC: CalculatorDef[] = [
     },
 
   // ── HAS-BLED (major bleeding risk on anticoagulation) ───────────────────
-    yesNoQuestionnaire({
-      id: 'has-bled',
-      name: { en: 'HAS-BLED Score', zh: 'HAS-BLED 出血風險分數' },
-      category: 'cardiac',
-      audience: 'medical',
-      blurb: { en: 'Major bleeding risk on anticoagulation.', zh: '抗凝治療之重大出血風險。' },
-      items: [
-        { key: 'htn', scoreOn: 'yes', label: { en: 'Hypertension (uncontrolled, SBP > 160)', zh: '高血壓（未控制，收縮壓 > 160）' } },
-        { key: 'renal', scoreOn: 'yes', label: { en: 'Abnormal renal function (dialysis/transplant/Cr > 2.26 mg/dL)', zh: '腎功能異常（洗腎／移植／Cr > 2.26 mg/dL）' } },
-        { key: 'liver', scoreOn: 'yes', label: { en: 'Abnormal liver function (cirrhosis / bili > 2× / AST-ALT-ALP > 3×)', zh: '肝功能異常（肝硬化／膽紅素 > 2 倍／AST-ALT-ALP > 3 倍）' } },
-        { key: 'stroke', scoreOn: 'yes', label: { en: 'Stroke history', zh: '中風病史' } },
-        { key: 'bleeding', scoreOn: 'yes', label: { en: 'Bleeding history or predisposition', zh: '出血病史或體質' } },
-        { key: 'inr', scoreOn: 'yes', label: { en: 'Labile INR (unstable / TTR < 60%)', zh: 'INR 不穩定（TTR < 60%）' } },
-        { key: 'elderly', scoreOn: 'yes', label: { en: 'Elderly (age > 65)', zh: '年長（年齡 > 65）' } },
-        { key: 'drugs', scoreOn: 'yes', label: { en: 'Drugs (antiplatelet / NSAID)', zh: '併用藥物（抗血小板／NSAID）' } },
-        { key: 'alcohol', scoreOn: 'yes', label: { en: 'Alcohol (≥ 8 drinks/week)', zh: '飲酒（每週 ≥ 8 份）' } },
-      ],
-      interpret: (score) => {
-        let interp: L; let severity: 'normal' | 'moderate' | 'high'
-        if (score <= 1) { interp = { en: 'Low bleeding risk', zh: '低出血風險' }; severity = 'normal' }
-        else if (score === 2) { interp = { en: 'Moderate bleeding risk', zh: '中度出血風險' }; severity = 'moderate' }
-        else { interp = { en: '≥ 3 — high bleeding risk; caution & regular review', zh: '≥ 3 — 高出血風險；謹慎並定期評估' }; severity = 'high' }
-        return { value: `${score} / 9`, interpretation: interp, severity }
-      },
-      reference: 'Pisters R, et al. Chest 2010. ≥ 3 indicates high risk — not a contraindication to anticoagulation.',
-    }),
+    HAS_BLED,
 
   // ── Corrected QT (QTc) ──────────────────────────────────────────────────
     {

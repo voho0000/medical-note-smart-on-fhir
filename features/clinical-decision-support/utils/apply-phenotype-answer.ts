@@ -49,6 +49,14 @@ export function applyPhenotypeAnswer(
 
   // DP-00. Written only once someone has answered: an absent fact is what the
   // pack reads as 「還沒問」, and it never reads that as 「不懷疑」.
+  if (answer.diagnosisConfirmation && !profile.facts.heartFailureDiagnosis) {
+    const date = answer.diagnosisConfirmation.confirmedAt.slice(0, 10)
+    facts.heartFailureDiagnosis = {
+      zh: `醫師確認心衰竭（${date} ${CLINIC_ENTRY_NOTE.zh}）`,
+      en: `Clinician-confirmed heart failure (${date}, ${CLINIC_ENTRY_NOTE.en})`,
+      date,
+    }
+  }
   if (answer.hfSuspicion) {
     facts.physicianHeartFailureSuspicion = {
       zh: `心衰竭懷疑（${answeredOn} ${CLINIC_ENTRY_NOTE.zh}）`,

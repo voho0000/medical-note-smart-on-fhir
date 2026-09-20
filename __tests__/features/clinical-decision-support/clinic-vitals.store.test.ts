@@ -73,6 +73,18 @@ describe('the clinic visit record', () => {
     expect(vitals.entries.systolic?.value).toBe(118)
   })
 
+  it('seals and reloads follow-up complaints without carrying them to another patient', async () => {
+    const hfFollowUp = { complaints: [{ text: '走路會喘', date: '2026-09-10', source: 'clinic', change: 'worse' as const, note: '爬樓梯時' }], weights: [{ value: 72, date: '2026-09-10', source: 'clinic' }], weightChanges: [{ date: '2026-09-10', value: 'increased' as const }] }
+    store().setVitals('p1', { hfFollowUp }, MORNING)
+    const raw = await storedCiphertext(clinicVitalsStorageKey('p1'))
+    expectSealedEnvelope(raw, ['走路會喘', '爬樓梯時', 'hfFollowUp'])
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    store().hydrate('p1')
+    await until(() => Boolean(useClinicVitalsStore.getState().hydratedPatientIds.p1), 'follow-up hydration')
+    expect(getClinicVitals('p1').hfFollowUp).toEqual(hfFollowUp)
+    expect(getClinicVitals('p2').hfFollowUp).toBeUndefined()
+  })
+
   it('leaves a field\'s stamp alone when the value does not change', () => {
     store().setVitals('p1', { nyhaClass: 'II' }, MORNING)
     const first = getClinicVitals('p1').nyhaClass?.modifiedAt

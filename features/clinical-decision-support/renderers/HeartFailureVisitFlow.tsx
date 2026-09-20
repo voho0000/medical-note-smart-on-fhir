@@ -74,6 +74,11 @@ import {
   type VisitStep,
 } from './heart-failure-visit-flow'
 import { heartFailureMedicationSafetyAssessment } from './heart-failure-medication-safety'
+import { CdssModuleSections } from './CdssModuleSections'
+import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
+import { HfFollowUpPriorities } from './HfFollowUpPriorities'
+import type { HfFollowUpHistory } from '../utils/hf-follow-up'
+import { diagnosisContextOf } from './cdss-sections'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
 /** The element a step's 「前往」 button scrolls to. */
@@ -102,6 +107,12 @@ export function focusVisitFlowTarget(target: VisitNextStepTarget): void {
   if (!id) return
   const element = document.getElementById(id)
   if (!element) return
+  // Questions and modules may be inside independently collapsed sections.
+  let ancestor: HTMLElement | null = element
+  while (ancestor) {
+    if (ancestor instanceof HTMLDetailsElement) ancestor.open = true
+    ancestor = ancestor.parentElement
+  }
   element.scrollIntoView({ block: 'center', behavior: 'smooth' })
   const focusable = element.querySelector<HTMLElement>(
     'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -152,6 +163,10 @@ export interface HeartFailureVisitFlowProps {
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   packVersion: string
   rhythmPanel?: ReactNode
+  /** Present the same editors and decisions in the shared three-section shell. */
+  sectionRecommendations?: readonly CdssRecommendation[]
+  prognosisContent?: ReactNode
+  followUpHistory?: HfFollowUpHistory
 }
 
 export function HeartFailureVisitFlow({
@@ -172,6 +187,9 @@ export function HeartFailureVisitFlow({
   onSaveHfpefInputs,
   packVersion,
   rhythmPanel,
+  sectionRecommendations,
+  prognosisContent,
+  followUpHistory,
 }: HeartFailureVisitFlowProps) {
   const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
@@ -212,7 +230,20 @@ export function HeartFailureVisitFlow({
     setRecordValuesOpen(false)
   }
   const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
-
+  const diagnosisContext = sectionRecommendations?.map(diagnosisContextOf).find(Boolean)
+  const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
+  const [selectedMode, setSelectedMode] = useState<{ confirmed: boolean; diagnosis: boolean } | null>(null)
+  const showFollowUp = followUp && !(selectedMode?.confirmed === followUp && selectedMode.diagnosis)
+  const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
+  const subset = (questions: VisitQuestion[]) => ({ ...flow, questions, openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length })
+  const assessmentFlow = followUp ? subset(flow.questions.filter(question => showFollowUp ? !diagnosticIds.includes(question.id) : diagnosticIds.includes(question.id))) : flow
+  const renderQuestions = (questionFlow: VisitFlowModel) => <QuestionsCard
+    flow={questionFlow} isEnglish={isEnglish} now={now} clinicVitals={clinicVitals}
+    onSaveClinicVitals={onSaveClinicVitals} phenotypeAnswer={phenotypeAnswer}
+    onAnswerPhenotype={onAnswerPhenotype} board={board} hfpefReading={hfpefReading}
+    onOpenCalculator={onSaveHfpefInputs ? (id = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined}
+  />
+  const actionRows = new Map(flow.actionGroups.flatMap(group => group.rows).map(row => [row.recommendation.id, row]))
 
   return (
     <div className="space-y-3" data-testid="cdss-hf-visit-flow">
@@ -222,6 +253,7 @@ export function HeartFailureVisitFlow({
         onClose={() => setEditingMetric(null)} /> : null}
       {recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={allEditableMetrics} isEnglish={isEnglish} now={now}
         onSave={saveMetrics} onClose={() => setRecordValuesOpen(false)} /> : null}
+      {!sectionRecommendations ? <>
       <StepCard
         steps={flow.steps}
         nextStep={flow.nextStep}
@@ -286,6 +318,51 @@ export function HeartFailureVisitFlow({
         isEnglish={isEnglish}
         now={now}
       />
+      </> : <>
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring">{isEnglish ? 'Clinical values and sources' : '臨床數值與來源'} · {board.lvef?.value ? `LVEF ${board.lvef.value}` : (isEnglish ? 'LVEF not documented' : 'LVEF 未取得')}</summary>
+          <RecordCard rhythmPanel={rhythmPanel} metrics={allEditableMetrics} isEnglish={isEnglish} canEdit={Boolean(onSaveClinicVitals)} onOpenForm={() => setRecordValuesOpen(true)} />
+        </details>
+        <CdssModuleSections
+          recommendations={followUp && !showFollowUp ? sectionRecommendations.filter(item => item.id !== 'heart-failure-monitoring') : sectionRecommendations}
+          isEnglish={isEnglish}
+          renderDetail={renderDetail}
+          followUp={showFollowUp}
+          diagnosisModeControl={<div role="group" aria-label={isEnglish ? 'Diagnosis or follow-up' : '診斷或追蹤'} className="mt-3 flex flex-wrap gap-1">
+            <Button variant={!showFollowUp ? 'default' : 'outline'} aria-pressed={!showFollowUp} className="min-h-11" onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
+            <Button variant={showFollowUp ? 'default' : 'outline'} aria-pressed={showFollowUp} className="min-h-11" disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
+          </div>}
+          sectionSummary={prognosisContent ? { prognosis: isEnglish ? 'Medical calculators · formulas pending' : '醫學計算機・公式待串接' } : undefined}
+          sectionContent={{ prognosis: prognosisContent, diagnosis: <>
+            <HfDiagnosisConfirmation answer={phenotypeAnswer} onConfirm={flow.readOnly ? undefined : onAnswerPhenotype} now={now} isEnglish={isEnglish} followUp={followUp} basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')} />
+            {followUp && diagnosisContext?.mode === 'reassessment' ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'New evidence requires review. Open diagnostic evidence; the prior confirmation is retained.' : '新資料需核對，請開啟診斷依據；既有確診紀錄仍保留。'}</p> : null}
+            {followUp && flow.questions.some(question => question.id === 'lvef-phenotype' && question.state === 'open') ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'HF phenotype pending: review LVEF in diagnostic evidence when available.' : '心衰竭分型待補：取得 LVEF 後可開啟診斷依據補充。'}</p> : null}
+            {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} /> : null}
+            <details key={showFollowUp ? 'follow-up' : 'diagnosis'} open={followUp && !showFollowUp} className="border-t border-border" data-testid="cdss-condition-assessment">
+              <summary data-cdss-action={assessmentFlow.openQuestionCount > 0 ? '' : undefined} className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium text-primary focus-visible:ring-2 focus-visible:ring-ring">{showFollowUp ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA') : (isEnglish ? 'Diagnostic assessment' : '診斷評估')} · {isEnglish ? `${assessmentFlow.openQuestionCount} questions pending` : `${assessmentFlow.openQuestionCount} 題待補`}</summary>
+              {renderQuestions(assessmentFlow)}
+            </details>
+          </> }}
+          sectionFooter={{ diagnosis: board.timeline ? <div className="border-t border-border px-3 py-3"><CareTimeline timeline={board.timeline} isEnglish={isEnglish} /></div> : null }}
+          decisionLabel={item => {
+            const row = actionRows.get(item.id)
+            return row?.decision && row.decisionSource !== 'medication-record' ? decisionLabel(row.decision.decision, isEnglish) : undefined
+          }}
+          renderDecision={item => {
+            const row = actionRows.get(item.id)
+            if (!row) return null
+            return <DecisionControls row={row} isEnglish={isEnglish} now={now}
+              editing={editingDecisions.has(item.id)}
+              onEdit={editing => setEditingDecisions(current => { const next = new Set(current); if (editing) next.add(item.id); else next.delete(item.id); return next })}
+              onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
+              packVersion={packVersion} readOnly={flow.readOnly} />
+          }}
+        />
+        <details className="rounded-lg border border-border bg-card" data-testid="cdss-shared-summary">
+          <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring">{isEnglish ? 'Visit summary and recorded decisions' : '本次摘要與處置紀錄'}</summary>
+          <FollowUpCard flow={flow} board={{ ...board, timeline: undefined }} isEnglish={isEnglish} now={now} />
+        </details>
+      </>}
 
       {hfpefReading && onSaveHfpefInputs ? (
         <HfpefInputsDialog
