@@ -2164,6 +2164,8 @@ export const zhTW = {
   agent: {
     thinking: '思考中...',
     organizingResults: '正在整理查詢結果...',
+    repeatedQueryStopped: '同一筆查詢連續重複三次，已停止查詢；以下依已取得的資料整理。',
+    repeatedQueryHint: '\n\n注意：上一輪因為連續三次重複同一個查詢而停止。若仍需要其他資料，請直接查詢，不要再重複同一個查詢；若有資料無法取得，請在回答中說明。',
     noTextGenerated: 'AI 執行了查詢但沒有生成回應。請重新嘗試或換個方式提問。',
     apiKeyRequired: '⚠️ AI 對話目前無法使用\n\nAI 對話需要登入帳號（含訪客免費額度）以使用 Firebase Proxy，或在「設定」頁面中設定您的 OpenAI、Gemini 或 Claude API Key。\n\n請登入或完成 API Key 設定後重試。',
     geminiRequiresApiKey: 'Gemini 模型的 AI 對話需要 API Key。請在「設定」中新增 Gemini API Key，或切換至 OpenAI 模型。',
