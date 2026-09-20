@@ -19,6 +19,80 @@ async function call(toolName: keyof typeof tools, args: any = {}): Promise<any> 
   return t.execute(args)
 }
 
+describe('lab searches by analyte alias', () => {
+  // The record names the analyte the way the NHI bridge does — a LOINC with its
+  // long display and a Chinese order-code display — never as the abbreviation
+  // a clinician types.
+  const urea = {
+    id: 'obs-bun',
+    resourceType: 'Observation',
+    status: 'final',
+    effectiveDateTime: '2026-06-02T00:00:00+08:00',
+    code: {
+      coding: [
+        { system: 'http://loinc.org', code: '3094-0', display: 'Urea nitrogen [Mass/volume] in Serum or Plasma' },
+        { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code', code: '09002C', display: '血中尿素氮' },
+      ],
+      text: '血中尿素氮',
+    },
+    valueQuantity: { value: 23.7, unit: 'mg/dL' },
+  } as any
+  const urate = {
+    id: 'obs-ua',
+    resourceType: 'Observation',
+    status: 'final',
+    effectiveDateTime: '2026-06-02T00:00:00+08:00',
+    code: { coding: [{ system: 'http://loinc.org', code: '3084-1', display: 'Urate [Mass/volume] in Serum or Plasma' }], text: '尿酸' },
+    valueQuantity: { value: 4.4, unit: 'mg/dL' },
+  } as any
+  const report = {
+    id: 'dr-bun',
+    resourceType: 'DiagnosticReport',
+    status: 'final',
+    effectiveDateTime: '2026-06-02T00:00:00+08:00',
+    category: [{ coding: [{ code: 'LAB' }] }],
+    code: { coding: [{ system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code', code: '09002C', display: '血中尿素氮' }], text: '血中尿素氮' },
+    _observations: [urea],
+  } as any
+  const aliasTools = createFhirTools(() => ({
+    patient: samplePatient,
+    collection: { ...sampleCollection, observations: [urea, urate], diagnosticReports: [report] },
+  }))
+  const run = async (name: keyof typeof aliasTools, args: any) => (aliasTools[name] as any).execute(args)
+
+  it('finds urea nitrogen when the clinician types BUN or blood urea nitrogen', async () => {
+    for (const query of ['BUN', 'blood urea nitrogen', 'bun']) {
+      const r = await run('searchObservationByName', { query })
+      expect(r.count).toBe(1)
+      expect(r.data[0].value).toBe(23.7)
+    }
+  })
+
+  it('finds urate when asked for uric acid, and creatinine-style prefixes do not break the alias', async () => {
+    const r = await run('searchObservationByName', { query: 'Uric Acid' })
+    expect(r.count).toBe(1)
+    expect(r.data[0].value).toBe(4.4)
+  })
+
+  it('still returns nothing for an analyte the record lacks, and says how to check', async () => {
+    const r = await run('searchObservationByName', { query: 'CRP' })
+    expect(r.count).toBe(0)
+    expect(r.summary).toContain('listAvailableObservationCodes')
+  })
+
+  it('matches a lab report by analyte alias through its code and its result observations', async () => {
+    const r = await run('queryDiagnosticReports', { query: 'BUN' })
+    expect(r.count).toBe(1)
+    expect(r.matchedQueryTerms).toEqual(['BUN'])
+    expect(r.unmatchedQueryTerms).toEqual([])
+  })
+
+  it('applies the alias to queryObservations codeQuery too', async () => {
+    const r = await run('queryObservations', { codeQuery: 'uric acid' })
+    expect(r.count).toBe(1)
+  })
+})
+
 describe('createFhirTools (unified)', () => {
   describe('searchEncountersByDiagnosis — one call for "when did X first appear"', () => {
     it('matches an ICD code with or without the dot, oldest first, with first/latest dates', async () => {
