@@ -151,7 +151,7 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.getByText('查看 1 項仍待補資料原因')).toBeInTheDocument()
   })
 
-  it('distinguishes an AI-filled row from a clinician correction', () => {
+  it('distinguishes record, AI, clinician modification and clinician selection by text and color', () => {
     const summary = coverageSummary()
     const answered = {
       ...summary,
@@ -164,21 +164,111 @@ describe('NhiTable1Panel AI review', () => {
         summary={answered}
         locale="zh-TW"
         patientId="patient-1"
-        answerProvenance={{ smoking: { source: 'ai', modelName: 'GPT Test' } }}
+        answerProvenance={{ smoking: { source: 'ai', recordState: 'unknown', modelName: 'GPT Test' } }}
         onAnswer={jest.fn()}
       />,
     )
+    expect(screen.getByTestId('nhi-criterion-provenance-age')).toHaveTextContent('自動帶入')
+    expect(screen.getByTestId('nhi-criterion-provenance-age')).toHaveClass('text-sky-800')
     expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('AI 判讀')
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveClass('text-violet-800')
 
     rerender(
       <NhiTable1Panel
         summary={answered}
         locale="zh-TW"
         patientId="patient-1"
-        answerProvenance={{ smoking: { source: 'manual' } }}
+        answerProvenance={{ smoking: { source: 'manual', manualAction: 'modified', recordState: 'unknown', overrides: 'ai' } }}
         onAnswer={jest.fn()}
       />,
     )
-    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('醫師修正')
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('醫師修改')
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveClass('text-amber-900')
+
+    rerender(
+      <NhiTable1Panel
+        summary={answered}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'manual', manualAction: 'selected', recordState: 'unknown', overrides: 'record' } }}
+        onAnswer={jest.fn()}
+      />,
+    )
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveTextContent('醫師選擇')
+    expect(screen.getByTestId('nhi-criterion-provenance-smoking')).toHaveClass('text-emerald-900')
+  })
+
+  it('restores the record state when a clinician-selected answer returns to the original unknown', () => {
+    const onAnswer = jest.fn()
+    const summary = coverageSummary()
+    const answered = {
+      ...summary,
+      factors: summary.factors.map((check) => check.id === 'smoking'
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '符合' }
+        : check),
+    }
+    render(
+      <NhiTable1Panel
+        summary={answered}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'manual', manualAction: 'selected', recordState: 'unknown', overrides: 'record' } }}
+        onAnswer={onAnswer}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '抽菸' }))
+    fireEvent.click(screen.getByRole('button', { name: '未確認' }))
+    expect(onAnswer).toHaveBeenCalledWith('smoking', undefined)
+  })
+
+  it('records filling an unknown criterion as a clinician selection', () => {
+    const onAnswer = jest.fn()
+    render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={onAnswer}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '抽菸' }))
+    fireEvent.click(screen.getByRole('button', { name: '符合' }))
+    expect(onAnswer).toHaveBeenCalledWith('smoking', 'yes', {
+      source: 'manual',
+      manualAction: 'selected',
+      recordState: 'unknown',
+      overrides: 'record',
+    })
+  })
+
+  it('keeps an explicit clinician correction visible when it overrides AI with unknown', () => {
+    const onAnswer = jest.fn()
+    const summary = coverageSummary()
+    const answered = {
+      ...summary,
+      factors: summary.factors.map((check) => check.id === 'smoking'
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '符合' }
+        : check),
+    }
+    render(
+      <NhiTable1Panel
+        summary={answered}
+        locale="zh-TW"
+        patientId="patient-1"
+        answerProvenance={{ smoking: { source: 'ai', recordState: 'unknown' } }}
+        onAnswer={onAnswer}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '抽菸' }))
+    fireEvent.click(screen.getByRole('button', { name: '未確認' }))
+    expect(onAnswer).toHaveBeenCalledWith('smoking', 'unknown', {
+      source: 'manual',
+      manualAction: 'modified',
+      recordState: 'unknown',
+      overrides: 'ai',
+    })
   })
 })

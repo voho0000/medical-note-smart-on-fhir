@@ -28,6 +28,11 @@ export type NhiLipidAnswer = 'yes' | 'no' | 'unknown'
 export type NhiLipidAnswers = Readonly<Record<string, NhiLipidAnswer>>
 export interface NhiLipidAnswerProvenance {
   source: 'manual' | 'ai'
+  /** The record-only value before AI or a clinician changed this criterion. */
+  recordState?: NhiLipidAnswer
+  /** A selection fills a record gap; a modification overrides record or AI. */
+  manualAction?: 'selected' | 'modified'
+  overrides?: 'record' | 'ai'
   modelId?: string
   modelName?: string
   generatedAt?: string

@@ -68,6 +68,44 @@ const ANSWER_LABEL: Record<CdssCoverageCheck['state'], [zh: string, en: string]>
   unknown: ['未確認', 'Unconfirmed'],
 }
 
+type ProvenanceKind = 'record' | 'ai' | 'manual-modified' | 'manual-selected'
+
+const PROVENANCE_STYLE: Record<ProvenanceKind, string> = {
+  record: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200',
+  ai: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200',
+  'manual-modified': 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+  'manual-selected': 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
+}
+
+function ProvenanceBadge({
+  kind,
+  isEnglish,
+  testId,
+}: {
+  kind: ProvenanceKind
+  isEnglish: boolean
+  testId?: string
+}) {
+  const label: Record<ProvenanceKind, [zh: string, en: string]> = {
+    record: ['自動帶入', 'Record autofill'],
+    ai: ['AI 判讀', 'AI assessment'],
+    'manual-modified': ['醫師修改', 'Clinician changed'],
+    'manual-selected': ['醫師選擇', 'Clinician selected'],
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-medium leading-none',
+        PROVENANCE_STYLE[kind],
+      )}
+      data-testid={testId}
+    >
+      <span aria-hidden="true">{kind === 'record' ? '●' : kind === 'ai' ? '✦' : kind === 'manual-modified' ? '↺' : '✓'}</span>
+      {label[kind][isEnglish ? 1 : 0]}
+    </span>
+  )
+}
+
 /**
  * One 表一 criterion: a mark, the clause's label, and what the record says.
  *
@@ -99,9 +137,38 @@ function Criterion({
   const fromCode = check.state === 'yes' && check.origin === 'record'
   const aiApplied = check.origin === 'physician' && answerProvenance?.source === 'ai'
   const manuallyChanged = check.origin === 'physician' && !aiApplied
+  const provenanceKind: ProvenanceKind | undefined = aiApplied
+    ? 'ai'
+    : manuallyChanged
+      ? answerProvenance?.manualAction === 'selected' ? 'manual-selected' : 'manual-modified'
+      : check.state !== 'unknown'
+        ? 'record'
+        : undefined
   const glyph = manuallyChanged ? '✓' : fromCode && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
   const states: readonly CdssCoverageCheck['state'][] = ['yes', 'no', 'unknown']
   const interactive = Boolean(onAnswer && check.editable) || Boolean(check.detail)
+  const recordState = answerProvenance?.recordState
+    ?? (check.origin === 'record' ? check.state : undefined)
+  const overridesAi = answerProvenance?.source === 'ai' || answerProvenance?.overrides === 'ai'
+  const answerManually = (state: CdssCoverageCheck['state']) => {
+    if (!onAnswer) return
+    // Selecting the record's original value is a restore, not another manual
+    // assertion. An AI override is the exception: choosing the record value is
+    // still a clinician correction of that AI assessment and remains visible.
+    if (recordState !== undefined && state === recordState && !overridesAi) {
+      onAnswer(check.id, undefined)
+      return
+    }
+    const manualAction = overridesAi || recordState === undefined || recordState !== 'unknown'
+      ? 'modified'
+      : 'selected'
+    onAnswer(check.id, state, {
+      source: 'manual',
+      manualAction,
+      ...(recordState !== undefined ? { recordState } : {}),
+      overrides: overridesAi ? 'ai' : 'record',
+    })
+  }
 
   const body = (
     <>
@@ -123,20 +190,13 @@ function Criterion({
         </span>
         <span className={cn('block text-xs tabular-nums', mark.lit ? 'text-primary' : 'text-muted-foreground')}>
           {check.value}
-          {aiApplied ? (
-            <span
-              className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary/30 bg-primary/5 px-1 py-0.5 font-medium text-primary"
-              data-testid={`nhi-criterion-provenance-${check.id}`}
-            >
-              <Sparkles className="h-3 w-3" aria-hidden="true" />
-              {isEnglish ? 'AI assessment' : 'AI 判讀'}
-            </span>
-          ) : manuallyChanged ? (
-            <span
-              className="ml-1 rounded border border-foreground/20 bg-muted/40 px-1 py-0.5 font-medium text-foreground"
-              data-testid={`nhi-criterion-provenance-${check.id}`}
-            >
-              {isEnglish ? 'Clinician changed' : '醫師修正'}
+          {provenanceKind ? (
+            <span className="ml-1 inline-block">
+              <ProvenanceBadge
+                kind={provenanceKind}
+                isEnglish={isEnglish}
+                testId={`nhi-criterion-provenance-${check.id}`}
+              />
             </span>
           ) : null}
         </span>
@@ -183,7 +243,7 @@ function Criterion({
                   key={state}
                   type="button"
                   aria-pressed={check.state === state}
-                  onClick={() => onAnswer(check.id, state)}
+                  onClick={() => answerManually(state)}
                   className={cn(
                     'min-h-11 flex-1 rounded-md border px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     check.state === state
@@ -292,7 +352,10 @@ function NhiLipidAiReview({
   const suggestions = ai.suggestions
   const decisions = ai.decisions
   const decide = ai.decide
-  const checkById = new Map(checks.map((check) => [check.id, check]))
+  const checkById = useMemo(
+    () => new Map(checks.map((check) => [check.id, check])),
+    [checks],
+  )
   const allSuggestions = Object.values(suggestions)
   const decisive = allSuggestions.filter((suggestion) => suggestion.state !== 'unknown')
   const unknown = allSuggestions.filter((suggestion) => suggestion.state === 'unknown')
@@ -304,6 +367,7 @@ function NhiLipidAiReview({
       if (suggestion.state === 'unknown' || decisions[suggestion.criterionId]) continue
       onAnswer(suggestion.criterionId, suggestion.state, {
         source: 'ai',
+        recordState: checkById.get(suggestion.criterionId)?.state,
         modelId: suggestion.modelId,
         modelName: suggestion.modelName,
         generatedAt: suggestion.generatedAt,
@@ -311,7 +375,7 @@ function NhiLipidAiReview({
       })
       decide(suggestion.criterionId, 'applied')
     }
-  }, [decide, decisions, onAnswer, suggestions])
+  }, [checkById, decide, decisions, onAnswer, suggestions])
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3" data-testid="nhi-lipid-ai-review">
@@ -471,17 +535,18 @@ function NhiTable1PanelContent({
         </a>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
-        <span className="font-medium text-muted-foreground">{isEnglish ? 'Key' : '符號'}</span>
-        <span><span className="font-semibold text-primary">●</span> {isEnglish ? 'Autofilled from the record' : '病歷資料自動帶入'}</span>
-        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Autofilled from a claims code; confirm clinically' : '申報碼自動帶入，須臨床確認'}</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+        <span className="font-medium text-muted-foreground">{isEnglish ? 'Status' : '狀態'}</span>
+        <span><span className="font-semibold text-primary">●</span> {isEnglish ? 'Met' : '符合'}</span>
+        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Claims code; confirm clinically' : '申報碼支持，須臨床確認'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">○</span> {isEnglish ? 'Not in the record — unknown, not absent' : '紀錄讀不到 — 未知，不等於沒有'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Measured and not met' : '有數值且不符合'}</span>
-        <span className="inline-flex items-center gap-1 text-primary">
-          <Sparkles className="h-3 w-3" aria-hidden="true" />
-          {isEnglish ? 'AI assessment' : 'AI 判讀'}
-        </span>
-        <span><span className="font-semibold">✓</span> {isEnglish ? 'Clinician changed' : '醫師修正'}</span>
+        <span className="h-4 w-px bg-border" aria-hidden="true" />
+        <span className="font-medium text-muted-foreground">{isEnglish ? 'Source' : '來源'}</span>
+        <ProvenanceBadge kind="record" isEnglish={isEnglish} />
+        <ProvenanceBadge kind="ai" isEnglish={isEnglish} />
+        <ProvenanceBadge kind="manual-modified" isEnglish={isEnglish} />
+        <ProvenanceBadge kind="manual-selected" isEnglish={isEnglish} />
       </div>
 
       {aiAssist ? (
