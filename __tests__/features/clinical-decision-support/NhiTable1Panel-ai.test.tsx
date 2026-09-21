@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/NhiTable1Panel'
 import { useNhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
@@ -244,7 +244,7 @@ describe('NhiTable1Panel AI review', () => {
       />,
     )
 
-    expect(screen.getByText('AI 判讀符合 · 已納入分級')).toBeInTheDocument()
+    expect(screen.getByText('AI 判讀符合 · 已納入分級 · 1 筆來源 · 點擊查看')).toBeInTheDocument()
     await waitFor(() => expect(onAnswer).toHaveBeenCalledWith('smoking', 'yes', expect.objectContaining({
       source: 'ai',
       modelId: 'gpt-test',
@@ -292,6 +292,113 @@ describe('NhiTable1Panel AI review', () => {
     expect(onAnswer).not.toHaveBeenCalled()
     expect(decide).not.toHaveBeenCalled()
     expect(screen.getByText('查看 1 項仍待補資料原因')).toBeInTheDocument()
+  })
+
+  it('shows the AI rationale and source link on the applied criterion row', async () => {
+    const base = coverageSummary()
+    const summary = {
+      ...base,
+      factors: base.factors.map((check) => check.id === 'smoking'
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '未找到可判讀資料' }
+        : check),
+    }
+    const onAnswer = jest.fn()
+    const onNavigate = jest.fn()
+    mockedUseAiAssist.mockReturnValue({
+      suggestions: {
+        smoking: {
+          criterionId: 'smoking',
+          state: 'yes',
+          confidence: 'high',
+          rationale: '病歷明確記載目前抽菸。',
+          missing: [],
+          evidence: [{
+            sourceKey: 'D1',
+            sourceResourceType: 'DocumentReference',
+            sourceResourceId: 'doc-smoking',
+            sourceLabel: '出院病歷摘要',
+            date: '2026-09-16',
+            excerpt: '目前每日抽菸一包。',
+          }],
+          modelId: 'gpt-test',
+          modelName: 'GPT Test',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+      },
+      decisions: { smoking: 'applied' },
+      isRunning: false,
+      isDataReady: true,
+      error: null,
+      modelId: 'gpt-test',
+      modelName: 'GPT Test',
+      run,
+      decide,
+    })
+
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={onAnswer}
+        onNavigate={onNavigate}
+        answerProvenance={{ smoking: { source: 'ai', recordState: 'unknown' } }}
+      />,
+    )
+
+    const row = screen.getByRole('button', { name: '抽菸' })
+    expect(row).toHaveTextContent('符合 · 病歷明確記載目前抽菸。')
+    expect(row).toHaveTextContent('AI 判讀符合 · 已納入分級 · 1 筆來源 · 點擊查看')
+    expect(row).not.toHaveTextContent('符合 · 未找到可判讀資料')
+
+    fireEvent.click(row)
+    const popover = screen.getByTestId('nhi-criterion-popover-smoking')
+    expect(popover).toHaveTextContent('目前每日抽菸一包。')
+    fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · 出院病歷摘要/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'DocumentReference',
+      resourceId: 'doc-smoking',
+      evidenceQuote: '目前每日抽菸一包。',
+    }))
+  })
+
+  it('does not apply a decisive AI answer without a traceable source', async () => {
+    const onAnswer = jest.fn()
+    mockedUseAiAssist.mockReturnValue({
+      suggestions: {
+        smoking: {
+          criterionId: 'smoking',
+          state: 'yes',
+          confidence: 'high',
+          rationale: '模型宣稱符合但沒有來源。',
+          missing: [],
+          evidence: [],
+          modelId: 'gpt-test',
+          modelName: 'GPT Test',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+      },
+      decisions: {},
+      isRunning: false,
+      isDataReady: true,
+      error: null,
+      modelId: 'gpt-test',
+      modelName: 'GPT Test',
+      run,
+      decide,
+    })
+
+    render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={onAnswer}
+      />,
+    )
+
+    await waitFor(() => expect(onAnswer).not.toHaveBeenCalled())
+    expect(decide).not.toHaveBeenCalled()
   })
 
   it('distinguishes record, AI, clinician modification and clinician selection by text and color', () => {
