@@ -135,6 +135,7 @@ function Criterion({
   aiSuggestion,
   aiDecision,
   answerProvenance,
+  onNavigate,
 }: {
   check: CdssCoverageCheck
   isEnglish: boolean
@@ -146,6 +147,7 @@ function Criterion({
   aiSuggestion?: NhiLipidAiSuggestion
   aiDecision?: NhiLipidAiDecision
   answerProvenance?: NhiLipidAnswerProvenance
+  onNavigate?: (target: ResourceNavTarget) => void
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -167,6 +169,10 @@ function Criterion({
   const recordState = answerProvenance?.recordState
     ?? (check.origin === 'record' ? check.state : undefined)
   const overridesAi = answerProvenance?.source === 'ai' || answerProvenance?.overrides === 'ai'
+  const aiEvidenceCount = aiSuggestion?.evidence.length ?? 0
+  const aiDisplayValue = aiApplied && aiSuggestion && aiSuggestion.state !== 'unknown'
+    ? aiSuggestion.rationale || check.value
+    : check.value
   const cancelScheduledClose = () => {
     if (closeTimer.current === null) return
     clearTimeout(closeTimer.current)
@@ -233,7 +239,7 @@ function Criterion({
           className={cn(
             'block',
             mark.lit ? 'font-medium text-foreground' : 'text-muted-foreground',
-            check.detail && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
+            (check.detail || (aiApplied && aiSuggestion)) && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
           )}
         >
           {check.label}
@@ -242,7 +248,7 @@ function Criterion({
           <span className="font-medium text-foreground">
             {isEnglish ? ANSWER_LABEL[check.state][1] : ANSWER_LABEL[check.state][0]}
           </span>
-          {check.value ? ` · ${check.value}` : ''}
+          {aiDisplayValue ? ` · ${aiDisplayValue}` : ''}
           {provenanceKind ? (
             <span className="ml-1 inline-block">
               <ProvenanceBadge
@@ -253,7 +259,7 @@ function Criterion({
             </span>
           ) : null}
         </span>
-        {aiSuggestion && aiSuggestion.state !== 'unknown' && (manuallyChanged || aiApplied || !aiDecision) ? (
+        {aiSuggestion && aiSuggestion.state !== 'unknown' && aiEvidenceCount > 0 && (manuallyChanged || aiApplied || !aiDecision) ? (
           <span className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
             <Sparkles className="h-3 w-3" aria-hidden="true" />
             {answerProvenance?.manualAction === 'reviewed'
@@ -265,6 +271,13 @@ function Criterion({
               : isEnglish
                 ? `AI assessed ${aiSuggestion.state === 'yes' ? 'met' : 'not met'} · included in tier`
                 : `AI 判讀${aiSuggestion.state === 'yes' ? '符合' : '不符合'} · 已納入分級`}
+            {!manuallyChanged && answerProvenance?.manualAction !== 'reviewed'
+              ? aiEvidenceCount > 0
+                ? isEnglish
+                  ? ` · ${aiEvidenceCount} source${aiEvidenceCount === 1 ? '' : 's'} · click to review`
+                  : ` · ${aiEvidenceCount} 筆來源 · 點擊查看`
+                : isEnglish ? ' · no traceable source' : ' · 缺少可回查來源'
+              : null}
           </span>
         ) : null}
       </span>
@@ -319,8 +332,51 @@ function Criterion({
         <div className="space-y-1">
           <p className="text-sm font-medium">{check.label}</p>
           {check.detail ? <p className="text-muted-foreground">{check.detail}</p> : null}
-          <p className="tabular-nums text-muted-foreground">{check.value}</p>
+          <p className="tabular-nums text-muted-foreground">{aiDisplayValue}</p>
         </div>
+        {aiSuggestion && (aiApplied || manuallyChanged) ? (
+          <div className="space-y-2 border-t border-border pt-2">
+            <p className="font-medium">
+              {isEnglish ? 'AI evidence' : 'AI 判讀依據'}
+              {aiEvidenceCount > 0 ? ` · ${aiEvidenceCount}` : ''}
+            </p>
+            {aiSuggestion.rationale ? <p className="text-muted-foreground">{aiSuggestion.rationale}</p> : null}
+            {aiSuggestion.evidence.map((evidence) => (
+              <blockquote key={`${evidence.sourceKey}-${evidence.excerpt}`} className="space-y-1 border-l-2 border-primary/40 pl-2">
+                <p>「{evidence.excerpt}」</p>
+                {onNavigate ? (
+                  <button
+                    type="button"
+                    className="min-h-8 text-left text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => onNavigate({
+                      resourceType: evidence.sourceResourceType,
+                      resourceId: evidence.sourceResourceId,
+                      display: evidence.sourceLabel,
+                      date: evidence.date,
+                      evidenceQuote: evidence.excerpt,
+                    })}
+                  >
+                    {isEnglish ? 'Open source record' : '開啟原始病歷'} · {evidence.sourceLabel}{evidence.date ? ` · ${evidence.date}` : ''}
+                  </button>
+                ) : (
+                  <footer className="text-muted-foreground">{evidence.sourceLabel}{evidence.date ? ` · ${evidence.date}` : ''}</footer>
+                )}
+              </blockquote>
+            ))}
+            {aiEvidenceCount === 0 ? (
+              <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                {isEnglish
+                  ? 'No source passage can be traced in the selected record. This result must not affect the tier; run the AI review again.'
+                  : '在目前選定病歷中沒有可回查的原文；此結果不應影響分級，請重新執行 AI 判讀。'}
+              </p>
+            ) : null}
+            {aiSuggestion.missing.length > 0 ? (
+              <p className="text-muted-foreground">
+                {isEnglish ? 'Still needed: ' : '仍需補充：'}{aiSuggestion.missing.join(isEnglish ? '; ' : '；')}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {onAnswer && check.editable ? (
           <div className="space-y-2 border-t border-border pt-2">
             <p className="text-muted-foreground">
@@ -551,7 +607,7 @@ function NhiLipidAiReview({
     for (const suggestion of Object.values(suggestions)) {
       const provenance = answerProvenance?.[suggestion.criterionId]
       if (provenance?.source === 'manual' || decisions[suggestion.criterionId]) continue
-      if (suggestion.state === 'unknown') {
+      if (suggestion.state === 'unknown' || suggestion.evidence.length === 0) {
         if (provenance?.source === 'ai') onAnswer(suggestion.criterionId, undefined)
         continue
       }
@@ -910,6 +966,7 @@ function NhiTable1PanelContent({
     aiSuggestion: aiAssist?.suggestions[check.id],
     aiDecision: aiAssist?.decisions[check.id],
     answerProvenance: answerProvenance?.[check.id],
+    onNavigate,
   })
   const prescribingStep = (
     step: NonNullable<CdssCoverageSummary['tiers'][number]['prescribing']>[number],
