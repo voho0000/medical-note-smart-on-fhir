@@ -28,15 +28,18 @@ const ADJUNCT_LANE = 22
 const GAP = 24
 const LDL_H = 86
 const W = 820
+const DAY_MS = 86400000
+const LONG_GAP_DAYS = 540
+const DISPLAY_GAP_DAYS = 90
+const MIN_TICK_DISTANCE = 54
 
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
 
-function monthTicks(from: number, to: number): { at: number; label: string }[] {
+function monthTicks(from: number, to: number, displaySpanDays = (to - from) / DAY_MS): { at: number; label: string }[] {
   const ticks: { at: number; label: string }[] = []
   const cursor = new Date(from)
   cursor.setUTCDate(1)
-  const span = (to - from) / 86400000
-  const step = span > 900 ? 6 : span > 400 ? 3 : span > 150 ? 2 : 1
+  const step = displaySpanDays > 900 ? 6 : displaySpanDays > 400 ? 3 : displaySpanDays > 150 ? 2 : 1
   while (cursor.getTime() <= to) {
     const at = cursor.getTime()
     if (at >= from) {
@@ -48,6 +51,53 @@ function monthTicks(from: number, to: number): { at: number; label: string }[] {
     cursor.setUTCMonth(cursor.getUTCMonth() + step)
   }
   return ticks
+}
+
+type TimelineGap = {
+  from: number
+  to: number
+  actualDays: number
+}
+
+const displayedIntervalDays = (actualDays: number) =>
+  actualDays > LONG_GAP_DAYS ? DISPLAY_GAP_DAYS : actualDays
+
+function buildTimeline(stamps: number[]) {
+  const anchors = [...new Set(stamps)].sort((a, b) => a - b)
+  const min = anchors[0]
+  const max = anchors.at(-1)!
+  const gaps: TimelineGap[] = []
+  let displaySpanDays = 0
+
+  for (let index = 1; index < anchors.length; index += 1) {
+    const actualDays = (anchors[index] - anchors[index - 1]) / DAY_MS
+    if (actualDays > LONG_GAP_DAYS) {
+      gaps.push({ from: anchors[index - 1], to: anchors[index], actualDays })
+    }
+    displaySpanDays += displayedIntervalDays(actualDays)
+  }
+
+  // Place every known event on a continuous display-time axis, but give a
+  // multi-year interval with no records only three months of visual width.
+  // This preserves the order and local spacing of recent events without
+  // implying that the missing years contain observations.
+  const displayDay = (stamp: number) => {
+    if (stamp <= min) return (stamp - min) / DAY_MS
+    let elapsed = 0
+    for (let index = 1; index < anchors.length; index += 1) {
+      const left = anchors[index - 1]
+      const right = anchors[index]
+      const actualDays = (right - left) / DAY_MS
+      const shownDays = displayedIntervalDays(actualDays)
+      if (stamp <= right) {
+        return elapsed + ((stamp - left) / (right - left)) * shownDays
+      }
+      elapsed += shownDays
+    }
+    return elapsed + (stamp - max) / DAY_MS
+  }
+
+  return { min, max, gaps, displayDay, displaySpanDays }
 }
 
 export function TherapyResponseChart({
@@ -84,7 +134,9 @@ export function TherapyResponseChart({
   const lanesHeight = lanes.reduce((total, lane) => total + lane.height + 6, 0)
   const H = PAD.top + lanesHeight + GAP + LDL_H + PAD.bottom
   const readings = useMemo(
-    () => (therapy.response ?? []).filter((r) => Number.isFinite(r.value)),
+    () => [...(therapy.response ?? [])]
+      .filter((r) => Number.isFinite(r.value))
+      .sort((a, b) => day(a.date) - day(b.date)),
     [therapy.response],
   )
 
@@ -94,13 +146,12 @@ export function TherapyResponseChart({
       ...readings.map((r) => day(r.date)),
     ].filter(Number.isFinite)
     if (stamps.length === 0) return null
-    const min = Math.min(...stamps)
-    const max = Math.max(...stamps)
+    const timeline = buildTimeline(stamps)
     // A single day would divide by zero; give it a month of room either side.
-    const pad = max === min ? 15 * 86400000 : (max - min) * 0.04
-    const from = min - pad
-    const to = max + pad
-    const x = (stamp: number) => PAD.left + ((stamp - from) / (to - from)) * (W - PAD.left - PAD.right)
+    const padDays = timeline.max === timeline.min ? 15 : Math.max(timeline.displaySpanDays * 0.04, 3)
+    const displaySpan = Math.max(timeline.displaySpanDays, 1) + padDays * 2
+    const x = (stamp: number) => PAD.left
+      + ((timeline.displayDay(stamp) + padDays) / displaySpan) * (W - PAD.left - PAD.right)
 
     const doses = spans.map((s) => Number(s.dose?.replace(/[^0-9.]/g, '')) || 0)
     const doseMax = Math.max(...doses, 1)
@@ -114,7 +165,15 @@ export function TherapyResponseChart({
     const ldlTicks = values.length > 0
       ? [...new Set([Math.round(Math.max(...values)), Math.round(Math.min(...values))])]
       : []
-    return { from, to, x, y, doseMax, ldlTop, ldlTicks, ticks: monthTicks(from, to) }
+    const ticks = monthTicks(timeline.min, timeline.max, timeline.displaySpanDays)
+      .filter((tick) => !timeline.gaps.some((gap) => tick.at > gap.from && tick.at < gap.to))
+      .reduce<{ at: number; label: string }[]>((kept, tick) => {
+        const previous = kept.at(-1)
+        if (!previous || x(tick.at) - x(previous.at) >= MIN_TICK_DISTANCE) kept.push(tick)
+        return kept
+      }, [])
+
+    return { x, y, doseMax, ldlTop, ldlTicks, ticks, gaps: timeline.gaps }
   }, [spans, readings, goal, lanesHeight])
 
   if (!scale || (spans.length === 0 && readings.length === 0)) return null
@@ -132,6 +191,11 @@ export function TherapyResponseChart({
             ? 'Prescribing and laboratory records on one time axis; the banded columns are 表一\u2019s 6–8 week recheck after each change'
             : '處方與檢驗紀錄，同一條時間軸；帶狀區間是表一在每次變動後的 6–8 週複驗窗'}
         </span>
+        {scale.gaps.length > 0 ? (
+          <span className="text-muted-foreground">
+            {isEnglish ? '// marks a long interval without records' : '// 表示長期無資料區間已折疊'}
+          </span>
+        ) : null}
       </figcaption>
 
       <svg
@@ -222,6 +286,20 @@ export function TherapyResponseChart({
             </text>
           </g>
         ))}
+
+        {scale.gaps.map((gap) => {
+          const x = scale.x((gap.from + gap.to) / 2)
+          const bottom = PAD.top + lanesHeight + GAP + LDL_H
+          const years = Math.round((gap.actualDays / 365.25) * 10) / 10
+          return (
+            <g key={`gap-${gap.from}-${gap.to}`} aria-label={isEnglish ? `${years} years without records` : `${years} 年無資料`}>
+              <rect x={x - 8} y={PAD.top} width="16" height={bottom - PAD.top} fill="var(--card)" fillOpacity="0.9" />
+              <line x1={x - 5} x2={x - 1} y1={bottom - 7} y2={bottom + 1} stroke="var(--muted-foreground)" strokeWidth="1.5" />
+              <line x1={x + 1} x2={x + 5} y1={bottom - 7} y2={bottom + 1} stroke="var(--muted-foreground)" strokeWidth="1.5" />
+              <title>{isEnglish ? `${years} years without records; timeline compressed` : `${years} 年無資料，時間軸已折疊`}</title>
+            </g>
+          )
+        })}
 
         {lanes.map((lane) => {
           const baseline = lane.top + lane.height
