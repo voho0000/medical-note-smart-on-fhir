@@ -32,6 +32,7 @@ describe('TherapyResponseChart', () => {
     const { container } = render(<TherapyResponseChart therapy={therapy} goal={55} locale="zh-TW" />)
 
     expect(screen.getByText('// 表示長期無資料區間已折疊')).toBeVisible()
+    expect(screen.getByText('18/12')).toBeVisible()
     expect(container.querySelector('[aria-label*="年無資料"]')).toBeInTheDocument()
 
     const points = [...container.querySelectorAll<SVGCircleElement>('svg circle[r="5"]')]
