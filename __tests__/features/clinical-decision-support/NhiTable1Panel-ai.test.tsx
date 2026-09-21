@@ -592,6 +592,35 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.queryByText('有數值且不符合')).not.toBeInTheDocument()
   })
 
+  it('marks a current medication in green on the selected tier without claiming the full rung is met', () => {
+    const base = coverageSummary()
+    const summary = {
+      ...base,
+      tiers: base.tiers.map((tier) => ({
+        ...tier,
+        selected: tier.id === 'extreme',
+        prescribing: tier.id === 'extreme'
+          ? [{
+              text: '中至高強度 statin',
+              state: 'unknown' as const,
+              evidence: '處方中：ATORVASTATIN 40 MG。紀錄未載每日劑量，強度仍待核對。',
+            }]
+          : tier.prescribing,
+      })),
+    }
+
+    render(<NhiTable1Panel summary={summary} locale="zh-TW" />)
+
+    const currentMedication = screen.getByRole('button', { name: /中至高強度 statin 使用中/ })
+    expect(currentMedication).toHaveAttribute('data-current-medication', 'true')
+    expect(currentMedication).toHaveTextContent('○')
+    expect(screen.getByText('綠＝目前用藥')).toBeInTheDocument()
+
+    fireEvent.click(currentMedication)
+    expect(screen.getByText('目前有相關藥物處方；是否符合這一階的強度、療程與血脂條件，仍依下方判讀。')).toBeVisible()
+    expect(screen.getByText('紀錄無法判讀')).toBeVisible()
+  })
+
   it('shows the pack-owned clinician action points without rewording them', () => {
     const summary = {
       ...coverageSummary(),
