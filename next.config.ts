@@ -35,6 +35,12 @@ const nextConfig: NextConfig = {
   // every route to be statically renderable, which breaks API routes.
   ...(isStaticExport ? { output: "export" as const } : {}),
   images: { unoptimized: true },
+  // Next 16.3 runs the project-local `tsc` over the whole tsconfig project,
+  // tests included. The GitHub Pages build stashes app/api/ away (see
+  // scripts/build-gh.mjs), so the API-route tests would fail to resolve
+  // their imports there. Builds type-check the app only; CI's own
+  // `tsc --noEmit` still covers __tests__ with tsconfig.json.
+  typescript: { tsconfigPath: 'tsconfig.build.json' },
   // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
   // worktree mode: point at main project where node_modules lives
   outputFileTracingRoot: projectRoot,
