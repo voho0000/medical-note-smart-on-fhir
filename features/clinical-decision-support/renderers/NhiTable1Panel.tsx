@@ -79,6 +79,18 @@ const ANSWER_LABEL: Record<CdssCoverageCheck['state'], [zh: string, en: string]>
   unknown: ['未確認', 'Unconfirmed'],
 }
 
+type PrescribingStep = NonNullable<CdssCoverageSummary['tiers'][number]['prescribing']>[number]
+
+/**
+ * Pack evidence says "prescribed" even when dose, intensity or elapsed-time
+ * details leave the whole Table 1 rung unresolved. Keep that useful medication
+ * fact visually separate from the rung's clinical state.
+ */
+function hasCurrentMedication(step: PrescribingStep): boolean {
+  const evidence = step.evidence?.trim() ?? ''
+  return /^(處方中(?:：|。)|Prescribed(?:[:.]|$))|ezetimibe 處方中|Ezetimibe is prescribed/i.test(evidence)
+}
+
 type ProvenanceKind = 'record' | 'ai' | 'manual-modified' | 'manual-selected' | 'manual-reviewed'
 
 const PROVENANCE_STYLE: Record<ProvenanceKind, string> = {
@@ -969,26 +981,47 @@ function NhiTable1PanelContent({
     onNavigate,
   })
   const prescribingStep = (
-    step: NonNullable<CdssCoverageSummary['tiers'][number]['prescribing']>[number],
-  ) => (
+    step: PrescribingStep,
+    showCurrentMedication: boolean,
+  ) => {
+    const medicationInUse = showCurrentMedication && hasCurrentMedication(step)
+    return (
     <Popover key={step.text}>
       <PopoverTrigger
+        data-current-medication={medicationInUse ? 'true' : undefined}
         className={cn(
           'flex w-full gap-1.5 rounded px-2 py-1 text-left text-xs leading-snug hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          step.state === 'yes'
+          medicationInUse
+            ? 'bg-emerald-500/10 text-emerald-950 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/15 dark:text-emerald-100'
+            : step.state === 'yes'
             ? 'bg-primary/10 font-medium text-foreground'
             : step.state === 'no'
               ? 'text-muted-foreground'
               : 'text-muted-foreground',
         )}
       >
-        <span aria-hidden="true" className={cn('shrink-0 font-semibold', step.state === 'yes' ? 'text-primary' : 'text-muted-foreground/70')}>
+        <span aria-hidden="true" className={cn('shrink-0 font-semibold', medicationInUse ? 'text-emerald-600 dark:text-emerald-400' : step.state === 'yes' ? 'text-primary' : 'text-muted-foreground/70')}>
           {MARK[step.state].glyph}
         </span>
         <span className="min-w-0">{step.text}</span>
+        {medicationInUse ? (
+          <Badge
+            variant="outline"
+            className="ml-auto shrink-0 border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+          >
+            {isEnglish ? 'In use' : '使用中'}
+          </Badge>
+        ) : null}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 space-y-1 text-xs leading-relaxed">
         <p className="text-sm font-medium">{step.text}</p>
+        {medicationInUse ? (
+          <p className="rounded bg-emerald-500/10 px-2 py-1.5 font-medium text-emerald-800 dark:text-emerald-200">
+            {isEnglish
+              ? 'A related medication is currently prescribed. The marker below separately indicates whether the full rung is supported.'
+              : '目前有相關藥物處方；是否符合這一階的強度、療程與血脂條件，仍依下方判讀。'}
+          </p>
+        ) : null}
         <p className="text-primary">
           {step.state === 'yes'
             ? isEnglish ? 'Supported by the record' : '紀錄支持走到這一階'
@@ -999,7 +1032,8 @@ function NhiTable1PanelContent({
         {step.evidence ? <p className="text-muted-foreground">{step.evidence}</p> : null}
       </PopoverContent>
     </Popover>
-  )
+    )
+  }
 
   return (
     <section className="space-y-3 px-3 pb-4" aria-label={summary.title} data-testid="nhi-table1-panel">
@@ -1295,7 +1329,10 @@ function NhiTable1PanelContent({
             <p className="pt-2 pr-2 text-right text-xs font-medium leading-snug">
               {isEnglish ? 'Prescribing' : '處方規定'}
               <span className="block font-normal text-primary">
-                {isEnglish ? 'Highlight = record-supported' : '亮＝紀錄支持'}
+                {isEnglish ? 'Blue = record-supported' : '藍＝紀錄支持'}
+              </span>
+              <span className="block font-normal text-emerald-700 dark:text-emerald-300">
+                {isEnglish ? 'Green = current medication' : '綠＝目前用藥'}
               </span>
             </p>
             {lowerPrescribingShared ? (
@@ -1311,7 +1348,7 @@ function NhiTable1PanelContent({
                     ? 'Shared by 0 factors, low risk, and moderate risk; highlighting follows the current tier'
                     : '0 項、低風險與中風險共用；亮起狀態依目前分級'}
                 </p>
-                {lowerPrescribingSteps.map(prescribingStep)}
+                {lowerPrescribingSteps.map(step => prescribingStep(step, Boolean(selectedLowerTier)))}
               </div>
             ) : null}
             {primaryTiers
@@ -1324,7 +1361,7 @@ function NhiTable1PanelContent({
                   tier.selected ? 'border-primary bg-card' : 'border-border bg-muted/30',
                 )}
               >
-                {(tier.prescribing ?? []).map(prescribingStep)}
+                {(tier.prescribing ?? []).map(step => prescribingStep(step, tier.selected))}
               </div>
             ))}
           </div>
