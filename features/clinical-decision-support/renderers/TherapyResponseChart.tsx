@@ -34,6 +34,10 @@ const DISPLAY_GAP_DAYS = 90
 const MIN_TICK_DISTANCE = 54
 
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
+const monthLabel = (stamp: number) => {
+  const date = new Date(stamp)
+  return `${date.getUTCFullYear().toString().slice(2)}/${String(date.getUTCMonth() + 1).padStart(2, '0')}`
+}
 
 function monthTicks(from: number, to: number, displaySpanDays = (to - from) / DAY_MS): { at: number; label: string }[] {
   const ticks: { at: number; label: string }[] = []
@@ -45,7 +49,7 @@ function monthTicks(from: number, to: number, displaySpanDays = (to - from) / DA
     if (at >= from) {
       ticks.push({
         at,
-        label: `${cursor.getUTCFullYear().toString().slice(2)}/${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`,
+        label: monthLabel(at),
       })
     }
     cursor.setUTCMonth(cursor.getUTCMonth() + step)
@@ -165,7 +169,7 @@ export function TherapyResponseChart({
     const ldlTicks = values.length > 0
       ? [...new Set([Math.round(Math.max(...values)), Math.round(Math.min(...values))])]
       : []
-    const ticks = monthTicks(timeline.min, timeline.max, timeline.displaySpanDays)
+    const ticks = [{ at: timeline.min, label: monthLabel(timeline.min) }, ...monthTicks(timeline.min, timeline.max, timeline.displaySpanDays)]
       .filter((tick) => !timeline.gaps.some((gap) => tick.at > gap.from && tick.at < gap.to))
       .reduce<{ at: number; label: string }[]>((kept, tick) => {
         const previous = kept.at(-1)
