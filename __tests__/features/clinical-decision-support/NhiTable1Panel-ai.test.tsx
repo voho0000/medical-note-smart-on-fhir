@@ -206,6 +206,39 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.getByText('男 <40 mg/dL；女 <50 mg/dL')).toBeVisible()
   })
 
+  it('routes a laboratory autofill source to the cumulative report', () => {
+    const onNavigate = jest.fn()
+    render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onNavigate={onNavigate}
+        recordSources={{
+          'low-hdl': [{
+            resourceType: 'Observation',
+            resourceId: 'observation-hdl',
+            date: '2026-08-04',
+            value: 55,
+            unit: 'mg/dL',
+            coding: [{ code: '2085-9', display: 'HDL cholesterol' }],
+          }],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('button', { name: '低 HDL-C' })[0])
+    const popover = screen.getByTestId('nhi-criterion-popover-low-hdl')
+    fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · HDL cholesterol/ }))
+
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'Observation',
+      resourceId: 'observation-hdl',
+      date: '2026-08-04',
+      reportView: 'cumulative',
+    }))
+  })
+
   it('keeps the clicked extreme-risk tier in view when source navigation narrows the table', () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let resizeCallback: ResizeObserverCallback | undefined

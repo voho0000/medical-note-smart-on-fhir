@@ -1002,6 +1002,11 @@ function NhiTable1PanelContent({
     .map((index) => summary.rows[index])
     .filter((row): row is CdssCoverageSummary['rows'][number] => Boolean(row))
   const actionPoints = summary.clinicianActionPoints
+  const navigateToEvidence = onNavigate ? (target: ResourceNavTarget) => {
+    onNavigate(target.resourceType === 'Observation'
+      ? { ...target, reportView: 'cumulative' }
+      : target)
+  } : undefined
   const forTier = (id: string) => summary.diseaseChecks.filter((check) => check.tier === id)
   const groupsOf = (id: string) => {
     const checks = forTier(id)
@@ -1017,11 +1022,11 @@ function NhiTable1PanelContent({
     aiDecision: aiAssist?.decisions[check.id],
     answerProvenance: answerProvenance?.[check.id],
     recordSources: recordSources?.[check.id],
-    onNavigate: onNavigate ? (target: ResourceNavTarget) => {
+    onNavigate: navigateToEvidence ? (target: ResourceNavTarget) => {
       if (check.tier) {
         preserveTierRef.current = { tier: check.tier, until: performance.now() + 1_500 }
       }
-      onNavigate(target)
+      navigateToEvidence(target)
     } : undefined,
   })
   const prescribingStep = (
@@ -1155,7 +1160,7 @@ function NhiTable1PanelContent({
           isEnglish={isEnglish}
           onAnswer={onAnswer}
           answerProvenance={answerProvenance}
-          onNavigate={onNavigate}
+          onNavigate={navigateToEvidence}
           reviewAction={reviewAction}
         />
       ) : null}

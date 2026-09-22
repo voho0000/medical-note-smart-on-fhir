@@ -80,7 +80,7 @@ export const CumulativeStackedView = memo(function CumulativeStackedView({
   range: CumulativeRangeId
   /** Analyte column to reveal, plus the section that owns it. `seq` advances on
    *  every request so re-picking the same analyte scrolls again. */
-  focusRequest?: { categoryId: string; key?: string; seq: number } | null
+  focusRequest?: { categoryId: string; key?: string; date?: string; seq: number } | null
   activeTrendSourceId?: string
   onOpenTrend: (target: OpenTrendTarget) => void
   onMove: (id: string, direction: -1 | 1) => void
@@ -219,6 +219,7 @@ export const CumulativeStackedView = memo(function CumulativeStackedView({
           isLast={index === entries.length - 1}
           onMove={(direction) => onMove(pivot.category.id, direction)}
           focusAnalyteKey={focusRequest?.categoryId === pivot.category.id ? focusRequest.key : undefined}
+          focusDate={focusRequest?.categoryId === pivot.category.id ? focusRequest.date : undefined}
           focusNonce={focusRequest?.seq}
           activeTrendSourceId={activeTrendSourceId}
           onOpenTrend={onOpenTrend}
@@ -242,6 +243,7 @@ function CumulativeSection({
   isLast,
   onMove,
   focusAnalyteKey,
+  focusDate,
   focusNonce,
   activeTrendSourceId,
   onOpenTrend,
@@ -259,6 +261,7 @@ function CumulativeSection({
   isLast: boolean
   onMove: (direction: -1 | 1) => void
   focusAnalyteKey?: string
+  focusDate?: string
   focusNonce?: number
   activeTrendSourceId?: string
   onOpenTrend: (target: OpenTrendTarget) => void
@@ -277,10 +280,13 @@ function CumulativeSection({
   const panels = useMemo(() => splitPivotIntoStackedPanels(pivot), [pivot])
   const rangedPanels = useMemo<LabPivot[]>(
     () => panels.map((panel) => {
-      const visible = expanded ? panel.dates : filterDatesByCumulativeRange(panel.dates, range, today)
+      const rangedDates = expanded ? panel.dates : filterDatesByCumulativeRange(panel.dates, range, today)
+      const visible = focusDate && panel.dates.includes(focusDate) && !rangedDates.includes(focusDate)
+        ? panel.dates.filter((date) => rangedDates.includes(date) || date === focusDate)
+        : rangedDates
       return visible.length === panel.dates.length ? panel : { ...panel, dates: visible }
     }),
-    [expanded, panels, range, today],
+    [expanded, focusDate, panels, range, today],
   )
 
   const totalDates = pivot.dates.length
@@ -378,6 +384,7 @@ function CumulativeSection({
               stacked
               pivot={panel}
               focusAnalyteKey={focusAnalyteKey}
+              focusDate={focusDate}
               focusNonce={focusNonce}
               nameMode={nameMode}
               activeTrendSourceId={activeTrendSourceId}

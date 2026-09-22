@@ -102,6 +102,8 @@ interface CumulativeLabReportProps {
   onActiveCategoryResolved?: (id: string) => void
   /** Canonical test key to horizontally reveal (e.g. CRP) after navigation. */
   focusAnalyteKey?: string
+  /** Collection date whose analyte cell should be highlighted. */
+  focusDate?: string
   /** Re-triggers focus when the same analyte is requested again. */
   focusNonce?: number
   /** Last range explicitly selected by the user; shared across analytes. */
@@ -117,6 +119,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   onCategoryChange,
   onActiveCategoryResolved,
   focusAnalyteKey,
+  focusDate,
   focusNonce,
   trendWindow,
   onTrendWindowChange,
@@ -187,9 +190,9 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   // has no "active tab" to infer the owning section from.
   // `key` is optional: a citation can point at a whole panel (「見生化」) with
   // no analyte, and 直式 still has to scroll that section into view.
-  const [focusRequest, setFocusRequest] = useState<{ categoryId?: string; key?: string; seq: number } | null>(
+  const [focusRequest, setFocusRequest] = useState<{ categoryId?: string; key?: string; date?: string; seq: number } | null>(
     () => (focusAnalyteKey || activeCategoryId
-      ? { categoryId: activeCategoryId, key: focusAnalyteKey, seq: 0 }
+      ? { categoryId: activeCategoryId, key: focusAnalyteKey, date: focusDate, seq: 0 }
       : null),
   )
   const [seenPropNonce, setSeenPropNonce] = useState(focusNonce)
@@ -204,6 +207,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       setFocusRequest((previous) => ({
         categoryId: activeCategoryId,
         key: focusAnalyteKey,
+        date: focusDate,
         seq: (previous?.seq ?? 0) + 1,
       }))
     }
@@ -397,6 +401,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
     setFocusRequest((previous) => ({
       categoryId: hit.categoryId,
       key: hit.testKey,
+      date: undefined,
       seq: (previous?.seq ?? 0) + 1,
     }))
   }
@@ -513,7 +518,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
             nameMode={nameMode}
             range={range}
             focusRequest={focusRequest?.categoryId
-              ? { categoryId: focusRequest.categoryId, key: focusRequest.key, seq: focusRequest.seq }
+              ? { categoryId: focusRequest.categoryId, key: focusRequest.key, date: focusRequest.date, seq: focusRequest.seq }
               : null}
             activeTrendSourceId={activeTrendSourceId}
             onOpenTrend={openTrend}
@@ -619,6 +624,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
                   pivot={p}
                   fullHeight={fullHeight}
                   focusAnalyteKey={p.category.id === activeId ? focusRequest?.key : undefined}
+                  focusDate={p.category.id === activeId ? focusRequest?.date : undefined}
                   focusNonce={focusRequest?.seq}
                   nameMode={nameMode}
                   activeTrendSourceId={activeTrendSourceId}
