@@ -177,12 +177,18 @@ function Criterion({
         : undefined
   const glyph = fromCode && !answerProvenance && check.evidenceKind !== 'measurement' ? '◐' : mark.glyph
   const states: readonly CdssCoverageCheck['state'][] = ['yes', 'no', 'unknown']
-  const interactive = Boolean(onAnswer && check.editable) || Boolean(check.detail)
   const recordState = answerProvenance?.recordState
     ?? (check.origin === 'record' ? check.state : undefined)
   const overridesAi = answerProvenance?.source === 'ai' || answerProvenance?.overrides === 'ai'
+  const reviewedAi = manuallyChanged
+    && answerProvenance?.manualAction === 'reviewed'
+    && answerProvenance?.overrides === 'ai'
+  const retainsAiEvidence = aiApplied || reviewedAi
+  const interactive = Boolean(onAnswer && check.editable)
+    || Boolean(check.detail)
+    || Boolean(retainsAiEvidence && aiSuggestion)
   const aiEvidenceCount = aiSuggestion?.evidence.length ?? 0
-  const aiDisplayValue = aiApplied && aiSuggestion && aiSuggestion.state !== 'unknown'
+  const aiDisplayValue = retainsAiEvidence && aiSuggestion && aiSuggestion.state !== 'unknown'
     ? aiSuggestion.rationale || check.value
     : check.value
   const cancelScheduledClose = () => {
@@ -251,7 +257,7 @@ function Criterion({
           className={cn(
             'block',
             mark.lit ? 'font-medium text-foreground' : 'text-muted-foreground',
-            (check.detail || (aiApplied && aiSuggestion)) && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
+            (check.detail || (retainsAiEvidence && aiSuggestion)) && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
           )}
         >
           {check.label}
@@ -283,7 +289,7 @@ function Criterion({
               : isEnglish
                 ? `AI assessed ${aiSuggestion.state === 'yes' ? 'met' : 'not met'} · included in tier`
                 : `AI 判讀${aiSuggestion.state === 'yes' ? '符合' : '不符合'} · 已納入分級`}
-            {!manuallyChanged && answerProvenance?.manualAction !== 'reviewed'
+            {!manuallyChanged || reviewedAi
               ? aiEvidenceCount > 0
                 ? isEnglish
                   ? ` · ${aiEvidenceCount} source${aiEvidenceCount === 1 ? '' : 's'} · click to review`

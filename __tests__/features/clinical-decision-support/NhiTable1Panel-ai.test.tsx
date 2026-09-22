@@ -362,6 +362,169 @@ describe('NhiTable1Panel AI review', () => {
     }))
   })
 
+  it('keeps the AI rationale and source guidance after the clinician reviews it', () => {
+    const base = coverageSummary()
+    const criterion = base.diseaseChecks.find((check) => check.label === '接受血管再通術')!
+    const summary = {
+      ...base,
+      diseaseChecks: base.diseaseChecks.map((check) => check.id === criterion.id
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '未找到可判讀資料' }
+        : check),
+    }
+    const onNavigate = jest.fn()
+    mockedUseAiAssist.mockReturnValue({
+      suggestions: {
+        [criterion.id]: {
+          criterionId: criterion.id,
+          state: 'yes',
+          confidence: 'high',
+          rationale: '心導管報告明確記載已接受 PCI 血管再通術。',
+          missing: [],
+          evidence: [{
+            sourceKey: 'R1',
+            sourceResourceType: 'DiagnosticReport',
+            sourceResourceId: 'cardiac-catheterization',
+            sourceLabel: '心導管報告',
+            date: '2025-03-26',
+            excerpt: 'PCI was performed through RRA access.',
+          }],
+          modelId: 'gpt-test',
+          modelName: 'GPT Test',
+          generatedAt: '2026-09-18T10:00:00+08:00',
+        },
+      },
+      decisions: { [criterion.id]: 'applied' },
+      isRunning: false,
+      isDataReady: true,
+      error: null,
+      modelId: 'gpt-test',
+      modelName: 'GPT Test',
+      run,
+      decide,
+    })
+
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+        onNavigate={onNavigate}
+        answerProvenance={{
+          [criterion.id]: {
+            source: 'manual',
+            manualAction: 'reviewed',
+            overrides: 'ai',
+            recordState: 'unknown',
+          },
+        }}
+      />,
+    )
+
+    const row = screen.getByRole('button', { name: '接受血管再通術' })
+    expect(row).toHaveTextContent('符合 · 心導管報告明確記載已接受 PCI 血管再通術。')
+    expect(row).toHaveTextContent('醫師已覆核此判讀 · 1 筆來源 · 點擊查看')
+    expect(row).not.toHaveTextContent('符合 · 未找到可判讀資料')
+
+    fireEvent.click(row)
+    const popover = screen.getByTestId(`nhi-criterion-popover-${criterion.id}`)
+    expect(popover).toHaveTextContent('PCI was performed through RRA access.')
+    fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · 心導管報告/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'DiagnosticReport',
+      resourceId: 'cardiac-catheterization',
+      evidenceQuote: 'PCI was performed through RRA access.',
+    }))
+  })
+
+  it.each([
+    {
+      label: '接受血管再通術',
+      resourceId: 'catheterization-revascularization',
+      excerpt: 'PCI with balloon angioplasty and stent deployment was performed.',
+    },
+    {
+      label: '≥50% 直徑狹窄率',
+      resourceId: 'angiography-stenosis',
+      excerpt: 'Angiography showed a 60% diameter stenosis.',
+    },
+    {
+      label: '多支冠狀動脈阻塞',
+      resourceId: 'angiography-multivessel',
+      excerpt: 'Significant lesions were documented in multiple coronary vessels.',
+    },
+  ])('opens the exact reviewed evidence for $label', ({ label, resourceId, excerpt }) => {
+    const base = coverageSummary()
+    const criterion = base.diseaseChecks.find((check) => check.label === label)!
+    expect(criterion).toBeDefined()
+    const summary = {
+      ...base,
+      diseaseChecks: base.diseaseChecks.map((check) => check.id === criterion.id
+        ? { ...check, state: 'yes' as const, origin: 'physician' as const, value: '未找到可判讀資料' }
+        : check),
+    }
+    const onNavigate = jest.fn()
+    mockedUseAiAssist.mockReturnValue({
+      suggestions: {
+        [criterion.id]: {
+          criterionId: criterion.id,
+          state: 'yes',
+          confidence: 'high',
+          rationale: `${label}具有明確報告依據。`,
+          missing: [],
+          evidence: [{
+            sourceKey: `source-${criterion.id}`,
+            sourceResourceType: 'DiagnosticReport',
+            sourceResourceId: resourceId,
+            sourceLabel: '心導管報告',
+            date: '2026-09-20',
+            excerpt,
+          }],
+          modelId: 'gpt-test',
+          modelName: 'GPT Test',
+          generatedAt: '2026-09-20T10:00:00+08:00',
+        },
+      },
+      decisions: { [criterion.id]: 'applied' },
+      isRunning: false,
+      isDataReady: true,
+      error: null,
+      modelId: 'gpt-test',
+      modelName: 'GPT Test',
+      run,
+      decide,
+    })
+
+    render(
+      <NhiTable1Panel
+        summary={summary}
+        locale="zh-TW"
+        patientId="patient-1"
+        onAnswer={jest.fn()}
+        onNavigate={onNavigate}
+        answerProvenance={{
+          [criterion.id]: {
+            source: 'manual',
+            manualAction: 'reviewed',
+            overrides: 'ai',
+            recordState: 'unknown',
+          },
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    const popover = screen.getByTestId(`nhi-criterion-popover-${criterion.id}`)
+    expect(popover).toHaveTextContent(excerpt)
+    fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · 心導管報告/ }))
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'DiagnosticReport',
+      resourceId,
+      evidenceQuote: excerpt,
+    }))
+  })
+
   it('does not apply a decisive AI answer without a traceable source', async () => {
     const onAnswer = jest.fn()
     mockedUseAiAssist.mockReturnValue({
