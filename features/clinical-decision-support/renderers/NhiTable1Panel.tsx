@@ -16,7 +16,7 @@ import { useSecondTick } from '@/src/shared/hooks/use-second-tick.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { formatGenerationDuration } from '@/features/medical-summary/utils/summary-generation-info'
 import { TherapyResponseChart } from './TherapyResponseChart'
-import type { CdssCoverageCheck, CdssCoverageSummary } from '../types'
+import type { CdssCoverageCheck, CdssCoverageSummary, CdssFactSource } from '../types'
 import {
   selectNhiLipidAiCriteria,
   type NhiLipidAiDecision,
@@ -147,6 +147,7 @@ function Criterion({
   aiSuggestion,
   aiDecision,
   answerProvenance,
+  recordSources,
   onNavigate,
 }: {
   check: CdssCoverageCheck
@@ -159,6 +160,7 @@ function Criterion({
   aiSuggestion?: NhiLipidAiSuggestion
   aiDecision?: NhiLipidAiDecision
   answerProvenance?: NhiLipidAnswerProvenance
+  recordSources?: readonly CdssFactSource[]
   onNavigate?: (target: ResourceNavTarget) => void
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -184,9 +186,11 @@ function Criterion({
     && answerProvenance?.manualAction === 'reviewed'
     && answerProvenance?.overrides === 'ai'
   const retainsAiEvidence = aiApplied || reviewedAi
+  const traceableRecordSources = check.origin === 'record' ? recordSources ?? [] : []
   const interactive = Boolean(onAnswer && check.editable)
     || Boolean(check.detail)
     || Boolean(retainsAiEvidence && aiSuggestion)
+    || traceableRecordSources.length > 0
   const aiEvidenceCount = aiSuggestion?.evidence.length ?? 0
   const aiDisplayValue = retainsAiEvidence && aiSuggestion && aiSuggestion.state !== 'unknown'
     ? aiSuggestion.rationale || check.value
@@ -257,7 +261,8 @@ function Criterion({
           className={cn(
             'block',
             mark.lit ? 'font-medium text-foreground' : 'text-muted-foreground',
-            (check.detail || (retainsAiEvidence && aiSuggestion)) && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
+            (check.detail || (retainsAiEvidence && aiSuggestion) || traceableRecordSources.length > 0)
+              && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
           )}
         >
           {check.label}
@@ -296,6 +301,14 @@ function Criterion({
                   : ` · ${aiEvidenceCount} 筆來源 · 點擊查看`
                 : isEnglish ? ' · no traceable source' : ' · 缺少可回查來源'
               : null}
+          </span>
+        ) : null}
+        {traceableRecordSources.length > 0 ? (
+          <span className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
+            <Database className="h-3 w-3" aria-hidden="true" />
+            {isEnglish
+              ? `Record evidence · ${traceableRecordSources.length} source${traceableRecordSources.length === 1 ? '' : 's'} · click to review`
+              : `自動帶入依據 · ${traceableRecordSources.length} 筆來源 · 點擊查看`}
           </span>
         ) : null}
       </span>
@@ -393,6 +406,39 @@ function Criterion({
                 {isEnglish ? 'Still needed: ' : '仍需補充：'}{aiSuggestion.missing.join(isEnglish ? '; ' : '；')}
               </p>
             ) : null}
+          </div>
+        ) : null}
+        {traceableRecordSources.length > 0 ? (
+          <div className="space-y-2 border-t border-border pt-2">
+            <p className="font-medium">
+              {isEnglish ? 'Record evidence' : '自動帶入依據'} · {traceableRecordSources.length}
+            </p>
+            {traceableRecordSources.map((source) => {
+              const codingLabel = source.coding?.map((coding) => coding.display || coding.code).filter(Boolean).join('、')
+              const sourceLabel = codingLabel || (typeof source.value === 'string' ? source.value : undefined) || check.label
+              const sourceMeta = [source.resourceType, source.date, source.facility].filter(Boolean).join(' · ')
+              return onNavigate ? (
+                <button
+                  key={`${source.resourceType}-${source.resourceId}`}
+                  type="button"
+                  className="block min-h-8 w-full rounded-sm border-l-2 border-primary/40 pl-2 text-left text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onNavigate({
+                    resourceType: source.resourceType,
+                    resourceId: source.resourceId,
+                    display: sourceLabel,
+                    date: source.date,
+                  })}
+                >
+                  {isEnglish ? 'Open source record' : '開啟原始病歷'} · {sourceLabel}
+                  {sourceMeta ? <span className="block text-muted-foreground no-underline">{sourceMeta}</span> : null}
+                </button>
+              ) : (
+                <div key={`${source.resourceType}-${source.resourceId}`} className="border-l-2 border-primary/40 pl-2">
+                  <p>{sourceLabel}</p>
+                  {sourceMeta ? <p className="text-muted-foreground">{sourceMeta}</p> : null}
+                </div>
+              )
+            })}
           </div>
         ) : null}
         {onAnswer && check.editable ? (
@@ -881,6 +927,7 @@ export interface NhiTable1PanelProps {
     provenance?: NhiLipidAnswerProvenance,
   ) => void
   answerProvenance?: NhiLipidAnswerProvenanceById
+  recordSources?: Readonly<Record<string, readonly CdssFactSource[]>>
   onNavigate?: (target: ResourceNavTarget) => void
   /** Development/review injection. Production omits this and uses the
    * patient-scoped connected wrapper below. */
@@ -893,6 +940,7 @@ function NhiTable1PanelContent({
   patientId,
   onAnswer,
   answerProvenance,
+  recordSources,
   aiAssist,
   onNavigate,
 }: NhiTable1PanelProps) {
@@ -984,6 +1032,7 @@ function NhiTable1PanelContent({
     aiSuggestion: aiAssist?.suggestions[check.id],
     aiDecision: aiAssist?.decisions[check.id],
     answerProvenance: answerProvenance?.[check.id],
+    recordSources: recordSources?.[check.id],
     onNavigate,
   })
   const prescribingStep = (
