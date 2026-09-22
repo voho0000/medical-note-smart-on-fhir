@@ -1,6 +1,7 @@
 // Perplexity API Service - Direct API calls with user-provided key
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '@/src/infrastructure/ai/utils/proxy-auth'
+import { beginCollectorObservation } from '@/src/infrastructure/telemetry/collector'
 
 /** Matches the 60s ceiling the OpenAI/Gemini services already enforce. */
 const PERPLEXITY_TIMEOUT_MS = 60_000
@@ -43,8 +44,13 @@ export class PerplexityService {
     error?: string
   }> {
     const proxyUrl = ENV_CONFIG.perplexityProxyUrl
+    const collector = beginCollectorObservation({ feature: 'literature', modelId: 'provider-managed',
+      provider: 'perplexity', sampleKind: 'request', mode: 'search' })
+    let httpStatus: number | undefined
+    let phase: 'request' | 'parse' = 'request'
 
     if (!proxyUrl) {
+      collector.finish({ outcome: 'validation_failed', phase: 'validation', responseComplete: false })
       return {
         success: false,
         content: '',
@@ -74,6 +80,8 @@ export class PerplexityService {
         })
       })
 
+      httpStatus = response.status
+      phase = 'parse'
       const data = await response.json().catch(() => null)
 
       // The proxy returns the real upstream reason in `error` even on non-2xx
@@ -81,6 +89,8 @@ export class PerplexityService {
       // quota-exceeded message). Surface THAT instead of a generic status so the
       // user/agent learns the actual cause rather than failing silently.
       if (!response.ok || !data || data.success === false) {
+        collector.finish({ outcome: !response.ok ? 'upstream' : !data ? 'parse_failed' : 'error',
+          phase: !response.ok ? 'request' : 'parse', httpStatus, responseComplete: true })
         return {
           success: false,
           content: '',
@@ -90,6 +100,7 @@ export class PerplexityService {
 
       // Try different possible response structures
       const result = data.result || data.data || data
+      collector.finish({ outcome: 'ok', phase: 'parse', httpStatus, responseComplete: true, modelSource: 'unreported' })
 
       return {
         success: true,
@@ -97,6 +108,7 @@ export class PerplexityService {
         citations: result.citations || [],
       }
     } catch (error) {
+      collector.finish({ outcome: controller.signal.aborted ? 'timeout' : 'network', phase, httpStatus, responseComplete: false })
       return {
         success: false,
         content: '',

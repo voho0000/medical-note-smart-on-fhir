@@ -8,10 +8,15 @@ import {
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { cancelCollectorRequests } from '@/src/application/telemetry/collector'
 
 const mockSetIsAsrLoading = jest.fn()
 const mockToastError = jest.fn()
 const mockToastInfo = jest.fn()
+
+jest.mock('@/src/infrastructure/telemetry/collector-auth', () => ({
+  captureCollectorAuth: async () => ({ getToken: async () => 'synthetic-firebase-token' }),
+}))
 
 jest.mock('@/src/application/providers/asr.provider', () => ({
   useAsr: () => ({
@@ -76,6 +81,25 @@ function beginRecording(result: { current: ReturnType<typeof useVoiceRecording> 
 }
 
 describe('useVoiceRecording custom endpoint lifecycle', () => {
+  it('returns the transcript while Collector is offline and sends neither audio nor transcript to it', async () => {
+    window.history.replaceState({}, '', '/?site=vghtpe')
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/collector/v1/events')) throw new Error('offline')
+      return { ...successfulResponse('SYNTHETIC-TRANSCRIPT'), status: 200 }
+    })
+    try {
+      const onTranscriptReady = jest.fn()
+      const { result } = renderHook(() => useVoiceRecording(onTranscriptReady, CUSTOM_OPENAI_MODEL_ID))
+      beginRecording(result)
+      await act(async () => result.current.onRecordingStop('', audioBlob))
+      expect(onTranscriptReady).toHaveBeenCalledWith('SYNTHETIC-TRANSCRIPT')
+      const collectorCall = mockFetch.mock.calls.find(([url]) => String(url).includes('/collector/v1/events'))
+      expect(collectorCall).toBeDefined()
+      expect(String(collectorCall?.[1].body)).not.toMatch(/SYNTHETIC-TRANSCRIPT|hospital-a|local-a-key|audio.webm/)
+      expect(JSON.parse(collectorCall![1].body)).toMatchObject({ feature: 'transcription', status: 'completed' })
+    } finally { cancelCollectorRequests(); window.history.replaceState({}, '', '/'); mockFetch.mockReset() }
+  })
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = mockFetch as typeof fetch

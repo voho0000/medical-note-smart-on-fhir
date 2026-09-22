@@ -214,6 +214,8 @@ App 以 Firebase Analytics / GA4 記錄極小量的介面使用統計，用來�
 
 ## 相關文件
 
+- [TVGH Collector 試行與資料契約](COLLECTOR-PILOT.md)：vghtpe-only 自動背景紀錄，沿用 Firebase session 驗證；包含經授權的瀏覽器 ID、來源 IP、UID/email 與管理員診間對照，皆加密保存。固定欄位／精確資源筆數／token 估計區間及失敗隔離，不複製完整 AI diagnostics、不保存 raw token；不宣稱匿名化。
+
 - [Privacy Policy](../PRIVACY_POLICY.md)
 - [Architecture](ARCHITECTURE.md)
 - [AI Agent](AI_AGENT_IMPLEMENTATION.md)

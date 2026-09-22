@@ -16,6 +16,7 @@ import {
 } from '@/src/application/telemetry/usage-analytics'
 import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
+import { beginCollectorObservation } from '@/src/application/telemetry/collector'
 
 /**
  * What a caller opts in with. Every measurement is optional and independent:
@@ -29,6 +30,7 @@ export interface AiResultAnalytics {
   modelId: string
   /** Estimated tokens of clinical context in this request. */
   contextTokens?: number
+  contextTrimmed?: boolean
   /** Size of the chart currently loaded. Omitted when none is. */
   counts?: PatientResourceCounts
   /** How much of that chart survived Data Selection + context fitting and
@@ -69,10 +71,16 @@ export async function runGenerationJob<T>(options: {
   // Reporting is strictly an observer here: it reads the outcome this function
   // already decides and never changes it. `report` fires at most once.
   const startedAt = nowMs()
+  const collector = analytics ? beginCollectorObservation({
+    feature: analytics.surface, modelId: analytics.modelId, sampleKind: 'feature', mode: 'structured',
+    counts: analytics.counts, fedCounts: analytics.fedCounts, contextTokens: analytics.contextTokens,
+    contextTrimmed: analytics.contextTrimmed,
+  }) : undefined
   let reported = false
   const report = (outcome: AiOutcome) => {
     if (reported || !analytics) return
     reported = true
+    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown' })
     reportAiResult(analytics, outcome, nowMs() - startedAt)
   }
   try {

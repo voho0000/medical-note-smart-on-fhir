@@ -30,6 +30,8 @@ import {
   type AiExecutionStatus,
 } from '@/src/application/stores/ai-execution-diagnostics.store'
 
+import { beginCollectorObservation, collectorFeature, collectorError, type CollectorContext } from '@/src/application/telemetry/collector'
+
 interface UseUnifiedAiOptions {
   defaultModel?: string
   onSuccess?: (text: string) => void
@@ -49,6 +51,8 @@ interface QueryOptions {
   operationKey?: string
   /** Human-readable owner included in the downloaded diagnostics bundle. */
   diagnosticFeature?: string
+  /** Only aggregate measurements; never pass diagnostics records or operationKey. */
+  collectorContext?: CollectorContext
 }
 
 interface StreamOptions extends QueryOptions {
@@ -153,6 +157,10 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       const timestamp = new Date().toISOString()
       let modelExecution = createModelExecution(queryOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let outputData = ''
+      const collector = beginCollectorObservation({
+        ...queryOptions?.collectorContext, feature: collectorFeature(queryOptions?.diagnosticFeature),
+        modelId, sampleKind: 'request', mode: 'query',
+      })
       const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
         useAiExecutionDiagnosticsStore.getState().addRecord({
           version: 1,
@@ -195,10 +203,14 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           : modelExecution
         queryOptions?.onModelExecution?.(modelExecution)
         outputData = result.text
+        collector.finish({ outcome: 'ok', phase: 'request', responseComplete: true,
+          modelId: modelExecution.actualModelId ?? modelId,
+          modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record('completed')
         options.onSuccess?.(outputData)
         return outputData
       } catch (err) {
+        collector.finish({ outcome: collectorError(err), phase: 'request', responseComplete: false })
         if (err instanceof Error && err.name === 'AbortError') {
           record('aborted', err.message)
           throw err
@@ -250,6 +262,10 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
       let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let fullText = ''
+      const collector = beginCollectorObservation({
+        ...streamOptions?.collectorContext, feature: collectorFeature(streamOptions?.diagnosticFeature),
+        modelId, sampleKind: 'request', mode: 'stream',
+      })
       const timestamp = new Date().toISOString()
       let recorded = false
       const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
@@ -305,6 +321,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
             streamOptions?.onModelExecution?.(modelExecution)
           },
           onChunk: (chunk: string) => {
+            if (chunk.length > 0) collector.firstChunk()
             fullText = chunk
             streamOptions?.onChunk?.(chunk)
           },
@@ -314,6 +331,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         // instead of rejecting. Structured callers still need a hard stop so
         // they neither parse buffered text nor launch their parse-retry pass.
         if (abortController.signal.aborted) {
+          collector.finish({ outcome: 'aborted', phase: 'stream', responseComplete: false })
           record('aborted', 'The operation was aborted')
           if (streamOptions?.throwOnAbort) {
             const abortError = new Error('The operation was aborted')
@@ -324,10 +342,14 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         }
 
         streamOptions?.onComplete?.(fullText)
+        collector.finish({ outcome: 'ok', phase: 'stream', responseComplete: true,
+          modelId: modelExecution.actualModelId ?? modelId,
+          modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record('completed')
         options.onSuccess?.(fullText)
         return fullText
       } catch (err) {
+        collector.finish({ outcome: abortController.signal.aborted ? 'aborted' : collectorError(err), phase: 'stream', responseComplete: false })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(

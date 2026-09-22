@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { beginCollectorObservation, collectorError } from '@/src/application/telemetry/collector'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useClinicalAiInput } from '@/src/application/hooks/ai-generation/use-clinical-ai-input.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
@@ -164,6 +165,9 @@ export function useNhiLipidAiAssist(input: {
     }
     stopAi(operationKey)
     useNhiLipidReviewStore.getState().beginAiRun(patientId, metadata)
+    const collector = beginCollectorObservation({ feature: 'nhi_lipid', modelId, sampleKind: 'feature', mode: 'structured' })
+    let collectorPhase: 'request' | 'validation' = 'request'
+    let collectorComplete = false
 
     try {
       let completedModelId = modelId
@@ -187,11 +191,13 @@ export function useNhiLipidAiAssist(input: {
         },
       })
       const latestScope = currentScopeRef.current
+      collectorComplete = true
       if (
         latestScope.patientId !== patientId
         || latestScope.inputSignature !== inputSignature
         || latestScope.sourceScopeSignature !== sourceScopeSignature
       ) {
+        collector.finish({ outcome: 'aborted', phase: 'validation', responseComplete: true })
         useNhiLipidReviewStore.getState().failAiRun(
           patientId,
           runId,
@@ -201,6 +207,7 @@ export function useNhiLipidAiAssist(input: {
         )
         return
       }
+      collectorPhase = 'validation'
       const parsed = parseNhiLipidAiResponse({
         raw,
         criteria,
@@ -210,6 +217,7 @@ export function useNhiLipidAiAssist(input: {
         modelName: completedModelName,
       })
       if (!parsed) {
+        collector.finish({ outcome: 'validation_failed', phase: 'validation', responseComplete: true })
         useNhiLipidReviewStore.getState().failAiRun(
           patientId,
           runId,
@@ -220,6 +228,7 @@ export function useNhiLipidAiAssist(input: {
         return
       }
       const recordStates = Object.fromEntries(criteria.map((criterion) => [criterion.id, criterion.state]))
+      collector.finish({ outcome: 'ok', phase: 'validation', responseComplete: true })
       useNhiLipidReviewStore.getState().completeAiRun(
         patientId,
         runId,
@@ -229,6 +238,7 @@ export function useNhiLipidAiAssist(input: {
         { modelId: completedModelId, modelName: completedModelName },
       )
     } catch (caught) {
+      collector.finish({ outcome: collectorError(caught), phase: collectorPhase, responseComplete: collectorComplete })
       const activeRun = useNhiLipidReviewStore.getState().aiReview.latestAttempt?.runId
       if (activeRun !== runId) return
       if (caught instanceof Error && caught.name === 'AbortError') {
