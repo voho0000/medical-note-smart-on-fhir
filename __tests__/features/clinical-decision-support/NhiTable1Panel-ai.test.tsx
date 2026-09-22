@@ -186,7 +186,7 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('耗時 01:05')
   })
 
-  it('shows criterion details on mouse hover without requiring a click', () => {
+  it('opens criterion details only after an explicit click', () => {
     render(
       <NhiTable1Panel
         summary={coverageSummary()}
@@ -198,8 +198,117 @@ describe('NhiTable1Panel AI review', () => {
 
     fireEvent.pointerEnter(screen.getAllByRole('button', { name: '低 HDL-C' })[0], { pointerType: 'mouse' })
 
+    expect(screen.queryByTestId('nhi-criterion-popover-low-hdl')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: '低 HDL-C' })[0])
+
     expect(screen.getByTestId('nhi-criterion-popover-low-hdl')).toBeVisible()
     expect(screen.getByText('男 <40 mg/dL；女 <50 mg/dL')).toBeVisible()
+  })
+
+  it('routes a laboratory autofill source to the cumulative report', () => {
+    const onNavigate = jest.fn()
+    render(
+      <NhiTable1Panel
+        summary={coverageSummary()}
+        locale="zh-TW"
+        patientId="patient-1"
+        onNavigate={onNavigate}
+        recordSources={{
+          'low-hdl': [{
+            resourceType: 'Observation',
+            resourceId: 'observation-hdl',
+            date: '2026-08-04',
+            value: 55,
+            unit: 'mg/dL',
+            coding: [{ code: '2085-9', display: 'HDL cholesterol' }],
+          }],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getAllByRole('button', { name: '低 HDL-C' })[0])
+    const popover = screen.getByTestId('nhi-criterion-popover-low-hdl')
+    fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · HDL cholesterol/ }))
+
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      resourceType: 'Observation',
+      resourceId: 'observation-hdl',
+      date: '2026-08-04',
+      reportView: 'cumulative',
+    }))
+  })
+
+  it('keeps the clicked extreme-risk tier in view when source navigation narrows the table', () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let resizeCallback: ResizeObserverCallback | undefined
+    let animationCallback: FrameRequestCallback | undefined
+    const performanceNow = jest.spyOn(performance, 'now').mockReturnValue(1_000)
+    const requestAnimationFrame = jest.spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        animationCallback = callback
+        return 1
+      })
+    globalThis.ResizeObserver = class {
+      private readonly callback: ResizeObserverCallback
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+      }
+      observe(target: Element) {
+        if (target.getAttribute('data-testid') === 'nhi-table1-scroll') {
+          resizeCallback = this.callback
+        }
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+
+    try {
+      const onNavigate = jest.fn()
+      render(
+        <NhiTable1Panel
+          summary={coverageSummary()}
+          locale="zh-TW"
+          patientId="patient-1"
+          onNavigate={onNavigate}
+          recordSources={{
+            cad: [{
+              resourceType: 'Condition',
+              resourceId: 'condition-cad',
+              date: '2026-08-04',
+              coding: [{ code: 'I25.2', display: 'Old myocardial infarction' }],
+            }],
+          }}
+        />,
+      )
+
+      const viewport = screen.getByTestId('nhi-table1-scroll')
+      const extremeTier = viewport.querySelector<HTMLElement>('[data-nhi-tier="extreme"]')
+      expect(extremeTier).not.toBeNull()
+      Object.defineProperty(viewport, 'scrollLeft', { configurable: true, writable: true, value: 400 })
+      jest.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0, right: 500, width: 500, top: 0, bottom: 800, height: 800, x: 0, y: 0, toJSON: () => ({}),
+      })
+      jest.spyOn(extremeTier!, 'getBoundingClientRect').mockReturnValue({
+        left: 700, right: 900, width: 200, top: 0, bottom: 80, height: 80, x: 700, y: 0, toJSON: () => ({}),
+      })
+
+      fireEvent.click(screen.getAllByRole('button', { name: '冠狀動脈疾病' })[0])
+      fireEvent.click(within(screen.getByTestId('nhi-criterion-popover-cad')).getByRole('button', { name: /開啟原始病歷 · Old myocardial infarction/ }))
+      expect(resizeCallback).toBeDefined()
+      resizeCallback?.([], {} as ResizeObserver)
+      animationCallback?.(0)
+
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({
+        resourceType: 'Condition',
+        resourceId: 'condition-cad',
+      }))
+      expect(viewport.scrollLeft).toBe(950)
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+      requestAnimationFrame.mockRestore()
+      performanceNow.mockRestore()
+    }
   })
 
   it('automatically includes a traceable AI assessment in the tier with provenance', async () => {

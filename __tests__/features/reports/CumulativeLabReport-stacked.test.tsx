@@ -171,6 +171,7 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
         observations={crpObservations(5)}
         activeCategoryId="chem"
         focusAnalyteKey="CRP"
+        focusDate="2026-09-01"
         focusNonce={3}
       />,
       { wrapper: TestProviders },
@@ -179,6 +180,13 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     const crpHeader = section('chem')!.querySelector('[data-lab-test-key="CRP"]')
     expect(crpHeader).toHaveClass('bg-primary/10', 'border-b-primary')
+    const focusedCell = section('chem')!.querySelector('[data-evidence-focus="true"]')
+    expect(focusedCell).toHaveAttribute('data-lab-date', '2026-09-01')
+    expect(focusedCell).toHaveAttribute('data-lab-test-key', 'CRP')
+    expect(focusedCell).toHaveTextContent('1.4')
+    // The cited date remains visible even though it is older than the default
+    // latest-three range; the rest of the full history stays collapsed.
+    expect(dateRows('chem')).toHaveLength(4)
     // Only the cited section highlights: 血液 also carries no CRP column, and
     // no other section may claim the focus key.
     expect(document.querySelectorAll('[data-lab-test-key="CRP"].bg-primary\\/10'))
@@ -190,6 +198,7 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
         observations={crpObservations(5)}
         activeCategoryId="chem"
         focusAnalyteKey="CRP"
+        focusDate="2026-09-01"
         focusNonce={4}
       />,
     )

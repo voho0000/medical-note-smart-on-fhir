@@ -144,6 +144,41 @@ interface ClinicalDecisionSupportViewProps {
   nhiPageResetKey?: number
 }
 
+const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  hypertension: ['hypertensionDiagnosis'],
+  age: ['age'],
+  'low-hdl': ['HDL'],
+  'met-bp': ['bloodPressure'],
+  'met-tg': ['triglycerides'],
+  cad: ['coronaryArteryDiagnosis'],
+  'recent-mi': ['myocardialInfarctionEventDate'],
+  pad: ['peripheralArteryDiagnosis'],
+  carotid: ['carotidStenosisDiagnosis'],
+  acs: ['acuteCoronarySyndromeDiagnosis', 'myocardialInfarctionDiagnosis'],
+  'stroke-atherosclerosis': ['ischemicStrokeDiagnosis'],
+  diabetes: ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis'],
+  'predialysis-ckd': ['ckdChronicity', 'ckdDiagnosis'],
+  'severe-ldl': ['LDL'],
+}
+
+function buildNhiRecordSources(
+  facts: CdssPatientProfile['facts'] | undefined,
+): Readonly<Record<string, readonly CdssFactSource[]>> | undefined {
+  if (!facts) return undefined
+  const result: Record<string, CdssFactSource[]> = {}
+  for (const [criterionId, factKeys] of Object.entries(NHI_RECORD_FACT_KEYS)) {
+    const seen = new Set<string>()
+    const sources = factKeys.flatMap((factKey) => facts[factKey]?.sources ?? []).filter((source) => {
+      const key = `${source.resourceType}/${source.resourceId}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (sources.length > 0) result[criterionId] = sources
+  }
+  return result
+}
+
 const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
   recommended: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200',
   consider: 'bg-blue-100 text-blue-900 dark:bg-blue-500/10 dark:text-blue-200',
@@ -2130,6 +2165,10 @@ export function ClinicalDecisionSupportView({
   const nhiSummary = isNhiTable
     ? result.recommendations.find((item) => item.id === 'dyslipidemia-risk-and-target')?.coverageSummary
     : undefined
+  const nhiRecordSources = useMemo(
+    () => isNhiTable ? buildNhiRecordSources(profileFacts) : undefined,
+    [isNhiTable, profileFacts],
+  )
   const ModuleSections = result.packId === 'hyperlipidemia-cdss' ? LipidModuleSections : CdssModuleSections
   const isVisitFlow = (layout === 'flow' || isSections) && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
   const visitFlow = useMemo(() => (
@@ -2502,6 +2541,7 @@ export function ClinicalDecisionSupportView({
                 : undefined}
               aiAssist={nhiLipidAiAssist}
               answerProvenance={nhiLipidAnswerProvenance}
+              recordSources={nhiRecordSources}
               onNavigate={navigateToResource}
             />
           ) : (
