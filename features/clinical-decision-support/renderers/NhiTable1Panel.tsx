@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Bug, Check, Database, ListChecks, LoaderCircle, Settings2, Sparkles } from 'lucide-react'
 import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutionDiagnosticsDialog'
 import { downloadAiExecutionDiagnostics } from '@/src/shared/utils/ai-execution-diagnostics'
@@ -899,11 +899,40 @@ function NhiTable1PanelContent({
   aiAssist,
   onNavigate,
 }: NhiTable1PanelProps) {
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const preserveTierRef = useRef<{ tier: string; until: number } | null>(null)
   const isEnglish = locale === 'en'
   const allChecks = [...summary.factors, ...summary.metabolicChecks, ...summary.diseaseChecks]
   const tiers = COLUMNS.map((id) => summary.tiers.find((tier) => tier.id === id)).filter(
     (tier): tier is CdssCoverageSummary['tiers'][number] => Boolean(tier),
   )
+
+  useEffect(() => {
+    const viewport = tableScrollRef.current
+    if (!viewport || typeof ResizeObserver === 'undefined') return
+    let frame: number | null = null
+    const keepPendingTierVisible = () => {
+      const pending = preserveTierRef.current
+      if (!pending || performance.now() > pending.until) return
+      const anchor = viewport.querySelector<HTMLElement>(`[data-nhi-tier="${pending.tier}"]`)
+      if (!anchor) return
+      const viewportRect = viewport.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      const centeredOffset = anchorRect.left - viewportRect.left
+        - ((viewportRect.width - anchorRect.width) / 2)
+      viewport.scrollLeft += centeredOffset
+    }
+    const observer = new ResizeObserver(() => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(keepPendingTierVisible)
+    })
+    observer.observe(viewport)
+    return () => {
+      observer.disconnect()
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
+  }, [tiers.length])
+
   if (tiers.length === 0) return null
 
   const pendingReview = [...new Map(allChecks.filter(check => check.editable).map(check => [check.id, check])).values()]
@@ -988,7 +1017,12 @@ function NhiTable1PanelContent({
     aiDecision: aiAssist?.decisions[check.id],
     answerProvenance: answerProvenance?.[check.id],
     recordSources: recordSources?.[check.id],
-    onNavigate,
+    onNavigate: onNavigate ? (target: ResourceNavTarget) => {
+      if (check.tier) {
+        preserveTierRef.current = { tier: check.tier, until: performance.now() + 1_500 }
+      }
+      onNavigate(target)
+    } : undefined,
   })
   const prescribingStep = (
     step: PrescribingStep,
@@ -1128,7 +1162,7 @@ function NhiTable1PanelContent({
 
       {!aiAssist ? reviewAction : null}
 
-      <div className="overflow-x-auto" data-testid="nhi-table1-scroll" tabIndex={0} aria-label={isEnglish ? 'Complete NHI Table 1; scroll horizontally for all risk groups' : '完整健保表一；可水平捲動查看所有風險分級'}>
+      <div ref={tableScrollRef} className="overflow-x-auto" data-testid="nhi-table1-scroll" tabIndex={0} aria-label={isEnglish ? 'Complete NHI Table 1; scroll horizontally for all risk groups' : '完整健保表一；可水平捲動查看所有風險分級'}>
         <p className="sticky left-0 mb-2 w-fit text-[11px] text-muted-foreground">
           {isEnglish ? 'Scroll horizontally to compare all risk groups →' : '向右捲動可對照所有風險分級 →'}
         </p>
@@ -1146,6 +1180,7 @@ function NhiTable1PanelContent({
               {lowerTiers.map((baseTier) => (
                 <div
                   key={baseTier.id}
+                  data-nhi-tier={baseTier.id}
                   aria-label={baseTier.label}
                   className={cn(
                     'flex min-w-0 flex-col items-center justify-center rounded-t-md bg-card px-1.5 py-2 text-center',
@@ -1172,6 +1207,7 @@ function NhiTable1PanelContent({
           ) : (
             <div
               key={tier.id}
+              data-nhi-tier={tier.id}
               className={cn(
                 'rounded-t-md px-3 py-2 text-center text-base font-semibold',
                 TINT[tier.id],
