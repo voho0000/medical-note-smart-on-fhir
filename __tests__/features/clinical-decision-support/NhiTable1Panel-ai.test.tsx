@@ -186,7 +186,7 @@ describe('NhiTable1Panel AI review', () => {
     expect(screen.getByTestId('nhi-lipid-ai-run-meta')).toHaveTextContent('耗時 01:05')
   })
 
-  it('shows criterion details on mouse hover without requiring a click', () => {
+  it('opens criterion details only after an explicit click', () => {
     render(
       <NhiTable1Panel
         summary={coverageSummary()}
@@ -197,6 +197,10 @@ describe('NhiTable1Panel AI review', () => {
     )
 
     fireEvent.pointerEnter(screen.getAllByRole('button', { name: '低 HDL-C' })[0], { pointerType: 'mouse' })
+
+    expect(screen.queryByTestId('nhi-criterion-popover-low-hdl')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: '低 HDL-C' })[0])
 
     expect(screen.getByTestId('nhi-criterion-popover-low-hdl')).toBeVisible()
     expect(screen.getByText('男 <40 mg/dL；女 <50 mg/dL')).toBeVisible()

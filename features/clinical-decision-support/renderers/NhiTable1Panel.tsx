@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Bug, Check, Database, ListChecks, LoaderCircle, Settings2, Sparkles } from 'lucide-react'
 import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutionDiagnosticsDialog'
 import { downloadAiExecutionDiagnostics } from '@/src/shared/utils/ai-execution-diagnostics'
@@ -134,8 +134,9 @@ function ProvenanceBadge({
 /**
  * One 表一 criterion: a mark, the clause's label, and what the record says.
  *
- * The clause's bracket and the clinician's answer appear on hover for a quick
- * desktop read, while press remains available to touch and keyboard users.
+ * The clause's bracket and the clinician's answer appear after an explicit
+ * click or keyboard activation, so scanning across a dense table does not
+ * repeatedly cover adjacent criteria with transient cards.
  * Twenty-six criteria each carrying three answer buttons is a screen that asks
  * everything and is read by nobody; the tier only moves on a few of them, and
  * those are the ones a clinician opens.
@@ -164,8 +165,6 @@ function Criterion({
   onNavigate?: (target: ResourceNavTarget) => void
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const openedFromHover = useRef(false)
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
   const aiApplied = answerProvenance?.source === 'ai'
@@ -195,28 +194,6 @@ function Criterion({
   const aiDisplayValue = retainsAiEvidence && aiSuggestion && aiSuggestion.state !== 'unknown'
     ? aiSuggestion.rationale || check.value
     : check.value
-  const cancelScheduledClose = () => {
-    if (closeTimer.current === null) return
-    clearTimeout(closeTimer.current)
-    closeTimer.current = null
-  }
-  const openFromPointer = () => {
-    cancelScheduledClose()
-    openedFromHover.current = true
-    setPopoverOpen(true)
-  }
-  const closeAfterPointerLeaves = () => {
-    cancelScheduledClose()
-    closeTimer.current = setTimeout(() => {
-      closeTimer.current = null
-      setPopoverOpen(false)
-    }, 200)
-  }
-
-  useEffect(() => () => {
-    if (closeTimer.current !== null) clearTimeout(closeTimer.current)
-  }, [])
-
   const answerManually = (state: CdssCoverageCheck['state']) => {
     if (!onAnswer) return
     const confirmsRecordCode = !answerProvenance
@@ -322,23 +299,13 @@ function Criterion({
   return (
     <Popover
       open={popoverOpen}
-      onOpenChange={(open) => {
-        cancelScheduledClose()
-        openedFromHover.current = false
-        setPopoverOpen(open)
-      }}
+      onOpenChange={setPopoverOpen}
     >
       <PopoverTrigger
         className="flex w-full gap-2 rounded-sm py-1.5 text-[13px] leading-relaxed hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={check.label}
         onClick={(event) => {
           if (window.getSelection()?.toString()) event.preventDefault()
-        }}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== 'touch') openFromPointer()
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType !== 'touch') closeAfterPointerLeaves()
         }}
       >
         {body}
@@ -347,18 +314,6 @@ function Criterion({
         align="start"
         className="w-72 space-y-3 text-xs leading-relaxed"
         data-testid={`nhi-criterion-popover-${check.id}`}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== 'touch') cancelScheduledClose()
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType !== 'touch') closeAfterPointerLeaves()
-        }}
-        onOpenAutoFocus={(event) => {
-          if (openedFromHover.current) event.preventDefault()
-        }}
-        onCloseAutoFocus={(event) => {
-          if (openedFromHover.current) event.preventDefault()
-        }}
       >
         <div className="space-y-1">
           <p className="text-sm font-medium">{check.label}</p>
