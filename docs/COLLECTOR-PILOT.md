@@ -93,7 +93,8 @@ counts 是病歷衍生的精確統計，搭配時間／設備／帳號可能交�
 - 驗收使用正式 `https://mediprisma.tw/app`（沿用 `site=vghtpe`），不是其他預覽網址；所有符合 site 的使用者會自動嘗試，不只測試者。Chrome 的 [Local Network Access](https://developer.chrome.com/blog/local-network-access) 可能顯示權限提示，不是應用程式啟用開關。需測試允許／拒絕／未回應、Collector 正常／離線時的聊天、摘要、語音與搜尋，以及非 vghtpe 不送事件。localhost 證據不能代替這項驗收。
 - 本次只提交 Collector 相關檔案。開發中的 CDSS 手動儲存／病歷內容上傳及其 stores、UI、契約、tests 均排除；原有 NHI lipid AI 的固定結果 metadata 掛點仍屬既有 Collector 範圍，不傳 CDSS 內容。
 - 發布前保留上一版網站 commit／artifact。若新前端主功能異常，回退網站版本；停止 Collector 只能停止收件，不能撤回已載入的前端程式。保留原 DB/key 與 v5 reader，不刪紀錄。
-- 2026-09-23 故障隔離回歸：MediPrisma 36 suites／353 tests 通過；Gateway 82/82、typecheck/build 通過。包含離線、5 秒逾時、有界並行、401/403、自動恢復與 site gate。不是全 repo 或正式站跨機驗收，亦未消除下述既有 dependency audit findings。
+- 2026-09-23 PR 交付複驗：pull 後以獨立 worktree 同步最新 master 4edcf8cd，只包含已提交的 Collector 變更。**24 suites／239 tests**、全 repo TypeScript、PR 修改程式檔 ESLint、lockfile／diff／新增行常見憑證格式檢查通過。正式 `npm run build:mediprisma`（/app 靜態輸出）通過，使用合成 HTTPS origin 確認設定確實編入 browser bundle；沒有發布產物。Gateway 同步 main 後 82/82、typecheck/build 再次通過。包含離線、5 秒逾時、有界並行、401/403、自動恢復與 site gate；不是全 repo Jest 或正式站跨機驗收，亦未消除下述既有 dependency audit findings。
+- 計數更正：前次主工作區輸出的 36 suites／353 tests 含 `tmp/release-scope-perf` 內 12 組／114 項重複副本，不能當成 353 個獨立測項；本次以乾淨 worktree 的 24／239 為準。下方歷史工作區測試總數不代表排除副本後的獨立測項數；未刪除任何測試或變更 assertions。
 
 ## 驗證與回復
 
