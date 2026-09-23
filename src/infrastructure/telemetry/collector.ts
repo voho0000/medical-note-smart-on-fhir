@@ -112,6 +112,24 @@ function modelInfo(id: string, provider?: Start['provider']) {
     provider: provider ?? (definition?.provider === 'claude' ? 'anthropic' : definition?.provider ?? 'unknown') }
 }
 
+/** Read existing browser consent only. Never probe the network to request it. */
+async function collectorNetworkPermission(endpoint: string): Promise<PermissionStatus | null> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null
+    const host = new URL(endpoint).hostname
+    const name = ['localhost', '127.0.0.1', '[::1]'].includes(host) ? 'loopback-network' : 'local-network'
+    try {
+      // Chromium 145+ splits local and loopback permissions; lib.dom may lag it.
+      return await navigator.permissions.query({ name: name as PermissionName })
+    } catch (error) {
+      // Older Chromium only knows the combined descriptor. Never override a
+      // returned prompt/denied state with a different permission's grant.
+      if (!(error instanceof TypeError)) return null
+      return await navigator.permissions.query({ name: 'local-network-access' as PermissionName })
+    }
+  } catch { return null }
+}
+
 /** Map only source-code labels; arbitrary panel titles and operation keys never pass through. */
 export function collectorFeature(label?: string): Start['feature'] {
   const aliases: Record<string, Start['feature']> = {
@@ -140,11 +158,19 @@ function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: 
   // Defer even the fetch invocation. The clinical caller never awaits this promise.
   const send = Promise.resolve().then(async () => {
     if (generation !== owner || !isCollectorSite() || controller.signal.aborted) return
+    const permission = await collectorNetworkPermission(endpoint)
+    if (generation !== owner || !isCollectorSite() || controller.signal.aborted) return
+    if (permission?.state !== 'granted') {
+      dropped++ // A permission skip is not a transport failure/cooldown.
+      return
+    }
     const credential = await auth
     if (generation !== owner || !isCollectorSite() || controller.signal.aborted) return
     const token = await credential?.getToken()
     if (!token) throw new Error('collector_auth_unavailable')
     if (generation !== owner || !isCollectorSite() || controller.signal.aborted) return
+    // PermissionStatus is live: do not send if consent changed while awaiting auth.
+    if (permission.state !== 'granted') { dropped++; return }
     const response = await fetch(endpoint, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(event), signal: controller.signal, credentials: 'omit',
