@@ -1,5 +1,5 @@
 import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV4Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV5Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
@@ -46,7 +46,7 @@ test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('auto
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body().site).toBe('vghtpe')
-  expect(collectorEventV4Schema.safeParse(body()).success).toBe(true)
+  expect(collectorEventV5Schema.safeParse(body()).success).toBe(true)
 })
 
 test('moving to app-hmc while keeping site=vghtpe does not suppress the observation', async () => {
@@ -84,8 +84,8 @@ test('exact resource counts and approved model codes leave the browser, once per
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   const payload = body()
-  expect(collectorEventV4Schema.safeParse(payload).success).toBe(true)
-  expect(payload).toMatchObject({ schema_version: 4, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
+  expect(collectorEventV5Schema.safeParse(payload).success).toBe(true)
+  expect(payload).toMatchObject({ schema_version: 5, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
     diagnostics: { loaded: { total: 8237, medications: 47, encounters: 23, documents: 0, observations: 8121, reports: 19 },
       prepared: { total: 124, medications: 4, encounters: 11, observations: 100, reports: 8, documents: 0 },
       context_tokens_bucket: '32001-128000', context_trimmed: true } })
@@ -107,7 +107,7 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   expect(payload.diagnostics).not.toHaveProperty('prepared')
   expect(payload.response_complete).toBeNull()
   for (const model of MODEL_CATALOG) {
-    expect(collectorEventV4Schema.safeParse({ ...payload, model: model.provider === 'custom' ? 'custom' : model.id }).success).toBe(true)
+    expect(collectorEventV5Schema.safeParse({ ...payload, model: model.provider === 'custom' ? 'custom' : model.id }).success).toBe(true)
   }
 })
 
@@ -119,7 +119,7 @@ test('invalid counts are omitted, never rounded, made positive or coerced from s
   await settle()
   expect(body().diagnostics).not.toHaveProperty('loaded')
   for (const value of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '12', '11-50', null]) {
-    expect(collectorEventV4Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
+    expect(collectorEventV5Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
   }
 })
 
@@ -129,10 +129,10 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   await settle()
   const payload = body()
   for (const field of ['prompt', 'response', 'patient_id', 'token', 'url', 'error_message']) {
-    expect(collectorEventV4Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
-    expect(collectorEventV4Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
+    expect(collectorEventV5Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
+    expect(collectorEventV5Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
   }
-  expect(collectorEventV4Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
+  expect(collectorEventV5Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
   expect(collectorFeature('SYNTHETIC-PATIENT-TITLE')).toBe('ai_other')
   expect(collectorFeature('__proto__')).toBe('ai_other')
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
@@ -149,6 +149,53 @@ test('collector failure cannot change clinical success, cache update or loading 
   expect(store.getState().errors['synthetic-slot']).toBeFalsy()
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test.each([[0, 6], [3, 3], [6, 0], [1, 0]])('summary terminal event measures %i/%i without discarding partial results', async (succeeded, failed) => {
+  const store = createAiResultStore<{ cardErrors?: object; completedCardIds: string[] }>()
+  const parsed = { cardErrors: failed ? { safety: 'SYNTHETIC-SECRET' } : undefined, completedCardIds: ['synthetic-card'] }
+  const result = await runGenerationJob({
+    store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' },
+    produce: async (measure) => {
+      measure({ outcome: failed ? 'parse_failed' : 'ok', summaryCards: { succeeded, failed } })
+      return parsed
+    },
+  })
+  await settle()
+  expect(result).toBe(parsed)
+  expect(store.getState().byKey.summary).toBe(parsed)
+  expect(store.getState().errors.summary).toBeNull()
+  expect(store.getState().running.summary).toBe(false)
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(body()).toMatchObject({
+    schema_version: 5, sample_kind: 'feature', status: failed ? 'error' : 'completed',
+    error_class: failed ? 'parse_failed' : null,
+    diagnostics: { summary_cards: { succeeded, failed }, phase: failed ? 'parse' : 'unknown' },
+  })
+  expect(JSON.stringify(body())).not.toMatch(/SYNTHETIC-SECRET|synthetic-card|cardErrors/)
+})
+
+test.each(['cancelled', 'superseded', 'thrown'] as const)('a %s run overrides pending card measurements', async (kind) => {
+  const store = createAiResultStore<object>()
+  let commit = true
+  const result = await runGenerationJob({
+    store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, shouldCommit: () => commit,
+    produce: async (measure) => {
+      measure({ outcome: 'ok', summaryCards: { succeeded: 6, failed: 0 } })
+      if (kind === 'thrown') throw new Error('SYNTHETIC-SECRET')
+      if (kind === 'superseded') store.setState({ bundleRevision: 1 })
+      else commit = false
+      return {}
+    },
+  })
+  await settle()
+  expect(result).toBeNull()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(body().status).toBe(kind === 'thrown' ? 'error' : 'aborted')
+  expect(body().diagnostics).not.toHaveProperty('summary_cards')
+  expect(store.getState().byKey.summary).toBeUndefined()
 })
 
 test('5-second timeout, bounded concurrency and automatic recovery without eight-hour expiry', async () => {
@@ -221,7 +268,7 @@ test('automatic collection uses a persistent browser ID, never storing credentia
   expect(JSON.stringify(localStorage)).not.toContain(TOKEN)
   for (const key of ['user_id', 'email', 'source_ip', 'room', 'receipt']) {
     expect(body()).not.toHaveProperty(key)
-    expect(collectorEventV4Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
+    expect(collectorEventV5Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
   }
   localStorage.clear()
   start().finish({ outcome: 'ok' })

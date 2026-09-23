@@ -17,6 +17,13 @@ import {
 import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
 import { beginCollectorObservation } from '@/src/application/telemetry/collector'
+import type { SummaryCardCounts } from '@/src/shared/contracts/collector-event'
+
+/** Per-run measurements only; never stored in the clinical result/cache. */
+export interface AiGenerationMeasurement {
+  outcome: AiOutcome
+  summaryCards?: SummaryCardCounts
+}
 
 /**
  * What a caller opts in with. Every measurement is optional and independent:
@@ -48,7 +55,7 @@ export async function runGenerationJob<T>(options: {
   /** Encrypted-session-cache key — each feature keeps its historical format. */
   cacheKey: string
   /** Streams + parses one reply; null = parse failed (after any internal retry). */
-  produce: () => Promise<T | null>
+  produce: (measure: (result: AiGenerationMeasurement) => void) => Promise<T | null>
   /** A user cancellation invalidates the run without surfacing an error. */
   shouldCommit?: () => boolean
   /** Opt in to the `ai_result` reliability event. Omit and nothing is sent. */
@@ -77,14 +84,15 @@ export async function runGenerationJob<T>(options: {
     contextTrimmed: analytics.contextTrimmed,
   }) : undefined
   let reported = false
-  const report = (outcome: AiOutcome) => {
+  const report = (outcome: AiOutcome, summaryCards?: SummaryCardCounts) => {
     if (reported || !analytics) return
     reported = true
-    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown' })
+    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards })
     reportAiResult(analytics, outcome, nowMs() - startedAt)
   }
   try {
-    const parsed = await produce()
+    let measurement: AiGenerationMeasurement | undefined
+    const parsed = await produce((result) => { measurement = result })
     // A cancelled or superseded run is not a failure of the model.
     if (!isCurrentBundle() || !shouldCommit()) {
       report('aborted')
@@ -95,7 +103,7 @@ export async function runGenerationJob<T>(options: {
       setError(key, 'PARSE_FAILED')
       return null
     }
-    report('ok')
+    report(measurement?.outcome ?? 'ok', measurement?.summaryCards)
     // Always commit to THIS run's own slot — even if the user has since
     // switched away, the result is stored and shows when they switch back.
     setResult(key, parsed)

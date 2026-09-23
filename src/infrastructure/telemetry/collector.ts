@@ -1,6 +1,6 @@
 'use client'
 
-import { collectorEventV4Schema, collectorModelSchema, featureSchema, type CollectorEventV4 as CollectorEvent } from '@/src/shared/contracts/collector-event'
+import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -28,6 +28,7 @@ type Finish = {
   modelId?: string
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
+  summaryCards?: SummaryCardCounts
 }
 interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
@@ -194,8 +195,8 @@ export function beginCollectorObservation(input: Start): Observation {
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = collectorEventV4Schema.safeParse({
-            schema_version: 4, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          const parsed = collectorEventV5Schema.safeParse({
+            schema_version: 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -208,6 +209,7 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(tokens ? { context_tokens_bucket: tokens } : {}),
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
+              ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
             },
           })

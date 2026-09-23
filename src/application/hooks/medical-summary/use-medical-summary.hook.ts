@@ -76,6 +76,7 @@ import {
   streamWithCardProgressTimeout,
 } from './card-progress-timeout'
 import { runWithContextWindowRetry } from '@/src/application/hooks/ai-generation/context-window-retry'
+import { measureSummaryCardOutcomes } from './summary-result-measurement'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -596,6 +597,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       },
     )
     const generatedAt = Date.now()
+    ctx.measureResult?.(measureSummaryCardOutcomes(settled))
     return {
       ...finalized,
       safety: aggregate.safety

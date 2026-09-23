@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/test'
 import { importBundle, openChatInput, chatPanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 import { mockAiStream, STREAM_PROBE_MARKER } from '../fixtures/mock-stream'
-import { collectorEventV4Schema } from '../../src/shared/contracts/collector-event'
+import { collectorEventV5Schema } from '../../src/shared/contracts/collector-event'
 
 // Real browser/app, synthetic chart and AI; collector HTTP is intercepted.
 // This is not a claim that the hospital TLS/private-network path is validated.
@@ -41,7 +41,7 @@ test('site gate and offline collector leave chat operational, with no clinical t
   await expect(chatPanel(page).locator('.prose').last()).toContainText('SYNTHETIC-COLLECTOR-ANSWER', { timeout: 25_000 })
   await expect.poll(() => payloads.length).toBeGreaterThan(0)
   for (const payload of payloads) {
-    expect(collectorEventV4Schema.safeParse(payload).success).toBe(true)
+    expect(collectorEventV5Schema.safeParse(payload).success).toBe(true)
     expect(JSON.stringify(payload)).not.toMatch(/SYNTHETIC-PRIVATE-PROMPT|SYNTHETIC-COLLECTOR-ANSWER|王小明|patientId|operationKey/)
   }
 

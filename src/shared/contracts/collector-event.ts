@@ -1,4 +1,4 @@
-// Wire contracts v2-v4. Kept identical across sender and gateway.
+// Wire contracts v2-v5. Kept identical across sender and gateway.
 // Only declared metadata; no arbitrary objects, URLs, messages or clinical text.
 import { z } from 'zod'
 
@@ -83,7 +83,7 @@ export const resourceCountsSchema = z.object({
   medications: resourceCountSchema.optional(), observations: resourceCountSchema.optional(),
   reports: resourceCountSchema.optional(), documents: resourceCountSchema.optional(),
 }).strict()
-export const collectorEventV4Schema = collectorEventBaseSchema.extend({
+const collectorEventV4BaseSchema = collectorEventBaseSchema.extend({
   schema_version: z.literal(4),
   browser_id: z.string().uuid(),
   browser_id_scope: z.enum(['persistent', 'page']),
@@ -91,5 +91,30 @@ export const collectorEventV4Schema = collectorEventBaseSchema.extend({
     loaded: resourceCountsSchema.optional(),
     prepared: resourceCountsSchema.optional(),
   }).strict(),
-}).strict().superRefine(validateOutcome)
+}).strict()
+export const collectorEventV4Schema = collectorEventV4BaseSchema.superRefine(validateOutcome)
 export type CollectorEventV4 = z.infer<typeof collectorEventV4Schema>
+
+// v5: exact terminal counts for this summary run, including its internal retries.
+// Retained cards from earlier runs are not counted again. No clinical content.
+export const summaryCardCountsSchema = z.object({
+  succeeded: z.number().int().min(0).max(6),
+  failed: z.number().int().min(0).max(6),
+}).strict()
+export type SummaryCardCounts = z.infer<typeof summaryCardCountsSchema>
+export const collectorEventV5Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(5),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  const cards = e.diagnostics.summary_cards
+  if (!cards) return
+  if (e.feature !== 'summary' || e.sample_kind !== 'feature' ||
+      cards.succeeded + cards.failed < 1 || cards.succeeded + cards.failed > 6 ||
+      e.status !== (cards.failed === 0 ? 'completed' : 'error')) {
+    ctx.addIssue({ code: 'custom', message: 'Summary card counts and feature outcome disagree' })
+  }
+})
+export type CollectorEventV5 = z.infer<typeof collectorEventV5Schema>
