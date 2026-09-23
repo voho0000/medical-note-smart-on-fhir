@@ -4,6 +4,7 @@ import { ClinicalDecisionSupportView } from '@/features/clinical-decision-suppor
 import { NhiLipidCoverageSummary } from '@/features/clinical-decision-support/renderers/NhiLipidCoverageSummary'
 import { LipidModuleSections } from '@/features/clinical-decision-support/renderers/LipidModuleSections'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import type { CdssRecommendation } from '@/features/clinical-decision-support/types'
 
 const recommendation = { id: 'dyslipidemia-risk-and-target', status: 'review', priority: 'routine', domain: 'target', title: 'Risk review', nextActions: [], coverageSummary: {
@@ -93,4 +94,50 @@ test('dedicated NHI layout renders Table 1 once instead of the generic module li
   expect(screen.getByTestId('nhi-table1-panel')).toBeInTheDocument()
   expect(screen.queryByLabelText('個案決策總覽')).not.toBeInTheDocument()
   expect(screen.queryByTestId('cdss-section-diagnosis')).not.toBeInTheDocument()
+})
+
+test('record autofill opens the exact structured source used by the lipid criterion', () => {
+  const profile: CdssPatientProfile = {
+    id: 'synthetic-table1-record-source',
+    evaluatedAt: '2026-09-20T00:00:00+08:00',
+    demographics: { sex: 'male' },
+    facts: {
+      age: { zh: '70 歲', en: '70 years', numericValue: 70 },
+      myocardialInfarctionDiagnosis: {
+        zh: '陳舊性心肌梗塞（2026-08-04）',
+        en: 'Old myocardial infarction (2026-08-04)',
+        date: '2026-08-04',
+        sources: [{
+          resourceType: 'Condition',
+          resourceId: 'condition-old-mi',
+          date: '2026-08-04',
+          coding: [{ code: 'I25.2', display: 'Old myocardial infarction' }],
+          facility: '測試醫院',
+        }],
+      },
+    },
+  }
+  const result = HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+
+  render(
+    <ClinicalDecisionSupportView
+      result={result}
+      locale="zh-TW"
+      layout="nhi"
+      profileFacts={profile.facts}
+    />,
+  )
+
+  const row = screen.getByRole('button', { name: '急性冠心症病史' })
+  expect(row).toHaveTextContent('自動帶入依據 · 1 筆來源 · 點擊查看')
+  fireEvent.click(row)
+  const popover = screen.getByTestId('nhi-criterion-popover-acs')
+  fireEvent.click(within(popover).getByRole('button', { name: /開啟原始病歷 · Old myocardial infarction/ }))
+  expect(useResourceNavigationStore.getState().pending).toMatchObject({
+    resourceType: 'Condition',
+    resourceId: 'condition-old-mi',
+    display: 'Old myocardial infarction',
+    date: '2026-08-04',
+  })
+  useResourceNavigationStore.getState().consume()
 })

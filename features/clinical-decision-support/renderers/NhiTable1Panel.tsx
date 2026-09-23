@@ -16,7 +16,7 @@ import { useSecondTick } from '@/src/shared/hooks/use-second-tick.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { formatGenerationDuration } from '@/features/medical-summary/utils/summary-generation-info'
 import { TherapyResponseChart } from './TherapyResponseChart'
-import type { CdssCoverageCheck, CdssCoverageSummary } from '../types'
+import type { CdssCoverageCheck, CdssCoverageSummary, CdssFactSource } from '../types'
 import {
   selectNhiLipidAiCriteria,
   type NhiLipidAiDecision,
@@ -134,8 +134,9 @@ function ProvenanceBadge({
 /**
  * One 表一 criterion: a mark, the clause's label, and what the record says.
  *
- * The clause's bracket and the clinician's answer appear on hover for a quick
- * desktop read, while press remains available to touch and keyboard users.
+ * The clause's bracket and the clinician's answer appear after an explicit
+ * click or keyboard activation, so scanning across a dense table does not
+ * repeatedly cover adjacent criteria with transient cards.
  * Twenty-six criteria each carrying three answer buttons is a screen that asks
  * everything and is read by nobody; the tier only moves on a few of them, and
  * those are the ones a clinician opens.
@@ -147,6 +148,7 @@ function Criterion({
   aiSuggestion,
   aiDecision,
   answerProvenance,
+  recordSources,
   onNavigate,
 }: {
   check: CdssCoverageCheck
@@ -159,11 +161,10 @@ function Criterion({
   aiSuggestion?: NhiLipidAiSuggestion
   aiDecision?: NhiLipidAiDecision
   answerProvenance?: NhiLipidAnswerProvenance
+  recordSources?: readonly CdssFactSource[]
   onNavigate?: (target: ResourceNavTarget) => void
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const openedFromHover = useRef(false)
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
   const aiApplied = answerProvenance?.source === 'ai'
@@ -184,35 +185,15 @@ function Criterion({
     && answerProvenance?.manualAction === 'reviewed'
     && answerProvenance?.overrides === 'ai'
   const retainsAiEvidence = aiApplied || reviewedAi
+  const traceableRecordSources = check.origin === 'record' ? recordSources ?? [] : []
   const interactive = Boolean(onAnswer && check.editable)
     || Boolean(check.detail)
     || Boolean(retainsAiEvidence && aiSuggestion)
+    || traceableRecordSources.length > 0
   const aiEvidenceCount = aiSuggestion?.evidence.length ?? 0
   const aiDisplayValue = retainsAiEvidence && aiSuggestion && aiSuggestion.state !== 'unknown'
     ? aiSuggestion.rationale || check.value
     : check.value
-  const cancelScheduledClose = () => {
-    if (closeTimer.current === null) return
-    clearTimeout(closeTimer.current)
-    closeTimer.current = null
-  }
-  const openFromPointer = () => {
-    cancelScheduledClose()
-    openedFromHover.current = true
-    setPopoverOpen(true)
-  }
-  const closeAfterPointerLeaves = () => {
-    cancelScheduledClose()
-    closeTimer.current = setTimeout(() => {
-      closeTimer.current = null
-      setPopoverOpen(false)
-    }, 200)
-  }
-
-  useEffect(() => () => {
-    if (closeTimer.current !== null) clearTimeout(closeTimer.current)
-  }, [])
-
   const answerManually = (state: CdssCoverageCheck['state']) => {
     if (!onAnswer) return
     const confirmsRecordCode = !answerProvenance
@@ -257,7 +238,8 @@ function Criterion({
           className={cn(
             'block',
             mark.lit ? 'font-medium text-foreground' : 'text-muted-foreground',
-            (check.detail || (retainsAiEvidence && aiSuggestion)) && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
+            (check.detail || (retainsAiEvidence && aiSuggestion) || traceableRecordSources.length > 0)
+              && 'underline decoration-dotted decoration-muted-foreground/50 underline-offset-4',
           )}
         >
           {check.label}
@@ -298,6 +280,14 @@ function Criterion({
               : null}
           </span>
         ) : null}
+        {traceableRecordSources.length > 0 ? (
+          <span className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
+            <Database className="h-3 w-3" aria-hidden="true" />
+            {isEnglish
+              ? `Record evidence · ${traceableRecordSources.length} source${traceableRecordSources.length === 1 ? '' : 's'} · click to review`
+              : `自動帶入依據 · ${traceableRecordSources.length} 筆來源 · 點擊查看`}
+          </span>
+        ) : null}
       </span>
     </>
   )
@@ -309,23 +299,13 @@ function Criterion({
   return (
     <Popover
       open={popoverOpen}
-      onOpenChange={(open) => {
-        cancelScheduledClose()
-        openedFromHover.current = false
-        setPopoverOpen(open)
-      }}
+      onOpenChange={setPopoverOpen}
     >
       <PopoverTrigger
         className="flex w-full gap-2 rounded-sm py-1.5 text-[13px] leading-relaxed hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={check.label}
         onClick={(event) => {
           if (window.getSelection()?.toString()) event.preventDefault()
-        }}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== 'touch') openFromPointer()
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType !== 'touch') closeAfterPointerLeaves()
         }}
       >
         {body}
@@ -334,18 +314,6 @@ function Criterion({
         align="start"
         className="w-72 space-y-3 text-xs leading-relaxed"
         data-testid={`nhi-criterion-popover-${check.id}`}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== 'touch') cancelScheduledClose()
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType !== 'touch') closeAfterPointerLeaves()
-        }}
-        onOpenAutoFocus={(event) => {
-          if (openedFromHover.current) event.preventDefault()
-        }}
-        onCloseAutoFocus={(event) => {
-          if (openedFromHover.current) event.preventDefault()
-        }}
       >
         <div className="space-y-1">
           <p className="text-sm font-medium">{check.label}</p>
@@ -393,6 +361,39 @@ function Criterion({
                 {isEnglish ? 'Still needed: ' : '仍需補充：'}{aiSuggestion.missing.join(isEnglish ? '; ' : '；')}
               </p>
             ) : null}
+          </div>
+        ) : null}
+        {traceableRecordSources.length > 0 ? (
+          <div className="space-y-2 border-t border-border pt-2">
+            <p className="font-medium">
+              {isEnglish ? 'Record evidence' : '自動帶入依據'} · {traceableRecordSources.length}
+            </p>
+            {traceableRecordSources.map((source) => {
+              const codingLabel = source.coding?.map((coding) => coding.display || coding.code).filter(Boolean).join('、')
+              const sourceLabel = codingLabel || (typeof source.value === 'string' ? source.value : undefined) || check.label
+              const sourceMeta = [source.resourceType, source.date, source.facility].filter(Boolean).join(' · ')
+              return onNavigate ? (
+                <button
+                  key={`${source.resourceType}-${source.resourceId}`}
+                  type="button"
+                  className="block min-h-8 w-full rounded-sm border-l-2 border-primary/40 pl-2 text-left text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onNavigate({
+                    resourceType: source.resourceType,
+                    resourceId: source.resourceId,
+                    display: sourceLabel,
+                    date: source.date,
+                  })}
+                >
+                  {isEnglish ? 'Open source record' : '開啟原始病歷'} · {sourceLabel}
+                  {sourceMeta ? <span className="block text-muted-foreground no-underline">{sourceMeta}</span> : null}
+                </button>
+              ) : (
+                <div key={`${source.resourceType}-${source.resourceId}`} className="border-l-2 border-primary/40 pl-2">
+                  <p>{sourceLabel}</p>
+                  {sourceMeta ? <p className="text-muted-foreground">{sourceMeta}</p> : null}
+                </div>
+              )
+            })}
           </div>
         ) : null}
         {onAnswer && check.editable ? (
@@ -881,6 +882,7 @@ export interface NhiTable1PanelProps {
     provenance?: NhiLipidAnswerProvenance,
   ) => void
   answerProvenance?: NhiLipidAnswerProvenanceById
+  recordSources?: Readonly<Record<string, readonly CdssFactSource[]>>
   onNavigate?: (target: ResourceNavTarget) => void
   /** Development/review injection. Production omits this and uses the
    * patient-scoped connected wrapper below. */
@@ -893,14 +895,44 @@ function NhiTable1PanelContent({
   patientId,
   onAnswer,
   answerProvenance,
+  recordSources,
   aiAssist,
   onNavigate,
 }: NhiTable1PanelProps) {
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const preserveTierRef = useRef<{ tier: string; until: number } | null>(null)
   const isEnglish = locale === 'en'
   const allChecks = [...summary.factors, ...summary.metabolicChecks, ...summary.diseaseChecks]
   const tiers = COLUMNS.map((id) => summary.tiers.find((tier) => tier.id === id)).filter(
     (tier): tier is CdssCoverageSummary['tiers'][number] => Boolean(tier),
   )
+
+  useEffect(() => {
+    const viewport = tableScrollRef.current
+    if (!viewport || typeof ResizeObserver === 'undefined') return
+    let frame: number | null = null
+    const keepPendingTierVisible = () => {
+      const pending = preserveTierRef.current
+      if (!pending || performance.now() > pending.until) return
+      const anchor = viewport.querySelector<HTMLElement>(`[data-nhi-tier="${pending.tier}"]`)
+      if (!anchor) return
+      const viewportRect = viewport.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      const centeredOffset = anchorRect.left - viewportRect.left
+        - ((viewportRect.width - anchorRect.width) / 2)
+      viewport.scrollLeft += centeredOffset
+    }
+    const observer = new ResizeObserver(() => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(keepPendingTierVisible)
+    })
+    observer.observe(viewport)
+    return () => {
+      observer.disconnect()
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
+  }, [tiers.length])
+
   if (tiers.length === 0) return null
 
   const pendingReview = [...new Map(allChecks.filter(check => check.editable).map(check => [check.id, check])).values()]
@@ -970,6 +1002,11 @@ function NhiTable1PanelContent({
     .map((index) => summary.rows[index])
     .filter((row): row is CdssCoverageSummary['rows'][number] => Boolean(row))
   const actionPoints = summary.clinicianActionPoints
+  const navigateToEvidence = onNavigate ? (target: ResourceNavTarget) => {
+    onNavigate(target.resourceType === 'Observation'
+      ? { ...target, reportView: 'cumulative' }
+      : target)
+  } : undefined
   const forTier = (id: string) => summary.diseaseChecks.filter((check) => check.tier === id)
   const groupsOf = (id: string) => {
     const checks = forTier(id)
@@ -984,7 +1021,13 @@ function NhiTable1PanelContent({
     aiSuggestion: aiAssist?.suggestions[check.id],
     aiDecision: aiAssist?.decisions[check.id],
     answerProvenance: answerProvenance?.[check.id],
-    onNavigate,
+    recordSources: recordSources?.[check.id],
+    onNavigate: navigateToEvidence ? (target: ResourceNavTarget) => {
+      if (check.tier) {
+        preserveTierRef.current = { tier: check.tier, until: performance.now() + 1_500 }
+      }
+      navigateToEvidence(target)
+    } : undefined,
   })
   const prescribingStep = (
     step: PrescribingStep,
@@ -1117,14 +1160,14 @@ function NhiTable1PanelContent({
           isEnglish={isEnglish}
           onAnswer={onAnswer}
           answerProvenance={answerProvenance}
-          onNavigate={onNavigate}
+          onNavigate={navigateToEvidence}
           reviewAction={reviewAction}
         />
       ) : null}
 
       {!aiAssist ? reviewAction : null}
 
-      <div className="overflow-x-auto" data-testid="nhi-table1-scroll" tabIndex={0} aria-label={isEnglish ? 'Complete NHI Table 1; scroll horizontally for all risk groups' : '完整健保表一；可水平捲動查看所有風險分級'}>
+      <div ref={tableScrollRef} className="overflow-x-auto" data-testid="nhi-table1-scroll" tabIndex={0} aria-label={isEnglish ? 'Complete NHI Table 1; scroll horizontally for all risk groups' : '完整健保表一；可水平捲動查看所有風險分級'}>
         <p className="sticky left-0 mb-2 w-fit text-[11px] text-muted-foreground">
           {isEnglish ? 'Scroll horizontally to compare all risk groups →' : '向右捲動可對照所有風險分級 →'}
         </p>
@@ -1142,6 +1185,7 @@ function NhiTable1PanelContent({
               {lowerTiers.map((baseTier) => (
                 <div
                   key={baseTier.id}
+                  data-nhi-tier={baseTier.id}
                   aria-label={baseTier.label}
                   className={cn(
                     'flex min-w-0 flex-col items-center justify-center rounded-t-md bg-card px-1.5 py-2 text-center',
@@ -1168,6 +1212,7 @@ function NhiTable1PanelContent({
           ) : (
             <div
               key={tier.id}
+              data-nhi-tier={tier.id}
               className={cn(
                 'rounded-t-md px-3 py-2 text-center text-base font-semibold',
                 TINT[tier.id],
