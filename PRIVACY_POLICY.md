@@ -1,6 +1,6 @@
 # MediPrisma 隱私權政策
 
-**生效／最後更新：2026-09-15**
+**生效／最後更新：2026-09-22**
 **適用程式基準：v0.51.0**
 
 本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
@@ -115,6 +115,14 @@ Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在
 **明確不記錄**：任何病人資料或 FHIR 內容（姓名、病歷號、檢驗值、報告與文件文字、翻譯與解讀結果、被引用資源的 id 與標題）、送給 AI 的提示詞與 AI 的回覆內容、複製到剪貼簿的文字、Firebase uid（從不呼叫 `setUserId`）、完整網址與其 query 參數。自動 `page_view` 已關閉（正是因為 SMART 啟動網址帶有 `iss` 與 OAuth `code`），Google Signals 與廣告個人化亦已關閉。依 Google 說明，GA4 不會記錄或保存個別 IP 位址（僅於伺服器端用於推導概略地理位置後即丟棄）；此為 Google 的產品行為，非本 app 可驗證或控制的部分。§2.7 所述的 hosting／Firebase 營運 log 不受此影響。
 
 程式端以白名單強制上述邊界：事件名稱、參數名稱與參數值都逐一比對允許清單，字串上限 64 字元，任何不符者整筆丟棄。相關程式集中在 `src/infrastructure/telemetry/usage-analytics.ts`。
+
+### 2.9 TVGH 診斷 Collector（指定站點自動紀錄）
+
+當前網址恰有一個 `site=vghtpe` 時，自動向部署指定的 Collector 位址背景傳送功能／請求的結果與效能紀錄，不需使用者手動啟用。資料包含隨機事件 UUID、操作時間、版本、固定功能／模型／錯誤分類、耗時，以及可量測時的就診、用藥、檢驗、報告、文件精確筆數、輸入 token 估計區間與裁切狀態。
+
+為排查診間電腦問題，此資料流使用 localStorage 保存隨機瀏覽器識別碼，並將其隨事件傳送；儲存受限時退回單頁識別碼。Gateway 接收現有 Firebase ID token 作驗證，記錄驗證成功的 UID、email（匿名帳號通常沒有 email）、連線來源 IP，以及管理員對照出的診間／電腦名稱。UID 不等於 Windows 或院內職工帳號，IP 也可能是共用出口。原 token 不保存。上述識別與事件內容一起加密，事件 UUID 與收件時間為明文索引；僅授權管理員可解密讀取，保存期限由部署者明確設定。
+
+此資料流不傳 prompt、AI 回覆、病歷內容、音訊、圖片、病人識別碼或其雜湊。不宣稱診斷資料不可識別。Firebase SDK 自動提供／更新憑證，Collector 不另存 token，也不要求使用者額外登入；Gateway 定期向 Google 取得公鑰，不將紀錄傳給 Google。認證、網路失敗或關頁可能漏記，但不影響原本 AI 或臨床功能。實作與限制見 [Collector 試行說明](docs/COLLECTOR-PILOT.md)。程式碼存在不代表正式部署已啟用。
 
 ## 3. 瀏覽器端儲存
 

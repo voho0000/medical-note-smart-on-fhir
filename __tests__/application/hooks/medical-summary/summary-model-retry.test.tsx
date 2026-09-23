@@ -7,16 +7,18 @@ import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-exec
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcloud-launch-context'
+import { MEDICAL_SUMMARY_CARD_REGISTRY } from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
 
 let mockSlotOptions: any
 let mockResult: any
 const mockStream = jest.fn()
+const mockMeasureResult = jest.fn()
 const mockGenerate = async () => {
   mockResult = await mockSlotOptions.run({
     operationKey: 'audit-slot', modelId: 'gemini-3.8-flash', requestedModelId: 'gemini-3.8-flash',
     modelName: 'Gemini 3.8 Flash', locale: 'zh-TW', audience: 'medical',
     clinicalContext: 'synthetic data', catalog: [], piiLiterals: [], contextLimit: 10000,
-    ai: { stream: mockStream },
+    ai: { stream: mockStream }, measureResult: mockMeasureResult,
   })
 }
 
@@ -58,6 +60,7 @@ jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
 }))
 
 beforeEach(() => {
+  mockMeasureResult.mockClear()
   mockResult = undefined
   mockStream.mockReset()
   useMedcloudLaunchStore.getState().clear()
@@ -70,6 +73,23 @@ beforeEach(() => {
 })
 
 afterEach(() => jest.restoreAllMocks())
+
+test.each([false, true])('reports final card failures after internal retries, preserving results (partial=%s)', async (partial) => {
+  jest.spyOn(MEDICAL_SUMMARY_CARD_REGISTRY.safety, 'parseBatch').mockReturnValue(null)
+  if (!partial) jest.spyOn(MEDICAL_SUMMARY_CARD_REGISTRY.medications, 'parseBatch').mockReturnValue(null)
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => result.current.generate())
+  expect(mockStream).toHaveBeenCalledTimes(3)
+  expect(mockMeasureResult).toHaveBeenCalledTimes(1)
+  expect(mockMeasureResult).toHaveBeenCalledWith({
+    outcome: 'parse_failed', summaryCards: { succeeded: partial ? 1 : 0, failed: partial ? 1 : 2 },
+  })
+  expect(mockResult.cardErrors.safety).toBe('PARSE_FAILED')
+  if (partial) {
+    expect(mockResult.medications).toBe('NEW_MEDICATION_CARD')
+    expect(mockResult.completedCardIds).toContain('medications')
+  } else expect(mockResult.cardErrors.medications).toBe('PARSE_FAILED')
+})
 
 test('a manual summary model choice immediately releases the Medcloud override', () => {
   act(() => {
@@ -148,4 +168,8 @@ test('retrying a failed safety card preserves successful summary cards', async (
   })
   expect(mockResult.cardErrors).toBeUndefined()
   expect(mockResult.completedCardIds).toEqual(expect.arrayContaining(['problems', 'safety']))
+  expect(mockMeasureResult).toHaveBeenCalledTimes(1)
+  expect(mockMeasureResult).toHaveBeenCalledWith({
+    outcome: 'ok', summaryCards: { succeeded: 1, failed: 0 },
+  })
 })

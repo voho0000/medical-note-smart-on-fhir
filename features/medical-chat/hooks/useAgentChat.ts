@@ -18,6 +18,7 @@ import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-cl
 import { getUserErrorMessage } from "@/src/core/errors"
 import { trackEvent, type AiOutcome } from "@/src/application/telemetry/usage-analytics"
 import { bucketDuration, classifyAiOutcome, nowMs } from "@/src/application/telemetry/ai-outcome"
+import { beginCollectorObservation } from '@/src/application/telemetry/collector'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
@@ -385,9 +386,15 @@ export function useAgentChat(
       const turnFedCounts = turnSendsChart && fittedClinicalInput.clinicalData
         ? countContextResources(fittedClinicalInput.clinicalData)
         : undefined
+      const collector = beginCollectorObservation({
+        feature: 'chat', modelId: effectiveModelId, sampleKind: 'feature', mode: isStandardChat ? 'standard' : 'agent',
+        counts: turnSendsChart ? fittedClinicalInput.patientCounts : undefined,
+        fedCounts: turnFedCounts, contextTokens: turnContextTokens,
+      })
       const reportChatResult = (outcome: AiOutcome) => {
         if (turnReported) return
         turnReported = true
+        collector.finish({ outcome, phase: 'unknown' })
         trackEvent('ai_result', {
           surface: 'chat',
           outcome,
@@ -429,6 +436,7 @@ export function useAgentChat(
         if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
       }
       const setContent = (content: string) => {
+        if (content.length > 0) collector.firstChunk()
         // A throttled timer can fire just after the user aborts — don't let it
         // resurrect content over a cleared chat or reset message.
         if (abortController.signal.aborted) return
