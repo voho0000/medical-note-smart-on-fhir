@@ -1,14 +1,28 @@
 # TVGH 旁路紀錄試行
 
-2026-09-22。先 pull 最新 origin/master `338a5d70`，於 `codex/vghtpe-collector-telemetry` 修改。使用者授權本次跨 repo sender 與 Gateway 契約擴充；尚未發布網站或啟用真實紀錄。
+初始紀錄（2026-09-22）：先 pull 最新 origin/master `338a5d70`，於 `codex/vghtpe-collector-telemetry` 修改。當時使用者授權跨 repo sender 與 Gateway 契約擴充，尚未發布網站或啟用真實紀錄。以下保留各階段的驗證範圍；最新狀態以日期較新的段落為準。
+
+## 2026-09-23：已授權才送、不觸發區域網路詢問（本次修改，尚未發布）
+
+使用者授權先修改 sender，避免院內使用者的正常操作觸發瀏覽器 Local Network Access 詢問。修改前已在隔離分支 pull 最新 master `fc7970e509ac`；原工作目錄的 CDSS 變更與 `pilot/hmc` 不在範圍內。本次不修改正式站、Collector 設定、port、保存期限或院方瀏覽器政策。
+
+- 每次送件前僅使用 `navigator.permissions.query()` 讀取既有權限，只有 `granted` 才可 fetch；`prompt`、`denied`、API 缺失／不支援／查詢失敗都靜默略過，不以 health probe、fetch、beacon 或其他傳輸方式要求授權。
+- Chromium 145+ 依 endpoint 查詢 `local-network` 或 `loopback-network`；僅在新版 descriptor 不支援（TypeError）時查詢舊版 `local-network-access`。已回傳的拒絕／未決定不得用另一權限的允許覆蓋。參考 [Chrome 145 權限拆分說明](https://developer.chrome.com/release-notes/145#local-network-access-split-permissions)。不支援這些查詢的瀏覽器即使可能連通，也不送 Collector。
+- 送件前再次讀取該 `PermissionStatus.state`，檢查等待 Firebase 憑證期間的權限撤回；原有 site、pagehide、並行上限與五秒截止仍生效。這是送件前檢查，不宣稱可與瀏覽器外部權限變更原子化。
+- 權限略過增加 `dropped`，不當成 HTTP 失敗累積冷卻；權限日後變成允許時，下個新事件自動恢復，舊事件不補送、不新增手動啟用開關。`enabled` 仍僅表示 site 與 endpoint 有效，不表示已獲瀏覽器授權。
+- AI、摘要、語音、搜尋不等待權限查詢或 Collector。此取捨是「未授權的電腦暫無紀錄」，不是全院完整收件保證。
+
+先前正式版 `fc7970e509ac` 已使用 `https://collector.mediprisma.tw:8787`，2026-09-23 已核對兩個不同瀏覽器 ID 的跨工作站成功收件；其中一台 Chrome 的 uBlock 移除後才送達。這些是舊 sender 的連線證據，不能當作本次「不觸發詢問」修改的實機驗收。新程式須經審查、重建、發布後才生效，已開啟的舊頁面需重新載入。合併前後的正式狀態不得混為一談。
+
+本次驗證：修改前先用新測試重現舊 sender 在權限不足時仍 fetch；修改後相關 **17 suites／193 tests** 與 **4 項 Chromium E2E** 通過。E2E 使用合成病例／Firebase／AI、模擬權限與攔截 Collector HTTP，覆蓋 prompt、denied、不支援時零收件請求、聊天成功、授權後新事件自動恢復，以及已授權但 Collector 離線的失敗隔離；不宣稱已在正式站或院內受管理 Chrome／Edge 驗收此修正。修改檔 ESLint、lockfile 檢查與正式 `/app` 模式的本機 build 通過；無依賴版本／lockfile 變更，未發布網站。
 
 ## 行為與啟用
 
 AI、Whisper、文獻搜尋使用原本 endpoint、身份與額度流程；紀錄沒有 await 依賴、沒有失敗 toast、不會重叫模型。
 
-使用者已要求自動傳送：當前 URL 恰有一個 `site=vghtpe` 就自動觀察並背景傳送，不需手動啟用、不新增登入提示，也沒有八小時後手動重開的限制。觀察開始、完成、取得憑證前後與實際 fetch 前皆檢查 site。缺少、不同大小寫、其他站點或重複 site 參數都不送，也不做 discovery/health probe。site 是 client 標記，不是醫院身分認證。
+使用者已要求自動傳送：當前 URL 恰有一個 `site=vghtpe` 就自動觀察，瀏覽器既有區域網路權限為允許時才背景傳送，不需手動啟用、不新增登入提示，也沒有八小時後手動重開的限制。觀察開始、完成、取得憑證前後與實際 fetch 前皆檢查 site。缺少、不同大小寫、其他站點或重複 site 參數都不送，也不做 discovery/health probe。site 是 client 標記，不是醫院身分認證。
 
-判斷與 URL 路徑無關：`/app/?site=vghtpe`、`/app-hmc/?site=vghtpe` 都自動傳送。`/app-hmc/` 不代表 `site=hmc`；只有 site 參數改成 `hmc`（或其他不符合值）才停止收集。此處描述本次 sender 的規則，不代表已將變更發布至 app-hmc；未修改協作者的 `pilot/hmc` 分支。
+判斷與 URL 路徑無關：`/app/?site=vghtpe`、`/app-hmc/?site=vghtpe` 都在瀏覽器已有權限時自動傳送。`/app-hmc/` 不代表 `site=hmc`；site 參數改成 `hmc`（或其他不符合值）即停止觀察，權限不足則略過送件。此處描述本次 sender 的規則，不代表已將變更發布至 app-hmc；未修改協作者的 `pilot/hmc` 分支。
 
 筆電預設 endpoint 為 `http://127.0.0.1:8787/collector/v1/events`。其他主機由建置設定 `NEXT_PUBLIC_COLLECTOR_ORIGIN=https://<核准主機>:8787` 指定，只接受 origin，不接受帳密、path、query 或 fragment。HTTP 僅限 loopback，其他主機要求 HTTPS。不從 `gw=`、launch URL、localStorage 或任意 runtime endpoint 讀取收件位置。
 
@@ -22,7 +36,7 @@ window.mediprismaCollector.status()
 
 每個 origin／瀏覽器設定檔自動產生 UUID，存於 localStorage 的 `mediprisma.collector.browser-id.v1`；不含病人或帳號資料、不跨裝置同步。儲存被封鎖時退回 page scope，清資料／更換瀏覽器會換 ID。不是硬體指紋，不保證一台電腦只有一個 ID。
 
-上傳最多兩筆 in-flight，沒有等待佇列；滿載丟棄新紀錄。每筆取得憑證與 HTTP 合計五秒逾時；連續三次失敗冷卻六十秒，之後新事件自動恢復嘗試，401/403 不要求手動重開。無自動重送舊事件、磁碟補送或 unload beacon。pagehide 取消舊觀察；新頁自動開始。status 只回 enabled/in_flight/sent/dropped/cooling_down；enabled 表示站點與 endpoint 條件成立，不代表 Firebase 或 Gateway 已連通。不可用、關頁、同時多個事件都可能漏記，不可當作完整帳務 audit。
+上傳最多兩筆 in-flight，沒有等待佇列；滿載丟棄新紀錄。每筆權限查詢、取得憑證與 HTTP 合計五秒逾時；連續三次失敗冷卻六十秒，之後新事件自動恢復嘗試，401/403 不要求手動重開。已確定未授權／不支援的略過不累積失敗；權限查詢卡住仍受五秒截止與冷卻保護。無自動重送舊事件、磁碟補送或 unload beacon。pagehide 取消舊觀察；新頁自動開始。status 只回 enabled/in_flight/sent/dropped/cooling_down；enabled 表示站點與 endpoint 條件成立，不代表瀏覽器已授權、Firebase 或 Gateway 已連通。不可用、關頁、同時多個事件都可能漏記，不可當作完整帳務 audit。
 
 ## v5 資料契約
 
@@ -85,7 +99,7 @@ counts 是病歷衍生的精確統計，搭配時間／設備／帳號可能交�
 
 正式網站、Gateway 正式排程與真實收件均未啟用。Gateway 需設定 `COLLECTOR_FIREBASE_PROJECT_ID`；本 repo Firebase project 為 `smart-on-fhir-ac97d`，部署時確認與網站一致。Gateway 定期向 Google 下載公鑰，不上傳紀錄；公鑰不可用且無有效快取時拒收，前端只漏記。院內 TLS/CORS/DNS、防火牆與瀏覽器私網權限須實機確認。跨電腦收件必須將網站的 NEXT_PUBLIC_COLLECTOR_ORIGIN 設成筆電／VM 的共用 HTTPS 位址；127.0.0.1 只會指向使用者自己的電腦。CSP 本次未放寬。
 
-## 本次 PR 與正式 /app 驗收
+## PR #149 交付時規劃與正式 /app 驗收（歷史紀錄）
 
 - 更新現有 MediPrisma PR #149 與 Gateway PR #2，不另開重複 PR；使用者自行審查／merge。本次不觸發正式部署，不改 pilot/hmc。
 - 正式 /app 的建置 workflow 讀取 GitHub Actions variable `NEXT_PUBLIC_COLLECTOR_ORIGIN`（repository 或 `mediprisma-site-publish` environment）。這是公開 HTTPS origin，不得填 token／帳密／path。尚未設定真實值；空值保留既有 loopback fallback，不能當跨機設定完成。變更值後必須重建網站，現有靜態 bundle 不會即時更新。不新增前端開關或 API，也不改 workflow trigger、HMC publisher 或 pilot 分支。

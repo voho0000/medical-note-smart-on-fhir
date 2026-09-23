@@ -9,6 +9,7 @@ import {
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { mockCollectorPermission } from '../../helpers/collector-permissions'
 
 const mockSetIsAsrLoading = jest.fn()
 const mockToastError = jest.fn()
@@ -82,6 +83,7 @@ function beginRecording(result: { current: ReturnType<typeof useVoiceRecording> 
 
 describe('useVoiceRecording custom endpoint lifecycle', () => {
   it('returns the transcript while Collector is offline and sends neither audio nor transcript to it', async () => {
+    const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')
 
     mockFetch.mockImplementation(async (url: string) => {
@@ -98,7 +100,7 @@ describe('useVoiceRecording custom endpoint lifecycle', () => {
       expect(collectorCall).toBeDefined()
       expect(String(collectorCall?.[1].body)).not.toMatch(/SYNTHETIC-TRANSCRIPT|hospital-a|local-a-key|audio.webm/)
       expect(JSON.parse(collectorCall![1].body)).toMatchObject({ feature: 'transcription', status: 'completed' })
-    } finally { cancelCollectorRequests(); window.history.replaceState({}, '', '/'); mockFetch.mockReset() }
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/'); mockFetch.mockReset() }
   })
   beforeEach(() => {
     jest.clearAllMocks()

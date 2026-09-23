@@ -3,6 +3,7 @@ import { collectorEventV5Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
+import { mockCollectorPermission } from '../../helpers/collector-permissions'
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ saveEncryptedCache: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/src/application/telemetry/usage-analytics', () => ({ trackEvent: jest.fn() }))
@@ -14,20 +15,22 @@ jest.mock('@/src/infrastructure/telemetry/collector-auth', () => ({
 }))
 import { captureCollectorAuth } from '@/src/infrastructure/telemetry/collector-auth'
 const start = () => beginCollectorObservation({ feature: 'summary', modelId: 'gpt-5.4-nano', sampleKind: 'feature', mode: 'structured' })
-const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve() }
+const settle = async () => { for (let i = 0; i < 24; i++) await Promise.resolve() }
 const body = () => JSON.parse(jest.mocked(fetch).mock.calls.at(-1)![1]!.body as string)
+let permission: ReturnType<typeof mockCollectorPermission>
 
 beforeEach(() => {
   cancelCollectorRequests()
   jest.useFakeTimers()
   localStorage.clear()
+  permission = mockCollectorPermission()
   mockGetToken.mockReset().mockResolvedValue(TOKEN)
   jest.mocked(captureCollectorAuth).mockClear()
   jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
   window.history.replaceState({}, '', '/?site=vghtpe')
   delete process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN
 })
-afterEach(async () => { cancelCollectorRequests(); await settle(); jest.useRealTimers() })
+afterEach(async () => { cancelCollectorRequests(); await settle(); permission.restore(); jest.useRealTimers() })
 
 test.each(['/', '/?site=hmc', '/app-hmc/', '/app-hmc/?site=hmc', '/?site=VGHTPE', '/?site=', '/?site=vghtpe&site=hmc', '/?site=vghtpe&site=vghtpe'])('zero collector traffic and no enablement on %s', async (url) => {
   window.history.replaceState({}, '', url)
@@ -36,10 +39,11 @@ test.each(['/', '/?site=hmc', '/app-hmc/', '/app-hmc/?site=hmc', '/?site=VGHTPE'
   await settle()
   expect(fetch).not.toHaveBeenCalled()
   expect(captureCollectorAuth).not.toHaveBeenCalled()
+  expect(permission.query).not.toHaveBeenCalled()
   expect(localStorage.length).toBe(0)
 })
 
-test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('automatically sends on %s regardless of pathname', async (url) => {
+test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('automatically sends with existing permission on %s regardless of pathname', async (url) => {
   window.history.replaceState({}, '', url)
   expect(collectorStatus().enabled).toBe(true)
   start().finish({ outcome: 'ok' })
@@ -47,6 +51,123 @@ test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('auto
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body().site).toBe('vghtpe')
   expect(collectorEventV5Schema.safeParse(body()).success).toBe(true)
+})
+
+test.each(['prompt', 'denied'] as const)('permission %s skips telemetry without changing clinical success or cache', async (state) => {
+  permission.status.state = state
+  const before = collectorStatus().dropped
+  const store = createAiResultStore<{ result: string }>()
+  const result = await runGenerationJob({ store, key: 'synthetic-slot', cacheKey: 'synthetic-cache',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({ result: 'synthetic-success' }) })
+  await settle()
+  expect(result).toEqual({ result: 'synthetic-success' })
+  expect(store.getState().byKey['synthetic-slot']).toEqual(result)
+  expect(store.getState().running['synthetic-slot']).toBe(false)
+  expect(store.getState().errors['synthetic-slot']).toBeFalsy()
+  expect(permission.query).toHaveBeenCalledTimes(1)
+  expect(fetch).not.toHaveBeenCalled()
+  expect(mockGetToken).not.toHaveBeenCalled()
+  expect(collectorStatus()).toMatchObject({ enabled: true, dropped: before + 1, in_flight: 0, cooling_down: false })
+})
+
+test.each(['missing API', 'missing query', 'query throws', 'unsupported names', 'query rejects', 'invalid status'])('%s never falls back to a permission-triggering fetch', async (scenario) => {
+  if (scenario === 'missing API') Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined })
+  if (scenario === 'missing query') Object.defineProperty(navigator, 'permissions', { configurable: true, value: {} })
+  if (scenario === 'query throws') permission.query.mockImplementation(() => { throw new Error('unavailable') })
+  if (scenario === 'unsupported names') permission.query.mockRejectedValue(new TypeError('unsupported descriptor'))
+  if (scenario === 'query rejects') permission.query.mockRejectedValue(new DOMException('blocked', 'SecurityError'))
+  if (scenario === 'invalid status') permission.query.mockResolvedValue(null)
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(mockGetToken).not.toHaveBeenCalled()
+  expect(collectorStatus()).toMatchObject({ in_flight: 0, cooling_down: false })
+})
+
+test.each([
+  ['https://collector.invalid:8787', 'local-network'],
+  ['http://127.0.0.1:8787', 'loopback-network'],
+  ['http://localhost:8787', 'loopback-network'],
+  ['http://[::1]:8787', 'loopback-network'],
+])('queries the relevant permission for %s without touching the network first', async (origin, name) => {
+  process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = origin
+  permission.query.mockImplementation(async () => {
+    expect(fetch).not.toHaveBeenCalled()
+    expect(mockGetToken).not.toHaveBeenCalled()
+    return permission.status
+  })
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(permission.query).toHaveBeenCalledWith({ name })
+  expect(permission.query).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test.each(['granted', 'prompt', 'denied'] as const)('uses the legacy descriptor only when split permissions are unsupported (%s)', async (state) => {
+  permission.query.mockRejectedValueOnce(new TypeError('unsupported descriptor')).mockResolvedValue({ state })
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(permission.query.mock.calls).toEqual([[{ name: 'loopback-network' }], [{ name: 'local-network-access' }]])
+  expect(fetch).toHaveBeenCalledTimes(state === 'granted' ? 1 : 0)
+})
+
+test('a split permission denial cannot be overridden by a legacy grant', async () => {
+  permission.query.mockResolvedValueOnce({ state: 'denied' }).mockResolvedValue({ state: 'granted' })
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(permission.query).toHaveBeenCalledTimes(1)
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('skips do not trigger cooldown or replay; the next newly permitted event resumes automatically', async () => {
+  permission.status.state = 'prompt'
+  for (let i = 0; i < 4; i++) {
+    start().finish({ outcome: 'ok' })
+    await settle()
+  }
+  expect(fetch).not.toHaveBeenCalled()
+  expect(collectorStatus().cooling_down).toBe(false)
+  permission.status.state = 'granted'
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  permission.status.state = 'denied'
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test('revoking permission while credentials are pending prevents the fetch', async () => {
+  let resolveToken!: (value: string) => void
+  mockGetToken.mockImplementation(() => new Promise<string>(resolve => { resolveToken = resolve }))
+  start().finish({ outcome: 'ok' })
+  await settle()
+  permission.status.state = 'prompt'
+  resolveToken(TOKEN)
+  await settle()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(collectorStatus().in_flight).toBe(0)
+})
+
+test.each(['navigation', 'pagehide', 'timeout'] as const)('a late permission grant after %s cannot send', async (cause) => {
+  let resolvePermission!: (value: { state: PermissionState }) => void
+  permission.query.mockImplementation(() => new Promise(resolve => { resolvePermission = resolve }))
+  const store = createAiResultStore<{ result: string }>()
+  const result = await runGenerationJob({ store, key: 'synthetic-slot', cacheKey: 'synthetic-cache',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({ result: 'synthetic-success' }) })
+  expect(result).toEqual({ result: 'synthetic-success' })
+  await settle()
+  if (cause === 'navigation') window.history.replaceState({}, '', '/?site=hmc')
+  if (cause === 'pagehide') window.dispatchEvent(new Event('pagehide'))
+  if (cause === 'timeout') {
+    await jest.advanceTimersByTimeAsync(5000)
+    expect(collectorStatus().in_flight).toBe(0)
+  }
+  resolvePermission({ state: 'granted' })
+  await settle()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(mockGetToken).not.toHaveBeenCalled()
+  expect(collectorStatus().in_flight).toBe(0)
 })
 
 test('moving to app-hmc while keeping site=vghtpe does not suppress the observation', async () => {

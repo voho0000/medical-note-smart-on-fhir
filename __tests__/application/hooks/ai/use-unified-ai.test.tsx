@@ -5,6 +5,7 @@ import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatib
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 import { cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { mockCollectorPermission } from '../../../helpers/collector-permissions'
 
 const mockStream = jest.fn()
 const mockQuery = jest.fn()
@@ -61,6 +62,7 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 
 describe('useUnifiedAi cancellation', () => {
   it.each(['query', 'stream'] as const)('completes %s while an enabled collector is offline, without forwarding full diagnostics', async (transport) => {
+    const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')
 
     jest.mocked(fetch).mockRejectedValue(new Error('collector offline'))
@@ -81,7 +83,7 @@ describe('useUnifiedAi cancellation', () => {
       const wire = String(jest.mocked(fetch).mock.calls.at(-1)?.[1]?.body)
       expect(wire).not.toMatch(/SYNTHETIC-CLINICAL-TEXT|SYNTHETIC-PATIENT-ID|SYNTHETIC-ANSWER|messages|outputData/)
       expect(JSON.parse(wire)).toMatchObject({ feature: 'summary', sample_kind: 'request', status: 'completed' })
-    } finally { cancelCollectorRequests(); window.history.replaceState({}, '', '/') }
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
   it.each(['stream', 'query'] as const)('keeps actual provenance in %s diagnostics and forwards it to result owners', async (transport) => {
     const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
