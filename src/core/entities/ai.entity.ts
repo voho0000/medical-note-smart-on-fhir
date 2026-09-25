@@ -27,6 +27,9 @@ export interface AiQueryRequest {
   modelId: string
   temperature?: number
   maxTokens?: number
+  /** Opt in to keeping a nonempty response when the model reports
+   * finish_reason=length. Other callers still reject incomplete output. */
+  allowTruncatedOutput?: boolean
   /** OpenAI-compatible reasoning control (supported by gpt-oss and some
    * compatible reasoning servers). Omitted unless a caller opts in. */
   reasoningEffort?: 'low' | 'medium' | 'high'
@@ -48,6 +51,8 @@ export interface AiQueryResponse {
     modelId: string
     provider: AiProvider
     tokensUsed?: number
+    /** The returned text is partial because generation hit an output limit. */
+    outputTruncated?: boolean
   }
 }
 

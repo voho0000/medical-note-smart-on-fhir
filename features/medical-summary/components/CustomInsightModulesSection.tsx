@@ -23,6 +23,7 @@ import {
 } from "@/src/shared/constants/clinical-insights.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { getUserErrorMessage } from "@/src/core/errors"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { InsightContentRenderer } from "@/features/clinical-insights/components/InsightContentRenderer"
 import {
@@ -31,6 +32,7 @@ import {
 } from "@/features/clinical-insights/utils/insight-content"
 import { CustomInsightGenerationMeta } from "./CustomInsightGenerationMeta"
 import { CustomInsightDetailDialog } from "./CustomInsightDetailDialog"
+import { CustomInsightTruncationNotice } from "./CustomInsightTruncationNotice"
 
 interface CustomInsightModulesSectionProps {
   onManage: (panelId?: string) => void
@@ -80,6 +82,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
           {visiblePanels.map((panel) => {
             const response = responses[panel.id]
             const status = panelStatus[panel.id] ?? { isLoading: false, error: null }
+            const outputTruncated = response?.metadata?.outputTruncated === true
             const responseText = response?.text ?? ""
             const hasResponse = Boolean(responseText.trim())
             const isCollapsed = collapsedPanelIds.has(panel.id)
@@ -187,7 +190,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                               data-tour="custom-summary-generate"
                             >
                               <Sparkles className="h-3.5 w-3.5" />
-                              {hasResponse ? labels.customRegenerate : labels.customGenerate}
+                              {hasResponse || status.error ? labels.customRegenerate : labels.customGenerate}
                             </Button>
                           )}
                           <CustomInsightDetailDialog
@@ -296,12 +299,19 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                     </div>
                   </div>
 
+                  {outputTruncated ? (
+                    <CustomInsightTruncationNotice className="mb-2" />
+                  ) : null}
                   {status.error ? (
-                    <div className="flex items-start gap-1.5 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:bg-rose-500/10 dark:text-rose-300">
-                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span>{status.error.message}</span>
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 rounded-md bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-rose-500/10 dark:text-rose-300"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{getUserErrorMessage(status.error)}</span>
                     </div>
-                  ) : status.isLoading && !hasResponse ? (
+                  ) : null}
+                  {status.isLoading && !hasResponse ? (
                     <div
                       className="py-3 text-xs text-muted-foreground"
                       role="status"
@@ -325,7 +335,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                         </div>
                       </CollapsibleContent>
                     </>
-                  ) : (
+                  ) : status.error ? null : (
                     <p className="line-clamp-3 text-xs leading-snug text-muted-foreground">{panel.prompt}</p>
                   )}
                 </article>

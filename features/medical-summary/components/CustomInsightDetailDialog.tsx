@@ -18,6 +18,7 @@ import type {
   InsightGenerationMetadata,
 } from "@/features/clinical-insights/types"
 import { CustomInsightGenerationMeta } from "./CustomInsightGenerationMeta"
+import { CustomInsightTruncationNotice } from "./CustomInsightTruncationNotice"
 
 interface CustomInsightDetailDialogProps {
   title: string
@@ -94,6 +95,9 @@ export function CustomInsightDetailDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <div className="mx-auto w-full max-w-4xl text-sm leading-relaxed text-foreground">
+            {!showingPrompt && metadata?.outputTruncated ? (
+              <CustomInsightTruncationNotice className="mb-4" />
+            ) : null}
             <InsightContentRenderer content={content} format={format} />
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { useInsightGeneration } from "@/features/clinical-insights/hooks/useInsightGeneration"
 import { useInsightResponsesStore } from "@/features/clinical-insights/hooks/useInsightResponsesStore"
+import { AiError, AiErrorCode } from "@/src/core/errors"
 
 const mockQuery = jest.fn()
 const mockStop = jest.fn()
@@ -109,7 +110,7 @@ describe("useInsightGeneration provenance", () => {
     })
   })
 
-  it("lets the local endpoint choose the custom summary output limit", async () => {
+  it("bounds local custom summary output at 4,096 tokens", async () => {
     mockQuery.mockResolvedValueOnce("generated summary")
 
     const { result } = renderHook(() => useInsightGeneration({
@@ -138,8 +139,80 @@ describe("useInsightGeneration provenance", () => {
     expect(mockQuery.mock.calls[0][1]).toMatchObject({
       modelId: "openai-compatible-custom:vghtpe-tvghbrain",
       temperature: 0,
+      maxTokens: 4096,
+      allowTruncatedOutput: true,
       reasoningEffort: "low",
     })
-    expect(mockQuery.mock.calls[0][1]).not.toHaveProperty("maxTokens")
+  })
+
+  it("keeps partial local output and records that it was truncated", async () => {
+    mockQuery.mockImplementationOnce(async (
+      _messages: unknown,
+      options: { onOutputTruncated?: (truncated: boolean) => void },
+    ) => {
+      options.onOutputTruncated?.(true)
+      return "A:診斷\n部分內容"
+    })
+
+    const { result } = renderHook(() => useInsightGeneration({
+      panels: [{
+        id: "soap",
+        title: "SOAP",
+        prompt: "Generate SOAP",
+        outputFormat: "markdown",
+        languagePolicy: "interface-language",
+      }],
+      prompts: { soap: "Generate SOAP" },
+      context: "clinical context",
+      piiLiterals: [],
+      model: "openai-compatible-custom:vghtpe-tvghbrain",
+      modelName: "Tvghbrain 3.5",
+      contextLimit: 262_144,
+      contextAdaptation: null,
+      inputSignature: "input-local",
+    }))
+
+    await act(async () => {
+      await result.current.runPanel("soap", { force: true })
+    })
+
+    expect(useInsightResponsesStore.getState().responses.soap).toMatchObject({
+      text: "A:診斷\n部分內容",
+      metadata: { outputTruncated: true },
+    })
+    expect(useInsightResponsesStore.getState().panelStatus.soap.error).toBeNull()
+  })
+
+  it("keeps an empty truncation error when no partial text is available", async () => {
+    const truncated = new AiError(
+      'OpenAI-compatible local model output limit reached; response incomplete',
+      AiErrorCode.OUTPUT_TRUNCATED,
+    )
+    mockQuery.mockRejectedValueOnce(truncated)
+
+    const { result } = renderHook(() => useInsightGeneration({
+      panels: [{
+        id: "soap",
+        title: "SOAP",
+        prompt: "Generate SOAP",
+        outputFormat: "markdown",
+        languagePolicy: "interface-language",
+      }],
+      prompts: { soap: "Generate SOAP" },
+      context: "clinical context",
+      piiLiterals: [],
+      model: "openai-compatible-custom:vghtpe-tvghbrain",
+      modelName: "Tvghbrain 3.5",
+      contextLimit: 262_144,
+      contextAdaptation: null,
+      inputSignature: "input-local",
+    }))
+
+    await act(async () => {
+      await result.current.runPanel("soap", { force: true })
+    })
+
+    expect(useInsightResponsesStore.getState().panelStatus.soap.error).toBe(truncated)
+    expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
   })
 })

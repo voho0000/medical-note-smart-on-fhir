@@ -120,7 +120,10 @@ export class OpenAiCompatibleService {
         choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>
         usage?: { total_tokens?: number }
       }
-      if (data.choices?.[0]?.finish_reason === 'length') {
+      const choice = data.choices?.[0]
+      const outputTruncated = choice?.finish_reason === 'length'
+      const text = choice?.message?.content ?? ''
+      if (outputTruncated && (!request.allowTruncatedOutput || !text.trim())) {
         throw new AiError(
           'OpenAI-compatible local model output limit reached; response incomplete',
           AiErrorCode.OUTPUT_TRUNCATED,
@@ -131,12 +134,13 @@ export class OpenAiCompatibleService {
         ? reportModelExecution(execution, data.model)
         : execution
       return {
-        text: data.choices?.[0]?.message?.content ?? '',
+        text,
         metadata: {
           modelId: modelExecution.actualModelId ?? 'unreported',
           modelExecution,
           provider: 'custom',
           tokensUsed: data.usage?.total_tokens,
+          ...(outputTruncated ? { outputTruncated: true } : {}),
         },
       }
     } catch (error) {

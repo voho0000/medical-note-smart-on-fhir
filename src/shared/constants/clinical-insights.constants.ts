@@ -1,6 +1,12 @@
 export const MAX_SUMMARY_INSIGHT_MODULES = 5
 export const MAX_AUTO_INSIGHT_MODULES = 2
 
+/** Local custom-summary output guard, not the model's input context window.
+ * In the 2026-09 HMC SOAP reproduction, useful completions stayed well below
+ * 4,096 tokens; a looping Assessment reached it and ran for 15 minutes without
+ * a cap. A `length` finish must be labeled as partial, never as a complete note. */
+export const LOCAL_INSIGHT_MAX_OUTPUT_TOKENS = 4096
+
 export const INSIGHT_OUTPUT_FORMATS = ["plain-text", "markdown", "html"] as const
 export type InsightOutputFormat = (typeof INSIGHT_OUTPUT_FORMATS)[number]
 
