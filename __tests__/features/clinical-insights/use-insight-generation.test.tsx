@@ -108,4 +108,38 @@ describe("useInsightGeneration provenance", () => {
       error: null,
     })
   })
+
+  it("lets the local endpoint choose the custom summary output limit", async () => {
+    mockQuery.mockResolvedValueOnce("generated summary")
+
+    const { result } = renderHook(() => useInsightGeneration({
+      panels: [{
+        id: "soap",
+        title: "SOAP",
+        prompt: "Generate SOAP",
+        outputFormat: "markdown",
+        languagePolicy: "interface-language",
+      }],
+      prompts: { soap: "Generate SOAP" },
+      context: "clinical context",
+      piiLiterals: [],
+      model: "openai-compatible-custom:vghtpe-tvghbrain",
+      modelName: "Tvghbrain 3.5",
+      contextLimit: 262_144,
+      contextAdaptation: null,
+      inputSignature: "input-local",
+    }))
+
+    await act(async () => {
+      await result.current.runPanel("soap", { force: true })
+    })
+
+    expect(mockQuery).toHaveBeenCalledTimes(1)
+    expect(mockQuery.mock.calls[0][1]).toMatchObject({
+      modelId: "openai-compatible-custom:vghtpe-tvghbrain",
+      temperature: 0,
+      reasoningEffort: "low",
+    })
+    expect(mockQuery.mock.calls[0][1]).not.toHaveProperty("maxTokens")
+  })
 })

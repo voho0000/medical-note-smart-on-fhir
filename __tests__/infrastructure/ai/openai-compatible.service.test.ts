@@ -68,6 +68,20 @@ describe('OpenAiCompatibleService', () => {
     })
   })
 
+  it('rejects a response cut off by the endpoint output limit', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: 'unfinished assessment' }, finish_reason: 'length' }],
+    }))
+    const service = new OpenAiCompatibleService(config)
+
+    const error = await service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'generate SOAP' }],
+    }).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ code: 'AI_OUTPUT_TRUNCATED' })
+    expect(getUserErrorMessage(error)).toContain('摘要尚未完成')
+  })
+
   it('omits gpt-oss reasoning controls for other endpoint models', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
       choices: [{ message: { content: 'answer' } }],
@@ -123,5 +137,40 @@ describe('OpenAiCompatibleService', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  it('reports a long direct connection failure without calling it a confirmed timeout', async () => {
+    jest.useFakeTimers()
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(() =>
+      new Promise<Response>((_resolve, reject) => {
+        setTimeout(() => reject(new TypeError('Failed to fetch')), 5 * 60_000)
+      }))
+    try {
+      const service = new OpenAiCompatibleService({ ...config, transport: 'direct' })
+      const captured = service.query({
+        modelId: 'openai-compatible-custom',
+        messages: [{ role: 'user', content: 'long clinical prompt' }],
+      }).catch((error: unknown) => error)
+      await jest.advanceTimersByTimeAsync(5 * 60_000)
+
+      const error = await captured
+      expect(error).toMatchObject({ code: 'AI_CONNECTION_INTERRUPTED' })
+      expect(getUserErrorMessage(error)).toContain('可能是服務端或網路逾時')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('keeps a short fetch failure as an ordinary network failure', async () => {
+    jest.spyOn(global, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'))
+    const service = new OpenAiCompatibleService({ ...config, transport: 'direct' })
+    const error = await service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'hello' }],
+    }).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(TypeError)
+    expect(getUserErrorMessage(error)).toContain('網路連線問題')
   })
 })

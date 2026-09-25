@@ -24,6 +24,8 @@ interface CustomInsightGenerationMetaProps {
   className?: string
 }
 
+const LOCAL_MODEL_SLOW_WARNING_MS = 4 * 60_000
+
 function ModelName({
   children,
   className,
@@ -71,9 +73,10 @@ function RunningMeta({
     return () => window.clearInterval(timer)
   }, [])
 
-  const elapsedText = formatGenerationDuration(
-    Math.max(0, now - activeGeneration.startedAt),
-  ) ?? "00:00"
+  const elapsedMs = Math.max(0, now - activeGeneration.startedAt)
+  const elapsedText = formatGenerationDuration(elapsedMs) ?? "00:00"
+  const showSlowWarning = activeGeneration.isLocalModel &&
+    elapsedMs >= LOCAL_MODEL_SLOW_WARNING_MS
   const ariaLabel = labels.summaryGenerationRunningProvenance
     .replace("{model}", activeGeneration.modelName)
     .replace("{elapsed}", elapsedText)
@@ -100,6 +103,11 @@ function RunningMeta({
       <ModelName>{activeGeneration.modelName}</ModelName>
       <span aria-hidden="true" className="shrink-0">·</span>
       <span className="min-w-[5ch] shrink-0 tabular-nums">{elapsedText}</span>
+      {showSlowWarning ? (
+        <span className="basis-full text-amber-700 dark:text-amber-300" role="status" aria-live="polite">
+          {labels.summaryGenerationSlowWarning}
+        </span>
+      ) : null}
     </div>
   )
 }

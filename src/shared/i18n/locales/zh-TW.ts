@@ -408,6 +408,7 @@ export const zhTW = {
     summaryGenerationDurationLabel: '耗時',
     summaryGenerationRunningLabel: '產生中',
     summaryGenerationRunningProvenance: '正在使用 {model} 產生摘要，已進行 {elapsed}',
+    summaryGenerationSlowWarning: '已等待至少 4 分鐘。長病歷可能需要較久；若連線中斷，請縮小「資料選擇」範圍後重試。',
     summaryPreGeneratedLabel: '預產生',
     summaryPreGeneratedProvenance: '預產生摘要，由 {model} 建立',
     medicationEducationTitle: '我的用藥與照護',
