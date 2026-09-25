@@ -17,6 +17,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
+import { isCustomOpenAiModelId } from "@/src/shared/constants/ai-models.constants"
 import {
   MAX_SUMMARY_INSIGHT_MODULES,
   type InsightOutputFormat,
@@ -25,6 +27,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { InsightContentRenderer } from "@/features/clinical-insights/components/InsightContentRenderer"
+import { LongCustomInsightPromptNotice } from "@/features/clinical-insights/components/LongCustomInsightPromptNotice"
 import {
   insightContentToPlainText,
   sanitizeInsightHtml,
@@ -38,6 +41,7 @@ interface CustomInsightModulesSectionProps {
 
 export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSectionProps) {
   const { t } = useLanguage()
+  const insightsModel = useEffectiveModel("insights")
   const labels = t.medicalSummary
   const [collapsedPanelIds, setCollapsedPanelIds] = useState<Set<string>>(() => new Set())
   const [viewFormatsByPanel, setViewFormatsByPanel] = useState<Record<
@@ -213,6 +217,11 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                         </div>
                       </div>
                     </div>
+                    <LongCustomInsightPromptNotice
+                      prompt={panel.prompt}
+                      isCustomModel={isCustomOpenAiModelId(insightsModel)}
+                      className="mt-1"
+                    />
                     <div
                       className={cn(
                         "mt-1 flex flex-wrap items-center gap-1.5",
