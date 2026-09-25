@@ -33,7 +33,7 @@ jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({ L
 jest.mock('@/src/shared/components/TemplateRestore', () => ({ TemplateRestore: () => null }))
 jest.mock('@/src/shared/components/InfoHint', () => ({ InfoHint: () => null }))
 jest.mock('@/src/shared/components/ModelPicker', () => ({ ModelPicker: () => null }))
-jest.mock('@/src/application/stores/model-prefs.store', () => ({ MODEL_PREF_DEFAULTS: { insights: 'model' }, useModelPref: () => 'model', useSetModelFor: () => jest.fn() }))
+jest.mock('@/src/application/stores/model-prefs.store', () => ({ MODEL_PREF_DEFAULTS: { insights: 'model' }, useEffectiveModel: () => 'model', useModelPref: () => 'model', useSetModelFor: () => jest.fn() }))
 import { ChatTemplatesProvider } from '@/src/application/providers/chat-templates.provider'
 import { ClinicalInsightsConfigProvider, getDefaultClinicalInsightPanels } from '@/src/application/providers/clinical-insights-config.provider'
 import { ChatTemplatesSettings } from '@/features/settings/components/ChatTemplatesSettings'
