@@ -82,6 +82,35 @@ describe('OpenAiCompatibleService', () => {
     expect(getUserErrorMessage(error)).toContain('摘要尚未完成')
   })
 
+  it('returns nonempty truncated text with an explicit marker when the caller opts in', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: 'A:診斷\n部分內容' }, finish_reason: 'length' }],
+    }))
+    const service = new OpenAiCompatibleService(config)
+
+    await expect(service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'generate SOAP' }],
+      allowTruncatedOutput: true,
+    })).resolves.toMatchObject({
+      text: 'A:診斷\n部分內容',
+      metadata: { outputTruncated: true },
+    })
+  })
+
+  it('still rejects an empty truncated response when the caller opts in', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: '' }, finish_reason: 'length' }],
+    }))
+    const service = new OpenAiCompatibleService(config)
+
+    await expect(service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'generate SOAP' }],
+      allowTruncatedOutput: true,
+    })).rejects.toMatchObject({ code: 'AI_OUTPUT_TRUNCATED' })
+  })
+
   it('omits gpt-oss reasoning controls for other endpoint models', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
       choices: [{ message: { content: 'answer' } }],

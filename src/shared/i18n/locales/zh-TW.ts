@@ -444,6 +444,8 @@ export const zhTW = {
     customPromptPreview: '模板提示',
     customResultPreview: '摘要結果',
     customGenerating: '正在產生，完成後會一次顯示完整結果…',
+    customOutputTruncatedTitle: '輸出已截斷：以下為部分內容',
+    customOutputTruncatedDescription: '地端模型已達輸出上限（本功能最多 {tokens} 個 tokens）。已保留產生的文字，後續段落可能缺漏，請確認後再使用。',
     customDisplayAs: '顯示格式',
     customCopyText: '複製文字',
     customCopySource: '複製原始碼',
