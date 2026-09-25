@@ -68,6 +68,20 @@ describe('OpenAiCompatibleService', () => {
     })
   })
 
+  it('rejects a response cut off by the endpoint output limit', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: 'unfinished assessment' }, finish_reason: 'length' }],
+    }))
+    const service = new OpenAiCompatibleService(config)
+
+    const error = await service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'generate SOAP' }],
+    }).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ code: 'AI_OUTPUT_TRUNCATED' })
+    expect(getUserErrorMessage(error)).toContain('摘要尚未完成')
+  })
+
   it('omits gpt-oss reasoning controls for other endpoint models', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
       choices: [{ message: { content: 'answer' } }],

@@ -179,12 +179,11 @@ export function useInsightGeneration({
           const fullText = await ai.query(messages, {
             onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
             modelId: model,
-            // Deterministic decoding improves factual repeatability on local
-            // OpenAI-compatible models. A bounded completion also prevents
-            // reasoning models from spending thousands of hidden tokens on a
-            // single concise card. Keep frontier-provider defaults intact.
+            // Keep local-model decoding deterministic. The endpoint owns its
+            // completion limit; the clinical context window is not an output
+            // token budget. Keep frontier-provider defaults intact.
             ...(isCustomOpenAiModelId(model)
-              ? { temperature: 0, maxTokens: 4096, reasoningEffort: 'low' as const }
+              ? { temperature: 0, reasoningEffort: 'low' as const }
               : {}),
             operationKey: `clinical-insight:${owner}:${panel.id}`,
             diagnosticFeature: 'clinical-insights',

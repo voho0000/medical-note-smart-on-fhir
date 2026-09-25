@@ -112,8 +112,15 @@ export class OpenAiCompatibleService {
 
       const data = await response.json() as {
         model?: string
-        choices?: Array<{ message?: { content?: string } }>
+        choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>
         usage?: { total_tokens?: number }
+      }
+      if (data.choices?.[0]?.finish_reason === 'length') {
+        throw new AiError(
+          'OpenAI-compatible local model output limit reached; response incomplete',
+          AiErrorCode.OUTPUT_TRUNCATED,
+          { modelId: config.modelId },
+        )
       }
       const modelExecution = typeof data.model === 'string'
         ? reportModelExecution(execution, data.model)

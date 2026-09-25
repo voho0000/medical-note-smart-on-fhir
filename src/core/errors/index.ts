@@ -31,6 +31,10 @@ interface ErrorMapping {
 const CONTEXT_WINDOW_EXCEEDED_PATTERN = /ContextWindowExceededError|maximum context length|context window.{0,40}(?:exceed|overflow)|prompt contains at least \d+ input tokens/i
 
 const ERROR_MAPPINGS: ErrorMapping[] = [
+  {
+    pattern: /AI_OUTPUT_TRUNCATED|OpenAI-compatible local model output limit reached/i,
+    message: '地端模型已達輸出長度上限，摘要尚未完成。請縮小「資料選擇」範圍或精簡自訂提示詞後重試。'
+  },
   // OpenAI-compatible gateways (notably LiteLLM) wrap this under several
   // nested error/cause shapes. Keep it ahead of generic 400/provider text so
   // an exhausted automatic context retry never dumps the raw routing payload
