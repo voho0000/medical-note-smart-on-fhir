@@ -2,6 +2,7 @@ import { createModelExecution, reportModelExecution } from '@/src/shared/utils/a
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 import {
   isOpenAiCompatibleRuntimeReady,
   openAiCompatibleEndpointUrl,
@@ -15,6 +16,7 @@ import { createConfiguredOpenAiCompatibleFetch } from
 // direct OpenAI-compatible endpoint. The caller's AbortSignal still stops it
 // immediately when the user cancels or starts a replacement batch.
 export const OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS = 10 * 60_000
+const LOCAL_MODEL_SLOW_RESPONSE_MS = 4 * 60_000
 
 export class OpenAiCompatibleService {
   readonly name = 'custom'
@@ -69,6 +71,8 @@ export class OpenAiCompatibleService {
 
     const controller = new AbortController()
     let didTimeout = false
+    let receivedResponse = false
+    const startedAt = Date.now()
     const timeoutId = setTimeout(() => {
       didTimeout = true
       controller.abort()
@@ -89,6 +93,7 @@ export class OpenAiCompatibleService {
           referrerPolicy: 'no-referrer',
         },
       )
+      receivedResponse = true
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as {
           error?: string | { message?: string }
@@ -145,6 +150,22 @@ export class OpenAiCompatibleService {
           `OpenAI-compatible local model response timed out after ${minutes} minutes`,
           AiErrorCode.TIMEOUT,
           { modelId: config.modelId, timeoutMs: this.queryTimeoutMs },
+        )
+      }
+      // A direct fetch can fail before our ten-minute timer without returning
+      // an HTTP response. After a long wait, report the interrupted connection
+      // without guessing whether the server, proxy, or network ended it.
+      if (
+        !receivedResponse &&
+        !request.signal?.aborted &&
+        error instanceof TypeError &&
+        Date.now() - startedAt >= LOCAL_MODEL_SLOW_RESPONSE_MS &&
+        normalizeOpenAiCompatibleTransport(config.transport) === 'direct'
+      ) {
+        throw new AiError(
+          'OpenAI-compatible local model connection interrupted after a long wait',
+          AiErrorCode.CONNECTION_INTERRUPTED,
+          { modelId: config.modelId },
         )
       }
       throw error

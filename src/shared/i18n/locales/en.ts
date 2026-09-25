@@ -408,6 +408,7 @@ export const en = {
     summaryGenerationDurationLabel: 'Time',
     summaryGenerationRunningLabel: 'Generating',
     summaryGenerationRunningProvenance: 'Generating the summary with {model}; elapsed {elapsed}',
+    summaryGenerationSlowWarning: 'Waiting for at least 4 minutes. Longer records may take more time. If the connection ends, select less data and try again.',
     summaryPreGeneratedLabel: 'Pre-generated',
     summaryPreGeneratedProvenance: 'Pre-generated summary created with {model}',
     medicationEducationTitle: 'My medicines and care',

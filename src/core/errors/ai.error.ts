@@ -12,6 +12,7 @@ export enum AiErrorCode {
   INVALID_REQUEST = 'AI_INVALID_REQUEST',
   STREAMING_ERROR = 'AI_STREAMING_ERROR',
   OUTPUT_TRUNCATED = 'AI_OUTPUT_TRUNCATED',
+  CONNECTION_INTERRUPTED = 'AI_CONNECTION_INTERRUPTED',
   TIMEOUT = 'AI_TIMEOUT',
   UNKNOWN_ERROR = 'AI_UNKNOWN_ERROR',
 }
@@ -46,6 +47,8 @@ export class AiError extends BaseError {
         return 'Error occurred during streaming. Please try again.'
       case AiErrorCode.OUTPUT_TRUNCATED:
         return 'The model stopped at its output limit before completing the response.'
+      case AiErrorCode.CONNECTION_INTERRUPTED:
+        return 'The local-model connection ended after a long wait. The server or network may have timed out.'
       case AiErrorCode.TIMEOUT:
         return 'Request timeout. Please try again.'
       default:

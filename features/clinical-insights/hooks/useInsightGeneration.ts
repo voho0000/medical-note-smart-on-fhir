@@ -164,6 +164,7 @@ export function useInsightGeneration({
               id: activeGenerationId,
               modelName,
               startedAt,
+              isLocalModel: isCustomOpenAiModelId(model),
             },
           },
         }))

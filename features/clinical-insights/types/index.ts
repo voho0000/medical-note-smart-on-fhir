@@ -28,6 +28,7 @@ export interface ActiveInsightGeneration {
   id: string
   modelName: string
   startedAt: number
+  isLocalModel?: boolean
 }
 
 export interface PanelStatus {
