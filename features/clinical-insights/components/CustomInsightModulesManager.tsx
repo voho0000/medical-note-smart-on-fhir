@@ -24,6 +24,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { isCustomOpenAiModelId } from "@/src/shared/constants/ai-models.constants"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
@@ -38,6 +39,7 @@ import {
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import {
   MODEL_PREF_DEFAULTS,
+  useEffectiveModel,
   useModelPref,
   useSetModelFor,
 } from "@/src/application/stores/model-prefs.store"
@@ -60,6 +62,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
   const { audience } = useAudience()
   const { user } = useAuth()
   const insightsModel = useModelPref("insights")
+  const effectiveInsightsModel = useEffectiveModel("insights")
   const setModelFor = useSetModelFor()
   const {
     panels,
@@ -383,6 +386,7 @@ export function CustomInsightModulesManager({ initialPanelId, guidedPreview = fa
               autoModuleCount={autoModuleCount}
               maxSummaryModules={MAX_SUMMARY_INSIGHT_MODULES}
               maxAutoModules={MAX_AUTO_INSIGHT_MODULES}
+              isCustomModel={isCustomOpenAiModelId(effectiveInsightsModel)}
               onUpdate={(id, patch) => void requestCustomization(() => updatePanel(id, patch))}
               onUpdateAndSave={user && !guidedPreview ? updatePanelAndSave : undefined}
               onRemove={handleRemovePanel}

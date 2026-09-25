@@ -2013,6 +2013,7 @@ export const zhTW = {
     tabLabelPlaceholder: '例如：近期重要變化',
     subtitlePlaceholder: '突顯緊急安全問題或禁忌症。',
     promptPlaceholderInsight: '描述此摘要模組應使用可用的臨床資料產生什麼內容。',
+    longCustomInsightPromptWarning: '此提示詞已達 {count} 字元。字數沒有可靠的安全界線；請檢查重複或矛盾的規則與範例，並核對產出的診斷。',
     expandPromptEditor: '展開編輯',
     promptEditorTitle: '編輯 Prompt',
     backToTemplate: '返回模板',
