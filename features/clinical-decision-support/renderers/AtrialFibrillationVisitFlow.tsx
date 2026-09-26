@@ -406,6 +406,15 @@ export function AtrialFibrillationVisitFlow({
                 if (rhythmIds.includes(r.id)) setStrategy('rhythm')
                 setOpenSections((old) => new Set([...old, sectionFor(r)]))
                 if (expandedId !== r.id) onToggle(r.id)
+                // Bring the card itself into view once its section has rendered, so the
+                // alert is one click from the decision rather than a hunt down the page.
+                // (setTimeout, not requestAnimationFrame: it runs after React commits the
+                // click's update and still runs when the tab is not being painted.)
+                setTimeout(() => {
+                  const row = document.getElementById(`af-action-${r.id}`)
+                  row?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+                  row?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
+                }, 0)
               }}
             >
               {r.title}

@@ -56,6 +56,37 @@ describe('AF three-section visit flow', () => {
       buildDiseaseBoard({ ...r, packId: 'heart-failure-cdss' }, AF_BOARD_CONFIG, 'zh-TW'),
     ).toBeUndefined()
   })
+  it('a safety alert opens its card and scrolls it into view', async () => {
+    const flecainide: CdssPatientProfile = {
+      ...profile,
+      afMedicationRegimens: [{ ingredient: 'flecainide', name: 'flecainide', sources: [] }],
+      facts: { ...profile.facts, coronaryArteryDiagnosis: { zh: 'I25.10', en: 'I25.10' } },
+    }
+    const scroll = jest.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scroll
+    try {
+      render(
+        <ClinicalDecisionSupportView
+          result={PACK.build({ profile: applyAfCalculatorResults(flecainide), locale: 'zh-TW' })}
+          locale="zh-TW"
+          layout="flow"
+          patientId={profile.id}
+          afAnswers={{}}
+          onAfAnswer={() => {}}
+          profileFacts={flecainide.facts}
+        />,
+      )
+      const alerts = screen.getByRole('region', { name: '優先安全警訊' })
+      fireEvent.click(within(alerts).getByRole('button', { name: /Flecainide 在用＋冠心病/ }))
+      const row = screen.getByTestId('cdss-af-action-af-antiarrhythmic-drug-safety')
+      expect(within(row).getByRole('button', { expanded: true })).toBeInTheDocument()
+      await new Promise((r) => setTimeout(r, 50))
+      expect(scroll).toHaveBeenCalled()
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
   it('starts with three collapsed sections and preserves every module when expanded', () => {
     render(<Harness />)
     for (const id of ['diagnosis', 'treatment', 'prognosis']) {
