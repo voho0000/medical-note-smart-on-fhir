@@ -99,3 +99,15 @@ describe('AF follow-up calculators', () => {
     })
   })
 })
+
+describe('HAS-BLED item definitions (ACC/AHA 2023 Figure 11; AF spec RT-15)', () => {
+  const label = (key: string) => HAS_BLED.inputs.find((i) => i.key === key)!.label.en
+  it('states age ≥65, liver criteria as any one, and alcohol ≥8 as provisional', () => {
+    expect(HAS_BLED.version).toBe('1.2.0')
+    expect(label('elderly')).toBe('Age ≥65')
+    expect(label('liver')).toContain('any one')
+    expect(label('liver')).not.toContain('AND')
+    expect(label('alcohol')).toContain('≥8')
+    expect(HAS_BLED.reference).toContain('Figure 11')
+  })
+})

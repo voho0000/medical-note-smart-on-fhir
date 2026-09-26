@@ -95,7 +95,7 @@ export function calculateHasBled(inputs: Record<string, boolean | undefined>) {
 /** Shared definition used by the calculator catalog and CDSS handoff tests. */
 export const HAS_BLED: CalculatorDef = {
   id: 'has-bled',
-  version: '1.1.0',
+  version: '1.2.0',
   name: { zh: 'HAS-BLED 出血風險分數', en: 'HAS-BLED Score' },
   category: 'cardiac',
   audience: 'medical',
@@ -108,15 +108,15 @@ export const HAS_BLED: CalculatorDef = {
     ['renal', '腎異常：透析／移植／Cr >2.26 mg/dL', 'Renal: dialysis/transplant/Cr >2.26 mg/dL'],
     [
       'liver',
-      '肝異常：慢性肝病，或 bilirubin >2× 且 AST/ALT/ALP >3×ULN',
-      'Liver: chronic disease, or bilirubin >2× AND AST/ALT/ALP >3×ULN',
+      '肝異常：bilirubin >2×ULN、AST/ALT/ALP >3×ULN 或肝硬化（任一）',
+      'Liver: bilirubin >2×ULN, AST/ALT/ALP >3×ULN, or cirrhosis (any one)',
     ],
     ['stroke', '中風病史（非單純 TIA／周邊栓塞）', 'Stroke (not isolated TIA/peripheral embolism)'],
     ['bleeding', '重大出血病史／出血傾向', 'Major bleeding history/predisposition'],
     ['inr', 'INR 不穩定（TTR <60%）', 'Labile INR (TTR <60%)'],
-    ['elderly', '年齡 >65', 'Age >65'],
+    ['elderly', '年齡 ≥65', 'Age ≥65'],
     ['drugs', '併用抗血小板／NSAID', 'Antiplatelet/NSAID'],
-    ['alcohol', '酒精每週 >8 單位', 'Alcohol >8 units/week'],
+    ['alcohol', '酒精每週 ≥8 單位（暫行，待臨床確認）', 'Alcohol ≥8 units/week (provisional, pending clinical sign-off)'],
   ].map(([key, zh, en]) => ({
     key,
     type: 'select',
@@ -174,5 +174,5 @@ export const HAS_BLED: CalculatorDef = {
     }
   },
   reference:
-    'Pisters R et al. Chest 2010; ACC/AHA/ACCP/HRS AF 2023. A score alone does not contraindicate anticoagulation.',
+    'Item definitions follow ACC/AHA/ACCP/HRS AF 2023 Figure 11 (age ≥65; liver: bilirubin >2×ULN, AST/ALT/ALP >3×ULN, or cirrhosis); score after Pisters R et al. Chest 2010. A score alone does not contraindicate anticoagulation.',
 }
