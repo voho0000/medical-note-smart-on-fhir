@@ -11,7 +11,7 @@ interface CoverageCheck {
   label: string
   value: string
   state: NhiLipidAnswer
-  origin: 'record' | 'physician' | 'derived'
+  origin: 'record' | 'physician' | 'ai' | 'derived'
   editable: boolean
 }
 
@@ -45,7 +45,7 @@ function CheckRow({ row, patientId, en }: { row: CoverageCheck; patientId?: stri
         className={`min-h-11 rounded-md border px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${row.state === state ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted/40'}`}
         onClick={() => patientId && answer(patientId, row.id, state)}>{label}</button>)}
     </div> : <p className="text-xs font-medium">{options.find(([state]) => state === row.state)?.[1]} · {en ? 'Computed from components' : '由細項計算'}</p>}
-    <p className="text-xs text-muted-foreground">{row.origin === 'physician' ? en ? 'Physician verified · record supporting evidence in the chart' : '醫師人工核對 · 請於病歷記錄確認依據' : row.origin === 'record' ? en ? 'Preselected from record; available for correction' : '依資料預選，可由醫師修正' : ''}
+    <p className="text-xs text-muted-foreground">{row.origin === 'ai' ? en ? 'AI assessment included automatically · available for clinician correction' : 'AI 判讀自動帶入 · 可由醫師修正' : row.origin === 'physician' ? en ? 'Physician verified · record supporting evidence in the chart' : '醫師人工核對 · 請於病歷記錄確認依據' : row.origin === 'record' ? en ? 'Preselected from record; available for correction' : '依資料預選，可由醫師修正' : ''}
       {row.origin === 'physician' ? <button type="button" className="ml-2 min-h-11 text-primary underline underline-offset-2" onClick={() => patientId && answer(patientId, row.id, undefined)}>{en ? 'Restore record assessment' : '恢復資料判讀'}</button> : null}
     </p>
   </div>

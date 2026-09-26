@@ -38,6 +38,7 @@ const scenarios = [
   { id: 'ddi', zh: '抗凝藥交互作用' },
   { id: 'amiodarone', zh: 'Amiodarone／抗凝藥副作用追蹤' },
   { id: 'dronedarone', zh: 'Dronedarone 副作用追蹤' },
+  { id: 'ic-cad', zh: 'Flecainide＋冠心病（Ic 安全）' },
   { id: 'hf', zh: 'HF 原版參考' },
 ]
 function synthetic(id: string) {
@@ -47,7 +48,7 @@ function synthetic(id: string) {
       ? ['I10', ...(id === 'screening' ? ['G47.33'] : [])]
       : id === 'low'
         ? ['I48.0']
-        : ['I48.0', 'I10', 'E11.9', ...(id === 'valve' ? ['Z95.2', 'I05.0', 'I50.9'] : [])]
+        : ['I48.0', 'I10', 'E11.9', ...(id === 'valve' ? ['Z95.2', 'I05.0', 'I50.9'] : []), ...(id === 'ic-cad' ? ['I25.10'] : [])]
   const lab = (key: string, code: string, value: number, unit: string) => ({
     id: key,
     status: 'final',
@@ -128,7 +129,7 @@ function synthetic(id: string) {
       lab('ef', '10230-1', id === 'valve' ? 40 : 58, '%'),
     ],
     medications:
-      id === 'amiodarone' ? [drug('amiodarone', 200, 1), drug('apixaban', 5, 2)] : id === 'dronedarone' ? [drug('dronedarone', 400, 2)] : id === 'warfarin'
+      id === 'amiodarone' ? [drug('amiodarone', 200, 1), drug('apixaban', 5, 2)] : id === 'dronedarone' ? [drug('dronedarone', 400, 2)] : id === 'ic-cad' ? [drug('flecainide', 50, 2), drug('apixaban', 5, 2)] : id === 'warfarin'
         ? [drug('warfarin', 3, 1)]
         : id === 'ddi'
           ? [drug('apixaban', 5, 2), drug('ketoconazole', 200, 1)]
