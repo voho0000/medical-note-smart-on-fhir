@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, type ReactNode, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useState } from 'react'
 import {
   ArrowRight,
   Check,
@@ -57,6 +57,7 @@ import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
   VISIT_DECISIONS,
+  buildTodayFocus,
   VISIT_SIDE_LABELS,
   decisionLabel,
   decisionReasonIds,
@@ -79,6 +80,7 @@ import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
 import { HfFollowUpPriorities } from './HfFollowUpPriorities'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { diagnosisContextOf } from './cdss-sections'
+import { markCdssFocusShown, recordCdssDecisionTiming } from '../utils/cdss-decision-timing'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
 /** The element a step's 「前往」 button scrolls to. */
@@ -253,6 +255,24 @@ export function HeartFailureVisitFlow({
         onClose={() => setEditingMetric(null)} /> : null}
       {recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={allEditableMetrics} isEnglish={isEnglish} now={now}
         onSave={saveMetrics} onClose={() => setRecordValuesOpen(false)} /> : null}
+      <TodayFocusCard
+        flow={flow}
+        isEnglish={isEnglish}
+        now={now}
+        expandedId={expandedId}
+        onToggle={onToggle}
+        renderDetail={renderDetail}
+        editingDecisions={editingDecisions}
+        onEditDecision={(moduleId, editing) => setEditingDecisions((current) => {
+          const next = new Set(current)
+          if (editing) next.add(moduleId)
+          else next.delete(moduleId)
+          return next
+        })}
+        onRecordDecision={onRecordDecision}
+        onClearDecision={onClearDecision}
+        packVersion={packVersion}
+      />
       {!sectionRecommendations ? <>
       <StepCard
         steps={flow.steps}
@@ -1472,6 +1492,7 @@ function DecisionControls({
   onClearDecision,
   packVersion,
   readOnly,
+  testIdPrefix = 'cdss-hf-decision',
 }: {
   row: VisitActionRow
   isEnglish: boolean
@@ -1482,6 +1503,8 @@ function DecisionControls({
   onClearDecision?: (moduleId: string) => void
   packVersion: string
   readOnly: boolean
+  /** Distinguishes the 「今天要決定」 copy of these controls from the full list's. */
+  testIdPrefix?: string
 }) {
   const [note, setNote] = useState(row.decision?.note ?? '')
   if (row.decisionKind === 'none' || readOnly || !onRecordDecision) return null
@@ -1503,7 +1526,7 @@ function DecisionControls({
     return (
       <div
         className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1"
-        data-testid={`cdss-hf-decision-recorded-${moduleId}`}
+        data-testid={`${testIdPrefix}-recorded-${moduleId}`}
         data-decision={decision.decision}
       >
         <Badge className="h-5 bg-primary/10 px-1.5 text-[11px] text-primary hover:bg-primary/10">
@@ -1529,7 +1552,7 @@ function DecisionControls({
           type="button"
           className="min-h-8 min-w-14 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onEdit(true)}
-          data-testid={`cdss-hf-decision-edit-${moduleId}`}
+          data-testid={`${testIdPrefix}-edit-${moduleId}`}
         >
           {isEnglish ? 'Edit' : '修改'}
         </button>
@@ -1542,7 +1565,7 @@ function DecisionControls({
   const reasonIds = decisionReasonIds(moduleId, row.decisionKind, decision?.decision)
 
   return (
-    <div className="mt-1.5 space-y-1.5" data-testid={`cdss-hf-decision-${moduleId}`}>
+    <div className="mt-1.5 space-y-1.5" data-testid={`${testIdPrefix}-${moduleId}`}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">
           {isEnglish ? 'Your decision' : '你的處置'}
@@ -1577,7 +1600,7 @@ function DecisionControls({
                 // so those three keep the editor open for the second half.
                 onEdit(option === 'contraindicated' || option === 'deferred' || option === 'dose-adjusted')
               }}
-              data-testid={`cdss-hf-decision-${moduleId}-${option}`}
+              data-testid={`${testIdPrefix}-${moduleId}-${option}`}
             >
               {decisionLabel(option, isEnglish)}
             </button>
@@ -1588,7 +1611,7 @@ function DecisionControls({
             type="button"
             className="min-h-7 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => { onClearDecision(moduleId); onEdit(false) }}
-            data-testid={`cdss-hf-decision-clear-${moduleId}`}
+            data-testid={`${testIdPrefix}-clear-${moduleId}`}
           >
             {isEnglish ? 'Clear' : '清除'}
           </button>
@@ -1596,7 +1619,7 @@ function DecisionControls({
       </div>
 
       {needsReasons ? (
-        <div className="flex items-end gap-2" data-testid={`cdss-hf-decision-reasons-${moduleId}`}>
+        <div className="flex items-end gap-2" data-testid={`${testIdPrefix}-reasons-${moduleId}`}>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {DECISION_REASONS.filter((reason) => reasonIds.includes(reason.id)).map((reason) => {
               const selected = decision?.reasons.includes(reason.id) ?? false
@@ -1626,7 +1649,7 @@ function DecisionControls({
                       }
                     }
                   }}
-                  data-testid={`cdss-hf-decision-reason-${moduleId}-${reason.id}`}
+                  data-testid={`${testIdPrefix}-reason-${moduleId}-${reason.id}`}
                 >
                   {isEnglish ? reason.en : reason.zh}
                 </button>
@@ -1639,7 +1662,7 @@ function DecisionControls({
                 placeholder={isEnglish ? 'Specify other reason' : '其他想記的一行'}
                 className="h-8 w-56 px-2 text-sm md:text-sm"
                 aria-label={isEnglish ? 'Other decision reason' : '其他處置原因'}
-                data-testid={`cdss-hf-decision-note-${moduleId}`}
+                data-testid={`${testIdPrefix}-note-${moduleId}`}
               />
             ) : null}
           </div>
@@ -1653,7 +1676,7 @@ function DecisionControls({
               record({ decision: decision.decision, note: decision.reasons.includes('other') ? note.trim() : '' })
               onEdit(false)
             }}
-            data-testid={`cdss-hf-decision-save-${moduleId}`}
+            data-testid={`${testIdPrefix}-save-${moduleId}`}
           >
             {isEnglish ? 'Record' : '記錄'}
           </Button>
@@ -1982,6 +2005,142 @@ function ActionsCard({
           </div>
         )
       })}
+    </section>
+  )
+}
+
+/* ------------------------------------------------------ 今天要決定 */
+
+/**
+ * 「今天要決定」: the few rows to settle first, above every layout.
+ *
+ * Every undecided safety row, then at most three undecided routine rows, each
+ * with the pack's own next step, its concise basis and the same one-click
+ * decision controls as the full list below. The full list stays in place; this
+ * card only chooses what is read first so a single decision can be made in
+ * seconds. Placement only — every clinical word is the pack's.
+ */
+function TodayFocusCard({
+  flow,
+  isEnglish,
+  now,
+  expandedId,
+  onToggle,
+  renderDetail,
+  editingDecisions,
+  onEditDecision,
+  onRecordDecision,
+  onClearDecision,
+  packVersion,
+}: {
+  flow: VisitFlowModel
+  isEnglish: boolean
+  now: Date
+  expandedId: string | null
+  onToggle: (id: string) => void
+  renderDetail: (recommendation: CdssRecommendation) => ReactNode
+  editingDecisions: ReadonlySet<string>
+  onEditDecision: (moduleId: string, editing: boolean) => void
+  onRecordDecision?: (moduleId: string, input: PhysicianDecisionInput) => void
+  onClearDecision?: (moduleId: string) => void
+  packVersion: string
+}) {
+  const focus = buildTodayFocus(flow.actionGroups)
+  useEffect(() => { markCdssFocusShown() }, [])
+  const rows = [...focus.safety, ...focus.routine]
+  const record = onRecordDecision
+    ? (moduleId: string, input: PhysicianDecisionInput) => {
+      recordCdssDecisionTiming(moduleId)
+      onRecordDecision(moduleId, input)
+    }
+    : undefined
+  const pendingTotal = focus.decidable - focus.decided
+  return (
+    <section
+      aria-labelledby="cdss-hf-today-focus-title"
+      className="rounded-lg border border-border bg-card"
+      data-testid="cdss-hf-today-focus"
+    >
+      <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border px-3 py-2">
+        <h3 id="cdss-hf-today-focus-title" className="text-sm font-semibold text-foreground">
+          {isEnglish ? 'Decide today' : '今天要決定'}
+        </h3>
+        <span className="text-xs tabular-nums text-muted-foreground" data-testid="cdss-hf-today-focus-count">
+          {isEnglish
+            ? `${focus.safety.length} safety · ${focus.routine.length} routine · ${focus.decided}/${focus.decidable} decided`
+            : `安全 ${focus.safety.length} · 例行 ${focus.routine.length} · 已決定 ${focus.decided}/${focus.decidable}`}
+        </span>
+      </header>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-sm text-muted-foreground" data-testid="cdss-hf-today-focus-empty">
+          {pendingTotal > 0
+            ? (isEnglish ? 'No safety or routine decision is pending; see the full list below.' : '沒有待決定的安全或例行項目；其餘見下方完整清單。')
+            : (isEnglish ? 'Nothing is pending today.' : '今天沒有待決定的項目。')}
+        </p>
+      ) : (
+        <ol className="divide-y divide-border">
+          {rows.map((row) => {
+            const moduleId = row.recommendation.id
+            const basis = conciseActionBasis(row)
+            const expanded = expandedId === moduleId
+            return (
+              <li key={moduleId} className="px-3 py-2" data-testid={`cdss-hf-today-focus-row-${moduleId}`}>
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <Badge className={cn('h-5 shrink-0 px-1.5 text-[11px]', statusStyle[row.status])}>
+                        <StatusIcon status={row.status} />
+                        {row.isSafety ? (isEnglish ? 'Safety' : '安全') : statusLabel(row.status, isEnglish)}
+                      </Badge>
+                      <span className="text-xs font-medium text-muted-foreground">{row.moduleName}</span>
+                    </div>
+                    <p className="mt-0.5 text-sm font-semibold leading-snug text-foreground" data-testid={`cdss-hf-today-focus-headline-${moduleId}`}>
+                      {row.headline}
+                    </p>
+                    {basis ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{basis}</p>
+                    ) : null}
+                    <DecisionControls
+                      key={`focus-${moduleId}-${row.decision?.recordedAt ?? 'none'}`}
+                      row={row}
+                      isEnglish={isEnglish}
+                      now={now}
+                      editing={editingDecisions.has(moduleId)}
+                      onEdit={(editing) => onEditDecision(moduleId, editing)}
+                      onRecordDecision={record}
+                      onClearDecision={onClearDecision}
+                      packVersion={packVersion}
+                      readOnly={flow.readOnly}
+                      testIdPrefix="cdss-hf-focus-decision"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="flex min-h-8 shrink-0 items-center rounded-md px-1 text-primary hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-expanded={expanded}
+                    aria-label={isEnglish ? 'Show decision details' : '展開決策詳情'}
+                    onClick={() => onToggle(moduleId)}
+                  >
+                    <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
+                  </button>
+                </div>
+                {expanded ? (
+                  <div role="region" className="mt-2 rounded-md border border-border bg-background">
+                    {renderDetail(row.recommendation)}
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {focus.remaining > 0 ? (
+        <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground" data-testid="cdss-hf-today-focus-more">
+          {isEnglish
+            ? `${focus.remaining} more item${focus.remaining === 1 ? '' : 's'} in the full list below.`
+            : `另有 ${focus.remaining} 項，見下方完整清單。`}
+        </p>
+      ) : null}
     </section>
   )
 }

@@ -147,3 +147,20 @@ test('HF visit omits rehabilitation clearance but retains rehabilitation referra
   expect(flow.decidableCount).toBe(3)
   expect(flow.actionGroups.flatMap(group => group.rows).some(row => row.recommendation.id === 'cardiac-rehabilitation-safety')).toBe(false)
 })
+
+test('「今天要決定」 lists pending rows above the full list and records a decision in one click', () => {
+  const onRecord = jest.fn()
+  render(<Harness onRecord={onRecord} />)
+  const focus = screen.getByTestId('cdss-hf-today-focus')
+  expect(within(focus).getByText('今天要決定')).toBeVisible()
+  // SGLT2i is already on the medication record, so only the two pending review rows are listed.
+  expect(within(focus).getByTestId('cdss-hf-today-focus-row-heart-failure-monitoring')).toBeVisible()
+  expect(within(focus).queryByTestId('cdss-hf-today-focus-row-heart-failure-sglt2')).not.toBeInTheDocument()
+  fireEvent.click(within(focus).getByTestId('cdss-hf-focus-decision-heart-failure-monitoring-follow-up-arranged'))
+  expect(onRecord).toHaveBeenCalledWith('heart-failure-monitoring', expect.objectContaining({ decision: 'follow-up-arranged' }))
+  // Once decided, the row leaves the focus; the full list below keeps it with the recorded decision.
+  expect(within(screen.getByTestId('cdss-hf-today-focus')).queryByTestId('cdss-hf-today-focus-row-heart-failure-monitoring')).not.toBeInTheDocument()
+  expect(within(screen.getByTestId('cdss-hf-decision-recorded-heart-failure-monitoring')).getByText('已安排追蹤')).toBeVisible()
+  const timings = (window as Window & { __mediprismaCdssTimings?: { moduleId: string; elapsedMs: number }[] }).__mediprismaCdssTimings
+  expect(timings?.at(-1)).toMatchObject({ moduleId: 'heart-failure-monitoring' })
+})

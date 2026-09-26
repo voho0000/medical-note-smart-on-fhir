@@ -213,6 +213,49 @@ export interface VisitActionGroup {
   summary?: string
 }
 
+/* ------------------------------------------------------------ today focus */
+
+/** Routine rows shown in 「今天要決定」; safety rows are never capped. */
+export const TODAY_FOCUS_ROUTINE_LIMIT = 3
+
+/**
+ * 「今天要決定」: the rows a clinician should settle first, read off the flow's
+ * own action groups so the pack's status, wording and decision set are the
+ * ones shown. Every undecided safety row is listed — a count cap must never
+ * hide a safety event — and at most three undecided routine rows follow, in
+ * the order the groups already rank them (actionable, then data needed, then
+ * review). Rows the medication record marks as already prescribed are not
+ * pending decisions. This is placement only; no clinical judgement is added.
+ */
+export interface VisitTodayFocus {
+  safety: readonly VisitActionRow[]
+  routine: readonly VisitActionRow[]
+  /** Undecided routine rows left out of the focus by the cap. */
+  remaining: number
+  /** Decidable rows already decided (by the clinician or the medication record). */
+  decided: number
+  decidable: number
+}
+
+export function buildTodayFocus(
+  actionGroups: readonly VisitActionGroup[],
+  limit: number = TODAY_FOCUS_ROUTINE_LIMIT,
+): VisitTodayFocus {
+  const decidable = actionGroups.flatMap((group) => group.rows).filter((row) => row.decisionKind !== 'none')
+  const pending = (row: VisitActionRow) => row.decisionKind !== 'none' && !row.decision
+  const safety = (actionGroups.find((group) => group.id === 'safety')?.rows ?? []).filter(pending)
+  const routineOrder: readonly VisitActionGroupId[] = ['actionable', 'needs-data', 'review']
+  const routineAll = routineOrder.flatMap((id) => (actionGroups.find((group) => group.id === id)?.rows ?? []).filter(pending))
+  const routine = routineAll.slice(0, Math.max(0, limit))
+  return {
+    safety,
+    routine,
+    remaining: routineAll.length - routine.length,
+    decided: decidable.filter((row) => row.decision).length,
+    decidable: decidable.length,
+  }
+}
+
 /* -------------------------------------------------------------- next step */
 
 export type VisitNextStepTone = 'safety' | 'primary' | 'ok'
@@ -1230,7 +1273,10 @@ export function buildHeartFailureVisitFlow(
 
 /** State the result of a negative medication-safety scan instead of when to scan again. */
 function visitActionHeadline(recommendation: CdssRecommendation, isEnglish: boolean): string {
-  if (recommendation.id === 'heart-failure-fmt-safety') {
+  // A potassium tier the pack marked actionable names the step itself
+  // (recheck, hold up-titration, same-day assessment); the host's
+  // missing-data phrasing must not replace it.
+  if (recommendation.id === 'heart-failure-fmt-safety' && recommendation.status !== 'actionable') {
     const missing = (recommendation.missingData ?? []).map(conciseMissingLabel)
     const stale = recommendation.patientEvidence
       .filter((item) => /超過\s*\d+\s*天窗|stale|exceeds?.*window|out(?:side| of).*window/i.test(item.value))
@@ -1254,7 +1300,9 @@ function visitActionHeadline(recommendation: CdssRecommendation, isEnglish: bool
       ? `${actions.join('並')}，再評估藥物調整。`
       : '確認症狀、生命徵象與檢驗後，再評估藥物調整。'
   }
-  if (recommendation.id === 'heart-failure-mra') {
+  if (recommendation.id === 'heart-failure-mra' && recommendation.status === 'actionable') {
+    // Only the eligible-to-start state is shortened; a held or data-needed MRA
+    // keeps the pack's own step, which names the potassium or eGFR behind it.
     return isEnglish ? 'Assess starting MRA.' : '評估啟用 MRA。'
   }
   if (recommendation.id === 'heart-failure-congestion-diuretic') {
