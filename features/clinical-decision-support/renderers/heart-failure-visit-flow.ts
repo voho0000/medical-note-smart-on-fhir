@@ -218,6 +218,9 @@ export interface VisitActionGroup {
 /** Routine rows shown in 「今天要決定」; safety rows are never capped. */
 export const TODAY_FOCUS_ROUTINE_LIMIT = 3
 
+/** Rows added to the focus beyond the cap whenever the pack marks them actionable. */
+export const TODAY_FOCUS_ACTIONABLE_EXTRA_IDS: readonly string[] = ['af-anticoagulation-concordance']
+
 /**
  * 「今天要決定」: the rows a clinician should settle first, read off the flow's
  * own action groups so the pack's status, wording and decision set are the
@@ -246,7 +249,16 @@ export function buildTodayFocus(
   const safety = (actionGroups.find((group) => group.id === 'safety')?.rows ?? []).filter(pending)
   const routineOrder: readonly VisitActionGroupId[] = ['actionable', 'needs-data', 'review']
   const routineAll = routineOrder.flatMap((id) => (actionGroups.find((group) => group.id === id)?.rows ?? []).filter(pending))
-  const routine = routineAll.slice(0, Math.max(0, limit))
+  const capped = routineAll.slice(0, Math.max(0, limit))
+  // A comorbidity decision the HF list would sort last (AF stroke prevention
+  // merged from the AF pack) still reaches the focus when its pack marks it
+  // actionable, so the cap never pushes it below the fold.
+  const extra = routineAll.filter((row) => (
+    !capped.includes(row)
+    && row.status === 'actionable'
+    && TODAY_FOCUS_ACTIONABLE_EXTRA_IDS.includes(row.recommendation.id)
+  ))
+  const routine = [...capped, ...extra]
   return {
     safety,
     routine,
@@ -1346,12 +1358,20 @@ function isGenericMonitoringReminder(item: CdssRecommendation): boolean {
   ].includes(item.nextActions[0] ?? '')
 }
 
+const AF_MEDICATION_DECISION_IDS: ReadonlySet<string> = new Set([
+  'af-anticoagulation-concordance',
+  'af-doac-renal-dose-check',
+])
+
 /** Match the task itself, not the severity/group in which it happens to appear. */
 function visitDecisionKind(recommendation: CdssRecommendation, group: VisitActionGroupId): VisitDecisionKind {
   if (group === 'no-action') return 'none'
   if (recommendation.id === 'cardiac-rehabilitation-safety') return 'exercise-safety'
   if (recommendation.id === 'cardiac-rehabilitation') return 'rehabilitation'
   if (recommendation.id === 'heart-failure-fmt-safety') return 'measurement'
+  // The AF pack's anticoagulation and DOAC-dose cards, merged onto the HF page,
+  // settle as a prescription whatever input they still lack.
+  if (AF_MEDICATION_DECISION_IDS.has(recommendation.id)) return 'medication'
   if (group === 'needs-data') return 'test'
   if (recommendation.id === 'heart-failure-monitoring' || recommendation.id === 'cardiac-rehabilitation-response') return 'follow-up'
   if (

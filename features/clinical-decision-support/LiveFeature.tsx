@@ -16,6 +16,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import {
   getApplicableClinicalGuidelinePacks,
+  getClinicalGuidelinePack,
   getDefaultClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,
 } from './guideline-packs/registry'
@@ -54,6 +55,7 @@ import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
 import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
+import { AF_PACK_ID, mergeAfIntoHeartFailure } from './utils/merge-af-into-hf'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -411,17 +413,36 @@ export default function LiveClinicalDecisionSupportFeature() {
     ?? applicablePacks[0]
     ?? getDefaultClinicalGuidelinePack()
 
+  // A heart-failure patient who also has AF is seen in the HF clinic, so the
+  // HF page carries the AF pack's own anticoagulation and rate cards when that
+  // pack says AF is established. The AF pack goes through the same visibility
+  // gate as the switcher: a route that shows released guidance only never
+  // gains an unreleased pack's cards this way. Any AF failure leaves the HF
+  // result untouched.
+  const buildSelected = useMemo(() => (
+    (targetProfile: NonNullable<typeof profile>, locale: CdssLocale) => {
+      const built = selectedPack.build({ profile: targetProfile, locale })
+      if (built.packId !== HEART_FAILURE_PACK_ID) return built
+      return mergeAfIntoHeartFailure(built, () => {
+        const afPack = getClinicalGuidelinePack(AF_PACK_ID)
+        return afPack && afPack.applies(targetProfile)
+          ? afPack.build({ profile: targetProfile, locale })
+          : undefined
+      })
+    }
+  ), [selectedPack])
+
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
-      ? selectedPack.build({ profile, locale: cdssLocale })
+      ? buildSelected(profile, cdssLocale)
       : null
-  }, [cdssLocale, profile, selectedPack])
+  }, [buildSelected, cdssLocale, profile, selectedPack])
 
   const englishResult = useMemo(() => {
     if (cdssLocale === 'en') return result
-    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
-  }, [cdssLocale, profile, result, selectedPack])
+    return profile && selectedPack.applies(profile) ? buildSelected(profile, 'en') : null
+  }, [buildSelected, cdssLocale, profile, result, selectedPack])
 
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching || !answersHydrated) {
     return <LoadingState locale={cdssLocale} />

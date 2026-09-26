@@ -22,7 +22,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import type { CdssRecommendation } from '../types'
+import type { CdssRecommendation, CdssResult } from '../types'
 import {
   NOT_ASSESSED,
   todayIsoDate,
@@ -76,6 +76,7 @@ import {
 } from './heart-failure-visit-flow'
 import { heartFailureMedicationSafetyAssessment } from './heart-failure-medication-safety'
 import { CdssModuleSections } from './CdssModuleSections'
+import { DecisionMapCard } from './DecisionMapCard'
 import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
 import { HfFollowUpPriorities } from './HfFollowUpPriorities'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
@@ -169,6 +170,8 @@ export interface HeartFailureVisitFlowProps {
   sectionRecommendations?: readonly CdssRecommendation[]
   prognosisContent?: ReactNode
   followUpHistory?: HfFollowUpHistory
+  /** The result the flow was read from; draws the decision map under 「今天要決定」. */
+  result?: CdssResult
 }
 
 export function HeartFailureVisitFlow({
@@ -192,6 +195,7 @@ export function HeartFailureVisitFlow({
   sectionRecommendations,
   prognosisContent,
   followUpHistory,
+  result,
 }: HeartFailureVisitFlowProps) {
   const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
@@ -273,6 +277,37 @@ export function HeartFailureVisitFlow({
         onClearDecision={onClearDecision}
         packVersion={packVersion}
       />
+      {result ? (
+        <DecisionMapCard
+          result={result}
+          isEnglish={isEnglish}
+          renderDetail={renderDetail}
+          actionRows={actionRows}
+          renderDecision={(row) => {
+            const moduleId = row.recommendation.id
+            return (
+              <DecisionControls
+                key={`map-${moduleId}-${row.decision?.recordedAt ?? 'none'}`}
+                row={row}
+                isEnglish={isEnglish}
+                now={now}
+                editing={editingDecisions.has(moduleId)}
+                onEdit={(editing) => setEditingDecisions((current) => {
+                  const next = new Set(current)
+                  if (editing) next.add(moduleId)
+                  else next.delete(moduleId)
+                  return next
+                })}
+                onRecordDecision={onRecordDecision}
+                onClearDecision={onClearDecision}
+                packVersion={packVersion}
+                readOnly={flow.readOnly}
+                testIdPrefix="cdss-hf-map-decision"
+              />
+            )
+          }}
+        />
+      ) : null}
       {!sectionRecommendations ? <>
       <StepCard
         steps={flow.steps}

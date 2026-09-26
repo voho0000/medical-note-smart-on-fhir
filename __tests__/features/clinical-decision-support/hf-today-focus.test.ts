@@ -47,6 +47,16 @@ describe('buildTodayFocus', () => {
     expect(focus.remaining).toBe(2)
   })
 
+  it('adds an actionable AF anticoagulation row beyond the cap, but not a data-needed one', () => {
+    const base = [row('a1', 'actionable'), row('a2', 'actionable'), row('a3', 'actionable')]
+    const af = buildTodayFocus(groups({ actionable: [...base, row('af-anticoagulation-concordance', 'actionable')] }))
+    expect(af.routine.map((r) => r.recommendation.id)).toEqual(['a1', 'a2', 'a3', 'af-anticoagulation-concordance'])
+    expect(af.remaining).toBe(0)
+    const pending = buildTodayFocus(groups({ actionable: base, 'needs-data': [row('af-anticoagulation-concordance', 'needs-data')] }))
+    expect(pending.routine.map((r) => r.recommendation.id)).toEqual(['a1', 'a2', 'a3'])
+    expect(pending.remaining).toBe(1)
+  })
+
   it('leaves out decided rows, medication-record rows and rows without decisions', () => {
     const focus = buildTodayFocus(groups({
       safety: [row('s1', 'safety', decided)],

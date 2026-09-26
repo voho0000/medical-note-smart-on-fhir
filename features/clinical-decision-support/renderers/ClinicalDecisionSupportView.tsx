@@ -64,6 +64,7 @@ import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
 import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
+import { DecisionMapCard } from './DecisionMapCard'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
@@ -2431,6 +2432,7 @@ export function ClinicalDecisionSupportView({
           rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
           flow={visitFlow}
           board={board}
+          result={result}
           isEnglish={isEnglish}
           now={now}
           expandedId={expandedId}
@@ -2501,6 +2503,32 @@ export function ClinicalDecisionSupportView({
         </li>)}</ul>
       </details> : null}
 
+      {/*
+        The original board records no decisions, so its decision map opens
+        each point's cards without the decision buttons the visit flow adds.
+      */}
+      {board && !isVisitFlow && !isSections ? (
+        <DecisionMapCard
+          key={`${patientId ?? 'no-patient'}-decision-map`}
+          result={result}
+          isEnglish={isEnglish}
+          renderDetail={(recommendation) => (
+            <RecommendationDetail
+              recommendation={recommendation}
+              englishRecommendation={englishRecommendations.get(recommendation.id)}
+              isEnglish={isEnglish}
+              onNavigate={navigateToResource}
+              label={label}
+              patientId={patientId}
+              copyProvenance={copyProvenance}
+              phenotypeAnswer={phenotypeAnswer}
+              onAnswerPhenotype={onAnswerPhenotype}
+              clinicVitals={clinicVitals}
+              onSaveClinicVitals={onSaveClinicVitals}
+            />
+          )}
+        />
+      ) : null}
       {board && !isVisitFlow && !isSections ? (
         <HeartFailureStatusBoard
           board={board}
