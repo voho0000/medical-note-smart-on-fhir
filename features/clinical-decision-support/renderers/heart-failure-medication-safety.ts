@@ -85,22 +85,22 @@ export function heartFailureMedicationSafetyAssessment(
     const concernsZh = [
       ...(systolic! < 100 ? [`收縮壓 ${systolic} mmHg`] : []),
       ...(eGfr! < 30 ? [`eGFR ${eGfr}`] : []),
-      ...(potassium! >= 5 ? [`K ${potassium} mmol/L`] : []),
+      ...(potassium! > 5.2 ? [`K ${potassium} mmol/L`] : []),
     ]
     const concernsEn = [
       ...(systolic! < 100 ? [`systolic BP ${systolic} mmHg`] : []),
       ...(eGfr! < 30 ? [`eGFR ${eGfr}`] : []),
-      ...(potassium! >= 5 ? [`potassium ${potassium} mmol/L`] : []),
+      ...(potassium! > 5.2 ? [`potassium ${potassium} mmol/L`] : []),
     ]
     const summaryConcernsZh = [
       ...(systolic! < 100 ? [`收縮壓 ${systolic} mmHg（<100）`] : []),
       ...(eGfr! < 30 ? [`eGFR ${eGfr}（<30）`] : []),
-      ...(potassium! >= 5 ? [`K ${potassium} mmol/L（≥5.0）`] : []),
+      ...(potassium! > 5.2 ? [`K ${potassium} mmol/L（>5.2）`] : []),
     ]
     const summaryConcernsEn = [
       ...(systolic! < 100 ? [`SBP ${systolic} mmHg (<100)`] : []),
       ...(eGfr! < 30 ? [`eGFR ${eGfr} (<30)`] : []),
-      ...(potassium! >= 5 ? [`K ${potassium} mmol/L (≥5.0)`] : []),
+      ...(potassium! > 5.2 ? [`K ${potassium} mmol/L (>5.2)`] : []),
     ]
     if (concernsZh.length > 0) {
       return {

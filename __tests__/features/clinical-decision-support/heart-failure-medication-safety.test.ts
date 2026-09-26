@@ -47,7 +47,7 @@ describe('HFrEF medication-specific safety gates', () => {
   it.each([
     ['low systolic BP', { bloodPressure: '99/70 mmHg', eGFR: '45', potassium: '4.2' }],
     ['low eGFR', { bloodPressure: '120/70 mmHg', eGFR: '29', potassium: '4.2' }],
-    ['high potassium', { bloodPressure: '120/70 mmHg', eGFR: '45', potassium: '5.0' }],
+    ['high potassium', { bloodPressure: '120/70 mmHg', eGFR: '45', potassium: '5.3' }],
   ])('moves RAS inhibition to review for %s', (_label, facts) => {
     expect(applyHeartFailureMedicationSafety(recommendation(
       'heart-failure-ras-inhibition', facts,
@@ -90,6 +90,13 @@ describe('HFrEF medication-specific safety gates', () => {
     ['heart-failure-sglt2', { eGFR: '20' }],
   ])('keeps %s unchanged at a passing boundary', (id, facts) => {
     const original = recommendation(id, facts)
+    expect(applyHeartFailureMedicationSafety(original)).toBe(original)
+  })
+
+  it('keeps RAS inhibition unchanged at potassium 5.2, the ESC p.33 caution being >5.2', () => {
+    const original = recommendation('heart-failure-ras-inhibition', {
+      bloodPressure: '120/70 mmHg', eGFR: '45', potassium: '5.2',
+    })
     expect(applyHeartFailureMedicationSafety(original)).toBe(original)
   })
 })

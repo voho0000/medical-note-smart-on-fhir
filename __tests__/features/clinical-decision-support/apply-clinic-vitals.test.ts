@@ -42,6 +42,8 @@ describe('applyClinicVitals', () => {
       unit: 'mmHg',
       date: '2026-09-05',
     })
+    // The pack reads SBP from its own numeric fact, dated with the pair.
+    expect(next.facts.systolicBloodPressure).toMatchObject({ numericValue: 128, unit: 'mmHg', date: '2026-09-05' })
     expect(next.facts.heartRate).toMatchObject({ numericValue: 72, unit: 'bpm', date: '2026-09-05' })
     expect(next.facts.bodyWeight).toMatchObject({ numericValue: 73.5, unit: 'kg', date: '2026-09-05' })
     // Untouched facts stay.

@@ -110,6 +110,7 @@ export const CLINIC_ENTRY_PATTERN = /門診輸入|entered in clinic/
 /** The windows the adapter attaches when the record holds the fact. */
 const DEFAULT_INTERVAL_DAYS: Readonly<Record<string, number>> = {
   bloodPressure: 90,
+  systolicBloodPressure: 90,
   heartRate: 90,
   bodyWeight: 30,
 }
@@ -163,6 +164,17 @@ export function applyClinicVitals(
       date,
     }
     factDates.bloodPressure = date
+    // The pack reads the systolic number from its own fact, and only when its
+    // date matches `bloodPressure` — so a clinic reading must replace both, or
+    // an older record SBP would stand beside a newer clinic pair.
+    facts.systolicBloodPressure = {
+      zh: `${systolic.value} mmHg${noteZh(date)}`,
+      en: `${systolic.value} mmHg${noteEn(date)}`,
+      numericValue: systolic.value,
+      unit: 'mmHg',
+      date,
+    }
+    factDates.systolicBloodPressure = date
   }
 
   const heartRate = entry('heartRate')
