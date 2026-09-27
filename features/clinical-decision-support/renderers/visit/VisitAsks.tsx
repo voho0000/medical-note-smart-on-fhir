@@ -2,6 +2,7 @@
 
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
+import { answerToneClass, visitAnswerTone } from './answer-tones'
 import type { VisitAnswers, VisitAsk } from '../../types'
 
 /**
@@ -62,10 +63,7 @@ export function VisitAsks({
                       'inline-flex h-11 min-w-16 items-center justify-center rounded-md border px-3.5 text-sm transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                       'disabled:pointer-events-none disabled:opacity-60',
-                      selected
-                        ? 'border-foreground bg-foreground font-semibold text-background'
-                        : 'border-border bg-background text-foreground hover:bg-muted',
-                      fromRecord && 'border-dashed',
+                      answerToneClass(visitAnswerTone(ask.id, option.value), selected, fromRecord),
                     )}
                     data-visit-ask={ask.id}
                     data-value={option.value}

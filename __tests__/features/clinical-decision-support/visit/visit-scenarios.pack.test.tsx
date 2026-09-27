@@ -438,3 +438,45 @@ describe('real pack · one answer, one decision, on every page', () => {
   })
 })
 
+describe('real pack · reading the map without scrolling back up', () => {
+  it('steps from card to card in the pack order and on into the next section (P5)', () => {
+    render(<ScenarioMap id="p5-titrating-af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    fireEvent.click(cell('DP-09'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-09')
+    expect(screen.getByTestId('cdss-visit-detail-previous')).toHaveAttribute('data-dp', 'DP-08')
+    fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-10')
+    // The card follows its cell: it sits in the slot right after DP-10.
+    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-10'))
+    fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-09')
+
+    // The last card of 02 leads into 03, which opens in its place.
+    const treatmentCells = [...screen.getByTestId('cdss-visit-column-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]
+    fireEvent.click(treatmentCells.at(-1)!)
+    const next = screen.getByTestId('cdss-visit-detail-next')
+    expect(next).toHaveTextContent('03 預後與計畫')
+    fireEvent.click(next)
+    expect(screen.getByTestId('cdss-visit-column-outlook')).toBeVisible()
+    expect(screen.getByTestId('cdss-visit-column-treatment')).not.toBeVisible()
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', next.dataset.dp!)
+
+    fireEvent.click(screen.getByTestId('cdss-visit-detail-collapse'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+  })
+
+  it('colours each every-visit answer by what it means, the words unchanged (P7)', () => {
+    render(<ScenarioMap id="p7-worsening-congestion" />)
+    const worse = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
+    const better = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!
+    const down = document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!
+    expect(worse).toHaveTextContent('變差')
+    expect(worse.className).toContain('bg-rose-50')
+    expect(better.className).toContain('bg-emerald-50')
+    expect(down.className).toContain('bg-sky-50')
+    fireEvent.click(worse)
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-rose-700')
+  })
+})
+

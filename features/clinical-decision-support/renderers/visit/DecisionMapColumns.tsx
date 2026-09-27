@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, type ReactNode } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PointDecision } from './visit-decisions'
@@ -78,7 +78,7 @@ function MapCell({
       aria-expanded={open}
       aria-controls={open ? VISIT_DETAIL_ID : undefined}
       className={cn(
-        'flex min-h-11 w-full flex-col gap-1 rounded-md border px-2.5 py-2 text-left transition-colors',
+        'flex min-h-11 w-full scroll-mt-2 flex-col gap-1 rounded-md border px-2.5 py-2 text-left transition-colors @min-[40rem]:scroll-mt-24',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         open ? 'border-foreground bg-background' : 'border-border bg-background hover:bg-muted/50',
         absent && !open && 'border-dashed bg-transparent',
@@ -106,6 +106,57 @@ function MapCell({
         {sub ? <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{sub}</span> : null}
       </span>
     </button>
+  )
+}
+
+/**
+ * Under an open card: the previous and next point of the map in reading order,
+ * and 收合. The last point of a section leads into the next section, so the
+ * map reads 01 → 02 → 03 without scrolling back up to the section buttons.
+ */
+function DetailStepper({
+  current,
+  previous,
+  next,
+  isEnglish,
+  onGo,
+  onCollapse,
+}: {
+  current: DecisionPointView
+  previous?: DecisionPointView
+  next?: DecisionPointView
+  isEnglish: boolean
+  onGo: (point: DecisionPointView) => void
+  onCollapse: () => void
+}) {
+  const where = (point: DecisionPointView) => (point.block === current.block ? '' : `${blockTitle(point.block, isEnglish)} · `)
+  const stepClass = 'flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  return (
+    <nav aria-label={isEnglish ? 'Move through the map' : '在地圖上前後移動'} className="flex items-stretch gap-1.5" data-testid="cdss-visit-detail-stepper">
+      {previous ? (
+        <button type="button" className={stepClass} onClick={() => onGo(previous)} data-testid="cdss-visit-detail-previous" data-dp={previous.dp}>
+          <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="sr-only">{isEnglish ? 'Previous: ' : '上一個：'}</span>
+          <span className="min-w-0 truncate">{where(previous)}<span className="font-mono">{previous.dp}</span> {previous.label}</span>
+        </button>
+      ) : <span className="flex-1" />}
+      <button
+        type="button"
+        className="flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onCollapse}
+        data-testid="cdss-visit-detail-collapse"
+      >
+        <ChevronUp className="h-4 w-4" aria-hidden="true" />
+        {isEnglish ? 'Collapse' : '收合'}
+      </button>
+      {next ? (
+        <button type="button" className={cn(stepClass, 'justify-end text-right')} onClick={() => onGo(next)} data-testid="cdss-visit-detail-next" data-dp={next.dp}>
+          <span className="sr-only">{isEnglish ? 'Next: ' : '下一個：'}</span>
+          <span className="min-w-0 truncate">{where(next)}<span className="font-mono">{next.dp}</span> {next.label}</span>
+          <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+        </button>
+      ) : <span className="flex-1" />}
+    </nav>
   )
 }
 
@@ -184,9 +235,43 @@ export function DecisionMapColumns({
 }) {
   const [showAll, setShowAll] = useState(false)
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(null)
-  const openPointBlock = openKey
-    ? model.points.find((point) => visitDecisionKey(point) === openKey)?.block
+  const [stuck, setStuck] = useState(false)
+  const barRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  // Where to bring the page after a move made from the sticky bar or the
+  // stepper: the section just opened, or the cell whose card just opened.
+  const scrollTo = useRef<{ block: VisitBlock } | { dp: string; source: string } | null>(null)
+  const openPoint = openKey
+    ? model.points.find((point) => visitDecisionKey(point) === openKey)
     : undefined
+  const openPointBlock = openPoint?.block
+
+  // The bar is stuck once the line just above it has scrolled away; only then
+  // does it draw its shadow over the cells passing beneath it.
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting))
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const target = scrollTo.current
+    if (!target) return
+    scrollTo.current = null
+    if ('block' in target) {
+      // A section opened from the bar while it was stuck starts right under
+      // the bar, not wherever the closed section above left the page.
+      const panel = document.getElementById(`cdss-visit-column-${target.block}`)
+      const barBottom = barRef.current?.getBoundingClientRect().bottom ?? 0
+      if (panel && panel.getBoundingClientRect().top < barBottom) panel.scrollIntoView?.({ block: 'start' })
+      return
+    }
+    const cells = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')
+    ;[...cells].find((cell) => cell.dataset.dp === target.dp && cell.dataset.source === target.source)
+      ?.scrollIntoView?.({ block: 'start' })
+  }, [openBlock, openKey])
 
   // A block the pack closed with a note (「確診後開啟」) — or, without one,
   // 02 and 03 before a diagnosis — shows only what needs the clinician.
@@ -203,6 +288,24 @@ export function DecisionMapColumns({
       !ABSENT_STATES.has(point.state)
       && (!closed || NEEDS_CLINICIAN.has(point.state))
     ))
+  }
+  // The map in reading order, section by section, as the stepper walks it.
+  const sequence = BLOCK_ORDER.flatMap((block) => visibleIn(block, model.points.filter((point) => point.block === block)))
+  const openIndex = openPoint ? sequence.indexOf(openPoint) : -1
+  const goTo = (point: DecisionPointView) => {
+    scrollTo.current = { dp: point.dp, source: point.source }
+    setOpenBlock(point.block)
+    onOpen(point)
+  }
+  const collapse = (point: DecisionPointView) => {
+    onOpen(point)
+    // Back to the cell that opened it, as the card's own close does.
+    requestAnimationFrame(() => {
+      const cells = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')
+      const cell = [...cells].find((candidate) => candidate.dataset.dp === point.dp && candidate.dataset.source === point.source)
+      cell?.focus({ preventScroll: true })
+      cell?.scrollIntoView?.({ block: 'nearest' })
+    })
   }
 
   return (
@@ -225,7 +328,19 @@ export function DecisionMapColumns({
               : `顯示全部 ${model.coverage.total} 點`}
         </button>
       </div>
-      <div className="grid gap-2 @min-[40rem]:grid-cols-3" data-testid="cdss-visit-sections">
+      <div ref={sentinelRef} aria-hidden="true" className="h-px" />
+      {/* On a wide screen the three buttons stay at the top of the screen
+          while the open section scrolls beneath them, so another section is
+          one press away from anywhere in the map. */}
+      <div
+        ref={barRef}
+        className={cn(
+          'z-20 -mx-1 grid gap-2 bg-background px-1 py-1 @min-[40rem]:sticky @min-[40rem]:top-0 @min-[40rem]:grid-cols-3',
+          stuck && '@min-[40rem]:shadow-[0_8px_10px_-8px_rgb(0_0_0/0.25)]',
+        )}
+        data-testid="cdss-visit-sections"
+        data-stuck={stuck ? 'true' : undefined}
+      >
         {BLOCK_ORDER.map((block) => {
           const points = model.points.filter((point) => point.block === block)
           const open = openBlock === block
@@ -239,7 +354,10 @@ export function DecisionMapColumns({
               id={`cdss-visit-section-toggle-${block}`}
               aria-expanded={open}
               aria-controls={`cdss-visit-column-${block}`}
-              onClick={() => setOpenBlock((current) => (current === block ? null : block))}
+              onClick={() => {
+                if (openBlock !== block) scrollTo.current = { block }
+                setOpenBlock((current) => (current === block ? null : block))
+              }}
               className={cn(
                 styles.tone,
                 styles.mapToggle,
@@ -291,7 +409,7 @@ export function DecisionMapColumns({
             id={`cdss-visit-column-${block}`}
             aria-labelledby={`cdss-visit-section-toggle-${block}`}
             hidden={!open}
-            className={cn(styles.tone, styles.mapPanel, 'min-w-0 space-y-2 rounded-lg border border-border p-2')}
+            className={cn(styles.tone, styles.mapPanel, 'min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2 @min-[40rem]:scroll-mt-24')}
             data-section={SECTION_TONE[block]}
             data-testid={`cdss-visit-column-${block}`}
             data-block={block}
@@ -341,8 +459,16 @@ export function DecisionMapColumns({
                     // The opened point's card sits directly under the cell that
                     // opened it, not at the foot of the section.
                     const opened = openKey === key && open && detail ? (
-                      <li key={`${key}-detail`} className="col-span-full" data-testid="cdss-visit-detail-slot">
+                      <li key={`${key}-detail`} className="col-span-full space-y-1.5" data-testid="cdss-visit-detail-slot">
                         {detail}
+                        <DetailStepper
+                          current={point}
+                          previous={openIndex > 0 ? sequence[openIndex - 1] : undefined}
+                          next={openIndex >= 0 && openIndex < sequence.length - 1 ? sequence[openIndex + 1] : undefined}
+                          isEnglish={isEnglish}
+                          onGo={goTo}
+                          onCollapse={() => collapse(point)}
+                        />
                       </li>
                     ) : null
                     return opened ? [item, opened] : [item]
