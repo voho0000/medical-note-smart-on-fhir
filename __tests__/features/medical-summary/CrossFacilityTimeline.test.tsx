@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
@@ -21,6 +21,17 @@ const result = {
 } as unknown as MedicalSummaryResult
 
 describe('CrossFacilityTimeline', () => {
+  it('keeps a document timeline event visible and navigable when its excerpt is not found', async () => {
+    const onNavigate = jest.fn()
+    render(<LanguageProvider><CrossFacilityTimeline result={{ ...result, timeline: [{
+      ...result.timeline[0], key: 'D1', resourceType: 'DocumentReference', resourceId: 'synthetic-doc',
+      documentEvidence: [{ source: 'D1', quote: 'Synthetic unmatched quote', verification: 'not-found' }],
+    }] }} title="Timeline" categoryLabel={() => 'Document'} encounterClassLabel={() => 'Document'}
+      earlierLabel="Earlier" collapseLabel="Less" droppedNote={null} onNavigate={onNavigate} /></LanguageProvider>)
+    expect(await screen.findByText('Excerpt needs review. Open the source to check.')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Latest outpatient claim/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'synthetic-doc', evidenceQuote: 'Synthetic unmatched quote' }))
+  })
   beforeEach(() => {
     localStorage.setItem('medical-note-locale', 'en')
   })

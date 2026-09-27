@@ -13,13 +13,19 @@ export function resolveClaimSources(
   byKey: ReadonlyMap<string, ResolvedSourceRef>,
   documentEvidence?: DocumentEvidence[],
 ): ResolvedSourceRef[] {
-  const quoteBySource = new Map(
-    (documentEvidence ?? []).map((entry) => [entry.source, entry.quote]),
+  const evidenceBySource = new Map(
+    (documentEvidence ?? []).map((entry) => [entry.source, entry]),
   )
   return sourceKeys.flatMap((key) => {
     const source = byKey.get(key)
     if (!source) return []
-    const evidenceQuote = quoteBySource.get(key)
-    return evidenceQuote ? [{ ...source, evidenceQuote }] : [source]
+    const evidence = evidenceBySource.get(key)
+    const evidenceQuote = evidence?.quote
+    const isDocument = source.resourceType === 'Composition' || source.resourceType === 'DocumentReference'
+    if (!isDocument) return evidenceQuote ? [{ ...source, evidenceQuote }] : [source]
+    const evidenceWarning = !evidenceQuote ? 'missing'
+      : evidence?.verification === 'not-found' ? 'mismatch'
+        : evidence?.verification === 'exact' || evidence?.verification === 'whitespace-restored' ? undefined : 'unchecked'
+    return [{ ...source, ...(evidenceQuote ? { evidenceQuote } : {}), ...(evidenceWarning ? { evidenceWarning } : {}) }]
   })
 }

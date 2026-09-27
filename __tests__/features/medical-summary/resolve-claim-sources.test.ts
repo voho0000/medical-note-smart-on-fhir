@@ -15,7 +15,7 @@ describe('resolveClaimSources', () => {
     const resolved = resolveClaimSources(
       ['D1'],
       byKey,
-      [{ source: 'D1', quote: 'Reflux esophagitis, L.A. grade A' }],
+      [{ source: 'D1', quote: 'Reflux esophagitis, L.A. grade A', verification: 'exact' }],
     )
 
     expect(resolved).toEqual([{
@@ -23,5 +23,14 @@ describe('resolveClaimSources', () => {
       evidenceQuote: 'Reflux esophagitis, L.A. grade A',
     }])
     expect(sharedSource).not.toHaveProperty('evidenceQuote')
+  })
+
+  it('warns on a claim with a mismatched or missing quote while keeping the document navigable', () => {
+    const source: ResolvedSourceRef = { key: 'D1', num: 1, verified: true, resourceType: 'DocumentReference', resourceId: 'synthetic-document' }
+    const byKey = new Map([['D1', source]])
+    expect(resolveClaimSources(['D1'], byKey, [{ source: 'D1', quote: 'Mismatched quote', verification: 'not-found' }])[0])
+      .toMatchObject({ verified: true, resourceId: source.resourceId, evidenceWarning: 'mismatch' })
+    expect(resolveClaimSources(['D1'], byKey)[0]).toMatchObject({ evidenceWarning: 'missing', resourceId: source.resourceId })
+    expect(source).not.toHaveProperty('evidenceWarning')
   })
 })

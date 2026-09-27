@@ -29,10 +29,11 @@ const result: MedicalSummaryResult = {
   droppedTimelineCount: 0,
 }
 
-function renderCard() {
+function renderCard(cardResult = result, onNavigate = jest.fn()) {
   render(
     <CurrentPrioritiesCard
-      result={result}
+      result={cardResult}
+      onNavigate={onNavigate}
       title="摘要重點"
       generatedByLine="由 3 筆就醫生成"
       expandSummaryLabel="展開摘要"
@@ -47,6 +48,15 @@ function renderCard() {
 }
 
 describe('CurrentPrioritiesCard', () => {
+  it('passes claim-specific document evidence through to source navigation', () => {
+    const onNavigate = jest.fn()
+    renderCard({ ...result, summary: [{ text: '合成測試摘要。', emphasis: false, sourceKeys: ['D1'],
+      documentEvidence: [{ source: 'D1', quote: 'Synthetic original passage.', verification: 'exact' }] }],
+      sourceIndex: [{ key: 'D1', num: 1, verified: true, resourceType: 'DocumentReference', resourceId: 'doc', display: '合成文件' }] }, onNavigate)
+    fireEvent.click(screen.getByRole('button', { name: /1 · DocumentReference/ }))
+    fireEvent.click(screen.getByRole('button', { name: /合成文件/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'doc', evidenceQuote: 'Synthetic original passage.' }))
+  })
   const writeText = jest.fn()
 
   beforeEach(() => {

@@ -9,10 +9,10 @@ import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { trackEvent } from "@/src/application/telemetry/usage-analytics"
 import type {
   MedicalSummaryResult,
-  ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
 import { SourceSup } from "./SourceSup"
+import { resolveClaimSources } from "../utils/resolve-claim-sources"
 
 interface CurrentPrioritiesCardProps {
   result: MedicalSummaryResult
@@ -124,9 +124,7 @@ export function CurrentPrioritiesCard({
           !summaryExpanded && "line-clamp-4",
         )}>
           {result.summary.map((segment, index) => {
-            const sources = segment.sourceKeys
-              .map((key) => byKey.get(key))
-              .filter((source): source is ResolvedSourceRef => source !== undefined)
+            const sources = resolveClaimSources(segment.sourceKeys, byKey, segment.documentEvidence)
             return (
               <span key={index}>
                 <span className={cn(segment.emphasis && "font-semibold text-foreground")}>{segment.text}</span>
