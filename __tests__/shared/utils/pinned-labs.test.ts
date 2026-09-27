@@ -58,6 +58,33 @@ describe('pinnable catalog', () => {
     expect(searchPinnableLabs('   ')).toEqual([])
   })
 
+  it('offers analytes, not the sort lists’ spellings', () => {
+    for (const id of ['urine:GRAVITY', 'urine:SP.GRAVITY', 'urine:PROTEIN', 'urine:KETON', 'urine:CAST1', 'endocrine:DHEAS', 'endocrine:IGF1', 'tumor:PIVKA', 'lipid:RISKF', 'glucose:GLU,1HRPC']) {
+      expect(ids.has(id)).toBe(false)
+    }
+    expect(catalog.some((entry) => entry.categoryId === 'microbio' || entry.categoryId === 'other')).toBe(false)
+    // Every option has a human name.
+    expect(catalog.every((entry) => entry.nameZh || entry.nameEn)).toBe(true)
+  })
+
+  it('names a urine analyte as the urine test, not the serum one', () => {
+    expect(findPinnableLab('urine:GLUCOSE')).toMatchObject({ short: 'Glucose(U)', nameZh: '尿糖' })
+    expect(findPinnableLab('urine:CREA')).toMatchObject({ short: 'CREA(U)', nameZh: '尿肌酸酐' })
+    expect(findPinnableLab('urine:GRAVIT')?.short).toBe('SG')
+    expect(findPinnableLab('glucose:GLUCOSE')?.nameZh).toBe('血糖')
+  })
+
+  it('offers a key listed in two panels only where results land', () => {
+    expect(catalog.filter((entry) => entry.testKey === 'C-PEPTIDE')).toHaveLength(1)
+    expect(catalog.filter((entry) => entry.testKey === 'CALCITONIN')).toHaveLength(1)
+  })
+
+  it('labels analytes the shared vocabulary cannot name', () => {
+    expect(findPinnableLab('lipid:LP(A)')).toMatchObject({ short: 'Lp(a)', nameZh: '脂蛋白(a)' })
+    expect(findPinnableLab('chem:HS-TROPONIN T')?.short).toBe('hs-TnT')
+    expect(findPinnableLab('endocrine:IPTH')?.short).toBe('iPTH')
+  })
+
   it('looks entries up by id', () => {
     expect(findPinnableLab('lipid:LDL')?.short).toBe('LDL')
     expect(findPinnableLab('chem:NOPE')).toBeUndefined()

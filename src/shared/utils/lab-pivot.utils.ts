@@ -264,6 +264,34 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '2885-2': 'TP',   // Total protein [Mass/volume] in Serum or Plasma
   '2731-8': 'IPTH',  // Parathyrin.intact [Mass/volume] in Serum or Plasma
   '14866-8': 'IPTH', // Parathyrin.intact [Moles/volume] in Serum or Plasma
+  // 2026-09-27: codes real bridge bundles (健康存摺 ×14, medcloud) carry
+  // that the package table lacks, so the rows only joined their column when
+  // the source NAME happened to match an alias — a bilingual "嗜鹼性白血球 /
+  // Basophil" or "尿糖 / Glucose" split into a column of its own. Every code
+  // verified against NLM Clinical Table Search (LONG_COMMON_NAME quoted).
+  '706-2': 'BASO',   // Basophils/Leukocytes in Blood by Automated count
+  '713-8': 'EOS',    // Eosinophils/Leukocytes in Blood by Automated count
+  '736-9': 'LYM',    // Lymphocytes/Leukocytes in Blood by Automated count
+  '5905-5': 'MONO',  // Monocytes/Leukocytes in Blood by Automated count
+  '770-8': 'NEU',    // Neutrophils/Leukocytes in Blood by Automated count
+  '18262-6': 'LDL',  // Cholesterol in LDL [Mass/volume] in Serum or Plasma by Direct assay
+  '22763-7': 'AMMONIA', // Ammonia [Mass/volume] in Plasma
+  // High-sensitivity troponins keep their own rows, never TROP: results from
+  // different troponin assays must not be compared (see lab-categories chem).
+  '89579-7': 'HS-TROPONIN I', // Troponin I.cardiac [Mass/volume] in Serum or Plasma by High sensitivity method
+  '67151-1': 'HS-TROPONIN T', // Troponin T.cardiac [Mass/volume] in Serum or Plasma by High sensitivity method
+  // Urine — category is decided by the urine LOINC allowlist, so CREA / PROT
+  // here are the urine panel's own columns, not the serum ones.
+  '2161-8': 'CREA',   // Creatinine [Mass/volume] in Urine
+  '14957-5': 'MALB',  // Microalbumin [Mass/volume] in Urine
+  '2888-6': 'PROT',   // Protein [Mass/volume] in Urine
+  '25428-4': 'GLUCOSE', // Glucose [Presence] in Urine by Test strip
+  '2514-8': 'KETONE', // Ketones [Presence] in Urine by Test strip
+  '19161-9': 'UROBI', // Urobilinogen [Units/volume] in Urine by Test strip
+  '24124-0': 'CASTS', // Casts [Presence] in Urine sediment by Light microscopy
+  // Its own column — not folded into RISKF, whose exact ratio definition at
+  // the source hospital is unverified.
+  '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
 }
 
 const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
@@ -276,12 +304,94 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   'I-PTH': 'IPTH',
   'INTACT PTH': 'IPTH',
   '副甲狀腺素': 'PTH',
+  // Typographic spellings of one analyte that the package passes through as
+  // separate raw keys (each already listed in lab-categories). Pure spelling
+  // only — "VITAMIN D" is NOT folded into 25-OH-D: it may be 1,25-(OH)2 D.
+  DHEAS: 'DHEA-S',
+  IGF1: 'IGF-1',
+  PIVKA: 'PIVKA-II',
+  CA72_4: 'CA72-4',
+  CYF21_1: 'CYFRA21-1',
+  '25-OH VITAMIN D': '25-OH-D',
+  '25(OH)D': '25-OH-D',
+  // Hospital short names for serum creatinine and glucose that fell to 其他
+  // (健康存摺 bundles, 2026-09-27). Glucose keys are subclassified by the
+  // glucose panel itself (fasting / finger / generic).
+  CRE: 'CREA',
+  'AC-SUG': 'GLUCOSE',
+  'PC-SUG': 'GLUCOSE',
+  'GLUCOSE PC': 'GLUCOSE',
+  'GLUCOSE P.C': 'GLUCOSE',
+  'GLUCOSE RANDOM': 'GLUCOSE',
+  'TOTAL CHOLESTEROL/HDL-C RATIO': 'TC/HDL RATIO',
+}
+
+/**
+ * Urinalysis spellings of one test, folded into the urine panel's column.
+ * Scoped to that panel on purpose: "Protein" is urine protein there, but a
+ * pleural-fluid "Protein" filed under 其他 must not become 尿蛋白.
+ * Only the same measurement merges — squamous, urothelial and renal tubular
+ * epithelial cells are different findings and keep their own columns.
+ * (Source rows without LOINC; 2026-09-27 real-bundle probe.)
+ */
+const URINE_SPELLINGS: Readonly<Record<string, string>> = {
+  GRAVITY: 'GRAVIT',
+  'S.G': 'GRAVIT',
+  PROTEIN: 'PROT',
+  KETONES: 'KETONE',
+  KETON: 'KETONE',
+  // Clarity reported as transparency — the same inspection as turbidity.
+  TRANS: 'TURBIDITY',
+  TRANSPARENT: 'TURBIDITY',
+  TRASPARANT: 'TURBIDITY',
+  CLARITY: 'TURBIDITY',
+  PCRATIO: 'PROT/CR RATIO',
+  UPCR: 'PROT/CR RATIO',
+  'EPITH CELL': 'EPITH',
+  'EPITHELIAL CELL': 'EPITH',
+  CAST: 'CASTS',
+  'KETONE BODY': 'KETONE',
+  'LEUCOCYTE ESTER': 'LE',
+  'LEUKOCYTE ESTERASE': 'LE',
+  PRO: 'PROT',
+  BIL: 'BILI',
+  // Semi-quantitative strip results, same columns as their LOINC-coded twins.
+  '肌酸酐(尿液)(半定量)': 'CREA',
+  '微白蛋白(尿)(半定量)': 'MALB',
+  '微白蛋白/肌酐酸比值(半定量)': 'ACR',
+}
+
+/** A key as it lands in one panel — urine spellings folded there only. */
+export function labKeyInCategory(testKey: string, categoryId?: string): string {
+  return categoryId === 'urine' ? URINE_SPELLINGS[testKey] ?? testKey : testKey
+}
+
+/** The pivot's own text → key resolution (package alias + app compatibility
+ *  table), for callers that must agree with the pivot about which key a
+ *  spelling lands on. */
+export function resolveLabTextKey(name: string): string {
+  const upper = name.normalize('NFKC').trim().toUpperCase()
+  if (APP_TEXT_TO_CANONICAL[upper]) return APP_TEXT_TO_CANONICAL[upper]
+  const fromText = canonicalTestKeyFromString(name)
+  return APP_TEXT_TO_CANONICAL[fromText] ?? fromText
 }
 
 const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   TP: 'TP',
   PTH: 'PTH',
   IPTH: 'iPTH',
+  // Keys the text resolver already produces but the package has no label for;
+  // without these the column header was the raw upper-case key.
+  'HS-TROPONIN I': 'hs-TnI',
+  'HS-TROPONIN T': 'hs-TnT',
+  'LP(A)': 'Lp(a)',
+  'APO-B': 'ApoB',
+  'APO-A1': 'ApoA1',
+  'NON-HDL': 'Non-HDL-C',
+  VLDL: 'VLDL-C',
+  CASTS: 'Casts',
+  'PROT/CR RATIO': 'UPCR',
+  'TC/HDL RATIO': 'TC/HDL',
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -334,8 +444,35 @@ function canonicalTestKey(obs: any): string {
   if (/^C型肝炎抗體(?:\(Anti-HCV\))?$/i.test(screeningName)) return 'ANTI-HCV'
   // These category allowlist names are not yet aliases in the package.
   if (['鎂', 'MAGNESIUM'].includes(raw.trim().toUpperCase())) return 'MG'
-  const fromText = canonicalTestKeyFromString(raw)
-  return APP_TEXT_TO_CANONICAL[fromText] ?? fromText
+  const resolved = resolveLabTextKey(raw)
+  if (isKnownPivotKey(resolved)) return resolved
+  // Bilingual source names — "嗜鹼性白血球 / Basophil", "肌酐、尿 ;(Creatinine
+  // (U) CRTN)" — fail as a whole even when one half is a known analyte. Try
+  // each half, the one written in Latin letters first. Only reached when the
+  // full name resolved to nothing known, so it never overrides a match.
+  for (const part of bilingualNameParts(raw)) {
+    const key = resolveLabTextKey(part)
+    if (isKnownPivotKey(key)) return key
+  }
+  return resolved
+}
+
+function isKnownPivotKey(key: string): boolean {
+  return CANONICAL_KEYS.has(key) || !!APP_CANONICAL_DISPLAY[key]
+}
+
+/** "中文 / English" and "中文 ;(English)" halves, Latin-script half first.
+ *  A slash counts only with spaces around it: "LDL/HDL", "ALB/CR RATIO" and
+ *  "微白蛋白/肌酐酸比值" are single names. */
+export function bilingualNameParts(raw: string): string[] {
+  const text = raw.normalize('NFKC').trim()
+  let parts: string[] = []
+  const semi = text.match(/^(.*?)\s*;\s*\((.*)\)\s*$/)
+  if (semi) parts = [semi[1], semi[2]]
+  else if (/\s\/\s/.test(text)) parts = text.split(/\s+\/\s+/)
+  parts = parts.map((part) => part.trim()).filter(Boolean)
+  if (parts.length < 2) return []
+  return parts.sort((a, b) => Number(/[A-Za-z]/.test(b)) - Number(/[A-Za-z]/.test(a)))
 }
 
 // Returns { mapKey, testKey, displayName } for one observation.
@@ -352,6 +489,19 @@ function canonicalTestKey(obs: any): string {
 // categorization already told us it's a glucose measurement.
 const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC'])
 
+// The package's fasting pattern misses the hospital short forms "AC-Sug",
+// "AC Sugar" and "Glucose AC" (健康存摺 bundles, 2026-09-27), which then sit
+// in the generic 血糖 column beside the post-prandial values.
+const FASTING_SHORT_NAME = /\bac[-\s]*sug(?:ar)?\b|\bglucose[-\s(]*ac\b/i
+
+function glucoseSubtype(obs: any): ReturnType<typeof classifyGlucose> {
+  const sub = classifyGlucose(obs)
+  if (sub !== 'generic') return sub
+  const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const text = [obs?.code?.text, ...codings.map((c: any) => c?.display)].filter(Boolean).join(' ')
+  return FASTING_SHORT_NAME.test(text) ? 'fasting' : sub
+}
+
 export function getLabPivotTestIdentity(
   obs: any,
   categoryId?: string,
@@ -362,7 +512,7 @@ export function getLabPivotTestIdentity(
     : getTestDisplayName(obs)
   if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
 
-  let testKey = canonicalTestKey(obs)
+  let testKey = labKeyInCategory(canonicalTestKey(obs), categoryId)
   let displayOverride: string | undefined
 
   const microbiologyComponent = categoryId === 'microbio'
@@ -398,7 +548,7 @@ export function getLabPivotTestIdentity(
   // Glucose subclassification: split into fasting / finger-stick / generic
   // columns using display + LOINC (see classifyGlucose).
   if (testKey === 'GLUCOSE') {
-    const sub = classifyGlucose(obs)
+    const sub = glucoseSubtype(obs)
     const label = GLUCOSE_SUBTYPE_LABEL[sub]
     testKey = label.key
     displayOverride = label.display

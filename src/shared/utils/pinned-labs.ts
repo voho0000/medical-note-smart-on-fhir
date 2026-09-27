@@ -13,14 +13,20 @@
 // A pin is category-scoped (`chem:CREA`, not `CREA`): creatinine and WBC also
 // exist as urine analytes, and a bare key would pull those in.
 
-import { canonicalTestKeyFromString, CANONICAL_DISPLAY, CANONICAL_KEYS } from '@voho0000/clinical-lab-normalization/canonical'
+import { CANONICAL_DISPLAY, CANONICAL_KEYS } from '@voho0000/clinical-lab-normalization/canonical'
 import {
   CANONICAL_TO_LAY_EN,
   CANONICAL_TO_LAY_ZH,
   getAnalyteDisplayLabel,
 } from '@voho0000/clinical-lab-normalization/display'
-import { LAB_CATEGORIES } from './lab-categories'
-import { getLabCompatibilityCanonicalDisplay, type LabCell, type LabPivot } from './lab-pivot.utils'
+import { categorizeObservation, LAB_CATEGORIES } from './lab-categories'
+import {
+  getLabCompatibilityCanonicalDisplay,
+  labKeyInCategory,
+  resolveLabTextKey,
+  type LabCell,
+  type LabPivot,
+} from './lab-pivot.utils'
 
 export const PINNED_LAB_REMINDER_PREFIX = 'note:'
 
@@ -63,15 +69,155 @@ export function makePinnedLabReminder(label: string): string {
   return `${PINNED_LAB_REMINDER_PREFIX}${label.trim()}`
 }
 
-function shortLabel(testKey: string): string {
-  return getLabCompatibilityCanonicalDisplay(testKey)
+/**
+ * Names for analytes the pivot produces but the shared vocabulary has no
+ * label for. Without them the picker showed raw keys such as "LP(A)".
+ */
+const APP_ANALYTE_NAMES: Readonly<Record<string, { zh: string; en: string }>> = {
+  'LP(A)': { zh: '脂蛋白(a)', en: 'Lipoprotein(a)' },
+  'APO-B': { zh: '載脂蛋白 B', en: 'Apolipoprotein B' },
+  'APO-A1': { zh: '載脂蛋白 A1', en: 'Apolipoprotein A1' },
+  'NON-HDL': { zh: '非高密度脂蛋白膽固醇', en: 'Non-HDL cholesterol' },
+  VLDL: { zh: '極低密度脂蛋白膽固醇', en: 'VLDL cholesterol' },
+  'HS-TROPONIN I': { zh: '高敏感度心肌旋轉蛋白 I', en: 'High-sensitivity troponin I' },
+  'HS-TROPONIN T': { zh: '高敏感度心肌旋轉蛋白 T', en: 'High-sensitivity troponin T' },
+  AMMONIA: { zh: '血氨', en: 'Ammonia' },
+  'WBC/HPF': { zh: '尿沉渣白血球', en: 'Urine WBC (sediment)' },
+  'RBC/HPF': { zh: '尿沉渣紅血球', en: 'Urine RBC (sediment)' },
+  EPITH: { zh: '尿沉渣上皮細胞', en: 'Urine epithelial cells' },
+  CASTS: { zh: '尿沉渣圓柱體', en: 'Urine casts' },
+  CRYSTAL: { zh: '尿沉渣結晶', en: 'Urine crystals' },
+  BACTERIA: { zh: '尿沉渣細菌', en: 'Urine bacteria' },
+  MUCUS: { zh: '尿沉渣黏液', en: 'Urine mucus' },
+  'SQUAMOUS EPI': { zh: '尿沉渣扁平上皮細胞', en: 'Urine squamous epithelial cells' },
+  'UROTHELIUM EPI': { zh: '尿沉渣移行上皮細胞', en: 'Urine urothelial cells' },
+  'RTE-RENAL TUBE': { zh: '尿沉渣腎小管上皮細胞', en: 'Urine renal tubular epithelial cells' },
+  'PROT/CR RATIO': { zh: '尿蛋白/肌酸酐比值', en: 'Urine protein/creatinine ratio' },
+  'TC/HDL RATIO': { zh: '總膽固醇/HDL 比值', en: 'Total cholesterol/HDL ratio' },
+  // Hormones and tumour markers the pivot carries under their source key.
+  IPTH: { zh: '副甲狀腺素 (intact)', en: 'Intact parathyroid hormone' },
+  PTH: { zh: '副甲狀腺素', en: 'Parathyroid hormone' },
+  '25-OH-D': { zh: '25-羥基維生素 D', en: '25-hydroxyvitamin D' },
+  ACTH: { zh: '促腎上腺皮質素', en: 'ACTH' },
+  ALDOSTERONE: { zh: '醛固酮', en: 'Aldosterone' },
+  RENIN: { zh: '腎素濃度', en: 'Renin concentration' },
+  PRA: { zh: '血漿腎素活性', en: 'Plasma renin activity' },
+  'DHEA-S': { zh: '硫酸脫氫表雄固酮', en: 'DHEA sulfate' },
+  AMH: { zh: '抗穆勒氏管荷爾蒙', en: 'Anti-Müllerian hormone' },
+  SHBG: { zh: '性荷爾蒙結合球蛋白', en: 'Sex hormone-binding globulin' },
+  GH: { zh: '生長激素', en: 'Growth hormone' },
+  'IGF-1': { zh: '類胰島素生長因子-1', en: 'IGF-1' },
+  'ANTI-TPO': { zh: '甲狀腺過氧化酶抗體', en: 'Anti-TPO antibody' },
+  'ANTI-TG': { zh: '甲狀腺球蛋白抗體', en: 'Anti-thyroglobulin antibody' },
+  THYROGLOBULIN: { zh: '甲狀腺球蛋白', en: 'Thyroglobulin' },
+  TRAB: { zh: '促甲狀腺素受體抗體', en: 'TSH receptor antibody' },
+  CALCITONIN: { zh: '降鈣素', en: 'Calcitonin' },
+  SCC: { zh: '鱗狀細胞癌抗原', en: 'SCC antigen' },
+  'CA72-4': { zh: '醣蛋白 72-4 (CA 72-4)', en: 'CA 72-4' },
+  'CYFRA21-1': { zh: '細胞角蛋白 19 片段', en: 'CYFRA 21-1' },
+  NSE: { zh: '神經元特異性烯醇化酶', en: 'Neuron-specific enolase' },
+  'PIVKA-II': { zh: '異常凝血酶原 (PIVKA-II)', en: 'PIVKA-II' },
+  B2M: { zh: 'β2-微球蛋白', en: 'Beta-2 microglobulin' },
+}
+
+/** Short labels where the key itself is not what a clinician writes. */
+const APP_SHORT_LABELS: Readonly<Record<string, string>> = {
+  AMMONIA: 'NH3',
+  '25-OH-D': '25-OH Vit D',
+}
+
+/** Urinalysis shorthand as clinicians write it (urine panel only). */
+const URINE_SHORT_LABELS: Readonly<Record<string, string>> = {
+  COLOR: 'Color',
+  TURBIDITY: 'Turbidity',
+  GRAVIT: 'SG',
+  PROT: 'PRO',
+  KETONE: 'KET',
+  UROBI: 'URO',
+  NITRITE: 'NIT',
+  LE: 'LEU',
+  OCCULT: 'OB',
+  EPITH: 'Epi',
+  CRYSTAL: 'Crystal',
+  BACTERIA: 'Bacteria',
+  MUCUS: 'Mucus',
+}
+
+/**
+ * The same key in the urine panel and a blood panel is a different test; the
+ * shared label is the blood one ("Glucose 血糖"). A urine pin gets its own
+ * name so a pinned list can never be read as the serum value.
+ */
+const URINE_NAMES: Readonly<Record<string, { short: string; zh: string; en: string }>> = {
+  GLUCOSE: { short: 'Glucose(U)', zh: '尿糖', en: 'Urine glucose' },
+  CREA: { short: 'CREA(U)', zh: '尿肌酸酐', en: 'Urine creatinine' },
+  PH: { short: 'pH(U)', zh: '尿液酸鹼值', en: 'Urine pH' },
+  ALB: { short: 'ALB(U)', zh: '尿白蛋白', en: 'Urine albumin' },
+  BILI: { short: 'BIL(U)', zh: '尿膽紅素', en: 'Urine bilirubin' },
+  WBC: { short: 'WBC(U)', zh: '尿中白血球', en: 'Urine WBC' },
+  RBC: { short: 'RBC(U)', zh: '尿中紅血球', en: 'Urine RBC' },
+}
+
+/** Panels that hold values a clinician tracks. Cultures and the 其他 bucket
+ *  are read as reports, not pinned numbers. */
+const EXCLUDED_CATEGORIES = new Set(['microbio', 'other'])
+
+/** A key the pivot produces that we can also NAME — canonical, app-labelled,
+ *  or named by the shared vocabulary. A raw spelling with no name is not an
+ *  option; it folds into the key it resolves to. */
+function isNamedPivotKey(testKey: string): boolean {
+  return CANONICAL_KEYS.has(testKey)
+    || !!getLabCompatibilityCanonicalDisplay(testKey)
+    || !!APP_ANALYTE_NAMES[testKey]
+    || !!CANONICAL_TO_LAY_ZH[testKey]
+    || !!CANONICAL_TO_LAY_EN[testKey]
+}
+
+function isRecognisedPivotKey(testKey: string): boolean {
+  return CANONICAL_KEYS.has(testKey) || !!getLabCompatibilityCanonicalDisplay(testKey)
+}
+
+/**
+ * Several panels list the same key for sorting (C-PEPTIDE under 血糖 and
+ * 內分泌, CALCITONIN under 內分泌 and 癌症), but a result lands in exactly one
+ * panel. Offer the key only where the pivot's own categoriser puts a result
+ * carrying that name, so a pin can never point at a panel that stays empty.
+ * The urine panel is routed by specimen (LOINC, qualitative results), not by
+ * name, so its keys are always its own.
+ */
+function landsInCategory(testKey: string, categoryId: string): boolean {
+  if (categoryId === 'urine') return true
+  const listedIn = LAB_CATEGORIES.filter((category) => category.id !== 'urine' && (
+    (category.preferredOrder ?? []).includes(testKey)
+    || (category.subgroups ?? []).some((group) => group.members.includes(testKey))
+  ))
+  if (listedIn.length < 2) return true
+  const landed = categorizeObservation({ resourceType: 'Observation', code: { text: testKey } })?.id
+  return landed ? landed === categoryId : listedIn[0].id === categoryId
+}
+
+function shortLabel(categoryId: string, testKey: string): string {
+  if (categoryId === 'urine' && URINE_NAMES[testKey]) return URINE_NAMES[testKey].short
+  if (categoryId === 'urine' && URINE_SHORT_LABELS[testKey]) return URINE_SHORT_LABELS[testKey]
+  return APP_SHORT_LABELS[testKey]
+    ?? getLabCompatibilityCanonicalDisplay(testKey)
     ?? CANONICAL_DISPLAY[testKey]
     ?? (CANONICAL_KEYS.has(testKey) ? getAnalyteDisplayLabel(testKey, 'medical', 'en') : testKey)
 }
 
-function canonicalOf(code: string): string | null {
+function analyteNames(categoryId: string, testKey: string): { zh?: string; en?: string } {
+  if (categoryId === 'urine' && URINE_NAMES[testKey]) {
+    return { zh: URINE_NAMES[testKey].zh, en: URINE_NAMES[testKey].en }
+  }
+  return {
+    zh: CANONICAL_TO_LAY_ZH[testKey] ?? APP_ANALYTE_NAMES[testKey]?.zh,
+    en: CANONICAL_TO_LAY_EN[testKey] ?? APP_ANALYTE_NAMES[testKey]?.en,
+  }
+}
+
+function canonicalOf(code: string, categoryId?: string): string | null {
   try {
-    return canonicalTestKeyFromString(code) ?? null
+    return labKeyInCategory(resolveLabTextKey(code), categoryId) ?? null
   } catch {
     return null
   }
@@ -86,56 +232,64 @@ let cachedCatalog: PinnableLab[] | null = null
 
 /**
  * Every analyte the app can pin, in LAB_CATEGORIES order and each category's
- * preferred reading order. Name variants that resolve to another key of the
- * same panel (I-PTH → IPTH) are folded into that key's search aliases rather
- * than listed twice.
+ * preferred reading order.
+ *
+ * The category lists (preferredOrder, subgroup members) are SORT lists: they
+ * also carry each hospital's spellings ("GRAVIT", "GRAVITY", "SP.GRAVITY") so
+ * the cumulative report can order whatever arrives. Only keys the pivot
+ * actually produces AND that have a human name become options; spellings are
+ * folded into the search aliases of the key they resolve to.
  */
 export function getPinnableLabCatalog(): PinnableLab[] {
   if (cachedCatalog) return cachedCatalog
   const out: PinnableLab[] = []
   const seen = new Set<string>()
   for (const category of LAB_CATEGORIES) {
+    if (EXCLUDED_CATEGORIES.has(category.id)) continue
     const keys: string[] = []
     const push = (key: string) => {
       if (!keys.includes(key)) keys.push(key)
     }
-    // preferredOrder / pinnedColumns hold canonical pivot keys only; subgroup
-    // member lists may also carry spelling variants.
-    const primary = new Set([...(category.preferredOrder ?? []), ...(category.pinnedColumns ?? [])])
     for (const key of category.preferredOrder ?? []) push(key)
     for (const key of category.pinnedColumns ?? []) push(key)
     for (const group of category.subgroups ?? []) for (const key of group.members) push(key)
 
-    const keySet = new Set(keys)
+    // A listed spelling that resolves to ANOTHER listed key is that key —
+    // unless it is a recognised pivot key itself: the eGFR formulas and
+    // Glu-AC are distinct columns even where their text resolves to a sibling.
+    const named = keys.filter(isNamedPivotKey)
+    const namedSet = new Set(named)
+    const options = named.filter((key) => {
+      if (isRecognisedPivotKey(key)) return true
+      const target = canonicalOf(key, category.id)
+      return !(target && target !== key && namedSet.has(target))
+    }).filter((key) => landsInCategory(key, category.id))
+    const optionSet = new Set(options)
     const aliasesByKey = new Map<string, string[]>()
-    for (const code of category.codes) {
-      const canonical = canonicalOf(code)
-      const target = canonical && keySet.has(canonical) ? canonical : keySet.has(code) ? code : null
-      if (!target) continue
+    const addAlias = (target: string, alias: string) => {
       const list = aliasesByKey.get(target) ?? []
-      list.push(code)
+      list.push(alias)
       aliasesByKey.set(target, list)
     }
+    for (const code of [...category.codes, ...keys]) {
+      if (optionSet.has(code)) continue
+      const canonical = canonicalOf(code, category.id)
+      if (canonical && optionSet.has(canonical)) addAlias(canonical, code)
+    }
 
-    for (const key of keys) {
-      const canonical = canonicalOf(key)
-      // A spelling variant of another key in this same panel is not a
-      // separate analyte. A pivot key never folds — the eGFR formulas and
-      // calculated LDL are distinct columns even where their text alias
-      // resolves to a sibling key.
-      if (!primary.has(key) && !CANONICAL_KEYS.has(key) && canonical && canonical !== key && keySet.has(canonical)) continue
+    for (const key of options) {
       const id = pinnedLabId(category.id, key)
       if (seen.has(id) || NEVER_POPULATED.has(id)) continue
+      const names = analyteNames(category.id, key)
+      if (!names.zh && !names.en) continue
       seen.add(id)
-      const short = shortLabel(key)
-      const nameZh = CANONICAL_TO_LAY_ZH[key]
-      const nameEn = CANONICAL_TO_LAY_EN[key]
-      const haystack = [key, short, nameZh, nameEn, ...(aliasesByKey.get(key) ?? [])]
+      const short = shortLabel(category.id, key)
+      const haystack = [key, short, names.zh, names.en, ...(aliasesByKey.get(key) ?? [])]
         .filter((part): part is string => typeof part === 'string' && part.length > 0)
         .join(' ')
         .normalize('NFKC')
         .toLowerCase()
-      out.push({ id, categoryId: category.id, testKey: key, short, nameZh, nameEn, haystack })
+      out.push({ id, categoryId: category.id, testKey: key, short, nameZh: names.zh, nameEn: names.en, haystack })
     }
   }
   cachedCatalog = out
