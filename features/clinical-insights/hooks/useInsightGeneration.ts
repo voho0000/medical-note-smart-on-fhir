@@ -21,6 +21,12 @@ import type {
   InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
 import { LOCAL_INSIGHT_MAX_OUTPUT_TOKENS } from '@/src/shared/constants/clinical-insights.constants'
+import {
+  buildIcdCodeReference,
+  extractBilledIcd10Codes,
+  templateRequestsIcd9,
+} from '@/src/core/utils/icd-code-reference.utils'
+import { loadIcdCrosswalk } from '@/src/infrastructure/terminology/icd-crosswalk.loader'
 
 interface Panel {
   id: string
@@ -81,6 +87,23 @@ export function useInsightGeneration({
     async (panelIds: string[], options?: { force?: boolean }) => {
       const force = options?.force ?? false
       const uniquePanelIds = [...new Set(panelIds)]
+      const promptFor = (panelId: string) =>
+        prompts[panelId] ?? panels.find((item) => item.id === panelId)?.prompt ?? ''
+      // Local models given an ICD-9 template (HMC SOAP) but only ICD-10 billing
+      // codes enumerate ICD-9 codes from memory until truncation. Translate
+      // the billed codes instead; see icd-code-reference.utils.ts.
+      let icdCodeReference = ''
+      if (
+        isCustomOpenAiModelId(model) &&
+        uniquePanelIds.some((panelId) => templateRequestsIcd9(promptFor(panelId))) &&
+        extractBilledIcd10Codes(context).size > 0
+      ) {
+        try {
+          icdCodeReference = buildIcdCodeReference(context, await loadIcdCrosswalk())
+        } catch (error) {
+          console.warn('ICD code reference unavailable; generating without it.', error)
+        }
+      }
       const prepared = uniquePanelIds.flatMap((panelId) => {
         const panel = panels.find((item) => item.id === panelId)
         if (!panel) return []
@@ -98,6 +121,7 @@ export function useInsightGeneration({
           locale: locale === 'zh-TW' ? 'zh-TW' as const : 'en' as const,
           outputFormat: panel.outputFormat,
           languagePolicy: panel.languagePolicy,
+          ...(icdCodeReference && templateRequestsIcd9(promptFor(panelId)) ? { icdCodeReference } : {}),
         }
         const validation = generateInsight.validate(input)
         if (!validation.valid) {

@@ -5,6 +5,12 @@ import { AiError, AiErrorCode } from "@/src/core/errors"
 
 const mockQuery = jest.fn()
 const mockStop = jest.fn()
+const mockBuildMessages = jest.fn((_input: unknown) => [{ role: "user", content: "summarize" }])
+const mockLoadIcdCrosswalk = jest.fn()
+
+jest.mock("@/src/infrastructure/terminology/icd-crosswalk.loader", () => ({
+  loadIcdCrosswalk: () => mockLoadIcdCrosswalk(),
+}))
 
 jest.mock("@/src/application/hooks/ai/use-unified-ai.hook", () => ({
   useUnifiedAi: () => ({
@@ -16,7 +22,7 @@ jest.mock("@/src/application/hooks/ai/use-unified-ai.hook", () => ({
 jest.mock("@/src/application/hooks/clinical-insights/use-generate-insight.hook", () => ({
   useGenerateInsight: () => ({
     validate: () => ({ valid: true }),
-    buildMessages: () => [{ role: "user", content: "summarize" }],
+    buildMessages: (input: unknown) => mockBuildMessages(input),
     buildMetadata: (modelId: string) => ({ modelId, provider: "openai" }),
   }),
 }))
@@ -214,5 +220,61 @@ describe("useInsightGeneration provenance", () => {
 
     expect(useInsightResponsesStore.getState().panelStatus.soap.error).toBe(truncated)
     expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+  })
+
+  describe("ICD code reference", () => {
+    const billed = "-     ICD codes on visit record (billing, not confirmed diagnoses): I10 - Essential hypertension"
+    const render = (model: string, prompt: string, context = `Visits & Treatment History:\n${billed}`) =>
+      renderHook(() => useInsightGeneration({
+        panels: [{ id: "soap", title: "SOAP", prompt, outputFormat: "markdown", languagePolicy: "interface-language" }],
+        prompts: { soap: prompt },
+        context,
+        piiLiterals: [],
+        model,
+        modelName: "Tvghbrain 3.5",
+        contextLimit: 262_144,
+        contextAdaptation: null,
+        inputSignature: "input-icd",
+      }))
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue("generated summary")
+      mockLoadIcdCrosswalk.mockResolvedValue({ map: { I10: ["4019"] }, names: { "4019": "Unspecified essential hypertension" } })
+    })
+
+    it("adds the translated billed codes for a local model and an ICD-9 template", async () => {
+      const { result } = render("openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block and ICD-10 block")
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockLoadIcdCrosswalk).toHaveBeenCalledTimes(1)
+      expect(mockBuildMessages.mock.calls[0][0]).toMatchObject({
+        icdCodeReference: expect.stringContaining(
+          "1. billed ICD-10-CM I10 Essential hypertension | ICD-9-CM equivalent: 401.9 UNSPECIFIED ESSENTIAL HYPERTENSION",
+        ),
+      })
+    })
+
+    it.each([
+      ["a frontier model", "gpt-5.6-luna", "A: ICD-9 block", undefined],
+      ["a template without ICD-9", "openai-compatible-custom:vghtpe-tvghbrain", "Summarize the record", undefined],
+      ["a record without billed codes", "openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block", "Lab Reports:\nnone"],
+    ])("leaves the request unchanged for %s", async (_label, model, prompt, context) => {
+      const { result } = render(model, prompt, context)
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockLoadIcdCrosswalk).not.toHaveBeenCalled()
+      expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
+    })
+
+    it("still generates when the crosswalk cannot be loaded", async () => {
+      mockLoadIcdCrosswalk.mockRejectedValueOnce(new Error("offline"))
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const { result } = render("openai-compatible-custom:vghtpe-tvghbrain", "A: ICD-9 block")
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
+      expect(useInsightResponsesStore.getState().responses.soap?.text).toBe("generated summary")
+      warn.mockRestore()
+    })
   })
 })
