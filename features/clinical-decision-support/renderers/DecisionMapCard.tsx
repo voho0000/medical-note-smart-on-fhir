@@ -47,6 +47,11 @@ export interface DecisionMapCardProps {
   groups?: readonly DecisionMapGroupDef[]
   /** Name the points that need action under the folded summary (AF page). */
   listActionable?: boolean
+  /**
+   * Fold a group in which no point applies to this patient into one line, which
+   * opens on request (AF page: before AF is confirmed, A/R/C/E do not apply).
+   */
+  foldInapplicableGroups?: boolean
 }
 
 /**
@@ -66,11 +71,13 @@ export function DecisionMapCard({
   renderDecision,
   groups = HF_DECISION_MAP_GROUPS,
   listActionable = false,
+  foldInapplicableGroups = false,
 }: DecisionMapCardProps) {
   const map = useMemo(() => buildDecisionMap(result, groups), [groups, result])
   const [expanded, setExpanded] = useState(false)
   const actionable = map.groups.flatMap((group) => group.cells).filter((cell) => cell.state === 'actionable')
   const [openPoint, setOpenPoint] = useState<string | null>(null)
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set())
   const summary = isEnglish
     ? `${map.total} decision points · ${map.counts.actionable} action needed · ${map.counts['needs-data']} data needed · ${map.counts.review} to review`
     : `${map.total} 個決策點 · 需處理 ${map.counts.actionable} · 需補資料 ${map.counts['needs-data']} · 需確認 ${map.counts.review}`
@@ -103,6 +110,25 @@ export function DecisionMapCard({
         {map.groups.map((group) => {
           const headingId = `cdss-hf-map-group-${group.def.id}`
           const openCell = group.cells.find((cell) => cell.point.dp === openPoint)
+          const inapplicable = group.cells.every((cell) => cell.state === 'not-applicable' || cell.state === 'not-included')
+          if (foldInapplicableGroups && inapplicable && !unfolded.has(group.def.id)) {
+            return (
+              <p key={group.def.id} className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground" data-testid={`cdss-hf-map-folded-${group.def.id}`}>
+                <span className="font-semibold">
+                  <span aria-hidden="true">{group.def.marker} </span>
+                  {isEnglish ? group.def.label.en : group.def.label.zh}
+                </span>
+                <span>{isEnglish ? `not applicable this visit (${group.cells.length})` : `本次不適用（${group.cells.length} 項）`}</span>
+                <button
+                  type="button"
+                  className="min-h-11 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @min-[40rem]:min-h-8"
+                  onClick={() => setUnfolded((current) => new Set([...current, group.def.id]))}
+                >
+                  {isEnglish ? 'Show' : '展開'}
+                </button>
+              </p>
+            )
+          }
           return (
             <section key={group.def.id} aria-labelledby={headingId} data-testid={`cdss-hf-map-group-${group.def.id}`}>
               <h4 id={headingId} className="text-xs font-semibold text-muted-foreground">

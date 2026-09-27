@@ -59,6 +59,26 @@ describe('AF decision map (spec DP-00–DP-24)', () => {
     expect(state('DP-09')).toBe('not-applicable')
     expect(['actionable', 'review']).toContain(state('DP-06'))
   })
+  it('suspected AF: groups where nothing applies fold to one line and open on request', () => {
+    render(
+      <ClinicalDecisionSupportView
+        result={build(suspected)}
+        locale="zh-TW"
+        layout="flow"
+        patientId={suspected.id}
+        afAnswers={{}}
+        onAfAnswer={() => {}}
+        profileFacts={suspected.facts}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('cdss-hf-decision-map-toggle'))
+    const folded = screen.getByTestId('cdss-hf-map-folded-af-a')
+    expect(folded).toHaveTextContent('本次不適用（10 項）')
+    expect(screen.queryByTestId('cdss-hf-map-cell-DP-09')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-hf-map-cell-DP-06')).toBeInTheDocument()
+    fireEvent.click(within(folded).getByRole('button', { name: '展開' }))
+    expect(screen.getByTestId('cdss-hf-map-cell-DP-09')).toBeInTheDocument()
+  })
   it('renders folded on the AF page, opens a point, and jumps to its card', async () => {
     const scroll = jest.fn()
     const original = Element.prototype.scrollIntoView

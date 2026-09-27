@@ -430,6 +430,7 @@ export function AtrialFibrillationVisitFlow({
         isEnglish={en}
         groups={afDecisionMapGroupsFor(followUp)}
         listActionable
+        foldInapplicableGroups
         renderDetail={(r) => (
           <div className="px-3 py-2">
             <p className="mb-2 text-sm leading-relaxed">{r.recommendation}</p>
