@@ -423,7 +423,7 @@ describe('the questions', () => {
     expect(symptoms?.items?.find((item) => item.term === 'reported-ankle-swelling')?.side)
       .toBe('systemic')
     expect(symptoms?.items?.filter((item) => !item.common).map((item) => item.term))
-      .toEqual(['nocturnal-cough', 'bendopnea', 'reported-weight-gain'])
+      .toEqual(['abdominal-bloating', 'nocturnal-cough', 'bendopnea'])
   })
 
   it('enters HFrEF directly when the record has an HF diagnosis and LVEF is below 50%', () => {
@@ -475,7 +475,7 @@ describe('the questions', () => {
     expect(symptoms?.state).toBe('answered')
     // Grouped by answer, the findings first, so the one row that matters is
     // not lost in a list of 「：−」.
-    expect(symptoms?.answerText).toBe('有：勞力性喘、疲倦、腳腫；無：端坐呼吸、腹脹；未評估：PND；3 項未答')
+    expect(symptoms?.answerText).toBe('有：勞力性喘、疲倦、腳腫；無：端坐呼吸、腹脹；未評估：PND；2 項未答')
     expect(signs?.answerText).toBe('有：Pitting edema；無：Rales、JVP；3 項未答')
     // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
     // systemic one; the tally is read across both questions.
