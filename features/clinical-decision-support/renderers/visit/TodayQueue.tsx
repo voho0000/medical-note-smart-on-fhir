@@ -69,7 +69,7 @@ export function TodayQueue({
           {isEnglish ? 'To decide today' : '今天要決定'}
         </h3>
         {rows.length ? (
-          <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="text-xs tabular-nums text-muted-foreground" role="status" data-testid="cdss-visit-queue-progress">
             {isEnglish
               ? `${rows.length - pending}/${rows.length} decided`
               : `已決定 ${rows.length - pending}/${rows.length}`}

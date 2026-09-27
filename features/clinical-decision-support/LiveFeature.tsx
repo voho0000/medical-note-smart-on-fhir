@@ -722,7 +722,7 @@ export default function LiveClinicalDecisionSupportFeature() {
               onSelect={setLayout}
             />
           ) : null}
-          {(isVisitFlow || isNhiTable || isMap) && patientId ? (
+          {(isVisitFlow || isNhiTable) && patientId ? (
             <Button
               type="button"
               size="sm"
@@ -735,14 +735,19 @@ export default function LiveClinicalDecisionSupportFeature() {
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
-              {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
-            </Badge>
-            <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200">
-              {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
-            </Badge>
-          </div>
+          {/* The map's 今天要決定 says what needs the clinician, item by item;
+              these two counts would repeat it less exactly, so the map leaves
+              them out. */}
+          {isMap ? null : (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
+                {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
+              </Badge>
+              <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200">
+                {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
+              </Badge>
+            </div>
+          )}
         </div>
       </header>
 
@@ -795,6 +800,24 @@ export default function LiveClinicalDecisionSupportFeature() {
           : undefined}
       />
       </PreventReadingContext.Provider>
+      {/* On the map, the reset sits at the foot, after the summary: it clears
+          every answer and decision on the page, and has no business beside
+          the first things a clinician reads. */}
+      {isMap && patientId ? (
+        <div className="flex justify-end border-t border-border pt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1.5 px-2.5 text-xs text-muted-foreground shadow-none"
+            onClick={resetVisitDefaults}
+            data-testid="cdss-hf-reset-page-defaults"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

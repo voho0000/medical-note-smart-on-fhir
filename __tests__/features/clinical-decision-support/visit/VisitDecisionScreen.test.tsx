@@ -221,7 +221,9 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(primaryOf(row('DP-10'))).toHaveFocus()
     fireEvent.click(primaryOf(row('DP-10')))
     expect(screen.getByRole('heading', { name: '今天要決定' })).toHaveFocus()
-    expect(screen.getByTestId('cdss-visit-progress')).toHaveTextContent('今天的決定都記下了')
+    // Progress is said once, on the queue.
+    expect(screen.queryByTestId('cdss-visit-progress')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-queue-progress')).toHaveTextContent('已決定 3/3')
     // SGLT2i asked for no check; the plan lists only what did.
     expect(within(plan).getAllByText(/K、Cr、血壓/)).toHaveLength(2)
     expect(screen.getByTestId('cdss-visit-summary-text')).toHaveTextContent('DP-10 SGLT2i：開始 SGLT2i')

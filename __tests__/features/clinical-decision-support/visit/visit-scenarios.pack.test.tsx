@@ -188,7 +188,9 @@ describe('real pack · P5 titrating with AF', () => {
     for (const block of ['status', 'treatment', 'outlook']) {
       expect(screen.getByTestId(`cdss-visit-section-toggle-${block}`)).toHaveAttribute('aria-expanded', 'false')
     }
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需處理 3')
+    // The three starts are counted in 今天要決定, once; 02 says what it adds.
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需你確認 1')
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).not.toHaveTextContent('需處理')
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
     expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
@@ -205,7 +207,7 @@ describe('real pack · P5 titrating with AF', () => {
     const plan = screen.getByTestId('cdss-visit-plan')
     expect(plan).toHaveTextContent('K、Cr、血壓，14 天內')
     expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
-    expect(screen.getByTestId('cdss-visit-progress')).toHaveTextContent('今天的決定都記下了')
+    expect(screen.getByTestId('cdss-visit-queue-progress')).toHaveTextContent('已決定 3/3')
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
   })
 })
@@ -309,6 +311,10 @@ describe('real pack · the other scenarios', () => {
     expect(model.queue).toEqual(['DP-00'])
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
+    // The checklist's questions stay locked until 懷疑 HF is answered, so the
+    // first-assessment checklist waits for that answer before it opens.
+    expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
+    fireEvent.click(primaryOf('DP-00'))
     expect(screen.getByTestId('cdss-visit-asks-detail')).toHaveAttribute('open')
   })
 
@@ -334,5 +340,38 @@ describe('real pack · the other scenarios', () => {
       ['p9-hfpef-af-dose', 'hf'], ['p10-improved-ef', 'hf'], ['p11-af-dabigatran-renal', 'af'],
     ]
     for (const [id, page] of ids) expect(scenarioRun(id, { page }).model.points.length).toBeGreaterThan(0)
+  })
+})
+
+describe('real pack · what a clinician reads without opening anything', () => {
+  it('names the red flags on the page, marks K 5.7 and drops today’s dates (P6)', () => {
+    render(<ScenarioMap id="p6-hyperkalaemia" />)
+    const triage = screen.getByTestId('cdss-visit-triage')
+    expect(triage).toHaveTextContent('胸痛・暈厥・休息時喘・休息時低血氧・意識改變・快速水腫或體重增加')
+    const values = screen.getByTestId('cdss-visit-key-values')
+    const potassium = values.querySelector('[data-key="potassium"]')!
+    expect(potassium).toHaveAttribute('data-alert', 'true')
+    expect(values.querySelectorAll('[data-alert="true"]')).toHaveLength(1)
+    // 09-27 is the visit date: today's heart rate carries no date; K (09-24) a short one.
+    expect(values.querySelector('[data-key="heartRate"]')).not.toHaveTextContent('09-27')
+    expect(potassium).toHaveTextContent('09-24')
+    expect(potassium).not.toHaveTextContent('2026-09-24')
+  })
+
+  it('keeps the AF follow-up questions folded at a first AF visit until an ask says 有 (P3)', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
+    expect(screen.getByTestId('cdss-visit-asks-detail-toggle')).not.toHaveTextContent('待')
+    fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
+    expect(screen.getByTestId('cdss-visit-asks-detail')).toHaveAttribute('open')
+  })
+
+  it('puts cards no point names inside 02, and folds the summary preview under the copy button (P5)', () => {
+    render(<ScenarioMap id="p5-titrating-af" />)
+    const other = screen.queryByTestId('cdss-visit-other-modules')
+    if (other) expect(screen.getByTestId('cdss-visit-column-treatment')).toContainElement(other)
+    expect(screen.getByTestId('cdss-visit-summary-copy')).toBeVisible()
+    expect(screen.getByTestId('cdss-visit-summary-preview')).not.toHaveAttribute('open')
+    expect(screen.queryByTestId('cdss-visit-map-legend')).toBeNull()
   })
 })

@@ -329,8 +329,10 @@ describe('HF surfaces on the decision map', () => {
     expect(asksDetail().open).toBe(true)
   })
 
-  it('opens it at a first assessment', () => {
+  it('opens it at a first assessment, once 懷疑 HF is answered', () => {
     render(<HfHarness model={p1Model()} />)
+    expect(asksDetail().open).toBe(false)
+    fireEvent.click(document.querySelector('[data-visit-queue-dp="DP-00"] [data-visit-primary]')!)
     expect(asksDetail().open).toBe(true)
     expect(screen.getByTestId('cdss-visit-asks-detail-reason')).toHaveTextContent('初次評估')
   })

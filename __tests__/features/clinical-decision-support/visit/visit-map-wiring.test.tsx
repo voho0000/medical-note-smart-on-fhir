@@ -141,7 +141,8 @@ describe('decision map wiring', () => {
       expect(screen.getByTestId(`cdss-layout-switch-${kept}`)).toBeInTheDocument()
     }
     // Nothing in the header is hidden by the map: the module counts stay.
-    expect(screen.getByText(/\d+ 優先$/)).toBeInTheDocument()
+    // The header's 優先／需資料 counts are left out on the map: 今天要決定 says it, item by item.
+    expect(screen.queryByText(/\d+ 優先$/)).toBeNull()
     expect(screen.getByTestId('cdss-hf-reset-page-defaults')).toBeInTheDocument()
   })
 

@@ -46,7 +46,7 @@ export function VisitAsksDetail({
   label,
   content,
   openCount,
-  stage,
+  firstAssessment,
   asks,
   answers,
   isEnglish,
@@ -58,7 +58,8 @@ export function VisitAsksDetail({
   content: ReactNode
   /** Questions still unanswered inside, when the content knows. */
   openCount?: number
-  stage: VisitStage
+  /** Whether this visit asks the whole checklist (the screen decides: stage, page, gate). */
+  firstAssessment: boolean
   asks: readonly VisitAsk[]
   answers: VisitAnswers
   isEnglish: boolean
@@ -68,9 +69,12 @@ export function VisitAsksDetail({
   const opening = openingAnswers(asks, answers)
   const reason = opening.length
     ? `${opening.map((item) => `${item.ask.label}${isEnglish ? ' ' : ''}${item.label}`).join(isEnglish ? ', ' : '、')}${isEnglish ? ': opened for the fuller assessment' : '，已展開完整評估'}`
-    : isFirstAssessment(stage)
+    : firstAssessment
       ? (isEnglish ? 'First assessment: opened in full' : '初次評估，已完整展開')
       : undefined
+  // At a follow-up these questions are optional; a pending count would read as
+  // unfinished work. It shows only when the visit calls for them.
+  const showCount = Boolean(reason) && typeof openCount === 'number' && openCount > 0
   // A <details> rather than a button-and-region: the questions inside are the
   // same ones other cards jump to (「前往第 2 題」, 「記錄喘的細節」), and that
   // jump opens every folded <details> on its way. The open state is still the
@@ -91,7 +95,7 @@ export function VisitAsksDetail({
       >
         <span className="min-w-0 flex-1">
           {label}
-          {typeof openCount === 'number' && openCount > 0 ? (
+          {showCount ? (
             <span className="ml-2 text-xs font-normal text-muted-foreground">
               {isEnglish ? `${openCount} pending` : `${openCount} 題待補`}
             </span>

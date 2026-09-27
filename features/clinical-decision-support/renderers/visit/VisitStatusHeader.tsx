@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDown, ArrowRight, ArrowUp, PencilLine } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, PencilLine, TriangleAlert } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { QueueRow } from './visit-decisions'
 import type { VisitDecisionModel } from '../../types'
@@ -17,6 +17,20 @@ const TREND = {
  * reopened the assessment — why. The only host words are the progress of
  * today's queue.
  */
+/**
+ * A value's date as a clinician reads it beside the number: nothing for
+ * today's, month-day within this year, the full date otherwise.
+ */
+export function displayDate(date: string | undefined, now: Date): string | undefined {
+  if (!date) return undefined
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date)
+  if (!match) return date
+  const [, year, month, day] = match
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  if (`${year}-${month}-${day}` === today) return undefined
+  return Number(year) === now.getFullYear() ? `${month}-${day}` : `${year}-${month}-${day}`
+}
+
 /** A value the record lacks: the pack printed nothing, or a dash. */
 function isMissingValue(value: string): boolean {
   return !value.trim() || /^[—–-]+$/.test(value.trim())
@@ -26,12 +40,14 @@ export function VisitStatusHeader({
   model,
   rows,
   isEnglish,
+  now,
   onEditValues,
   onEditValue,
 }: {
   model: VisitDecisionModel
   rows: readonly QueueRow[]
   isEnglish: boolean
+  now: Date
   /** Opens the page's clinical-values editor. */
   onEditValues?: () => void
   /** Opens it at one value; offered on values that are stale or missing. */
@@ -40,7 +56,8 @@ export function VisitStatusHeader({
   const pending = rows.filter((row) => row.current).length
   const allDecided = rows.length > 0 && pending === 0
   // Once everything queued is recorded the pack may say so in its own words;
-  // otherwise its sentence stands and the host line below says it.
+  // otherwise its sentence stands. How many are left is said once, on the
+  // queue itself (已決定 x/y), not repeated here.
   const headline = allDecided && model.headlineWhenDecided ? model.headlineWhenDecided : model.headline
   return (
     <section
@@ -84,9 +101,16 @@ export function VisitStatusHeader({
               </>
             )
             return (
-              <div key={item.key} className="flex items-baseline gap-1.5" data-key={item.key} data-stale={item.stale ? 'true' : undefined} data-missing={missing ? 'true' : undefined}>
-                <dt className="text-xs text-muted-foreground">{item.label}</dt>
-                <dd className="inline-flex items-baseline gap-1 font-semibold tabular-nums text-foreground">
+              <div
+                key={item.key}
+                className={cn('flex items-baseline gap-1.5', item.alert && 'rounded-md bg-destructive/10 px-1.5')}
+                data-key={item.key}
+                data-stale={item.stale ? 'true' : undefined}
+                data-missing={missing ? 'true' : undefined}
+                data-alert={item.alert ? 'true' : undefined}
+              >
+                <dt className={cn('text-xs', item.alert ? 'font-semibold text-destructive' : 'text-muted-foreground')}>{item.label}</dt>
+                <dd className={cn('inline-flex items-baseline gap-1 font-semibold tabular-nums', item.alert ? 'text-destructive' : 'text-foreground')}>
                   {editable ? (
                     <button
                       type="button"
@@ -102,21 +126,28 @@ export function VisitStatusHeader({
                     </button>
                   ) : value}
                 </dd>
-                {item.date || item.stale ? (
+                {displayDate(item.date, now) || item.stale ? (
                   <dd
                     className={cn(
                       'text-xs tabular-nums',
                       item.stale ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
                     )}
                   >
-                    {item.date}
-                    {item.stale ? `${item.date ? ' · ' : ''}${isEnglish ? 'Past window' : '已超過窗期'}` : ''}
+                    {displayDate(item.date, now)}
+                    {item.stale ? `${displayDate(item.date, now) ? ' · ' : ''}${isEnglish ? 'Past window' : '已超過窗期'}` : ''}
                   </dd>
                 ) : null}
               </div>
             )
           })}
         </dl>
+      ) : null}
+      {model.triage?.items.length ? (
+        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-foreground" data-testid="cdss-visit-triage">
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0 self-center text-destructive" aria-hidden="true" />
+          <span className="font-semibold text-destructive">{model.triage.label}</span>
+          <span>{model.triage.items.join(isEnglish ? ' · ' : '・')}</span>
+        </p>
       ) : null}
       {model.triggers.length ? (
         <div
@@ -134,15 +165,6 @@ export function VisitStatusHeader({
             ))}
           </ul>
         </div>
-      ) : null}
-      {rows.length ? (
-        <p className="text-xs font-medium text-muted-foreground" role="status" data-testid="cdss-visit-progress">
-          {allDecided
-            ? (isEnglish ? "Today's decisions are all recorded" : '今天的決定都記下了')
-            : isEnglish
-              ? `${pending} of ${rows.length} to decide today`
-              : `今天還有 ${pending}／${rows.length} 件要決定`}
-        </p>
       ) : null}
     </section>
   )

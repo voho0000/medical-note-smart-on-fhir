@@ -101,28 +101,31 @@ function MapCell({
   )
 }
 
-const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm', 'ask']
+const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm']
 
 /**
- * One line under a section's name: what in it needs the clinician, or that
- * nothing does — so a closed section still says whether to open it.
+ * One line under a section's name: what in it still needs the clinician and is
+ * not already in 今天要決定 above, then what was recorded today. Points in the
+ * queue are counted there, once; points waiting on the every-visit asks are
+ * answered at the top of the screen. So a closed section says whether opening
+ * it would add anything.
  */
-function sectionSummary(points: readonly DecisionPointView[], isEnglish: boolean): { text: string; attention: boolean } {
+function sectionSummary(
+  points: readonly DecisionPointView[],
+  queuedDps: ReadonlySet<string>,
+  decisionOf: (point: DecisionPointView) => PointDecision | undefined,
+  isEnglish: boolean,
+): { text: string; attention: boolean } {
+  const decided = points.filter((point) => decisionOf(point)).length
+  const open = points.filter((point) => !decisionOf(point) && !queuedDps.has(point.dp))
   const counts = new Map<DecisionPointState, number>()
-  for (const point of points) counts.set(point.state, (counts.get(point.state) ?? 0) + 1)
+  for (const point of open) counts.set(point.state, (counts.get(point.state) ?? 0) + 1)
   const attention = ATTENTION_ORDER.filter((state) => counts.get(state))
-  if (attention.length) {
-    return {
-      text: attention.map((state) => `${stateLabel(state, isEnglish)} ${counts.get(state)}`).join(' · '),
-      attention: true,
-    }
-  }
-  const settled = counts.get('done') ?? 0
+  const parts = attention.map((state) => `${stateLabel(state, isEnglish)} ${counts.get(state)}`)
+  if (decided) parts.push(isEnglish ? `${decided} recorded today` : `已記錄 ${decided}`)
   return {
-    text: isEnglish
-      ? `Nothing pending${settled ? ` · ${settled} settled` : ''}`
-      : `沒有待辦${settled ? ` · 已定 ${settled}` : ''}`,
-    attention: false,
+    text: parts.length ? parts.join(' · ') : (isEnglish ? 'Nothing pending' : '沒有待辦'),
+    attention: attention.length > 0,
   }
 }
 
@@ -200,9 +203,6 @@ export function DecisionMapColumns({
         <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
           {isEnglish ? 'Decision map' : '決策地圖'}
         </h3>
-        <span className="text-xs text-muted-foreground" data-testid="cdss-visit-map-legend">
-          {countLine(model.points, isEnglish)}
-        </span>
         <button
           type="button"
           className="ml-auto inline-flex h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -222,7 +222,7 @@ export function DecisionMapColumns({
           const points = model.points.filter((point) => point.block === block)
           const open = openBlock === block
           const note = closedNote(block)
-          const summary = sectionSummary(points, isEnglish)
+          const summary = sectionSummary(points, queuedDps, decisionOf, isEnglish)
           const extra = block === 'status' ? answersLine : block === 'outlook' ? outlookSummary : undefined
           return (
             <button

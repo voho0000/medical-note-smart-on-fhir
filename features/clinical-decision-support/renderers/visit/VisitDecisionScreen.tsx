@@ -101,7 +101,14 @@ export function VisitDecisionScreen({
   // DP-03's fuller questions: open at a first assessment and whenever an ask
   // comes back worse. A clinician's own open/close holds until that reason
   // changes — a new 「變差」 reopens what was folded under 「穩定」.
-  const asksOpenReason = `${isFirstAssessment(model.stage) ? 'first' : ''}|${openingAnswers(model.asks, answers).map((item) => item.ask.id).join(',')}`
+  // The whole checklist belongs to a heart-failure first assessment — and only
+  // once 懷疑 HF has been answered, since its questions stay locked until then.
+  // The AF page's fuller questions are about treatment already under way, so
+  // they open only when an ask comes back 有.
+  const rows = useMemo(() => buildQueueRows(model, decisions, now), [decisions, model, now])
+  const gatePending = rows.some((row) => row.current?.point.dp === 'DP-00')
+  const firstAssessment = model.packId === 'heart-failure-cdss' && isFirstAssessment(model.stage) && !gatePending
+  const asksOpenReason = `${firstAssessment ? 'first' : ''}|${openingAnswers(model.asks, answers).map((item) => item.ask.id).join(',')}`
   const asksAutoOpen = asksOpenReason !== '|'
   const [asksOverride, setAsksOverride] = useState<{ reason: string; open: boolean } | null>(null)
   const asksDetailOpen = asksOverride && asksOverride.reason === asksOpenReason ? asksOverride.open : asksAutoOpen
@@ -113,7 +120,6 @@ export function VisitDecisionScreen({
     screenShown(screenKey)
   }, [screenKey, screenShown])
 
-  const rows = useMemo(() => buildQueueRows(model, decisions, now), [decisions, model, now])
   const queuedDps = useMemo(() => queuedPointDps(rows), [rows])
   const plan = useMemo(() => buildVisitPlan(model, decisions, now), [decisions, model, now])
   const summaryText = useMemo(
@@ -171,6 +177,27 @@ export function VisitDecisionScreen({
     </>
   ) : undefined
 
+  // Cards no decision point names sit at the foot of 02, inside the map, rather
+  // than as a stray line between the map and the summary.
+  const otherModules = unmappedModules.length ? (
+        <details className="rounded-lg border border-border" data-testid="cdss-visit-other-modules">
+          <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {isEnglish ? 'Other modules: ' : '其他模組：'}
+            {unmappedModules.map((item) => item.moduleName ?? item.title).join(isEnglish ? ', ' : '、')}
+          </summary>
+          <div className="divide-y divide-border border-t border-border">
+            {unmappedModules.map((item) => (
+              <details key={item.id} className="group/module" data-testid={`cdss-visit-other-module-${item.id}`}>
+                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                  {item.moduleName ?? item.title}
+                </summary>
+                <div className="px-3 pb-3">{renderDetail(item)}</div>
+              </details>
+            ))}
+          </div>
+        </details>
+      ) : null
+
   const answersLine = model.asks
     .flatMap((ask) => {
       const { value } = effectiveAnswer(ask, answers)
@@ -190,6 +217,7 @@ export function VisitDecisionScreen({
         model={model}
         rows={rows}
         isEnglish={isEnglish}
+        now={now}
         onEditValues={surfaces?.editValues}
         onEditValue={surfaces?.editValue}
       />
@@ -201,7 +229,7 @@ export function VisitDecisionScreen({
           label={surfaces.asksDetail.label}
           content={surfaces.asksDetail.content}
           openCount={surfaces.asksDetail.openCount}
-          stage={model.stage}
+          firstAssessment={firstAssessment}
           asks={model.asks}
           answers={answers}
           isEnglish={isEnglish}
@@ -243,7 +271,15 @@ export function VisitDecisionScreen({
             {outlookContent}
           </>
         )}
-        columnFooters={surfaces?.columnFooters}
+        columnFooters={{
+          ...surfaces?.columnFooters,
+          treatment: (
+            <>
+              {surfaces?.columnFooters?.treatment}
+              {otherModules}
+            </>
+          ),
+        }}
         detail={openPoint ? (
           <DecisionPointDetail
             key={visitDecisionKey(openPoint)}
@@ -268,24 +304,6 @@ export function VisitDecisionScreen({
           />
         ) : null}
       />
-      {unmappedModules.length ? (
-        <details className="rounded-lg border border-border" data-testid="cdss-visit-other-modules">
-          <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            {isEnglish ? 'Other modules: ' : '其他模組：'}
-            {unmappedModules.map((item) => item.moduleName ?? item.title).join(isEnglish ? ', ' : '、')}
-          </summary>
-          <div className="divide-y divide-border border-t border-border">
-            {unmappedModules.map((item) => (
-              <details key={item.id} className="group/module" data-testid={`cdss-visit-other-module-${item.id}`}>
-                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                  {item.moduleName ?? item.title}
-                </summary>
-                <div className="px-3 pb-3">{renderDetail(item)}</div>
-              </details>
-            ))}
-          </div>
-        </details>
-      ) : null}
       <VisitSummary text={summaryText} isEnglish={isEnglish} />
       {footer}
     </div>
