@@ -22,7 +22,10 @@ export function resolveClaimSources(
     const evidence = evidenceBySource.get(key)
     const evidenceQuote = evidence?.quote
     const isDocument = source.resourceType === 'Composition' || source.resourceType === 'DocumentReference'
-    if (!isDocument) return evidenceQuote ? [{ ...source, evidenceQuote }] : [source]
+    // Quotes emitted for reports/observations need the same check as document
+    // quotes. Only documents REQUIRE an excerpt; do not warn merely because
+    // a structured source has no free-text quotation.
+    if (!isDocument && !evidenceQuote) return [source]
     const evidenceWarning = !evidenceQuote ? 'missing'
       : evidence?.verification === 'not-found' ? 'mismatch'
         : evidence?.verification === 'exact' || evidence?.verification === 'whitespace-restored' ? undefined : 'unchecked'

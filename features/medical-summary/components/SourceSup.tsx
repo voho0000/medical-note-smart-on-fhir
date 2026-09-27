@@ -86,8 +86,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
         : 'This excerpt has not been checked. Open the source to review.'
   }
   const hasUnverified = sources.some((s) => !s.verified)
-  const checkedExcerptLabel = (s: ResolvedSourceRef) => s.evidenceQuote && !s.evidenceWarning &&
-    (s.resourceType === 'Composition' || s.resourceType === 'DocumentReference')
+  const checkedExcerptLabel = (s: ResolvedSourceRef) => s.evidenceQuote && !s.evidenceWarning
     ? locale === 'zh-TW' ? '引句與原文相符，請核對是否支持此敘述。' : 'Excerpt matches the source; check that it supports this claim.'
     : ''
   const hasWarning = hasUnverified || sources.some(isSuspect)
