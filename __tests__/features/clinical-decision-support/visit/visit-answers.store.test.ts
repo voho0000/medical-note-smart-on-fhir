@@ -1,0 +1,79 @@
+/**
+ * @jest-environment jsdom
+ */
+/**
+ * The every-visit answers are a clinical statement about a named person, so
+ * they are kept like the rest of this feature's answers: encrypted, per
+ * patient, and — being this visit's answers — dropped when read back on
+ * another day.
+ */
+import {
+  toVisitAnswerRecord,
+  useVisitAnswersStore,
+  visitAnswersOf,
+  visitAnswersStorageKey,
+} from '@/features/clinical-decision-support/stores/visit-answers.store'
+import {
+  expectSealedEnvelope,
+  sealAnswers,
+  storedCiphertext,
+  until,
+  useRealWebCrypto,
+} from '../encrypted-answers.helper'
+
+const AT = new Date('2026-09-27T09:10:00+08:00')
+
+function store() {
+  return useVisitAnswersStore.getState()
+}
+
+describe('visit answers', () => {
+  useRealWebCrypto()
+
+  beforeEach(() => {
+    localStorage.clear()
+    useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  })
+
+  it('stores an answer as ciphertext, never as readable text', async () => {
+    store().answer('p1', 'dyspnoea-trend', 'worse', AT)
+    expect(visitAnswersOf(store().byPatientId.p1)).toEqual({ 'dyspnoea-trend': 'worse' })
+    const raw = await storedCiphertext(visitAnswersStorageKey('p1'))
+    expectSealedEnvelope(raw, ['worse', 'dyspnoea'])
+  })
+
+  it('reads today’s answers back and keeps them to their own patient', async () => {
+    await sealAnswers(visitAnswersStorageKey('p1'), {
+      'weight-trend': { value: 'up', answeredAt: AT.toISOString() },
+    })
+    store().hydrate('p1', new Date('2026-09-27T15:00:00+08:00'))
+    await until(() => Boolean(store().hydratedPatientIds.p1), 'p1 to hydrate')
+    expect(visitAnswersOf(store().byPatientId.p1)).toEqual({ 'weight-trend': 'up' })
+
+    store().hydrate('p2')
+    await until(() => Boolean(store().hydratedPatientIds.p2), 'p2 to hydrate')
+    expect(visitAnswersOf(store().byPatientId.p2)).toEqual({})
+  })
+
+  it('drops an answer given on another day, and anything it does not recognise', () => {
+    const next = new Date('2026-09-28T09:00:00+08:00')
+    expect(toVisitAnswerRecord({ 'weight-trend': { value: 'up', answeredAt: AT.toISOString() } }, next)).toEqual({})
+    expect(toVisitAnswerRecord({
+      'weight-trend': { value: 'up', answeredAt: AT.toISOString() },
+      nyha: { value: 'III', answeredAt: AT.toISOString() },
+      bleeding: { value: 7, answeredAt: AT.toISOString() },
+    }, AT)).toEqual({ 'weight-trend': { value: 'up', answeredAt: AT.toISOString() } })
+    expect(toVisitAnswerRecord('garbage', AT)).toEqual({})
+  })
+
+  it('withdraws one answer and clears the chart', async () => {
+    store().answer('p1', 'af-symptoms', 'yes', AT)
+    store().answer('p1', 'bleeding', 'no', AT)
+    store().answer('p1', 'af-symptoms', null, AT)
+    expect(visitAnswersOf(store().byPatientId.p1)).toEqual({ bleeding: 'no' })
+    await storedCiphertext(visitAnswersStorageKey('p1'))
+    store().clearAnswers('p1')
+    expect(visitAnswersOf(store().byPatientId.p1)).toEqual({})
+    expect(localStorage.getItem(visitAnswersStorageKey('p1'))).toBeNull()
+  })
+})

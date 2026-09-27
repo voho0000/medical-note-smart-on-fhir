@@ -1,0 +1,231 @@
+"use client"
+
+import { useEffect, useRef, type ReactNode } from 'react'
+import { Check, X } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/src/shared/utils/cn.utils'
+import type { CdssRecommendation } from '../../types'
+import type { QueueStep } from './visit-decisions'
+import { blockTitle, stateLabel } from './visit-decisions'
+import type { ChainStep, DecisionPointChecklistItem, DecisionPointView, VisitAction } from '../../types'
+import { VisitDecisionControls } from './VisitDecisionControls'
+import { ChainStepName, StatePill } from './visit-presentation'
+import { statusLabel, statusStyle, StatusIcon } from '../status-presentation'
+
+export const VISIT_DETAIL_ID = 'cdss-visit-dp-detail'
+
+/** A point's checklist — what the record holds and what it lacks, item by item. */
+export function DecisionPointChecklist({
+  items,
+  isEnglish,
+  compact = false,
+}: {
+  items: readonly DecisionPointChecklistItem[]
+  isEnglish: boolean
+  compact?: boolean
+}) {
+  return (
+    <ul className={cn('grid gap-x-3 gap-y-0.5 text-xs', !compact && '@min-[40rem]:grid-cols-2')} data-testid="cdss-visit-checklist">
+      {items.map((item) => (
+        <li key={item.key} className="flex min-w-0 items-baseline gap-1.5" data-checklist-item={item.key} data-present={item.present ? 'true' : 'false'}>
+          {item.present ? (
+            <Check className="h-3.5 w-3.5 shrink-0 self-center text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+          ) : (
+            <span className="shrink-0 font-semibold text-amber-800 dark:text-amber-300">{isEnglish ? 'Missing' : '缺'}</span>
+          )}
+          <span className={cn('min-w-0', item.present ? 'text-foreground' : 'text-muted-foreground')}>
+            {item.present ? <span className="sr-only">{isEnglish ? 'In the record: ' : '已有：'}</span> : null}
+            {item.label}
+            {item.value ? <span className="tabular-nums"> {item.value}</span> : null}
+            {item.date ? <span className="tabular-nums text-muted-foreground">（{item.date}）</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const STEP_STATE: Record<ChainStep['state'], { zh: string; en: string; className: string }> = {
+  done: { zh: '完成', en: 'Done', className: 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/25 dark:bg-emerald-500/10' },
+  current: { zh: '卡在這', en: 'Here now', className: 'border-amber-300 bg-amber-50/70 dark:border-amber-500/35 dark:bg-amber-500/10' },
+  later: { zh: '之後', en: 'Later', className: 'border-border bg-muted/30' },
+  blocked: { zh: '受阻', en: 'Blocked', className: 'border-destructive/40 bg-destructive/5' },
+}
+
+/**
+ * One opened map cell: the pack's question and reason, each step of its
+ * decision chain, the same decision control the queue row shows, and the
+ * cards behind it drawn by the existing detail renderer — evidence tables and
+ * all. A card that the model names but the result does not hold is skipped;
+ * nothing is synthesised in its place.
+ */
+export function DecisionPointDetail({
+  extras,
+  point,
+  steps,
+  isEnglish,
+  sourceOfPage,
+  modules,
+  renderDetail,
+  onDecide,
+  onClear,
+  onClose,
+}: {
+  point: DecisionPointView
+  /**
+   * The point's steps as far as today's decisions reach — the point, and its
+   * next step once the action revealing it was recorded — from the same store
+   * the queue row reads.
+   */
+  steps: readonly QueueStep[]
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  modules: ReadonlyMap<string, CdssRecommendation>
+  renderDetail: (recommendation: CdssRecommendation) => ReactNode
+  onDecide?: (step: QueueStep, action: VisitAction) => void
+  onClear?: (step: QueueStep) => void
+  onClose: () => void
+  /** The page's own inputs this point reads — questions, confirmation, calculator. */
+  extras?: ReactNode
+}) {
+  const decision = [...steps].reverse().find((step) => step.decision)?.decision
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  // Opening a cell moves focus to what it opened, so a keyboard or screen
+  // reader user lands on the card rather than having to find it.
+  useEffect(() => {
+    headingRef.current?.focus()
+    headingRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [point.dp, point.source])
+
+  const cards = point.moduleIds.flatMap((id) => {
+    const recommendation = modules.get(id)
+    return recommendation ? [recommendation] : []
+  })
+  return (
+    <section
+      id={VISIT_DETAIL_ID}
+      aria-labelledby={`${VISIT_DETAIL_ID}-title`}
+      className="space-y-3 rounded-lg border border-border bg-card p-3"
+      data-testid="cdss-visit-detail"
+      data-dp={point.dp}
+      data-state={point.state}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h4
+            id={`${VISIT_DETAIL_ID}-title`}
+            ref={headingRef}
+            tabIndex={-1}
+            className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="font-mono">{point.dp}</span>
+            <span>{point.label}</span>
+            <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} />
+            {point.source !== sourceOfPage ? (
+              <Badge variant="outline" className="h-5 px-1.5 text-[11px]">{point.source.toUpperCase()}</Badge>
+            ) : null}
+          </h4>
+          <p className="text-xs text-muted-foreground">{blockTitle(point.block, isEnglish)}</p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-11 min-w-11 px-3"
+          onClick={onClose}
+          aria-label={isEnglish ? `Close ${point.dp}` : `收起 ${point.dp}`}
+          data-testid="cdss-visit-detail-close"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+
+      {point.headline || point.why ? (
+        <div className="space-y-0.5">
+          {point.headline ? <p className="text-sm font-medium text-foreground">{point.headline}</p> : null}
+          {point.why ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
+        </div>
+      ) : null}
+
+      {point.chain?.length ? (
+        <ol className="grid gap-2 @min-[40rem]:grid-cols-3" aria-label={isEnglish ? 'Decision chain' : '決策鏈'}>
+          {point.chain.map((step, index) => (
+            <li
+              key={step.id}
+              className={cn('space-y-1 rounded-md border px-3 py-2', STEP_STATE[step.state].className)}
+              data-chain-step={step.id}
+              data-chain-state={step.state}
+            >
+              <p className="text-xs font-semibold text-foreground">
+                {index + 1}. <ChainStepName id={step.id} isEnglish={isEnglish} />
+                {' · '}
+                {isEnglish ? STEP_STATE[step.state].en : STEP_STATE[step.state].zh}
+              </p>
+              <p className="text-xs leading-relaxed text-foreground">{step.text}</p>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+
+      {point.checklist?.length ? <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} /> : null}
+
+      {point.needsData?.length ? (
+        <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300" data-testid="cdss-visit-detail-needs-data">
+          {isEnglish ? 'Not in the record: ' : '紀錄裡還缺：'}
+          {point.needsData.join(isEnglish ? ', ' : '、')}
+        </p>
+      ) : null}
+
+      {steps.map((step, index) => (step.point.actions.length ? (
+        <div key={step.key} className="space-y-1" data-visit-detail-step={step.key}>
+          {index > 0 ? (
+            <div className="space-y-0.5 border-t border-border pt-2">
+              {step.point.headline ? <p className="text-sm font-medium text-foreground">{step.point.headline}</p> : null}
+              {step.point.why ? <p className="text-xs leading-relaxed text-muted-foreground">{step.point.why}</p> : null}
+            </div>
+          ) : null}
+          <VisitDecisionControls
+            point={step.point}
+            decision={step.decision}
+            surface="map"
+            isEnglish={isEnglish}
+            onDecide={onDecide ? (action) => onDecide(step, action) : undefined}
+            onClear={onClear ? () => onClear(step) : undefined}
+          />
+        </div>
+      ) : null))}
+
+      {extras ? (
+        <div className="space-y-2 border-t border-border pt-3" data-testid="cdss-visit-detail-extras">
+          {extras}
+        </div>
+      ) : null}
+
+      {cards.length ? (
+        <div className="space-y-3">
+          {cards.map((recommendation) => (
+            <div key={recommendation.id} className="space-y-2 border-t border-border pt-3" data-testid={`cdss-visit-detail-module-${recommendation.id}`}>
+              {/* The card's own status, as the pack returned it. The cell above
+                  reads the same module's visit decision, so the two agree; no
+                  host re-grade is applied on the map. */}
+              <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[recommendation.status])} data-module-status={recommendation.status}>
+                  <StatusIcon status={recommendation.status} />
+                  {statusLabel(recommendation.status, isEnglish)}
+                </Badge>
+                {recommendation.moduleName ?? recommendation.title}
+              </p>
+              {renderDetail(recommendation)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {point.state === 'not-included'
+            ? (isEnglish ? 'No module computes this decision point yet.' : '這個決策點還沒有對應的模組。')
+            : (isEnglish ? `${stateLabel(point.state, true)}; no module card behind this point.` : `${stateLabel(point.state, false)}；這一點沒有對應的模組卡。`)}
+        </p>
+      )}
+    </section>
+  )
+}

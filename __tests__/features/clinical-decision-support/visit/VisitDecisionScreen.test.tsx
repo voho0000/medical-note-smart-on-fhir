@@ -1,0 +1,432 @@
+/**
+ * The visit decision map, driven by hand-written models shaped like brief §7.
+ *
+ * What is under test is placement and recording, never clinical judgement:
+ * the queue shows the pack's rows in the pack's order with the pack's words;
+ * pressing a primary button records `actions[0]` once, under one key, whether
+ * it was pressed in the queue or on the opened map cell; a decided row
+ * collapses in place and focus moves on; the plan lists what was decided with
+ * the pack's response checks; the stage decides the shape.
+ */
+import { useMemo } from 'react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { VisitDecisionScreen } from '@/features/clinical-decision-support/renderers/visit/VisitDecisionScreen'
+import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
+import type { CdssRecommendation } from '@/features/clinical-decision-support/types'
+import {
+  getPhysicianDecisions,
+  usePhysicianDecisions,
+  usePhysicianDecisionsStore,
+} from '@/features/clinical-decision-support/stores/physician-decisions.store'
+import {
+  useVisitAnswerRecord,
+  useVisitAnswersStore,
+  visitAnswersOf,
+} from '@/features/clinical-decision-support/stores/visit-answers.store'
+import {
+  getCdssDecisionTimings,
+  useCdssDecisionTimingStore,
+} from '@/features/clinical-decision-support/stores/cdss-decision-timing.store'
+import { p1Model, p2Model, p3Model, p4Model, p5Model, p6Model, p7Model, p9Model } from './visit-model.fixtures'
+
+const PATIENT = 'visit-patient'
+
+function askButton(ask: string, value: string): HTMLButtonElement {
+  const found = document.querySelector<HTMLButtonElement>(`[data-visit-ask="${ask}"][data-value="${value}"]`)
+  if (!found) throw new Error(`no ask button ${ask}=${value}`)
+  return found
+}
+
+function card(id: string): CdssRecommendation {
+  return {
+    id, moduleName: `模組 ${id}`, domain: 'medication', priority: 'medium', status: 'review',
+    title: `卡片 ${id}`, recommendation: '', rationale: '', patientEvidence: [], nextActions: [],
+    guidelineReferences: [], safetyBoundary: '',
+  }
+}
+
+function Harness({
+  model,
+  modules = [],
+  unmapped = [],
+}: {
+  model: VisitDecisionModel
+  modules?: CdssRecommendation[]
+  unmapped?: CdssRecommendation[]
+}) {
+  const decisions = usePhysicianDecisions(PATIENT)
+  const record = usePhysicianDecisionsStore((state) => state.recordDecision)
+  const clear = usePhysicianDecisionsStore((state) => state.clearDecision)
+  const answerRecord = useVisitAnswerRecord(PATIENT)
+  const answers = useMemo(() => visitAnswersOf(answerRecord), [answerRecord])
+  const now = useMemo(() => new Date(), [])
+  return (
+    <VisitDecisionScreen
+      model={model}
+      isEnglish={false}
+      now={now}
+      packVersion="test-1"
+      screenKey={`${PATIENT}:${model.packId}`}
+      decisions={decisions}
+      onRecordDecision={(key, input) => record(PATIENT, key, input)}
+      onClearDecision={(key) => clear(PATIENT, key)}
+      answers={answers}
+      onAnswer={(id, value) => useVisitAnswersStore.getState().answer(PATIENT, id, value)}
+      modules={new Map(modules.map((item) => [item.id, item]))}
+      unmappedModules={unmapped}
+      renderDetail={(recommendation) => <p data-testid={`detail-body-${recommendation.id}`}>證據表 {recommendation.id}</p>}
+    />
+  )
+}
+
+function queueRows(): HTMLElement[] {
+  return [...screen.getByTestId('cdss-visit-queue').querySelectorAll<HTMLElement>('[data-visit-queue-row]')]
+}
+
+function row(dp: string): HTMLElement {
+  const found = queueRows().find((element) => element.dataset.visitQueueDp === dp)
+  if (!found) throw new Error(`no queue row ${dp}`)
+  return found
+}
+
+function cell(dp: string, source = 'hf'): HTMLElement {
+  const found = [...screen.getByTestId('cdss-visit-map').querySelectorAll<HTMLElement>('button[data-dp]')]
+    .find((element) => element.dataset.dp === dp && element.dataset.source === source)
+  if (!found) throw new Error(`no map cell ${dp}`)
+  return found
+}
+
+function primaryOf(element: HTMLElement): HTMLButtonElement {
+  const button = element.querySelector<HTMLButtonElement>('[data-visit-primary]')
+  if (!button) throw new Error('no primary button')
+  return button
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  usePhysicianDecisionsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  useCdssDecisionTimingStore.getState().reset()
+})
+
+describe('visit decision screen · P4 stable and optimised', () => {
+  it('has nothing to decide, prefills the weight answer and settles every pillar', () => {
+    render(<Harness model={p4Model()} />)
+
+    expect(screen.getByTestId('cdss-visit-status')).toHaveTextContent('四支柱都在目標劑量，今天沒有要改的藥')
+    expect(screen.getByTestId('cdss-visit-queue-empty')).toHaveTextContent('今天沒有要決定的事')
+    expect(queueRows()).toHaveLength(0)
+
+    const same = askButton('weight-trend', 'same')
+    expect(same).toHaveTextContent('不變')
+    expect(same).toHaveAttribute('data-prefilled', 'true')
+    expect(same).toHaveAttribute('aria-pressed', 'true')
+    expect(document.querySelector('[data-visit-prefill-basis="weight-trend"]')).toHaveTextContent('紀錄：74→74 kg')
+
+    const map = screen.getByTestId('cdss-visit-map')
+    for (const state of ['act', 'confirm', 'safety']) {
+      expect(map.querySelector(`[data-state="${state}"]`)).toBeNull()
+    }
+    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    const treatmentStates = [...treatment.querySelectorAll<HTMLElement>('button[data-dp]')].map((element) => element.dataset.state)
+    expect(treatmentStates.length).toBeGreaterThan(0)
+    expect(new Set(treatmentStates)).toEqual(new Set(['done']))
+    expect(screen.getByTestId('cdss-visit-plan-empty')).toBeInTheDocument()
+  })
+
+  it('folds 01 to one line in follow-up and keeps every folded point reachable', () => {
+    render(<Harness model={p4Model()} />)
+    const status = screen.getByTestId('cdss-visit-column-status')
+    expect(status).toHaveAttribute('data-folded', 'true')
+    const fold = screen.getByTestId('cdss-visit-status-fold')
+    expect(fold).toHaveAttribute('aria-expanded', 'false')
+    expect(fold).toHaveTextContent('體重 不變')
+    expect(within(status).queryByRole('button', { name: /DP-01/ })).toBeNull()
+    fireEvent.click(fold)
+    expect(status).not.toHaveAttribute('data-folded')
+    expect(cell('DP-01')).toBeInTheDocument()
+    // Not-applicable and not-included points sit at the column foot until 顯示全部.
+    expect(within(status).queryByText('病因')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('另 4 點收起')
+    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
+    expect(screen.getByTestId('cdss-visit-map-show-all')).toHaveAttribute('aria-expanded', 'true')
+    expect(cell('DP-29')).toHaveAttribute('data-state', 'not-included')
+    expect(cell('DP-34')).toHaveAttribute('data-state', 'not-applicable')
+  })
+})
+
+describe('visit decision screen · P5 titrating with AF', () => {
+  it('queues three rows in the pack order with the pack primary buttons', () => {
+    render(<Harness model={p5Model()} />)
+    expect(queueRows().map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
+    expect(queueRows().map((element) => primaryOf(element).textContent)).toEqual(['換 ARNI', '開始 MRA', '開始 SGLT2i'])
+    expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
+    expect(row('DP-07')).toHaveTextContent('LVEF 30%、ACEi 中；SBP 112、K 4.6、eGFR 48')
+    expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
+    expect(cell('DP-08')).toHaveTextContent('需你確認')
+    expect(cell('DP-14', 'af')).toHaveAttribute('data-state', 'done')
+    expect(cell('DP-14', 'af')).toHaveTextContent('AF')
+    expect(cell('DP-14', 'af')).toHaveTextContent('apixaban 5 mg bid · 減量條件 0/3')
+  })
+
+  it('collapses each decided row in place, moves focus on, and lists the checks in the plan', () => {
+    render(<Harness model={p5Model()} />)
+    fireEvent.click(primaryOf(row('DP-07')))
+
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(row('DP-07').querySelector('[data-visit-primary]')).toBeNull()
+    expect(row('DP-07')).toHaveTextContent('換 ARNI')
+    expect(row('DP-07')).toHaveTextContent('回應檢查：K、Cr、血壓，14 天內')
+    expect(within(row('DP-07')).getByRole('button', { name: '改 DP-07 的決定' })).toBeInTheDocument()
+    expect(primaryOf(row('DP-09'))).toHaveFocus()
+    expect(cell('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(cell('DP-07')).toHaveTextContent('已記錄')
+
+    const plan = screen.getByTestId('cdss-visit-plan')
+    expect(within(plan).getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
+    expect(plan).toHaveTextContent('換 ARNI：K、Cr、血壓，14 天內')
+
+    fireEvent.click(primaryOf(row('DP-09')))
+    expect(primaryOf(row('DP-10'))).toHaveFocus()
+    fireEvent.click(primaryOf(row('DP-10')))
+    expect(screen.getByRole('heading', { name: '今天要決定' })).toHaveFocus()
+    expect(screen.getByTestId('cdss-visit-progress')).toHaveTextContent('今天的決定都記下了')
+    // SGLT2i asked for no check; the plan lists only what did.
+    expect(within(plan).getAllByText(/K、Cr、血壓/)).toHaveLength(2)
+    expect(screen.getByTestId('cdss-visit-summary-text')).toHaveTextContent('DP-10 SGLT2i：開始 SGLT2i')
+  })
+
+  it('records one decision per point: the queue row and the opened cell share it', () => {
+    render(<Harness model={p5Model()} modules={[card('heart-failure-ras')]} />)
+    fireEvent.click(primaryOf(row('DP-07')))
+
+    const decisions = getPhysicianDecisions(PATIENT)
+    expect(Object.keys(decisions)).toEqual(['visit:hf:DP-07'])
+    expect(decisions['visit:hf:DP-07']).toMatchObject({
+      decision: 'prescribed',
+      dp: 'DP-07',
+      actionId: 'switch-arni',
+      actionLabel: '換 ARNI',
+      responseCheck: { text: 'K、Cr、血壓', withinDays: 14 },
+      packVersion: 'test-1',
+    })
+
+    fireEvent.click(cell('DP-07'))
+    expect(cell('DP-07')).toHaveAttribute('aria-expanded', 'true')
+    const detail = screen.getByTestId('cdss-visit-detail')
+    expect(detail).toHaveAttribute('data-dp', 'DP-07')
+    expect(within(detail).getByRole('heading', { level: 4 })).toHaveFocus()
+    expect(within(detail).getByTestId('cdss-visit-decided')).toHaveTextContent('換 ARNI')
+    expect(within(detail).getByTestId('detail-body-heart-failure-ras')).toHaveTextContent('證據表 heart-failure-ras')
+    expect(within(detail).getAllByText(/要不要|哪一種|劑量/).length).toBeGreaterThanOrEqual(3)
+
+    // Taking it back on the card takes it back in the queue.
+    fireEvent.click(within(detail).getByRole('button', { name: '改 DP-07 的決定' }))
+    expect(getPhysicianDecisions(PATIENT)['visit:hf:DP-07']).toBeUndefined()
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
+
+    // Deciding an alternative on the card collapses the queue row to it. (A
+    // browser focuses the button it clicks; jsdom has to be told.)
+    const keep = within(detail).getByRole('button', { name: '維持 ACEi' })
+    keep.focus()
+    fireEvent.click(keep)
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(row('DP-07')).toHaveTextContent('維持 ACEi')
+    expect(Object.keys(getPhysicianDecisions(PATIENT))).toEqual(['visit:hf:DP-07'])
+    expect(within(detail).getByTestId('cdss-visit-decided').querySelector('[tabindex="-1"]')).toHaveFocus()
+  })
+
+  it('offers the other decisions behind one 其他 disclosure and records the one chosen', () => {
+    render(<Harness model={p5Model()} />)
+    const other = within(row('DP-09')).getByRole('button', { name: /其他/ })
+    expect(other).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(other)
+    expect(other).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(within(row('DP-09')).getByRole('button', { name: '暫緩' }))
+    expect(getPhysicianDecisions(PATIENT)['visit:hf:DP-09']).toMatchObject({ decision: 'deferred', actionId: 'defer' })
+    expect(row('DP-09')).toHaveTextContent('暫緩')
+    // A deferral carries no check, so the plan has nothing from it.
+    expect(screen.getByTestId('cdss-visit-plan-empty')).toBeInTheDocument()
+  })
+
+  it('times each decision from the screen appearing, in memory only', () => {
+    render(<Harness model={p5Model()} />)
+    fireEvent.click(primaryOf(row('DP-07')))
+    const timings = getCdssDecisionTimings()
+    expect(timings).toHaveLength(1)
+    expect(timings[0]).toMatchObject({ screen: `${PATIENT}:heart-failure-cdss`, decision: 'visit:hf:DP-07', surface: 'queue' })
+    expect(timings[0].elapsedMs).toBeGreaterThanOrEqual(0)
+    expect(Object.keys(localStorage).some((key) => key.includes('timing'))).toBe(false)
+  })
+})
+
+describe('visit decision screen · P6 hyperkalaemia', () => {
+  it('puts the safety row first with the pack hold action, and plans the 7-day check', () => {
+    render(<Harness model={p6Model()} />)
+    const first = queueRows()[0]
+    expect(first).toHaveAttribute('data-visit-queue-dp', 'DP-09')
+    expect(first).toHaveAttribute('data-visit-queue-state', 'safety')
+    expect(within(first).getByText('安全')).toBeInTheDocument()
+    expect(first).toHaveTextContent('K 5.7 → 暫停 MRA？')
+    expect(primaryOf(first)).toHaveTextContent('暫停 MRA')
+    expect(cell('DP-07')).toHaveAttribute('data-state', 'info')
+    expect(cell('DP-07')).toHaveTextContent('K ≥5.0：不上調')
+
+    fireEvent.click(primaryOf(first))
+    expect(getPhysicianDecisions(PATIENT)['visit:hf:DP-09']).toMatchObject({
+      decision: 'held',
+      reopenWhen: 'K 回到 <5.0 時重新開始',
+    })
+    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr，7 天內')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('重新評估：K 回到 <5.0 時重新開始')
+  })
+})
+
+describe('visit decision screen · P7 worsening congestion', () => {
+  it('lists the reassessment trigger, prefills a weight gain and queues the diuretic', () => {
+    render(<Harness model={p7Model()} />)
+    expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'reassess')
+    expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('NT-proBNP 1200→2600')
+    expect(askButton('weight-trend', 'up')).toHaveAttribute('data-prefilled', 'true')
+    expect(document.querySelector('[data-visit-prefill-basis="weight-trend"]')).toHaveTextContent('紀錄：65→68 kg')
+    expect(queueRows().map((element) => element.dataset.visitQueueDp)).toEqual(['DP-06'])
+    expect(primaryOf(row('DP-06'))).toHaveTextContent('利尿劑加量')
+    expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
+    // Reassessment reopens 01 rather than folding it.
+    expect(screen.getByTestId('cdss-visit-column-status')).not.toHaveAttribute('data-folded')
+
+    fireEvent.click(primaryOf(row('DP-06')))
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，7 天內')
+  })
+
+  it('stores the clinician answer over the prefill, and withdraws it on a second press', () => {
+    render(<Harness model={p7Model()} />)
+    fireEvent.click(askButton('dyspnoea-trend', 'worse'))
+    expect(useVisitAnswersStore.getState().byPatientId[PATIENT]?.['dyspnoea-trend']?.value).toBe('worse')
+    expect(askButton('dyspnoea-trend', 'worse')).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(askButton('weight-trend', 'same'))
+    expect(askButton('weight-trend', 'same')).toHaveAttribute('aria-pressed', 'true')
+    expect(askButton('weight-trend', 'same')).not.toHaveAttribute('data-prefilled')
+    expect(askButton('weight-trend', 'up')).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(askButton('weight-trend', 'same'))
+    // Withdrawn: the record's reading stands again.
+    expect(askButton('weight-trend', 'up')).toHaveAttribute('data-prefilled', 'true')
+  })
+})
+
+describe('visit decision screen · P9 HFpEF with AF', () => {
+  it('queues the AF dose change from the companion pack and the MRA start', () => {
+    render(<Harness model={p9Model()} />)
+    expect(askButton('weight-trend', 'down')).toHaveAttribute('data-prefilled', 'true')
+    expect(queueRows().map((element) => element.dataset.visitQueueDp)).toEqual(['DP-14', 'DP-09'])
+    expect(row('DP-14')).toHaveTextContent('AF')
+    expect(row('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
+    expect(row('DP-14')).toHaveTextContent('年齡 80、體重 58：減量條件 2/3')
+    expect(cell('DP-06')).toHaveAttribute('data-state', 'confirm')
+    fireEvent.click(primaryOf(row('DP-14')))
+    expect(getPhysicianDecisions(PATIENT)['visit:af:DP-14']).toMatchObject({ decision: 'dose-adjusted' })
+    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 30 天內回診')
+  })
+})
+
+describe('visit decision screen · P3 new AF (AF page)', () => {
+  it('walks the anticoagulation chain in one row', () => {
+    render(<Harness model={p3Model()} />)
+    expect(askButton('af-symptoms', 'yes')).toHaveTextContent('有')
+    expect(askButton('bleeding', 'no')).toHaveTextContent('無')
+    expect(queueRows()).toHaveLength(1)
+    expect(primaryOf(row('DP-07'))).toHaveTextContent('開始抗凝')
+
+    fireEvent.click(primaryOf(row('DP-07')))
+    expect(queueRows()).toHaveLength(1)
+    const chain = row('DP-07')
+    expect(chain).toHaveAttribute('data-decided', 'false')
+    expect(chain).toHaveAttribute('data-visit-current-dp', 'DP-09')
+    expect(chain.querySelector('[data-visit-chain-done="DP-07"]')).toHaveTextContent('開始抗凝')
+    expect(primaryOf(chain)).toHaveTextContent('apixaban 5 mg bid')
+    expect(primaryOf(chain)).toHaveFocus()
+    expect(chain).toHaveTextContent('減量條件 0/3')
+    expect(cell('DP-09', 'af')).toHaveAttribute('data-in-queue', 'true')
+
+    fireEvent.click(primaryOf(chain))
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(getPhysicianDecisions(PATIENT)['visit:af:DP-09']).toMatchObject({ actionId: 'apixaban-5' })
+  })
+
+  it('does not advance the chain on a deferral', () => {
+    render(<Harness model={p3Model()} />)
+    fireEvent.click(within(row('DP-07')).getByRole('button', { name: /其他/ }))
+    fireEvent.click(within(row('DP-07')).getByRole('button', { name: '暫緩' }))
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(row('DP-07').querySelector('[data-visit-primary]')).toBeNull()
+  })
+
+  it('shows the rhythm row the pack adds once symptoms are answered', () => {
+    const view = render(<Harness model={p3Model()} />)
+    fireEvent.click(askButton('af-symptoms', 'yes'))
+    expect(useVisitAnswersStore.getState().byPatientId[PATIENT]?.['af-symptoms']?.value).toBe('yes')
+    // The pack recomputes from the answer; the host draws what it returns.
+    view.rerender(<Harness model={p3Model({ symptoms: 'yes' })} />)
+    expect(queueRows().map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-18'])
+    expect(primaryOf(row('DP-18'))).toHaveTextContent('討論節律控制')
+    expect(cell('DP-13', 'af')).toHaveAttribute('data-state', 'confirm')
+    expect(screen.getByTestId('cdss-visit-map')).not.toHaveTextContent('篩檢待辦')
+  })
+})
+
+describe('visit decision screen · stage shapes', () => {
+  it('suspected: only 01 works; 02 opens once the diagnosis is confirmed', () => {
+    render(<Harness model={p1Model()} />)
+    expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
+    expect(screen.getByTestId('cdss-visit-column-treatment').querySelector('button[data-dp]')).toBeNull()
+    expect(primaryOf(row('DP-00'))).toHaveTextContent('是')
+    expect(cell('DP-34')).toHaveAttribute('data-state', 'waiting')
+    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
+    expect(cell('DP-10')).toHaveAttribute('data-state', 'not-applicable')
+  })
+
+  it('baseline: up to five rows and the baseline checklist open in 01', () => {
+    render(<Harness model={p2Model()} />)
+    expect(queueRows().map((element) => primaryOf(element).textContent)).toEqual(['開始 β 阻斷劑', '開始 ARNI', '開始 MRA', '開始 SGLT2i'])
+    expect(screen.getByTestId('cdss-visit-column-status')).not.toHaveAttribute('data-folded')
+    expect(cell('DP-02')).toHaveTextContent('紀錄缺 ferritin、TSAT、TSH、HbA1c')
+    expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('尚未納入')
+    fireEvent.click(primaryOf(row('DP-07')))
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr、血壓，14 天內')
+  })
+})
+
+describe('visit decision screen · reachability and copy', () => {
+  it('keeps cards no point names reachable at the foot', () => {
+    render(<Harness model={p4Model()} unmapped={[card('heart-failure-monitoring')]} />)
+    const other = screen.getByTestId('cdss-visit-other-modules')
+    expect(other).toHaveTextContent('其他模組：模組 heart-failure-monitoring')
+    expect(within(other).getByTestId('detail-body-heart-failure-monitoring')).toBeInTheDocument()
+  })
+
+  it('copies a summary built from the pack wording and today’s decisions', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<Harness model={p5Model()} />)
+    fireEvent.click(primaryOf(row('DP-07')))
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('cdss-visit-summary-copy'))
+    })
+    const text = writeText.mock.calls[0][0] as string
+    expect(text).toContain('HFrEF（LVEF 30%，2026-06-01）· 追蹤期 · 併 AF')
+    expect(text).toContain('體重：不變（紀錄：70→70 kg（08-20→09-27））')
+    expect(text).toContain('- DP-07 RAS 抑制：換 ARNI（回應檢查：K、Cr、血壓，14 天內）')
+    expect(text).toContain('建議 14 天內回診')
+    expect(screen.getByTestId('cdss-visit-summary-copy')).toHaveTextContent('已複製')
+  })
+
+  it('ignores a decision recorded on another day', () => {
+    usePhysicianDecisionsStore.getState().recordDecision(PATIENT, 'visit:hf:DP-07', {
+      decision: 'prescribed', packVersion: 'test-1', dp: 'DP-07', actionId: 'switch-arni', actionLabel: '換 ARNI',
+    }, new Date(Date.now() - 3 * 24 * 60 * 60 * 1000))
+    render(<Harness model={p5Model()} />)
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
+  })
+})

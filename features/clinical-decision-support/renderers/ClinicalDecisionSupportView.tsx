@@ -69,7 +69,7 @@ import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type { HfpefReading } from '../utils/hfpef-scores'
 import { HeartFailureStatusBoard } from './HeartFailureStatusBoard'
-import { focusVisitFlowTarget, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
+import { focusVisitFlowTarget, HeartFailureMapSurfaces, HeartFailureVisitFlow } from './HeartFailureVisitFlow'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { physicianInputRequestsOf } from '../physician-input-contract'
@@ -88,6 +88,13 @@ import type {
 import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
+import { ClinicalHandoffCard } from './ClinicalHandoffCard'
+import { VisitDecisionScreen } from './visit/VisitDecisionScreen'
+import type { VisitAnswers, VisitAsk, VisitDecisionModel } from '../types'
+import { phenotypeAnswerForInput } from './visit/physician-input'
+import { heartFailureVisitSurfaces } from './visit/heart-failure-map-surfaces'
+import { AtrialFibrillationMapSurfaces } from './visit/AtrialFibrillationMapSurfaces'
+import type { VisitMapSurfaces } from './visit/visit-surfaces'
 
 interface ClinicalDecisionSupportViewProps {
   afAnswers?: AfAnswers
@@ -142,6 +149,21 @@ interface ClinicalDecisionSupportViewProps {
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   /** Changes when the NHI page returns to its record-only default state. */
   nhiPageResetKey?: number
+  /**
+   * The pack's visit decision model. With `layout="map"` it draws the decision
+   * map; without one the map is not available and the page falls back to the
+   * three sections.
+   */
+  visitModel?: VisitDecisionModel
+  /**
+   * On the heart-failure page, the atrial-fibrillation result the model's AF
+   * decision points were read from, so their cards open from the map.
+   */
+  companionResult?: CdssResult
+  visitAnswers?: VisitAnswers
+  onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
+  /** The companion's English build, so its cards' rationale copies in English too. */
+  englishCompanionResult?: CdssResult
 }
 
 const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -2105,7 +2127,7 @@ export function ClinicalDecisionSupportView({
   nhiLipidAnswerProvenance,
   profileFacts,
   followUpHistory,
-  layout = 'flow',
+  layout: requestedLayout = 'flow',
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
@@ -2117,8 +2139,18 @@ export function ClinicalDecisionSupportView({
   hfpefReading,
   onSaveHfpefInputs,
   nhiPageResetKey = 0,
+  visitModel,
+  companionResult,
+  visitAnswers,
+  onVisitAnswer,
+  englishCompanionResult,
 }: ClinicalDecisionSupportViewProps) {
+  // The decision map exists only with a model; asked for without one, the page
+  // is the three sections it always was.
+  const layout: CdssLayout = requestedLayout === 'map' && !visitModel ? 'sections' : requestedLayout
   const englishRecommendations = new Map([
+    ...(englishCompanionResult?.recommendations ?? []),
+    ...(englishCompanionResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
     ...(englishResult?.recommendations ?? []),
     ...(englishResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
   ].map(item => [item.id, item]))
@@ -2157,6 +2189,9 @@ export function ClinicalDecisionSupportView({
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
   )
+  // The decision map replaces every other face of the page while it is chosen,
+  // and exists only when the pack produced a model for it.
+  const isMap = layout === 'map' && Boolean(visitModel)
   const afBoard = useMemo(() => layout === 'classic' ? undefined : buildDiseaseBoard(result, AF_BOARD_CONFIG, locale, profileFacts), [result, locale, profileFacts, layout])
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
@@ -2171,8 +2206,11 @@ export function ClinicalDecisionSupportView({
   )
   const ModuleSections = result.packId === 'hyperlipidemia-cdss' ? LipidModuleSections : CdssModuleSections
   const isVisitFlow = (layout === 'flow' || isSections) && result.packId === HEART_FAILURE_PACK_ID && Boolean(board)
+  // The decision map on the heart-failure page places the visit flow's own
+  // questions and editors, so it reads the same flow model.
+  const needsVisitFlow = isVisitFlow || (isMap && result.packId === HEART_FAILURE_PACK_ID)
   const visitFlow = useMemo(() => (
-    isVisitFlow && board
+    needsVisitFlow && board
       ? buildHeartFailureVisitFlow({
         board,
         result,
@@ -2186,7 +2224,7 @@ export function ClinicalDecisionSupportView({
       })
       : undefined
   ), [
-    board, clinicVitals, isEnglish, isVisitFlow, isSections, now, patientId, phenotypeAnswer,
+    board, clinicVitals, isEnglish, needsVisitFlow, isSections, now, patientId, phenotypeAnswer,
     physicianDecisions, result,
   ])
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
@@ -2327,10 +2365,141 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && !isSections && !isNhiTable && !afBoard && (
+  const showClinicalSummary = !board && !isSections && !isNhiTable && !afBoard && !isMap && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
+
+  // Every card a decision point can open: this pack's (completed checks
+  // restored, as the sections show them) and, on the heart-failure page, the
+  // atrial-fibrillation cards behind DP-14 and DP-28.
+  if (isMap && visitModel) {
+    const companionModules = companionResult ? restoreCompletedModules(companionResult).recommendations : []
+    const visitModules = new Map<string, CdssRecommendation>([
+      ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
+      ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
+    ])
+    // A card no decision point names is still this pack's card; it stays at
+    // the foot of the map rather than disappearing with the layout.
+    const namedModuleIds = new Set([
+      ...visitModel.points.flatMap((point) => point.moduleIds),
+      ...(visitModel.outlookModuleIds ?? []),
+    ])
+    const unmappedVisitModules = displayRecommendations.filter((item) => !namedModuleIds.has(item.id))
+    // On the heart-failure page the map carries 本次評估 (the symptom, sign and
+    // NYHA questions and the diagnostic ones), so a card's own physician rows
+    // echo those answers and send the clinician to the question — the way the
+    // three sections do — instead of offering a second control.
+    const hfMap = result.packId === HEART_FAILURE_PACK_ID && Boolean(visitFlow && board)
+    const screen = (surfaces?: VisitMapSurfaces) => (
+        <VisitDecisionScreen
+          surfaces={surfaces}
+          key={`${patientId ?? 'no-patient'}:${result.packId}`}
+          model={visitModel}
+          isEnglish={isEnglish}
+          now={now}
+          packVersion={result.packVersion}
+          screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
+          decisions={physicianDecisions}
+          onRecordDecision={onRecordDecision}
+          onClearDecision={onClearDecision}
+          answers={visitAnswers ?? {}}
+          onAnswer={onVisitAnswer}
+          onPhysicianInput={onAnswerPhenotype ? (input) => {
+            const next = phenotypeAnswerForInput(input, phenotypeAnswer, new Date())
+            if (next) onAnswerPhenotype(next)
+          } : undefined}
+          modules={visitModules}
+          unmappedModules={unmappedVisitModules}
+          renderDetail={(recommendation) => (
+            <>
+              <NhiLipidCoverageSummary recommendation={recommendation} locale={locale} patientId={patientId} presentation="treatment" />
+              <PreventRiskSummary recommendation={recommendation} locale={locale} patientId={patientId} />
+              <RecommendationDetail
+                recommendation={recommendation}
+                englishRecommendation={englishRecommendations.get(recommendation.id)}
+                isEnglish={isEnglish}
+                onNavigate={navigateToResource}
+                label={label}
+                patientId={patientId}
+                copyProvenance={copyProvenance}
+                phenotypeAnswer={phenotypeAnswer}
+                onAnswerPhenotype={hfMap ? undefined : onAnswerPhenotype}
+                clinicVitals={clinicVitals}
+                onSaveClinicVitals={onSaveClinicVitals}
+                {...(hfMap ? {
+                  physicianRowsReadOnly: true,
+                  onEditPhysicianRow: (question: 'nyha' | 'symptoms' | 'signs') => focusVisitFlowTarget({ kind: 'question', questionId: question }),
+                } : {})}
+              />
+            </>
+          )}
+          outlookContent={result.packId === HEART_FAILURE_PACK_ID ? (
+            <details className="border-t border-border pt-2" data-testid="cdss-visit-prognosis">
+              <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {isEnglish ? 'Prognosis models' : '預後模型'}
+              </summary>
+              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} />
+            </details>
+          ) : undefined}
+          footer={(
+            <>
+              {standaloneAutomatedChecks.length > 0 ? (
+                <details className="rounded-lg border border-border bg-card" data-testid="cdss-visit-completed-checks">
+                  <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm">{isEnglish ? 'Additional completed checks' : '其他已完成檢查'}</summary>
+                  <ul className="space-y-2 px-3 pb-3 text-sm">{standaloneAutomatedChecks.map(check => <li key={check.id}>
+                    <p className="font-medium">{check.label}</p>
+                    <p className="text-xs text-muted-foreground">{check.value}</p>
+                    {check.sources?.length ? <EvidenceSources sources={check.sources} isEnglish={isEnglish} evidenceLabel={check.label} evidenceValue={check.value} onNavigate={navigateToResource} compact /> : null}
+                  </li>)}</ul>
+                </details>
+              ) : null}
+              {result.clinicalHandoff ? <ClinicalHandoffCard handoff={result.clinicalHandoff} /> : null}
+            </>
+          )}
+        />
+    )
+    return (
+      <div className="space-y-3" data-testid="clinical-decision-support-view">
+        {hfMap && visitFlow && board ? (
+          <HeartFailureMapSurfaces
+            key={`${patientId ?? 'no-patient'}:surfaces`}
+            flow={visitFlow}
+            board={board}
+            isEnglish={isEnglish}
+            now={now}
+            recommendations={displayRecommendations}
+            clinicVitals={clinicVitals}
+            onSaveClinicVitals={onSaveClinicVitals}
+            phenotypeAnswer={phenotypeAnswer}
+            onAnswerPhenotype={onAnswerPhenotype}
+            hfpefReading={hfpefReading}
+            onSaveHfpefInputs={onSaveHfpefInputs}
+            rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
+            followUpHistory={followUpHistory}
+          >
+            {(slots) => screen(heartFailureVisitSurfaces(slots, visitModel, isEnglish))}
+          </HeartFailureMapSurfaces>
+        ) : afBoard ? (
+          <AtrialFibrillationMapSurfaces
+            key={`${patientId ?? 'no-patient'}:surfaces`}
+            model={visitModel}
+            board={afBoard}
+            result={result}
+            isEnglish={isEnglish}
+            now={now}
+            answers={afAnswers}
+            onAnswer={onAfAnswer}
+            clinicVitals={clinicVitals}
+            onSaveClinicVitals={onSaveClinicVitals}
+            onClearClinicVitals={onClearClinicVitals}
+          >
+            {(surfaces) => screen(surfaces)}
+          </AtrialFibrillationMapSurfaces>
+        ) : screen()}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3" data-testid="clinical-decision-support-view">

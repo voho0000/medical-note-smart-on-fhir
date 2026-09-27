@@ -1337,6 +1337,8 @@ export const DECISION_LABELS: Readonly<Record<PhysicianDecision['decision'], { z
   'exercise-cleared': { zh: '可運動', en: 'Cleared for exercise' },
   'supervised-exercise': { zh: '需監測下運動', en: 'Supervised exercise' },
   reviewed: { zh: '已評估', en: 'Reviewed' },
+  held: { zh: '暫停', en: 'Held' },
+  'at-max-tolerated': { zh: '已達耐受上限', en: 'At maximum tolerated dose' },
 }
 
 export function decisionLabel(

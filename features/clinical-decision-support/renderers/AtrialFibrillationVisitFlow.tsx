@@ -120,6 +120,237 @@ function Section({
     </section>
   )
 }
+/** Every AF question group id, in the order the flow asks them. */
+export const AF_QUESTION_GROUP_IDS: readonly string[] = QUESTION_GROUPS.map((group) => group.id)
+
+/** A question group's own title, as the AF flow prints it. */
+export function afQuestionGroupTitle(id: string, isEnglish: boolean): string | undefined {
+  const group = QUESTION_GROUPS.find((candidate) => candidate.id === id)
+  return group ? (isEnglish ? group.en : group.zh) : undefined
+}
+
+/**
+ * The AF structured questions for the named groups, each group folded under
+ * its own title with its count of unsettled answers. The pack's evidence
+ * decides what is prefilled; only a deliberate correction is stored. Shared by
+ * the AF visit flow and the decision map, over the same answers.
+ */
+export function AfQuestionGroups({
+  groupIds,
+  board,
+  result,
+  isEnglish: en,
+  answers = {},
+  onAnswer,
+  onDiagnosisAnswer,
+}: {
+  groupIds: readonly string[]
+  board: DiseaseBoardModel
+  result: CdssResult
+  isEnglish: boolean
+  answers?: AfAnswers
+  onAnswer?: (id: string, value: boolean | undefined) => void
+  /** Called when the diagnosis-confirmed answer changes, so a view can follow it. */
+  onDiagnosisAnswer?: () => void
+}) {
+  const diagnosis = board.items.find((r) => r.id === 'af-diagnosis-and-pattern')?.diagnosisContext
+  const confirmed = diagnosis?.mode === 'follow-up'
+  const evidenceFor = (id: string) =>
+    result.recommendations
+      .flatMap((r) => r.evidenceTables ?? [])
+      .flatMap((t) => t.items)
+      .find((row) => row.id === `af-stroke:${id}` || row.id === `af-clinic:${id}`)
+
+  // Display the pack's evidence decision directly; only deliberate corrections are stored.
+  const answerValue = (id: string): boolean | undefined => {
+    if (answers[id] !== undefined) return answers[id]
+    if (id === 'diagnosisConfirmed') return confirmed ? true : undefined
+    const row = evidenceFor(id)
+    if (!row || row.defaultEnabled === false) return undefined
+    return row.direction === 'supports' ? true : row.direction === 'against' ? false : undefined
+  }
+  const currentAdverseIds = new Set(
+    board.items
+      .find((r) => r.id === 'af-followup-assessment')
+      ?.evidenceTables?.flatMap((t) => t.items)
+      .map((r) => r.id.replace('af-clinic:', '')) ?? [],
+  )
+  const availableQuestions = AF_CLINICAL_QUESTIONS.filter(
+    (q) => q.group !== 'adverse' || currentAdverseIds.has(q.id),
+  )
+  const groups = QUESTION_GROUPS.filter(
+    (group) => groupIds.includes(group.id) && availableQuestions.some((q) => q.group === group.id),
+  )
+  if (groups.length === 0) return null
+  return (
+    <div data-testid="cdss-af-question-groups" data-groups={groups.map((group) => group.id).join(' ')}>
+      {en ? (
+        <p className="px-3 py-2 text-xs text-muted-foreground">
+          Diagnoses and comorbidities are prefilled from records. You can correct the selected buttons; missing evidence remains pending.
+        </p>
+      ) : (
+        <p className="px-3 py-2 text-xs text-muted-foreground">
+          診斷與共病已依病歷預填，不需逐項點選；可直接以按鈕修正，缺少資料保留待確定。
+        </p>
+      )}
+      {groups.map((group) => (
+        <details key={group.id} className="border-t border-border" data-af-question-group={group.id}>
+          <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+            {en ? group.en : group.zh}
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              {
+                availableQuestions.filter(
+                  (q) => q.group === group.id && answerValue(q.id) === undefined,
+                ).length
+              }{' '}
+              {en ? 'pending data' : '項待確定'}
+            </span>
+          </summary>
+          <div className="divide-y divide-border">
+            {availableQuestions
+              .filter((q) => q.group === group.id)
+              .map((q) => (
+                <div
+                  key={q.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                >
+                  <span className="min-w-0 text-sm">
+                    {en ? q.en : q.zh}
+                    {answers[q.id] === undefined &&
+                    answerValue(q.id) !== undefined ? (
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {en ? 'Prefilled from records: ' : '病歷預填：'}
+                        {evidenceFor(q.id)?.value}
+                        {evidenceFor(q.id)?.date ? ` · ${evidenceFor(q.id)?.date}` : ''}
+                      </span>
+                    ) : null}
+                  </span>
+                  <div
+                    role="group"
+                    aria-label={en ? q.en : q.zh}
+                    className="flex overflow-hidden rounded-md border border-border"
+                  >
+                    {[
+                      { label: en ? 'Yes' : '有', value: true },
+                      { label: en ? 'No' : '無', value: false },
+                      { label: en ? 'Reset / pending' : '依病歷／待確定', value: undefined },
+                    ].map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        disabled={!onAnswer}
+                        aria-pressed={answerValue(q.id) === option.value}
+                        onClick={() => {
+                          if (q.id === 'diagnosisConfirmed') onDiagnosisAnswer?.()
+                          onAnswer?.(q.id, option.value)
+                        }}
+                        className={cn(
+                          'min-h-11 min-w-11 border-r border-border px-3 text-xs last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50',
+                          answerValue(q.id) === option.value
+                            ? 'bg-primary/10 font-semibold text-primary'
+                            : 'hover:bg-muted/30',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </details>
+      ))}
+    </div>
+  )
+}
+
+export type AfControlStrategy = 'rate' | 'rhythm'
+
+/** R · the primary control strategy, one of two; it opens that strategy's questions and cards. */
+export function AfControlStrategyPicker({
+  value,
+  onChange,
+  isEnglish: en,
+  name = 'af-control-strategy',
+}: {
+  value: AfControlStrategy | null
+  onChange: (value: AfControlStrategy) => void
+  isEnglish: boolean
+  /** The radio group's name; unique per rendering. */
+  name?: string
+}) {
+  return (
+    <fieldset className="px-3 py-3" data-testid="af-control-strategy">
+      <legend className="pt-3 text-sm font-semibold">
+        {en ? 'R · Primary control strategy' : 'R · 主要控制策略（擇一）'}
+      </legend>
+      <div className="flex flex-wrap gap-3">
+        {(['rate', 'rhythm'] as const).map((option) => (
+          <label
+            key={option}
+            className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option}
+              checked={value === option}
+              onChange={() => onChange(option)}
+              className="h-4 w-4 accent-primary"
+            />
+            {option === 'rate'
+              ? en
+                ? 'Rate control'
+                : 'Rate control（心率控制）'
+              : en
+                ? 'Rhythm control'
+                : 'Rhythm control（節律控制）'}
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {en
+          ? 'Select a primary strategy; existing medication safety assessments remain available. Rhythm control may also require rate control.'
+          : '選擇主要策略；既有用藥安全評估持續保留。節律控制仍可能需要合併心率控制。'}
+      </p>
+    </fieldset>
+  )
+}
+
+/** The record's AF inputs as the flow shows them: value, date, and 「建議複驗」 when stale. */
+export function AfRecordMetrics({ board, isEnglish: en }: { board: DiseaseBoardModel; isEnglish: boolean }) {
+  return (
+    <dl className="grid grid-cols-2 @min-[40rem]:grid-cols-4" data-testid="cdss-af-record-metrics">
+      {board.metrics.map((m) => (
+        <div
+          key={m.key}
+          className="min-w-0 border-b border-r border-border px-3 py-2"
+          style={
+            !m.value ? { backgroundImage: 'var(--clinical-missing-data-pattern)' } : undefined
+          }
+          data-testid={`cdss-af-metric-${m.key}`}
+        >
+          <dt className="text-xs text-muted-foreground">{m.label}</dt>
+          <dd className="mt-1 break-words text-sm font-semibold tabular-nums">
+            {m.value ?? (en ? 'Not in record' : '紀錄無值')}
+          </dd>
+          {m.date ? (
+            <dd
+              className={cn(
+                'mt-1 text-xs tabular-nums',
+                m.stale ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+              )}
+            >
+              {m.date}
+              {m.stale ? (en ? ' · repeat advised' : ' · 建議複驗') : ''}
+            </dd>
+          ) : null}
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export function AtrialFibrillationVisitFlow({
   board,
   result,
@@ -168,20 +399,6 @@ export function AtrialFibrillationVisitFlow({
     open: openSections.has(id),
     onToggle: () => toggleSection(id),
   })
-  const evidenceFor = (id: string) =>
-    result.recommendations
-      .flatMap((r) => r.evidenceTables ?? [])
-      .flatMap((t) => t.items)
-      .find((row) => row.id === `af-stroke:${id}` || row.id === `af-clinic:${id}`)
-
-  // Display the pack's evidence decision directly; only deliberate corrections are stored.
-  const answerValue = (id: string): boolean | undefined => {
-    if (answers[id] !== undefined) return answers[id]
-    if (id === 'diagnosisConfirmed') return confirmed ? true : undefined
-    const row = evidenceFor(id)
-    if (!row || row.defaultEnabled === false) return undefined
-    return row.direction === 'supports' ? true : row.direction === 'against' ? false : undefined
-  }
 
   function renderRow(r: CdssRecommendation) {
     return (
@@ -262,96 +479,16 @@ export function AtrialFibrillationVisitFlow({
     )
   }
   function questions(ids: string[]) {
-    const currentAdverseIds = new Set(
-      board.items
-        .find((r) => r.id === 'af-followup-assessment')
-        ?.evidenceTables?.flatMap((t) => t.items)
-        .map((r) => r.id.replace('af-clinic:', '')) ?? [],
-    )
-    const availableQuestions = AF_CLINICAL_QUESTIONS.filter(
-      (q) => q.group !== 'adverse' || currentAdverseIds.has(q.id),
-    )
     return (
-      <div>
-        {en ? (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
-            Diagnoses and comorbidities are prefilled from records. You can correct the selected buttons; missing evidence remains pending.
-          </p>
-        ) : (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
-            診斷與共病已依病歷預填，不需逐項點選；可直接以按鈕修正，缺少資料保留待確定。
-          </p>
-        )}
-        {QUESTION_GROUPS.filter(
-          (group) => ids.includes(group.id) && availableQuestions.some((q) => q.group === group.id),
-        ).map((group) => (
-          <details key={group.id} className="border-t border-border">
-            <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-              {en ? group.en : group.zh}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {
-                  availableQuestions.filter(
-                    (q) => q.group === group.id && answerValue(q.id) === undefined,
-                  ).length
-                }{' '}
-                {en ? 'pending data' : '項待確定'}
-              </span>
-            </summary>
-            <div className="divide-y divide-border">
-              {availableQuestions
-                .filter((q) => q.group === group.id)
-                .map((q) => (
-                  <div
-                    key={q.id}
-                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-                  >
-                    <span className="min-w-0 text-sm">
-                      {en ? q.en : q.zh}
-                      {answers[q.id] === undefined &&
-                      answerValue(q.id) !== undefined ? (
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {en ? 'Prefilled from records: ' : '病歷預填：'}
-                          {evidenceFor(q.id)?.value}
-                          {evidenceFor(q.id)?.date ? ` · ${evidenceFor(q.id)?.date}` : ''}
-                        </span>
-                      ) : null}
-                    </span>
-                    <div
-                      role="group"
-                      aria-label={en ? q.en : q.zh}
-                      className="flex overflow-hidden rounded-md border border-border"
-                    >
-                      {[
-                        { label: en ? 'Yes' : '有', value: true },
-                        { label: en ? 'No' : '無', value: false },
-                        { label: en ? 'Reset / pending' : '依病歷／待確定', value: undefined },
-                      ].map((option) => (
-                        <button
-                          key={option.label}
-                          type="button"
-                          disabled={!onAnswer}
-                          aria-pressed={answerValue(q.id) === option.value}
-                          onClick={() => {
-                            if (q.id === 'diagnosisConfirmed') setModeChoice(null)
-                            onAnswer?.(q.id, option.value)
-                          }}
-                          className={cn(
-                            'min-h-11 min-w-11 border-r border-border px-3 text-xs last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50',
-                            answerValue(q.id) === option.value
-                              ? 'bg-primary/10 font-semibold text-primary'
-                              : 'hover:bg-muted/30',
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </details>
-        ))}
-      </div>
+      <AfQuestionGroups
+        groupIds={ids}
+        board={board}
+        result={result}
+        isEnglish={en}
+        answers={answers}
+        onAnswer={onAnswer}
+        onDiagnosisAnswer={() => setModeChoice(null)}
+      />
     )
   }
   const rateIds = ['af-rate-control-and-lvef-safety']
@@ -463,34 +600,7 @@ export function AtrialFibrillationVisitFlow({
             </Button>
           ) : null}
         </div>
-        <dl className="grid grid-cols-2 @min-[40rem]:grid-cols-4">
-          {board.metrics.map((m) => (
-            <div
-              key={m.key}
-              className="min-w-0 border-b border-r border-border px-3 py-2"
-              style={
-                !m.value ? { backgroundImage: 'var(--clinical-missing-data-pattern)' } : undefined
-              }
-              data-testid={`cdss-af-metric-${m.key}`}
-            >
-              <dt className="text-xs text-muted-foreground">{m.label}</dt>
-              <dd className="mt-1 break-words text-sm font-semibold tabular-nums">
-                {m.value ?? (en ? 'Not in record' : '紀錄無值')}
-              </dd>
-              {m.date ? (
-                <dd
-                  className={cn(
-                    'mt-1 text-xs tabular-nums',
-                    m.stale ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
-                  )}
-                >
-                  {m.date}
-                  {m.stale ? (en ? ' · repeat advised' : ' · 建議複驗') : ''}
-                </dd>
-              ) : null}
-            </div>
-          ))}
-        </dl>
+        <AfRecordMetrics board={board} isEnglish={en} />
         {vitalsOpen && onSaveClinicVitals ? (
           <div className="p-3">
             <ClinicVitalsForm
@@ -594,40 +704,7 @@ export function AtrialFibrillationVisitFlow({
                   .map(renderRow)}
               </div>
             ))}
-            <fieldset className="px-3 py-3">
-              <legend className="pt-3 text-sm font-semibold">
-                {en ? 'R · Primary control strategy' : 'R · 主要控制策略（擇一）'}
-              </legend>
-              <div className="flex flex-wrap gap-3">
-                {(['rate', 'rhythm'] as const).map((value) => (
-                  <label
-                    key={value}
-                    className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-                  >
-                    <input
-                      type="radio"
-                      name="af-control-strategy"
-                      value={value}
-                      checked={strategy === value}
-                      onChange={() => setStrategy(value)}
-                      className="h-4 w-4 accent-primary"
-                    />
-                    {value === 'rate'
-                      ? en
-                        ? 'Rate control'
-                        : 'Rate control（心率控制）'
-                      : en
-                        ? 'Rhythm control'
-                        : 'Rhythm control（節律控制）'}
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {en
-                  ? 'Select a primary strategy; existing medication safety assessments remain available. Rhythm control may also require rate control.'
-                  : '選擇主要策略；既有用藥安全評估持續保留。節律控制仍可能需要合併心率控制。'}
-              </p>
-            </fieldset>
+            <AfControlStrategyPicker value={strategy} onChange={setStrategy} isEnglish={en} />
             {!strategy ? (
               <p role="status" className="px-3 pb-3 text-sm">
                 {en

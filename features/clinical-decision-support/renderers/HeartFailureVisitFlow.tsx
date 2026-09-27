@@ -200,36 +200,15 @@ export function HeartFailureVisitFlow({
   )
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
 
-  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
-  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
-  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
-  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
-  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
-    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
-    const entry = clinicVitals?.entries[key]
-    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
-  }
-  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'hemoglobin', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
-  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
-  const saveMetrics = (changes: RecordValueChange[]) => {
-    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
-    for (const { metric, values, measuredOn } of changes) {
-      if (metric.factKey === 'LVEF') {
-        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
-      } else if (metric.factKey === 'bloodPressure') {
-        entries.systolic = values ? { value: values[0], measuredOn } : null
-        entries.diastolic = values ? { value: values[1], measuredOn } : null
-      } else {
-        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
-        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
-        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
-      }
-    }
-    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
-    setEditingMetric(null)
-    setRecordValuesOpen(false)
-  }
-  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
+  const {
+    editingMetric,
+    setEditingMetric,
+    recordValuesOpen,
+    setRecordValuesOpen,
+    allEditableMetrics,
+    saveMetrics,
+    saveMetric,
+  } = useRecordValueEditing({ flow, isEnglish, now, clinicVitals, onSaveClinicVitals, phenotypeAnswer, onAnswerPhenotype, onSaveHfpefInputs })
   const diagnosisContext = sectionRecommendations?.map(diagnosisContextOf).find(Boolean)
   const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
   const [selectedMode, setSelectedMode] = useState<{ confirmed: boolean; diagnosis: boolean } | null>(null)
@@ -386,6 +365,214 @@ export function HeartFailureVisitFlow({
         />
       ) : null}
     </div>
+  )
+}
+
+/**
+ * The clinical values a clinician can complete or correct, and the saving of
+ * them: an LVEF is the phenotype answer, a blood pressure is two entries, the
+ * rest are clinic-vitals entries. Shared by the visit flow, the three sections
+ * and the decision map so the three editors are one editor.
+ */
+function useRecordValueEditing({
+  flow,
+  isEnglish,
+  now,
+  clinicVitals,
+  onSaveClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
+  onSaveHfpefInputs,
+}: {
+  flow: VisitFlowModel
+  isEnglish: boolean
+  now: Date
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
+}) {
+  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
+  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
+  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
+  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
+  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
+    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
+    const entry = clinicVitals?.entries[key]
+    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
+  }
+  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'hemoglobin', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
+  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
+  const saveMetrics = (changes: RecordValueChange[]) => {
+    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
+    for (const { metric, values, measuredOn } of changes) {
+      if (metric.factKey === 'LVEF') {
+        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
+      } else if (metric.factKey === 'bloodPressure') {
+        entries.systolic = values ? { value: values[0], measuredOn } : null
+        entries.diastolic = values ? { value: values[1], measuredOn } : null
+      } else {
+        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
+        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
+        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
+      }
+    }
+    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
+    setEditingMetric(null)
+    setRecordValuesOpen(false)
+  }
+  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
+  return { editingMetric, setEditingMetric, recordValuesOpen, setRecordValuesOpen, allEditableMetrics, saveMetrics, saveMetric }
+}
+
+/** Letters and digits only, lower-cased: `ntProBnp`, `NTproBNP` and `nt-probnp` are one key. */
+function metricKeyOf(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/** What the decision map places from the heart-failure page's own surfaces. */
+export interface HeartFailureMapSurfaceSlots {
+  /** Opens the clinical-values editor with every value. */
+  editValues?: () => void
+  /** Opens the editor for one value, by the key the status line printed it under. */
+  editValue?: (key: string) => void
+  /** 本次評估 without the diagnostic questions: symptoms, signs, NYHA, compensation. */
+  followUpQuestions: ReactNode
+  /** How many of those questions are still open. */
+  followUpOpenCount: number
+  /** The chief-complaint and weight follow-up, once the diagnosis is established. */
+  followUpPriorities?: ReactNode
+  /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
+  diagnosticAssessment: ReactNode
+  /** The clinical values with their sources and echo report, the rhythm, and the course. */
+  recordAndCourse: ReactNode
+}
+
+/**
+ * The heart-failure page's input surfaces, for the decision map to place.
+ *
+ * These are the same components the visit flow and the three sections draw —
+ * the clinical-values editor, 本次評估 split into its follow-up and diagnostic
+ * halves, the diagnosis confirmation, the HFpEF calculator, the rhythm panel
+ * and the care timeline — over the same stores. The map decides where each
+ * sits; nothing here is new clinical content. The dialogs are rendered once,
+ * here, whichever slot opened them.
+ */
+export function HeartFailureMapSurfaces({
+  flow,
+  board,
+  isEnglish,
+  now,
+  recommendations,
+  clinicVitals,
+  onSaveClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
+  hfpefReading,
+  onSaveHfpefInputs,
+  rhythmPanel,
+  followUpHistory,
+  children,
+}: {
+  flow: VisitFlowModel
+  board: HeartFailureBoardModel
+  isEnglish: boolean
+  now: Date
+  /** The pack's modules, for the diagnosis context the confirmation reads. */
+  recommendations: readonly CdssRecommendation[]
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+  hfpefReading?: HfpefReading
+  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
+  rhythmPanel?: ReactNode
+  followUpHistory?: HfFollowUpHistory
+  children: (slots: HeartFailureMapSurfaceSlots) => ReactNode
+}) {
+  const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
+  const [calculatorOpen, setCalculatorOpen] = useState(false)
+  const editing = useRecordValueEditing({ flow, isEnglish, now, clinicVitals, onSaveClinicVitals, phenotypeAnswer, onAnswerPhenotype, onSaveHfpefInputs })
+  const diagnosisContext = recommendations.map(diagnosisContextOf).find(Boolean)
+  const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
+  const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
+  const subset = (questions: VisitQuestion[]): VisitFlowModel => ({ ...flow, questions, openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length })
+  const followUpFlow = subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)))
+  const diagnosticFlow = subset(flow.questions.filter((question) => diagnosticIds.includes(question.id)))
+  const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
+  const questionsCard = (questionFlow: VisitFlowModel) => (
+    <QuestionsCard
+      flow={questionFlow} isEnglish={isEnglish} now={now} clinicVitals={clinicVitals}
+      onSaveClinicVitals={onSaveClinicVitals} phenotypeAnswer={phenotypeAnswer}
+      onAnswerPhenotype={onAnswerPhenotype} board={board} hfpefReading={hfpefReading}
+      onOpenCalculator={openCalculator}
+    />
+  )
+  const canEdit = Boolean(onSaveClinicVitals)
+  const slots: HeartFailureMapSurfaceSlots = {
+    ...(canEdit ? {
+      editValues: () => editing.setRecordValuesOpen(true),
+      editValue: (key: string) => {
+        const metric = editing.allEditableMetrics.find((candidate) => metricKeyOf(candidate.factKey) === metricKeyOf(key))
+        if (metric) editing.setEditingMetric(metric)
+        else editing.setRecordValuesOpen(true)
+      },
+    } : {}),
+    followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
+    followUpOpenCount: followUpFlow.openQuestionCount,
+    followUpPriorities: followUp ? (
+      <HfFollowUpPriorities
+        history={followUpHistory}
+        vitals={clinicVitals}
+        onSave={flow.readOnly ? undefined : onSaveClinicVitals}
+        now={now}
+        isEnglish={isEnglish}
+        onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })}
+      />
+    ) : undefined,
+    diagnosticAssessment: (
+      <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
+        <HfDiagnosisConfirmation
+          answer={phenotypeAnswer}
+          onConfirm={flow.readOnly ? undefined : onAnswerPhenotype}
+          now={now}
+          isEnglish={isEnglish}
+          followUp={followUp}
+          basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')}
+        />
+        {diagnosticFlow.questions.length ? questionsCard(diagnosticFlow) : null}
+      </div>
+    ),
+    recordAndCourse: (
+      <div className="space-y-2" data-testid="cdss-visit-hf-record-and-course">
+        <RecordCard rhythmPanel={rhythmPanel} metrics={editing.allEditableMetrics} isEnglish={isEnglish} canEdit={canEdit} onOpenForm={() => editing.setRecordValuesOpen(true)} />
+        {board.timeline ? <CareTimeline timeline={board.timeline} isEnglish={isEnglish} /> : null}
+      </div>
+    ),
+  }
+  return (
+    <>
+      {children(slots)}
+      {editing.editingMetric ? <RecordMetricEditor key={editing.editingMetric.factKey} metric={editing.editingMetric} isEnglish={isEnglish} now={now}
+        onSave={(values, date) => editing.saveMetric(editing.editingMetric!, values, date)}
+        onRestore={() => editing.saveMetric(editing.editingMetric!, null, todayIsoDate(now))}
+        onClose={() => editing.setEditingMetric(null)} /> : null}
+      {editing.recordValuesOpen ? <RecordValuesEditor rhythm={hfpefReading?.inputs.find(input => input.key === 'rhythm')?.value} onSaveRhythm={onSaveHfpefInputs} metrics={editing.allEditableMetrics} isEnglish={isEnglish} now={now}
+        onSave={editing.saveMetrics} onClose={() => editing.setRecordValuesOpen(false)} /> : null}
+      {hfpefReading && onSaveHfpefInputs ? (
+        <HfpefInputsDialog
+          key={`${calculatorTab}-${calculatorOpen}`}
+          initialTab={calculatorTab}
+          open={calculatorOpen}
+          onOpenChange={setCalculatorOpen}
+          reading={hfpefReading}
+          isEnglish={isEnglish}
+          now={now}
+          onApply={onSaveHfpefInputs}
+        />
+      ) : null}
+    </>
   )
 }
 

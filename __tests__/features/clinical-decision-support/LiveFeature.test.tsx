@@ -212,10 +212,13 @@ describe('Live personalized-guidance pathway list', () => {
     })
   })
 
-  it('defaults to three sections and remembers the selected layout', () => {
+  it('defaults to the decision map and remembers the selected layout', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
+    // Heart failure opens on 決策地圖 for a browser that never chose a layout;
+    // 三區塊, 新版流程 and 原版看板 stay one press away.
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
+    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
     expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
