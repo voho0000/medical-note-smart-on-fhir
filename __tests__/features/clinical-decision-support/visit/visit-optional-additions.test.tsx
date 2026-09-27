@@ -93,6 +93,12 @@ beforeEach(() => {
 describe('optional additions', () => {
   it('follows the pack’s own next step in the same row, under its own key', () => {
     render(<Harness model={p3WithNext()} />)
+    // DP-07 is a row, not a cell; its card opens under the row from
+    // 「依據與細節」, which only an undecided row offers — so it is opened
+    // first and stays open while both steps are decided on the row.
+    expect(document.querySelector('button[data-dp="DP-07"]')).toBeNull()
+    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-row-detail="DP-07"]')!)
+    expect(row('DP-07')).toContainElement(screen.getByTestId('cdss-visit-detail'))
     fireEvent.click(primaryOf(row('DP-07')))
     expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
     expect(primaryOf(row('DP-07'))).toHaveTextContent('apixaban 5 mg bid')
@@ -105,9 +111,9 @@ describe('optional additions', () => {
     // The waiting points are the pack's to settle; the host did not walk into them.
     expect(decisions['visit:af:DP-09']).toBeUndefined()
 
-    // The opened cell shows both steps, from the same records.
-    fireEvent.click([...document.querySelectorAll<HTMLElement>('button[data-dp="DP-07"]')][0])
+    // The opened card shows both steps, from the same records.
     const detail = screen.getByTestId('cdss-visit-detail')
+    expect(row('DP-07')).toContainElement(detail)
     expect(within(detail).getAllByTestId('cdss-visit-decided').map((element) => element.textContent)).toEqual([
       expect.stringContaining('開始抗凝'),
       expect.stringContaining('apixaban 5 mg bid'),
@@ -211,7 +217,13 @@ describe('optional additions', () => {
         onAnswerPhenotype={onAnswerPhenotype}
       />,
     )
-    fireEvent.click(primaryOf(row('DP-00')))
+    // 懷疑 HF？ is question 1 of 01's diagnostic assessment on this page, so
+    // DP-00 is not listed again as a row; the answer still routes to the
+    // phenotype store.
+    expect(document.querySelector('[data-visit-queue-dp="DP-00"]')).toBeNull()
+    // This fixture carries every-visit asks, so 01 opens on 追蹤; the question is under 診斷.
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
     expect(onAnswerPhenotype).toHaveBeenCalledWith(expect.objectContaining({ hfSuspicion: 'suspected' }))
     expect(within(screen.getByTestId('cdss-visit-column-outlook')).getByTestId('cdss-visit-outlook-module-hf-prognosis-shell')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-visit-other-modules')).not.toBeInTheDocument()

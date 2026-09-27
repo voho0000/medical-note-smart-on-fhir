@@ -67,8 +67,13 @@ function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page
   )
 }
 
-function queue(): { dp: string; primary: string | null }[] {
-  return [...document.querySelectorAll<HTMLElement>('[data-visit-queue-row]')].map((row) => ({
+/**
+ * Every decision row on the page, in page order — 01's, 02's, then 03's, each
+ * at the head of its section — or one section's.
+ */
+function queue(block?: 'status' | 'treatment' | 'outlook'): { dp: string; primary: string | null }[] {
+  const scope = block ? document.querySelector(`[data-testid="cdss-visit-queue-${block}"]`) : document
+  return [...(scope?.querySelectorAll<HTMLElement>('[data-visit-queue-row]') ?? [])].map((row) => ({
     dp: row.dataset.visitCurrentDp ?? row.dataset.visitQueueDp ?? '',
     primary: row.querySelector('[data-visit-primary]')?.textContent ?? null,
   }))
@@ -84,10 +89,21 @@ function primaryOf(dp: string): HTMLButtonElement {
   return row(dp).querySelector<HTMLButtonElement>('[data-visit-primary]')!
 }
 
-function cell(dp: string, source = 'hf'): HTMLElement {
-  const found = [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
+function queryCell(dp: string, source = 'hf'): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
     .find((element) => element.dataset.dp === dp && element.dataset.source === source)
+}
+
+function cell(dp: string, source = 'hf'): HTMLElement {
+  const found = queryCell(dp, source)
   if (!found) throw new Error(`no map cell ${source}:${dp}`)
+  return found
+}
+
+/** A row's 「依據與細節」: a queued point has no cell; its card opens under the row. */
+function rowDetail(dp: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
+  if (!found) throw new Error(`no 依據與細節 on row ${dp}`)
   return found
 }
 
@@ -148,7 +164,13 @@ describe('real pack · P4 stable and optimised', () => {
     expect(point('p4-stable-optimised', 'DP-09').headline).toBe('spironolactone 25 mg：足量')
 
     render(<ScenarioMap id="p4-stable-optimised" />)
-    expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
+    // An empty queue draws no decision list in any section (there is no
+    // 「今天沒有要決定的事」 line any more), and 02 says it holds nothing to do.
+    expect(queue()).toEqual([])
+    for (const block of ['status', 'treatment', 'outlook']) {
+      expect(screen.queryByTestId(`cdss-visit-queue-${block}`)).toBeNull()
+    }
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('沒有待辦')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
   })
 
@@ -188,15 +210,21 @@ describe('real pack · P5 titrating with AF', () => {
       { dp: 'DP-10', primary: '開始 SGLT2i' },
     ])
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
-    // The map opens section by section: all three start closed, and 02 says
-    // what it holds before it is opened.
-    for (const block of ['status', 'treatment', 'outlook']) {
+    // All three are 02's rows, at the head of 02 — not repeated as cells.
+    expect(queue('treatment').map((item) => item.dp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
+    for (const dp of ['DP-07', 'DP-09', 'DP-10']) expect(queryCell(dp)).toBeUndefined()
+    // The map opens section by section: with no safety row the visit starts
+    // at 01, open; 02 and 03 are closed, and 02 says what it holds.
+    expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
+    for (const block of ['treatment', 'outlook']) {
       expect(screen.getByTestId(`cdss-visit-section-toggle-${block}`)).toHaveAttribute('aria-expanded', 'false')
     }
-    // The three starts are counted in 今天要決定, once; 02 says what it adds.
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需你確認 1')
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).not.toHaveTextContent('需處理')
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    // 02's toggle reads its rows first (the three starts, counted once), then
+    // what its cells add.
+    const treatmentToggle = screen.getByTestId('cdss-visit-section-toggle-treatment')
+    expect(treatmentToggle).toHaveTextContent('待決定 3 · 需你確認 1')
+    expect(treatmentToggle).not.toHaveTextContent('需處理')
+    fireEvent.click(treatmentToggle)
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
     expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
     expect(cell('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
@@ -212,7 +240,8 @@ describe('real pack · P5 titrating with AF', () => {
     const plan = screen.getByTestId('cdss-visit-plan')
     expect(plan).toHaveTextContent('K、Cr、血壓，14 天內')
     expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
-    expect(screen.getByTestId('cdss-visit-queue-progress')).toHaveTextContent('已決定 3/3')
+    expect(screen.getByTestId('cdss-visit-queue-treatment-progress')).toHaveTextContent('已決定 3/3')
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
   })
 })
@@ -229,11 +258,14 @@ describe('real pack · P6 hyperkalaemia', () => {
     expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
   })
 
-  it('shows the pack’s own status on the card the cell opens, not the host re-grade', () => {
+  it('shows the pack’s own status on the card a row or cell opens, not the host re-grade', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
     // The flow layout's re-grade reads K ≥5.0 and would call both of these
-    // 「需臨床確認」; on the map the card says what the pack said.
-    fireEvent.click(cell('DP-09'))
+    // 「需臨床確認」; on the map the card says what the pack said. DP-09 is the
+    // safety row (no cell), so its card opens under the row; DP-07 is a cell.
+    expect(queryCell('DP-09')).toBeUndefined()
+    fireEvent.click(rowDetail('DP-09'))
+    expect(row('DP-09')).toContainElement(screen.getByTestId('cdss-visit-detail'))
     const mra = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-mra')
     expect(mra.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'actionable')
     fireEvent.click(cell('DP-07'))
@@ -249,6 +281,11 @@ describe('real pack · P7 worsening congestion', () => {
     expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('NT-proBNP 1200→2600')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
+    // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
+    // stands, so 01 opens on 追蹤 and DP-04's cell is under 診斷.
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    expect(queryCell('DP-04')).toBeUndefined()
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(primaryOf('DP-06'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，7 天內')
@@ -315,23 +352,34 @@ describe('real pack · P11 dabigatran with CrCl under 30 (AF page)', () => {
 })
 
 describe('real pack · the other scenarios', () => {
-  it('P1 suspected HFpEF: diagnosis first — 懷疑 HF？ is question 1 of an open assessment, not a queue row', () => {
+  it('P1 suspected HFpEF: diagnosis first — 懷疑 HF？ is question 1 of 01’s 診斷 view, not a queue row', () => {
     const { model } = scenarioRun('p1-suspected-hfpef')
     expect(model.stage).toBe('suspected')
     expect(model.queue).toEqual(['DP-00'])
     expect(model.asks).toEqual([])
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
-    // No 「比上次」 before a diagnosis; the assessment is open and asks 懷疑 HF？ itself…
+    expect(screen.getByTestId('cdss-visit-next-status')).toBeDisabled()
+    // No 「比上次」 before a diagnosis: 01 is open on 診斷, and 追蹤 waits for one.
     expect(document.querySelector('[data-visit-ask]')).toBeNull()
-    const assessment = screen.getByTestId('cdss-visit-asks-detail')
-    expect(assessment).toHaveAttribute('open')
+    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toBeDisabled()
+    // The assessment is in view and asks 懷疑 HF？ itself, as its question 1…
+    const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect(assessment).toBeVisible()
     expect(assessment).toHaveTextContent('診斷評估')
     expect(within(assessment).getByRole('radio', { name: /是，懷疑心衰竭/ })).toBeInTheDocument()
-    // …so today's list does not ask it a second time.
-    expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
-    // It comes before today's decisions on the page.
-    expect(assessment.compareDocumentPosition(screen.getByTestId('cdss-visit-queue')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(assessment.querySelector('[data-testid^="cdss-hf-question-"]')).toHaveAttribute('data-testid', 'cdss-hf-question-hf-suspicion')
+    // …so neither a row nor a cell asks it a second time: 01 has no decision
+    // list today, and DP-00 is not drawn as a cell.
+    expect(queue()).toEqual([])
+    expect(screen.queryByTestId('cdss-visit-queue-status')).toBeNull()
+    expect(queryCell('DP-00')).toBeUndefined()
+    // Evidence before the verdict: no confirmation until HF is suspected.
+    expect(within(assessment).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
+    // It comes before the diagnosis points' cells on the page.
+    expect(assessment.compareDocumentPosition(cell('DP-34')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
@@ -396,6 +444,11 @@ describe('real pack · what a clinician reads without opening anything', () => {
 describe('real pack · AF 全部皆無', () => {
   it('answers a follow-up checklist 無 in one press, leaves 「有改善」 alone, and undoes on a second press (P11)', () => {
     render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    // The safety row opens 02 at first paint; the asks and their fuller
+    // questions are 01's, one press away.
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
     fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
     const group = document.querySelector('[data-af-question-group="followup"]') as HTMLDetailsElement
     fireEvent.click(group.querySelector('summary')!)
@@ -455,15 +508,18 @@ describe('real pack · reading the map without scrolling back up', () => {
   it('steps from card to card in the pack order and on into the next section (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    fireEvent.click(cell('DP-09'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-09')
-    expect(screen.getByTestId('cdss-visit-detail-previous')).toHaveAttribute('data-dp', 'DP-08')
+    // The stepper walks the cells. DP-07, DP-09 and DP-10 are 02's decision
+    // rows (not cells), so from DP-08 it steps past them to DP-26, the next
+    // pillar point in the pack's order.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    expect(screen.getByTestId('cdss-visit-detail-previous')).toHaveAttribute('data-dp', 'DP-11')
     fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-10')
-    // The card follows its cell: it sits in the slot right after DP-10.
-    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-10'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-26')
+    // The card follows its cell: it sits in the slot right after DP-26.
+    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-26'))
     fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-09')
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
 
     // The last card of 02 leads into 03, which opens in its place.
     const treatmentCells = [...screen.getByTestId('cdss-visit-column-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]

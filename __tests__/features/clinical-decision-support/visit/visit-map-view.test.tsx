@@ -94,15 +94,20 @@ describe('decision map in the view', () => {
     expect(screen.queryByTestId('cdss-hf-visit-flow')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('個案決策總覽')).not.toBeInTheDocument()
 
-    // A point opens the existing card detail for its module.
-    const ras = [...document.querySelectorAll<HTMLElement>('button[data-dp="DP-07"]')][0]
+    // A point opens the existing card detail for its module. DP-07 is one of
+    // 02's decision rows (so it has no cell): its card opens under the row,
+    // from 「依據與細節」.
+    expect(document.querySelector('button[data-dp="DP-07"]')).toBeNull()
+    const ras = document.querySelector<HTMLElement>('[data-visit-row-detail="DP-07"]')!
     fireEvent.click(ras)
     const detail = screen.getByTestId('cdss-visit-detail')
+    expect(ras.closest('li')).toContainElement(detail)
     expect(within(detail).getByTestId('cdss-visit-detail-module-heart-failure-ras')).toHaveTextContent('依據 heart-failure-ras')
 
-    // The companion's card opens from its point on the heart-failure page.
+    // The companion's card opens from its point's cell on the heart-failure page.
     const anticoagulation = [...document.querySelectorAll<HTMLElement>('button[data-dp="DP-14"]')][0]
     fireEvent.click(anticoagulation)
+    expect(screen.getAllByTestId('cdss-visit-detail')).toHaveLength(1)
     expect(within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-af-anticoagulation')).toBeInTheDocument()
 
     // What no point names stays at the foot, with the completed checks and the handoff.

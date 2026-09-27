@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../../types'
 import type {
   PhysicianDecisionInput,
@@ -8,6 +9,8 @@ import type {
 } from '../../stores/physician-decisions.store'
 import { useCdssDecisionTimingStore } from '../../stores/cdss-decision-timing.store'
 import {
+  BLOCK_ORDER,
+  DECISION_STATES,
   buildQueueRows,
   buildVisitPlan,
   buildVisitSummaryText,
@@ -24,6 +27,7 @@ import type {
   VisitAction,
   VisitAnswers,
   VisitAsk,
+  VisitBlock,
   VisitDecisionModel,
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
@@ -37,6 +41,73 @@ import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
 
 const ASKS_DETAIL_ID = 'cdss-visit-asks-detail'
+
+type StatusView = 'diagnosis' | 'follow-up'
+
+/**
+ * 01's 診斷／追蹤 switch, in the page's segmented-choice grammar. 追蹤 waits
+ * for a diagnosis: before one there is nothing to follow.
+ */
+function StatusViewSwitch({
+  view,
+  followUpAvailable,
+  otherPending,
+  isEnglish,
+  onChange,
+}: {
+  view: StatusView
+  followUpAvailable: boolean
+  /** Points in the other view that need the clinician, named so they are not missed. */
+  otherPending: readonly DecisionPointView[]
+  isEnglish: boolean
+  onChange: (view: StatusView) => void
+}) {
+  const other: StatusView = view === 'diagnosis' ? 'follow-up' : 'diagnosis'
+  const otherLabel = other === 'diagnosis' ? (isEnglish ? 'Diagnosis' : '診斷') : (isEnglish ? 'Follow-up' : '追蹤')
+  const options: { id: StatusView; label: string; disabled?: boolean }[] = [
+    { id: 'diagnosis', label: isEnglish ? 'Diagnosis' : '診斷' },
+    { id: 'follow-up', label: isEnglish ? 'Follow-up' : '追蹤', disabled: !followUpAvailable },
+  ]
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div role="group" aria-label={isEnglish ? 'Diagnosis or follow-up' : '診斷或追蹤'} className="inline-flex overflow-hidden rounded-md border border-border bg-card" data-testid="cdss-visit-status-view">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={view === option.id}
+            disabled={option.disabled}
+            onClick={() => onChange(option.id)}
+            className={cn(
+              'min-h-11 min-w-16 border-r border-border px-4 text-sm transition-colors last:border-r-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              view === option.id ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-muted/40',
+            )}
+            data-testid={`cdss-visit-status-view-${option.id}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {!followUpAvailable ? (
+        <span className="text-xs text-muted-foreground">{isEnglish ? 'Follow-up opens once diagnosed' : '「追蹤」確診後可用'}</span>
+      ) : null}
+      {otherPending.length ? (
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onChange(other)}
+          data-testid="cdss-visit-status-view-other-pending"
+        >
+          {isEnglish
+            ? `${otherLabel} also needs you: ${otherPending.map((point) => `${point.dp} ${point.label}`).join(', ')} →`
+            : `「${otherLabel}」還有：${otherPending.map((point) => `${point.dp} ${point.label}`).join('、')} →`}
+        </button>
+      ) : null}
+    </div>
+  )
+}
 
 export interface VisitDecisionScreenProps {
   model: VisitDecisionModel
@@ -98,6 +169,7 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
+  const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // DP-03's fuller questions: open at a first assessment and whenever an ask
   // comes back worse. A clinician's own open/close holds until that reason
   // changes — a new 「變差」 reopens what was folded under 「穩定」.
@@ -110,12 +182,13 @@ export function VisitDecisionScreen({
   // before a diagnosis) is answered there, once, in reasoning order — not
   // again as a row of 今天要決定.
   const blockRequests = surfaces?.asksDetail?.requests
-  const rows = useMemo(() => (blockRequests?.length
-    ? allRows.filter((row) => {
-      const actions = (row.current ?? row.steps[0]).point.actions
-      return !(actions.length > 0 && actions.every((action) => action.physicianInput && blockRequests.includes(action.physicianInput.request)))
-    })
-    : allRows), [allRows, blockRequests])
+  // A point whose recommended action answers one of the page's own questions
+  // (懷疑 HF？, 確認 HFpEF) is asked there, once.
+  const askedHere = useCallback((point: DecisionPointView) => {
+    const request = point.actions[0]?.physicianInput?.request
+    return Boolean(request && blockRequests?.includes(request))
+  }, [blockRequests])
+  const rows = useMemo(() => allRows.filter((row) => !askedHere((row.current ?? row.steps[0]).point)), [allRows, askedHere])
   const gatePending = allRows.some((row) => row.current?.point.dp === 'DP-00')
   // Before a diagnosis there are no every-visit asks: the block is the
   // assessment itself, 懷疑 HF？ first, and it is open from the start.
@@ -219,15 +292,142 @@ export function VisitDecisionScreen({
     })
     .join(' · ')
 
-  const queueBlock = (
-    <TodayQueue
-      rows={rows}
+  const detailNode = openPoint ? (
+    <DecisionPointDetail
+      key={visitDecisionKey(openPoint)}
+      extras={detailExtras}
+      point={openPoint}
+      steps={pointSteps(openPoint, decisions, now)}
       isEnglish={isEnglish}
       sourceOfPage={sourceOfPage}
+      modules={modules}
+      renderDetail={renderDetail}
+      onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
+      onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+      onClose={() => {
+        const { dp, source } = openPoint
+        setOpenKey(null)
+        // Back to the cell (or row) that opened it.
+        requestAnimationFrame(() => {
+          const targets = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp], [data-visit-row-detail]')
+          ;[...targets].find((target) => (target.dataset.dp === dp && target.dataset.source === source) || target.dataset.visitRowDetail === dp)?.focus()
+        })
+      }}
+    />
+  ) : null
+  const toggleOpen = (point: DecisionPointView) => {
+    const key = visitDecisionKey(point)
+    setOpenKey((current) => (current === key ? null : key))
+  }
+
+  // The three sections are the page's spine. Each opens with what it asks and
+  // what it decides today, then its other points: 01 the asks (追蹤) or the
+  // diagnostic step (診斷), 02 and 03 their rows. There is no queue above
+  // them, so nothing is on the screen twice.
+  const rowsIn = (block: VisitBlock) => rows.filter((row) => row.steps[0].point.block === block)
+  // Every point a row stands for — and a question the lead asks itself — is
+  // not repeated as a cell.
+  const rowDps = useMemo(() => new Set([
+    ...queuedPointDps(allRows),
+    ...model.points.filter(askedHere).map((point) => point.dp),
+  ]), [allRows, askedHere, model.points])
+  const decisionList = (block: VisitBlock, title: string) => (
+    <TodayQueue
+      rows={rowsIn(block)}
+      isEnglish={isEnglish}
+      sourceOfPage={sourceOfPage}
+      title={title}
+      testId={`cdss-visit-queue-${block}`}
+      hideWhenEmpty
       onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'queue') : undefined}
       onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+      onOpenDetail={toggleOpen}
+      detailFor={(point) => (openPoint && openPoint.dp === point.dp && openPoint.source === point.source ? detailNode : undefined)}
     />
   )
+  const undiagnosed = model.asks.length === 0
+  const diagnosisView = surfaces?.diagnosis
+  // 01 opens on 診斷 before a diagnosis and on 追蹤 after it; the clinician's
+  // own choice holds until that standing changes.
+  const defaultStatusView: StatusView = undiagnosed ? 'diagnosis' : 'follow-up'
+  const statusView: StatusView = undiagnosed
+    ? 'diagnosis'
+    : statusViewOverride && statusViewOverride.reason === defaultStatusView ? statusViewOverride.view : defaultStatusView
+  // What the other 01 view holds that needs the clinician (P7's 重新評估
+  // under 診斷 while 01 shows 追蹤), so it is named rather than missed.
+  const inDiagnosisView = (point: DecisionPointView) => Boolean(diagnosisView && point.source === sourceOfPage && diagnosisView.dps.includes(point.dp))
+  const otherViewPending = diagnosisView ? model.points.filter((point) => (
+    point.block === 'status'
+    && !rowDps.has(point.dp)
+    && DECISION_STATES.has(point.state)
+    && !decisionOf(point)
+    && inDiagnosisView(point) !== (statusView === 'diagnosis')
+  )) : []
+  const followUpLead = (
+    <>
+      <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
+      {surfaces?.asksDetail ? (
+        <VisitAsksDetail
+          id={ASKS_DETAIL_ID}
+          label={surfaces.asksDetail.label}
+          content={surfaces.asksDetail.content}
+          openCount={surfaces.asksDetail.openCount}
+          firstAssessment={firstAssessment}
+          asks={model.asks}
+          answers={answers}
+          isEnglish={isEnglish}
+          open={asksDetailOpen}
+          onToggle={setAsksDetailOpen}
+        />
+      ) : null}
+    </>
+  )
+  const leads: Partial<Record<VisitBlock, ReactNode>> = {
+    status: (
+      <>
+        {diagnosisView ? (
+          <StatusViewSwitch
+            view={statusView}
+            followUpAvailable={!undiagnosed}
+            otherPending={otherViewPending}
+            isEnglish={isEnglish}
+            onChange={(view) => setStatusViewOverride({ reason: defaultStatusView, view })}
+          />
+        ) : null}
+        {diagnosisView && statusView === 'diagnosis' ? diagnosisView.content : followUpLead}
+        {decisionList('status', statusView === 'diagnosis' ? (isEnglish ? 'Diagnosis decisions' : '診斷決定') : (isEnglish ? 'To decide' : '待決定'))}
+      </>
+    ),
+    treatment: decisionList('treatment', isEnglish ? 'To decide' : '待決定'),
+    outlook: decisionList('outlook', isEnglish ? 'To decide' : '待決定'),
+  }
+  const unanswered = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value).length
+  const pendingIn = (block: VisitBlock) => rowsIn(block).filter((row) => row.current).length
+  const decidedIn = (block: VisitBlock) => rowsIn(block).filter((row) => !row.current).length
+  const leadSummary = (block: VisitBlock): { text: string; attention: boolean } | undefined => {
+    const parts: string[] = []
+    const toAnswer = block === 'status' ? (undiagnosed ? surfaces?.asksDetail?.openCount ?? 0 : unanswered) : 0
+    if (toAnswer) parts.push(isEnglish ? `${toAnswer} to answer` : `待答 ${toAnswer}`)
+    if (pendingIn(block)) parts.push(isEnglish ? `${pendingIn(block)} to decide` : `待決定 ${pendingIn(block)}`)
+    else if (decidedIn(block)) parts.push(isEnglish ? `${decidedIn(block)} decided` : `已決定 ${decidedIn(block)}`)
+    return parts.length ? { text: parts.join(' · '), attention: toAnswer > 0 || pendingIn(block) > 0 } : undefined
+  }
+  const leadSummaries: Partial<Record<VisitBlock, { text: string; attention: boolean }>> = {}
+  for (const block of BLOCK_ORDER) {
+    const summary = leadSummary(block)
+    if (summary) leadSummaries[block] = summary
+  }
+  // A safety row opens its own section; otherwise the visit starts at 01.
+  const initialOpen: VisitBlock = rows.find((row) => row.safety && row.current)?.steps[0].point.block ?? 'status'
+  // 01's cells: the view's own, and never the every-visit point whose
+  // questions (喘／體重, AF 症狀／出血) are the asks right above.
+  const cellFilters: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>> = {
+    status: (point) => {
+      if (model.asks.length && point.semanticId.endsWith('-visit-response')) return false
+      if (!diagnosisView) return true
+      return (statusView === 'diagnosis') === (point.source === sourceOfPage && diagnosisView.dps.includes(point.dp))
+    },
+  }
 
   return (
     <div
@@ -245,31 +445,17 @@ export function VisitDecisionScreen({
         onEditValue={surfaces?.editValue}
       />
       {surfaces?.statusPanel}
-      <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
-      {surfaces?.asksDetail ? (
-        <VisitAsksDetail
-          id={ASKS_DETAIL_ID}
-          label={surfaces.asksDetail.label}
-          content={surfaces.asksDetail.content}
-          openCount={surfaces.asksDetail.openCount}
-          firstAssessment={firstAssessment}
-          asks={model.asks}
-          answers={answers}
-          isEnglish={isEnglish}
-          open={asksDetailOpen}
-          onToggle={setAsksDetailOpen}
-        />
-      ) : null}
-      {queueBlock}
       <DecisionMapColumns
         model={model}
         decisionOf={decisionOf}
         queuedDps={queuedDps}
         openKey={openPoint ? openKey : null}
-        onOpen={(point) => {
-          const key = visitDecisionKey(point)
-          setOpenKey((current) => (current === key ? null : key))
-        }}
+        onOpen={toggleOpen}
+        leads={leads}
+        leadSummaries={leadSummaries}
+        rowDps={rowDps}
+        cellFilters={cellFilters}
+        initialOpen={initialOpen}
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
@@ -297,29 +483,7 @@ export function VisitDecisionScreen({
             </>
           ),
         }}
-        detail={openPoint ? (
-          <DecisionPointDetail
-            key={visitDecisionKey(openPoint)}
-            extras={detailExtras}
-            point={openPoint}
-            steps={pointSteps(openPoint, decisions, now)}
-            isEnglish={isEnglish}
-            sourceOfPage={sourceOfPage}
-            modules={modules}
-            renderDetail={renderDetail}
-            onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
-            onClear={onClearDecision ? (step) => clear(step.key) : undefined}
-            onClose={() => {
-              const { dp, source } = openPoint
-              setOpenKey(null)
-              // Back to the cell that opened it.
-              requestAnimationFrame(() => {
-                const cells = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')
-                ;[...cells].find((cell) => cell.dataset.dp === dp && cell.dataset.source === source)?.focus()
-              })
-            }}
-          />
-        ) : null}
+        detail={detailNode}
       />
       <VisitSummary text={summaryText} isEnglish={isEnglish} />
       {footer}

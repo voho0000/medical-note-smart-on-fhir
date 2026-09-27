@@ -2,10 +2,10 @@
 
 import type { HeartFailureMapSurfaceSlots } from '../HeartFailureVisitFlow'
 import type { VisitDecisionModel } from '../../types'
-import { firstPresentPoint, isPagePoint, type VisitMapSurfaces } from './visit-surfaces'
+import type { VisitMapSurfaces } from './visit-surfaces'
 
-/** The diagnosis points whose cards carry the diagnostic assessment. */
-const DIAGNOSIS_DPS = ['DP-00', 'DP-01', 'DP-34'] as const
+/** 01's cells under 診斷: suspicion, diagnosis and phenotype, HFpEF, baseline work-up, reassessment, aetiology. */
+const DIAGNOSIS_VIEW_DPS = ['DP-00', 'DP-01', 'DP-34', 'DP-02', 'DP-04', 'DP-29', 'DP-30'] as const
 
 /**
  * Where the heart-failure page's surfaces sit on the map:
@@ -15,9 +15,9 @@ const DIAGNOSIS_DPS = ['DP-00', 'DP-01', 'DP-34'] as const
  * - 本次評估's follow-up half (symptoms, signs, NYHA, compensation) and the
  *   chief-complaint and weight follow-up under the two asks, as
  *   「其他症狀、徵象與 NYHA」;
- * - the diagnosis confirmation, the diagnostic questions and the HFpEF scores
- *   with their calculator inside DP-00, DP-01 and DP-34's cards (at 01's foot
- *   when the model carries none of them);
+ * - 01's 診斷 view: before a diagnosis the assessment (懷疑 HF？ first), then
+ *   the diagnosis confirmation, the diagnostic questions and the HFpEF scores
+ *   with their calculator, beside the diagnosis points' cells;
  * - the clinical values with their sources and echo report, the rhythm and the
  *   care timeline folded at 01's foot.
  */
@@ -26,7 +26,6 @@ export function heartFailureVisitSurfaces(
   model: VisitDecisionModel,
   isEnglish: boolean,
 ): VisitMapSurfaces {
-  const diagnosisHome = firstPresentPoint(model.points, 'hf', DIAGNOSIS_DPS)
   return {
     ...(slots.editValues ? { editValues: slots.editValues } : {}),
     ...(slots.editValue ? { editValue: slots.editValue } : {}),
@@ -45,20 +44,27 @@ export function heartFailureVisitSurfaces(
         </div>
       ),
     },
-    pointExtras: (point) => (
-      diagnosisHome && isPagePoint(point, 'hf', DIAGNOSIS_DPS) ? slots.diagnosticAssessment : undefined
-    ),
+    // 01's 診斷 view holds the whole diagnostic step: before a diagnosis the
+    // assessment (懷疑 HF？ first, then symptoms, signs, NYHA), then the
+    // confirmation, phenotype and HFpEF criteria with their scores, beside the
+    // diagnosis points' cells — so none of it is repeated inside their cards.
+    diagnosis: {
+      content: (
+        <div className="space-y-3" data-testid="cdss-visit-hf-diagnosis-view">
+          {model.asks.length ? null : (
+            <section className="space-y-1.5" aria-label={isEnglish ? 'Diagnostic assessment' : '診斷評估'}>
+              <h4 className="px-0.5 text-[11px] font-semibold text-muted-foreground">{isEnglish ? 'Diagnostic assessment' : '診斷評估'}</h4>
+              {slots.followUpQuestions}
+            </section>
+          )}
+          {slots.diagnosticAssessment}
+        </div>
+      ),
+      dps: DIAGNOSIS_VIEW_DPS,
+    },
     columnFooters: {
       status: (
         <>
-          {diagnosisHome ? null : (
-            <details className="rounded-md border border-border bg-background" data-testid="cdss-visit-hf-diagnosis-foot">
-              <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                {isEnglish ? 'Diagnostic assessment' : '診斷評估'}
-              </summary>
-              <div className="border-t border-border p-2">{slots.diagnosticAssessment}</div>
-            </details>
-          )}
           <details className="rounded-md border border-border bg-background" data-testid="cdss-visit-hf-record-foot">
             <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
               {isEnglish ? 'Clinical values, rhythm and course' : '臨床數值、心律與病程時間軸'}

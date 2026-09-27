@@ -214,6 +214,11 @@ export function DecisionMapColumns({
   outlookSlot,
   detail,
   columnFooters,
+  leads,
+  leadSummaries,
+  rowDps,
+  cellFilters,
+  initialOpen,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -232,9 +237,23 @@ export function DecisionMapColumns({
   detail?: ReactNode
   /** Folded surfaces at the foot of a section (clinical values, rhythm, course, other questions). */
   columnFooters?: Partial<Record<VisitBlock, ReactNode>>
+  /**
+   * What a section opens with, above its cells: its questions and today's
+   * decisions in it (01's asks or diagnostic assessment, 02's rows). The
+   * sections are the page's spine; there is no separate queue above them.
+   */
+  leads?: Partial<Record<VisitBlock, ReactNode>>
+  /** One line per section of what its lead still waits for (「待答 2」, 「待決定 3」). */
+  leadSummaries?: Partial<Record<VisitBlock, { text: string; attention: boolean }>>
+  /** Points drawn as rows in a lead; not repeated as cells. */
+  rowDps?: ReadonlySet<string>
+  /** Which of a section's cells show (01's 診斷／追蹤 view). */
+  cellFilters?: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>>
+  /** The section open at first paint. */
+  initialOpen?: VisitBlock | null
 }) {
   const [showAll, setShowAll] = useState(false)
-  const [openBlock, setOpenBlock] = useState<VisitBlock | null>(null)
+  const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
   const [stuck, setStuck] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -281,6 +300,13 @@ export function DecisionMapColumns({
       ? (isEnglish ? 'Opens once the diagnosis is confirmed.' : '確診後開啟')
       : undefined)
   )
+  // A section's cells: not the points its lead already draws as rows, and —
+  // in 01 — only the current view's.
+  const cellsOf = (block: VisitBlock) => model.points.filter((point) => (
+    point.block === block
+    && !rowDps?.has(point.dp)
+    && (cellFilters?.[block]?.(point) ?? true)
+  ))
   const visibleIn = (block: VisitBlock, points: readonly DecisionPointView[]) => {
     if (showAll) return points
     const closed = Boolean(closedNote(block))
@@ -290,7 +316,7 @@ export function DecisionMapColumns({
     ))
   }
   // The map in reading order, section by section, as the stepper walks it.
-  const sequence = BLOCK_ORDER.flatMap((block) => visibleIn(block, model.points.filter((point) => point.block === block)))
+  const sequence = BLOCK_ORDER.flatMap((block) => visibleIn(block, cellsOf(block)))
   const openIndex = openPoint ? sequence.indexOf(openPoint) : -1
   const goTo = (point: DecisionPointView) => {
     scrollTo.current = { dp: point.dp, source: point.source }
@@ -306,6 +332,23 @@ export function DecisionMapColumns({
       cell?.focus({ preventScroll: true })
       cell?.scrollIntoView?.({ block: 'nearest' })
     })
+  }
+
+  // A section says what its lead still waits for (answers, today's
+  // decisions) and what its cells add; 「沒有待辦」 only when neither does.
+  const combinedSummary = (block: VisitBlock): { text: string; attention: boolean } => {
+    const lead = leadSummaries?.[block]
+    const cells = sectionSummary(model.points.filter((point) => point.block === block && !rowDps?.has(point.dp)), queuedDps, decisionOf, isEnglish)
+    const nothing = isEnglish ? 'Nothing pending' : '沒有待辦'
+    const parts = [lead?.text, cells.text === nothing ? undefined : cells.text].filter(Boolean)
+    return {
+      text: parts.length ? parts.join(' · ') : nothing,
+      attention: Boolean(lead?.attention) || cells.attention,
+    }
+  }
+  const openNext = (block: VisitBlock) => {
+    scrollTo.current = { block }
+    setOpenBlock(block)
   }
 
   return (
@@ -342,10 +385,9 @@ export function DecisionMapColumns({
         data-stuck={stuck ? 'true' : undefined}
       >
         {BLOCK_ORDER.map((block) => {
-          const points = model.points.filter((point) => point.block === block)
           const open = openBlock === block
           const note = closedNote(block)
-          const summary = sectionSummary(points, queuedDps, decisionOf, isEnglish)
+          const summary = combinedSummary(block)
           const extra = block === 'status' ? answersLine : block === 'outlook' ? outlookSummary : undefined
           return (
             <button
@@ -381,9 +423,10 @@ export function DecisionMapColumns({
         })}
       </div>
       {BLOCK_ORDER.map((block) => {
-        const points = model.points.filter((point) => point.block === block)
+        const points = cellsOf(block)
         const visible = visibleIn(block, points)
         const hidden = points.filter((point) => !visible.includes(point))
+        const nextBlock = BLOCK_ORDER[BLOCK_ORDER.indexOf(block) + 1]
         const note = closedNote(block)
         const open = openBlock === block
         // Subheadings print the pack's group label (A／R／C on the
@@ -418,6 +461,12 @@ export function DecisionMapColumns({
             {note ? (
               <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
                 {note}
+              </p>
+            ) : null}
+            {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
+            {leads?.[block] && buckets.length ? (
+              <p className="px-0.5 pt-1 text-[11px] font-semibold text-muted-foreground">
+                {isEnglish ? 'Other points' : `${blockTitle(block, isEnglish).split(' ')[0]} 其餘`}
               </p>
             ) : null}
             {/* Each group is its own grid: a card's detail opens as a full row
@@ -491,9 +540,31 @@ export function DecisionMapColumns({
             ) : null}
             {/* A point hidden by the fold (opened before 顯示全部 was turned
                 off) still shows its card, at the foot. */}
-            {open && openPointBlock === block && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
+            {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
             {columnFooters?.[block]}
             {block === 'outlook' ? outlookSlot : null}
+            {nextBlock ? (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  className={cn(
+                    styles.tone,
+                    styles.mapToggle,
+                    'inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    closedNote(nextBlock) && 'opacity-70',
+                  )}
+                  data-section={SECTION_TONE[nextBlock]}
+                  disabled={Boolean(closedNote(nextBlock))}
+                  onClick={() => openNext(nextBlock)}
+                  data-testid={`cdss-visit-next-${block}`}
+                >
+                  {closedNote(nextBlock)
+                    ? `${blockTitle(nextBlock, isEnglish)}${isEnglish ? ': ' : '：'}${closedNote(nextBlock)}`
+                    : `${isEnglish ? 'Next: ' : '下一區：'}${blockTitle(nextBlock, isEnglish)} · ${combinedSummary(nextBlock).text}`}
+                  {closedNote(nextBlock) ? null : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                </button>
+              </div>
+            ) : null}
           </section>
         )
       })}

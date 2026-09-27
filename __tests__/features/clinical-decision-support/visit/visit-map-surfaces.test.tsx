@@ -8,17 +8,18 @@
  * HF: the clinical-values editor (status line, and every stale value there);
  * 本次評估's symptom, sign, NYHA and compensation questions under the asks as
  * 「其他症狀、徵象與 NYHA」, open at a first assessment and when 喘 or 體重
- * come back worse; the diagnosis confirmation, the diagnostic questions and the
- * HFpEF scores with their calculator in DP-00/01/34's cards; the record values
- * with the rhythm panel and the care timeline at 01's foot.
+ * come back worse (01's 追蹤 view); the diagnosis confirmation, the diagnostic
+ * questions and the HFpEF scores with their calculator in 01's 診斷 view, once,
+ * and in no diagnosis point's card; the record values with the rhythm panel
+ * and the care timeline at 01's foot.
  *
  * AF: the clinic-measurements form; every structured question group, each in
- * the card of the point it feeds and under 「其他問答」 when the model carries
- * no such point; the rate-or-rhythm choice in DP-17/18's card; the record's AF
- * inputs at 01's foot.
+ * the card of the point it feeds (a queued point's card opens under its row)
+ * and under 「其他問答」 when the model carries no such point; the
+ * rate-or-rhythm choice in DP-17/18's card; the record's AF inputs at 01's foot.
  *
- * And the fast path holds: nothing but the folded DP-03 line sits between the
- * asks and the queue's first primary button.
+ * And the fast path holds: in 01's lead nothing but the folded DP-03 line
+ * follows the asks, and 02 opens with its decision rows.
  */
 import { useMemo, useState } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -239,11 +240,30 @@ function AfHarness({ model }: { model: VisitDecisionModel }) {
 
 /* ----------------------------------------------------------- helpers */
 
-function cell(dp: string, source = 'hf'): HTMLElement {
-  const found = [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
+function queryCell(dp: string, source = 'hf'): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
     .find((element) => element.dataset.dp === dp && element.dataset.source === source)
+}
+
+function cell(dp: string, source = 'hf'): HTMLElement {
+  const found = queryCell(dp, source)
   if (!found) throw new Error(`no map cell ${dp}`)
   return found
+}
+
+/**
+ * What opens a point's card: its cell, or — for a point drawn as a decision
+ * row, which has no cell — the row's 「依據與細節」.
+ */
+function opener(dp: string, source = 'hf'): HTMLElement {
+  const found = queryCell(dp, source) ?? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
+  if (!found) throw new Error(`no cell or row for ${dp}`)
+  return found
+}
+
+/** 01's 診斷／追蹤 switch. */
+function statusView(view: 'diagnosis' | 'follow-up'): HTMLButtonElement {
+  return screen.getByTestId(`cdss-visit-status-view-${view}`) as HTMLButtonElement
 }
 
 function asksDetail(): HTMLDetailsElement {
@@ -253,11 +273,6 @@ function asksDetail(): HTMLDetailsElement {
 /** 本次評估 unlocks once DP-00 is answered; a follow-up chart has answered it. */
 function suspected() {
   usePhenotypeAnswerStore.setState({ byPatientId: { [PATIENT]: { hfSuspicion: 'suspected', answeredOn: '2026-09-27' } }, hydratedPatientIds: { [PATIENT]: true } })
-}
-
-function openStatusColumn() {
-  const fold = screen.queryByTestId('cdss-visit-status-fold')
-  if (fold) fireEvent.click(fold)
 }
 
 beforeEach(() => {
@@ -293,19 +308,31 @@ describe('HF surfaces on the decision map', () => {
 
   it('folds 「其他症狀、徵象與 NYHA」 at follow-up, with the symptom, sign, NYHA and compensation questions inside', () => {
     render(<HfHarness model={p5Model()} />)
+    // A diagnosis stands (the model asks 喘／體重), so 01 opens on 追蹤, where
+    // the asks and their fuller questions are.
+    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
     const detail = asksDetail()
+    expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(detail)
     expect(detail.open).toBe(false)
     expect(within(detail).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('其他症狀、徵象與 NYHA')
     for (const id of ['symptoms', 'signs', 'nyha', 'compensation']) {
       expect(within(detail).getByTestId(`cdss-hf-question-${id}`)).toBeInTheDocument()
     }
-    // The diagnostic questions live with the diagnosis points, not here.
+    // The diagnostic questions live in 01's 診斷 view, not here.
     expect(within(detail).queryByTestId('cdss-hf-question-hf-suspicion')).toBeNull()
 
-    // Fast path: nothing but the folded line between the asks and the queue.
+    // Fast path: in 01's lead nothing but the folded line follows the asks
+    // (01's own decision rows would come next; P5 has none)…
     const between: Element[] = []
-    for (let node = screen.getByTestId('cdss-visit-asks').nextElementSibling; node && node !== screen.getByTestId('cdss-visit-queue'); node = node.nextElementSibling) between.push(node)
+    for (let node = screen.getByTestId('cdss-visit-asks').nextElementSibling; node && node.getAttribute('data-testid') !== 'cdss-visit-queue-status'; node = node.nextElementSibling) between.push(node)
     expect(between).toEqual([detail])
+    // …and 02 opens with its decision rows, their primary buttons first.
+    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    expect(treatment.firstElementChild).toBe(screen.getByTestId('cdss-visit-lead-treatment'))
+    expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toBe(screen.getByTestId('cdss-visit-queue-treatment'))
+    const firstPrimary = screen.getByTestId('cdss-visit-queue-treatment').querySelector('[data-visit-primary]')
+    expect(firstPrimary).not.toBeNull()
+    expect(treatment.querySelector('[data-visit-primary]')).toBe(firstPrimary)
   })
 
   it('opens it when breathlessness comes back worse, and says why', () => {
@@ -337,33 +364,71 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.getByTestId('cdss-visit-asks-detail-reason')).toHaveTextContent('初次評估')
   })
 
-  it('carries the diagnosis confirmation, the diagnostic questions and the HFpEF calculator in DP-01’s card', () => {
+  it('carries the diagnosis confirmation, the diagnostic questions and the HFpEF calculator in 01’s 診斷 view', () => {
     render(<HfHarness model={p5Model()} />)
-    openStatusColumn()
-    fireEvent.click(cell('DP-01'))
-    const detail = screen.getByTestId('cdss-visit-detail')
-    expect(within(detail).getByTestId('cdss-diagnosis-confirmation')).toBeInTheDocument()
-    expect(within(detail).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
-    fireEvent.click(within(detail).getByTestId('cdss-hf-suspicion-option-suspected'))
+    // A diagnosis stands, so 01 opens on 追蹤; the diagnostic step is one
+    // press on 01's 診斷／追蹤 switch away (it used to sit in DP-01's card).
+    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
+    expect(queryCell('DP-01')).toBeUndefined()
+    fireEvent.click(statusView('diagnosis'))
+    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(view)
+    expect(view).toBeVisible()
+    // The asks belong to 追蹤; 診斷 shows the diagnosis points' cells instead.
+    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
+    expect(cell('DP-01')).toBeVisible()
+    expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
+    // Evidence before the verdict: the confirmation waits for 懷疑 HF？ 「是」.
+    expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
+    fireEvent.click(within(view).getByTestId('cdss-hf-suspicion-option-suspected'))
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]?.hfSuspicion).toBe('suspected')
-    const scores = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-hf-hfpef-scores')
+    // One confirmation: the HFpEF question beside its criteria where the
+    // patient has one, else the general diagnosis confirmation.
+    const confirmations = ['cdss-diagnosis-confirmation', 'cdss-hf-hfpef-confirm']
+      .filter((id) => within(screen.getByTestId('cdss-visit-hf-diagnosis-view')).queryByTestId(id))
+    expect(confirmations).toHaveLength(1)
+    const scores = within(screen.getByTestId('cdss-visit-hf-diagnosis-view')).getByTestId('cdss-hf-hfpef-scores')
     fireEvent.click(within(scores).getAllByRole('button', { name: /^開啟 / })[0])
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('offers the same diagnostic assessment from DP-00 and DP-34, one card at a time', () => {
+  it('draws the diagnostic assessment once, in 01’s 診斷 view, and in neither DP-00’s nor DP-34’s card', () => {
+    // Was: the same assessment offered inside DP-00's and DP-34's cards, one
+    // card at a time. Now it has one home beside those points, so opening
+    // either card never draws it a second time.
     render(<HfHarness model={p1Model()} />)
-    fireEvent.click(cell('DP-00'))
-    expect(within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-hf-diagnostic-assessment')).toBeInTheDocument()
-    fireEvent.click(cell('DP-34'))
+    fireEvent.click(statusView('diagnosis'))
+    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
+    expect(view).toContainElement(screen.getByTestId('cdss-visit-hf-diagnostic-assessment'))
+
+    // DP-00 is 01's decision row (so not a cell); its card opens under the row.
+    expect(queryCell('DP-00')).toBeUndefined()
+    fireEvent.click(opener('DP-00'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-00')
+    expect(within(screen.getByTestId('cdss-visit-detail')).queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
+    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
+
+    fireEvent.click(cell('DP-34'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-34')
+    expect(within(screen.getByTestId('cdss-visit-detail')).queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
+    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
+
+    // Under 追蹤 the diagnosis points' cells are not drawn at all.
+    fireEvent.click(statusView('follow-up'))
+    expect(queryCell('DP-34')).toBeUndefined()
+    expect(screen.queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
   })
 
   it('keeps the record values with the rhythm panel and the course at 01’s foot, one press away', () => {
     render(<HfHarness model={p5Model()} />)
-    expect(screen.getByTestId('cdss-visit-column-status')).not.toBeVisible()
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    // 01 is open at first paint, so the folded foot is in view straight away.
+    expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
     const foot = screen.getByTestId('cdss-visit-hf-record-foot')
+    expect(foot).not.toHaveAttribute('open')
     expect(foot.querySelector('summary')).toBeVisible()
     expect(foot).toHaveTextContent('臨床數值、心律與病程時間軸')
     expect(within(foot).getByTestId('cdss-hf-record-values')).toBeInTheDocument()
@@ -400,8 +465,11 @@ describe('AF surfaces on the decision map', () => {
 
   it('places every question group on the point it feeds', () => {
     render(<AfHarness model={afModel()} />)
+    // DP-07 is the page's decision row, so its card opens under the row; the
+    // others open from their cells.
+    expect(queryCell('DP-07', 'af')).toBeUndefined()
     const groupsIn = (dp: string) => {
-      fireEvent.click(cell(dp, 'af'))
+      fireEvent.click(opener(dp, 'af'))
       const detail = screen.getByTestId('cdss-visit-detail')
       return [...detail.querySelectorAll<HTMLElement>('[data-af-question-group]')].map((element) => element.dataset.afQuestionGroup)
     }

@@ -34,6 +34,12 @@ export interface VisitMapSurfaces {
      */
     requests?: readonly string[]
   }
+  /**
+   * 01's 診斷 view, beside its 追蹤 view (the asks): the diagnostic assessment
+   * and the diagnosis points' cells. A page that has one gets a 診斷／追蹤
+   * switch in 01, opening on 診斷 before a diagnosis and on 追蹤 after.
+   */
+  diagnosis?: { content: ReactNode; dps: readonly string[] }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode
   /** Folded at the foot of a column: what has no single point to live under. */

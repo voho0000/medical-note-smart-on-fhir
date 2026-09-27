@@ -520,11 +520,11 @@ export function HeartFailureMapSurfaces({
   const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
   const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
   const subset = (questions: VisitQuestion[]): VisitFlowModel => ({ ...flow, questions, openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length })
-  // Before a diagnosis the questions start where the reasoning starts: 懷疑
-  // HF？ is their question 1, so the symptoms, signs and NYHA it unlocks sit
-  // right under it and their numbers follow on. Phenotype and HFpEF stay with
-  // DP-01 and DP-34, whose cards they settle.
-  const mapFollowUpIds = (question: VisitQuestion) => (assessmentAsksSuspicion && question.id === 'hf-suspicion') || !diagnosticIds.includes(question.id)
+  // Before a diagnosis the whole diagnostic step is one card, numbered in
+  // reasoning order: 懷疑 HF？ → symptoms → signs → NYHA → compensation →
+  // (LVEF ≥50%) confirm HFpEF beside its criteria. After a diagnosis the
+  // follow-up questions and the diagnostic ones part again.
+  const mapFollowUpIds = (question: VisitQuestion) => assessmentAsksSuspicion || !diagnosticIds.includes(question.id)
   const followUpFlow = subset(flow.questions.filter(mapFollowUpIds))
   const diagnosticFlow = subset(flow.questions.filter((question) => !mapFollowUpIds(question)))
   const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
@@ -534,9 +534,16 @@ export function HeartFailureMapSurfaces({
       onSaveClinicVitals={onSaveClinicVitals} phenotypeAnswer={phenotypeAnswer}
       onAnswerPhenotype={onAnswerPhenotype} board={board} hfpefReading={hfpefReading}
       onOpenCalculator={openCalculator}
+      compact
     />
   )
   const canEdit = Boolean(onSaveClinicVitals)
+  // The physician-input requests the map's own questions ask, so a decision
+  // point whose answer is one of them is not asked again beside them.
+  const askedRequests = flow.questions.flatMap((question) => (
+    question.id === 'hf-suspicion' ? ['hf-suspicion'] : question.id === 'hfpef-confirmation' ? ['hfpef-diagnosis-confirmation'] : []
+  ))
+  const asksHfpef = flow.questions.some((question) => question.id === 'hfpef-confirmation')
   const slots: HeartFailureMapSurfaceSlots = {
     ...(canEdit ? {
       editValues: () => editing.setRecordValuesOpen(true),
@@ -548,7 +555,7 @@ export function HeartFailureMapSurfaces({
     } : {}),
     followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
     followUpOpenCount: followUpFlow.openQuestionCount,
-    followUpRequests: followUpFlow.questions.some((question) => question.id === 'hf-suspicion') ? ['hf-suspicion'] : [],
+    followUpRequests: askedRequests,
     followUpPriorities: followUp ? (
       <HfFollowUpPriorities
         history={followUpHistory}
@@ -563,14 +570,18 @@ export function HeartFailureMapSurfaces({
     ) : undefined,
     diagnosticAssessment: (
       <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
-        <HfDiagnosisConfirmation
+        {/* Evidence before the verdict: before a diagnosis the confirmation
+            waits until someone has said HF is suspected. */}
+        {/* One confirmation: where the HFpEF question stands beside its
+            criteria, it is the confirmation. */}
+        {!asksHfpef && (followUp || !flow.questions.some((question) => question.id === 'hf-suspicion') || phenotypeAnswer?.hfSuspicion === 'suspected') ? <HfDiagnosisConfirmation
           answer={phenotypeAnswer}
           onConfirm={flow.readOnly ? undefined : onAnswerPhenotype}
           now={now}
           isEnglish={isEnglish}
           followUp={followUp}
           basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')}
-        />
+        /> : null}
         {diagnosticFlow.questions.length ? questionsCard(diagnosticFlow) : null}
       </div>
     ),
@@ -1258,6 +1269,7 @@ function HfpEfConfirmation({
   onAnswer,
   hfpefReading,
   onOpenCalculator,
+  compact = false,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
@@ -1266,6 +1278,8 @@ function HfpEfConfirmation({
   onAnswer: (answer: PhenotypeAnswer) => void
   hfpefReading?: HfpefReading
   onOpenCalculator?: (id?: HfpefScoreId) => void
+  /** The map: the criteria, the score and the buttons; the guideline text and the storage note one press away. */
+  compact?: boolean
 }) {
   const symptomsState = summary?.criteria
     .find((criterion) => criterion.id === 'symptoms-signs')?.state
@@ -1277,7 +1291,7 @@ function HfpEfConfirmation({
   })
   return (
     <div className="space-y-2" data-testid="cdss-hf-hfpef-confirmation">
-      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} />
+      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} showBasis={!compact} />
       <HfpEfScoreLine
         reading={hfpefReading}
         isEnglish={isEnglish}
@@ -1316,13 +1330,23 @@ function HfpEfConfirmation({
           {isEnglish ? 'Not confirming today' : '暫不確認'}
         </Button>
       </div>
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2, and nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
-          : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'}
-      </p>
+      {compact ? (
+        <details className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-hfpef-basis">
+          <summary className="min-h-8 cursor-pointer py-1 font-medium">{isEnglish ? 'Basis and notes' : '依據與說明'}</summary>
+          {summary?.basis ? <p className="mt-1">{summary.basis}</p> : null}
+          <p className="mt-1">{storageNote(isEnglish)}</p>
+        </details>
+      ) : (
+        <p className="text-[11px] leading-4 text-muted-foreground">{storageNote(isEnglish)}</p>
+      )}
     </div>
   )
+}
+
+function storageNote(isEnglish: boolean): string {
+  return isEnglish
+    ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2, and nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
+    : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'
 }
 
 function QuestionShell({
@@ -1430,6 +1454,7 @@ function QuestionsCard({
   board,
   hfpefReading,
   onOpenCalculator,
+  compact = false,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1442,6 +1467,11 @@ function QuestionsCard({
   board: HeartFailureBoardModel
   hfpefReading?: HfpefReading
   onOpenCalculator?: (id?: HfpefScoreId) => void
+  /**
+   * The map's one card, numbered in reasoning order: no note explaining why
+   * the HFpEF question comes last, and that question's guideline text folded.
+   */
+  compact?: boolean
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
@@ -1478,7 +1508,7 @@ function QuestionsCard({
             : (isEnglish ? 'Assessment complete' : '本次評估完成')}
         </span>
       </div>
-      {flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
+      {!compact && flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
           className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
           data-testid="cdss-hf-questions-hfpef-note"
@@ -1543,6 +1573,7 @@ function QuestionsCard({
                     onAnswer={onAnswerPhenotype}
                     hfpefReading={hfpefReading}
                     onOpenCalculator={onOpenCalculator}
+                    compact={compact}
                   />
                 ) : null}
               </QuestionShell>

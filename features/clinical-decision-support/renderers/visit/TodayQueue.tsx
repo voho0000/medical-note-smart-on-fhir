@@ -1,6 +1,6 @@
 "use client"
 
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -22,6 +22,11 @@ export function TodayQueue({
   sourceOfPage,
   onDecide,
   onClear,
+  title,
+  testId = 'cdss-visit-queue',
+  hideWhenEmpty = false,
+  detailFor,
+  onOpenDetail,
 }: {
   rows: readonly QueueRow[]
   isEnglish: boolean
@@ -29,6 +34,15 @@ export function TodayQueue({
   sourceOfPage: DecisionPointView['source']
   onDecide?: (step: QueueStep, action: VisitAction) => void
   onClear?: (step: QueueStep) => void
+  /** The heading: 「今天要決定」, or a section's own (「待決定」, 「診斷決定」). */
+  title?: string
+  testId?: string
+  /** Inside a section, an empty list says nothing rather than 「今天沒有要決定的事」. */
+  hideWhenEmpty?: boolean
+  /** The opened point's card, drawn under its own row. */
+  detailFor?: (point: DecisionPointView) => ReactNode
+  /** Opens (or closes) a row's card — its reasons, chain and guideline. */
+  onOpenDetail?: (point: DecisionPointView) => void
 }) {
   const listRef = useRef<HTMLOListElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -57,19 +71,21 @@ export function TodayQueue({
   })
 
   const pending = rows.filter((row) => row.current).length
+  const headingId = `${testId}-title`
+  if (hideWhenEmpty && rows.length === 0) return null
   return (
-    <section aria-labelledby="cdss-visit-queue-title" className="space-y-2" data-testid="cdss-visit-queue">
+    <section aria-labelledby={headingId} className="space-y-2" data-testid={testId}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3
-          id="cdss-visit-queue-title"
+          id={headingId}
           ref={headingRef}
           tabIndex={-1}
           className="text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {isEnglish ? 'To decide today' : '今天要決定'}
+          {title ?? (isEnglish ? 'To decide today' : '今天要決定')}
         </h3>
         {rows.length ? (
-          <span className="text-xs tabular-nums text-muted-foreground" role="status" data-testid="cdss-visit-queue-progress">
+          <span className="text-xs tabular-nums text-muted-foreground" role="status" data-testid={`${testId}-progress`}>
             {isEnglish
               ? `${rows.length - pending}/${rows.length} decided`
               : `已決定 ${rows.length - pending}/${rows.length}`}
@@ -77,7 +93,7 @@ export function TodayQueue({
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-border px-3 py-2.5 text-sm text-muted-foreground" data-testid="cdss-visit-queue-empty">
+        <p className="rounded-md border border-border px-3 py-2.5 text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
           {isEnglish ? 'Nothing to decide today.' : '今天沒有要決定的事。'}
         </p>
       ) : (
@@ -130,6 +146,17 @@ export function TodayQueue({
                         {point.why ? (
                           <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p>
                         ) : null}
+                        {onOpenDetail ? (
+                          <button
+                            type="button"
+                            className="inline-flex min-h-8 items-center text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-expanded={Boolean(detailFor?.(point))}
+                            onClick={() => onOpenDetail(point)}
+                            data-visit-row-detail={point.dp}
+                          >
+                            {isEnglish ? 'Reasons and guideline' : '依據與細節'}
+                          </button>
+                        ) : null}
                         <VisitDecisionControls
                           point={point}
                           surface="queue"
@@ -167,9 +194,22 @@ export function TodayQueue({
                           onClear(shown)
                         } : undefined}
                       />
+                      {/* A decided row keeps its card one press away. */}
+                      {onOpenDetail ? (
+                        <button
+                          type="button"
+                          className="inline-flex min-h-8 items-center text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-expanded={Boolean(detailFor?.(point))}
+                          onClick={() => onOpenDetail(point)}
+                          data-visit-row-detail={point.dp}
+                        >
+                          {isEnglish ? 'Reasons and guideline' : '依據與細節'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 )}
+                {detailFor?.(point) ?? null}
               </li>
             )
           })}
