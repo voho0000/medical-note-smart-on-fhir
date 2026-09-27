@@ -1068,6 +1068,7 @@ function SignItemRows({
   clinicVitals,
   isEnglish,
   showLegend,
+  compact = false,
   onAnswer,
   onAnswerAll,
 }: {
@@ -1076,6 +1077,11 @@ function SignItemRows({
   clinicVitals?: ClinicVitals
   isEnglish: boolean
   showLegend: boolean
+  /**
+   * The map: 全部皆無／其餘皆無 sits at the foot beside 更多, where the list is
+   * finished — not alone on a row above it.
+   */
+  compact?: boolean
   onAnswer: (term: string, value: SignAnswerValue) => void
   onAnswerAll?: (answers: Record<string, SignAnswerValue | null>) => void
 }) {
@@ -1115,39 +1121,7 @@ function SignItemRows({
     // The folded rows were answered too: open them so the answer is seen, not assumed.
     if (foldedTargets > 0) setMoreOpen(true)
   }
-  const row = (item: VisitSignItem) => {
-    const visibleLabel = isEnglish ? item.en : item.zh
-    return <div key={item.term} className="flex flex-wrap items-center gap-2">
-      <SideTag side={item.side} isEnglish={isEnglish} />
-      <span className="min-w-0 flex-1 text-xs text-foreground">{visibleLabel}</span>
-      <SegmentedControl<SignAnswerValue>
-        label={visibleLabel}
-        options={[
-          { id: 'present', text: isEnglish ? 'Yes' : '有' },
-          { id: 'absent', text: isEnglish ? 'No' : '無' },
-          { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
-        ]}
-        value={clinicVitals?.signAnswers?.[item.term]?.value ?? null}
-        onSelect={(next) => onAnswer(item.term, next)}
-        testId={`cdss-hf-flow-sign-${item.term}`}
-      />
-    </div>
-  }
-  return (
-    <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
-      {showLegend || onAnswerAll ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {showLegend ? (
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
-              {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
-                <span key={side} className="inline-flex items-center gap-1">
-                  <SideTag side={side} isEnglish={isEnglish} />
-                  {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
-                </span>
-              ))}
-            </p>
-          ) : null}
-          {onAnswerAll ? (
+  const noneButton = onAnswerAll ? (
             <button
               type="button"
               className={cn(
@@ -1172,32 +1146,71 @@ function SignItemRows({
                 </span>
               ) : null}
             </button>
+  ) : null
+  const moreButton = (
+    <button
+      type="button"
+      className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-expanded={moreOpen}
+      onClick={() => setMoreOpen((open) => !open)}
+      data-testid={`cdss-hf-sign-more-${questionId}`}
+    >
+      <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', moreOpen && 'rotate-180')} aria-hidden="true" />
+      {isEnglish ? `${more.length} more` : `更多 ${more.length} 項`}
+      {moreOpen ? null : (
+        <span className="min-w-0 truncate font-normal text-muted-foreground">
+          {more
+            .map((item) => `${isEnglish ? item.shortEn : item.shortZh}（${isEnglish ? VISIT_SIDE_LABELS[item.side].tagEn : VISIT_SIDE_LABELS[item.side].tagZh}）`)
+            .join(' · ')}
+        </span>
+      )}
+    </button>
+  )
+  const row = (item: VisitSignItem) => {
+    const visibleLabel = isEnglish ? item.en : item.zh
+    return <div key={item.term} className="flex flex-wrap items-center gap-2">
+      <SideTag side={item.side} isEnglish={isEnglish} />
+      <span className="min-w-0 flex-1 text-xs text-foreground">{visibleLabel}</span>
+      <SegmentedControl<SignAnswerValue>
+        label={visibleLabel}
+        options={[
+          { id: 'present', text: isEnglish ? 'Yes' : '有' },
+          { id: 'absent', text: isEnglish ? 'No' : '無' },
+          { id: NOT_ASSESSED, text: isEnglish ? 'Not assessed' : '未評估' },
+        ]}
+        value={clinicVitals?.signAnswers?.[item.term]?.value ?? null}
+        onSelect={(next) => onAnswer(item.term, next)}
+        testId={`cdss-hf-flow-sign-${item.term}`}
+      />
+    </div>
+  }
+  return (
+    <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
+      {showLegend || (onAnswerAll && !compact) ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {showLegend ? (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+              {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
+                <span key={side} className="inline-flex items-center gap-1">
+                  <SideTag side={side} isEnglish={isEnglish} />
+                  {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
+                </span>
+              ))}
+            </p>
           ) : null}
+          {onAnswerAll && !compact ? noneButton : null}
         </div>
       ) : null}
       <div className="grid gap-x-6 gap-y-1.5 @min-[44rem]:grid-cols-2">
         {common.map(row)}
         {moreOpen ? more.map(row) : null}
       </div>
-      {more.length > 0 ? (
-        <button
-          type="button"
-          className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-expanded={moreOpen}
-          onClick={() => setMoreOpen((open) => !open)}
-          data-testid={`cdss-hf-sign-more-${questionId}`}
-        >
-          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', moreOpen && 'rotate-180')} aria-hidden="true" />
-          {isEnglish ? `${more.length} more` : `更多 ${more.length} 項`}
-          {moreOpen ? null : (
-            <span className="min-w-0 truncate font-normal text-muted-foreground">
-              {more
-                .map((item) => `${isEnglish ? item.shortEn : item.shortZh}（${isEnglish ? VISIT_SIDE_LABELS[item.side].tagEn : VISIT_SIDE_LABELS[item.side].tagZh}）`)
-                .join(' · ')}
-            </span>
-          )}
-        </button>
-      ) : null}
+      {compact && (more.length > 0 || noneButton) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {more.length > 0 ? moreButton : null}
+          {noneButton}
+        </div>
+      ) : more.length > 0 ? moreButton : null}
     </div>
   )
 }
@@ -1381,7 +1394,7 @@ function storageNote(isEnglish: boolean): string {
     : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'
 }
 
-function QuestionShell({
+function ListQuestionShell({
   question,
   isEnglish,
   now,
@@ -1395,6 +1408,8 @@ function QuestionShell({
   onEdit?: () => void
   /** Shown beside the folded answer — the side tally on question ④. */
   answerBadge?: ReactNode
+  /** The map's box closes an open, answered question from its header; this layout does it below. */
+  onCollapse?: () => void
   children?: ReactNode
 }) {
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
@@ -1580,7 +1595,7 @@ function QuestionsCard({
     ) : null}
     {listed.length > 0 ? (
     <section
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className={compact ? 'space-y-2' : 'overflow-hidden rounded-lg border border-border bg-card'}
       aria-label={isEnglish ? "This visit's assessment" : '本次評估'}
       data-testid="cdss-hf-questions"
     >
@@ -1621,10 +1636,19 @@ function QuestionsCard({
           {isEnglish ? 'Load a patient record to answer.' : '需載入病人才能作答。'}
         </p>
       ) : null}
-      <ul className="divide-y divide-border">
+      <ul className={compact ? 'space-y-2' : 'divide-y divide-border'}>
         {listed.map((question) => {
           const editable = !flow.readOnly
           const onEdit = editable ? () => reopen(question.id) : undefined
+          // The map draws each question as it draws a point: a box of its own.
+          const QuestionShell = compact ? MapQuestionBox : ListQuestionShell
+          const onCollapse = !compact || question.state !== 'answered'
+            ? undefined
+            : question.items
+              ? () => setCollapsedItems((current) => new Set(current).add(question.id))
+              : reopened.has(question.id)
+                ? () => setReopened((current) => { const rest = new Set(current); rest.delete(question.id); return rest })
+                : undefined
 
           if (question.id === 'hf-suspicion' || question.id === 'lvef-phenotype') {
             const shell = (
@@ -1634,6 +1658,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && question.request && onAnswerPhenotype && question.recommendationId ? (
                   <PhysicianInputRequestPanel
@@ -1659,6 +1684,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onAnswerPhenotype ? (
                   <HfpEfConfirmation
@@ -1685,6 +1711,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<NyhaAnswerValue>
@@ -1714,6 +1741,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
                 answerBadge={question.sideTally ? (
                   <SideTallyChip tally={question.sideTally} isEnglish={isEnglish} />
                 ) : undefined}
@@ -1726,6 +1754,7 @@ function QuestionsCard({
                     clinicVitals={clinicVitals}
                     isEnglish={isEnglish}
                     showLegend={question.id === 'symptoms'}
+                    compact={compact}
                     onAnswer={(term, next) => {
                       reopen(question.id)
                       onSaveClinicVitals({ signAnswers: { [term]: next } })
@@ -1735,7 +1764,7 @@ function QuestionsCard({
                       onSaveClinicVitals({ signAnswers: answers })
                     }}
                   />
-                  {question.state === 'answered' ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
+                  {question.state === 'answered' && !compact ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
                   </div>
                 ) : null}
               </QuestionShell>
@@ -1750,6 +1779,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<CompensationAnswerValue>
@@ -1775,6 +1805,70 @@ function QuestionsCard({
     </section>
     ) : null}
     </>
+  )
+}
+
+/**
+ * A question on the map, drawn as the map draws a point (clinician feedback
+ * 2026-09-28: 「排版醜醜，而且 UI 一樣不太符合決策地圖風格」): a box of its
+ * own, the question's number where a point has its code, its name, and —
+ * folded — the answer in one line with 修改; open, its controls under a
+ * header that carries 收合. No green tick, no stamp, no pill of 「：−」s.
+ */
+function MapQuestionBox({
+  question,
+  isEnglish,
+  onEdit,
+  onCollapse,
+  answerBadge,
+  children,
+}: {
+  question: VisitQuestion
+  isEnglish: boolean
+  now: Date
+  onEdit?: () => void
+  answerBadge?: ReactNode
+  onCollapse?: () => void
+  children?: ReactNode
+}) {
+  const answered = question.state === 'answered'
+  const open = Boolean(children)
+  const action = 'min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  return (
+    <li
+      id={visitQuestionElementId(question.id)}
+      className="scroll-mt-2 rounded-md border border-border bg-background px-2.5 py-2"
+      data-testid={`cdss-hf-question-${question.id}`}
+      data-state={question.state}
+      data-number={question.number}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">{question.number}</span>
+        <span className={cn('text-sm font-medium', question.state === 'locked' ? 'text-muted-foreground' : 'text-foreground')}>{question.label}</span>
+        {answered && !open && answerBadge ? answerBadge : null}
+        {open && onCollapse ? (
+          <button type="button" className={cn('ml-auto', action)} onClick={onCollapse} data-testid={`cdss-hf-question-collapse-${question.id}`}>
+            {isEnglish ? 'Collapse' : '收合'}
+          </button>
+        ) : null}
+        {answered && !open && onEdit ? (
+          <button type="button" className={cn('ml-auto', action)} onClick={onEdit} data-testid={`cdss-hf-question-edit-${question.id}`}>
+            {isEnglish ? 'Edit' : '修改'}
+          </button>
+        ) : null}
+      </div>
+      {answered && !open && question.answerText ? (
+        <p className="mt-1 text-sm text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</p>
+      ) : null}
+      {question.state === 'locked' ? (
+        <p className="mt-1 text-xs text-muted-foreground">{question.lockedReason}</p>
+      ) : open ? (
+        <div className="mt-2 space-y-1.5">
+          {question.hint ? <p className="text-xs text-muted-foreground">{question.hint}</p> : null}
+          {children}
+        </div>
+      ) : null}
+    </li>
   )
 }
 
