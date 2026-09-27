@@ -171,7 +171,6 @@ export function VisitDecisionScreen({
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
-  const [openRequest, setOpenRequest] = useState<{ block: VisitBlock; token: number } | null>(null)
   // The standing the page last drew: undiagnosed (no every-visit asks) or not.
   const [drawnUndiagnosed, setDrawnUndiagnosed] = useState(model.asks.length === 0)
   // DP-03's fuller questions: open at a first assessment and whenever an ask
@@ -187,13 +186,21 @@ export function VisitDecisionScreen({
   // again as a row of 今天要決定.
   const blockRequests = surfaces?.asksDetail?.requests
   // A point whose recommended action answers one of the page's own questions
-  // (懷疑 HF？, 確認 HFpEF) is asked there, once.
+  // (HFrEF 還是 HFpEF？, 確認 HFpEF) is asked there, once. So is every point
+  // the diagnosis question stands for while the page asks it (HF: DP-00,
+  // DP-01, DP-34) — waiting on it, or done by it — unless the point carries
+  // an action of its own that the question does not (安排心超, 重新評估).
+  const answeredBy = surfaces?.diagnosis?.answeredBy
   const askedHere = useCallback((point: DecisionPointView) => {
     const request = point.actions[0]?.physicianInput?.request
-    return Boolean(request && blockRequests?.includes(request))
-  }, [blockRequests])
+    if (request && blockRequests?.includes(request)) return true
+    return Boolean(answeredBy
+      && blockRequests?.includes(answeredBy.request)
+      && answeredBy.dps.includes(point.dp)
+      && point.actions.every((action) => action.physicianInput && blockRequests.includes(action.physicianInput.request)))
+  }, [answeredBy, blockRequests])
   const rows = useMemo(() => allRows.filter((row) => !askedHere((row.current ?? row.steps[0]).point)), [allRows, askedHere])
-  const gatePending = allRows.some((row) => row.current?.point.dp === 'DP-00')
+  const gatePending = allRows.some((row) => row.current?.point.actions[0]?.physicianInput?.request === answeredBy?.request)
   // Before a diagnosis there are no every-visit asks: the block is the
   // assessment itself, 懷疑 HF？ first, and it is open from the start.
   const firstAssessment = model.packId === 'heart-failure-cdss'
@@ -350,11 +357,13 @@ export function VisitDecisionScreen({
     />
   )
   const undiagnosed = model.asks.length === 0
-  // The diagnosis came to stand on this page — 目前 <50%, the quick
-  // confirmation, or question 6 — so the visit moves on to treatment.
+  // The diagnosis came to stand on this page (question 1, 目前 <50%, the
+  // HFpEF confirmation). Nothing moves: the answer stays where it was given,
+  // 01 stays on 診斷, and 「下一區：02 治療」 is now the clinician's to press
+  // (clinician feedback 2026-09-27: 「應該要 user 自己點」).
   if (drawnUndiagnosed !== undiagnosed) {
     setDrawnUndiagnosed(undiagnosed)
-    if (drawnUndiagnosed && !undiagnosed) setOpenRequest((current) => ({ block: 'treatment', token: (current?.token ?? 0) + 1 }))
+    if (drawnUndiagnosed && !undiagnosed) setStatusViewOverride({ reason: 'follow-up', view: 'diagnosis' })
   }
   const diagnosisView = surfaces?.diagnosis
   // 01 opens on 診斷 before a diagnosis and on 追蹤 after it; the clinician's
@@ -466,7 +475,6 @@ export function VisitDecisionScreen({
         rowDps={rowDps}
         cellFilters={cellFilters}
         initialOpen={initialOpen}
-        openRequest={openRequest}
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}

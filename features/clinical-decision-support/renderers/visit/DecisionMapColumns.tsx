@@ -219,7 +219,6 @@ export function DecisionMapColumns({
   rowDps,
   cellFilters,
   initialOpen,
-  openRequest,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -252,16 +251,9 @@ export function DecisionMapColumns({
   cellFilters?: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>>
   /** The section open at first paint. */
   initialOpen?: VisitBlock | null
-  /** Opens a section when its token changes (the quick confirmation moving on to 02). */
-  openRequest?: { block: VisitBlock; token: number } | null
 }) {
   const [showAll, setShowAll] = useState(false)
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
-  const [handledRequest, setHandledRequest] = useState(openRequest?.token)
-  if (openRequest && openRequest.token !== handledRequest) {
-    setHandledRequest(openRequest.token)
-    setOpenBlock(openRequest.block)
-  }
   const [stuck, setStuck] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)

@@ -61,6 +61,9 @@ export function heartFailureVisitSurfaces(
         </div>
       ),
       dps: DIAGNOSIS_VIEW_DPS,
+      // 「HFrEF 還是 HFpEF？」 is DP-01 (DP-00 folded into it), and its
+      // 「還不確定」 path ends at DP-34's confirmation, in the same card.
+      answeredBy: { request: 'hf-suspicion', dps: ['DP-00', 'DP-01', 'DP-34'] },
     },
     columnFooters: {
       status: (

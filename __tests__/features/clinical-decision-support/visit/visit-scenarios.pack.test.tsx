@@ -357,7 +357,7 @@ describe('real pack · the other scenarios', () => {
   it('P1 suspected HFpEF: diagnosis first — 「HFrEF 還是 HFpEF？」 is question 1 of 01’s 診斷 view, not a queue row', () => {
     const { model } = scenarioRun('p1-suspected-hfpef')
     expect(model.stage).toBe('suspected')
-    expect(model.queue).toEqual(['DP-00'])
+    expect(model.queue).toEqual(['DP-01'])
     expect(model.asks).toEqual([])
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
@@ -382,11 +382,15 @@ describe('real pack · the other scenarios', () => {
     // list today, and DP-00 is not drawn as a cell.
     expect(queue()).toEqual([])
     expect(screen.queryByTestId('cdss-visit-queue-status')).toBeNull()
+    // Question 1 is DP-01 (DP-00 folded into it), and DP-34 only waits on it:
+    // none of them is drawn again beside the card.
     expect(queryCell('DP-00')).toBeUndefined()
+    expect(queryCell('DP-01')).toBeUndefined()
+    expect(queryCell('DP-34')).toBeUndefined()
     // Question 1 is the only confirmation on the page.
     expect(within(assessment).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
-    // It comes before the diagnosis points' cells on the page.
-    expect(assessment.compareDocumentPosition(cell('DP-34')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // It comes before the other diagnosis points' cells on the page.
+    expect(assessment.compareDocumentPosition(cell('DP-02')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('P1 「還不確定」: the HFpEF criteria come up under question 1, then symptoms, signs and the confirmation — no NYHA', () => {
@@ -412,16 +416,20 @@ describe('real pack · the other scenarios', () => {
     expect(within(assessment).queryByTestId('cdss-hf-hfpef-go-to-symptoms')).toBeNull()
   })
 
-  it('P1 one press on 「HFpEF」 is the diagnosis: 02 opens and 01 moves to 追蹤', () => {
+  it('P1 one press on 「HFpEF」 is the diagnosis; the page stays put and 02 is the clinician’s to open', () => {
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
-    // The answer stays where it was given, and can be changed there.
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    // The answer stays where it was given, on 診斷, and can be changed there.
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    // 下一區 now leads on to 02, when the clinician presses it.
+    const next = screen.getByTestId('cdss-visit-next-status')
+    expect(next).toBeEnabled()
+    fireEvent.click(next)
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
@@ -451,6 +459,9 @@ describe('real pack · the other scenarios', () => {
 
 describe('real pack · what a clinician reads without opening anything', () => {
   it('names the red flags in DP-24 itself, not above the page; marks K 5.7 and drops today’s dates (P6)', () => {
+    // 「Today」 is the scenarios' visit date, whatever day the suite runs on;
+    // only the clock is pinned.
+    jest.useFakeTimers({ now: new Date('2026-09-27T10:00:00+08:00'), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'performance', 'hrtime'] })
     render(<ScenarioMap id="p6-hyperkalaemia" />)
     expect(screen.queryByTestId('cdss-visit-triage')).toBeNull()
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
@@ -463,6 +474,7 @@ describe('real pack · what a clinician reads without opening anything', () => {
     expect(values.querySelector('[data-key="heartRate"]')).not.toHaveTextContent('09-27')
     expect(potassium).toHaveTextContent('09-24')
     expect(potassium).not.toHaveTextContent('2026-09-24')
+    jest.useRealTimers()
   })
 
   it('keeps the AF follow-up questions folded at a first AF visit until an ask says 有 (P3)', () => {

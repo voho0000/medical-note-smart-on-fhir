@@ -42,6 +42,13 @@ export interface VisitMapSurfaces {
   diagnosis?: {
     content: ReactNode
     dps: readonly string[]
+    /**
+     * The diagnosis question the assessment asks (its physician-input
+     * request) and the points it stands for: while the page asks it, those
+     * points are not drawn again as cells or rows — unless one carries an
+     * action of its own.
+     */
+    answeredBy?: { request: string; dps: readonly string[] }
   }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode

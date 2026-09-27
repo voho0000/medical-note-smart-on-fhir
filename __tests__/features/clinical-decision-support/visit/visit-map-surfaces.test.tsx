@@ -357,10 +357,18 @@ describe('HF surfaces on the decision map', () => {
     expect(asksDetail().open).toBe(true)
   })
 
-  it('opens it at a first assessment, once 懷疑 HF is answered', () => {
-    render(<HfHarness model={p1Model()} />)
+  it('opens it at a first assessment, once the diagnosis question is answered', () => {
+    // The pack's gate: DP-01 asks 「HFrEF 還是 HFpEF？」 through `hf-suspicion`.
+    const gate = (model: VisitDecisionModel): VisitDecisionModel => ({
+      ...model,
+      points: model.points.map((item) => (item.dp === 'DP-00'
+        ? { ...item, actions: item.actions.map((entry) => ({ ...entry, physicianInput: { request: 'hf-suspicion' as const, optionId: 'suspected' } })) }
+        : item)),
+    })
+    const view = render(<HfHarness model={gate(p1Model())} />)
     expect(asksDetail().open).toBe(false)
-    fireEvent.click(document.querySelector('[data-visit-queue-dp="DP-00"] [data-visit-primary]')!)
+    // The pack recomputes from the answer: no gate row any more.
+    view.rerender(<HfHarness model={{ ...p1Model(), queue: [], points: p1Model().points.filter((item) => item.dp !== 'DP-00') }} />)
     expect(asksDetail().open).toBe(true)
     expect(screen.getByTestId('cdss-visit-asks-detail-reason')).toHaveTextContent('初次評估')
   })
@@ -379,8 +387,9 @@ describe('HF surfaces on the decision map', () => {
     expect(view).toBeVisible()
     // The asks belong to 追蹤; 診斷 shows the diagnosis points' cells instead.
     expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
-    expect(cell('DP-01')).toBeVisible()
+    // Question 1 is DP-01 on this page, so DP-01 is not drawn beside it.
     expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
+    expect(queryCell('DP-01')).toBeUndefined()
     // Evidence before the verdict: the confirmation waits for 懷疑 HF？ 「是」.
     expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
     fireEvent.click(within(view).getByTestId('cdss-hf-suspicion-option-suspected'))
@@ -412,10 +421,9 @@ describe('HF surfaces on the decision map', () => {
     expect(within(screen.getByTestId('cdss-visit-detail')).queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
 
-    fireEvent.click(cell('DP-34'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-34')
-    expect(within(screen.getByTestId('cdss-visit-detail')).queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
-    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
+    // DP-34 only waits on question 1 here, which asks it in the same card:
+    // it is not drawn a second time as a cell.
+    expect(queryCell('DP-34')).toBeUndefined()
 
     // Under 追蹤 the diagnosis points' cells are not drawn at all.
     fireEvent.click(statusView('follow-up'))
@@ -530,11 +538,18 @@ describe('the busy clinician’s path', () => {
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ hfSuspicion: 'suspected', diagnosis: 'hfpEF', hfpEfConfirmed: true })
   })
 
-  it('moves on to 02 whenever the diagnosis comes to stand on the page (question 1, 目前 <50%, the HFpEF confirmation)', () => {
+  // Clinician feedback 2026-09-27: 「為什麼我點 HFpEF 就自動幫我跳到治療去？
+  // 應該要 user 自己點」.
+  it('stays put when the diagnosis comes to stand on the page: 01 on 診斷, 02 closed until 下一區 is pressed', () => {
     const view = render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('cdss-visit-next-status')).toBeDisabled()
     // The pack recomputes from the answer: the model now follows a diagnosis.
     view.rerender(<HfHarness model={p5Model()} />)
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view')).toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-visit-next-status'))
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
 
