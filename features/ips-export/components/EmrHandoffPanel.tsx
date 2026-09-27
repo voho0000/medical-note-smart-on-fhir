@@ -14,6 +14,9 @@ import { InfoHint } from '@/src/shared/components/InfoHint'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { usePatientQuery } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { EmrHandoffMode } from '@/src/application/stores/outpatient-prefs.store'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { useReportInterpretation } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
@@ -31,8 +34,9 @@ import {
   type EmrRange,
   type EmrReportItem,
 } from '../utils/emr-plaintext'
+import { EmrCustomFormatSection } from './EmrCustomFormatSection'
 
-type CopyKey = 'labs' | 'reports' | 'all'
+type CopyKey = 'labs' | 'reports' | 'all' | 'custom'
 type ReportLanguage = 'original' | 'translated'
 
 /** What one report's translation slot looks like to the panel. */
@@ -53,7 +57,12 @@ export function EmrHandoffPanel() {
   const { t } = useLanguage()
   const x = t.ipsExport.emrHandoff
   const { data } = useClinicalDataQuery()
+  const { data: patient } = usePatientQuery()
   const { copy } = useCopyToClipboard()
+  const prefs = useOutpatientPrefs()
+  // 我的格式 opens by default once the clinician has one; until then the
+  // built-in formats stay exactly as they were.
+  const handoffMode: EmrHandoffMode = prefs.handoffMode ?? (prefs.formats.length > 0 ? 'custom' : 'builtin')
 
   // Labs and studies get their own window on purpose. In clinic they are asked
   // for on different timescales — the labs you want as a recent trend, while
@@ -256,6 +265,12 @@ export function EmrHandoffPanel() {
   ]
 
   const hasAnything = hasLabData || allReports.length > 0
+  const isCustom = handoffMode === 'custom'
+
+  const modeOptions: Array<{ id: EmrHandoffMode; label: string }> = [
+    { id: 'custom', label: x.custom.modeCustom },
+    { id: 'builtin', label: x.custom.modeBuiltin },
+  ]
 
   return (
     <div className="space-y-4">
@@ -273,7 +288,7 @@ export function EmrHandoffPanel() {
             <span className="mt-2 block">{x.presetHint}</span>
           </InfoHint>
         </div>
-        {hasAnything && (
+        {hasAnything && !isCustom && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {x.footerMeta.replace('{chars}', String(allText.length))}
@@ -286,13 +301,33 @@ export function EmrHandoffPanel() {
         )}
       </div>
 
+      {hasAnything && (
+        <SegmentedControl
+          label={x.custom.modeLabel}
+          value={handoffMode}
+          options={modeOptions}
+          onChange={prefs.setHandoffMode}
+        />
+      )}
+
       {!hasAnything && (
         <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
           {x.noData}
         </div>
       )}
 
-      {hasLabData && (
+      {hasAnything && isCustom && (
+        <EmrCustomFormatSection
+          // A new patient starts with fresh per-patient decisions and preview.
+          key={patient?.id ?? 'no-patient'}
+          pivots={pivots}
+          diagnosticReports={data?.diagnosticReports ?? []}
+          copiedKey={copiedKey}
+          onCopy={(text) => void doCopy('custom', text)}
+        />
+      )}
+
+      {hasLabData && !isCustom && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">
@@ -377,7 +412,7 @@ export function EmrHandoffPanel() {
         </section>
       )}
 
-      {allReports.length > 0 && (
+      {allReports.length > 0 && !isCustom && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">

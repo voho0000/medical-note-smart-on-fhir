@@ -37,6 +37,10 @@ export interface LabCell {
   unit?: string
   interpretationCode?: string  // 'H'|'L'|'N'|'A'|'AA'|'HH'|'LL' (HL7)
   isAbnormal?: boolean
+  /** Quantity.comparator ('<' | '<=' | '>=' | '>') when the source sent one.
+   *  `value` holds only the number, so a reader that prints a value on its own
+   *  must put this back in front of it. */
+  comparator?: string
   effectiveDateTime?: string
   status?: string
   unitInferred?: boolean
@@ -577,6 +581,9 @@ export function buildLabPivots(
         value: cellValue,
         unit: cellUnit,
         isAbnormal,
+        comparator: typeof obs.valueQuantity?.comparator === 'string' && obs.valueQuantity.comparator.trim()
+          ? obs.valueQuantity.comparator.trim()
+          : undefined,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
         status,

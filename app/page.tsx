@@ -25,6 +25,7 @@ import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view
 import { useBackDismissibleLayer } from "@/src/shared/hooks/layout/use-back-dismissible-layer.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
@@ -193,6 +194,19 @@ function PageContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setChosenCollapse((c) => (c === 'left' ? null : c))
   }, [navPending, navSeq, setMobileView])
+
+  // The opposite direction: a control in the clinical summary sent the reader
+  // to a right-panel task (總覽 → 帶回病歷). Flip the phone view to 功能 and
+  // reopen a collapsed right panel — asking for it is the reader choosing it.
+  const { revealSeq } = useRightPanel()
+  useEffect(() => {
+    if (!revealSeq) return
+    setMobileView('right')
+    // A request from an external context must make the panel visible.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChosenCollapse((c) => (c === 'right' ? null : c))
+    setCollapseChosen(true)
+  }, [revealSeq, setMobileView])
 
   // Header collapse: tuck the title/toolbar away into a slim strip so the
   // panels get the full viewport height. In-session only (same hydration
