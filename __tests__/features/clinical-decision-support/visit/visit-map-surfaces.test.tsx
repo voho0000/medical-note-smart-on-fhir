@@ -385,8 +385,8 @@ describe('HF surfaces on the decision map', () => {
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(view)
     expect(view).toBeVisible()
-    // 喘／體重比上次 are asked under the diagnosis too once it stands.
-    expect(within(screen.getByTestId('cdss-visit-diagnosis-asks')).getByTestId('cdss-visit-asks')).toBeInTheDocument()
+    // The asks belong to 追蹤 only; 診斷 shows the diagnosis points instead.
+    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
     // Question 1 is DP-01 on this page, so DP-01 is not drawn beside it.
     expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
     expect(queryCell('DP-01')).toBeUndefined()
@@ -549,6 +549,10 @@ describe('the busy clinician’s path', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-visit-hf-diagnosis-view')).toBeVisible()
+    // 01's foot leads to 追蹤 first while its asks are unanswered, then to 02.
+    fireEvent.click(screen.getByTestId('cdss-visit-next-step-status'))
+    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(screen.getByTestId('cdss-visit-next-status'))
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })

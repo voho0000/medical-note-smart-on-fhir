@@ -219,6 +219,7 @@ export function DecisionMapColumns({
   rowDps,
   cellFilters,
   initialOpen,
+  stepsBeforeNext,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -251,6 +252,12 @@ export function DecisionMapColumns({
   cellFilters?: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>>
   /** The section open at first paint. */
   initialOpen?: VisitBlock | null
+  /**
+   * A step still inside a section that comes before the next one (01's 追蹤
+   * after a diagnosis made on 診斷): its foot button offers it instead of
+   * 「下一區」, and the clinician presses it — nothing moves on its own.
+   */
+  stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
 }) {
   const [showAll, setShowAll] = useState(false)
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
@@ -546,7 +553,24 @@ export function DecisionMapColumns({
             {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
             {columnFooters?.[block]}
             {block === 'outlook' ? outlookSlot : null}
-            {nextBlock ? (
+            {stepsBeforeNext?.[block] ? (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  className={cn(
+                    styles.tone,
+                    styles.mapToggle,
+                    'inline-flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  )}
+                  data-section={SECTION_TONE[block]}
+                  onClick={stepsBeforeNext[block]!.onGo}
+                  data-testid={`cdss-visit-next-step-${block}`}
+                >
+                  {stepsBeforeNext[block]!.label}
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ) : nextBlock ? (
               <div className="flex justify-end pt-1">
                 <button
                   type="button"

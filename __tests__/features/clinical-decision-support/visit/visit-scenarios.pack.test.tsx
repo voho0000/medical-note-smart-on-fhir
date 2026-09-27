@@ -479,16 +479,21 @@ describe('real pack · the other scenarios', () => {
     // The answer stays where it was given, on 診斷, and can be changed there.
     expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
-    // A new diagnosis is still asked 喘／體重比上次 — right under it, without
-    // switching to 追蹤: many a first CDSS visit is a returning patient.
-    const asks = screen.getByTestId('cdss-visit-diagnosis-asks')
-    expect(asks.querySelectorAll('[data-visit-ask-row]')).toHaveLength(2)
-    fireEvent.click(asks.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
-    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    // A new diagnosis is still asked 喘／體重比上次 (many a first CDSS visit is
+    // a returning patient): they stay in 追蹤, one home per question, and 診斷
+    // names them — at the switch and at 01's foot, which leads to 追蹤 before
+    // 02. Nothing moves until the clinician presses.
+    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-status-view-other-pending')).toHaveTextContent('「追蹤」還有：喘比上次、體重比上次')
+    const step = screen.getByTestId('cdss-visit-next-step-status')
+    expect(step).toHaveTextContent('下一步：追蹤（喘比上次、體重比上次）')
+    expect(screen.queryByTestId('cdss-visit-next-status')).toBeNull()
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    // 下一區 now leads on to 02, when the clinician presses it.
+    fireEvent.click(step)
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
+    fireEvent.click(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')!)
+    // Then 下一區 leads on to 02, when the clinician presses it.
     const next = screen.getByTestId('cdss-visit-next-status')
     expect(next).toBeEnabled()
     fireEvent.click(next)

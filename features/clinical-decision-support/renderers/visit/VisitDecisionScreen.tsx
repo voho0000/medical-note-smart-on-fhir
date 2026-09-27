@@ -52,6 +52,7 @@ function StatusViewSwitch({
   view,
   followUpAvailable,
   otherPending,
+  otherAsks = [],
   isEnglish,
   onChange,
 }: {
@@ -59,6 +60,8 @@ function StatusViewSwitch({
   followUpAvailable: boolean
   /** Points in the other view that need the clinician, named so they are not missed. */
   otherPending: readonly DecisionPointView[]
+  /** Every-visit asks the other view still waits for (喘／體重比上次 while 01 shows 診斷). */
+  otherAsks?: readonly string[]
   isEnglish: boolean
   onChange: (view: StatusView) => void
 }) {
@@ -93,7 +96,7 @@ function StatusViewSwitch({
       {!followUpAvailable ? (
         <span className="text-xs text-muted-foreground">{isEnglish ? 'Follow-up opens once diagnosed' : '「追蹤」確診後可用'}</span>
       ) : null}
-      {otherPending.length ? (
+      {otherPending.length || otherAsks.length ? (
         <button
           type="button"
           className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -101,8 +104,8 @@ function StatusViewSwitch({
           data-testid="cdss-visit-status-view-other-pending"
         >
           {isEnglish
-            ? `${otherLabel} also needs you: ${otherPending.map((point) => `${point.dp} ${point.label}`).join(', ')} →`
-            : `「${otherLabel}」還有：${otherPending.map((point) => `${point.dp} ${point.label}`).join('、')} →`}
+            ? `${otherLabel} also needs you: ${[...otherAsks, ...otherPending.map((point) => `${point.dp} ${point.label}`)].join(', ')} →`
+            : `「${otherLabel}」還有：${[...otherAsks, ...otherPending.map((point) => `${point.dp} ${point.label}`)].join('、')} →`}
         </button>
       ) : null}
     </div>
@@ -382,6 +385,15 @@ export function VisitDecisionScreen({
     && !decisionOf(point)
     && inDiagnosisView(point) !== (statusView === 'diagnosis')
   )) : []
+  // 喘／體重比上次 live in 追蹤 only — one home per question, and the same 診斷
+  // view for every patient — but a diagnosis made on 診斷 (often a returning
+  // patient's first CDSS visit: clinician feedback 2026-09-28) must not skip
+  // them: the switch names them, and 01's foot offers 追蹤 before 02.
+  const unansweredAsks = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value)
+  const goToFollowUp = () => {
+    setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
+    document.querySelector('[data-testid="cdss-visit-status-view"]')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+  }
   const followUpLead = (
     <>
       <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
@@ -409,25 +421,12 @@ export function VisitDecisionScreen({
             view={statusView}
             followUpAvailable={!undiagnosed}
             otherPending={otherViewPending}
+            otherAsks={statusView === 'diagnosis' ? unansweredAsks.map((ask) => ask.label) : []}
             isEnglish={isEnglish}
             onChange={(view) => setStatusViewOverride({ reason: defaultStatusView, view })}
           />
         ) : null}
-        {diagnosisView && statusView === 'diagnosis' ? (
-          <>
-            {diagnosisView.content}
-            {/* Once a diagnosis stands, 喘／體重比上次 are asked under it too,
-                not only behind 追蹤: a diagnosis made on this page is often a
-                returning patient's first CDSS visit (clinician feedback
-                2026-09-28: 「就算是新診斷 HF，也需要問喘跟體重」), and the page
-                does not move to 追蹤 on its own. One set of answers. */}
-            {!undiagnosed ? (
-              <div data-testid="cdss-visit-diagnosis-asks">
-                <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
-              </div>
-            ) : null}
-          </>
-        ) : followUpLead}
+        {diagnosisView && statusView === 'diagnosis' ? diagnosisView.content : followUpLead}
         {decisionList('status', statusView === 'diagnosis' ? (isEnglish ? 'Diagnosis decisions' : '診斷決定') : (isEnglish ? 'To decide' : '待決定'))}
       </>
     ),
@@ -489,6 +488,9 @@ export function VisitDecisionScreen({
         rowDps={rowDps}
         cellFilters={cellFilters}
         initialOpen={initialOpen}
+        {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
+          ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
+          : {})}
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
