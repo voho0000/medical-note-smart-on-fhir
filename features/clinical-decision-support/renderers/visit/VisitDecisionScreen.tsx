@@ -173,6 +173,8 @@ export function VisitDecisionScreen({
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
   const [openRequest, setOpenRequest] = useState<{ block: VisitBlock; token: number } | null>(null)
+  // The standing the page last drew: undiagnosed (no every-visit asks) or not.
+  const [drawnUndiagnosed, setDrawnUndiagnosed] = useState(model.asks.length === 0)
   // DP-03's fuller questions: open at a first assessment and whenever an ask
   // comes back worse. A clinician's own open/close holds until that reason
   // changes — a new 「變差」 reopens what was folded under 「穩定」.
@@ -349,6 +351,12 @@ export function VisitDecisionScreen({
     />
   )
   const undiagnosed = model.asks.length === 0
+  // The diagnosis came to stand on this page — 目前 <50%, the quick
+  // confirmation, or question 6 — so the visit moves on to treatment.
+  if (drawnUndiagnosed !== undiagnosed) {
+    setDrawnUndiagnosed(undiagnosed)
+    if (drawnUndiagnosed && !undiagnosed) setOpenRequest((current) => ({ block: 'treatment', token: (current?.token ?? 0) + 1 }))
+  }
   const diagnosisView = surfaces?.diagnosis
   // 01 opens on 診斷 before a diagnosis and on 追蹤 after it; the clinician's
   // own choice holds until that standing changes.

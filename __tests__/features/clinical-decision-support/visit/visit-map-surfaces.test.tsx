@@ -531,6 +531,14 @@ describe('the busy clinician’s path', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
 
+  it('moves on to 02 whenever the diagnosis comes to stand on the page (目前 <50%, quick confirmation, question 6)', () => {
+    const view = render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    // The pack recomputes from the answer: the model now follows a diagnosis.
+    view.rerender(<HfHarness model={p5Model()} />)
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('offers no quick confirmation before 懷疑 HF is answered', () => {
     render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
     expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
