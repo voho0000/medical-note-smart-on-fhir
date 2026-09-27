@@ -1,7 +1,7 @@
 'use client'
 import { type ReactNode, useState } from 'react'
 import { AF_CLINICAL_QUESTIONS } from '@voho0000/personalized-care'
-import { ChevronDown, Copy, PencilLine } from 'lucide-react'
+import { Check, ChevronDown, Copy, PencilLine } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -135,6 +135,16 @@ export function afQuestionGroupTitle(id: string, isEnglish: boolean): string | u
  * decides what is prefilled; only a deliberate correction is stored. Shared by
  * the AF visit flow and the decision map, over the same answers.
  */
+/**
+ * The groups that are today's checklists of problems — where 「全部皆無」 means
+ * what it says. Groups read from the history (diagnosis, stroke-risk history,
+ * valves, HAS-BLED, comorbidities) have no such button: a bulk 無 there could
+ * overwrite what the record holds.
+ */
+const BULK_NONE_GROUPS: ReadonlySet<string> = new Set(['followup', 'adverse', 'bleeding'])
+/** Items whose 有 is good news; a bulk 無 would record the opposite of 「沒有問題」. */
+const BULK_NONE_EXCLUDED: ReadonlySet<string> = new Set(['treatmentBenefit'])
+
 export function AfQuestionGroups({
   groupIds,
   board,
@@ -181,7 +191,30 @@ export function AfQuestionGroups({
   const groups = QUESTION_GROUPS.filter(
     (group) => groupIds.includes(group.id) && availableQuestions.some((q) => q.group === group.id),
   )
+  // What each group's rows held before 全部皆無 was pressed, for a second press to restore.
+  const [beforeNone, setBeforeNone] = useState<Record<string, Record<string, boolean | undefined>>>({})
   if (groups.length === 0) return null
+  const noneTargets = (groupId: string) => availableQuestions.filter((q) => (
+    q.group === groupId && !BULK_NONE_EXCLUDED.has(q.id) && answerValue(q.id) !== true
+  ))
+  // Pressed while every row it covers was answered 無 by the clinician —
+  // a record's prefilled 無 is not the clinician's answer.
+  const noneApplied = (groupId: string) => {
+    const targets = noneTargets(groupId)
+    return targets.length > 0 && targets.every((q) => answers[q.id] === false)
+  }
+  const toggleNone = (groupId: string) => {
+    if (!onAnswer) return
+    const targets = noneTargets(groupId)
+    if (noneApplied(groupId)) {
+      const saved = beforeNone[groupId]
+      for (const q of targets) onAnswer(q.id, saved ? saved[q.id] : undefined)
+      setBeforeNone((current) => { const next = { ...current }; delete next[groupId]; return next })
+      return
+    }
+    setBeforeNone((current) => ({ ...current, [groupId]: Object.fromEntries(targets.map((q) => [q.id, answers[q.id]])) }))
+    for (const q of targets) onAnswer(q.id, false)
+  }
   return (
     <div data-testid="cdss-af-question-groups" data-groups={groups.map((group) => group.id).join(' ')}>
       {en ? (
@@ -206,6 +239,36 @@ export function AfQuestionGroups({
               {en ? 'pending data' : '項待確定'}
             </span>
           </summary>
+          {BULK_NONE_GROUPS.has(group.id) && onAnswer ? (() => {
+            const applied = noneApplied(group.id)
+            const anyYes = availableQuestions.some((q) => q.group === group.id && !BULK_NONE_EXCLUDED.has(q.id) && answerValue(q.id) === true)
+            const targets = noneTargets(group.id)
+            const label = anyYes ? (en ? 'Rest: none' : '其餘皆無') : (en ? 'None of these' : '全部皆無')
+            return (
+              <div className="flex justify-end px-3 pb-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60',
+                    applied
+                      ? 'border-primary bg-primary/10 text-primary hover:bg-primary/15'
+                      : 'border-border bg-background text-foreground hover:bg-muted/60',
+                  )}
+                  disabled={targets.length === 0}
+                  aria-pressed={applied}
+                  title={applied
+                    ? (en ? 'Press again to restore these rows' : '再按一次，恢復成按下前的答案')
+                    : (en ? `Mark ${targets.length} as absent` : `把 ${targets.length} 項記為「無」`)}
+                  onClick={() => toggleNone(group.id)}
+                  data-testid={`cdss-af-none-${group.id}`}
+                >
+                  {applied ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
+                  {label}
+                  {applied ? <span className="font-normal">{en ? '· press again to undo' : '· 再按一次復原'}</span> : null}
+                </button>
+              </div>
+            )
+          })() : null}
           <div className="divide-y divide-border">
             {availableQuestions
               .filter((q) => q.group === group.id)

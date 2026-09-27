@@ -23,6 +23,7 @@ import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/cl
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
+import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -45,6 +46,7 @@ function ScenarioMap({ id, page = 'hf' }: { id: ScenarioId; page?: 'hf' | 'af' }
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const run = useMemo(() => scenarioRun(id, { page, answers }), [answers, id, page])
+  const afAnswers = useAfAnswers(PATIENT)
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -61,6 +63,8 @@ function ScenarioMap({ id, page = 'hf' }: { id: ScenarioId; page?: 'hf' | 'af' }
       onVisitAnswer={(ask, value) => useVisitAnswersStore.getState().answer(PATIENT, ask, value)}
       onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(PATIENT, patch)}
       onAnswerPhenotype={(answer) => usePhenotypeAnswerStore.getState().setAnswer(PATIENT, answer)}
+      afAnswers={afAnswers}
+      onAfAnswer={(questionId, value) => useAfAnswersStore.getState().answer(PATIENT, questionId, value)}
     />
   )
 }
@@ -103,6 +107,7 @@ beforeEach(() => {
   useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useClinicVitalsStore.setState({ byPatientId: {} })
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  useAfAnswersStore.setState({ patientId: undefined, answers: {} })
 })
 
 describe('real pack · P3 new AF (AF page)', () => {
@@ -373,5 +378,34 @@ describe('real pack · what a clinician reads without opening anything', () => {
     expect(screen.getByTestId('cdss-visit-summary-copy')).toBeVisible()
     expect(screen.getByTestId('cdss-visit-summary-preview')).not.toHaveAttribute('open')
     expect(screen.queryByTestId('cdss-visit-map-legend')).toBeNull()
+  })
+})
+
+describe('real pack · AF 全部皆無', () => {
+  it('answers a follow-up checklist 無 in one press, leaves 「有改善」 alone, and undoes on a second press (P11)', () => {
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
+    const group = document.querySelector('[data-af-question-group="followup"]') as HTMLDetailsElement
+    fireEvent.click(group.querySelector('summary')!)
+    const answer = (question: string, label: '有' | '無' | '依病歷／待確定') =>
+      within(within(group).getByRole('group', { name: question })).getByRole('button', { name: label })
+    const button = within(group).getByTestId('cdss-af-none-followup')
+    expect(button).toHaveTextContent('全部皆無')
+    fireEvent.click(button)
+    for (const question of ['本次仍有心悸', '本次仍有呼吸困難', '新發暈厥／近乎暈厥']) {
+      expect(answer(question, '無')).toHaveAttribute('aria-pressed', 'true')
+    }
+    // 「有改善」 is good news; a bulk 無 must not record 「沒有改善」.
+    expect(answer('治療後症狀或活動耐受有改善', '無')).toHaveAttribute('aria-pressed', 'false')
+    expect(within(group).getByTestId('cdss-af-none-followup')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(group).getByTestId('cdss-af-none-followup'))
+    expect(answer('本次仍有心悸', '無')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('offers no bulk 無 on groups read from the history', () => {
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    for (const id of ['diagnosis', 'stroke', 'safety', 'bleedingRisk', 'comorbidity']) {
+      expect(document.querySelector(`[data-testid="cdss-af-none-${id}"]`)).toBeNull()
+    }
   })
 })
