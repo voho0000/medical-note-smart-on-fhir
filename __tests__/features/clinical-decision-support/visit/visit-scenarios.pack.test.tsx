@@ -563,3 +563,15 @@ describe('real pack · follow-up questions open once the pack says follow-up', (
   })
 })
 
+describe('real pack · one heading per group', () => {
+  it('draws 用藥安全 once even though its points are apart in the pack order (P5, 顯示全部)', () => {
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ScenarioMap id="p5-titrating-af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
+    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    expect(treatment.querySelectorAll('[data-map-group="medication-safety"]')).toHaveLength(1)
+    expect(errors.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
+    errors.mockRestore()
+  })
+})
+

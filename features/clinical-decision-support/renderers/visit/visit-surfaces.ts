@@ -39,7 +39,12 @@ export interface VisitMapSurfaces {
    * and the diagnosis points' cells. A page that has one gets a 診斷／追蹤
    * switch in 01, opening on 診斷 before a diagnosis and on 追蹤 after.
    */
-  diagnosis?: { content: ReactNode; dps: readonly string[] }
+  diagnosis?: {
+    content: ReactNode
+    dps: readonly string[]
+    /** One press to the clinician's own confirmation, for a clinician already sure; the screen then opens 02. */
+    quickConfirm?: { label: string; hint: string; onConfirm: () => void }
+  }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode
   /** Folded at the foot of a column: what has no single point to live under. */

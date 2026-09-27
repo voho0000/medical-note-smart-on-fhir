@@ -518,3 +518,22 @@ describe('AF surfaces on the decision map', () => {
     expect(within(foot).getByTestId('cdss-af-metric-heartRate')).toHaveTextContent('88 bpm')
   })
 })
+
+describe('the busy clinician’s path', () => {
+  it('confirms HFpEF in one press once HF is suspected, records it as the clinician’s, and opens 02', () => {
+    suspected()
+    const model = { ...p1Model(), asks: [] }
+    render(<HfHarness model={model} />)
+    const quick = screen.getByTestId('cdss-visit-quick-confirm-button')
+    expect(screen.getByTestId('cdss-visit-quick-confirm')).toHaveTextContent('記為醫師臨床判斷')
+    fireEvent.click(quick)
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ hfSuspicion: 'suspected', hfpEfConfirmed: true })
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('offers no quick confirmation before 懷疑 HF is answered', () => {
+    render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
+    expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
+  })
+})
+

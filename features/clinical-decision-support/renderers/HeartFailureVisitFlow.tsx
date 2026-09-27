@@ -456,6 +456,13 @@ export interface HeartFailureMapSurfaceSlots {
    * the same question again in 今天要決定.
    */
   followUpRequests: readonly string[]
+  /**
+   * The busy clinician's path: HF suspected, the HFpEF question still open,
+   * and the clinician already sure. One press records the clinician's
+   * confirmation — as theirs; the symptom and sign rows stay undetermined
+   * until someone fills them — and the page moves on to treatment.
+   */
+  quickConfirm?: () => void
   /** The chief-complaint and weight follow-up, once the diagnosis is established. */
   followUpPriorities?: ReactNode
   /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
@@ -556,6 +563,10 @@ export function HeartFailureMapSurfaces({
     followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
     followUpOpenCount: followUpFlow.openQuestionCount,
     followUpRequests: askedRequests,
+    ...(onAnswerPhenotype && !flow.readOnly && !followUp && phenotypeAnswer?.hfSuspicion === 'suspected'
+      && flow.questions.some((question) => question.id === 'hfpef-confirmation' && question.state !== 'answered')
+      ? { quickConfirm: () => onAnswerPhenotype({ ...(phenotypeAnswer ?? {}), answeredOn: todayIsoDate(now), hfpEfConfirmed: true }) }
+      : {}),
     followUpPriorities: followUp ? (
       <HfFollowUpPriorities
         history={followUpHistory}

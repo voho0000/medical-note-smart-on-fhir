@@ -219,6 +219,7 @@ export function DecisionMapColumns({
   rowDps,
   cellFilters,
   initialOpen,
+  openRequest,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -251,9 +252,16 @@ export function DecisionMapColumns({
   cellFilters?: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>>
   /** The section open at first paint. */
   initialOpen?: VisitBlock | null
+  /** Opens a section when its token changes (the quick confirmation moving on to 02). */
+  openRequest?: { block: VisitBlock; token: number } | null
 }) {
   const [showAll, setShowAll] = useState(false)
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
+  const [handledRequest, setHandledRequest] = useState(openRequest?.token)
+  if (openRequest && openRequest.token !== handledRequest) {
+    setHandledRequest(openRequest.token)
+    setOpenBlock(openRequest.block)
+  }
   const [stuck, setStuck] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -437,13 +445,16 @@ export function DecisionMapColumns({
         const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
           ? new Set(visible.map((point) => point.group))
           : new Set<string>()
-        // Consecutive points of one group, in the pack's order, with the
-        // group's heading when the section has more than one group.
+        // One bucket per group, groups in the order they first appear and
+        // points in the pack's order within each, with the group's heading when
+        // the section has more than one. A group whose points the pack does not
+        // list side by side (用藥安全: DP-25 before the pillars, DP-05 after) is
+        // still one group under one heading.
         const buckets: { key: string; label?: string; points: DecisionPointView[] }[] = []
         for (const point of visible) {
-          const last = buckets.at(-1)
           const key = groups.size > 1 ? point.group : 'all'
-          if (last && last.key === key) last.points.push(point)
+          const bucket = buckets.find((candidate) => candidate.key === key)
+          if (bucket) bucket.points.push(point)
           else buckets.push({ key, ...(groups.size > 1 ? { label: point.groupLabel ?? point.group } : {}), points: [point] })
         }
         return (

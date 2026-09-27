@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../../types'
 import type {
@@ -170,6 +171,8 @@ export function VisitDecisionScreen({
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
+  // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
+  const [openRequest, setOpenRequest] = useState<{ block: VisitBlock; token: number } | null>(null)
   // DP-03's fuller questions: open at a first assessment and whenever an ask
   // comes back worse. A clinician's own open/close holds until that reason
   // changes — a new 「變差」 reopens what was folded under 「穩定」.
@@ -394,6 +397,23 @@ export function VisitDecisionScreen({
             onChange={(view) => setStatusViewOverride({ reason: defaultStatusView, view })}
           />
         ) : null}
+        {diagnosisView && statusView === 'diagnosis' && diagnosisView.quickConfirm ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-primary/30 bg-primary/5 px-3 py-2" data-testid="cdss-visit-quick-confirm">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              onClick={() => {
+                diagnosisView.quickConfirm?.onConfirm()
+                setOpenRequest((current) => ({ block: 'treatment', token: (current?.token ?? 0) + 1 }))
+              }}
+              data-testid="cdss-visit-quick-confirm-button"
+            >
+              {diagnosisView.quickConfirm.label}
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-muted-foreground">{diagnosisView.quickConfirm.hint}</span>
+          </div>
+        ) : null}
         {diagnosisView && statusView === 'diagnosis' ? diagnosisView.content : followUpLead}
         {decisionList('status', statusView === 'diagnosis' ? (isEnglish ? 'Diagnosis decisions' : '診斷決定') : (isEnglish ? 'To decide' : '待決定'))}
       </>
@@ -456,6 +476,7 @@ export function VisitDecisionScreen({
         rowDps={rowDps}
         cellFilters={cellFilters}
         initialOpen={initialOpen}
+        openRequest={openRequest}
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
