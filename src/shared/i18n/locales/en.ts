@@ -444,6 +444,8 @@ export const en = {
     customPromptPreview: 'Template prompt',
     customResultPreview: 'Summary result',
     customGenerating: 'Generating… The complete result will appear when finished.',
+    customOutputTruncatedTitle: 'Output truncated: partial content follows',
+    customOutputTruncatedDescription: 'The local model reached its output limit (up to {tokens} tokens for this feature). Generated text is preserved; later sections may be missing. Review before use.',
     customDisplayAs: 'Display as',
     customCopyText: 'Copy text',
     customCopySource: 'Copy source',

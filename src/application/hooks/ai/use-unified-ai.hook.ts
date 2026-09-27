@@ -44,6 +44,9 @@ interface QueryOptions {
   modelId?: string
   temperature?: number
   maxTokens?: number
+  /** Only callers that visibly mark partial text should enable this. */
+  allowTruncatedOutput?: boolean
+  onOutputTruncated?: (truncated: boolean) => void
   reasoningEffort?: 'low' | 'medium' | 'high'
   responseFormat?: 'json'
   /** Optional owner identity for cancelling one structured generation slot
@@ -193,6 +196,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           modelId,
           temperature: queryOptions?.temperature,
           maxTokens: queryOptions?.maxTokens,
+          allowTruncatedOutput: queryOptions?.allowTruncatedOutput,
           reasoningEffort: queryOptions?.reasoningEffort,
           responseFormat: queryOptions?.responseFormat,
           signal: abortController.signal,
@@ -202,8 +206,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           ? { ...modelExecution, ...result.metadata.modelExecution, requestedModelId: queryOptions?.requestedModelId ?? modelId }
           : modelExecution
         queryOptions?.onModelExecution?.(modelExecution)
+        queryOptions?.onOutputTruncated?.(result.metadata.outputTruncated === true)
         outputData = result.text
-        collector.finish({ outcome: 'ok', phase: 'request', responseComplete: true,
+        collector.finish({ outcome: 'ok', phase: 'request', responseComplete: result.metadata.outputTruncated !== true,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record('completed')
