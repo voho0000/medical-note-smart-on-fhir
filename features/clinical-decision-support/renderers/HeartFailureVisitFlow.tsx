@@ -22,7 +22,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import type { CdssRecommendation } from '../types'
+import type { CdssRecommendation, VisitAnswers, VisitAsk } from '../types'
 import {
   NOT_ASSESSED,
   todayIsoDate,
@@ -167,6 +167,13 @@ export interface HeartFailureVisitFlowProps {
   sectionRecommendations?: readonly CdssRecommendation[]
   prognosisContent?: ReactNode
   followUpHistory?: HfFollowUpHistory
+  /**
+   * The every-visit answers the decision map asks at its top. The three-section
+   * follow-up reads and writes the same two (喘, 體重), so switching layouts
+   * never asks them again and the pack reads one answer.
+   */
+  visitAnswers?: VisitAnswers
+  onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
 }
 
 export function HeartFailureVisitFlow({
@@ -190,6 +197,8 @@ export function HeartFailureVisitFlow({
   sectionRecommendations,
   prognosisContent,
   followUpHistory,
+  visitAnswers,
+  onVisitAnswer,
 }: HeartFailureVisitFlowProps) {
   const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
@@ -316,7 +325,7 @@ export function HeartFailureVisitFlow({
             <HfDiagnosisConfirmation answer={phenotypeAnswer} onConfirm={flow.readOnly ? undefined : onAnswerPhenotype} now={now} isEnglish={isEnglish} followUp={followUp} basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')} />
             {followUp && diagnosisContext?.mode === 'reassessment' ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'New evidence requires review. Open diagnostic evidence; the prior confirmation is retained.' : '新資料需核對，請開啟診斷依據；既有確診紀錄仍保留。'}</p> : null}
             {followUp && flow.questions.some(question => question.id === 'lvef-phenotype' && question.state === 'open') ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'HF phenotype pending: review LVEF in diagnostic evidence when available.' : '心衰竭分型待補：取得 LVEF 後可開啟診斷依據補充。'}</p> : null}
-            {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} /> : null}
+            {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} trendAnswers={visitAnswers} onTrendAnswer={flow.readOnly ? undefined : onVisitAnswer} /> : null}
             <details key={showFollowUp ? 'follow-up' : 'diagnosis'} open={followUp && !showFollowUp} className="border-t border-border" data-testid="cdss-condition-assessment">
               <summary data-cdss-action={assessmentFlow.openQuestionCount > 0 ? '' : undefined} className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium text-primary focus-visible:ring-2 focus-visible:ring-ring">{showFollowUp ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA') : (isEnglish ? 'Diagnostic assessment' : '診斷評估')} · {isEnglish ? `${assessmentFlow.openQuestionCount} questions pending` : `${assessmentFlow.openQuestionCount} 題待補`}</summary>
               {renderQuestions(assessmentFlow)}

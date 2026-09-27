@@ -5,6 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { todayIsoDate, type ClinicVitals, type ClinicVitalsPatch } from '../stores/clinic-vitals.store'
 import { EMPTY_HF_HISTORY, type HfFollowUpHistory, type SymptomChange, type FollowUpComplaint } from '../utils/hf-follow-up'
+import type { VisitAnswers, VisitAsk } from '../types'
+
+type WeightChange = NonNullable<HfFollowUpHistory['weightChanges']>[number]['value']
+
+/** This block's words for a change, and the every-visit answer each one is. */
+const DYSPNOEA_ANSWER: Readonly<Partial<Record<SymptomChange, NonNullable<VisitAnswers['dyspnoea-trend']>>>> = { worse: 'worse', unchanged: 'stable', improved: 'better' }
+const WEIGHT_ANSWER: Readonly<Record<WeightChange, NonNullable<VisitAnswers['weight-trend']>>> = { increased: 'up', unchanged: 'same', decreased: 'down' }
+const invert = <K extends string, V extends string>(map: Readonly<Partial<Record<K, V>>>) => Object.fromEntries(Object.entries(map).map(([key, value]) => [value, key])) as Partial<Record<V, K>>
+const DYSPNOEA_CHANGE = invert(DYSPNOEA_ANSWER)
+const WEIGHT_CHANGE = invert(WEIGHT_ANSWER)
 
 /**
  * Chief-complaint and weight follow-up. `trendAsksElsewhere` is for a screen
@@ -12,9 +22,15 @@ import { EMPTY_HF_HISTORY, type HfFollowUpHistory, type SymptomChange, type Foll
  * the 增加／不變／減少 buttons are left out so the two are not asked twice, and
  * what stays is the rest — other tracked complaints, adding one, and the
  * weight records with their chart and new entry.
+ *
+ * Elsewhere (the three sections), the 喘 row's change and the weight change
+ * are the same two answers the map asks: they show `trendAnswers` and write
+ * through `onTrendAnswer`, so an answer given on either layout is the answer
+ * on both, and the pack reads it once.
  */
-export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSave, now, isEnglish, onBreathDetails, trendAsksElsewhere = false }: {
+export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSave, now, isEnglish, onBreathDetails, trendAsksElsewhere = false, trendAnswers, onTrendAnswer }: {
   history?: HfFollowUpHistory; vitals?: ClinicVitals; onSave?: (patch: ClinicVitalsPatch) => void; now: Date; isEnglish: boolean; onBreathDetails: () => void; trendAsksElsewhere?: boolean
+  trendAnswers?: VisitAnswers; onTrendAnswer?: (id: VisitAsk['id'], value: string) => void
 }) {
   const today = todayIsoDate(now)
   const [text, setText] = useState('')
@@ -31,7 +47,10 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const rows = trendAsksElsewhere
     ? recordedRows.filter(item => !isBreath(item.text))
     : recordedRows.some(item => isBreath(item.text)) ? recordedRows : [{ text: isEnglish ? 'Breathlessness' : '喘', date: today, source: 'clinic' }, ...recordedRows]
-  const weightChange = local.weightChanges?.find(item => item.date === today)?.value
+  const answeredWeight = trendAnswers?.['weight-trend']
+  const weightChange = (answeredWeight ? WEIGHT_CHANGE[answeredWeight] : undefined) ?? local.weightChanges?.find(item => item.date === today)?.value
+  const answeredDyspnoea = trendAnswers?.['dyspnoea-trend']
+  const breathChange = answeredDyspnoea ? DYSPNOEA_CHANGE[answeredDyspnoea] : undefined
   const saveComplaint = (item: FollowUpComplaint) => onSave?.({ hfFollowUp: { ...local, complaints: [...local.complaints.filter(row => !(row.date === item.date && row.text === item.text)), { ...local.complaints.find(row => row.date === item.date && row.text === item.text), ...item }] } })
   const points = [...new Map([...history.weights, ...local.weights, ...(vitals?.entries.bodyWeight ? [{ value: vitals.entries.bodyWeight.value, date: vitals.entries.bodyWeight.measuredOn, source: 'clinic' }] : [])].filter(point => point.date <= today).sort((a, b) => a.date.localeCompare(b.date)).map(point => [point.date, point])).values()]
   const latest = points.at(-1)
@@ -49,16 +68,16 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
     <section className="space-y-3" aria-label={isEnglish ? 'Chief complaint follow-up' : '主訴追蹤'}>
       <h4 className="font-semibold">{trendAsksElsewhere ? (isEnglish ? 'Other complaints' : '其他主訴') : (isEnglish ? 'Chief complaint · change since last visit' : '主要主訴・與上次相比')}</h4>
       {!trendAsksElsewhere || rows.length ? <p className="text-xs text-muted-foreground">{previousDate ? `${isEnglish ? 'Previous record' : '上次紀錄'}：${previousDate}` : (isEnglish ? 'No previous chief complaint available. Add the symptom to follow.' : '未取得上次主訴，請新增要追蹤的症狀。')}</p> : null}
-      {rows.map(item => { const answer = current.find(row => row.text === item.text); const baseline = previous.find(row => row.text === item.text); return <div key={item.text} className="space-y-2 rounded-md border border-border bg-card p-3">
+      {rows.map(item => { const breath = isBreath(item.text); const recorded = current.find(row => row.text === item.text); const answer = breath && breathChange ? { ...recorded, change: breathChange } : recorded; const baseline = previous.find(row => row.text === item.text); return <div key={item.text} className="space-y-2 rounded-md border border-border bg-card p-3">
         <p className="break-words font-medium">{item.text}</p>
         <p className="break-words text-xs text-muted-foreground">{baseline ? `${baseline.date} · ${sourceName(baseline.source)}` : answer ? `${item.date} · ${sourceName(item.source)}` : (isEnglish ? 'Not yet recorded' : '尚未記錄')}</p>
         {!answer?.change ? <p data-cdss-action="" className="text-sm">{isEnglish ? 'Confirm today’s symptom status' : '請確認本次症狀變化'}</p> : null}
         {answer?.change === 'worse' ? <p data-cdss-action="" className="text-sm">{isEnglish ? 'Worsening reported · review this visit' : '主訴加重・請於本次評估'}</p> : null}
-        <div role="group" aria-label={`${item.text} ${isEnglish ? 'change' : '變化'}`} className="flex flex-wrap gap-1">{choices.map(([value, zh, en]) => <Button key={value} variant={answer?.change === value ? 'default' : 'outline'} className="min-h-11" disabled={!onSave} aria-pressed={answer?.change === value} onClick={() => saveComplaint({ text: item.text, date: today, source: 'clinic', change: value, comparedWith: baseline?.date })}>{isEnglish ? en : zh}</Button>)}</div>
+        <div role="group" aria-label={`${item.text} ${isEnglish ? 'change' : '變化'}`} className="flex flex-wrap gap-1">{choices.map(([value, zh, en]) => <Button key={value} variant={answer?.change === value ? 'default' : 'outline'} className="min-h-11" disabled={!onSave} aria-pressed={answer?.change === value} onClick={() => { saveComplaint({ text: item.text, date: today, source: 'clinic', change: value, comparedWith: baseline?.date }); const shared = breath ? DYSPNOEA_ANSWER[value] : undefined; if (shared) onTrendAnswer?.('dyspnoea-trend', shared) }}>{isEnglish ? en : zh}</Button>)}</div>
         {answer?.change === 'resolved' ? <p className="text-sm">{isEnglish ? 'Previously recorded: resolved' : '既有紀錄：已消失'}</p> : null}
         <details data-testid="cdss-symptom-details"><summary className="min-h-11 cursor-pointer py-3 text-sm">{isEnglish ? 'Record details' : '展開紀錄細節'}{answer?.note ? (isEnglish ? ' · note saved' : '・已記錄') : ''}</summary>
           <label className="block text-sm">{isEnglish ? 'Details (saved on leaving field)' : '補充細節（離開欄位時儲存）'}<Input key={`${item.text}-${today}`} defaultValue={answer?.note ?? ''} disabled={!onSave} maxLength={1000} onBlur={event => { if (event.target.value !== (answer?.note ?? '')) saveComplaint({ text: item.text, date: today, source: 'clinic', note: event.target.value, comparedWith: baseline?.date }) }} /></label>
-          {/喘|breath|dyspn/i.test(item.text) ? <Button variant="outline" className="mt-2 min-h-11" onClick={onBreathDetails}>{isEnglish ? 'Breathlessness assessment' : '記錄喘的細節'}</Button> : null}
+          {breath ? <Button variant="outline" className="mt-2 min-h-11" onClick={onBreathDetails}>{isEnglish ? 'Breathlessness assessment' : '記錄喘的細節'}</Button> : null}
         </details>
       </div> })}
       <details><summary className="min-h-11 cursor-pointer py-3 text-sm">{isEnglish ? 'Add another complaint' : '新增／補記其他主訴'}</summary>
@@ -72,7 +91,7 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
     <section className="space-y-3 border-t border-border pt-3" aria-label={isEnglish ? 'Weight trend' : '體重趨勢'}>
       <h4 className="font-semibold">{isEnglish ? 'Weight · kg' : '體重・kg'}</h4>
       {trendAsksElsewhere ? null : <>
-      <div role="group" aria-label={isEnglish ? 'Weight change' : '體重變化'} className="flex flex-wrap gap-1">{([['increased', '增加', 'Increased'], ['unchanged', '不變', 'Unchanged'], ['decreased', '減少', 'Decreased']] as const).map(([value, zh, en]) => <Button key={value} variant={weightChange === value ? 'default' : 'outline'} className="min-h-11" disabled={!onSave} aria-pressed={weightChange === value} onClick={() => onSave?.({ hfFollowUp: { ...local, weightChanges: [...(local.weightChanges ?? []).filter(item => item.date !== today), { date: today, value }] } })}>{isEnglish ? en : zh}</Button>)}</div>
+      <div role="group" aria-label={isEnglish ? 'Weight change' : '體重變化'} className="flex flex-wrap gap-1">{([['increased', '增加', 'Increased'], ['unchanged', '不變', 'Unchanged'], ['decreased', '減少', 'Decreased']] as const).map(([value, zh, en]) => <Button key={value} variant={weightChange === value ? 'default' : 'outline'} className="min-h-11" disabled={!onSave} aria-pressed={weightChange === value} onClick={() => { onSave?.({ hfFollowUp: { ...local, weightChanges: [...(local.weightChanges ?? []).filter(item => item.date !== today), { date: today, value }] } }); onTrendAnswer?.('weight-trend', WEIGHT_ANSWER[value]) }}>{isEnglish ? en : zh}</Button>)}</div>
       <p className="text-xs text-muted-foreground">{isEnglish ? 'Reported change this visit; measured values are shown separately.' : '本次回報的體重變化；實際量測差值另列如下。'}</p>
       <p>{isEnglish ? 'Today' : '本日'}：{currentWeight ? `${currentWeight.value.toFixed(1)} kg` : (isEnglish ? 'Not recorded' : '尚未量測')}</p>
       </>}

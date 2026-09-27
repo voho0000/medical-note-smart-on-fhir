@@ -2653,6 +2653,8 @@ export function ClinicalDecisionSupportView({
           key={patientId ?? 'no-patient'}
           sectionRecommendations={isSections ? displayRecommendations : undefined}
           prognosisContent={isSections ? <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} /> : undefined}
+          visitAnswers={visitAnswers}
+          onVisitAnswer={onVisitAnswer}
           rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
           flow={visitFlow}
           board={board}

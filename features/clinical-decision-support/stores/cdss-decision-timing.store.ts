@@ -13,7 +13,7 @@ import { create } from 'zustand'
 export interface CdssDecisionTiming {
   /** `<patientId>:<packId>` — which screen the decision was taken on. */
   screen: string
-  /** The decision's store key (`visit:<source>:<dp>`). */
+  /** The decision's store key (`visit:<decisionId>`, see `visitDecisionKey`). */
   decision: string
   /** Milliseconds from the screen appearing to the decision. */
   elapsedMs: number

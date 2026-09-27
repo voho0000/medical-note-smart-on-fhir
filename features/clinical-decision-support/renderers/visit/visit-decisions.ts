@@ -22,13 +22,20 @@ import type {
  * The store key a decision point's decision lives under. The queue row and the
  * map cell for one point compute the same key, which is what makes them one
  * decision rather than two.
+ *
+ * The key is the pack's `decisionId` — the clinical question, named by the
+ * pack that owns it — so a question two pages show (AF anticoagulation on the
+ * HF page's DP-14 and on the AF page's DP-07) is one decision wherever it was
+ * taken. The host holds no table of which DP matches which; a pack that folds
+ * another's question says so. A point without one (an older pack) keeps its
+ * page-local key.
  */
-export function visitDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp'>): string {
-  return `visit:${point.source}:${point.dp}`
+export function visitDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp' | 'decisionId'>): string {
+  return point.decisionId ? `visit:${point.decisionId}` : `visit:${point.source}:${point.dp}`
 }
 
 /** The key of the step a point reveals once its first action is recorded. */
-export function nextStepDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp'>): string {
+export function nextStepDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp' | 'decisionId'>): string {
   return `${visitDecisionKey(point)}:next`
 }
 

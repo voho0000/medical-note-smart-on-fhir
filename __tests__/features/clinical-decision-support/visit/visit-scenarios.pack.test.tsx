@@ -4,11 +4,9 @@
  * Each bundle goes through the app's own import parser, the FHIR adapter, the
  * host's AF calculators and the pack's `applyVisitAnswers` /
  * `buildVisitDecisionModel` (see `scenario-models`), and the map is drawn by
- * the real view. The assertions are brief §7's, with the two deviations the
+ * the real view. The assertions are brief §7's, with the deviation the
  * pack's author accepted:
  *
- * - P4 keeps a DP-09 「需你確認」 (spironolactone 25 → 50 mg) — but nothing in
- *   the queue;
  * - R2 reads the previous weight up to 120 days back, not 90 (P4's basis is a
  *   06-20 weight).
  *
@@ -41,7 +39,7 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 const PATIENT = 'scenario-patient'
 
 /** The map for a scenario, rebuilt by the pack from every answer given on it. */
-function ScenarioMap({ id, page = 'hf' }: { id: ScenarioId; page?: 'hf' | 'af' }) {
+function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page?: 'hf' | 'af'; layout?: 'map' | 'sections' }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -51,7 +49,7 @@ function ScenarioMap({ id, page = 'hf' }: { id: ScenarioId; page?: 'hf' | 'af' }
     <ClinicalDecisionSupportView
       result={run.result}
       locale="zh-TW"
-      layout="map"
+      layout={layout}
       patientId={PATIENT}
       visitModel={run.model}
       companionResult={run.companion}
@@ -139,14 +137,14 @@ describe('real pack · P3 new AF (AF page)', () => {
 })
 
 describe('real pack · P4 stable and optimised', () => {
-  it('has an empty queue, a prefilled weight and settled pillars (DP-09 confirm accepted)', () => {
+  it('has an empty queue, a prefilled weight and settled pillars (spironolactone 25 mg settled)', () => {
     const { model } = scenarioRun('p4-stable-optimised')
     expect(model.stage).toBe('follow-up')
     expect(model.queue).toEqual([])
     expect(model.asks.find((ask) => ask.id === 'weight-trend')?.prefill?.value).toBe('same')
     expect(model.points.filter((item) => item.state === 'act' || item.state === 'safety')).toEqual([])
-    for (const dp of ['DP-07', 'DP-08', 'DP-10']) expect(point('p4-stable-optimised', dp).state).toBe('done')
-    expect(point('p4-stable-optimised', 'DP-09').state).toBe('confirm')
+    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) expect(point('p4-stable-optimised', dp).state).toBe('done')
+    expect(point('p4-stable-optimised', 'DP-09').headline).toBe('spironolactone 25 mg：足量')
 
     render(<ScenarioMap id="p4-stable-optimised" />)
     expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
@@ -163,12 +161,13 @@ describe('real pack · P4 stable and optimised', () => {
     expect(triage).not.toContainElement(cell('DP-07'))
   })
 
-  it('opens DP-09 with its question and buttons in view, the guideline folded until asked for', () => {
+  it('opens the settled DP-09 with the 50 mg target in its reason, no button, the guideline folded', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
     fireEvent.click(cell('DP-09'))
     const detail = screen.getByTestId('cdss-visit-detail')
-    expect(within(detail).getByRole('button', { name: '上調至 50 mg' })).toBeVisible()
+    expect(detail).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
+    expect(within(detail).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
     const evidence = screen.getByTestId('cdss-visit-detail-module-heart-failure-mra')
     expect(evidence).not.toHaveAttribute('open')
     expect(evidence).toHaveTextContent('指引與依據')
@@ -409,3 +408,33 @@ describe('real pack · AF 全部皆無', () => {
     }
   })
 })
+
+describe('real pack · one answer, one decision, on every page', () => {
+  it('records AF anticoagulation once: decided on the HF page, decided on the AF page (P9)', () => {
+    const hfCell = point('p9-hfpef-af-dose', 'DP-14')
+    const afOwner = scenarioRun('p9-hfpef-af-dose', { page: 'af' }).model.points.find((item) => item.decisionId === hfCell.decisionId)
+    expect(afOwner?.dp).toBeDefined()
+    const { unmount } = render(<ScenarioMap id="p9-hfpef-af-dose" />)
+    fireEvent.click(primaryOf('DP-14'))
+    unmount()
+
+    render(<ScenarioMap id="p9-hfpef-af-dose" page="af" />)
+    expect(row(afOwner!.dp)).toHaveAttribute('data-decided', 'true')
+    expect(Object.keys(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})).toContain(`visit:${hfCell.decisionId}`)
+  })
+
+  it('shows the map’s 喘 and 體重 answers in the three sections, and writes back to them (P4)', () => {
+    useVisitAnswersStore.getState().answer(PATIENT, 'weight-trend', 'up')
+    render(<ScenarioMap id="p4-stable-optimised" layout="sections" />)
+    const followUp = screen.getByTestId('cdss-followup-priorities')
+    const weight = within(followUp).getByRole('group', { name: '體重變化' })
+    expect(within(weight).getByRole('button', { name: '增加' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(weight).getByRole('button', { name: '減少' }))
+    expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT])['weight-trend']).toBe('down')
+    const breath = within(followUp).getByRole('group', { name: '喘 變化' })
+    fireEvent.click(within(breath).getByRole('button', { name: '惡化' }))
+    expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT])['dyspnoea-trend']).toBe('worse')
+    expect(within(breath).getByRole('button', { name: '惡化' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
