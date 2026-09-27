@@ -290,11 +290,49 @@ describe('the visit flow', () => {
     for (const term of ['rales', 'jvp', 'pitting-edema']) {
       expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
     }
-    fireEvent.click(screen.getByTestId('cdss-hf-sign-more-signs'))
-    expect(screen.getByTestId('cdss-hf-flow-sign-third-heart-sound-absent')).toHaveAttribute('aria-pressed', 'true')
+    // The folded rows open by themselves, already reading 無.
+    expect(screen.getByTestId('cdss-hf-sign-more-signs')).toHaveAttribute('aria-expanded', 'true')
+    for (const term of ['third-heart-sound', 'hepatojugular-reflux', 'ascites', 'hepatomegaly']) {
+      expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
+    }
     expect(remaining()).toBe('還有 3 題')
-    // Nothing left to mark: the button rests until a row changes.
-    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toBeDisabled()
+    // Every row it covers reads 無: the button shows pressed and says how to undo.
+    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toHaveTextContent('再按一次復原')
+  })
+
+  it('restores the rows as they were when 全部皆無 is pressed again', () => {
+    render(<Harness />)
+    suspectHeartFailure()
+    const remaining = () => screen.getByTestId('cdss-hf-questions-remaining').textContent
+    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-rales-not-assessed'))
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-none-signs'))
+    expect(screen.getByTestId('cdss-hf-flow-sign-rales-absent')).toHaveAttribute('aria-pressed', 'true')
+    expect(remaining()).toBe('還有 3 題')
+
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-none-signs'))
+    // rales was 未評估 before the press and is again; the others were unanswered.
+    expect(screen.getByTestId('cdss-hf-flow-sign-rales-not-assessed')).toHaveAttribute('aria-pressed', 'true')
+    for (const term of ['jvp', 'pitting-edema']) {
+      expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'false')
+    }
+    expect(remaining()).toBe('還有 4 題')
+    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toHaveTextContent('全部皆無')
+  })
+
+  it('keeps a row changed after 全部皆無 when the press is undone', () => {
+    render(<Harness />)
+    suspectHeartFailure()
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-none-symptoms'))
+    // The patient then mentions orthopnoea: that row is now 有.
+    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-orthopnea-present'))
+    const button = screen.getByTestId('cdss-hf-sign-none-symptoms')
+    expect(button).toHaveTextContent('其餘皆無')
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(button)
+    expect(screen.getByTestId('cdss-hf-flow-sign-orthopnea-present')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('cdss-hf-flow-sign-exertional-dyspnea-absent')).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('reads 其餘皆無 once a finding is 有, and leaves that finding alone', () => {

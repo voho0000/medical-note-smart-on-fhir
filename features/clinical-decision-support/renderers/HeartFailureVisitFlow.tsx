@@ -988,8 +988,12 @@ function SideTallyChip({
  * where only 腳腫 was asked about says exactly that.
  *
  * 「全部皆無」 answers 無 for every row of the question in one press, the folded
- * ones included (the button says how many it covers). Once any row is 有 it
- * reads 「其餘皆無」 and leaves the 有 rows as they are.
+ * ones included (the button says how many it covers, and opens them so the
+ * answers are on screen). Once any row is 有 it
+ * reads 「其餘皆無」 and leaves the 有 rows as they are. It is a toggle: while
+ * every row it covers reads 無 it shows pressed, and a second press puts those
+ * rows back as they were before the first — or unanswered, when this block
+ * was closed in between and no longer remembers.
  */
 function SignItemRows({
   questionId,
@@ -1006,9 +1010,11 @@ function SignItemRows({
   isEnglish: boolean
   showLegend: boolean
   onAnswer: (term: string, value: SignAnswerValue) => void
-  onAnswerAll?: (answers: Record<string, SignAnswerValue>) => void
+  onAnswerAll?: (answers: Record<string, SignAnswerValue | null>) => void
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
+  // What the rows held before 全部皆無 was pressed, so a second press restores it.
+  const [beforeNone, setBeforeNone] = useState<Record<string, SignAnswerValue | null> | null>(null)
   const common = items.filter((item) => item.common)
   const more = items.filter((item) => !item.common)
   const answerOf = (term: string) => clinicVitals?.signAnswers?.[term]?.value
@@ -1019,9 +1025,29 @@ function SignItemRows({
   const noneLabel = anyPresent
     ? (isEnglish ? 'Rest: none' : '其餘皆無')
     : (isEnglish ? 'None of these' : '全部皆無')
-  const noneTitle = isEnglish
-    ? `Mark ${noneTargets.length} finding${noneTargets.length === 1 ? '' : 's'} as absent${foldedTargets ? `, including ${foldedTargets} folded under more` : ''}`
-    : `把 ${noneTargets.length} 項記為「無」${foldedTargets ? `，含收起的 ${foldedTargets} 項` : ''}`
+  const noneTitle = allNone
+    ? (isEnglish ? 'Press again to restore these rows' : '再按一次，恢復成按下前的答案')
+    : isEnglish
+      ? `Mark ${noneTargets.length} finding${noneTargets.length === 1 ? '' : 's'} as absent${foldedTargets ? `, including ${foldedTargets} folded under more` : ''}`
+      : `把 ${noneTargets.length} 項記為「無」${foldedTargets ? `，含收起的 ${foldedTargets} 項` : ''}`
+  const toggleNone = () => {
+    if (!onAnswerAll) return
+    if (allNone) {
+      // Only rows still reading 無 go back; a row changed since keeps its answer.
+      const restore: Record<string, SignAnswerValue | null> = {}
+      for (const item of noneTargets) {
+        if (answerOf(item.term) !== 'absent') continue
+        restore[item.term] = beforeNone ? (beforeNone[item.term] ?? null) : null
+      }
+      setBeforeNone(null)
+      onAnswerAll(restore)
+      return
+    }
+    setBeforeNone(Object.fromEntries(noneTargets.map((item) => [item.term, answerOf(item.term) ?? null])))
+    onAnswerAll(Object.fromEntries(noneTargets.map((item) => [item.term, 'absent' as const])))
+    // The folded rows were answered too: open them so the answer is seen, not assumed.
+    if (foldedTargets > 0) setMoreOpen(true)
+  }
   const row = (item: VisitSignItem) => {
     const visibleLabel = isEnglish ? item.en : item.zh
     return <div key={item.term} className="flex flex-wrap items-center gap-2">
@@ -1057,15 +1083,23 @@ function SignItemRows({
           {onAnswerAll ? (
             <button
               type="button"
-              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60"
-              disabled={noneTargets.length === 0 || allNone}
+              className={cn(
+                'ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60',
+                allNone
+                  ? 'border-primary bg-primary/10 text-primary hover:bg-primary/15'
+                  : 'border-border bg-background text-foreground hover:bg-muted/60',
+              )}
+              disabled={noneTargets.length === 0}
+              aria-pressed={allNone}
               title={noneTitle}
-              aria-label={noneTitle}
-              onClick={() => onAnswerAll(Object.fromEntries(noneTargets.map((item) => [item.term, 'absent' as const])))}
+              onClick={toggleNone}
               data-testid={`cdss-hf-sign-none-${questionId}`}
             >
+              {allNone ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
               {noneLabel}
-              {foldedTargets && !allNone ? (
+              {allNone ? (
+                <span className="font-normal">{isEnglish ? '· press again to undo' : '· 再按一次復原'}</span>
+              ) : foldedTargets ? (
                 <span className="font-normal text-muted-foreground">
                   {isEnglish ? `(incl. ${foldedTargets} folded)` : `（含收起 ${foldedTargets} 項）`}
                 </span>
