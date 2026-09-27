@@ -57,5 +57,21 @@ describe('CrossFacilityTimeline', () => {
 
     expect(await screen.findByText('A Hospital')).toBeInTheDocument()
     expect(screen.queryByText('示範長青醫院')).not.toBeInTheDocument()
+    expect(screen.queryByText('Document source date:')).not.toBeInTheDocument()
+  })
+
+  it('labels document provenance dates even when the source quote matches exactly', async () => {
+    const onNavigate = jest.fn()
+    render(<LanguageProvider><CrossFacilityTimeline result={{ ...result, timeline: [{
+      ...result.timeline[0], key: 'D1', resourceType: 'DocumentReference', resourceId: 'synthetic-doc',
+      date: '2026-08-12', label: 'Surgery documented in 2024',
+      documentEvidence: [{ source: 'D1', quote: 'Surgery performed in 2024', verification: 'exact' }],
+    }] }} title="Timeline" categoryLabel={() => 'Procedure'} encounterClassLabel={() => 'Document'}
+      earlierLabel="Earlier" collapseLabel="Less" droppedNote={null} onNavigate={onNavigate} /></LanguageProvider>)
+    expect(await screen.findByText('Document source date:')).toBeVisible()
+    expect(screen.getByText(/Document rows use the source date/)).toBeVisible()
+    expect(screen.queryByText('Excerpt needs review. Open the source to check.')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Surgery documented in 2024/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'synthetic-doc', date: '2026-08-12', evidenceQuote: 'Surgery performed in 2024' }))
   })
 })
