@@ -220,6 +220,7 @@ export function DecisionMapColumns({
   cellFilters,
   initialOpen,
   stepsBeforeNext,
+  leadDetailDps,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -258,6 +259,8 @@ export function DecisionMapColumns({
    * 「下一區」, and the clinician presses it — nothing moves on its own.
    */
   stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
+  /** Points whose card a lead draws itself (02's 四支柱), never again at a section's foot. */
+  leadDetailDps?: ReadonlySet<string>
 }) {
   const [showAll, setShowAll] = useState(false)
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
@@ -550,7 +553,7 @@ export function DecisionMapColumns({
             ) : null}
             {/* A point hidden by the fold (opened before 顯示全部 was turned
                 off) still shows its card, at the foot. */}
-            {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
+            {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !leadDetailDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
             {columnFooters?.[block]}
             {block === 'outlook' ? outlookSlot : null}
             {stepsBeforeNext?.[block] ? (

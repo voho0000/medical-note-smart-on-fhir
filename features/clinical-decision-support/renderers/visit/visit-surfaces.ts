@@ -50,6 +50,16 @@ export interface VisitMapSurfaces {
      */
     answeredBy?: { request: string; dps: readonly string[] }
   }
+  /**
+   * Points always shown together at the head of 02, whatever their state
+   * (HF: the four pillars), each deciding in its own box.
+   */
+  pillars?: {
+    title: string
+    dps: readonly string[]
+    /** Shown with them only while it needs the clinician (HF: DP-26, a paused pillar). */
+    whenActive?: readonly string[]
+  }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode
   /** Folded at the foot of a column: what has no single point to live under. */

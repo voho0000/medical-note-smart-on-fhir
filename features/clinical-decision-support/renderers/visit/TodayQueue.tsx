@@ -7,6 +7,7 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import type { QueueRow, QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
+import { StatePill } from './visit-presentation'
 
 /**
  * 今天要決定: the only place on the screen with the day's treatment buttons in
@@ -74,18 +75,19 @@ export function TodayQueue({
   const headingId = `${testId}-title`
   if (hideWhenEmpty && rows.length === 0) return null
   return (
-    <section aria-labelledby={headingId} className="space-y-2" data-testid={testId}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+    <section aria-labelledby={headingId} className="space-y-1.5" data-testid={testId}>
+      {/* A subheading as the map prints its groups (「分流與安全」), not a panel title. */}
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-0.5">
         <h3
           id={headingId}
           ref={headingRef}
           tabIndex={-1}
-          className="text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="text-[11px] font-semibold text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {title ?? (isEnglish ? 'To decide today' : '今天要決定')}
         </h3>
         {rows.length ? (
-          <span className="text-xs tabular-nums text-muted-foreground" role="status" data-testid={`${testId}-progress`}>
+          <span className="text-[11px] tabular-nums text-muted-foreground" role="status" data-testid={`${testId}-progress`}>
             {isEnglish
               ? `${rows.length - pending}/${rows.length} decided`
               : `已決定 ${rows.length - pending}/${rows.length}`}
@@ -93,128 +95,207 @@ export function TodayQueue({
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-border px-3 py-2.5 text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
+        <p className="rounded-md border border-border px-2.5 py-2 text-sm text-muted-foreground" data-testid={`${testId}-empty`}>
           {isEnglish ? 'Nothing to decide today.' : '今天沒有要決定的事。'}
         </p>
       ) : (
-        <ol ref={listRef} className="divide-y divide-border overflow-hidden rounded-md border border-border">
-          {rows.map((row) => {
-            const current = row.current
-            const decidedSteps = row.steps.filter((step) => step.decision)
-            const shown = current ?? row.steps[row.steps.length - 1]
-            const point = shown.point
-            return (
-              <li
-                key={row.key}
-                className={cn(
-                  'space-y-2 px-3 py-2.5',
-                  row.safety && current && 'bg-destructive/5',
-                )}
-                data-visit-queue-row={row.key}
-                data-visit-queue-dp={row.steps[0].point.dp}
-                data-visit-current-dp={current?.point.dp}
-                data-visit-queue-state={point.state}
-                data-decided={current ? 'false' : 'true'}
-              >
-                {current ? (
-                  <>
-                    {decidedSteps.map((step) => (
-                      <p key={step.key} className="flex items-center gap-1.5 text-xs text-muted-foreground" data-visit-chain-done={step.point.dp}>
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-                        <span className="font-mono">{step.point.dp}</span>
-                        <span>{step.decision?.record.actionLabel ?? step.decision?.action.label}</span>
-                      </p>
-                    ))}
-                    <div className="flex min-w-0 gap-2.5">
-                      <span className="mt-0.5 w-12 shrink-0 font-mono text-xs font-semibold text-muted-foreground">
-                        {point.dp}
-                      </span>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="flex flex-wrap items-center gap-1.5">
-                          {row.safety ? (
-                            <Badge variant="destructive" className="h-5 px-1.5 text-[11px]">
-                              {isEnglish ? 'Safety' : '安全'}
-                            </Badge>
-                          ) : null}
-                          {point.source !== sourceOfPage ? (
-                            <Badge variant="outline" className="h-5 px-1.5 text-[11px]">{point.source.toUpperCase()}</Badge>
-                          ) : null}
-                          <span className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">
-                            {point.headline ?? point.label}
-                          </span>
-                        </p>
-                        {point.why ? (
-                          <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p>
-                        ) : null}
-                        {onOpenDetail ? (
-                          <button
-                            type="button"
-                            className="inline-flex min-h-8 items-center text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            aria-expanded={Boolean(detailFor?.(point))}
-                            onClick={() => onOpenDetail(point)}
-                            data-visit-row-detail={point.dp}
-                          >
-                            {isEnglish ? 'Reasons and guideline' : '依據與細節'}
-                          </button>
-                        ) : null}
-                        <VisitDecisionControls
-                          point={point}
-                          surface="queue"
-                          isEnglish={isEnglish}
-                          onDecide={onDecide && current ? (action) => {
-                            focusFrom.current = row.key
-                            onDecide(current, action)
-                          } : undefined}
-                        />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex min-w-0 gap-2.5">
-                    <span className="mt-1 w-12 shrink-0 font-mono text-xs font-semibold text-muted-foreground">
-                      {point.dp}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      {/* What the decision was about, so 「✓ 改 2.5 mg bid」 is never a dose with no drug. */}
-                      <p className="text-xs text-muted-foreground" data-visit-decided-about="">{point.label}</p>
-                      {decidedSteps.slice(0, -1).map((step) => (
-                        <p key={step.key} className="flex items-center gap-1.5 text-xs text-muted-foreground" data-visit-chain-done={step.point.dp}>
-                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-                          <span className="font-mono">{step.point.dp}</span>
-                          <span>{step.decision?.record.actionLabel ?? step.decision?.action.label}</span>
-                        </p>
-                      ))}
-                      <VisitDecisionControls
-                        point={point}
-                        decision={shown.decision}
-                        surface="queue"
-                        isEnglish={isEnglish}
-                        onClear={onClear ? () => {
-                          focusFrom.current = row.key
-                          onClear(shown)
-                        } : undefined}
-                      />
-                      {/* A decided row keeps its card one press away. */}
-                      {onOpenDetail ? (
-                        <button
-                          type="button"
-                          className="inline-flex min-h-8 items-center text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-expanded={Boolean(detailFor?.(point))}
-                          onClick={() => onOpenDetail(point)}
-                          data-visit-row-detail={point.dp}
-                        >
-                          {isEnglish ? 'Reasons and guideline' : '依據與細節'}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-                {detailFor?.(point) ?? null}
-              </li>
-            )
-          })}
+        <ol ref={listRef} className="space-y-2">
+          {rows.map((row) => (
+            <QueueRowBox
+              key={row.key}
+              row={row}
+              isEnglish={isEnglish}
+              sourceOfPage={sourceOfPage}
+              {...(onDecide ? { onDecide: (step, action) => { focusFrom.current = row.key; onDecide(step, action) } } : {})}
+              {...(onClear ? { onClear: (step) => { focusFrom.current = row.key; onClear(step) } } : {})}
+              {...(detailFor ? { detailFor } : {})}
+              {...(onOpenDetail ? { onOpenDetail } : {})}
+            />
+          ))}
         </ol>
       )}
     </section>
+  )
+}
+
+const BOX = 'scroll-mt-2 space-y-1.5 rounded-md border bg-background px-2.5 py-2'
+const DETAIL_LINK = 'ml-auto inline-flex min-h-8 shrink-0 items-center rounded-md px-1.5 text-xs font-medium text-primary hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/** The line a box opens with, as a map cell does: DP code, name, source, 依據與細節. */
+function BoxHeader({
+  point,
+  isEnglish,
+  sourceOfPage,
+  detailOpen,
+  onOpenDetail,
+}: {
+  point: DecisionPointView
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  detailOpen: boolean
+  onOpenDetail?: (point: DecisionPointView) => void
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+      <span className="text-sm font-medium text-foreground">{point.label}</span>
+      {point.source !== sourceOfPage ? (
+        <Badge variant="outline" className="h-5 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+      ) : null}
+      {onOpenDetail ? (
+        <button
+          type="button"
+          className={DETAIL_LINK}
+          aria-expanded={detailOpen}
+          onClick={() => onOpenDetail(point)}
+          data-visit-row-detail={point.dp}
+        >
+          {isEnglish ? 'Reasons and guideline' : '依據與細節'}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function ChainDone({ steps }: { steps: readonly QueueStep[] }) {
+  return (
+    <>
+      {steps.map((step) => (
+        <p key={step.key} className="flex items-center gap-1.5 text-xs text-muted-foreground" data-visit-chain-done={step.point.dp}>
+          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+          <span className="font-mono">{step.point.dp}</span>
+          <span>{step.decision?.record.actionLabel ?? step.decision?.action.label}</span>
+        </p>
+      ))}
+    </>
+  )
+}
+
+/**
+ * One decision to take today, drawn as the map draws a point (clinician
+ * feedback 2026-09-28: 「這邊的 UI 風格也不像決策地圖」): a box of its own
+ * with the DP code and name, the state in the map's pill beside the pack's
+ * question, its one-line reason, and the buttons. A decided box collapses to
+ * the decision; a chain walks on in the same box. Used in the lists and in
+ * 02's 四支柱.
+ */
+export function QueueRowBox({
+  row,
+  isEnglish,
+  sourceOfPage,
+  onDecide,
+  onClear,
+  detailFor,
+  onOpenDetail,
+  detailOpen,
+  queued = true,
+  as: Element = 'li',
+}: {
+  row: QueueRow
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  onDecide?: (step: QueueStep, action: VisitAction) => void
+  onClear?: (step: QueueStep) => void
+  detailFor?: (point: DecisionPointView) => ReactNode
+  onOpenDetail?: (point: DecisionPointView) => void
+  /** The box's card is open, drawn by the caller outside the box (02's 四支柱). */
+  detailOpen?: boolean
+  /**
+   * False for a pillar that decides in its box without being on today's list
+   * (a dose to confirm): the box is the same, but it is not one of the rows.
+   */
+  queued?: boolean
+  as?: 'li' | 'div'
+}) {
+  const current = row.current
+  const decidedSteps = row.steps.filter((step) => step.decision)
+  const shown = current ?? row.steps[row.steps.length - 1]
+  const point = shown.point
+  const detail = detailFor?.(point)
+  return (
+    <Element
+      className={cn(BOX, row.safety && current ? 'border-destructive/50' : 'border-border')}
+      data-visit-queue-row={queued ? row.key : undefined}
+      data-visit-point-box={queued ? undefined : point.dp}
+      data-visit-queue-dp={row.steps[0].point.dp}
+      data-visit-current-dp={current?.point.dp}
+      data-visit-queue-state={point.state}
+      data-decided={current ? 'false' : 'true'}
+    >
+      <BoxHeader point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} detailOpen={detailOpen ?? Boolean(detail)} {...(onOpenDetail ? { onOpenDetail } : {})} />
+      {current ? (
+        <>
+          <ChainDone steps={decidedSteps} />
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <StatePill state={row.safety ? 'safety' : point.state} isEnglish={isEnglish} inQueue />
+            <span className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">
+              {point.headline ?? point.label}
+            </span>
+          </p>
+          {point.why ? (
+            <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p>
+          ) : null}
+          <VisitDecisionControls
+            point={point}
+            surface="queue"
+            isEnglish={isEnglish}
+            onDecide={onDecide ? (action) => onDecide(current, action) : undefined}
+          />
+        </>
+      ) : (
+        <>
+          {/* What the decision was about, so 「✓ 改 2.5 mg bid」 is never a dose with no drug. */}
+          <p className="sr-only" data-visit-decided-about="">{point.label}</p>
+          <ChainDone steps={decidedSteps.slice(0, -1)} />
+          <VisitDecisionControls
+            point={point}
+            decision={shown.decision}
+            surface="queue"
+            isEnglish={isEnglish}
+            onClear={onClear ? () => onClear(shown) : undefined}
+          />
+        </>
+      )}
+      {detail ?? null}
+    </Element>
+  )
+}
+
+/**
+ * A point with nothing to decide today, drawn in the same box as one that has
+ * — so 02's 四支柱 are four boxes whatever their state. Absent points (不適用)
+ * are dashed and muted, as on the map.
+ */
+export function PointBox({
+  point,
+  isEnglish,
+  sourceOfPage,
+  detail,
+  onOpenDetail,
+  detailOpen,
+}: {
+  point: DecisionPointView
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  detail?: ReactNode
+  onOpenDetail?: (point: DecisionPointView) => void
+  /** The box's card is open, drawn by the caller outside the box. */
+  detailOpen?: boolean
+}) {
+  const absent = point.state === 'not-applicable' || point.state === 'not-included'
+  return (
+    <div
+      className={cn(BOX, absent ? 'border-dashed border-border bg-transparent' : 'border-border')}
+      data-visit-point-box={point.dp}
+      data-state={point.state}
+    >
+      <BoxHeader point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} detailOpen={detailOpen ?? Boolean(detail)} {...(onOpenDetail ? { onOpenDetail } : {})} />
+      <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <StatePill state={point.state} isEnglish={isEnglish} />
+        <span className={cn('text-sm leading-snug', absent ? 'text-muted-foreground' : 'text-foreground')}>{point.headline ?? point.label}</span>
+      </p>
+      {point.why && !absent ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
+      {detail ?? null}
+    </div>
   )
 }

@@ -327,11 +327,12 @@ describe('HF surfaces on the decision map', () => {
     const between: Element[] = []
     for (let node = screen.getByTestId('cdss-visit-asks').nextElementSibling; node && node.getAttribute('data-testid') !== 'cdss-visit-queue-status'; node = node.nextElementSibling) between.push(node)
     expect(between).toEqual([detail])
-    // …and 02 opens with its decision rows, their primary buttons first.
+    // …and 02 opens with its four pillars, deciding in their boxes, their
+    // primary buttons first.
     const treatment = screen.getByTestId('cdss-visit-column-treatment')
     expect(treatment.firstElementChild).toBe(screen.getByTestId('cdss-visit-lead-treatment'))
-    expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toBe(screen.getByTestId('cdss-visit-queue-treatment'))
-    const firstPrimary = screen.getByTestId('cdss-visit-queue-treatment').querySelector('[data-visit-primary]')
+    expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toBe(screen.getByTestId('cdss-visit-pillars'))
+    const firstPrimary = screen.getByTestId('cdss-visit-pillars').querySelector('[data-visit-primary]')
     expect(firstPrimary).not.toBeNull()
     expect(treatment.querySelector('[data-visit-primary]')).toBe(firstPrimary)
   })

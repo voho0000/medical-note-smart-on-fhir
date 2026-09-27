@@ -21,6 +21,8 @@ import {
   queuedPointDps,
   returnVisitLabel,
   visitDecisionKey,
+  type QueueRow,
+  type QueueStep,
 } from './visit-decisions'
 import type {
   DecisionPointView,
@@ -32,7 +34,7 @@ import type {
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
 import { DecisionPointDetail } from './DecisionPointDetail'
-import { TodayQueue } from './TodayQueue'
+import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
 import { VisitAsks } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
@@ -339,24 +341,91 @@ export function VisitDecisionScreen({
   // diagnostic step (診斷), 02 and 03 their rows. There is no queue above
   // them, so nothing is on the screen twice.
   const rowsIn = (block: VisitBlock) => rows.filter((row) => row.steps[0].point.block === block)
+  // HFrEF's four pillars are always in view at the head of 02, in their own
+  // order and in one place, whatever their state today (clinician feedback
+  // 2026-09-28: 「治療隨時 HFrEF 的四大支柱呢…都要出現」): a pillar with a
+  // decision takes it in its own box, the others say where they stand. They
+  // are neither rows of 待決定 nor cells of 02 其餘.
+  const pillarDps = useMemo(() => [...(surfaces?.pillars?.dps ?? []), ...(surfaces?.pillars?.whenActive ?? [])], [surfaces?.pillars])
+  const isPillar = useCallback((point: DecisionPointView) => point.source === sourceOfPage && pillarDps.includes(point.dp), [pillarDps, sourceOfPage])
+  const rowOfPoint = (point: DecisionPointView) => rows.find((candidate) => candidate.steps[0].point.dp === point.dp && candidate.steps[0].point.source === point.source)
+  const pillarPoints = pillarDps
+    .map((dp) => model.points.find((point) => point.dp === dp && point.source === sourceOfPage))
+    .filter((point): point is DecisionPointView => Boolean(point))
+    // DP-26 and its like only while they ask for something.
+    .filter((point) => surfaces?.pillars?.dps.includes(point.dp) || Boolean(rowOfPoint(point)) || DECISION_STATES.has(point.state))
+  const listRowsIn = (block: VisitBlock) => rowsIn(block).filter((row) => !isPillar(row.steps[0].point))
   // Every point a row stands for — and a question the lead asks itself — is
-  // not repeated as a cell.
+  // not repeated as a cell. (The pillars leave 02's cells through its cell
+  // filter, so one still waiting on the clinician counts in 02's summary.)
   const rowDps = useMemo(() => new Set([
     ...queuedPointDps(allRows),
     ...model.points.filter(askedHere).map((point) => point.dp),
   ]), [allRows, askedHere, model.points])
+  const detailFor = (point: DecisionPointView) => (openPoint && openPoint.dp === point.dp && openPoint.source === point.source ? detailNode : undefined)
+  const decideRow = onRecordDecision ? (step: QueueStep, action: VisitAction) => record(step.key, step.point, action, 'queue') : undefined
+  const clearRow = onClearDecision ? (step: QueueStep) => clear(step.key) : undefined
+  // A pillar box decides in place: today's row where the pack queued it, else
+  // the point's own steps where it asks for a decision (a dose to confirm),
+  // else it just says where the pillar stands.
+  const pillarBox = (point: DecisionPointView) => {
+    const queued = rowOfPoint(point)
+    const steps = queued ? undefined : pointSteps(point, decisions, now)
+    const row: QueueRow | undefined = queued ?? (point.actions.length > 0 && DECISION_STATES.has(point.state) && steps
+      ? { key: visitDecisionKey(point), steps, ...(steps.find((step) => !step.decision) ? { current: steps.find((step) => !step.decision)! } : {}), safety: point.state === 'safety' }
+      : undefined)
+    return row ? (
+      <QueueRowBox
+        key={point.dp}
+        as="div"
+        row={row}
+        isEnglish={isEnglish}
+        sourceOfPage={sourceOfPage}
+        {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
+        {...(clearRow ? { onClear: clearRow } : {})}
+        onOpenDetail={toggleOpen}
+        detailOpen={Boolean(detailFor(point))}
+        queued={Boolean(queued)}
+      />
+    ) : (
+      <PointBox key={point.dp} point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpenDetail={toggleOpen} detailOpen={Boolean(detailFor(point))} />
+    )
+  }
+  // Two to a row on a wide screen; an opened card spans its row, right under
+  // the box that opened it, as the map's cells do.
+  const pillarPairs = pillarPoints.reduce<DecisionPointView[][]>((pairs, point, index) => {
+    if (index % 2 === 0) pairs.push([point])
+    else pairs[pairs.length - 1].push(point)
+    return pairs
+  }, [])
+  const pillarGroup = pillarPoints.length > 0 && surfaces?.pillars ? (
+    <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-title" data-testid="cdss-visit-pillars">
+      <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.title}</h3>
+      <div className="space-y-2">
+        {pillarPairs.map((pair) => {
+          const opened = pair.find((point) => detailFor(point))
+          return (
+            <div key={pair.map((point) => point.dp).join('-')} className="space-y-2">
+              <div className="grid items-start gap-2 @min-[48rem]:grid-cols-2">{pair.map(pillarBox)}</div>
+              {opened ? detailFor(opened) : null}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  ) : null
   const decisionList = (block: VisitBlock, title: string) => (
     <TodayQueue
-      rows={rowsIn(block)}
+      rows={listRowsIn(block)}
       isEnglish={isEnglish}
       sourceOfPage={sourceOfPage}
       title={title}
       testId={`cdss-visit-queue-${block}`}
       hideWhenEmpty
-      onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'queue') : undefined}
-      onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+      onDecide={decideRow}
+      onClear={clearRow}
       onOpenDetail={toggleOpen}
-      detailFor={(point) => (openPoint && openPoint.dp === point.dp && openPoint.source === point.source ? detailNode : undefined)}
+      detailFor={detailFor}
     />
   )
   const undiagnosed = model.asks.length === 0
@@ -430,7 +499,12 @@ export function VisitDecisionScreen({
         {decisionList('status', statusView === 'diagnosis' ? (isEnglish ? 'Diagnosis decisions' : '診斷決定') : (isEnglish ? 'To decide' : '待決定'))}
       </>
     ),
-    treatment: decisionList('treatment', isEnglish ? 'To decide' : '待決定'),
+    treatment: (
+      <>
+        {pillarGroup}
+        {decisionList('treatment', isEnglish ? (pillarGroup ? 'Other decisions' : 'To decide') : (pillarGroup ? '其他待決定' : '待決定'))}
+      </>
+    ),
     outlook: decisionList('outlook', isEnglish ? 'To decide' : '待決定'),
   }
   const unanswered = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value).length
@@ -454,6 +528,7 @@ export function VisitDecisionScreen({
   // 01's cells: the view's own, and never the every-visit point whose
   // questions (喘／體重, AF 症狀／出血) are the asks right above.
   const cellFilters: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>> = {
+    treatment: (point) => !isPillar(point),
     status: (point) => {
       if (model.asks.length && point.semanticId.endsWith('-visit-response')) return false
       if (!diagnosisView) return true
@@ -488,6 +563,7 @@ export function VisitDecisionScreen({
         rowDps={rowDps}
         cellFilters={cellFilters}
         initialOpen={initialOpen}
+        leadDetailDps={new Set(pillarPoints.map((point) => point.dp))}
         {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
           ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
           : {})}

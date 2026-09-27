@@ -102,6 +102,13 @@ function cell(dp: string, source = 'hf'): HTMLElement {
   return found
 }
 
+/** A pillar's box in 02's 四支柱, whatever its state: a queued row, a box deciding in place, or a plain box. */
+function pillar(dp: string): HTMLElement {
+  const box = document.querySelector<HTMLElement>(`[data-testid="cdss-visit-pillars"] [data-visit-queue-dp="${dp}"], [data-testid="cdss-visit-pillars"] [data-visit-point-box="${dp}"]`)
+  if (!box) throw new Error(`no pillar box ${dp}`)
+  return box
+}
+
 /** A row's 「依據與細節」: a queued point has no cell; its card opens under the row. */
 function rowDetail(dp: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
@@ -176,21 +183,30 @@ describe('real pack · P4 stable and optimised', () => {
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
   })
 
-  it('keeps each group’s cells under its own heading (RAS stays with the four pillars)', () => {
+  // Clinician feedback 2026-09-28: 「治療隨時 HFrEF 的四大支柱呢…都要出現」.
+  it('keeps the four pillars together at the head of 02, settled ones too, and not again as cells', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
     const treatment = screen.getByTestId('cdss-visit-column-treatment')
-    const pillars = within(treatment).getByText('四支柱').parentElement!
-    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) expect(pillars).toContainElement(cell(dp))
-    const triage = within(treatment).getByText('分流與安全').parentElement!
-    expect(triage).not.toContainElement(cell('DP-07'))
+    const pillars = within(treatment).getByTestId('cdss-visit-pillars')
+    expect(pillars).toHaveTextContent('四支柱')
+    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) {
+      expect(pillars).toContainElement(pillar(dp))
+      expect(pillar(dp)).toHaveTextContent('已定')
+      expect(queryCell(dp)).toBeUndefined()
+    }
+    // DP-26 joins them only while a pillar is paused; there is none here.
+    expect(queryCell('DP-26')).toBeUndefined()
+    expect(within(pillars).queryByText('暫停與重啟')).toBeNull()
   })
 
   it('opens the settled DP-09 with the 50 mg target in its reason, no button, the guideline folded', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    fireEvent.click(cell('DP-09'))
+    fireEvent.click(rowDetail('DP-09'))
     const detail = screen.getByTestId('cdss-visit-detail')
+    // Right under the pair of pillar boxes it was opened from.
+    expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(detail)
     expect(detail).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
     expect(within(detail).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
     const evidence = screen.getByTestId('cdss-visit-detail-module-heart-failure-mra')
@@ -212,9 +228,14 @@ describe('real pack · P5 titrating with AF', () => {
       { dp: 'DP-10', primary: '開始 SGLT2i' },
     ])
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
-    // All three are 02's rows, at the head of 02 — not repeated as cells.
-    expect(queue('treatment').map((item) => item.dp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
-    for (const dp of ['DP-07', 'DP-09', 'DP-10']) expect(queryCell(dp)).toBeUndefined()
+    // All three decide in their pillar boxes at the head of 02 — not as a
+    // separate list, and not repeated as cells.
+    const pillars = screen.getByTestId('cdss-visit-pillars')
+    for (const dp of ['DP-07', 'DP-09', 'DP-10']) {
+      expect(pillars).toContainElement(row(dp))
+      expect(queryCell(dp)).toBeUndefined()
+    }
+    expect(queue('treatment')).toEqual([])
     // The map opens section by section: with no safety row the visit starts
     // at 01, open; 02 and 03 are closed, and 02 says what it holds.
     expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
@@ -228,8 +249,10 @@ describe('real pack · P5 titrating with AF', () => {
     expect(treatmentToggle).not.toHaveTextContent('需處理')
     fireEvent.click(treatmentToggle)
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
-    expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
-    expect(cell('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
+    // The beta-blocker's dose to confirm is decided in its own pillar box.
+    expect(pillar('DP-08')).toHaveAttribute('data-visit-queue-state', 'confirm')
+    expect(pillar('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
+    expect(within(pillar('DP-08')).getByRole('button', { name: '上調至 5 mg' })).toBeInTheDocument()
     expect(cell('DP-14', 'af')).toHaveAttribute('data-state', 'done')
     expect(cell('DP-14', 'af')).toHaveTextContent('apixaban 5 mg bid：劑量符合')
     fireEvent.click(cell('DP-14', 'af'))
@@ -242,7 +265,6 @@ describe('real pack · P5 titrating with AF', () => {
     const plan = screen.getByTestId('cdss-visit-plan')
     expect(plan).toHaveTextContent('K、Cr、血壓，14 天內')
     expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
-    expect(screen.getByTestId('cdss-visit-queue-treatment-progress')).toHaveTextContent('已決定 3/3')
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
   })
@@ -254,7 +276,7 @@ describe('real pack · P6 hyperkalaemia', () => {
     expect(queue()).toEqual([{ dp: 'DP-09', primary: '暫停 MRA' }])
     expect(row('DP-09')).toHaveAttribute('data-visit-queue-state', 'safety')
     expect(row('DP-09')).toHaveTextContent('K 5.7 → 暫停 MRA？')
-    expect(cell('DP-07')).toHaveAttribute('data-state', 'info')
+    expect(pillar('DP-07')).toHaveAttribute('data-state', 'info')
     fireEvent.click(primaryOf('DP-09'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr，7 天內')
     expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
@@ -267,15 +289,16 @@ describe('real pack · P6 hyperkalaemia', () => {
     // safety row (no cell), so its card opens under the row; DP-07 is a cell.
     expect(queryCell('DP-09')).toBeUndefined()
     fireEvent.click(rowDetail('DP-09'))
-    expect(row('DP-09')).toContainElement(screen.getByTestId('cdss-visit-detail'))
+    // In 四支柱 the card opens right under the pair of boxes, full width.
+    expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(screen.getByTestId('cdss-visit-detail'))
     const mra = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-mra')
     expect(mra.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'actionable')
-    fireEvent.click(cell('DP-07'))
+    fireEvent.click(rowDetail('DP-07'))
     // K 5.7 on the ARNI: the pack's own card calls for a temporary reduction
     // (ESC §6.1.6) beside the MRA hold, not 「維持現劑量」.
     const ras = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-ras-inhibition')
     expect(ras.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'review')
-    expect(cell('DP-07')).toHaveTextContent('先處理高血鉀')
+    expect(pillar('DP-07')).toHaveTextContent('先處理高血鉀')
   })
 })
 
@@ -334,10 +357,11 @@ describe('real pack · P8 first visit after an HF admission', () => {
     expect(model.flags).toContain('post-hfh')
     render(<ScenarioMap id="p8-post-discharge" />)
     expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('09-05～09-12 HF 住院')
+    // The pillars in their own places (07, 08, 09), each deciding in its box.
     expect(queue()).toEqual([
-      { dp: 'DP-09', primary: '重新開始 MRA' },
       { dp: 'DP-07', primary: '上調至 49/51' },
       { dp: 'DP-08', primary: '上調至 5 mg' },
+      { dp: 'DP-09', primary: '重新開始 MRA' },
     ])
     expect(row('DP-07')).toHaveTextContent('ARNI 24/26 → 49/51 mg bid')
     expect(row('DP-08')).toHaveTextContent('bisoprolol 2.5 mg → 5 mg')
@@ -357,9 +381,10 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(model.stage).toBe('follow-up')
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
+    // The MRA start in its pillar box at the head of 02; the AF dose below.
     expect(queue()).toEqual([
-      { dp: 'DP-14', primary: '改 2.5 mg bid' },
       { dp: 'DP-09', primary: '開始 MRA' },
+      { dp: 'DP-14', primary: '改 2.5 mg bid' },
     ])
     expect(row('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
     expect(row('DP-14')).toHaveTextContent('2/3')
@@ -630,18 +655,16 @@ describe('real pack · reading the map without scrolling back up', () => {
   it('steps from card to card in the pack order and on into the next section (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    // The stepper walks the cells. DP-07, DP-09 and DP-10 are 02's decision
-    // rows (not cells), so from DP-08 it steps past them to DP-26, the next
-    // pillar point in the pack's order.
-    fireEvent.click(cell('DP-08'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
-    expect(screen.getByTestId('cdss-visit-detail-previous')).toHaveAttribute('data-dp', 'DP-11')
+    // The stepper walks the cells. The four pillars are boxes at the head of
+    // 02, not cells, so it walks what follows them: DP-11 → DP-06 → …
+    fireEvent.click(cell('DP-11'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
     fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-26')
-    // The card follows its cell: it sits in the slot right after DP-26.
-    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-26'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-06')
+    // The card follows its cell: it sits in the slot right after DP-06.
+    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-06'))
     fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
 
     // The last card of 02 leads into 03, which opens in its place.
     const treatmentCells = [...screen.getByTestId('cdss-visit-column-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]

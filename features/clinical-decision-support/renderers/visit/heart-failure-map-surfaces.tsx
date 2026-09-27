@@ -65,6 +65,8 @@ export function heartFailureVisitSurfaces(
       // 「還不確定」 path ends at DP-34's confirmation, in the same card.
       answeredBy: { request: 'hf-suspicion', dps: ['DP-00', 'DP-01', 'DP-34'] },
     },
+    // HFrEF's four pillars, always in view at the head of 02.
+    pillars: { title: isEnglish ? 'Four pillars' : '四支柱', dps: ['DP-07', 'DP-08', 'DP-09', 'DP-10'], whenActive: ['DP-26'] },
     columnFooters: {
       status: (
         <>
