@@ -261,7 +261,9 @@ describe('the visit flow', () => {
     expect(screen.getByText('肺部濕囉音（rales）')).toBeVisible()
     expect(screen.getByText('凹陷性水腫（pitting edema）')).toBeVisible()
     fireEvent.click(screen.getByTestId('cdss-hf-sign-more-signs'))
-    for (const label of ['第三心音（S3）', '肝頸反流（HJR）', '腹水（ascites）', '肝腫大（hepatomegaly）']) expect(screen.getByText(label)).toBeVisible()
+    for (const label of ['第三心音（S3）', '肝頸反流（HJR）', '腹水（ascites）']) expect(screen.getByText(label)).toBeVisible()
+    // Hepatomegaly is not asked (a less specific sign in ESC 2026 Table 7).
+    expect(screen.queryByText('肝腫大（hepatomegaly）')).toBeNull()
   })
 
   it('omits the duplicate congestion evidence table from the visit-flow detail', () => {
@@ -285,14 +287,14 @@ describe('the visit flow', () => {
     const signsNone = screen.getByTestId('cdss-hf-sign-none-signs')
     expect(signsNone).toHaveTextContent('全部皆無')
     // The rows folded under 「更多」 are named on the button before it writes them.
-    expect(signsNone).toHaveTextContent('含收起 4 項')
+    expect(signsNone).toHaveTextContent('含收起 3 項')
     fireEvent.click(signsNone)
     for (const term of ['rales', 'jvp', 'pitting-edema']) {
       expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
     }
     // The folded rows open by themselves, already reading 無.
     expect(screen.getByTestId('cdss-hf-sign-more-signs')).toHaveAttribute('aria-expanded', 'true')
-    for (const term of ['third-heart-sound', 'hepatojugular-reflux', 'ascites', 'hepatomegaly']) {
+    for (const term of ['third-heart-sound', 'hepatojugular-reflux', 'ascites']) {
       expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
     }
     expect(remaining()).toBe('還有 3 題')

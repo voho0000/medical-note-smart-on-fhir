@@ -473,10 +473,10 @@ describe('the questions', () => {
     const signs = flow.questions.find((item) => item.id === 'signs')
 
     expect(symptoms?.state).toBe('answered')
-    expect(symptoms?.answerText).toBe(
-      '勞力性喘：有 · 端坐呼吸：無 · PND：未評估 · 疲倦：有 · 腳腫：有 · 腹脹：無 · 更多 3 項未評估',
-    )
-    expect(signs?.answerText).toBe('Rales：− · JVP：− · Pitting edema：+ · 更多 4 項未評估')
+    // Grouped by answer, the findings first, so the one row that matters is
+    // not lost in a list of 「：−」.
+    expect(symptoms?.answerText).toBe('有：勞力性喘、疲倦、腳腫；無：端坐呼吸、腹脹；未評估：PND；3 項未答')
+    expect(signs?.answerText).toBe('有：Pitting edema；無：Rales、JVP；3 項未答')
     // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
     // systemic one; the tally is read across both questions.
     expect(signs?.sideTally).toEqual({ pulmonary: 2, systemic: 2 })
@@ -776,8 +776,8 @@ describe('the record card', () => {
     expect(lines).toHaveLength(4)
     expect(lines[0]).toContain('LVEF 32%')
     expect(lines[1]).toContain('NYHA：NYHA II')
-    expect(lines[1]).toContain('症狀：勞力性喘：有')
-    expect(lines[1]).toContain('徵象：Rales：−')
+    expect(lines[1]).toContain('症狀：有：勞力性喘')
+    expect(lines[1]).toContain('徵象：有：Pitting edema')
     expect(lines[2]).toContain('118/72')
     expect(lines[2]).toContain('SpO₂ 97%')
     expect(lines[3]).toContain('待決定')

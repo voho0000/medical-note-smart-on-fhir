@@ -361,7 +361,10 @@ export const VISIT_EXAM_ITEMS: readonly VisitSignItem[] = [
   { term: 'third-heart-sound', zh: '第三心音（S3）', en: 'Third heart sound (S3)', shortZh: 'S3', shortEn: 'S3', side: 'pulmonary', common: false },
   { term: 'hepatojugular-reflux', zh: '肝頸反流（HJR）', en: 'Hepatojugular reflux', shortZh: 'HJR', shortEn: 'HJR', side: 'systemic', common: false },
   { term: 'ascites', zh: '腹水（ascites）', en: 'Ascites', shortZh: 'Ascites', shortEn: 'Ascites', side: 'systemic', common: false },
-  { term: 'hepatomegaly', zh: '肝腫大（hepatomegaly）', en: 'Hepatomegaly', shortZh: 'Hepatomegaly', shortEn: 'Hepatomegaly', side: 'systemic', common: false },
+  // Hepatomegaly left out (clinician feedback 2026-09-28): a less specific sign
+  // in ESC 2026 Table 7 (PDF p.22), unreliable to palpate in clinic, and HJR
+  // and ascites already carry right-sided congestion. The pack's evidence row
+  // stays answerable where a card still shows it.
 ]
 
 /** Which of the two questions a term is asked in, for a link back to it. */
@@ -401,24 +404,33 @@ function signItemsText(
   items: readonly VisitSignItem[],
   vitals: ClinicVitals | undefined,
   isEnglish: boolean,
-  useExamSymbols = false,
 ): string | undefined {
-  const answered = items.flatMap((item) => {
-    const value = vitals?.signAnswers?.[item.term]?.value
-    if (!value) return []
-    const answer = useExamSymbols && value === 'present'
-      ? '+'
-      : useExamSymbols && value === 'absent'
-        ? '−'
-        : signText(value, isEnglish)
-    return [`${isEnglish ? item.shortEn : item.shortZh}${isEnglish ? ': ' : '：'}${answer}`]
-  })
-  const unanswered = items.filter((item) => !vitals?.signAnswers?.[item.term]?.value).length
-  if (answered.length === 0) return undefined
-  if (unanswered > 0) {
-    answered.push(isEnglish ? `${unanswered} more not assessed` : `更多 ${unanswered} 項未評估`)
-  }
-  return answered.join(' · ')
+  // Grouped by answer, the finding first — 「有：勞力性喘、腳腫；其餘皆無」,
+  // 「全部皆無（6 項）」 — rather than a list of 「Rales：−・JVP：−・…」 that
+  // hides the one row that matters.
+  const sep = isEnglish ? ', ' : '、'
+  const named = (value: SignAnswerValue) => items
+    .filter((item) => vitals?.signAnswers?.[item.term]?.value === value)
+    .map((item) => (isEnglish ? item.shortEn : item.shortZh))
+  const present = named('present')
+  const absent = named('absent')
+  const notAssessed = named(NOT_ASSESSED)
+  const unanswered = items.length - present.length - absent.length - notAssessed.length
+  if (present.length + absent.length + notAssessed.length === 0) return undefined
+  const restAbsent = notAssessed.length === 0 && unanswered === 0
+  const parts = [
+    present.length ? (isEnglish ? `Yes: ${present.join(sep)}` : `有：${present.join(sep)}`) : undefined,
+    absent.length === 0
+      ? undefined
+      : restAbsent && present.length === 0
+        ? (isEnglish ? `None of ${absent.length}` : `全部皆無（${absent.length} 項）`)
+        : restAbsent
+          ? (isEnglish ? 'the rest none' : '其餘皆無')
+          : (isEnglish ? `No: ${absent.join(sep)}` : `無：${absent.join(sep)}`),
+    notAssessed.length ? (isEnglish ? `Not assessed: ${notAssessed.join(sep)}` : `未評估：${notAssessed.join(sep)}`) : undefined,
+    unanswered ? (isEnglish ? `${unanswered} not answered` : `${unanswered} 項未答`) : undefined,
+  ].filter(Boolean)
+  return parts.join(isEnglish ? '; ' : '；')
 }
 
 /** A question is answered once every 常見 row in it has an answer. */
@@ -735,7 +747,7 @@ export function buildHeartFailureVisitFlow(
   const signsStamp = latestStamp(...VISIT_EXAM_ITEMS.map(
     (item) => clinicVitals?.signAnswers?.[item.term]?.modifiedAt,
   ))
-  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish, true)
+  const signsText = signItemsText(VISIT_EXAM_ITEMS, clinicVitals, isEnglish)
   const signsAnswered = signItemsAnswered(VISIT_EXAM_ITEMS, clinicVitals)
   questions.push({
     id: 'signs',
