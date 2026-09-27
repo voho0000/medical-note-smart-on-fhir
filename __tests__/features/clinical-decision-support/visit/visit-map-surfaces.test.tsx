@@ -90,8 +90,9 @@ function heartFailureResult(): CdssResult {
         patientEvidence: [evidence('LVEF', '58%', 'LVEF', '2026-07-14')],
         physicianInputRequests: [{
           kind: 'hf-suspicion',
-          label: '您懷疑這位病人有心衰竭嗎？',
-          options: [{ id: 'suspected', label: '是，懷疑心衰竭' }, { id: 'not-suspected', label: '否，本次不懷疑' }],
+          label: '診斷：HFrEF 還是 HFpEF？',
+          detail: '紀錄：LVEF 62%（2026-09-04）',
+          options: [{ id: 'hfref', label: 'HFrEF（LVEF <50%）' }, { id: 'hfpef', label: 'HFpEF（LVEF ≥50%）' }, { id: 'suspected', label: '還不確定' }],
         }],
       }),
       recommendation('heart-failure-mra', {
@@ -520,18 +521,16 @@ describe('AF surfaces on the decision map', () => {
 })
 
 describe('the busy clinician’s path', () => {
-  it('confirms HFpEF in one press once HF is suspected, records it as the clinician’s, and opens 02', () => {
-    suspected()
-    const model = { ...p1Model(), asks: [] }
-    render(<HfHarness model={model} />)
-    const quick = screen.getByTestId('cdss-visit-quick-confirm-button')
-    expect(screen.getByTestId('cdss-visit-quick-confirm')).toHaveTextContent('記為醫師臨床判斷')
-    fireEvent.click(quick)
-    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ hfSuspicion: 'suspected', hfpEfConfirmed: true })
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+  it('diagnoses in one press on question 1, recorded as the clinician’s — no separate quick-confirm bar', () => {
+    render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
+    expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
+    const question = screen.getByTestId('cdss-hf-question-hf-suspicion')
+    expect(question).toHaveTextContent('選分型即記為醫師判斷並進入治療')
+    fireEvent.click(within(question).getByTestId('cdss-hf-suspicion-option-hfpef'))
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ hfSuspicion: 'suspected', diagnosis: 'hfpEF', hfpEfConfirmed: true })
   })
 
-  it('moves on to 02 whenever the diagnosis comes to stand on the page (目前 <50%, quick confirmation, question 6)', () => {
+  it('moves on to 02 whenever the diagnosis comes to stand on the page (question 1, 目前 <50%, the HFpEF confirmation)', () => {
     const view = render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     // The pack recomputes from the answer: the model now follows a diagnosis.
@@ -539,9 +538,20 @@ describe('the busy clinician’s path', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('offers no quick confirmation before 懷疑 HF is answered', () => {
+  it('draws nothing locked behind question 1: before an answer the card is question 1 alone', () => {
     render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
-    expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
+    const card = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect(card.querySelectorAll('[data-state="locked"]')).toHaveLength(0)
+    expect(within(card).queryByTestId('cdss-hf-question-nyha')).toBeNull()
+  })
+
+  it('keeps NYHA and compensation for 追蹤: 「還不確定」 opens only what the diagnosis needs', () => {
+    suspected()
+    render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
+    const card = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect(within(card).getByTestId('cdss-hf-question-symptoms')).toBeInTheDocument()
+    expect(within(card).queryByTestId('cdss-hf-question-nyha')).toBeNull()
+    expect(within(card).queryByTestId('cdss-hf-question-compensation')).toBeNull()
   })
 })
 

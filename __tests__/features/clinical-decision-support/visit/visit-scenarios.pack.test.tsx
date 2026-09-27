@@ -20,7 +20,7 @@ import type { VisitAnswers } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
-import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
+import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
@@ -43,7 +43,8 @@ function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
-  const run = useMemo(() => scenarioRun(id, { page, answers }), [answers, id, page])
+  const phenotype = usePhenotypeAnswer(PATIENT)
+  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype }), [answers, id, page, phenotype])
   const afAnswers = useAfAnswers(PATIENT)
   return (
     <ClinicalDecisionSupportView
@@ -60,6 +61,7 @@ function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page
       visitAnswers={answers}
       onVisitAnswer={(ask, value) => useVisitAnswersStore.getState().answer(PATIENT, ask, value)}
       onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(PATIENT, patch)}
+      phenotypeAnswer={phenotype}
       onAnswerPhenotype={(answer) => usePhenotypeAnswerStore.getState().setAnswer(PATIENT, answer)}
       afAnswers={afAnswers}
       onAfAnswer={(questionId, value) => useAfAnswersStore.getState().answer(PATIENT, questionId, value)}
@@ -352,7 +354,7 @@ describe('real pack · P11 dabigatran with CrCl under 30 (AF page)', () => {
 })
 
 describe('real pack · the other scenarios', () => {
-  it('P1 suspected HFpEF: diagnosis first — 懷疑 HF？ is question 1 of 01’s 診斷 view, not a queue row', () => {
+  it('P1 suspected HFpEF: diagnosis first — 「HFrEF 還是 HFpEF？」 is question 1 of 01’s 診斷 view, not a queue row', () => {
     const { model } = scenarioRun('p1-suspected-hfpef')
     expect(model.stage).toBe('suspected')
     expect(model.queue).toEqual(['DP-00'])
@@ -365,21 +367,61 @@ describe('real pack · the other scenarios', () => {
     expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
     expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toBeDisabled()
-    // The assessment is in view and asks 懷疑 HF？ itself, as its question 1…
+    // The assessment is in view and asks the diagnosis itself, as its only
+    // question until it is answered: HFrEF, HFpEF or 還不確定 — no 「否」.
     const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(assessment).toBeVisible()
     expect(assessment).toHaveTextContent('診斷評估')
-    expect(within(assessment).getByRole('radio', { name: /是，懷疑心衰竭/ })).toBeInTheDocument()
-    expect(assessment.querySelector('[data-testid^="cdss-hf-question-"]')).toHaveAttribute('data-testid', 'cdss-hf-question-hf-suspicion')
+    expect(within(assessment).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent))
+      .toEqual(['HFrEF（LVEF <50%）', 'HFpEF（LVEF ≥50%）', '還不確定'])
+    expect([...assessment.querySelectorAll('[data-testid^="cdss-hf-question-"]')].map((item) => item.getAttribute('data-testid')))
+      .toEqual(['cdss-hf-question-hf-suspicion'])
+    expect(within(assessment).getByTestId('cdss-hf-question-hf-suspicion')).toHaveTextContent(/紀錄：LVEF 62%/)
+    expect(screen.queryByTestId('cdss-visit-quick-confirm')).toBeNull()
     // …so neither a row nor a cell asks it a second time: 01 has no decision
     // list today, and DP-00 is not drawn as a cell.
     expect(queue()).toEqual([])
     expect(screen.queryByTestId('cdss-visit-queue-status')).toBeNull()
     expect(queryCell('DP-00')).toBeUndefined()
-    // Evidence before the verdict: no confirmation until HF is suspected.
+    // Question 1 is the only confirmation on the page.
     expect(within(assessment).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
     // It comes before the diagnosis points' cells on the page.
     expect(assessment.compareDocumentPosition(cell('DP-34')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('P1 「還不確定」: the HFpEF criteria come up under question 1, then symptoms, signs and the confirmation — no NYHA', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
+    const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect([...assessment.querySelectorAll('[data-testid^="cdss-hf-question-"]:not([data-testid*="answer"]):not([data-testid*="edit"])')]
+      .map((item) => [item.getAttribute('data-testid'), item.getAttribute('data-number')]))
+      .toEqual([
+        ['cdss-hf-question-hf-suspicion', '1'],
+        ['cdss-hf-question-symptoms', '2'],
+        ['cdss-hf-question-signs', '3'],
+        ['cdss-hf-question-hfpef-confirmation', '4'],
+      ])
+    const evidence = within(assessment).getByTestId('cdss-hf-hfpef-evidence')
+    expect(evidence).toHaveTextContent('HFpEF 診斷條件')
+    expect(evidence).toHaveTextContent('LVEF ≥50%')
+    expect(within(assessment).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('還不確定')
+    // Under question 1, before the symptoms that supply criterion (i)…
+    expect(evidence.compareDocumentPosition(within(assessment).getByTestId('cdss-hf-question-symptoms')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // …so the confirmation at the end says where they stand in one line.
+    expect(within(assessment).getByTestId('cdss-hf-hfpef-status')).toHaveTextContent(/條件 \d\/3 成立/)
+    expect(within(assessment).queryByTestId('cdss-hf-hfpef-go-to-symptoms')).toBeNull()
+  })
+
+  it('P1 one press on 「HFpEF」 is the diagnosis: 02 opens and 01 moves to 追蹤', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    // The answer stays where it was given, and can be changed there.
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
   })
 
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {

@@ -10,6 +10,7 @@ import { VisitDecisionScreen } from '@/features/clinical-decision-support/render
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { phenotypeAnswerForInput } from '@/features/clinical-decision-support/renderers/visit/physician-input'
 import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
+import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type { CdssRecommendation, CdssResult } from '@/features/clinical-decision-support/types'
 import {
   getPhysicianDecisions,
@@ -181,8 +182,20 @@ describe('optional additions', () => {
     const now = new Date('2026-09-27T10:00:00+08:00')
     expect(phenotypeAnswerForInput({ request: 'hf-suspicion', optionId: 'suspected' }, undefined, now))
       .toEqual({ hfSuspicion: 'suspected', answeredOn: '2026-09-27' })
+    // 「HFpEF」 on DP-00 and 「確認 HFpEF」 on DP-34 are one diagnosis, written alike.
+    const hfpef = { answeredOn: '2026-09-27', hfSuspicion: 'suspected', diagnosis: 'hfpEF', choice: 'preserved', hfpEfConfirmed: true }
     expect(phenotypeAnswerForInput({ request: 'hfpef-diagnosis-confirmation' }, { answeredOn: '2026-09-20', hfSuspicion: 'suspected' }, now))
-      .toEqual({ answeredOn: '2026-09-27', hfSuspicion: 'suspected', hfpEfConfirmed: true })
+      .toEqual(hfpef)
+    expect(phenotypeAnswerForInput({ request: 'hf-suspicion', optionId: 'hfpef' }, undefined, now)).toEqual(hfpef)
+    // 「HFrEF」 is 「<50%」 plus a confirmed diagnosis, so the pack opens HFrEF over the record.
+    expect(phenotypeAnswerForInput({ request: 'hf-suspicion', optionId: 'hfref' }, undefined, now)).toEqual({
+      answeredOn: '2026-09-27', hfSuspicion: 'suspected', diagnosis: 'hfrEF', choice: 'reduced',
+      diagnosisConfirmation: { method: 'current', confirmedAt: now.toISOString(), basis: 'HFrEF：醫師臨床判斷' },
+    })
+    // Changing the answer takes back what the earlier one wrote, and nothing else.
+    const switched = phenotypeAnswerForInput({ request: 'hf-suspicion', optionId: 'hfref' }, { ...hfpef, lvef: 58 } as PhenotypeAnswer, now)
+    expect(switched).toMatchObject({ diagnosis: 'hfrEF', choice: 'reduced', lvef: 58 })
+    expect(switched).not.toHaveProperty('hfpEfConfirmed')
     expect(phenotypeAnswerForInput({ request: 'hf-suspicion', optionId: 'maybe' }, undefined, now)).toBeUndefined()
     expect(phenotypeAnswerForInput({ request: 'hf-symptoms' }, undefined, now)).toBeUndefined()
   })

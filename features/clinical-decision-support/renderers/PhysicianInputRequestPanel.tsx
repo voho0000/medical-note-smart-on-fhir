@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import { todayIsoDate } from '../stores/clinic-vitals.store'
+import { diagnosisAnswer, diagnosisOptionOf } from './visit/physician-input'
 import type {
   PhenotypeAnswer,
   PhenotypeAnswerChoice,
@@ -48,19 +49,23 @@ function HfSuspicionRequest({
   answer,
   onAnswer,
   now,
+  showDetail,
 }: {
   request: PhysicianInputRequest
   answer?: PhenotypeAnswer
   onAnswer: (answer: PhenotypeAnswer) => void
   now: Date
+  /** Inline, the question row already prints the record line. */
+  showDetail: boolean
 }) {
   const groupId = useId()
-  const selected = answer?.hfSuspicion
+  const selected = diagnosisOptionOf(answer)
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="mb-1.5 text-xs font-semibold text-foreground">
         {request.label}
       </legend>
+      {showDetail && request.detail ? <p className="mb-1.5 text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-suspicion-detail">{request.detail}</p> : null}
       <div className="flex flex-wrap gap-1.5">
         {(request.options ?? []).map((option) => {
           const inputId = `${groupId}-${option.id}`
@@ -85,12 +90,8 @@ function HfSuspicionRequest({
                 checked={isSelected}
                 className="h-3.5 w-3.5 shrink-0 accent-primary"
                 onChange={() => {
-                  if (option.id !== 'suspected' && option.id !== 'not-suspected') return
-                  onAnswer({
-                    ...(answer ?? {}),
-                    hfSuspicion: option.id,
-                    answeredOn: todayIsoDate(now),
-                  })
+                  const next = diagnosisAnswer(option.id, answer, now)
+                  if (next) onAnswer(next)
                 }}
                 data-testid={`cdss-hf-suspicion-option-${option.id}`}
               />
@@ -349,8 +350,9 @@ function HfpEfConfirmationRequest({
             size="sm"
             variant="ghost"
             className="h-8"
+            // Takes back the phenotype the confirmation wrote with it.
             onClick={() => onAnswer({
-              ...(answer ?? {}),
+              ...(diagnosisAnswer('suspected', answer, now) ?? answer ?? {}),
               answeredOn: todayIsoDate(now),
               hfpEfConfirmed: false,
             })}
@@ -364,11 +366,8 @@ function HfpEfConfirmationRequest({
           type="button"
           size="sm"
           className="h-8"
-          onClick={() => onAnswer({
-            ...(answer ?? {}),
-            answeredOn: todayIsoDate(now),
-            hfpEfConfirmed: true,
-          })}
+          // The same diagnosis as DP-00 「HFpEF」, reached the long way.
+          onClick={() => onAnswer(diagnosisAnswer('hfpef', answer, now)!)}
           data-testid="cdss-hfpef-confirm"
         >
           {request.label}
@@ -411,6 +410,7 @@ export function PhysicianInputRequestPanel({
                 answer={answer}
                 onAnswer={onAnswer}
                 now={now}
+                showDetail={!inline}
               />
             )
           }

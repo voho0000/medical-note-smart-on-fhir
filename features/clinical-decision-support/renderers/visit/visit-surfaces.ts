@@ -42,8 +42,6 @@ export interface VisitMapSurfaces {
   diagnosis?: {
     content: ReactNode
     dps: readonly string[]
-    /** One press to the clinician's own confirmation, for a clinician already sure; the screen then opens 02. */
-    quickConfirm?: { label: string; hint: string; onConfirm: () => void }
   }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode

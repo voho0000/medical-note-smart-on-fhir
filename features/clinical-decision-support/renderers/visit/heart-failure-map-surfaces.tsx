@@ -61,15 +61,6 @@ export function heartFailureVisitSurfaces(
         </div>
       ),
       dps: DIAGNOSIS_VIEW_DPS,
-      ...(slots.quickConfirm ? {
-        quickConfirm: {
-          label: isEnglish ? 'Confirm HFpEF, go to treatment' : '確認 HFpEF，進入治療',
-          hint: isEnglish
-            ? 'Recorded as your clinical judgement; symptoms and signs can be filled in later.'
-            : '記為醫師臨床判斷；症狀／徵象可之後補記。',
-          onConfirm: slots.quickConfirm,
-        },
-      } : {}),
     },
     columnFooters: {
       status: (

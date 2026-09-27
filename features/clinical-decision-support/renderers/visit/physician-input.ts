@@ -1,8 +1,9 @@
 /**
  * A decision-map action that also answers a card's structured question.
  *
- * The pack may mark an action with `physicianInput` — DP-00 「是」 answers
- * `hf-suspicion`, DP-34 「確認 HFpEF」 answers `hfpef-diagnosis-confirmation`
+ * The pack may mark an action with `physicianInput` — DP-00 「HFrEF／HFpEF／
+ * 還不確定」 answer `hf-suspicion`, DP-34 「確認 HFpEF」 answers
+ * `hfpef-diagnosis-confirmation`
  * — so pressing it is the same answer the card's own control writes, handed
  * back through the same phenotype-answer store, and the pack recomputes from
  * it. This file only translates the request kind and option id into that
@@ -14,6 +15,64 @@ import type { PhenotypeAnswer } from '../../stores/phenotype-answer.store'
 import type { VisitAction } from '../../types'
 
 export type VisitPhysicianInput = NonNullable<VisitAction['physicianInput']>
+
+/**
+ * The answer after DP-00 「診斷：HFrEF 還是 HFpEF？」, whichever control asked
+ * it — the card's radio, the assessment's question 1, the map's row, or the
+ * HFpEF confirmation, which is the same diagnosis reached the long way.
+ *
+ * A phenotype is the clinician's diagnosis, written the way the pack already
+ * reads one: 「HFrEF」 is 「LVEF <50%」 plus a confirmed diagnosis (the pack
+ * then opens HFrEF over whatever LVEF the record holds); 「HFpEF」 is 「LVEF
+ * ≥50%」 plus the HFpEF confirmation. 「還不確定」 is the old 「懷疑」: it opens
+ * the work-up and takes back whatever an earlier choice here had written.
+ * The legacy 「否」 is still read, so an answer stored before it went away
+ * keeps its meaning.
+ */
+export function diagnosisAnswer(
+  optionId: string | undefined,
+  current: PhenotypeAnswer | undefined,
+  now: Date,
+  isEnglish = false,
+): PhenotypeAnswer | undefined {
+  if (optionId !== 'hfref' && optionId !== 'hfpef' && optionId !== 'suspected' && optionId !== 'not-suspected') return undefined
+  const answeredOn = todayIsoDate(now)
+  const { diagnosis: previous, ...rest } = current ?? { answeredOn }
+  // Take back only what an earlier choice on this question wrote.
+  const base: PhenotypeAnswer = { ...rest, answeredOn }
+  if (previous === 'hfrEF') {
+    delete base.diagnosisConfirmation
+    if (base.choice === 'reduced') delete base.choice
+  }
+  if (previous === 'hfpEF') {
+    delete base.hfpEfConfirmed
+    if (base.choice === 'preserved') delete base.choice
+  }
+  if (optionId === 'hfref') {
+    return {
+      ...base,
+      hfSuspicion: 'suspected',
+      diagnosis: 'hfrEF',
+      choice: 'reduced',
+      diagnosisConfirmation: {
+        method: 'current',
+        confirmedAt: now.toISOString(),
+        basis: isEnglish ? "HFrEF: the clinician's judgement" : 'HFrEF：醫師臨床判斷',
+      },
+    }
+  }
+  if (optionId === 'hfpef') {
+    return { ...base, hfSuspicion: 'suspected', diagnosis: 'hfpEF', choice: 'preserved', hfpEfConfirmed: true }
+  }
+  return { ...base, hfSuspicion: optionId }
+}
+
+/** Which DP-00 option an answer stands for, by the ids the pack publishes. */
+export function diagnosisOptionOf(answer: PhenotypeAnswer | undefined): string | undefined {
+  if (answer?.diagnosis === 'hfrEF') return 'hfref'
+  if (answer?.diagnosis === 'hfpEF') return 'hfpef'
+  return answer?.hfSuspicion
+}
 
 /**
  * The phenotype answer after `input`, or undefined when the input is not one
@@ -28,11 +87,9 @@ export function phenotypeAnswerForInput(
   const answeredOn = todayIsoDate(now)
   switch (input.request) {
     case 'hf-suspicion':
-      return input.optionId === 'suspected' || input.optionId === 'not-suspected'
-        ? { ...(current ?? {}), hfSuspicion: input.optionId, answeredOn }
-        : undefined
+      return diagnosisAnswer(input.optionId, current, now)
     case 'hfpef-diagnosis-confirmation':
-      return { ...(current ?? {}), hfpEfConfirmed: true, answeredOn }
+      return diagnosisAnswer('hfpef', current, now)
     case 'lvef-phenotype':
       return input.optionId === 'reduced' || input.optionId === 'preserved' || input.optionId === 'unknown'
         ? { ...(current ?? {}), choice: input.optionId, answeredOn }

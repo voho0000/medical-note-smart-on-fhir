@@ -550,14 +550,20 @@ export function buildHeartFailureVisitFlow(
 
   // The visit always starts with this answer, even when the pack already
   // knows the phenotype and therefore has no diagnostic question to ask.
-  // Keep that visit input usable without changing the pack's clinical gates.
+  // Keep that visit input usable without changing the pack's clinical gates:
+  // the same three answers the pack's DP-00 offers, HFpEF left out where the
+  // record's LVEF is below 50%.
+  const recordLvef = Number.parseFloat(board.lvef?.value ?? '')
   const suspicionRequest: PhysicianInputRequest = requestOf(phenotypeCard, 'hf-suspicion') ?? {
     kind: 'hf-suspicion',
-    label: isEnglish ? 'Do you suspect heart failure in this patient?' : '您懷疑這位病人有心衰竭嗎？',
+    label: isEnglish ? 'Diagnosis: HFrEF or HFpEF?' : '診斷：HFrEF 還是 HFpEF？',
     selection: 'single',
     options: [
-      { id: 'suspected', label: isEnglish ? 'Yes, heart failure is suspected' : '是，懷疑心衰竭' },
-      { id: 'not-suspected', label: isEnglish ? 'No, not suspected at this visit' : '否，本次不懷疑' },
+      { id: 'hfref', label: isEnglish ? 'HFrEF (LVEF <50%)' : 'HFrEF（LVEF <50%）' },
+      ...(Number.isFinite(recordLvef) && recordLvef < 50
+        ? []
+        : [{ id: 'hfpef', label: isEnglish ? 'HFpEF (LVEF ≥50%)' : 'HFpEF（LVEF ≥50%）' }]),
+      { id: 'suspected', label: isEnglish ? 'Not sure yet' : '還不確定' },
     ],
   }
   const lvefRequest = requestOf(phenotypeCard, 'lvef-phenotype')
@@ -573,21 +579,30 @@ export function buildHeartFailureVisitFlow(
   const suspicion = establishedHfrEF ? 'suspected' : phenotypeAnswer?.hfSuspicion
   const suspected = suspicion === 'suspected'
   const notSuspected = suspicion === 'not-suspected'
+  // The phenotype chosen on question 1 is the diagnosis; the question stays,
+  // answered, so the choice can be changed where it was made.
+  const diagnosedHere = phenotypeAnswer?.diagnosis
+  const asksDiagnosis = !establishedHfrEF || Boolean(diagnosedHere)
 
   const suspicionLabel = suspicionRequest?.label
-    ?? (isEnglish ? 'Do you suspect heart failure in this patient?' : '您懷疑這位病人有心衰竭嗎？')
-  const suspicionAnswerText = establishedHfrEF
+    ?? (isEnglish ? 'Diagnosis: HFrEF or HFpEF?' : '診斷：HFrEF 還是 HFpEF？')
+  const suspicionAnswerText = diagnosedHere
+    ? (isEnglish
+      ? `${diagnosedHere === 'hfrEF' ? 'HFrEF' : 'HFpEF'} (your judgement)`
+      : `${diagnosedHere === 'hfrEF' ? 'HFrEF' : 'HFpEF'}（醫師判斷）`)
+    : establishedHfrEF
     ? (isEnglish ? 'Established heart failure in the record' : '病歷已有心衰竭診斷')
     : suspicion
     ? suspicionRequest?.options?.find((option) => option.id === suspicion)?.label
       ?? (suspected
-        ? (isEnglish ? 'Yes' : '是，懷疑心衰竭')
-        : (isEnglish ? 'No' : '否，本次不懷疑'))
+        ? (isEnglish ? 'Not sure yet' : '還不確定')
+        : (isEnglish ? 'Not suspected' : '本次不懷疑'))
     : undefined
 
   const questions: VisitQuestion[] = []
 
-  if (!establishedHfrEF) {
+  if (asksDiagnosis) {
+    const detail = suspicionRequest.detail
     questions.push({
       id: 'hf-suspicion',
       number: '1',
@@ -597,14 +612,26 @@ export function buildHeartFailureVisitFlow(
       ...(phenotypeAnswer?.modifiedAt?.hfSuspicion
         ? { modifiedAt: phenotypeAnswer.modifiedAt.hfSuspicion }
         : {}),
-      hint: isEnglish
-        ? 'Answering 「no」 folds the rest away and leaves only the safety alerts.'
-        : '答「否」後其餘題目與處置收起，只留安全警訊。',
+      // The record's LVEF is what the choice weighs; before an answer, say
+      // what a phenotype does, so one press is not a surprise.
+      ...(suspicion
+        ? (detail ? { hint: detail } : {})
+        : {
+          hint: [
+            detail,
+            isEnglish
+              ? 'A phenotype is recorded as your judgement and opens treatment; symptoms and signs can be added later.'
+              : '選分型即記為醫師判斷並進入治療；症狀／徵象可之後補記。',
+          ].filter(Boolean).join(isEnglish ? ' · ' : '・'),
+        }),
       counted: true,
       request: suspicionRequest,
       recommendationId: PHENOTYPE_MODULE_ID,
     })
   }
+  // Question 1 is the diagnosis where it is asked; everything after it
+  // numbers on from there.
+  const numberAfter = (position: number) => String(position + (asksDiagnosis ? 1 : 0))
 
   // 1b and 1c appear only where the pack actually raised them. The host does
   // not decide that a phenotype is missing — the pack does, by asking.
@@ -640,7 +667,7 @@ export function buildHeartFailureVisitFlow(
       ? 'Heart failure is not suspected this visit; the remaining questions are skipped.'
       : '本次不懷疑心衰竭，其餘題目略過。')
     // Named, not numbered: on the map the question sits in 01, not above.
-    : (isEnglish ? 'Opens once 「Is heart failure suspected?」 is answered' : '先回答「是否懷疑心衰竭」後開放')
+    : (isEnglish ? 'Opens once 「HFrEF or HFpEF?」 is answered' : '先回答「HFrEF 還是 HFpEF？」後開放')
   const gated = (state: VisitQuestionState): VisitQuestionState => (
     suspected ? state : 'locked'
   )
@@ -653,7 +680,7 @@ export function buildHeartFailureVisitFlow(
   const symptomsAnswered = signItemsAnswered(VISIT_SYMPTOM_ITEMS, clinicVitals)
   questions.push({
     id: 'symptoms',
-    number: establishedHfrEF ? '1' : '2',
+    number: numberAfter(1),
     label: isEnglish ? 'Symptoms the patient describes' : '病人描述的症狀',
     state: gated(symptomsAnswered ? 'answered' : 'open'),
     ...(symptomsAnswered && symptomsText
@@ -670,7 +697,7 @@ export function buildHeartFailureVisitFlow(
   const nyha = clinicVitals?.nyhaClass
   const nyhaQuestion: VisitQuestion = {
     id: 'nyha',
-    number: establishedHfrEF ? '3' : '4',
+    number: numberAfter(3),
     label: isEnglish ? "Today's NYHA class?" : '今天的 NYHA 分級？',
     state: gated(nyha ? 'answered' : 'open'),
     ...(nyha
@@ -682,8 +709,8 @@ export function buildHeartFailureVisitFlow(
       }
       : {}),
     hint: isEnglish
-      ? `Graded from the symptoms in question ${establishedHfrEF ? '1' : '2'} and the activity limitation; never inferred from LVEF or a diagnosis code.`
-      : `依第 ${establishedHfrEF ? '1' : '2'} 題的症狀與活動限制選擇；不由 LVEF 或診斷碼推定。`,
+      ? `Graded from the symptoms in question ${numberAfter(1)} and the activity limitation; never inferred from LVEF or a diagnosis code.`
+      : `依第 ${numberAfter(1)} 題的症狀與活動限制選擇；不由 LVEF 或診斷碼推定。`,
     ...(suspected ? {} : { lockedReason }),
     counted: true,
   }
@@ -698,7 +725,7 @@ export function buildHeartFailureVisitFlow(
   const signsAnswered = signItemsAnswered(VISIT_EXAM_ITEMS, clinicVitals)
   questions.push({
     id: 'signs',
-    number: establishedHfrEF ? '2' : '3',
+    number: numberAfter(2),
     label: isEnglish ? 'Signs you found on examination' : '你檢查到的徵象',
     state: gated(signsAnswered ? 'answered' : 'open'),
     ...(signsAnswered && signsText
@@ -717,7 +744,7 @@ export function buildHeartFailureVisitFlow(
   const compensation = clinicVitals?.compensationStatus
   const compensationQuestion: VisitQuestion = {
     id: 'compensation',
-    number: establishedHfrEF ? '4' : '5',
+    number: numberAfter(4),
     label: isEnglish
       ? 'Compensated or decompensated today?'
       : '今天是代償還是失代償？',
@@ -742,17 +769,18 @@ export function buildHeartFailureVisitFlow(
   const vitalsText = entryText(clinicVitals, isEnglish)
   questions.push(compensationQuestion)
 
-  // ⑥ The HFpEF confirmation, last because it reads questions ② and ④ to judge
+  // ⑥ The HFpEF confirmation, last because it reads questions ② and ③ to judge
   // criterion (i): a card that asked for the conclusion before the findings
-  // were in sent the clinician back up the page to answer them.
-  if (hfpEfRequest && diagnosisCard) {
+  // were in sent the clinician back up the page to answer them. Not asked once
+  // question 1 carries a phenotype — that answer is the diagnosis.
+  if (hfpEfRequest && diagnosisCard && !diagnosedHere) {
     const confirmation = phenotypeAnswer?.hfpEfConfirmed
     // `false` is the original board's 「取消確認」, which returns the question
     // to unanswered. Only 「暫不確認」 is an answer with no finding in it.
     const answered = confirmation === true || confirmation === HFPEF_NOT_CONFIRMED
     questions.push({
       id: 'hfpef-confirmation',
-      number: '6',
+      number: numberAfter(5),
       label: hfpEfRequest.label,
       state: gated(answered ? 'answered' : 'open'),
       ...(!answered
@@ -1092,7 +1120,7 @@ export function buildHeartFailureVisitFlow(
   }
   if (suspicionAnswerText) {
     pushCarried(
-      isEnglish ? 'Suspicion' : '心衰竭懷疑',
+      isEnglish ? 'Diagnosis' : '診斷',
       suspicionAnswerText,
       phenotypeAnswer?.modifiedAt?.hfSuspicion,
     )

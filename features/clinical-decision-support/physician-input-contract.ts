@@ -202,6 +202,7 @@ export function physicianInputRequestsOf(
     requests.push({
       kind: record.kind,
       label: record.label,
+      ...(typeof record.detail === 'string' && record.detail.trim() ? { detail: record.detail } : {}),
       ...(options && options.length > 0 ? { options } : {}),
       ...(record.selection === 'multiple' || record.selection === 'single'
         ? { selection: record.selection }

@@ -19,6 +19,8 @@ import {
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { applyAfCalculatorResults } from '@/features/clinical-decision-support/utils/af-calculators'
+import { applyPhenotypeAnswer } from '@/features/clinical-decision-support/utils/apply-phenotype-answer'
+import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type {
   CdssPatientProfile,
   CdssResult,
@@ -69,9 +71,10 @@ export function scenarioProfile(id: ScenarioId): CdssPatientProfile {
 /** The model the decision map draws for this scenario on the given page. */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {} }: { page?: 'hf' | 'af'; answers?: VisitAnswers } = {},
+  { page = 'hf', answers = {}, phenotype }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer } = {},
 ): ScenarioRun {
-  const profile = applyVisitAnswers(scenarioProfile(id), answers)
+  // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the profile.
+  const profile = applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype)
   if (page === 'af') {
     const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     return {
