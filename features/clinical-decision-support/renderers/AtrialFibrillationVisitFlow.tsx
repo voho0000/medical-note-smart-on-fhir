@@ -1,5 +1,7 @@
 'use client'
 import { type ReactNode, useState } from 'react'
+import { DecisionMapCard } from './DecisionMapCard'
+import { afDecisionMapGroupsFor } from './atrial-fibrillation-decision-map'
 import { AF_CLINICAL_QUESTIONS } from '@voho0000/personalized-care'
 import { ChevronDown, Copy, PencilLine } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -387,6 +389,21 @@ export function AtrialFibrillationVisitFlow({
         .map((r) => r.id),
     },
   ]
+  // Open a card where it lives in the list and bring it into view, so an alert
+  // or a decision-map point is one click from the decision rather than a hunt
+  // down the page. (setTimeout, not requestAnimationFrame: it runs after React
+  // commits the update and still runs when the tab is not being painted.)
+  const jumpTo = (r: CdssRecommendation) => {
+    if (rateIds.includes(r.id)) setStrategy('rate')
+    if (rhythmIds.includes(r.id)) setStrategy('rhythm')
+    setOpenSections((old) => new Set([...old, sectionFor(r)]))
+    if (expandedId !== r.id) onToggle(r.id)
+    setTimeout(() => {
+      const row = document.getElementById(`af-action-${r.id}`)
+      row?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+      row?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
+    }, 0)
+  }
   return (
     <div className="space-y-3" data-testid="cdss-af-visit-flow">
       {board.alerts.length ? (
@@ -401,27 +418,32 @@ export function AtrialFibrillationVisitFlow({
               key={r.id}
               type="button"
               className="block min-h-11 w-full text-left text-sm underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => {
-                if (rateIds.includes(r.id)) setStrategy('rate')
-                if (rhythmIds.includes(r.id)) setStrategy('rhythm')
-                setOpenSections((old) => new Set([...old, sectionFor(r)]))
-                if (expandedId !== r.id) onToggle(r.id)
-                // Bring the card itself into view once its section has rendered, so the
-                // alert is one click from the decision rather than a hunt down the page.
-                // (setTimeout, not requestAnimationFrame: it runs after React commits the
-                // click's update and still runs when the tab is not being painted.)
-                setTimeout(() => {
-                  const row = document.getElementById(`af-action-${r.id}`)
-                  row?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-                  row?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
-                }, 0)
-              }}
+              onClick={() => jumpTo(r)}
             >
               {r.title}
             </button>
           ))}
         </div>
       ) : null}
+      <DecisionMapCard
+        result={result}
+        isEnglish={en}
+        groups={afDecisionMapGroupsFor(followUp)}
+        listActionable
+        renderDetail={(r) => (
+          <div className="px-3 py-2">
+            <p className="mb-2 text-sm leading-relaxed">{r.recommendation}</p>
+            <button
+              type="button"
+              className="mb-2 min-h-11 text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => jumpTo(r)}
+            >
+              {en ? 'Go to this card to record a decision' : '到清單中的此卡記錄決定'}
+            </button>
+            {renderDetail(r)}
+          </div>
+        )}
+      />
       <Section
         {...sectionProps(
           'diagnosis',

@@ -45,6 +45,8 @@ export interface DecisionMapCardProps {
   /** The flow's own decision controls for a row. */
   renderDecision?: (row: VisitActionRow) => ReactNode
   groups?: readonly DecisionMapGroupDef[]
+  /** Name the points that need action under the folded summary (AF page). */
+  listActionable?: boolean
 }
 
 /**
@@ -63,9 +65,11 @@ export function DecisionMapCard({
   actionRows,
   renderDecision,
   groups = HF_DECISION_MAP_GROUPS,
+  listActionable = false,
 }: DecisionMapCardProps) {
   const map = useMemo(() => buildDecisionMap(result, groups), [groups, result])
   const [expanded, setExpanded] = useState(false)
+  const actionable = map.groups.flatMap((group) => group.cells).filter((cell) => cell.state === 'actionable')
   const [openPoint, setOpenPoint] = useState<string | null>(null)
   const summary = isEnglish
     ? `${map.total} decision points · ${map.counts.actionable} action needed · ${map.counts['needs-data']} data needed · ${map.counts.review} to review`
@@ -88,6 +92,12 @@ export function DecisionMapCard({
         <span className="text-xs tabular-nums text-muted-foreground" data-testid="cdss-hf-decision-map-summary">
           {summary}
         </span>
+        {listActionable && actionable.length ? (
+          <span className="basis-full text-xs font-medium text-foreground" data-testid="cdss-hf-decision-map-actionable">
+            {isEnglish ? 'Action needed: ' : '需處理：'}
+            {actionable.map((cell) => `${cell.point.dp} ${isEnglish ? cell.point.label.en : cell.point.label.zh}`).join(isEnglish ? '; ' : '、')}
+          </span>
+        ) : null}
       </summary>
       {expanded ? <div className="space-y-3 border-t border-border px-3 py-3">
         {map.groups.map((group) => {
