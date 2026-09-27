@@ -2010,6 +2010,7 @@ export const en = {
     tabLabelPlaceholder: 'e.g. Recent important changes',
     subtitlePlaceholder: 'Highlight urgent safety issues or contraindications.',
     promptPlaceholderInsight: 'Describe what this summary module should produce using the available clinical context.',
+    longCustomInsightPromptWarning: 'This prompt is {count} characters long. There is no reliable safe length; review repeated or conflicting rules and examples, then verify the generated diagnoses.',
     expandPromptEditor: 'Expand editor',
     promptEditorTitle: 'Edit prompt',
     backToTemplate: 'Back to template',

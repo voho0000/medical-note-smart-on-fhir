@@ -1,5 +1,7 @@
 export const MAX_SUMMARY_INSIGHT_MODULES = 5
 export const MAX_AUTO_INSIGHT_MODULES = 2
+// Review cue only: the Tvghbrain experiments did not find a safe character limit.
+export const CUSTOM_MODEL_PROMPT_REVIEW_CHARACTERS = 2_000
 
 export const INSIGHT_OUTPUT_FORMATS = ["plain-text", "markdown", "html"] as const
 export type InsightOutputFormat = (typeof INSIGHT_OUTPUT_FORMATS)[number]

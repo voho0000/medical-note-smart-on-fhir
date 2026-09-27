@@ -52,6 +52,7 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
 
 jest.mock('@/src/application/stores/model-prefs.store', () => ({
   MODEL_PREF_DEFAULTS: { insights: 'default-model' },
+  useEffectiveModel: () => 'default-model',
   useModelPref: () => 'default-model',
   useSetModelFor: () => jest.fn(),
 }))
