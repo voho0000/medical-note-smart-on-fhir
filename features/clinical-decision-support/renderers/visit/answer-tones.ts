@@ -26,18 +26,21 @@ export function visitAnswerTone(id: VisitAsk['id'], value: string): AnswerTone {
 
 /*
  * DESIGN.md: one interaction blue for selection; red, amber and green only
- * for clinical risk, warning and settled state; shared tokens, restrained
+ * for clinical risk, warning and success; shared tokens, restrained
  * backgrounds. So a chosen answer wears the page's own selected tint — the
- * `bg-primary/10 text-primary` every segmented choice uses — and only an
- * answer that is a clinical warning wears the risk colour.
+ * `bg-primary/10 text-primary` every segmented choice uses — except where the
+ * answer is itself a clinical state: a warning (喘變差, 體重增加) wears the
+ * risk colour, an improvement (喘進步) the success green (clinician feedback
+ * 2026-09-28: 「進步不是要綠色嗎」). The label says the same in words.
  */
 const SELECTED = 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/10 dark:bg-primary/15'
 const SELECTED_RISK = 'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/10 dark:bg-destructive/20'
+const SELECTED_GOOD = 'border-emerald-600/50 bg-emerald-50 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-200'
 const OPEN = 'border-border bg-card text-foreground hover:bg-muted/40'
 
 const IDLE: Readonly<Record<AnswerTone, string>> = { concern: OPEN, neutral: OPEN, reassuring: OPEN, change: OPEN }
 
-const CHOSEN: Readonly<Record<AnswerTone, string>> = { concern: SELECTED_RISK, neutral: SELECTED, reassuring: SELECTED, change: SELECTED }
+const CHOSEN: Readonly<Record<AnswerTone, string>> = { concern: SELECTED_RISK, neutral: SELECTED, reassuring: SELECTED_GOOD, change: SELECTED }
 
 /**
  * A choice button's colours at the page's own size (1px border, no icon):

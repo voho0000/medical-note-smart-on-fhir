@@ -657,19 +657,21 @@ describe('real pack · reading the map without scrolling back up', () => {
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
   })
 
-  it('marks a chosen answer with the page’s selected tint, a warning answer with the risk colour (P7)', () => {
+  it('marks a chosen answer with the page’s selected tint, a warning with the risk colour and an improvement with green (P7)', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
     const worse = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
     const better = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!
     const down = document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!
     expect(worse).toHaveTextContent('變差')
     // Open answers are neutral; a chosen one wears the page's selected tint,
-    // and only a warning answer the risk colour.
+    // a warning the risk colour, an improvement the success green.
     for (const open of [worse, better, down]) expect(open.className).toContain('bg-card')
     fireEvent.click(worse)
     expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-destructive/10')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!)
-    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!.className).toContain('bg-primary/10')
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!.className).toContain('bg-emerald-50')
+    fireEvent.click(down)
+    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="down"]')!.className).toContain('bg-primary/10')
   })
 })
 
