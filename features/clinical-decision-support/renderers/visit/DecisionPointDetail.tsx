@@ -91,11 +91,16 @@ export function DecisionPointDetail({
 }) {
   const decision = [...steps].reverse().find((step) => step.decision)?.decision
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
   // Opening a cell moves focus to what it opened, so a keyboard or screen
-  // reader user lands on the card rather than having to find it.
+  // reader user lands on the card rather than having to find it. The page
+  // scrolls only as far as the decision buttons: the card opens right under
+  // the cell that was pressed, and the clinician should not have to scroll to
+  // answer it — nor lose sight of the cell they pressed.
   useEffect(() => {
-    headingRef.current?.focus()
-    headingRef.current?.scrollIntoView?.({ block: 'nearest' })
+    headingRef.current?.focus({ preventScroll: true })
+    const controls = sectionRef.current?.querySelector<HTMLElement>('[data-visit-detail-step]')
+    ;(controls ?? headingRef.current)?.scrollIntoView?.({ block: 'nearest' })
   }, [point.dp, point.source])
 
   const cards = point.moduleIds.flatMap((id) => {
@@ -104,6 +109,7 @@ export function DecisionPointDetail({
   })
   return (
     <section
+      ref={sectionRef}
       id={VISIT_DETAIL_ID}
       aria-labelledby={`${VISIT_DETAIL_ID}-title`}
       className="space-y-3 rounded-lg border border-border bg-card p-3"

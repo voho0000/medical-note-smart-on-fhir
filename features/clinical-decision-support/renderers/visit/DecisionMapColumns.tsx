@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -282,7 +282,10 @@ export function DecisionMapColumns({
                 {note}
               </p>
             ) : null}
-            <ul className="grid gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
+            {/* grid-flow-dense: when a card's detail opens as a full row under
+                it, the next card fills the place beside it rather than being
+                pushed below, so the row reads as before with the detail under it. */}
+            <ul className="grid grid-flow-dense gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
               {visible.flatMap((point, index) => {
                 const key = visitDecisionKey(point)
                 const showGroup = groups.size > 1 && (index === 0 || visible[index - 1].group !== point.group)
@@ -317,7 +320,14 @@ export function DecisionMapColumns({
                     ) : null}
                   </li>
                 )
-                return heading ? [heading, item] : [item]
+                // The opened point's card sits directly under the cell that
+                // opened it, not at the foot of the section.
+                const opened = openKey === key && open && detail ? (
+                  <li key={`${key}-detail`} className="col-span-full" data-testid="cdss-visit-detail-slot">
+                    {detail}
+                  </li>
+                ) : null
+                return [heading, item, opened].filter((node): node is ReactElement => node !== null)
               })}
             </ul>
             {hidden.length ? (
@@ -333,7 +343,9 @@ export function DecisionMapColumns({
                   : `另 ${hidden.length} 點收起：${countLine(hidden, false)} · 顯示全部`}
               </button>
             ) : null}
-            {open && openPointBlock === block ? detail : null}
+            {/* A point hidden by the fold (opened before 顯示全部 was turned
+                off) still shows its card, at the foot. */}
+            {open && openPointBlock === block && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
             {columnFooters?.[block]}
             {block === 'outlook' ? outlookSlot : null}
           </section>

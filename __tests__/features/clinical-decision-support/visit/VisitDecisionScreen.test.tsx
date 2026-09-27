@@ -173,6 +173,17 @@ describe('visit decision screen · P4 stable and optimised', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
   })
+
+  it('opens the card directly under the cell that was pressed, not at the section foot', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    const pressed = cell('DP-07')
+    fireEvent.click(pressed)
+    const slot = screen.getByTestId('cdss-visit-detail-slot')
+    // The very next item after the pressed cell is its card.
+    expect(pressed.closest('li')?.nextElementSibling).toBe(slot)
+    expect(slot).toContainElement(screen.getByTestId('cdss-visit-detail'))
+  })
 })
 
 describe('visit decision screen · P5 titrating with AF', () => {
