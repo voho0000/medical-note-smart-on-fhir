@@ -6,8 +6,15 @@ import { Input } from '@/components/ui/input'
 import { todayIsoDate, type ClinicVitals, type ClinicVitalsPatch } from '../stores/clinic-vitals.store'
 import { EMPTY_HF_HISTORY, type HfFollowUpHistory, type SymptomChange, type FollowUpComplaint } from '../utils/hf-follow-up'
 
-export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSave, now, isEnglish, onBreathDetails }: {
-  history?: HfFollowUpHistory; vitals?: ClinicVitals; onSave?: (patch: ClinicVitalsPatch) => void; now: Date; isEnglish: boolean; onBreathDetails: () => void
+/**
+ * Chief-complaint and weight follow-up. `trendAsksElsewhere` is for a screen
+ * that already asks 喘 and 體重 at the top (the decision map): the 喘 row and
+ * the 增加／不變／減少 buttons are left out so the two are not asked twice, and
+ * what stays is the rest — other tracked complaints, adding one, and the
+ * weight records with their chart and new entry.
+ */
+export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSave, now, isEnglish, onBreathDetails, trendAsksElsewhere = false }: {
+  history?: HfFollowUpHistory; vitals?: ClinicVitals; onSave?: (patch: ClinicVitalsPatch) => void; now: Date; isEnglish: boolean; onBreathDetails: () => void; trendAsksElsewhere?: boolean
 }) {
   const today = todayIsoDate(now)
   const [text, setText] = useState('')
@@ -20,7 +27,10 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const previous = complaints.filter(item => item.date === previousDate)
   const current = complaints.filter(item => item.date === today)
   const recordedRows = [...new Map([...previous, ...current].map(item => [item.text, item])).values()]
-  const rows = recordedRows.some(item => /喘|breath|dyspn/i.test(item.text)) ? recordedRows : [{ text: isEnglish ? 'Breathlessness' : '喘', date: today, source: 'clinic' }, ...recordedRows]
+  const isBreath = (text: string) => /喘|breath|dyspn/i.test(text)
+  const rows = trendAsksElsewhere
+    ? recordedRows.filter(item => !isBreath(item.text))
+    : recordedRows.some(item => isBreath(item.text)) ? recordedRows : [{ text: isEnglish ? 'Breathlessness' : '喘', date: today, source: 'clinic' }, ...recordedRows]
   const weightChange = local.weightChanges?.find(item => item.date === today)?.value
   const saveComplaint = (item: FollowUpComplaint) => onSave?.({ hfFollowUp: { ...local, complaints: [...local.complaints.filter(row => !(row.date === item.date && row.text === item.text)), { ...local.complaints.find(row => row.date === item.date && row.text === item.text), ...item }] } })
   const points = [...new Map([...history.weights, ...local.weights, ...(vitals?.entries.bodyWeight ? [{ value: vitals.entries.bodyWeight.value, date: vitals.entries.bodyWeight.measuredOn, source: 'clinic' }] : [])].filter(point => point.date <= today).sort((a, b) => a.date.localeCompare(b.date)).map(point => [point.date, point])).values()]
@@ -37,8 +47,8 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const sourceName = (source: string) => source === 'clinic' ? (isEnglish ? 'Clinic entry' : '門診輸入') : source
   return <div className="space-y-4 px-3 py-3" data-testid="cdss-followup-priorities">
     <section className="space-y-3" aria-label={isEnglish ? 'Chief complaint follow-up' : '主訴追蹤'}>
-      <h4 className="font-semibold">{isEnglish ? 'Chief complaint · change since last visit' : '主要主訴・與上次相比'}</h4>
-      <p className="text-xs text-muted-foreground">{previousDate ? `${isEnglish ? 'Previous record' : '上次紀錄'}：${previousDate}` : (isEnglish ? 'No previous chief complaint available. Add the symptom to follow.' : '未取得上次主訴，請新增要追蹤的症狀。')}</p>
+      <h4 className="font-semibold">{trendAsksElsewhere ? (isEnglish ? 'Other complaints' : '其他主訴') : (isEnglish ? 'Chief complaint · change since last visit' : '主要主訴・與上次相比')}</h4>
+      {!trendAsksElsewhere || rows.length ? <p className="text-xs text-muted-foreground">{previousDate ? `${isEnglish ? 'Previous record' : '上次紀錄'}：${previousDate}` : (isEnglish ? 'No previous chief complaint available. Add the symptom to follow.' : '未取得上次主訴，請新增要追蹤的症狀。')}</p> : null}
       {rows.map(item => { const answer = current.find(row => row.text === item.text); const baseline = previous.find(row => row.text === item.text); return <div key={item.text} className="space-y-2 rounded-md border border-border bg-card p-3">
         <p className="break-words font-medium">{item.text}</p>
         <p className="break-words text-xs text-muted-foreground">{baseline ? `${baseline.date} · ${sourceName(baseline.source)}` : answer ? `${item.date} · ${sourceName(item.source)}` : (isEnglish ? 'Not yet recorded' : '尚未記錄')}</p>
@@ -61,9 +71,11 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
     </section>
     <section className="space-y-3 border-t border-border pt-3" aria-label={isEnglish ? 'Weight trend' : '體重趨勢'}>
       <h4 className="font-semibold">{isEnglish ? 'Weight · kg' : '體重・kg'}</h4>
+      {trendAsksElsewhere ? null : <>
       <div role="group" aria-label={isEnglish ? 'Weight change' : '體重變化'} className="flex flex-wrap gap-1">{([['increased', '增加', 'Increased'], ['unchanged', '不變', 'Unchanged'], ['decreased', '減少', 'Decreased']] as const).map(([value, zh, en]) => <Button key={value} variant={weightChange === value ? 'default' : 'outline'} className="min-h-11" disabled={!onSave} aria-pressed={weightChange === value} onClick={() => onSave?.({ hfFollowUp: { ...local, weightChanges: [...(local.weightChanges ?? []).filter(item => item.date !== today), { date: today, value }] } })}>{isEnglish ? en : zh}</Button>)}</div>
       <p className="text-xs text-muted-foreground">{isEnglish ? 'Reported change this visit; measured values are shown separately.' : '本次回報的體重變化；實際量測差值另列如下。'}</p>
       <p>{isEnglish ? 'Today' : '本日'}：{currentWeight ? `${currentWeight.value.toFixed(1)} kg` : (isEnglish ? 'Not recorded' : '尚未量測')}</p>
+      </>}
       <details data-testid="cdss-weight-records"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">{isEnglish ? 'Weight records · chart and new entry' : '體重紀錄・圖表與新增量測'}</summary>
       {latest ? <p className="text-sm">{isEnglish ? 'Latest' : '最近一次'}：{latest.value.toFixed(1)} kg · {latest.date}{prior ? ` ／ ${isEnglish ? 'Previous' : '前次'}：${prior.value.toFixed(1)} kg · ${prior.date} ／ Δ ${(latest.value - prior.value).toFixed(1)} kg` : ''}</p> : <p data-cdss-action="" className="text-sm">{isEnglish ? 'Record weight to start tracking' : '請記錄體重以開始追蹤'}</p>}
       {range.length > 1 ? <svg viewBox="0 0 300 90" role="img" aria-label={isEnglish ? 'Weight trend; dated measurements below' : '體重趨勢，日期與數值詳見下表'} className="h-28 w-full text-primary"><polyline points={xy} fill="none" stroke="currentColor" strokeWidth="2" />{xy.split(' ').map((pair, index) => <circle key={range[index].date} cx={pair.split(',')[0]} cy={pair.split(',')[1]} r="3" fill="currentColor" />)}</svg> : <p className="text-xs text-muted-foreground">{isEnglish ? 'At least two dated weights are needed for a trend.' : '至少兩筆不同日期的體重才能顯示趨勢。'}</p>}

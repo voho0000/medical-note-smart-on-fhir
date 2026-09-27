@@ -529,6 +529,8 @@ export function HeartFailureMapSurfaces({
         now={now}
         isEnglish={isEnglish}
         onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })}
+        // The map asks 喘 and 體重 at the top of the screen; do not ask them again here.
+        trendAsksElsewhere
       />
     ) : undefined,
     diagnosticAssessment: (
