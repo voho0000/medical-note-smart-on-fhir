@@ -160,12 +160,18 @@ describe('DP-01 phenotype gate, host to pack', () => {
 })
 
 describe('PhysicianInputRequestPanel', () => {
-  // The three-way LVEF question now belongs to a diagnosed patient whose
-  // record holds no LVEF; before a diagnosis, DP-00 asks the phenotype.
-  const requests = requestsFor({
-    answeredOn: '2026-09-09',
-    diagnosisConfirmation: { method: 'existing', confirmedAt: '2026-09-09T09:00:00+08:00', basis: 'I50.9' },
-  }).filter((request) => request.kind === 'lvef-phenotype')
+  // The pack now asks the phenotype as DP-01 on every chart; the three-way
+  // LVEF control stays in the panel for any card that still sends it.
+  const requests = [{
+    kind: 'lvef-phenotype' as const,
+    label: '院外、紙本或核醫報告中是否已知 LVEF？',
+    selection: 'single' as const,
+    options: [
+      { id: 'reduced', label: '院外／紙本／核醫已知 LVEF <50%', valueLabel: 'LVEF（%）與檢查日期' },
+      { id: 'preserved', label: '已知 LVEF ≥50% 且未曾 <50%', valueLabel: 'LVEF（%）與檢查日期' },
+      { id: 'unknown', label: '不清楚，建議安排心臟超音波＋NT-proBNP' },
+    ],
+  }]
 
   it('renders the pack’s choices as one radio group and reports the id chosen', () => {
     const onAnswer = jest.fn()

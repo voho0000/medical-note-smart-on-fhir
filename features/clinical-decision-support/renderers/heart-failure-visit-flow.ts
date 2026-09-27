@@ -582,21 +582,33 @@ export function buildHeartFailureVisitFlow(
   // The phenotype chosen on question 1 is the diagnosis; the question stays,
   // answered, so the choice can be changed where it was made.
   const diagnosedHere = phenotypeAnswer?.diagnosis
-  const asksDiagnosis = !establishedHfrEF || Boolean(diagnosedHere)
+  // The pack asks DP-01 on every chart, answered from the record where it can
+  // be (clinician feedback 2026-09-28: 「診斷留著讓人修改的空間，才不會每個病人
+  // 進來的畫面不一樣」). Without the pack's question the host asks only before a
+  // diagnosis, as before.
+  const packAsksDiagnosis = Boolean(requestOf(phenotypeCard, 'hf-suspicion'))
+  const asksDiagnosis = packAsksDiagnosis || !establishedHfrEF || Boolean(diagnosedHere)
+  const recorded = suspicionRequest.recordedOptionId
+  const phenotypeName = (id: string | undefined) => (id === 'hfref' || id === 'hfrEF' ? 'HFrEF' : 'HFpEF')
+  const ownChoice = diagnosedHere ? undefined : phenotypeAnswer?.hfSuspicion
+  const ownChoiceStands = Boolean(ownChoice && (
+    suspicionRequest.options?.some((option) => option.id === ownChoice)
+    || (ownChoice === 'not-suspected' && !establishedHfrEF)
+  ))
 
   const suspicionLabel = suspicionRequest?.label
     ?? (isEnglish ? 'Diagnosis: HFrEF or HFpEF?' : '診斷：HFrEF 還是 HFpEF？')
   const suspicionAnswerText = diagnosedHere
-    ? (isEnglish
-      ? `${diagnosedHere === 'hfrEF' ? 'HFrEF' : 'HFpEF'} (your judgement)`
-      : `${diagnosedHere === 'hfrEF' ? 'HFrEF' : 'HFpEF'}（醫師判斷）`)
-    : establishedHfrEF
-    ? (isEnglish ? 'Established heart failure in the record' : '病歷已有心衰竭診斷')
-    : suspicion
-    ? suspicionRequest?.options?.find((option) => option.id === suspicion)?.label
-      ?? (suspected
+    ? (isEnglish ? `${phenotypeName(diagnosedHere)} (your judgement)` : `${phenotypeName(diagnosedHere)}（醫師判斷）`)
+    : recorded
+    ? (isEnglish ? `${phenotypeName(recorded)} (record)` : `${phenotypeName(recorded)}（紀錄）`)
+    : ownChoiceStands
+    ? suspicionRequest.options?.find((option) => option.id === ownChoice)?.label
+      ?? (ownChoice === 'suspected'
         ? (isEnglish ? 'Not sure yet' : '還不確定')
         : (isEnglish ? 'Not suspected' : '本次不懷疑'))
+    : !packAsksDiagnosis && establishedHfrEF
+    ? (isEnglish ? 'Established heart failure in the record' : '病歷已有心衰竭診斷')
     : undefined
 
   const questions: VisitQuestion[] = []
@@ -607,21 +619,23 @@ export function buildHeartFailureVisitFlow(
       id: 'hf-suspicion',
       number: '1',
       label: suspicionLabel,
-      state: suspicion ? 'answered' : 'open',
+      state: suspicionAnswerText ? 'answered' : 'open',
       ...(suspicionAnswerText ? { answerText: suspicionAnswerText } : {}),
       ...(phenotypeAnswer?.modifiedAt?.hfSuspicion
         ? { modifiedAt: phenotypeAnswer.modifiedAt.hfSuspicion }
         : {}),
       // The record's LVEF is what the choice weighs; before an answer, say
       // what a phenotype does, so one press is not a surprise.
-      ...(suspicion
+      ...(suspicionAnswerText
         ? (detail ? { hint: detail } : {})
         : {
           hint: [
             detail,
-            isEnglish
-              ? 'A phenotype is recorded as your judgement and opens treatment; symptoms and signs can be added later.'
-              : '選分型即記為醫師判斷並進入治療；症狀／徵象可之後補記。',
+            establishedHfrEF
+              ? (isEnglish ? 'A phenotype is recorded as your judgement.' : '選分型即記為醫師判斷。')
+              : (isEnglish
+                ? 'A phenotype is recorded as your judgement and opens treatment; symptoms and signs can be added later.'
+                : '選分型即記為醫師判斷並進入治療；症狀／徵象可之後補記。'),
           ].filter(Boolean).join(isEnglish ? ' · ' : '・'),
         }),
       counted: true,

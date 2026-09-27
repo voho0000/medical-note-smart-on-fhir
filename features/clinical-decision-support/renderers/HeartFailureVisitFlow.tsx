@@ -22,7 +22,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import type { CdssRecommendation, VisitAnswers, VisitAsk } from '../types'
+import type { CdssRecommendation, DecisionPointState, VisitAnswers, VisitAsk } from '../types'
 import {
   NOT_ASSESSED,
   todayIsoDate,
@@ -55,6 +55,7 @@ import { DiagnosisReading } from './DiagnosisReading'
 import { HfpEfCriteriaList } from './HfpEfCriteriaList'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { diagnosisAnswer } from './visit/physician-input'
+import { StatePill } from './visit/visit-presentation'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
@@ -540,7 +541,7 @@ export function HeartFailureMapSurfaces({
     && question.id !== 'nyha' && question.id !== 'compensation' && question.id !== 'hfpef-confirmation'
   const followUpFlow = assessmentAsksSuspicion
     ? subset(flow.questions.filter(inDiagnosisCard), true)
-    : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)))
+    : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)), true)
   const diagnosticFlow = subset(assessmentAsksSuspicion ? [] : flow.questions.filter((question) => diagnosticIds.includes(question.id)))
   const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
   const questionsCard = (questionFlow: VisitFlowModel) => (
@@ -550,6 +551,8 @@ export function HeartFailureMapSurfaces({
       onAnswerPhenotype={onAnswerPhenotype} board={board} hfpefReading={hfpefReading}
       onOpenCalculator={openCalculator}
       compact
+      // HFrEF 還是 HFpEF？ is DP-01's question (DP-00 folded into it).
+      diagnosisPoint={{ dp: 'DP-01', label: isEnglish ? 'Diagnosis and phenotype' : '確診與分型' }}
     />
   )
   const canEdit = Boolean(onSaveClinicVitals)
@@ -1484,6 +1487,7 @@ function QuestionsCard({
   hfpefReading,
   onOpenCalculator,
   compact = false,
+  diagnosisPoint,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1501,6 +1505,12 @@ function QuestionsCard({
    * the HFpEF question comes last, and that question's guideline text folded.
    */
   compact?: boolean
+  /**
+   * On the map, the decision point the diagnosis question is (HF: DP-01): the
+   * question is drawn as that point, beside the map's other points, rather
+   * than as a row of this card.
+   */
+  diagnosisPoint?: { dp: string; label: string }
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
@@ -1526,12 +1536,56 @@ function QuestionsCard({
       : question.state === 'open' || reopened.has(question.id) || (question.id === 'hf-suspicion' && unsure)
   )
 
+  const answerDiagnosis = (question: VisitQuestion) => (next: PhenotypeAnswer) => {
+    setReopened((current) => { const rest = new Set(current); rest.delete(question.id); return rest })
+    onAnswerPhenotype?.(next)
+  }
+  const pointQuestion = compact && diagnosisPoint
+    ? flow.questions.find((question) => question.id === 'hf-suspicion')
+    : undefined
+  // Drawn as DP-01, the diagnosis leaves the card; what stays numbers from 1.
+  const listed = pointQuestion
+    ? flow.questions.filter((question) => question !== pointQuestion).map((question, index) => ({ ...question, number: String(index + 1) }))
+    : flow.questions
+
   return (
+    <>
+    {pointQuestion && diagnosisPoint ? (
+      <MapDiagnosisPoint
+        question={pointQuestion}
+        point={diagnosisPoint}
+        open={shows(pointQuestion)}
+        isEnglish={isEnglish}
+        now={now}
+        answer={phenotypeAnswer}
+        {...(onAnswerPhenotype && !flow.readOnly ? { onAnswer: answerDiagnosis(pointQuestion), onEdit: () => reopen(pointQuestion.id) } : {})}
+        {...(reopened.has(pointQuestion.id) ? { onCollapse: () => setReopened((current) => { const rest = new Set(current); rest.delete(pointQuestion.id); return rest }) } : {})}
+        evidence={evidenceUnderDiagnosis && diagnosisSummary && diagnosisCard ? (
+          <div className="space-y-1.5" data-testid="cdss-hf-hfpef-evidence">
+            <HfpEfCriteriaList
+              summary={diagnosisSummary}
+              card={diagnosisCard}
+              isEnglish={isEnglish}
+              symptomsHint={isEnglish ? 'tick them in the assessment below' : '在下方勾選'}
+            />
+            <HfpEfScoreLine
+              compact
+              reading={hfpefReading}
+              isEnglish={isEnglish}
+              {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+            />
+          </div>
+        ) : undefined}
+      />
+    ) : null}
+    {listed.length > 0 ? (
     <section
       className="overflow-hidden rounded-lg border border-border bg-card"
       aria-label={isEnglish ? "This visit's assessment" : '本次評估'}
       data-testid="cdss-hf-questions"
     >
+      {/* The map titles the card itself and counts in its section bar. */}
+      {!compact ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
         <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
           {isEnglish ? 'Your judgement' : '需要你判斷'}
@@ -1548,6 +1602,7 @@ function QuestionsCard({
             : (isEnglish ? 'Assessment complete' : '本次評估完成')}
         </span>
       </div>
+      ) : null}
       {!compact && flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
           className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
@@ -1567,7 +1622,7 @@ function QuestionsCard({
         </p>
       ) : null}
       <ul className="divide-y divide-border">
-        {flow.questions.map((question) => {
+        {listed.map((question) => {
           const editable = !flow.readOnly
           const onEdit = editable ? () => reopen(question.id) : undefined
 
@@ -1587,37 +1642,13 @@ function QuestionsCard({
                     recommendationId={question.recommendationId}
                     isEnglish={isEnglish}
                     answer={phenotypeAnswer}
-                    onAnswer={(next) => {
-                      setReopened((current) => { const rest = new Set(current); rest.delete(question.id); return rest })
-                      onAnswerPhenotype(next)
-                    }}
+                    onAnswer={answerDiagnosis(question)}
                     now={now}
                   />
                 ) : null}
               </QuestionShell>
             )
-            if (question.id !== 'hf-suspicion' || !evidenceUnderDiagnosis) return shell
-            return (
-              <Fragment key={question.id}>
-                {shell}
-                <li className="space-y-1.5 py-2.5 pl-[2.625rem] pr-3" data-testid="cdss-hf-hfpef-evidence">
-                  {diagnosisSummary && diagnosisCard ? (
-                    <HfpEfCriteriaList
-                      summary={diagnosisSummary}
-                      card={diagnosisCard}
-                      isEnglish={isEnglish}
-                      symptomsHint={isEnglish ? 'tick them in questions 2 and 3 below' : '在下方第 2、3 題勾選'}
-                    />
-                  ) : null}
-                  <HfpEfScoreLine
-                    compact
-                    reading={hfpefReading}
-                    isEnglish={isEnglish}
-                    {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
-                  />
-                </li>
-              </Fragment>
-            )
+            return shell
           }
 
           if (question.id === 'hfpef-confirmation') {
@@ -1742,6 +1773,101 @@ function QuestionsCard({
         })}
       </ul>
     </section>
+    ) : null}
+    </>
+  )
+}
+
+/**
+ * The diagnosis question on the map, drawn as the map draws a decision point
+ * (clinician feedback 2026-09-28: 「這個 UI 在決策地圖的畫面中有點不搭」): the
+ * DP code and name, the state in the map's own pill, the answer with the
+ * record's line beside it and 修改 — and, while it is being answered, its
+ * choices and (on 還不確定) the HFpEF criteria in the same box.
+ */
+function MapDiagnosisPoint({
+  question,
+  point,
+  open,
+  isEnglish,
+  now,
+  answer,
+  onAnswer,
+  onEdit,
+  onCollapse,
+  evidence,
+}: {
+  question: VisitQuestion
+  point: { dp: string; label: string }
+  open: boolean
+  isEnglish: boolean
+  now: Date
+  answer?: PhenotypeAnswer
+  onAnswer?: (answer: PhenotypeAnswer) => void
+  onEdit?: () => void
+  /** Closes an answer reopened by 修改 without changing it. */
+  onCollapse?: () => void
+  evidence?: ReactNode
+}) {
+  const ask = question.label.replace(/^診斷：|^Diagnosis:\s*/, '')
+  const state: DecisionPointState = !open ? 'done' : question.state === 'answered' ? 'confirm' : 'act'
+  return (
+    <div
+      id={visitQuestionElementId(question.id)}
+      className={cn('scroll-mt-2 rounded-md border bg-background px-2.5 py-2', open ? 'border-foreground' : 'border-border')}
+      data-testid={`cdss-hf-question-${question.id}`}
+      data-state={question.state}
+      data-dp={point.dp}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+        <span className="text-sm font-medium text-foreground">
+          {point.label}
+          {open ? <span className="font-normal">{isEnglish ? `: ${ask}` : `：${ask}`}</span> : null}
+        </span>
+        {open && onCollapse ? (
+          <button
+            type="button"
+            className="ml-auto min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onCollapse}
+            data-testid={`cdss-hf-question-collapse-${question.id}`}
+          >
+            {isEnglish ? 'Keep' : '不修改'}
+          </button>
+        ) : null}
+        {!open && onEdit ? (
+          <button
+            type="button"
+            className="ml-auto min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onEdit}
+            data-testid={`cdss-hf-question-edit-${question.id}`}
+          >
+            {isEnglish ? 'Edit' : '修改'}
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <StatePill state={state} isEnglish={isEnglish} />
+        {!open && question.answerText ? (
+          <span className="text-sm font-medium text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</span>
+        ) : null}
+        {question.hint ? <span className="min-w-0 text-xs text-muted-foreground">{!open && question.answerText ? '· ' : ''}{question.hint}</span> : null}
+      </div>
+      {open && question.request && question.recommendationId && onAnswer ? (
+        <div className="mt-2">
+          <PhysicianInputRequestPanel
+            inline
+            requests={[question.request]}
+            recommendationId={question.recommendationId}
+            isEnglish={isEnglish}
+            answer={answer}
+            onAnswer={onAnswer}
+            now={now}
+          />
+        </div>
+      ) : null}
+      {open && evidence ? <div className="mt-2 border-t border-border/60 pt-2">{evidence}</div> : null}
+    </div>
   )
 }
 

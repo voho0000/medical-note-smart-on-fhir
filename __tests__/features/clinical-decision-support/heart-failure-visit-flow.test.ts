@@ -437,18 +437,30 @@ describe('the questions', () => {
             evidence('心衰竭診斷', 'I50.22 慢性收縮性心衰竭', 'heartFailureDiagnosis', '2026-07-01'),
             ...item.patientEvidence,
           ],
+          // As the pack asks DP-01 on a diagnosed chart: answered from the record.
+          physicianInputRequests: [{
+            kind: 'hf-suspicion' as const,
+            label: '診斷：HFrEF 還是 HFpEF？',
+            detail: '紀錄：I50.22・LVEF 32%（2026-07-01）',
+            recordedOptionId: 'hfref',
+            selection: 'single' as const,
+            options: [{ id: 'hfref', label: 'HFrEF（LVEF <50%）' }],
+          }],
         }
         : item),
     }
 
     const flow = flowFor({ result: diagnosedResult })
 
+    // The same question 1 as every chart, standing on the record's answer.
     expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
-      ['1', 'symptoms'],
-      ['2', 'signs'],
-      ['3', 'nyha'],
-      ['4', 'compensation'],
+      ['1', 'hf-suspicion'],
+      ['2', 'symptoms'],
+      ['3', 'signs'],
+      ['4', 'nyha'],
+      ['5', 'compensation'],
     ])
+    expect(flow.questions[0]).toMatchObject({ state: 'answered', answerText: 'HFrEF（紀錄）', hint: '紀錄：I50.22・LVEF 32%（2026-07-01）' })
     expect(flow.steps[0]).toMatchObject({ state: 'done' })
     expect(flow.steps[0].detail).toContain('HFrEF · LVEF 32')
     expect(flow.questions.find((item) => item.id === 'symptoms')?.hint).toBeUndefined()

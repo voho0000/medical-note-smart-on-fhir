@@ -59,7 +59,11 @@ function HfSuspicionRequest({
   showDetail: boolean
 }) {
   const groupId = useId()
-  const selected = diagnosisOptionOf(answer)
+  // The clinician's own phenotype, else what the record answers, else their
+  // 還不確定.
+  const selected = (answer?.diagnosis ? diagnosisOptionOf(answer) : undefined)
+    ?? request.recordedOptionId
+    ?? answer?.hfSuspicion
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="mb-1.5 text-xs font-semibold text-foreground">

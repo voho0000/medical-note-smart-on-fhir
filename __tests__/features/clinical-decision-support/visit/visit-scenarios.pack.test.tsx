@@ -288,7 +288,24 @@ describe('real pack · P4 on 01’s 診斷 view', () => {
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
     expect(within(view).queryByText('補記診斷確認紀錄')).toBeNull()
-    expect(cell('DP-01')).toHaveTextContent('HFrEF')
+    // DP-01 is the diagnosis question on every chart (clinician feedback:
+    // 「診斷留著讓人修改的空間」), drawn as a map point, standing on the record.
+    const dp01 = within(view).getByTestId('cdss-hf-question-hf-suspicion')
+    expect(dp01).toHaveAttribute('data-dp', 'DP-01')
+    expect(within(dp01).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（紀錄）')
+    expect(dp01).toHaveTextContent('I50.22')
+    expect(dp01).toHaveTextContent('已定')
+    // The map's own card for DP-01 is not drawn a second time beside it.
+    expect(queryCell('DP-01')).toBeUndefined()
+    // 修改 opens the choices in place, the record's answer chosen; no HFpEF for an LVEF below 50%.
+    fireEvent.click(within(dp01).getByTestId('cdss-hf-question-edit-hf-suspicion'))
+    expect(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref')).toBeChecked()
+    expect(within(dp01).queryByTestId('cdss-hf-suspicion-option-hfpef')).toBeNull()
+    expect(dp01).toHaveTextContent('依 ESC 不列 HFpEF')
+    // 不修改 closes it again, the record's answer standing.
+    fireEvent.click(within(dp01).getByTestId('cdss-hf-question-collapse-hf-suspicion'))
+    expect(within(dp01).queryByTestId('cdss-hf-suspicion-option-hfref')).toBeNull()
+    expect(within(dp01).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（紀錄）')
   })
 })
 
@@ -416,10 +433,12 @@ describe('real pack · the other scenarios', () => {
     expect([...assessment.querySelectorAll('[data-testid^="cdss-hf-question-"]:not([data-testid*="answer"]):not([data-testid*="edit"])')]
       .map((item) => [item.getAttribute('data-testid'), item.getAttribute('data-number')]))
       .toEqual([
-        ['cdss-hf-question-hf-suspicion', '1'],
-        ['cdss-hf-question-symptoms', '2'],
-        ['cdss-hf-question-signs', '3'],
+        // The diagnosis is drawn as DP-01, unnumbered; the card numbers from 1.
+        ['cdss-hf-question-hf-suspicion', null],
+        ['cdss-hf-question-symptoms', '1'],
+        ['cdss-hf-question-signs', '2'],
       ])
+    expect(within(assessment).getByTestId('cdss-hf-question-hf-suspicion')).toHaveAttribute('data-dp', 'DP-01')
     const evidence = within(assessment).getByTestId('cdss-hf-hfpef-evidence')
     expect(evidence).toHaveTextContent('HFpEF 診斷條件')
     expect(evidence).toHaveTextContent('LVEF ≥50%')
@@ -427,7 +446,7 @@ describe('real pack · the other scenarios', () => {
     // feedback: 「畫面太花」), with Table 10 itself one press away.
     expect(within(evidence).getByTestId('cdss-hf-hfpef-criteria-count')).toHaveTextContent('2/3 成立')
     expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-lvef')).toHaveTextContent('62%，2026-09-20')
-    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('在下方第 2、3 題勾選')
+    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('在下方勾選')
     const objective = within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-objective-abnormality')
     expect(objective).toHaveTextContent('E/e′ 15')
     expect(objective).toHaveTextContent('TR Vmax 2.9 m/s')
