@@ -62,6 +62,7 @@ import {
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
+import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { isChronicPrescription, pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
@@ -128,14 +129,22 @@ type SummarySegment = {
 const SENTENCE_END = /[。．！？!?；;]\s*$/
 export function coalesceCitations(segments: SummarySegment[]): SummarySegment[] {
   let pending: string[] = []
+  // documentEvidence travels with its source keys; leaving it on a segment
+  // whose keys moved made the boundary render a false "missing quote" warning.
+  let pendingEvidence: DocumentEvidence[] = []
   return segments.map((seg, i) => {
     pending.push(...seg.sourceKeys)
+    pendingEvidence.push(...(seg.documentEvidence ?? []))
     const isBoundary =
       seg.emphasis || SENTENCE_END.test(seg.text.trim()) || i === segments.length - 1
-    if (!isBoundary) return { ...seg, sourceKeys: [] }
+    const { documentEvidence: _moved, ...rest } = seg
+    if (!isBoundary) return { ...rest, sourceKeys: [] }
     const keys = [...new Set(pending)]
+    const evidence = pendingEvidence.filter((entry, index) => pendingEvidence.findIndex((other) =>
+      other.source === entry.source && other.quote === entry.quote) === index)
     pending = []
-    return { ...seg, sourceKeys: keys }
+    pendingEvidence = []
+    return { ...rest, sourceKeys: keys, ...(evidence.length > 0 ? { documentEvidence: evidence } : {}) }
   })
 }
 
@@ -1275,6 +1284,8 @@ const LOCAL_CORE_RULES =
   'Copy medication product names, dose text, and frequency exactly. A same-row NHI terminology block may supply that exact product\'s ingredient/strength, dose form, and ATC classification; it overrides a conflicting administrative MedicationRequest.category, but never proves indication, actual use, adherence, or outcome. Never transfer terminology across rows or infer any medication detail that is not explicitly supplied. Never use a medication alone to diagnose the patient. ' +
   'A numeric laboratory value without an explicit interpretation flag, reference range, or patient-specific target must not be called high, low, normal, controlled, uncontrolled, at target, or not at target. Do not recommend medication adjustment. ' +
   'Every emitted item must have at least one source that directly supports its whole claim. Prefer omission or neutral uncertainty over plausible inference. ' +
+  'CERTAINTY: keep the source\'s certainty wording (疑似, R/O, rule out, impression, possible, 待排除). Never upgrade a suspected, provisional or ruled-out diagnosis to a confirmed one, and write 證實/確診 only when the cited source itself states it. ' +
+  'QUOTES: each documentEvidence quote must be one contiguous passage copied character-for-character from the cited D document; never join separate passages or paraphrase inside a quote. ' +
   'Return only the requested structured blocks; no markdown or surrounding explanation. '
 
 const LOCAL_MODULE_RULES: Record<MedicalSummaryModuleId, string> = {
@@ -1286,6 +1297,7 @@ const LOCAL_MODULE_RULES: Record<MedicalSummaryModuleId, string> = {
     'Never create an active problem from medication evidence alone. Never turn a single unassessed lab value into a disease or poor-control problem. Omit claim-only or medication-only candidates instead of presenting them as confirmed. ',
   timeline:
     'TIMELINE: Select significant objective events only. The app supplies dates, end dates, organizations, and encounter class; write only a concise label supported by the cited event. ' +
+    'For a D document the app shows the document/admission date. When the event inside the document (surgery, procedure, diagnosis, discharge) happened on a different date, put that date at the start of the label only if it appears verbatim in the document, and include it in documentEvidence. ' +
     'Do not add a finding or procedure that is absent from the cited record. Prefer admissions, emergency visits, procedures, major reports, and explicit medication changes over routine refills. ',
   investigations:
     `INVESTIGATIONS: Cite only matching L/O evidence and show at most ${MAX_INVESTIGATION_TREND_POINTS} actual dated values/findings. ` +
@@ -1823,7 +1835,7 @@ export class GenerateMedicalSummaryUseCase {
     const system = systemPrefix + systemRules
     const languageContract =
       input.locale === 'zh-TW'
-        ? 'OUTPUT LANGUAGE: Traditional Chinese (繁體中文). Write every human-readable generated field in Traditional Chinese.'
+        ? 'OUTPUT LANGUAGE: Traditional Chinese (繁體中文). Write every human-readable generated field in Traditional Chinese. 請一律使用臺灣繁體中文，不得使用簡體字（例如寫「檢查、診斷、藥物、腎臟」，不可寫「检查、诊断、药物、肾脏」）。'
         : 'OUTPUT LANGUAGE: ENGLISH ONLY (MANDATORY). The clinical records and examples may contain Traditional Chinese; translate their meaning into natural English instead of copying Chinese text. Every human-readable generated field — including headline, text, rationale, label, trend, interpretation, name, benefit, attention, overview, group, sig, medication, summary, and basis — must contain no Chinese Han characters. Keep JSON keys, enum values, and source keys unchanged. Before returning, inspect the entire JSON and rewrite any remaining Chinese prose in English.'
     const catalogBlock = compactEvidence.catalog
       .map((c) => {
@@ -1971,6 +1983,10 @@ export class GenerateMedicalSummaryUseCase {
   parseModuleResult<T extends MedicalSummaryModuleId>(
     moduleId: T,
     text: string,
+    /** `complete`: the block's end marker arrived, so the model finished it and
+     * one omitted final `}` may be closed. Without it the text may be a
+     * truncated stream and is parsed strictly. */
+    options: { complete?: boolean } = {},
   ): MedicalSummaryModuleResultMap[T] | null {
     const fail = (reason: string): null => {
       if (process.env.NODE_ENV !== 'production') {
@@ -1983,7 +1999,7 @@ export class GenerateMedicalSummaryUseCase {
       }
       return null
     }
-    const raw = tryExtractJsonValue(text)
+    const raw = tryExtractJsonValue(text, { closeMissingBrackets: options.complete === true })
     if (raw === null) {
       const salvaged = moduleId === 'priorities'
         ? salvagePrioritiesModule(null, text)
@@ -2069,7 +2085,7 @@ export class GenerateMedicalSummaryUseCase {
     const contentStart = startIndex + startMarker.length
     const endIndex = text.indexOf(moduleBlockEnd(moduleId), contentStart)
     if (endIndex >= 0) {
-      return this.parseModuleResult(moduleId, text.slice(contentStart, endIndex))
+      return this.parseModuleResult(moduleId, text.slice(contentStart, endIndex), { complete: true })
     }
 
     // A missing end marker should break only this block. Stop at the next
@@ -2324,6 +2340,7 @@ export class GenerateMedicalSummaryUseCase {
         direction: guardedInvestigationDirection(item.direction, item.label, item.sources, byKey, catalog),
         trend: limitInvestigationTrendPoints(item.trend),
         interpretation:
+          !item.interpretation.trim() ||
           strictGrounding && (TREATMENT_CHANGE_LANGUAGE.test(item.interpretation) || (
             unsupportedInterpretation && !supportsAssessment
           ))
@@ -2605,7 +2622,7 @@ export class GenerateMedicalSummaryUseCase {
       // sit at the top; scroll down for history.
       .sort((a, b) => b.date.localeCompare(a.date))
 
-    return {
+    const finalized = {
       headline,
       summary,
       investigations,
@@ -2617,6 +2634,39 @@ export class GenerateMedicalSummaryUseCase {
       sourceIndex,
       droppedTimelineCount,
     }
+    return locale === 'zh-TW' ? traditionalizeGeneratedProse(finalized) : finalized
+  }
+}
+
+/**
+ * zh-TW output contract backstop: repair Simplified characters in model-written
+ * prose only. Medicine names, SIG text, source displays and documentEvidence
+ * quotes are left byte-identical because they must match the record.
+ */
+function traditionalizeGeneratedProse<T extends Omit<MedicalSummaryResult, 'safety' | 'generation' | 'cardErrors' | 'completedCardIds'>>(
+  result: T,
+): T {
+  const t = toTraditionalChinese
+  return {
+    ...result,
+    headline: t(result.headline),
+    summary: result.summary.map((s) => ({ ...s, text: t(s.text) })),
+    investigations: result.investigations.map((i) => ({
+      ...i, label: t(i.label), trend: t(i.trend), interpretation: t(i.interpretation),
+    })),
+    medicationEducation: result.medicationEducation.map((m) => ({
+      ...m, benefit: t(m.benefit), attention: t(m.attention),
+    })),
+    medicationReview: {
+      ...result.medicationReview,
+      overview: t(result.medicationReview.overview),
+      regimen: result.medicationReview.regimen.map((r) => ({ ...r, group: t(r.group) })),
+      changes: result.medicationReview.changes.map((c) => ({ ...c, summary: t(c.summary) })),
+      reconciliation: result.medicationReview.reconciliation.map((r) => ({ ...r, text: t(r.text) })),
+    },
+    problems: result.problems.map((p) => ({ ...p, label: t(p.label), basis: t(p.basis) })),
+    decisions: result.decisions.map((d) => ({ ...d, text: t(d.text), rationale: t(d.rationale) })),
+    timeline: result.timeline.map((e) => ({ ...e, label: t(e.label) })),
   }
 }
 

@@ -1,12 +1,20 @@
 /** Source-excerpt verification, not semantic verification of a clinical claim. */
 export type DocumentQuoteVerification = 'exact' | 'whitespace-restored' | 'not-found' | 'unavailable'
 
+// A Chinese character carries roughly a word of meaning, so a genuine
+// verbatim clinical phrase can be much shorter than a Latin one (e.g.
+// 「疑似肺炎」). Very short Latin fragments still match too easily by accident.
+const HAN = /[㐀-鿿]/g
+function minimumQuoteLength(quote: string): number {
+  return (quote.match(HAN)?.length ?? 0) >= 4 ? 4 : 8
+}
+
 export function verifyDocumentQuote(quote: string, sourceText?: string): {
   quote: string
   verification: DocumentQuoteVerification
 } {
   if (!sourceText) return { quote, verification: 'unavailable' }
-  if (quote.trim().length < 8) return { quote, verification: 'not-found' }
+  if (quote.trim().length < minimumQuoteLength(quote)) return { quote, verification: 'not-found' }
   if (sourceText.includes(quote)) return { quote, verification: 'exact' }
   // Only whitespace may differ. Do not fuzzy-match, translate, case-fold
   // units, remove negation, change numbers, or join non-contiguous passages.

@@ -10,7 +10,9 @@ import {
   scopeDocumentSources,
   classifyEncounterClass,
   normaliseSummarySourceKey,
+  coalesceCitations,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
 import {
   MEDICAL_SUMMARY_CARD_REGISTRY,
   registeredMedicalSummaryCards,
@@ -2070,5 +2072,54 @@ describe('finalizeResult', () => {
     }
     const result = useCase.finalizeResult(ai, catalog)
     expect(result.timeline[0].category).toBe('encounter')
+  })
+})
+
+describe('local zh-TW prose guards', () => {
+  const catalog = buildSourceCatalog(CATALOG_INPUT)
+
+  it('repairs Simplified prose but keeps medicine names verbatim', () => {
+    const ai = {
+      headline: '血糖控制记录',
+      problems: [{ label: '糖尿病', basis: '多次检验', kind: 'diagnosis', sources: ['E1'] }],
+      summary: [{ text: '建议复诊追踪。', emphasis: false, sources: ['E1'] }],
+      decisions: [],
+      timeline: [{ ref: 'E1', label: '门诊复查', category: 'encounter' }],
+      medicationReview: { overview: '药物清单', regimen: [{ group: '降血糖药', name: '测试药名', sources: ['M1'] }], changes: [], reconciliation: [] },
+    }
+    const result = useCase.finalizeResult(ai as never, catalog, { locale: 'zh-TW' })
+    expect(result.headline).toBe('血糖控制記錄')
+    expect(result.summary[0].text).toBe('建議複診追蹤。')
+    expect(result.timeline[0].label).toBe('門診複查')
+    expect(result.medicationReview.overview).toBe('藥物清單')
+    expect(result.medicationReview.regimen[0]?.name).toBe('测试药名')
+    const en = useCase.finalizeResult(ai as never, catalog, { locale: 'en' })
+    expect(en.headline).toBe('血糖控制记录')
+  })
+
+  it('moves document evidence together with coalesced citations', () => {
+    const segments = coalesceCitations([
+      { text: '住院期間', emphasis: false, sourceKeys: ['D1'], documentEvidence: [{ source: 'D1', quote: '入院診斷為肺炎' }] },
+      { text: '接受治療。', emphasis: false, sourceKeys: [] },
+    ])
+    expect(segments[0].documentEvidence).toBeUndefined()
+    expect(segments[1]).toMatchObject({ sourceKeys: ['D1'], documentEvidence: [{ source: 'D1', quote: '入院診斷為肺炎' }] })
+  })
+
+  it('accepts short verbatim Chinese quotes but not short Latin fragments', () => {
+    expect(verifyDocumentQuote('疑似肺炎', '入院診斷：疑似肺炎。').verification).toBe('exact')
+    expect(verifyDocumentQuote('肺炎', '入院診斷：疑似肺炎。').verification).toBe('not-found')
+    expect(verifyDocumentQuote('R/O PE', 'Impression: R/O PE').verification).toBe('not-found')
+  })
+
+  it('local prompt states record-date, certainty and Traditional-Chinese rules', () => {
+    const input = { clinicalContext: 'ctx', catalog, locale: 'zh-TW', audience: 'medical', harnessProfile: 'local-small' } as never
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      registeredMedicalSummaryCards(input).map((card) => card.buildBatchInstruction(input)),
+    )
+    expect(messages[0].content).toContain('document/admission date')
+    expect(messages[0].content).toContain('Never upgrade a suspected')
+    expect(messages[0].content).toContain('不得使用簡體字')
   })
 })

@@ -165,8 +165,11 @@ export const SummaryInvestigationSchema = z.object({
   direction: z.string().optional(),
   /** Data-first display, e.g. "HbA1c 7.2% → 8.4%" or an imaging finding. */
   trend: clampedText(240),
-  /** One short, patient-specific interpretation of why the result matters. */
-  interpretation: clampedText(400),
+  /** One short, patient-specific interpretation of why the result matters.
+   * Local models sometimes emit null when no assessment is supported; keep the
+   * dated values instead of failing the whole card (finalizer fills a neutral
+   * sentence for an empty interpretation). */
+  interpretation: z.string().nullish().transform((s) => (s ?? '').slice(0, 400)),
   sources: clampedRequiredKeys(8),
   documentEvidence: optionalDocumentEvidence(),
 })
