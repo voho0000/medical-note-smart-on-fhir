@@ -385,8 +385,8 @@ describe('HF surfaces on the decision map', () => {
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(view)
     expect(view).toBeVisible()
-    // The asks belong to 追蹤; 診斷 shows the diagnosis points' cells instead.
-    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
+    // 喘／體重比上次 are asked under the diagnosis too once it stands.
+    expect(within(screen.getByTestId('cdss-visit-diagnosis-asks')).getByTestId('cdss-visit-asks')).toBeInTheDocument()
     // Question 1 is DP-01 on this page, so DP-01 is not drawn beside it.
     expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
     expect(queryCell('DP-01')).toBeUndefined()

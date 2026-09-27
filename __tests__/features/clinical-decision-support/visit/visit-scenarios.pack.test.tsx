@@ -479,6 +479,14 @@ describe('real pack · the other scenarios', () => {
     // The answer stays where it was given, on 診斷, and can be changed there.
     expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFpEF（醫師判斷）')
+    // A new diagnosis is still asked 喘／體重比上次 — right under it, without
+    // switching to 追蹤: many a first CDSS visit is a returning patient.
+    const asks = screen.getByTestId('cdss-visit-diagnosis-asks')
+    expect(asks.querySelectorAll('[data-visit-ask-row]')).toHaveLength(2)
+    fireEvent.click(asks.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     // 下一區 now leads on to 02, when the clinician presses it.
     const next = screen.getByTestId('cdss-visit-next-status')

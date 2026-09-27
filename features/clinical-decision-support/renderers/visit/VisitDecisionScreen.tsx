@@ -413,7 +413,21 @@ export function VisitDecisionScreen({
             onChange={(view) => setStatusViewOverride({ reason: defaultStatusView, view })}
           />
         ) : null}
-        {diagnosisView && statusView === 'diagnosis' ? diagnosisView.content : followUpLead}
+        {diagnosisView && statusView === 'diagnosis' ? (
+          <>
+            {diagnosisView.content}
+            {/* Once a diagnosis stands, 喘／體重比上次 are asked under it too,
+                not only behind 追蹤: a diagnosis made on this page is often a
+                returning patient's first CDSS visit (clinician feedback
+                2026-09-28: 「就算是新診斷 HF，也需要問喘跟體重」), and the page
+                does not move to 追蹤 on its own. One set of answers. */}
+            {!undiagnosed ? (
+              <div data-testid="cdss-visit-diagnosis-asks">
+                <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
+              </div>
+            ) : null}
+          </>
+        ) : followUpLead}
         {decisionList('status', statusView === 'diagnosis' ? (isEnglish ? 'Diagnosis decisions' : '診斷決定') : (isEnglish ? 'To decide' : '待決定'))}
       </>
     ),
