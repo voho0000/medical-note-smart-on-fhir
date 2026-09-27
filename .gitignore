@@ -67,3 +67,7 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Internal hospital-model experiment write-ups (kept local, not published)
+docs/experiments/
+docs/TVGHBRAIN-*.md
