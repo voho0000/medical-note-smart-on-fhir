@@ -10,6 +10,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import bundle from '@/public/demo/demo-bundle.json'
 import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { OverviewCard } from '@/features/clinical-summary/overview'
+import { useOutpatientPrefsStore } from '@/src/application/stores/outpatient-prefs.store'
 
 // 2026-06-15 — the one anchor where the demo bundle has all four data kinds
 // inside the default 3-month window AND strictly fewer inside the 1-month one.
@@ -25,6 +26,14 @@ jest.mock('@/src/application/providers/language.provider', () => {
   const { zhTW: translations } = require('@/src/shared/i18n/locales/zh-TW')
   return { useLanguage: () => ({ t: translations, locale: 'zh-TW' }) }
 })
+
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, anonymousUid: null }),
+}))
+
+jest.mock('@/src/application/providers/right-panel.provider', () => ({
+  useRightPanel: () => ({ setActiveTab: jest.fn(), revealTab: jest.fn() }),
+}))
 
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
@@ -90,6 +99,8 @@ describe('OverviewCard (demo bundle)', () => {
   afterAll(() => { globalThis.ResizeObserver = originalResizeObserver })
   beforeEach(() => {
     mockUseClinicalData.mockReturnValue(clinicalData)
+    // The lab mode is a remembered preference; each test starts from none.
+    useOutpatientPrefsStore.setState({ byUser: {} })
   })
 
   it('shows ongoing medication before finished medication in card and dialog', () => {

@@ -36,6 +36,12 @@ interface RightPanelContextType {
   settingsTab: string
   settingsTarget: SettingsNavigationTarget | null
   clearSettingsTarget: () => void
+  /** Open a tab AND make the right panel visible — the phone layout flips to
+   *  「功能」 and a collapsed desktop panel reopens. For a control in the
+   *  clinical summary that sends the reader to a right-panel task. */
+  revealTab: (tab: string) => void
+  /** Increments on every revealTab call; the page layout watches it. */
+  revealSeq: number
 }
 
 const RightPanelContext = createContext<RightPanelContextType | undefined>(undefined)
@@ -49,6 +55,7 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
   const [activeTab, setActiveTabState] = useState(defaultTab)
   const [settingsTab, setSettingsTab] = useState('ai')
   const [settingsTarget, setSettingsTarget] = useState<SettingsNavigationTarget | null>(null)
+  const [revealSeq, setRevealSeq] = useState(0)
 
   const setActiveTab = useCallback((
     tab: string,
@@ -67,6 +74,11 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
 
   const clearSettingsTarget = useCallback(() => setSettingsTarget(null), [])
 
+  const revealTab = useCallback((tab: string) => {
+    setActiveTab(tab)
+    setRevealSeq((seq) => seq + 1)
+  }, [setActiveTab])
+
   return (
     <RightPanelContext.Provider value={{
       activeTab,
@@ -74,6 +86,8 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
       settingsTab,
       settingsTarget,
       clearSettingsTarget,
+      revealTab,
+      revealSeq,
     }}>
       {children}
     </RightPanelContext.Provider>

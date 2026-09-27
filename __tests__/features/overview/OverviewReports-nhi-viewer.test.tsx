@@ -21,6 +21,14 @@ jest.mock('@/src/application/providers/language.provider', () => {
   return { useLanguage: () => ({ t: translations, locale: 'zh-TW' }) }
 })
 
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, anonymousUid: null }),
+}))
+
+jest.mock('@/src/application/providers/right-panel.provider', () => ({
+  useRightPanel: () => ({ setActiveTab: jest.fn(), revealTab: jest.fn() }),
+}))
+
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
 }))
