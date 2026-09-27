@@ -107,7 +107,10 @@ export const DocumentEvidenceSchema = z.object({
   source: z.string().min(1),
   quote: clampedText(240),
 })
-export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema>
+export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema> & {
+  /** App-authored excerpt check. Never establishes clinical entailment. */
+  verification?: import('@/src/core/utils/document-evidence.utils').DocumentQuoteVerification
+}
 const optionalDocumentEvidence = () =>
   z.array(DocumentEvidenceSchema).max(4).optional()
 
@@ -340,6 +343,9 @@ export interface ResolvedSourceRef {
    *  document. Never populated on the global source index; cards attach it
    *  while resolving the sources for one claim. */
   evidenceQuote?: string
+  /** A resolved document may exist while its claim-specific quote is missing
+   * or mismatched. Keep the original source navigable. */
+  evidenceWarning?: 'missing' | 'mismatch' | 'unchecked'
 }
 
 export interface SummaryTimelineEvent {

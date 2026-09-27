@@ -7,6 +7,17 @@ function CurrentLocale() {
 }
 
 describe('SourceSup', () => {
+  it('warns about a mismatched excerpt while retaining touch navigation to the original', () => {
+    const onNavigate = jest.fn()
+    render(<SourceSup sources={[{ key: 'D1', num: 1, verified: true, resourceType: 'DocumentReference',
+      resourceId: 'synthetic-doc', display: '合成病摘', evidenceQuote: 'Unmatched synthetic quote', evidenceWarning: 'mismatch' }]}
+      typeLabel={() => '文件'} unverifiedLabel="來源不存在" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByRole('button', { name: /1 · 文件 · 引文與來源原文不符/ }))
+    expect(screen.getByText('引文與來源原文不符，請點開來源核對。')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /合成病摘/ }))
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 'synthetic-doc', evidenceQuote: 'Unmatched synthetic quote' }))
+    expect(screen.queryByText('來源不存在')).not.toBeInTheDocument()
+  })
   it('hides a trailing NHI institution code without changing source navigation', () => {
     const onNavigate = jest.fn()
 

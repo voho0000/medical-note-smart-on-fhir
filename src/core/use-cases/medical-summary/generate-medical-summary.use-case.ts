@@ -61,6 +61,7 @@ import {
 } from '@/src/shared/utils/report-grouping-helpers'
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { isChronicPrescription, pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
@@ -2103,12 +2104,20 @@ export class GenerateMedicalSummaryUseCase {
    * failed module can be replaced without regenerating successful cards. */
   createAiDraftFromResult(result?: MedicalSummaryResult): MedicalSummaryAiResult {
     if (!result) return this.createEmptyAiResult()
+    // A failed-card retry must retain claim-specific evidence on successful
+    // cards. Rebuilding a draft without it silently loses the document audit
+    // trail even though the source keys and visible clinical text survive.
+    const evidenceFor = (item: { documentEvidence?: DocumentEvidence[] }) =>
+      item.documentEvidence?.length
+        ? { documentEvidence: item.documentEvidence.map(entry => ({ ...entry })) }
+        : {}
     return {
       headline: result.headline,
       summary: result.summary.map((item) => ({
         text: item.text,
         emphasis: item.emphasis,
         sources: item.sourceKeys,
+        ...evidenceFor(item),
       })),
       investigations: result.investigations.map((item) => ({
         label: item.label,
@@ -2117,12 +2126,14 @@ export class GenerateMedicalSummaryUseCase {
         trend: item.trend,
         interpretation: item.interpretation,
         sources: item.sourceKeys,
+        ...evidenceFor(item),
       })),
       medicationEducation: result.medicationEducation.map((item) => ({
         name: item.name,
         benefit: item.benefit,
         attention: item.attention,
         sources: item.sourceKeys,
+        ...evidenceFor(item),
       })),
       medicationReview: {
         overview: result.medicationReview.overview,
@@ -2131,17 +2142,20 @@ export class GenerateMedicalSummaryUseCase {
           name: item.name,
           sig: item.sig,
           sources: item.sourceKeys,
+          ...evidenceFor(item),
         })),
         changes: result.medicationReview.changes.map((item) => ({
           type: item.type,
           medication: item.medication,
           summary: item.summary,
           sources: item.sourceKeys,
+          ...evidenceFor(item),
         })),
         reconciliation: result.medicationReview.reconciliation.map((item) => ({
           reason: item.reason,
           text: item.text,
           sources: item.sourceKeys,
+          ...evidenceFor(item),
         })),
       },
       problems: result.problems.map((item) => ({
@@ -2149,17 +2163,20 @@ export class GenerateMedicalSummaryUseCase {
         basis: item.basis,
         kind: item.kind,
         sources: item.sourceKeys,
+        ...evidenceFor(item),
       })),
       decisions: result.decisions.map((item) => ({
         text: item.text,
         urgency: item.urgency,
         rationale: item.rationale,
         sources: item.sourceKeys,
+        ...evidenceFor(item),
       })),
       timeline: result.timeline.map((item) => ({
         ref: item.key,
         label: item.label,
         category: item.category,
+        ...evidenceFor(item),
       })),
     }
   }
@@ -2246,10 +2263,10 @@ export class GenerateMedicalSummaryUseCase {
     const finalizedDocumentEvidence = (
       evidence?: Array<{ source: string; quote: string }>,
     ): DocumentEvidence[] | undefined => {
-      const finalized = (evidence ?? []).map((entry) => ({
-        source: normaliseSummarySourceKey(entry.source),
-        quote: entry.quote,
-      }))
+      const finalized = (evidence ?? []).map((entry) => {
+        const source = normaliseSummarySourceKey(entry.source)
+        return { source, ...verifyDocumentQuote(entry.quote, byKey.get(source)?.getContentText?.()) }
+      })
       return finalized.length > 0 ? finalized : undefined
     }
     const withDocumentEvidence = (

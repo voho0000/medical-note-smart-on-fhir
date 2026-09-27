@@ -118,6 +118,9 @@ export function CrossFacilityTimeline({
             const organizationLabel = event.organization
               ? formatOrganizationDisplay(event.organization, locale)
               : ""
+            const evidence = event.documentEvidence?.find(item => item.source === event.key)
+            const documentNeedsReview = (event.resourceType === 'Composition' || event.resourceType === 'DocumentReference') &&
+              evidence?.verification !== 'exact' && evidence?.verification !== 'whitespace-restored'
             const inner = (
               <div className="@min-[30rem]:flex @min-[30rem]:items-baseline @min-[30rem]:gap-2">
                 <div className="flex flex-wrap items-center gap-1.5 @min-[30rem]:w-[16rem] @min-[30rem]:shrink-0">
@@ -136,6 +139,11 @@ export function CrossFacilityTimeline({
                 </div>
                 <p className="mt-0.5 min-w-0 text-[0.8125rem] leading-snug text-foreground @min-[30rem]:mt-0 @min-[30rem]:flex-1">
                   {event.label}
+                  {documentNeedsReview ? (
+                    <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
+                      {locale === 'zh-TW' ? '原文引句待核對，請點開來源確認。' : 'Excerpt needs review. Open the source to check.'}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             )

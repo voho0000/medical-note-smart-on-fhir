@@ -73,8 +73,23 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
   }
 
   if (sources.length === 0) return null
-  const isSuspect = (s: ResolvedSourceRef) => Boolean(suspectKeys?.has(s.key))
+  const isSuspect = (s: ResolvedSourceRef) => Boolean(suspectKeys?.has(s.key) || s.evidenceWarning)
+  const evidenceWarningLabel = (s: ResolvedSourceRef) => {
+    if (!s.evidenceWarning) return ''
+    if (locale === 'zh-TW') return s.evidenceWarning === 'missing'
+      ? '此敘述未附原文引句，請點開來源核對。'
+      : s.evidenceWarning === 'mismatch'
+        ? '引文與來源原文不符，請點開來源核對。'
+        : '此引文尚未核對，請點開來源確認。'
+    return s.evidenceWarning === 'missing' ? 'No excerpt for this claim. Open the source to check.'
+      : s.evidenceWarning === 'mismatch' ? 'The quote does not match the source. Open it to check.'
+        : 'This excerpt has not been checked. Open the source to review.'
+  }
   const hasUnverified = sources.some((s) => !s.verified)
+  const checkedExcerptLabel = (s: ResolvedSourceRef) => s.evidenceQuote && !s.evidenceWarning &&
+    (s.resourceType === 'Composition' || s.resourceType === 'DocumentReference')
+    ? locale === 'zh-TW' ? '引句與原文相符，請核對是否支持此敘述。' : 'Excerpt matches the source; check that it supports this claim.'
+    : ''
   const hasWarning = hasUnverified || sources.some(isSuspect)
   // Screen readers otherwise announce a bare "2" — compose a name from the
   // already-localised type labels so no host needs a new prop.
@@ -82,7 +97,8 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
     sources.map((s) => s.num).join(","),
     [...new Set(sources.map((s) => typeLabel(s.resourceType)).filter(Boolean))].join(", "),
     hasUnverified ? unverifiedLabel : "",
-    sources.some(isSuspect) && suspectLabel ? suspectLabel : "",
+    sources.some(s => suspectKeys?.has(s.key)) && suspectLabel ? suspectLabel : "",
+    ...sources.map(evidenceWarningLabel).filter(Boolean),
   ].filter(Boolean).join(" · ")
 
   return (
@@ -179,7 +195,9 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                   </span>
                 ) : null}
                 {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
-                {isSuspect(s) && suspectLabel ? <span className="block font-medium">{suspectLabel}</span> : null}
+                {suspectKeys?.has(s.key) && suspectLabel ? <span className="block font-medium">{suspectLabel}</span> : null}
+                {s.evidenceWarning ? <span className="block font-medium">{evidenceWarningLabel(s)}</span> : null}
+                {checkedExcerptLabel(s) ? <span className="block">{checkedExcerptLabel(s)}</span> : null}
               </span>
               <ArrowUpRight className={cn(
                 "h-3 w-3 shrink-0 self-center opacity-60 transition-opacity group-hover:opacity-100",
@@ -206,9 +224,11 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                         {localizeDemoDisplayText(s.display, locale)}
                       </span>
                     ) : null}
-                    {isSuspect(s) && suspectLabel ? (
+                    {suspectKeys?.has(s.key) && suspectLabel ? (
                       <span className="block font-medium">{suspectLabel}</span>
                     ) : null}
+                    {s.evidenceWarning ? <span className="block font-medium">{evidenceWarningLabel(s)}</span> : null}
+                    {checkedExcerptLabel(s) ? <span className="block">{checkedExcerptLabel(s)}</span> : null}
                   </>
                 ) : (
                   <>
