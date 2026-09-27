@@ -1,20 +1,27 @@
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { GenerateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
+const complete = { closeMissingBrackets: true }
+
 describe('tryExtractJsonValue', () => {
-  it('closes one or two omitted trailing brackets after a complete value', () => {
+  it('closes one omitted final } only when the caller knows the reply was complete', () => {
     const missingOuter = '{"medicationEducation": [], "medicationReview": {"regimen": [{"name": "A", "sources": ["M1"]}]}'
-    expect(tryExtractJsonValue(missingOuter)).toEqual({
+    expect(tryExtractJsonValue(missingOuter, complete)).toEqual({
       medicationEducation: [], medicationReview: { regimen: [{ name: 'A', sources: ['M1'] }] },
     })
-    expect(tryExtractJsonValue('{"a": {"b": [1, 2')).toBeNull() // cut mid-array, not on a closer
-    expect(tryExtractJsonValue('{"a": {"b": {"c": [1]}')).toEqual({ a: { b: { c: [1] } } })
+    expect(tryExtractJsonValue(missingOuter)).toBeNull()
   })
 
-  it('still rejects truncated strings, deep truncation and mismatched closers', () => {
-    expect(tryExtractJsonValue('{"a": "unterminated }')).toBeNull()
-    expect(tryExtractJsonValue('{"a": {"b": {"c": {"d": []}')).toBeNull()
-    expect(tryExtractJsonValue('{"a": [1}')).toBeNull()
+  it('never turns a truncated reply into a shortened success', () => {
+    // Cut mid second event: the tail after the last closer is not empty.
+    const midItem = '{"timeline": [{"ref": "E1", "label": "a"}, {"ref": "E2", "lab'
+    expect(tryExtractJsonValue(midItem, complete)).toBeNull()
+    expect(tryExtractJsonValue(midItem)).toBeNull()
+    // Cut exactly at an item boundary: an open list is never closed.
+    expect(tryExtractJsonValue('{"timeline": [{"ref": "E1", "label": "a"}', complete)).toBeNull()
+    expect(tryExtractJsonValue('{"a": {"b": {"c": [1]}', complete)).toBeNull() // two missing
+    expect(tryExtractJsonValue('{"a": "unterminated }', complete)).toBeNull()
+    expect(tryExtractJsonValue('{"a": [1}', complete)).toBeNull()
   })
 
   it('drops one or two surplus closing brackets at the very end only', () => {
@@ -38,7 +45,25 @@ describe('tryExtractJsonValue', () => {
   })
 
   it('keeps braces inside strings out of the bracket balance', () => {
-    expect(tryExtractJsonValue('{"a": {"t": "x}]"}')).toEqual({ a: { t: 'x}]' } })
+    expect(tryExtractJsonValue('{"a": {"t": "x}]"}', complete)).toEqual({ a: { t: 'x}]' } })
+  })
+})
+
+describe('medical summary batch blocks', () => {
+  const useCase = new GenerateMedicalSummaryUseCase()
+  const block = (id: string, body: string, closed = true) =>
+    `<<<MEDIPRISMA_MODULE:${id}>>>\n${body}\n${closed ? `<<<END_MEDIPRISMA_MODULE:${id}>>>` : ''}`
+
+  it('repairs an omitted final } in a block whose end marker arrived', () => {
+    const body = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
+    expect(useCase.parseBatchModuleResult('timeline', block('timeline', body))?.timeline).toHaveLength(1)
+  })
+
+  it('rejects a truncated final block instead of keeping only its first items', () => {
+    const truncated = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}, {"ref": "E2", "lab'
+    expect(useCase.parseBatchModuleResult('timeline', block('timeline', truncated, false))).toBeNull()
+    const atBoundary = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
+    expect(useCase.parseBatchModuleResult('timeline', block('timeline', atBoundary, false))).toBeNull()
   })
 })
 

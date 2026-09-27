@@ -23,7 +23,7 @@ export class LlmJsonError extends Error {
  * Throws `LlmJsonError` on failure — use {@link tryExtractJsonValue} for a
  * null-returning variant.
  */
-export function extractJsonObject(raw: string): unknown {
+export function extractJsonObject(raw: string, options: ExtractJsonOptions = {}): unknown {
   if (!raw || typeof raw !== 'string') {
     throw new LlmJsonError('Empty model response')
   }
@@ -43,7 +43,12 @@ export function extractJsonObject(raw: string): unknown {
   const lastObj = s.lastIndexOf('}')
   const lastArr = s.lastIndexOf(']')
   const end = Math.max(lastObj, lastArr)
+  // Anything cut off after the last closer. When it is not empty the reply may
+  // be truncated mid-item (`…}, {"ref": "E2", "lab`), so bracket balancing
+  // below must not turn the kept prefix into a silently shortened "success".
+  let droppedTail = ''
   if (start !== -1 && end !== -1 && end > start) {
+    droppedTail = s.slice(end + 1).trim()
     s = s.slice(start, end + 1)
   }
 
@@ -55,13 +60,18 @@ export function extractJsonObject(raw: string): unknown {
     // 2. common local-model slips: a key missing its colon
     //    (`"trend "8.2%"`) and an unescaped quote copied from a record inside a
     //    string value (`… "X.R." …`);
-    // 3. one or two omitted/extra closing brackets at the very end.
+    // 3. surplus closing brackets at the very end, or (opt-in, complete replies
+    //    only) one omitted final `}` — never when text followed the last
+    //    closer, i.e. when the reply may have been cut off mid-item.
     const withoutTrailingCommas = s.replace(/,\s*([}\]])/g, '$1')
     const candidates = [withoutTrailingCommas]
     const structural = escapeInteriorQuotes(insertMissingKeyColons(withoutTrailingCommas))
     if (structural !== withoutTrailingCommas) candidates.push(structural)
     for (const candidate of candidates) {
-      for (const attempt of [candidate, balanceTrailingBrackets(candidate)]) {
+      const balanced = droppedTail === ''
+        ? balanceTrailingBrackets(candidate, options.closeMissingBrackets === true)
+        : null
+      for (const attempt of [candidate, balanced]) {
         if (attempt === null) continue
         try {
           return JSON.parse(attempt)
@@ -74,15 +84,16 @@ export function extractJsonObject(raw: string): unknown {
   }
 }
 
-const MAX_TRAILING_BRACKET_REPAIRS = 2
+const MAX_SURPLUS_CLOSERS = 2
 
 /**
- * Close up to two omitted final brackets, or drop up to two surplus final
- * brackets. Only when every string is terminated and the text ends on a
- * closer, so a reply truncated mid-value is still rejected rather than
- * silently shortened; a mismatched closer anywhere else is never repaired.
+ * Drop up to two surplus final brackets, or — only when the caller knows the
+ * reply was complete — close exactly one omitted final `}`. Every string must
+ * be terminated and the text must end on a closer. An unclosed `[` is never
+ * closed: a list left open is what a truncated stream looks like, and closing
+ * it would silently drop the items that never arrived.
  */
-function balanceTrailingBrackets(s: string): string | null {
+function balanceTrailingBrackets(s: string, closeMissing: boolean): string | null {
   const trimmed = s.trimEnd()
   if (!/[}\]]$/.test(trimmed)) return null
   const stack: string[] = []
@@ -103,14 +114,21 @@ function balanceTrailingBrackets(s: string): string | null {
       if (stack.length === 0) {
         // Surplus closers are repairable only as a short run at the very end.
         const rest = trimmed.slice(i)
-        if (!/^[\s}\]]*$/.test(rest) || rest.replace(/\s/g, '').length > MAX_TRAILING_BRACKET_REPAIRS) return null
+        if (!/^[\s}\]]*$/.test(rest) || rest.replace(/\s/g, '').length > MAX_SURPLUS_CLOSERS) return null
         return trimmed.slice(0, i).trimEnd()
       }
       if (stack.pop() !== ch) return null
     }
   }
-  if (inString || stack.length === 0 || stack.length > MAX_TRAILING_BRACKET_REPAIRS) return null
-  return trimmed + stack.reverse().join('')
+  if (inString || !closeMissing || stack.length !== 1 || stack[0] !== '}') return null
+  return `${trimmed}}`
+}
+
+export interface ExtractJsonOptions {
+  /** Close one omitted final `}`. Enable only when the caller knows the model
+   * finished this reply (e.g. a batch block's end marker arrived); otherwise a
+   * truncated stream could be mistaken for a complete answer. */
+  closeMissingBrackets?: boolean
 }
 
 /** `{"trend "8.2%"` → `{"trend": "8.2%"`: an identifier key directly followed by a value quote. */
@@ -159,9 +177,9 @@ function escapeInteriorQuotes(s: string): string {
 }
 
 /** Null-returning variant of {@link extractJsonObject} for parse-or-null flows. */
-export function tryExtractJsonValue(raw: string): unknown | null {
+export function tryExtractJsonValue(raw: string, options: ExtractJsonOptions = {}): unknown | null {
   try {
-    return extractJsonObject(raw)
+    return extractJsonObject(raw, options)
   } catch {
     return null
   }

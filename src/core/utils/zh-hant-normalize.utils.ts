@@ -75,6 +75,9 @@ export const MAINLAND_TO_TAIWAN_TERMS: ReadonlyArray<readonly [string, string]> 
   ['谷丙轉氨酶', 'ALT'], ['谷草轉氨酶', 'AST'], ['轉氨酶', '轉胺酶'],
   ['糖化血紅蛋白', '糖化血色素'], ['血紅蛋白', '血紅素'], ['甘油三酯', '三酸甘油酯'], ['肌酐', '肌酸酐'],
   ['白細胞', '白血球'], ['紅細胞', '紅血球'],
+  // Full Mainland terms before their abbreviations: 腦梗死 must become 腦梗塞,
+  // not 腦梗塞死 via the 腦梗 rule.
+  ['心肌梗死', '心肌梗塞'], ['心梗死', '心肌梗塞'], ['腦梗死', '腦梗塞'], ['梗死', '梗塞'],
   ['心梗', '心肌梗塞'], ['腦梗', '腦梗塞'], ['房顫', '心房顫動'], ['慢阻肺', '慢性阻塞性肺病'],
   ['隨訪', '追蹤'], ['出院小結', '出院病摘'], ['B超', '超音波'], ['彩超', '彩色超音波'], ['靜滴', '靜脈輸注'],
   ['質子泵', '氫離子幫浦'],
@@ -110,6 +113,10 @@ export function toTaiwanClinicalTerms(text: string): string {
       if (start < cursor) continue
       const end = start + from.length
       if (protectedRanges.some(([s, e]) => start >= s && end <= e)) continue
+      // An abbreviation already followed by the replacement's final character
+      // (心梗塞, 房顫動) is part of a longer written term; expanding it would
+      // duplicate that character.
+      if (out[end] !== undefined && out[end] === to[to.length - 1]) continue
       result += out.slice(cursor, start) + to
       cursor = end
     }

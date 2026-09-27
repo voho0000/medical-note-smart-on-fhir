@@ -1983,6 +1983,10 @@ export class GenerateMedicalSummaryUseCase {
   parseModuleResult<T extends MedicalSummaryModuleId>(
     moduleId: T,
     text: string,
+    /** `complete`: the block's end marker arrived, so the model finished it and
+     * one omitted final `}` may be closed. Without it the text may be a
+     * truncated stream and is parsed strictly. */
+    options: { complete?: boolean } = {},
   ): MedicalSummaryModuleResultMap[T] | null {
     const fail = (reason: string): null => {
       if (process.env.NODE_ENV !== 'production') {
@@ -1995,7 +1999,7 @@ export class GenerateMedicalSummaryUseCase {
       }
       return null
     }
-    const raw = tryExtractJsonValue(text)
+    const raw = tryExtractJsonValue(text, { closeMissingBrackets: options.complete === true })
     if (raw === null) {
       const salvaged = moduleId === 'priorities'
         ? salvagePrioritiesModule(null, text)
@@ -2081,7 +2085,7 @@ export class GenerateMedicalSummaryUseCase {
     const contentStart = startIndex + startMarker.length
     const endIndex = text.indexOf(moduleBlockEnd(moduleId), contentStart)
     if (endIndex >= 0) {
-      return this.parseModuleResult(moduleId, text.slice(contentStart, endIndex))
+      return this.parseModuleResult(moduleId, text.slice(contentStart, endIndex), { complete: true })
     }
 
     // A missing end marker should break only this block. Stop at the next

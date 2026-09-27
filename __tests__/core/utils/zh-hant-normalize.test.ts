@@ -31,6 +31,17 @@ describe('toTraditionalChinese', () => {
     for (const text of ['腦梗塞病史', '心肌梗塞', '肌酸酐 1.2', '糖化血色素', '三酸甘油酯', '轉胺酶', '追蹤', '患者', '數據', '冠心病'])
       expect(toTraditionalChinese(text)).toBe(text)
     expect(toTraditionalChinese('疑似腦梗')).toBe('疑似腦梗塞')
+    expect(toTraditionalChinese('急性心梗')).toBe('急性心肌梗塞')
+  })
+
+  it('converts full Mainland infarction terms before their abbreviations', () => {
+    expect(toTraditionalChinese('腦梗死病史')).toBe('腦梗塞病史')
+    expect(toTraditionalChinese('脑梗死病史')).toBe('腦梗塞病史')
+    expect(toTraditionalChinese('急性心肌梗死')).toBe('急性心肌梗塞')
+    expect(toTraditionalChinese('陳舊性心梗死')).toBe('陳舊性心肌梗塞')
+    expect(toTraditionalChinese('肺梗死')).toBe('肺梗塞')
+    expect(toTraditionalChinese('心梗塞')).toBe('心梗塞') // never 心肌梗塞塞
+    expect(toTraditionalChinese('房顫動')).toBe('房顫動') // never 心房顫動動
     for (const [, tw] of MAINLAND_TO_TAIWAN_TERMS) expect(toTraditionalChinese(tw)).toBe(tw)
   })
 
