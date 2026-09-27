@@ -265,6 +265,13 @@ export interface HeartFailureVisitFlow {
 export interface HeartFailureVisitFlowInput {
   /** Three-section layout keeps all module decisions reachable. */
   includeAllModules?: boolean
+  /**
+   * The layout lets the pack's diagnosis mode settle 「is this heart
+   * failure?」 (三區塊, 決策地圖): when the phenotype card is in follow-up, the
+   * questions about a heart-failure patient open without asking again. Defaults
+   * to `includeAllModules`.
+   */
+  trustsPackFollowUp?: boolean
   board: HeartFailureBoardModel
   result: CdssResult
   isEnglish: boolean
@@ -560,7 +567,7 @@ export function buildHeartFailureVisitFlow(
     .flatMap((recommendation) => recommendation.patientEvidence)
     .some((evidence) => evidence.factKeys.includes('heartFailureDiagnosis'))
   const lvefValue = Number.parseFloat(board.lvef?.value ?? '')
-  const establishedHfrEF = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || (input.includeAllModules && diagnosisContextOf(phenotypeCard)?.mode === 'follow-up') || (establishedHeartFailure
+  const establishedHfrEF = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || ((input.trustsPackFollowUp ?? input.includeAllModules) && diagnosisContextOf(phenotypeCard)?.mode === 'follow-up') || (establishedHeartFailure
     && Number.isFinite(lvefValue)
     && lvefValue < 50)
   const suspicion = establishedHfrEF ? 'suspected' : phenotypeAnswer?.hfSuspicion
@@ -632,7 +639,8 @@ export function buildHeartFailureVisitFlow(
     ? (isEnglish
       ? 'Heart failure is not suspected this visit; the remaining questions are skipped.'
       : '本次不懷疑心衰竭，其餘題目略過。')
-    : (isEnglish ? 'Opens once question 1 is answered' : '回答第 1 題後開放')
+    // Named, not numbered: on the map the question sits in 01, not above.
+    : (isEnglish ? 'Opens once 「Is heart failure suspected?」 is answered' : '先回答「是否懷疑心衰竭」後開放')
   const gated = (state: VisitQuestionState): VisitQuestionState => (
     suspected ? state : 'locked'
   )

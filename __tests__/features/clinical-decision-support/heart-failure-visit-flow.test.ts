@@ -380,7 +380,7 @@ describe('the questions', () => {
     expect(states.compensation).toBe('locked')
     expect(states['clinic-vitals']).toBeUndefined()
     expect(flow.questions.find((item) => item.id === 'nyha')?.lockedReason)
-      .toBe('回答第 1 題後開放')
+      .toBe('先回答「是否懷疑心衰竭」後開放')
   })
 
   it('folds the rest away and drops the count when the answer is 「否」', () => {

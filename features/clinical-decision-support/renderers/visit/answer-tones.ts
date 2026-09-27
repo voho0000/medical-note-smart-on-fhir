@@ -32,25 +32,26 @@ const IDLE: Readonly<Record<AnswerTone, string>> = {
   change: 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-950/70',
 }
 
+/**
+ * Chosen: the same family one step deeper, a 2px border in the tone and bold
+ * ink — soft enough to sit beside the section colours, never a solid block of
+ * saturated colour.
+ */
 const CHOSEN: Readonly<Record<AnswerTone, string>> = {
-  concern: 'border-rose-700 bg-rose-700 text-white dark:border-rose-500 dark:bg-rose-600',
-  neutral: 'border-slate-700 bg-slate-700 text-white dark:border-slate-400 dark:bg-slate-500',
-  reassuring: 'border-emerald-700 bg-emerald-700 text-white dark:border-emerald-500 dark:bg-emerald-600',
-  change: 'border-sky-700 bg-sky-700 text-white dark:border-sky-500 dark:bg-sky-600',
+  concern: 'border-rose-500 bg-rose-100 text-rose-900 hover:bg-rose-100 dark:border-rose-400 dark:bg-rose-900/60 dark:text-rose-100',
+  neutral: 'border-slate-500 bg-slate-200 text-slate-900 hover:bg-slate-200 dark:border-slate-300 dark:bg-slate-700 dark:text-slate-50',
+  reassuring: 'border-emerald-500 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-400 dark:bg-emerald-900/60 dark:text-emerald-100',
+  change: 'border-sky-500 bg-sky-100 text-sky-900 hover:bg-sky-100 dark:border-sky-400 dark:bg-sky-900/60 dark:text-sky-100',
 }
 
-/** The record's reading, not yet the clinician's answer: the same colour, outlined dashed. */
-const PREFILLED_OUTLINE: Readonly<Record<AnswerTone, string>> = {
-  concern: 'outline-rose-700 dark:outline-rose-400',
-  neutral: 'outline-slate-700 dark:outline-slate-300',
-  reassuring: 'outline-emerald-700 dark:outline-emerald-400',
-  change: 'outline-sky-700 dark:outline-sky-400',
-}
-
-/** A choice button's colours: tinted while open, filled once chosen. */
+/**
+ * A choice button's colours: tinted while open, one step deeper with a 2px
+ * border once chosen, the border dashed while it is the record's reading and
+ * not yet the clinician's answer.
+ */
 export function answerToneClass(tone: AnswerTone, selected: boolean, prefilled = false): string {
   return cn(
-    selected ? cn(CHOSEN[tone], 'font-semibold') : IDLE[tone],
-    selected && prefilled && cn('outline-2 outline-dashed outline-offset-2', PREFILLED_OUTLINE[tone]),
+    selected ? cn(CHOSEN[tone], 'border-2 font-semibold') : IDLE[tone],
+    selected && prefilled && 'border-dashed',
   )
 }

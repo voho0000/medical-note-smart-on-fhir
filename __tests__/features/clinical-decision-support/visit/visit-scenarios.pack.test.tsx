@@ -348,10 +348,11 @@ describe('real pack · the other scenarios', () => {
 })
 
 describe('real pack · what a clinician reads without opening anything', () => {
-  it('names the red flags on the page, marks K 5.7 and drops today’s dates (P6)', () => {
+  it('names the red flags in DP-24 itself, not above the page; marks K 5.7 and drops today’s dates (P6)', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
-    const triage = screen.getByTestId('cdss-visit-triage')
-    expect(triage).toHaveTextContent('胸痛・暈厥・休息時喘・休息時低血氧・意識改變・快速水腫或體重增加')
+    expect(screen.queryByTestId('cdss-visit-triage')).toBeNull()
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    expect(cell('DP-24')).toHaveTextContent('胸痛・暈厥・休息時喘・快速水腫')
     const values = screen.getByTestId('cdss-visit-key-values')
     const potassium = values.querySelector('[data-key="potassium"]')!
     expect(potassium).toHaveAttribute('data-alert', 'true')
@@ -476,7 +477,21 @@ describe('real pack · reading the map without scrolling back up', () => {
     expect(better.className).toContain('bg-emerald-50')
     expect(down.className).toContain('bg-sky-50')
     fireEvent.click(worse)
-    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-rose-700')
+    const chosen = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
+    expect(chosen.className).toContain('bg-rose-100')
+    expect(chosen.className).toContain('border-rose-500')
+  })
+})
+
+describe('real pack · follow-up questions open once the pack says follow-up', () => {
+  it('does not lock symptoms, signs and NYHA behind a hidden 「是否懷疑心衰竭」 (P9 HFpEF, P10 improved EF)', () => {
+    for (const id of ['p9-hfpef-af-dose', 'p10-improved-ef'] as ScenarioId[]) {
+      const { unmount } = render(<ScenarioMap id={id} />)
+      fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!)
+      expect(screen.queryByText('先回答「是否懷疑心衰竭」後開放')).toBeNull()
+      unmount()
+      useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    }
   })
 })
 

@@ -37,7 +37,7 @@ test('a missing pack question still offers both answers and unlocks subsequent q
   fireEvent.click(screen.getByRole('radio', { name: '是，懷疑心衰竭' }))
   expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ hfSuspicion: 'suspected' }))
   rerender(view(onAnswer.mock.calls[0][0], onAnswer))
-  expect(screen.queryByText('回答第 1 題後開放')).not.toBeInTheDocument()
+  expect(screen.queryByText('先回答「是否懷疑心衰竭」後開放')).not.toBeInTheDocument()
   const question = document.getElementById('cdss-hf-question-hf-suspicion')!
   fireEvent.click(within(question).getByRole('button', { name: /改/ }))
   fireEvent.click(screen.getByRole('radio', { name: '否，本次不懷疑' }))

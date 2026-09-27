@@ -1,5 +1,6 @@
 "use client"
 
+import { Check } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
 import { answerToneClass, visitAnswerTone } from './answer-tones'
@@ -60,7 +61,7 @@ export function VisitAsks({
                       onAnswer(ask.id, selected && !prefilled ? null : option.value)
                     }}
                     className={cn(
-                      'inline-flex h-11 min-w-16 items-center justify-center rounded-md border px-3.5 text-sm transition-colors',
+                      'inline-flex h-11 min-w-16 items-center justify-center gap-1 rounded-md border px-3.5 text-sm transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                       'disabled:pointer-events-none disabled:opacity-60',
                       answerToneClass(visitAnswerTone(ask.id, option.value), selected, fromRecord),
@@ -69,6 +70,7 @@ export function VisitAsks({
                     data-value={option.value}
                     data-prefilled={fromRecord ? 'true' : undefined}
                   >
+                    {selected ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
                     {option.label}
                     {fromRecord ? (
                       <span className="sr-only">{isEnglish ? ' (from the record)' : '（紀錄預填）'}</span>

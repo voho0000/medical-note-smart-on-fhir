@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDown, ArrowRight, ArrowUp, PencilLine, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, PencilLine } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { QueueRow } from './visit-decisions'
 import type { VisitDecisionModel } from '../../types'
@@ -141,13 +141,6 @@ export function VisitStatusHeader({
             )
           })}
         </dl>
-      ) : null}
-      {model.triage?.items.length ? (
-        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-foreground" data-testid="cdss-visit-triage">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0 self-center text-destructive" aria-hidden="true" />
-          <span className="font-semibold text-destructive">{model.triage.label}</span>
-          <span>{model.triage.items.join(isEnglish ? ' · ' : '・')}</span>
-        </p>
       ) : null}
       {model.triggers.length ? (
         <div

@@ -2221,10 +2221,11 @@ export function ClinicalDecisionSupportView({
         decisions: physicianDecisions ?? {},
         patientId,
         includeAllModules: isSections,
+        trustsPackFollowUp: isSections || isMap,
       })
       : undefined
   ), [
-    board, clinicVitals, isEnglish, needsVisitFlow, isSections, now, patientId, phenotypeAnswer,
+    board, clinicVitals, isEnglish, needsVisitFlow, isSections, isMap, now, patientId, phenotypeAnswer,
     physicianDecisions, result,
   ])
   // 照護安排 holds the standing reminders — nutrition targets, immunisation —
