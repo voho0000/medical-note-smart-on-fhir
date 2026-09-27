@@ -148,6 +148,16 @@ describe('real pack · P4 stable and optimised', () => {
     expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')).toHaveAttribute('data-prefilled', 'true')
   })
 
+  it('keeps each group’s cells under its own heading (RAS stays with the four pillars)', () => {
+    render(<ScenarioMap id="p4-stable-optimised" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    const pillars = within(treatment).getByText('四支柱').parentElement!
+    for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) expect(pillars).toContainElement(cell(dp))
+    const triage = within(treatment).getByText('分流與安全').parentElement!
+    expect(triage).not.toContainElement(cell('DP-07'))
+  })
+
   it('opens DP-09 with its question and buttons in view, the guideline folded until asked for', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))

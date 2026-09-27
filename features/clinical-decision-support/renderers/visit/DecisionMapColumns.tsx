@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -266,6 +266,15 @@ export function DecisionMapColumns({
         const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
           ? new Set(visible.map((point) => point.group))
           : new Set<string>()
+        // Consecutive points of one group, in the pack's order, with the
+        // group's heading when the section has more than one group.
+        const buckets: { key: string; label?: string; points: DecisionPointView[] }[] = []
+        for (const point of visible) {
+          const last = buckets.at(-1)
+          const key = groups.size > 1 ? point.group : 'all'
+          if (last && last.key === key) last.points.push(point)
+          else buckets.push({ key, ...(groups.size > 1 ? { label: point.groupLabel ?? point.group } : {}), points: [point] })
+        }
         return (
           <section
             key={block}
@@ -282,54 +291,54 @@ export function DecisionMapColumns({
                 {note}
               </p>
             ) : null}
-            {/* grid-flow-dense: when a card's detail opens as a full row under
-                it, the next card fills the place beside it rather than being
-                pushed below, so the row reads as before with the detail under it. */}
-            <ul className="grid grid-flow-dense gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
-              {visible.flatMap((point, index) => {
-                const key = visitDecisionKey(point)
-                const showGroup = groups.size > 1 && (index === 0 || visible[index - 1].group !== point.group)
-                // A group's heading takes its own row, so its first cell sits in
-                // the grid like the others.
-                const heading = showGroup ? (
-                  <li key={`${key}-group`} className="col-span-full">
-                    <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={point.group}>
-                      {point.groupLabel ?? point.group}
-                    </p>
-                  </li>
-                ) : null
-                const item = (
-                  <li key={key} className="min-w-0">
-                    <MapCell
-                      point={point}
-                      decision={decisionOf(point)}
-                      inQueue={queuedDps.has(point.dp)}
-                      open={openKey === key}
-                      isEnglish={isEnglish}
-                      sourceOfPage={sourceOfPage}
-                      onOpen={() => {
-                        // The point's card shows in its own section, so that section is the open one.
-                        setOpenBlock(block)
-                        onOpen(point)
-                      }}
-                    />
-                    {point.checklist?.length && block === 'status' ? (
-                      <div className="px-2.5 pb-1 pt-1.5">
-                        <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} compact />
-                      </div>
-                    ) : null}
-                  </li>
-                )
-                // The opened point's card sits directly under the cell that
-                // opened it, not at the foot of the section.
-                const opened = openKey === key && open && detail ? (
-                  <li key={`${key}-detail`} className="col-span-full" data-testid="cdss-visit-detail-slot">
-                    {detail}
-                  </li>
-                ) : null
-                return [heading, item, opened].filter((node): node is ReactElement => node !== null)
-              })}
-            </ul>
+            {/* Each group is its own grid: a card's detail opens as a full row
+                under it and the next card of the same group fills the place
+                beside it (dense flow), but a gap at the end of one group is
+                never filled by a card from the next. */}
+            {buckets.map((bucket) => (
+              <div key={bucket.key} className="space-y-1.5">
+                {bucket.label ? (
+                  <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={bucket.key}>
+                    {bucket.label}
+                  </p>
+                ) : null}
+                <ul className="grid grid-flow-dense gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
+                  {bucket.points.flatMap((point) => {
+                    const key = visitDecisionKey(point)
+                    const item = (
+                      <li key={key} className="min-w-0">
+                        <MapCell
+                          point={point}
+                          decision={decisionOf(point)}
+                          inQueue={queuedDps.has(point.dp)}
+                          open={openKey === key}
+                          isEnglish={isEnglish}
+                          sourceOfPage={sourceOfPage}
+                          onOpen={() => {
+                            // The point's card shows in its own section, so that section is the open one.
+                            setOpenBlock(block)
+                            onOpen(point)
+                          }}
+                        />
+                        {point.checklist?.length && block === 'status' ? (
+                          <div className="px-2.5 pb-1 pt-1.5">
+                            <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} compact />
+                          </div>
+                        ) : null}
+                      </li>
+                    )
+                    // The opened point's card sits directly under the cell that
+                    // opened it, not at the foot of the section.
+                    const opened = openKey === key && open && detail ? (
+                      <li key={`${key}-detail`} className="col-span-full" data-testid="cdss-visit-detail-slot">
+                        {detail}
+                      </li>
+                    ) : null
+                    return opened ? [item, opened] : [item]
+                  })}
+                </ul>
+              </div>
+            ))}
             {hidden.length ? (
               <button
                 type="button"
