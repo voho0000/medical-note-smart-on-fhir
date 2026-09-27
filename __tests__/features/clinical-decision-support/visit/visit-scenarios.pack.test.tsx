@@ -174,12 +174,14 @@ describe('real pack · P4 stable and optimised', () => {
 
     render(<ScenarioMap id="p4-stable-optimised" />)
     // An empty queue draws no decision list in any section (there is no
-    // 「今天沒有要決定的事」 line any more), and 02 says it holds nothing to do.
+    // 「今天沒有要決定的事」 line any more). 02's one item is DP-12's iron
+    // screen — the record has no ferritin — which is a confirm, not a row.
     expect(queue()).toEqual([])
     for (const block of ['status', 'treatment', 'outlook']) {
       expect(screen.queryByTestId(`cdss-visit-queue-${block}`)).toBeNull()
     }
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('沒有待辦')
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需你確認 1')
+    expect(point('p4-stable-optimised', 'DP-12').state).toBe('confirm')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
   })
 
@@ -243,9 +245,9 @@ describe('real pack · P5 titrating with AF', () => {
       expect(screen.getByTestId(`cdss-visit-section-toggle-${block}`)).toHaveAttribute('aria-expanded', 'false')
     }
     // 02's toggle reads its rows first (the three starts, counted once), then
-    // what its cells add.
+    // what its cells add: the β-blocker dose and DP-12's iron screen.
     const treatmentToggle = screen.getByTestId('cdss-visit-section-toggle-treatment')
-    expect(treatmentToggle).toHaveTextContent('待決定 3 · 需你確認 1')
+    expect(treatmentToggle).toHaveTextContent('待決定 3 · 需你確認 2')
     expect(treatmentToggle).not.toHaveTextContent('需處理')
     fireEvent.click(treatmentToggle)
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
@@ -655,14 +657,15 @@ describe('real pack · reading the map without scrolling back up', () => {
   it('steps from card to card in the pack order and on into the next section (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    // The stepper walks the cells. The four pillars are boxes at the head of
-    // 02, not cells, so it walks what follows them: DP-11 → DP-06 → …
+    // The stepper walks the cells in pack order. The four pillars are boxes
+    // at the head of 02, not cells, so it walks what follows them: DP-11 →
+    // DP-25 (medication reconciliation) → …
     fireEvent.click(cell('DP-11'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
     fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-06')
-    // The card follows its cell: it sits in the slot right after DP-06.
-    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-06'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-25')
+    // The card follows its cell: it sits in the slot right after DP-25.
+    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-25'))
     fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
 

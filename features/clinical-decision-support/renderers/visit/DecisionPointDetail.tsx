@@ -207,6 +207,36 @@ export function DecisionPointDetail({
         </div>
       ) : null}
 
+      {point.guideline ? (
+        // What the guideline says about this decision, folded like the
+        // evidence below: the points in the page's language, then each cited
+        // recommendation with its section, page, class and level.
+        <details className="group/guide rounded-md border border-border" data-testid="cdss-visit-detail-guideline">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1 truncate text-foreground">{isEnglish ? 'Guideline points' : '指引重點'}</span>
+            <span className="shrink-0 font-normal">{[...new Set(point.guideline.references.map((reference) => reference.source))].join(isEnglish ? ', ' : '、')}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/guide:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="space-y-2 border-t border-border px-3 pb-2.5 pt-2">
+            <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-detail-guideline-points">
+              {point.guideline.points.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+            <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
+              {point.guideline.references.map((reference) => (
+                <li key={`${reference.section}-${reference.page}-${reference.quote.slice(0, 24)}`} className="text-[11px] leading-4 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {reference.source} §{reference.section} · p.{reference.page}
+                    {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}
+                  </span>
+                  {isEnglish ? ': ' : '：'}
+                  <span lang="en">“{reference.quote}”</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </details>
+      ) : null}
+
       {cards.length ? (
         <div className="space-y-2 border-t border-border pt-2">
           {cards.map((recommendation) => (
@@ -236,7 +266,7 @@ export function DecisionPointDetail({
             </details>
           ))}
         </div>
-      ) : (
+      ) : point.guideline ? null : (
         <p className="text-xs text-muted-foreground">
           {point.state === 'not-included'
             ? (isEnglish ? 'No module computes this decision point yet.' : '這個決策點還沒有對應的模組。')
