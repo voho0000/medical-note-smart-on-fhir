@@ -16,6 +16,14 @@ import {
 import type { DecisionPointState, DecisionPointView, VisitBlock, VisitDecisionModel } from '../../types'
 import { ChainDots, StatePill } from './visit-presentation'
 import { DecisionPointChecklist, VISIT_DETAIL_ID } from './DecisionPointDetail'
+import styles from '../cdss-poster.module.css'
+
+/** The three-section layout's section each map block is, for its colours. */
+const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
+  status: 'diagnosis',
+  treatment: 'treatment',
+  outlook: 'prognosis',
+}
 
 /**
  * States that need the clinician; a column holding one never folds. 「等你回答」
@@ -233,21 +241,23 @@ export function DecisionMapColumns({
               aria-controls={`cdss-visit-column-${block}`}
               onClick={() => setOpenBlock((current) => (current === block ? null : block))}
               className={cn(
+                styles.tone,
+                styles.mapToggle,
                 'flex min-h-16 w-full min-w-0 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                open ? 'border-foreground bg-background' : 'border-border bg-muted/20 hover:bg-muted/50',
               )}
+              data-section={SECTION_TONE[block]}
               data-testid={`cdss-visit-section-toggle-${block}`}
               data-attention={summary.attention ? 'true' : undefined}
             >
               <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="block text-sm font-semibold text-foreground">{blockTitle(block, isEnglish)}</span>
-                <span className={cn('block text-xs', summary.attention ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                <span className="block text-sm font-semibold">{blockTitle(block, isEnglish)}</span>
+                <span className={cn('block text-xs', summary.attention ? 'font-semibold' : 'opacity-85')}>
                   {note ?? summary.text}
                 </span>
-                {extra ? <span className="block truncate text-xs text-muted-foreground">{extra}</span> : null}
+                {extra ? <span className="block truncate text-xs opacity-85">{extra}</span> : null}
               </span>
-              <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
+              <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" />
             </button>
           )
         })}
@@ -281,7 +291,8 @@ export function DecisionMapColumns({
             id={`cdss-visit-column-${block}`}
             aria-labelledby={`cdss-visit-section-toggle-${block}`}
             hidden={!open}
-            className="min-w-0 space-y-2 rounded-lg border border-border bg-muted/20 p-2"
+            className={cn(styles.tone, styles.mapPanel, 'min-w-0 space-y-2 rounded-lg border border-border p-2')}
+            data-section={SECTION_TONE[block]}
             data-testid={`cdss-visit-column-${block}`}
             data-block={block}
             data-open={open ? 'true' : undefined}
