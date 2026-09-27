@@ -276,6 +276,40 @@ describe('the visit flow', () => {
     expect(screen.getByTestId('cdss-hf-flow-sign-pitting-edema-absent')).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('answers every symptom or sign as 無 with one press, folded rows included', () => {
+    render(<Harness />)
+    suspectHeartFailure()
+    const remaining = () => screen.getByTestId('cdss-hf-questions-remaining').textContent
+    expect(remaining()).toBe('還有 4 題')
+
+    const signsNone = screen.getByTestId('cdss-hf-sign-none-signs')
+    expect(signsNone).toHaveTextContent('全部皆無')
+    // The rows folded under 「更多」 are named on the button before it writes them.
+    expect(signsNone).toHaveTextContent('含收起 4 項')
+    fireEvent.click(signsNone)
+    for (const term of ['rales', 'jvp', 'pitting-edema']) {
+      expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
+    }
+    fireEvent.click(screen.getByTestId('cdss-hf-sign-more-signs'))
+    expect(screen.getByTestId('cdss-hf-flow-sign-third-heart-sound-absent')).toHaveAttribute('aria-pressed', 'true')
+    expect(remaining()).toBe('還有 3 題')
+    // Nothing left to mark: the button rests until a row changes.
+    expect(screen.getByTestId('cdss-hf-sign-none-signs')).toBeDisabled()
+  })
+
+  it('reads 其餘皆無 once a finding is 有, and leaves that finding alone', () => {
+    render(<Harness />)
+    suspectHeartFailure()
+    fireEvent.click(screen.getByTestId('cdss-hf-flow-sign-orthopnea-present'))
+    const symptomsNone = screen.getByTestId('cdss-hf-sign-none-symptoms')
+    expect(symptomsNone).toHaveTextContent('其餘皆無')
+    fireEvent.click(symptomsNone)
+    expect(screen.getByTestId('cdss-hf-flow-sign-orthopnea-present')).toHaveAttribute('aria-pressed', 'true')
+    for (const term of ['exertional-dyspnea', 'paroxysmal-nocturnal-dyspnea', 'fatigue-exercise-intolerance', 'reported-ankle-swelling', 'abdominal-bloating']) {
+      expect(screen.getByTestId(`cdss-hf-flow-sign-${term}-absent`)).toHaveAttribute('aria-pressed', 'true')
+    }
+  })
+
   it('counts down 還有 n 題 as the questions are answered', () => {
     render(<Harness />)
     const remaining = () => screen.getByTestId('cdss-hf-questions-remaining').textContent

@@ -986,6 +986,10 @@ function SideTallyChip({
  * names them so the reader knows what is behind it rather than having to open
  * it to find out. Each row writes its own term with its own stamp — a visit
  * where only 腳腫 was asked about says exactly that.
+ *
+ * 「全部皆無」 answers 無 for every row of the question in one press, the folded
+ * ones included (the button says how many it covers). Once any row is 有 it
+ * reads 「其餘皆無」 and leaves the 有 rows as they are.
  */
 function SignItemRows({
   questionId,
@@ -994,6 +998,7 @@ function SignItemRows({
   isEnglish,
   showLegend,
   onAnswer,
+  onAnswerAll,
 }: {
   questionId: VisitQuestionId
   items: readonly VisitSignItem[]
@@ -1001,10 +1006,22 @@ function SignItemRows({
   isEnglish: boolean
   showLegend: boolean
   onAnswer: (term: string, value: SignAnswerValue) => void
+  onAnswerAll?: (answers: Record<string, SignAnswerValue>) => void
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const common = items.filter((item) => item.common)
   const more = items.filter((item) => !item.common)
+  const answerOf = (term: string) => clinicVitals?.signAnswers?.[term]?.value
+  const anyPresent = items.some((item) => answerOf(item.term) === 'present')
+  const noneTargets = items.filter((item) => answerOf(item.term) !== 'present')
+  const allNone = noneTargets.length > 0 && noneTargets.every((item) => answerOf(item.term) === 'absent')
+  const foldedTargets = moreOpen ? 0 : noneTargets.filter((item) => !item.common).length
+  const noneLabel = anyPresent
+    ? (isEnglish ? 'Rest: none' : '其餘皆無')
+    : (isEnglish ? 'None of these' : '全部皆無')
+  const noneTitle = isEnglish
+    ? `Mark ${noneTargets.length} finding${noneTargets.length === 1 ? '' : 's'} as absent${foldedTargets ? `, including ${foldedTargets} folded under more` : ''}`
+    : `把 ${noneTargets.length} 項記為「無」${foldedTargets ? `，含收起的 ${foldedTargets} 項` : ''}`
   const row = (item: VisitSignItem) => {
     const visibleLabel = isEnglish ? item.en : item.zh
     return <div key={item.term} className="flex flex-wrap items-center gap-2">
@@ -1025,15 +1042,37 @@ function SignItemRows({
   }
   return (
     <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
-      {showLegend ? (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
-          {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
-            <span key={side} className="inline-flex items-center gap-1">
-              <SideTag side={side} isEnglish={isEnglish} />
-              {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
-            </span>
-          ))}
-        </p>
+      {showLegend || onAnswerAll ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {showLegend ? (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+              {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
+                <span key={side} className="inline-flex items-center gap-1">
+                  <SideTag side={side} isEnglish={isEnglish} />
+                  {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          {onAnswerAll ? (
+            <button
+              type="button"
+              className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60"
+              disabled={noneTargets.length === 0 || allNone}
+              title={noneTitle}
+              aria-label={noneTitle}
+              onClick={() => onAnswerAll(Object.fromEntries(noneTargets.map((item) => [item.term, 'absent' as const])))}
+              data-testid={`cdss-hf-sign-none-${questionId}`}
+            >
+              {noneLabel}
+              {foldedTargets && !allNone ? (
+                <span className="font-normal text-muted-foreground">
+                  {isEnglish ? `(incl. ${foldedTargets} folded)` : `（含收起 ${foldedTargets} 項）`}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <div className="grid gap-x-6 gap-y-1.5 @min-[44rem]:grid-cols-2">
         {common.map(row)}
@@ -1499,6 +1538,10 @@ function QuestionsCard({
                     onAnswer={(term, next) => {
                       reopen(question.id)
                       onSaveClinicVitals({ signAnswers: { [term]: next } })
+                    }}
+                    onAnswerAll={(answers) => {
+                      reopen(question.id)
+                      onSaveClinicVitals({ signAnswers: answers })
                     }}
                   />
                   {question.state === 'answered' ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
