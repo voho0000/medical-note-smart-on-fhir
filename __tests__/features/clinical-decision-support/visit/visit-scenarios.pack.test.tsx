@@ -147,6 +147,21 @@ describe('real pack · P4 stable and optimised', () => {
     expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
     expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')).toHaveAttribute('data-prefilled', 'true')
   })
+
+  it('opens DP-09 with its question and buttons in view, the guideline folded until asked for', () => {
+    render(<ScenarioMap id="p4-stable-optimised" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    fireEvent.click(cell('DP-09'))
+    const detail = screen.getByTestId('cdss-visit-detail')
+    expect(within(detail).getByRole('button', { name: '上調至 50 mg' })).toBeVisible()
+    const evidence = screen.getByTestId('cdss-visit-detail-module-heart-failure-mra')
+    expect(evidence).not.toHaveAttribute('open')
+    expect(evidence).toHaveTextContent('指引與依據')
+    expect(screen.getByTestId('cdss-visit-detail-module-body-heart-failure-mra')).not.toBeVisible()
+    fireEvent.click(evidence.querySelector('summary')!)
+    expect(evidence).toHaveAttribute('open')
+    expect(screen.getByTestId('cdss-visit-detail-module-body-heart-failure-mra')).toBeVisible()
+  })
 })
 
 describe('real pack · P5 titrating with AF', () => {

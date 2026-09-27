@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, type ReactNode } from 'react'
-import { Check, X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -208,21 +208,32 @@ export function DecisionPointDetail({
       ) : null}
 
       {cards.length ? (
-        <div className="space-y-3">
+        <div className="space-y-2 border-t border-border pt-2">
           {cards.map((recommendation) => (
-            <div key={recommendation.id} className="space-y-2 border-t border-border pt-3" data-testid={`cdss-visit-detail-module-${recommendation.id}`}>
-              {/* The card's own status, as the pack returned it. The cell above
-                  reads the same module's visit decision, so the two agree; no
-                  host re-grade is applied on the map. */}
-              <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+            // The guideline and the patient's evidence behind the point, folded:
+            // a clinician who knows the guidance decides from the question and
+            // the buttons above, and opens this only when they want to check.
+            <details
+              key={recommendation.id}
+              className="group/evidence rounded-md border border-border"
+              data-testid={`cdss-visit-detail-module-${recommendation.id}`}
+            >
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                {/* The card's own status, as the pack returned it. The cell
+                    above reads the same module's visit decision, so the two
+                    agree; no host re-grade is applied on the map. */}
                 <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[recommendation.status])} data-module-status={recommendation.status}>
                   <StatusIcon status={recommendation.status} />
                   {statusLabel(recommendation.status, isEnglish)}
                 </Badge>
-                {recommendation.moduleName ?? recommendation.title}
-              </p>
-              {renderDetail(recommendation)}
-            </div>
+                <span className="min-w-0 flex-1 truncate text-foreground">{recommendation.moduleName ?? recommendation.title}</span>
+                <span className="shrink-0 font-normal">{isEnglish ? 'Guideline and evidence' : '指引與依據'}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/evidence:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="border-t border-border px-1 pb-2 pt-2" data-testid={`cdss-visit-detail-module-body-${recommendation.id}`}>
+                {renderDetail(recommendation)}
+              </div>
+            </details>
           ))}
         </div>
       ) : (
