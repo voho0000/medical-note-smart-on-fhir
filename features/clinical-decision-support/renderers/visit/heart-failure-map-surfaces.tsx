@@ -31,8 +31,13 @@ export function heartFailureVisitSurfaces(
     ...(slots.editValues ? { editValues: slots.editValues } : {}),
     ...(slots.editValue ? { editValue: slots.editValue } : {}),
     asksDetail: {
-      label: isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA',
+      // 「其他」 beside the two asks; before a diagnosis there are none, and
+      // this is the diagnostic assessment itself, 懷疑 HF？ first.
+      label: model.asks.length
+        ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA')
+        : (isEnglish ? 'Diagnostic assessment' : '診斷評估'),
       openCount: slots.followUpOpenCount,
+      requests: slots.followUpRequests,
       content: (
         <div className="space-y-2" data-testid="cdss-visit-hf-follow-up-questions">
           {slots.followUpQuestions}

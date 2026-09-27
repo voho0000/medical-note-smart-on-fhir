@@ -110,7 +110,37 @@ export function VisitDecisionControls({
 
   const decide = (action: VisitAction) => onDecide?.(action)
 
-  const showOthers = others.length > 0 && surface === 'queue' && otherOpen
+  // A question (懷疑 HF？ 是／否) has answers, not a recommendation: every
+  // answer is shown, all alike, with none of them made the obvious one.
+  const question = point.actions.length > 1 && point.actions.every((action) => (
+    action.physicianInput && action.physicianInput.request === primary.physicianInput?.request
+  ))
+  if (question) {
+    return (
+      <div ref={containerRef} className="flex flex-wrap items-center gap-2" data-testid="cdss-visit-controls" data-visit-question="">
+        {point.actions.map((action, index) => (
+          <Button
+            key={action.id}
+            ref={index === 0 ? primaryRef : undefined}
+            type="button"
+            variant="outline"
+            className="h-11 min-w-16 px-4 text-sm shadow-none"
+            disabled={readOnly}
+            onClick={() => decide(action)}
+            data-visit-primary={index === 0 ? point.dp : undefined}
+            data-visit-action={action.id}
+          >
+            {action.label}
+          </Button>
+        ))}
+      </div>
+    )
+  }
+
+  // 「其他」 folds alternatives only when there are enough to crowd the row;
+  // one or two sit beside the recommendation, never one press away behind it.
+  const folded = surface === 'queue' && others.length >= 3
+  const showOthers = folded && otherOpen
   return (
     <div ref={containerRef} className="min-w-0 space-y-2" data-testid="cdss-visit-controls">
       <div className="flex flex-wrap items-center gap-2">
@@ -125,7 +155,7 @@ export function VisitDecisionControls({
         >
           {primary.label}
         </Button>
-        {others.length > 0 && surface === 'queue' ? (
+        {folded ? (
           <Button
             type="button"
             variant="outline"
@@ -142,7 +172,7 @@ export function VisitDecisionControls({
             />
           </Button>
         ) : null}
-        {surface === 'map'
+        {!folded
           ? others.map((action) => (
             <Button
               key={action.id}

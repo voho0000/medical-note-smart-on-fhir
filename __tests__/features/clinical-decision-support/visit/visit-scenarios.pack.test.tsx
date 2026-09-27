@@ -137,18 +137,19 @@ describe('real pack · P3 new AF (AF page)', () => {
 })
 
 describe('real pack · P4 stable and optimised', () => {
-  it('has an empty queue, a prefilled weight and settled pillars (spironolactone 25 mg settled)', () => {
+  it('has an empty queue, an unprefilled weight and settled pillars (spironolactone 25 mg settled)', () => {
     const { model } = scenarioRun('p4-stable-optimised')
     expect(model.stage).toBe('follow-up')
     expect(model.queue).toEqual([])
-    expect(model.asks.find((ask) => ask.id === 'weight-trend')?.prefill?.value).toBe('same')
+    // The cloud record's weights are health-check weights: never prefilled.
+    expect(model.asks.find((ask) => ask.id === 'weight-trend')?.prefill).toBeUndefined()
     expect(model.points.filter((item) => item.state === 'act' || item.state === 'safety')).toEqual([])
     for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) expect(point('p4-stable-optimised', dp).state).toBe('done')
     expect(point('p4-stable-optimised', 'DP-09').headline).toBe('spironolactone 25 mg：足量')
 
     render(<ScenarioMap id="p4-stable-optimised" />)
     expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
-    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="same"]')).toHaveAttribute('data-prefilled', 'true')
+    expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
   })
 
   it('keeps each group’s cells under its own heading (RAS stays with the four pillars)', () => {
@@ -242,12 +243,11 @@ describe('real pack · P6 hyperkalaemia', () => {
 })
 
 describe('real pack · P7 worsening congestion', () => {
-  it('reassesses on the NT-proBNP rise, prefills the weight gain and queues the diuretic', () => {
+  it('reassesses on the NT-proBNP rise and queues the diuretic, the weight asked rather than prefilled', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
     expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'reassess')
     expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('NT-proBNP 1200→2600')
-    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="up"]')).toHaveAttribute('data-prefilled', 'true')
-    expect(document.querySelector('[data-visit-prefill-basis="weight-trend"]')).toHaveTextContent('65→68 kg')
+    expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(primaryOf('DP-06'))
@@ -273,7 +273,8 @@ describe('real pack · P8 first visit after an HF admission', () => {
   })
 
   it('settles or asks about the diuretic once breathlessness is better and weight unchanged', () => {
-    const state = point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better' } }).state
+    expect(point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better' } }).state).toBe('ask')
+    const state = point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better', 'weight-trend': 'same' } }).state
     expect(['done', 'confirm']).toContain(state)
   })
 })
@@ -283,7 +284,7 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     const { model } = scenarioRun('p9-hfpef-af-dose')
     expect(model.stage).toBe('follow-up')
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
-    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="down"]')).toHaveAttribute('data-prefilled', 'true')
+    expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
     expect(queue()).toEqual([
       { dp: 'DP-14', primary: '改 2.5 mg bid' },
       { dp: 'DP-09', primary: '開始 MRA' },
@@ -291,8 +292,13 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(row('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
     expect(row('DP-14')).toHaveTextContent('2/3')
     expect(row('DP-14')).toHaveTextContent('AF')
+    // Weight is the clinician's answer now; until it is given DP-06 waits,
+    // and 「減少」 on a loop diuretic asks whether it can come down.
+    expect(cell('DP-06')).toHaveAttribute('data-state', 'ask')
+    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
+    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
     expect(cell('DP-06')).toHaveAttribute('data-state', 'confirm')
-    expect(cell('DP-06')).toHaveTextContent('體重減少 3 kg')
+    expect(cell('DP-06')).toHaveTextContent('體重減少 → 利尿劑是否減量？')
   })
 })
 
@@ -309,17 +315,23 @@ describe('real pack · P11 dabigatran with CrCl under 30 (AF page)', () => {
 })
 
 describe('real pack · the other scenarios', () => {
-  it('P1 suspected HFpEF: only 01 works, 02 opens once the diagnosis is confirmed', () => {
+  it('P1 suspected HFpEF: diagnosis first — 懷疑 HF？ is question 1 of an open assessment, not a queue row', () => {
     const { model } = scenarioRun('p1-suspected-hfpef')
     expect(model.stage).toBe('suspected')
     expect(model.queue).toEqual(['DP-00'])
+    expect(model.asks).toEqual([])
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
-    // The checklist's questions stay locked until 懷疑 HF is answered, so the
-    // first-assessment checklist waits for that answer before it opens.
-    expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
-    fireEvent.click(primaryOf('DP-00'))
-    expect(screen.getByTestId('cdss-visit-asks-detail')).toHaveAttribute('open')
+    // No 「比上次」 before a diagnosis; the assessment is open and asks 懷疑 HF？ itself…
+    expect(document.querySelector('[data-visit-ask]')).toBeNull()
+    const assessment = screen.getByTestId('cdss-visit-asks-detail')
+    expect(assessment).toHaveAttribute('open')
+    expect(assessment).toHaveTextContent('診斷評估')
+    expect(within(assessment).getByRole('radio', { name: /是，懷疑心衰竭/ })).toBeInTheDocument()
+    // …so today's list does not ask it a second time.
+    expect(screen.getByTestId('cdss-visit-queue-empty')).toBeInTheDocument()
+    // It comes before today's decisions on the page.
+    expect(assessment.compareDocumentPosition(screen.getByTestId('cdss-visit-queue')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
@@ -467,19 +479,19 @@ describe('real pack · reading the map without scrolling back up', () => {
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
   })
 
-  it('colours each every-visit answer by what it means, the words unchanged (P7)', () => {
+  it('marks a chosen answer with the page’s selected tint, a warning answer with the risk colour (P7)', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
     const worse = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
     const better = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!
     const down = document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!
     expect(worse).toHaveTextContent('變差')
-    expect(worse.className).toContain('bg-rose-50')
-    expect(better.className).toContain('bg-emerald-50')
-    expect(down.className).toContain('bg-sky-50')
+    // Open answers are neutral; a chosen one wears the page's selected tint,
+    // and only a warning answer the risk colour.
+    for (const open of [worse, better, down]) expect(open.className).toContain('bg-card')
     fireEvent.click(worse)
-    const chosen = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!
-    expect(chosen.className).toContain('bg-rose-100')
-    expect(chosen.className).toContain('border-rose-500')
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-destructive/10')
+    fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!)
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!.className).toContain('bg-primary/10')
   })
 })
 

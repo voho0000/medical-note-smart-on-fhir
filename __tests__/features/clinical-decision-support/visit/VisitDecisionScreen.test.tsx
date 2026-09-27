@@ -390,7 +390,10 @@ describe('visit decision screen · P3 new AF (AF page)', () => {
 
   it('does not advance the chain on a deferral', () => {
     render(<Harness model={p3Model()} />)
-    fireEvent.click(within(row('DP-07')).getByRole('button', { name: /其他/ }))
+    // One or two alternatives sit beside the recommendation; only three or
+    // more fold behind 「其他」.
+    const other = within(row('DP-07')).queryByRole('button', { name: /其他/ })
+    if (other) fireEvent.click(other)
     fireEvent.click(within(row('DP-07')).getByRole('button', { name: '暫緩' }))
     expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
     expect(row('DP-07').querySelector('[data-visit-primary]')).toBeNull()

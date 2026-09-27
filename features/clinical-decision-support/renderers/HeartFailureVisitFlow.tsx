@@ -450,6 +450,12 @@ export interface HeartFailureMapSurfaceSlots {
   followUpQuestions: ReactNode
   /** How many of those questions are still open. */
   followUpOpenCount: number
+  /**
+   * Physician-input requests the follow-up questions ask themselves — 懷疑
+   * HF？ before a diagnosis, as their question 1 — so the map does not list
+   * the same question again in 今天要決定.
+   */
+  followUpRequests: readonly string[]
   /** The chief-complaint and weight follow-up, once the diagnosis is established. */
   followUpPriorities?: ReactNode
   /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
@@ -482,12 +488,19 @@ export function HeartFailureMapSurfaces({
   onSaveHfpefInputs,
   rhythmPanel,
   followUpHistory,
+  assessmentAsksSuspicion = false,
   children,
 }: {
   flow: VisitFlowModel
   board: HeartFailureBoardModel
   isEnglish: boolean
   now: Date
+  /**
+   * Before a diagnosis (the model carries no every-visit asks) 懷疑 HF？ is the
+   * assessment's question 1; once the pack is following a diagnosis it stays
+   * with the diagnosis points' cards.
+   */
+  assessmentAsksSuspicion?: boolean
   /** The pack's modules, for the diagnosis context the confirmation reads. */
   recommendations: readonly CdssRecommendation[]
   clinicVitals?: ClinicVitals
@@ -507,8 +520,13 @@ export function HeartFailureMapSurfaces({
   const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
   const diagnosticIds: VisitQuestionId[] = ['hf-suspicion', 'lvef-phenotype', 'hfpef-confirmation']
   const subset = (questions: VisitQuestion[]): VisitFlowModel => ({ ...flow, questions, openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length })
-  const followUpFlow = subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)))
-  const diagnosticFlow = subset(flow.questions.filter((question) => diagnosticIds.includes(question.id)))
+  // Before a diagnosis the questions start where the reasoning starts: 懷疑
+  // HF？ is their question 1, so the symptoms, signs and NYHA it unlocks sit
+  // right under it and their numbers follow on. Phenotype and HFpEF stay with
+  // DP-01 and DP-34, whose cards they settle.
+  const mapFollowUpIds = (question: VisitQuestion) => (assessmentAsksSuspicion && question.id === 'hf-suspicion') || !diagnosticIds.includes(question.id)
+  const followUpFlow = subset(flow.questions.filter(mapFollowUpIds))
+  const diagnosticFlow = subset(flow.questions.filter((question) => !mapFollowUpIds(question)))
   const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
   const questionsCard = (questionFlow: VisitFlowModel) => (
     <QuestionsCard
@@ -530,6 +548,7 @@ export function HeartFailureMapSurfaces({
     } : {}),
     followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
     followUpOpenCount: followUpFlow.openQuestionCount,
+    followUpRequests: followUpFlow.questions.some((question) => question.id === 'hf-suspicion') ? ['hf-suspicion'] : [],
     followUpPriorities: followUp ? (
       <HfFollowUpPriorities
         history={followUpHistory}

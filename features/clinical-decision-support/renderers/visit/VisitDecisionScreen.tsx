@@ -105,9 +105,22 @@ export function VisitDecisionScreen({
   // once 懷疑 HF has been answered, since its questions stay locked until then.
   // The AF page's fuller questions are about treatment already under way, so
   // they open only when an ask comes back 有.
-  const rows = useMemo(() => buildQueueRows(model, decisions, now), [decisions, model, now])
-  const gatePending = rows.some((row) => row.current?.point.dp === 'DP-00')
-  const firstAssessment = model.packId === 'heart-failure-cdss' && isFirstAssessment(model.stage) && !gatePending
+  const allRows = useMemo(() => buildQueueRows(model, decisions, now), [decisions, model, now])
+  // A question the assessment block asks itself (懷疑 HF？ as its question 1
+  // before a diagnosis) is answered there, once, in reasoning order — not
+  // again as a row of 今天要決定.
+  const blockRequests = surfaces?.asksDetail?.requests
+  const rows = useMemo(() => (blockRequests?.length
+    ? allRows.filter((row) => {
+      const actions = (row.current ?? row.steps[0]).point.actions
+      return !(actions.length > 0 && actions.every((action) => action.physicianInput && blockRequests.includes(action.physicianInput.request)))
+    })
+    : allRows), [allRows, blockRequests])
+  const gatePending = allRows.some((row) => row.current?.point.dp === 'DP-00')
+  // Before a diagnosis there are no every-visit asks: the block is the
+  // assessment itself, 懷疑 HF？ first, and it is open from the start.
+  const firstAssessment = model.packId === 'heart-failure-cdss'
+    && (model.asks.length === 0 || (isFirstAssessment(model.stage) && !gatePending))
   const asksOpenReason = `${firstAssessment ? 'first' : ''}|${openingAnswers(model.asks, answers).map((item) => item.ask.id).join(',')}`
   const asksAutoOpen = asksOpenReason !== '|'
   const [asksOverride, setAsksOverride] = useState<{ reason: string; open: boolean } | null>(null)
@@ -206,6 +219,16 @@ export function VisitDecisionScreen({
     })
     .join(' · ')
 
+  const queueBlock = (
+    <TodayQueue
+      rows={rows}
+      isEnglish={isEnglish}
+      sourceOfPage={sourceOfPage}
+      onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'queue') : undefined}
+      onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+    />
+  )
+
   return (
     <div
       className="space-y-4"
@@ -237,13 +260,7 @@ export function VisitDecisionScreen({
           onToggle={setAsksDetailOpen}
         />
       ) : null}
-      <TodayQueue
-        rows={rows}
-        isEnglish={isEnglish}
-        sourceOfPage={sourceOfPage}
-        onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'queue') : undefined}
-        onClear={onClearDecision ? (step) => clear(step.key) : undefined}
-      />
+      {queueBlock}
       <DecisionMapColumns
         model={model}
         decisionOf={decisionOf}

@@ -74,7 +74,9 @@ export function VisitAsksDetail({
       : undefined
   // At a follow-up these questions are optional; a pending count would read as
   // unfinished work. It shows only when the visit calls for them.
-  const showCount = Boolean(reason) && typeof openCount === 'number' && openCount > 0
+  // Open, the questions inside count themselves (「還有 n 題」); the line says
+  // it only while folded, so the number is never on screen twice.
+  const showCount = !open && Boolean(reason) && typeof openCount === 'number' && openCount > 0
   // A <details> rather than a button-and-region: the questions inside are the
   // same ones other cards jump to (「前往第 2 題」, 「記錄喘的細節」), and that
   // jump opens every folded <details> on its way. The open state is still the

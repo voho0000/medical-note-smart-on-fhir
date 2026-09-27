@@ -148,6 +148,8 @@ export function TodayQueue({
                       {point.dp}
                     </span>
                     <div className="min-w-0 flex-1 space-y-1">
+                      {/* What the decision was about, so 「✓ 改 2.5 mg bid」 is never a dose with no drug. */}
+                      <p className="text-xs text-muted-foreground" data-visit-decided-about="">{point.label}</p>
                       {decidedSteps.slice(0, -1).map((step) => (
                         <p key={step.key} className="flex items-center gap-1.5 text-xs text-muted-foreground" data-visit-chain-done={step.point.dp}>
                           <Check className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />

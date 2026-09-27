@@ -23,7 +23,17 @@ export interface VisitMapSurfaces {
    * DP-03's fuller questions, folded under the every-visit asks. Opens by
    * itself at a first assessment and when an ask comes back worse.
    */
-  asksDetail?: { label: string; content: ReactNode; openCount?: number }
+  asksDetail?: {
+    label: string
+    content: ReactNode
+    openCount?: number
+    /**
+     * Physician-input requests the block asks itself (the HF page's 懷疑 HF？
+     * before a diagnosis). A queue row whose every action only answers one of
+     * them is not listed again in 今天要決定.
+     */
+    requests?: readonly string[]
+  }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode
   /** Folded at the foot of a column: what has no single point to live under. */

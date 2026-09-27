@@ -2478,6 +2478,7 @@ export function ClinicalDecisionSupportView({
             onSaveHfpefInputs={onSaveHfpefInputs}
             rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
             followUpHistory={followUpHistory}
+            assessmentAsksSuspicion={visitModel.asks.length === 0}
           >
             {(slots) => screen(heartFailureVisitSurfaces(slots, visitModel, isEnglish))}
           </HeartFailureMapSurfaces>
