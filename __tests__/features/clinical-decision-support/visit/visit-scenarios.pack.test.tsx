@@ -158,8 +158,14 @@ describe('real pack · P5 titrating with AF', () => {
       { dp: 'DP-10', primary: '開始 SGLT2i' },
     ])
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
-    // Follow-up: 01 folds to one line even while DP-03 waits on the asks above.
-    expect(screen.getByTestId('cdss-visit-column-status')).toHaveAttribute('data-folded', 'true')
+    // The map opens section by section: all three start closed, and 02 says
+    // what it holds before it is opened.
+    for (const block of ['status', 'treatment', 'outlook']) {
+      expect(screen.getByTestId(`cdss-visit-section-toggle-${block}`)).toHaveAttribute('aria-expanded', 'false')
+    }
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('需處理 3')
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
     expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
     expect(cell('DP-08')).toHaveTextContent('bisoprolol 2.5 mg／目標 10 mg')
     expect(cell('DP-14', 'af')).toHaveAttribute('data-state', 'done')

@@ -101,14 +101,43 @@ function MapCell({
   )
 }
 
+const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm', 'ask']
+
 /**
- * 決策地圖: the three sections drawn as three columns — 01 現況, 02 治療,
- * 03 預後與計畫 — each cell one decision point with its chain, its state and
- * one line of the pack's data. Points that do not apply or are not yet
- * computed fold to one line at a column's foot and open with 「顯示全部」;
- * nothing is removed. The shape follows the pack's stage: before a diagnosis
- * only 01 works, in follow-up 01 shrinks to one line, and a column never folds
- * over a point that needs the clinician.
+ * One line under a section's name: what in it needs the clinician, or that
+ * nothing does — so a closed section still says whether to open it.
+ */
+function sectionSummary(points: readonly DecisionPointView[], isEnglish: boolean): { text: string; attention: boolean } {
+  const counts = new Map<DecisionPointState, number>()
+  for (const point of points) counts.set(point.state, (counts.get(point.state) ?? 0) + 1)
+  const attention = ATTENTION_ORDER.filter((state) => counts.get(state))
+  if (attention.length) {
+    return {
+      text: attention.map((state) => `${stateLabel(state, isEnglish)} ${counts.get(state)}`).join(' · '),
+      attention: true,
+    }
+  }
+  const settled = counts.get('done') ?? 0
+  return {
+    text: isEnglish
+      ? `Nothing pending${settled ? ` · ${settled} settled` : ''}`
+      : `沒有待辦${settled ? ` · 已定 ${settled}` : ''}`,
+    attention: false,
+  }
+}
+
+/**
+ * 決策地圖: the three sections — 01 現況, 02 治療, 03 預後與計畫 — as three
+ * buttons, each with one line of what it holds. A section opens under the
+ * buttons when pressed and closes on a second press; opening another closes
+ * it. Nothing shows expanded until asked for, so the screen reads as today's
+ * decisions first and the map on request.
+ *
+ * Inside an open section each cell is one decision point with its chain, its
+ * state and one line of the pack's data. Points that do not apply or are not
+ * yet computed fold to one line at the foot and open with 「顯示全部」; nothing
+ * is removed. Closed sections stay in the page, hidden, so their points keep
+ * their place; the opened point's card shows in its own section.
  */
 export function DecisionMapColumns({
   model,
@@ -119,6 +148,7 @@ export function DecisionMapColumns({
   isEnglish,
   sourceOfPage,
   answersLine,
+  outlookSummary,
   outlookSlot,
   detail,
   columnFooters,
@@ -130,19 +160,22 @@ export function DecisionMapColumns({
   onOpen: (point: DecisionPointView) => void
   isEnglish: boolean
   sourceOfPage: DecisionPointView['source']
-  /** The every-visit answers in a line, for 01's folded follow-up form. */
+  /** The every-visit answers in a line, for 01's summary. */
   answersLine?: string
+  /** The plan in a line (「建議 14 天內回診」), for 03's summary. */
+  outlookSummary?: string
   /** Rendered at the foot of 03: the plan, and the prognosis models. */
   outlookSlot?: ReactNode
-  /** The opened cell's card, drawn under the columns. */
+  /** The opened cell's card, drawn inside its section. */
   detail?: ReactNode
-  /** Folded surfaces at the foot of a column (clinical values, rhythm, course, other questions). */
+  /** Folded surfaces at the foot of a section (clinical values, rhythm, course, other questions). */
   columnFooters?: Partial<Record<VisitBlock, ReactNode>>
 }) {
   const [showAll, setShowAll] = useState(false)
-  const statusNeedsClinician = model.points.some((point) => point.block === 'status' && NEEDS_CLINICIAN.has(point.state))
-  const [statusOpen, setStatusOpen] = useState(model.stage !== 'follow-up' || statusNeedsClinician)
-  const statusFolded = !statusOpen && !statusNeedsClinician
+  const [openBlock, setOpenBlock] = useState<VisitBlock | null>(null)
+  const openPointBlock = openKey
+    ? model.points.find((point) => visitDecisionKey(point) === openKey)?.block
+    : undefined
 
   // A block the pack closed with a note (「確診後開啟」) — or, without one,
   // 02 and 03 before a diagnosis — shows only what needs the clinician.
@@ -184,117 +217,128 @@ export function DecisionMapColumns({
               : `顯示全部 ${model.coverage.total} 點`}
         </button>
       </div>
-      <div className="grid gap-3 @min-[40rem]:grid-cols-3">
+      <div className="grid gap-2 @min-[40rem]:grid-cols-3" data-testid="cdss-visit-sections">
         {BLOCK_ORDER.map((block) => {
           const points = model.points.filter((point) => point.block === block)
-          const visible = visibleIn(block, points)
-          const hidden = points.filter((point) => !visible.includes(point))
-          const folded = block === 'status' && statusFolded
+          const open = openBlock === block
           const note = closedNote(block)
-          // Subheadings print the pack's group label (A／R／C on the
-          // atrial-fibrillation page). Without labels, only the AF page — whose
-          // group ids are those letters — shows them; heart-failure ids are not
-          // words a clinician reads.
-          const labelled = visible.some((point) => point.groupLabel)
-          const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
-            ? new Set(visible.map((point) => point.group))
-            : new Set<string>()
-          const titleId = `cdss-visit-col-${block}`
+          const summary = sectionSummary(points, isEnglish)
+          const extra = block === 'status' ? answersLine : block === 'outlook' ? outlookSummary : undefined
           return (
-            <section
+            <button
               key={block}
-              aria-labelledby={titleId}
-              className="min-w-0 space-y-1.5 rounded-lg border border-border bg-muted/20 p-2"
-              data-testid={`cdss-visit-column-${block}`}
-              data-block={block}
-              data-folded={folded ? 'true' : undefined}
-            >
-              <h4 id={titleId} className="px-0.5 text-xs font-semibold text-foreground">
-                {blockTitle(block, isEnglish)}
-              </h4>
-              {note ? (
-                <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
-                  {note}
-                </p>
-              ) : null}
-              {folded ? (
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-expanded={false}
-                  onClick={() => setStatusOpen(true)}
-                  data-testid="cdss-visit-status-fold"
-                >
-                  <span className="min-w-0 flex-1">
-                    {answersLine ? <span className="block font-medium text-foreground">{answersLine}</span> : null}
-                    <span className="block">{countLine(points, isEnglish)}</span>
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-                </button>
-              ) : (
-                <>
-                  {block === 'status' && model.stage === 'follow-up' && !statusNeedsClinician ? (
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center gap-1 px-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-expanded
-                      onClick={() => setStatusOpen(false)}
-                    >
-                      {isEnglish ? 'Fold to one line' : '收成一行'}
-                      <ChevronDown className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
-                    </button>
-                  ) : null}
-                  <ul className="space-y-1.5">
-                    {visible.map((point, index) => {
-                      const key = visitDecisionKey(point)
-                      const showGroup = groups.size > 1 && (index === 0 || visible[index - 1].group !== point.group)
-                      return (
-                        <li key={key}>
-                          {showGroup ? (
-                            <p className="px-0.5 pb-1 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={point.group}>
-                              {point.groupLabel ?? point.group}
-                            </p>
-                          ) : null}
-                          <MapCell
-                            point={point}
-                            decision={decisionOf(point)}
-                            inQueue={queuedDps.has(point.dp)}
-                            open={openKey === key}
-                            isEnglish={isEnglish}
-                            sourceOfPage={sourceOfPage}
-                            onOpen={() => onOpen(point)}
-                          />
-                          {point.checklist?.length && block === 'status' ? (
-                            <div className="px-2.5 pb-1 pt-1.5">
-                              <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} compact />
-                            </div>
-                          ) : null}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  {hidden.length ? (
-                    <button
-                      type="button"
-                      className="flex min-h-11 w-full items-center px-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-expanded={false}
-                      onClick={() => setShowAll(true)}
-                      data-testid={`cdss-visit-column-${block}-foot`}
-                    >
-                      {isEnglish
-                        ? `${hidden.length} more folded: ${countLine(hidden, true)} · Show all`
-                        : `另 ${hidden.length} 點收起：${countLine(hidden, false)} · 顯示全部`}
-                    </button>
-                  ) : null}
-                </>
+              type="button"
+              id={`cdss-visit-section-toggle-${block}`}
+              aria-expanded={open}
+              aria-controls={`cdss-visit-column-${block}`}
+              onClick={() => setOpenBlock((current) => (current === block ? null : block))}
+              className={cn(
+                'flex min-h-16 w-full min-w-0 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                open ? 'border-foreground bg-background' : 'border-border bg-muted/20 hover:bg-muted/50',
               )}
-              {columnFooters?.[block]}
-              {block === 'outlook' ? outlookSlot : null}
-            </section>
+              data-testid={`cdss-visit-section-toggle-${block}`}
+              data-attention={summary.attention ? 'true' : undefined}
+            >
+              <span className="min-w-0 flex-1 space-y-0.5">
+                <span className="block text-sm font-semibold text-foreground">{blockTitle(block, isEnglish)}</span>
+                <span className={cn('block text-xs', summary.attention ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                  {note ?? summary.text}
+                </span>
+                {extra ? <span className="block truncate text-xs text-muted-foreground">{extra}</span> : null}
+              </span>
+              <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden="true" />
+            </button>
           )
         })}
       </div>
-      {detail}
+      {BLOCK_ORDER.map((block) => {
+        const points = model.points.filter((point) => point.block === block)
+        const visible = visibleIn(block, points)
+        const hidden = points.filter((point) => !visible.includes(point))
+        const note = closedNote(block)
+        const open = openBlock === block
+        // Subheadings print the pack's group label (A／R／C on the
+        // atrial-fibrillation page). Without labels, only the AF page — whose
+        // group ids are those letters — shows them; heart-failure ids are not
+        // words a clinician reads.
+        const labelled = visible.some((point) => point.groupLabel)
+        const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
+          ? new Set(visible.map((point) => point.group))
+          : new Set<string>()
+        return (
+          <section
+            key={block}
+            id={`cdss-visit-column-${block}`}
+            aria-labelledby={`cdss-visit-section-toggle-${block}`}
+            hidden={!open}
+            className="min-w-0 space-y-2 rounded-lg border border-border bg-muted/20 p-2"
+            data-testid={`cdss-visit-column-${block}`}
+            data-block={block}
+            data-open={open ? 'true' : undefined}
+          >
+            {note ? (
+              <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
+                {note}
+              </p>
+            ) : null}
+            <ul className="grid gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
+              {visible.flatMap((point, index) => {
+                const key = visitDecisionKey(point)
+                const showGroup = groups.size > 1 && (index === 0 || visible[index - 1].group !== point.group)
+                // A group's heading takes its own row, so its first cell sits in
+                // the grid like the others.
+                const heading = showGroup ? (
+                  <li key={`${key}-group`} className="col-span-full">
+                    <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={point.group}>
+                      {point.groupLabel ?? point.group}
+                    </p>
+                  </li>
+                ) : null
+                const item = (
+                  <li key={key} className="min-w-0">
+                    <MapCell
+                      point={point}
+                      decision={decisionOf(point)}
+                      inQueue={queuedDps.has(point.dp)}
+                      open={openKey === key}
+                      isEnglish={isEnglish}
+                      sourceOfPage={sourceOfPage}
+                      onOpen={() => {
+                        // The point's card shows in its own section, so that section is the open one.
+                        setOpenBlock(block)
+                        onOpen(point)
+                      }}
+                    />
+                    {point.checklist?.length && block === 'status' ? (
+                      <div className="px-2.5 pb-1 pt-1.5">
+                        <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} compact />
+                      </div>
+                    ) : null}
+                  </li>
+                )
+                return heading ? [heading, item] : [item]
+              })}
+            </ul>
+            {hidden.length ? (
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center px-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-expanded={false}
+                onClick={() => setShowAll(true)}
+                data-testid={`cdss-visit-column-${block}-foot`}
+              >
+                {isEnglish
+                  ? `${hidden.length} more folded: ${countLine(hidden, true)} · Show all`
+                  : `另 ${hidden.length} 點收起：${countLine(hidden, false)} · 顯示全部`}
+              </button>
+            ) : null}
+            {open && openPointBlock === block ? detail : null}
+            {columnFooters?.[block]}
+            {block === 'outlook' ? outlookSlot : null}
+          </section>
+        )
+      })}
     </section>
   )
 }

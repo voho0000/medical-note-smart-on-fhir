@@ -357,10 +357,12 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
   })
 
-  it('keeps the record values with the rhythm panel and the course at 01’s foot, even when 01 is folded', () => {
+  it('keeps the record values with the rhythm panel and the course at 01’s foot, one press away', () => {
     render(<HfHarness model={p5Model()} />)
-    expect(screen.getByTestId('cdss-visit-column-status')).toHaveAttribute('data-folded', 'true')
+    expect(screen.getByTestId('cdss-visit-column-status')).not.toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
     const foot = screen.getByTestId('cdss-visit-hf-record-foot')
+    expect(foot.querySelector('summary')).toBeVisible()
     expect(foot).toHaveTextContent('臨床數值、心律與病程時間軸')
     expect(within(foot).getByTestId('cdss-hf-record-values')).toBeInTheDocument()
     expect(within(foot).getByText('心律')).toBeInTheDocument()

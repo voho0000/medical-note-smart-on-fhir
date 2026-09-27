@@ -16,6 +16,7 @@ import {
   latestDecisionFor,
   pointSteps,
   queuedPointDps,
+  returnVisitLabel,
   visitDecisionKey,
 } from './visit-decisions'
 import type {
@@ -227,6 +228,7 @@ export function VisitDecisionScreen({
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
+        outlookSummary={plan.withinDays !== undefined ? returnVisitLabel(plan.withinDays, isEnglish) : plan.notes[0]?.text}
         outlookSlot={(
           <>
             {outlookModules.map((item) => (

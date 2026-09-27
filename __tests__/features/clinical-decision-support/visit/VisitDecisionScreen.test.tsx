@@ -134,24 +134,44 @@ describe('visit decision screen · P4 stable and optimised', () => {
     expect(screen.getByTestId('cdss-visit-plan-empty')).toBeInTheDocument()
   })
 
-  it('folds 01 to one line in follow-up and keeps every folded point reachable', () => {
+  it('shows the three sections closed, opens one at a time, and keeps folded points reachable', () => {
     render(<Harness model={p4Model()} />)
-    const status = screen.getByTestId('cdss-visit-column-status')
-    expect(status).toHaveAttribute('data-folded', 'true')
-    const fold = screen.getByTestId('cdss-visit-status-fold')
-    expect(fold).toHaveAttribute('aria-expanded', 'false')
-    expect(fold).toHaveTextContent('體重 不變')
-    expect(within(status).queryByRole('button', { name: /DP-01/ })).toBeNull()
-    fireEvent.click(fold)
-    expect(status).not.toHaveAttribute('data-folded')
-    expect(cell('DP-01')).toBeInTheDocument()
-    // Not-applicable and not-included points sit at the column foot until 顯示全部.
-    expect(within(status).queryByText('病因')).toBeNull()
+    const toggle = (block: string) => screen.getByTestId(`cdss-visit-section-toggle-${block}`)
+    const section = (block: string) => screen.getByTestId(`cdss-visit-column-${block}`)
+    for (const block of ['status', 'treatment', 'outlook']) {
+      expect(toggle(block)).toHaveAttribute('aria-expanded', 'false')
+      expect(section(block)).not.toBeVisible()
+    }
+    // A closed section still says what it holds.
+    expect(toggle('status')).toHaveTextContent('體重 不變')
+    expect(toggle('treatment')).toHaveTextContent(/沒有待辦|需你確認/)
+
+    fireEvent.click(toggle('status'))
+    expect(toggle('status')).toHaveAttribute('aria-expanded', 'true')
+    expect(section('status')).toBeVisible()
+    expect(cell('DP-01')).toBeVisible()
+    // Opening another closes the first; a second press closes it.
+    fireEvent.click(toggle('treatment'))
+    expect(section('status')).not.toBeVisible()
+    expect(section('treatment')).toBeVisible()
+    fireEvent.click(toggle('treatment'))
+    expect(section('treatment')).not.toBeVisible()
+
+    fireEvent.click(toggle('status'))
+    // Not-applicable and not-included points sit at the section foot until 顯示全部.
+    expect(within(section('status')).queryByText('病因')).toBeNull()
     expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('另 4 點收起')
     fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
     expect(screen.getByTestId('cdss-visit-map-show-all')).toHaveAttribute('aria-expanded', 'true')
     expect(cell('DP-29')).toHaveAttribute('data-state', 'not-included')
     expect(cell('DP-34')).toHaveAttribute('data-state', 'not-applicable')
+  })
+
+  it('opens a point’s section when the point is opened from its cell', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(cell('DP-01'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
   })
 })
 
