@@ -271,8 +271,11 @@ describe('real pack · P6 hyperkalaemia', () => {
     const mra = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-mra')
     expect(mra.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'actionable')
     fireEvent.click(cell('DP-07'))
+    // K 5.7 on the ARNI: the pack's own card calls for a temporary reduction
+    // (ESC §6.1.6) beside the MRA hold, not 「維持現劑量」.
     const ras = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-ras-inhibition')
-    expect(ras.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'no-action')
+    expect(ras.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'review')
+    expect(cell('DP-07')).toHaveTextContent('先處理高血鉀')
   })
 })
 
@@ -393,7 +396,7 @@ describe('real pack · the other scenarios', () => {
     expect(assessment.compareDocumentPosition(cell('DP-02')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('P1 「還不確定」: the HFpEF criteria come up under question 1, then symptoms, signs and the confirmation — no NYHA', () => {
+  it('P1 「還不確定」: question 1 stays open, the HFpEF criteria come up under it, then symptoms and signs — no NYHA, no separate confirmation', () => {
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
     const assessment = screen.getByTestId('cdss-visit-hf-diagnosis-view')
@@ -403,7 +406,6 @@ describe('real pack · the other scenarios', () => {
         ['cdss-hf-question-hf-suspicion', '1'],
         ['cdss-hf-question-symptoms', '2'],
         ['cdss-hf-question-signs', '3'],
-        ['cdss-hf-question-hfpef-confirmation', '4'],
       ])
     const evidence = within(assessment).getByTestId('cdss-hf-hfpef-evidence')
     expect(evidence).toHaveTextContent('HFpEF 診斷條件')
@@ -425,12 +427,16 @@ describe('real pack · the other scenarios', () => {
     expect(rows).toHaveTextContent('門檻 >2.8 m/s')
     expect(rows).toHaveTextContent('未取得：')
     expect(evidence.querySelector('.bg-emerald-50')).toBeNull()
-    expect(within(assessment).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('還不確定')
+    // The verdict stays on question 1, open with 「還不確定」 chosen.
+    expect(within(assessment).getByTestId('cdss-hf-suspicion-option-suspected')).toBeChecked()
+    expect(within(assessment).getByTestId('cdss-hf-suspicion-option-hfpef')).not.toBeChecked()
     // Under question 1, before the symptoms that supply criterion (i)…
     expect(evidence.compareDocumentPosition(within(assessment).getByTestId('cdss-hf-question-symptoms')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // …so the confirmation at the end says where they stand in one line.
-    expect(within(assessment).getByTestId('cdss-hf-hfpef-status')).toHaveTextContent(/條件 \d\/3 成立/)
-    expect(within(assessment).queryByTestId('cdss-hf-hfpef-go-to-symptoms')).toBeNull()
+    // No 「確認 HFpEF」 at the foot (clinician feedback: 「直接回填第一題就好了」).
+    expect(within(assessment).queryByTestId('cdss-hf-hfpef-confirm')).toBeNull()
+    // Ticking a symptom and answering question 1 is the diagnosis.
+    fireEvent.click(within(assessment).getByTestId('cdss-hf-suspicion-option-hfpef'))
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfpEF', hfpEfConfirmed: true })
   })
 
   it('P1 one press on 「HFpEF」 is the diagnosis; the page stays put and 02 is the clinician’s to open', () => {

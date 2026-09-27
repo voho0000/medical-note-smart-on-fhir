@@ -524,16 +524,20 @@ export function HeartFailureMapSurfaces({
   // Before a diagnosis the whole diagnostic step is one card, and it asks only
   // what the diagnosis needs, renumbered in reasoning order: HFrEF 還是
   // HFpEF？ first — one press for a clinician already sure — and, on 「還不確定」,
-  // the HFpEF criteria under it, then symptoms → signs → confirm HFpEF. NYHA
-  // and compensation grade a diagnosis rather than make one, so they wait for
-  // 追蹤; questions still locked behind question 1 are not drawn at all.
+  // the HFpEF criteria under it, then symptoms → signs. The verdict is
+  // question 1 again, which stays open while it reads 「還不確定」: no separate
+  // 「確認 HFpEF」 at the foot (clinician feedback 2026-09-28: 「症狀填一填覺得
+  // 是 HFpEF 直接回填第一題就好了」). NYHA and compensation grade a diagnosis
+  // rather than make one, so they wait for 追蹤; questions still locked behind
+  // question 1 are not drawn at all.
   // After a diagnosis the follow-up questions and the diagnostic ones part.
   const subset = (questions: VisitQuestion[], renumber = false): VisitFlowModel => ({
     ...flow,
     questions: renumber ? questions.map((question, index) => ({ ...question, number: String(index + 1) })) : questions,
     openQuestionCount: questions.filter(question => question.counted && question.state === 'open').length,
   })
-  const inDiagnosisCard = (question: VisitQuestion) => question.state !== 'locked' && question.id !== 'nyha' && question.id !== 'compensation'
+  const inDiagnosisCard = (question: VisitQuestion) => question.state !== 'locked'
+    && question.id !== 'nyha' && question.id !== 'compensation' && question.id !== 'hfpef-confirmation'
   const followUpFlow = assessmentAsksSuspicion
     ? subset(flow.questions.filter(inDiagnosisCard), true)
     : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)))
@@ -1285,7 +1289,6 @@ function HfpEfConfirmation({
   hfpefReading,
   onOpenCalculator,
   compact = false,
-  evidenceAbove = false,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
@@ -1296,19 +1299,10 @@ function HfpEfConfirmation({
   onOpenCalculator?: (id?: HfpefScoreId) => void
   /** The map: the criteria, the score and the buttons; the guideline text and the storage note one press away. */
   compact?: boolean
-  /**
-   * The criteria and scores are already drawn under question 1 (「還不確定」),
-   * above the symptoms and signs that supply them: here only where they stand,
-   * in one line, and the buttons.
-   */
-  evidenceAbove?: boolean
 }) {
-  const criteria = summary?.criteria ?? []
-  const symptomsState = criteria.find((criterion) => criterion.id === 'symptoms-signs')?.state
+  const symptomsState = summary?.criteria
+    .find((criterion) => criterion.id === 'symptoms-signs')?.state
   const symptomsUndetermined = symptomsState === 'undetermined'
-  const met = criteria.filter((criterion) => criterion.state === 'met').length
-  const pending = criteria.filter((criterion) => criterion.state === 'undetermined').map((criterion) => criterion.label)
-  const refuted = criteria.filter((criterion) => criterion.state === 'refuted').map((criterion) => criterion.label)
   // 「確認」 is the same diagnosis as question 1's 「HFpEF」, so it is written
   // the same way and question 1 then carries it.
   const record = (value: true | typeof HFPEF_NOT_CONFIRMED) => onAnswer(value === true
@@ -1316,24 +1310,14 @@ function HfpEfConfirmation({
     : { ...(answer ?? {}), answeredOn: todayIsoDate(now), hfpEfConfirmed: value })
   return (
     <div className="space-y-2" data-testid="cdss-hf-hfpef-confirmation">
-      {evidenceAbove ? (
-        <p className="text-xs leading-5 text-muted-foreground" data-testid="cdss-hf-hfpef-status">
-          {isEnglish
-            ? [`${met}/${criteria.length} criteria met`, pending.length ? `to assess: ${pending.join(', ')}` : '', refuted.length ? `not met: ${refuted.join(', ')}` : ''].filter(Boolean).join(' · ')
-            : [`條件 ${met}/${criteria.length} 成立`, pending.length ? `待評估：${pending.join('、')}` : '', refuted.length ? `不符：${refuted.join('、')}` : ''].filter(Boolean).join('・')}
-        </p>
-      ) : (
-        <>
-          <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} showBasis={!compact} />
-          <HfpEfScoreLine
-            reading={hfpefReading}
-            isEnglish={isEnglish}
-            {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
-          />
-        </>
-      )}
+      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} showBasis={!compact} />
+      <HfpEfScoreLine
+        reading={hfpefReading}
+        isEnglish={isEnglish}
+        {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+      />
       <div className="flex flex-wrap items-center gap-2">
-        {symptomsUndetermined && !evidenceAbove ? (
+        {symptomsUndetermined ? (
           <Button
             type="button"
             size="sm"
@@ -1516,19 +1500,21 @@ function QuestionsCard({
     setReopened(current => new Set(current).add(id))
     setCollapsedItems(current => { const next = new Set(current); next.delete(id); return next })
   }
-  const shows = (question: VisitQuestion) => (
-    question.items ? !collapsedItems.has(question.id) : question.state === 'open' || reopened.has(question.id)
-  )
   const diagnosisCard = board.hfpEfDiagnosis
   const diagnosisSummary = diagnosisCard ? diagnosticSummaryOf(diagnosisCard) : undefined
-  // 「還不確定」 on the map: the HFpEF criteria come up right under question 1,
-  // so what is still missing is read before the symptoms and signs that
-  // supply it, and the confirmation at the end needs only its buttons.
-  const evidenceUnderDiagnosis = compact
-    && Boolean(diagnosisSummary)
-    && flow.questions.some((question) => question.id === 'hfpef-confirmation')
-    && phenotypeAnswer?.hfSuspicion === 'suspected'
-    && !phenotypeAnswer?.diagnosis
+  // 「還不確定」 on the map: question 1 stays open — the verdict is given there
+  // once the evidence is in — and the HFpEF criteria come up right under it,
+  // so what is still missing is read before the symptoms and signs below.
+  const unsure = compact && phenotypeAnswer?.hfSuspicion === 'suspected' && !phenotypeAnswer?.diagnosis
+  // Where the card still carries the HFpEF question, the criteria are drawn
+  // there instead, once.
+  const evidenceUnderDiagnosis = unsure && Boolean(diagnosisSummary)
+    && !flow.questions.some((question) => question.id === 'hfpef-confirmation')
+  const shows = (question: VisitQuestion) => (
+    question.items
+      ? !collapsedItems.has(question.id)
+      : question.state === 'open' || reopened.has(question.id) || (question.id === 'hf-suspicion' && unsure)
+  )
 
   return (
     <section
@@ -1643,7 +1629,6 @@ function QuestionsCard({
                     hfpefReading={hfpefReading}
                     onOpenCalculator={onOpenCalculator}
                     compact={compact}
-                    evidenceAbove={evidenceUnderDiagnosis}
                   />
                 ) : null}
               </QuestionShell>
