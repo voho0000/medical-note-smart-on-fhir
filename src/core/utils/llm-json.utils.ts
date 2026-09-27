@@ -50,14 +50,112 @@ export function extractJsonObject(raw: string): unknown {
   try {
     return JSON.parse(s)
   } catch {
-    // One repair pass: remove trailing commas before } or ].
-    const repaired = s.replace(/,\s*([}\]])/g, '$1')
-    try {
-      return JSON.parse(repaired)
-    } catch {
-      throw new LlmJsonError('Model response was not valid JSON')
+    // Repairs run only after a strict parse failed, cheapest first:
+    // 1. trailing commas before } or ];
+    // 2. common local-model slips: a key missing its colon
+    //    (`"trend "8.2%"`) and an unescaped quote copied from a record inside a
+    //    string value (`… "X.R." …`);
+    // 3. one or two omitted/extra closing brackets at the very end.
+    const withoutTrailingCommas = s.replace(/,\s*([}\]])/g, '$1')
+    const candidates = [withoutTrailingCommas]
+    const structural = escapeInteriorQuotes(insertMissingKeyColons(withoutTrailingCommas))
+    if (structural !== withoutTrailingCommas) candidates.push(structural)
+    for (const candidate of candidates) {
+      for (const attempt of [candidate, balanceTrailingBrackets(candidate)]) {
+        if (attempt === null) continue
+        try {
+          return JSON.parse(attempt)
+        } catch {
+          // try the next repair
+        }
+      }
+    }
+    throw new LlmJsonError('Model response was not valid JSON')
+  }
+}
+
+const MAX_TRAILING_BRACKET_REPAIRS = 2
+
+/**
+ * Close up to two omitted final brackets, or drop up to two surplus final
+ * brackets. Only when every string is terminated and the text ends on a
+ * closer, so a reply truncated mid-value is still rejected rather than
+ * silently shortened; a mismatched closer anywhere else is never repaired.
+ */
+function balanceTrailingBrackets(s: string): string | null {
+  const trimmed = s.trimEnd()
+  if (!/[}\]]$/.test(trimmed)) return null
+  const stack: string[] = []
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === '}' || ch === ']') {
+      if (stack.length === 0) {
+        // Surplus closers are repairable only as a short run at the very end.
+        const rest = trimmed.slice(i)
+        if (!/^[\s}\]]*$/.test(rest) || rest.replace(/\s/g, '').length > MAX_TRAILING_BRACKET_REPAIRS) return null
+        return trimmed.slice(0, i).trimEnd()
+      }
+      if (stack.pop() !== ch) return null
     }
   }
+  if (inString || stack.length === 0 || stack.length > MAX_TRAILING_BRACKET_REPAIRS) return null
+  return trimmed + stack.reverse().join('')
+}
+
+/** `{"trend "8.2%"` → `{"trend": "8.2%"`: an identifier key directly followed by a value quote. */
+function insertMissingKeyColons(s: string): string {
+  return s.replace(/([{,]\s*)"([A-Za-z_][A-Za-z0-9_]*)\s+"/g, '$1"$2": "')
+}
+
+/**
+ * Escape a `"` inside a string value when it cannot be the closing quote,
+ * i.e. the next non-space character is not `,`, `:`, `}` or `]`.
+ */
+function escapeInteriorQuotes(s: string): string {
+  let out = ''
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (!inString) {
+      if (ch === '"') inString = true
+      out += ch
+      continue
+    }
+    if (escaped) {
+      escaped = false
+      out += ch
+      continue
+    }
+    if (ch === '\\') {
+      escaped = true
+      out += ch
+      continue
+    }
+    if (ch === '"') {
+      const next = s.slice(i + 1).match(/^\s*(.)/)?.[1]
+      if (next === undefined || /[,:}\]]/.test(next)) {
+        inString = false
+        out += ch
+      } else {
+        out += '\\"'
+      }
+      continue
+    }
+    out += ch
+  }
+  return out
 }
 
 /** Null-returning variant of {@link extractJsonObject} for parse-or-null flows. */
