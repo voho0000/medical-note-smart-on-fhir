@@ -52,6 +52,7 @@ import { EchoReportButton } from './EchoReportButton'
 import { RecordMetricEditor } from './RecordMetricEditor'
 import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { DiagnosisReading } from './DiagnosisReading'
+import { HfpEfCriteriaList } from './HfpEfCriteriaList'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { diagnosisAnswer } from './visit/physician-input'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
@@ -1208,18 +1209,24 @@ function HfpEfScoreLine({
   reading,
   isEnglish,
   onComplete,
+  compact = false,
 }: {
   reading?: HfpefReading
   isEnglish: boolean
   onComplete?: (id?: HfpefScoreId) => void
+  /**
+   * The map's diagnosis card: no box, and the unreported parameters only
+   * where they could still change a score, in the page's muted ink.
+   */
+  compact?: boolean
 }) {
   const scores = [reading?.hfaPeff, reading?.h2fpef]
     .filter((score): score is HfpefScoreReading => Boolean(score))
   const date = scores.map((score) => score.date).filter(Boolean).sort().at(-1)
-  const missing = scores.find((score) => score.missing.length > 0)
+  const missing = scores.find((score) => score.missing.length > 0 && (!compact || score.upper > score.score))
   return (
     <div
-      className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
+      className={compact ? 'pt-0.5' : 'rounded-md border border-border bg-muted/[0.12] px-2.5 py-2'}
       data-testid="cdss-hf-hfpef-scores"
     >
       {scores.length === 0 ? (
@@ -1254,7 +1261,7 @@ function HfpEfScoreLine({
           </p>
           {missing ? (
             <p
-              className="mt-0.5 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
+              className={cn('mt-0.5 text-[11px] leading-4', compact ? 'text-muted-foreground' : 'text-amber-800 dark:text-amber-300')}
               data-testid="cdss-hf-hfpef-score-missing"
             >
               {isEnglish
@@ -1598,11 +1605,16 @@ function QuestionsCard({
               <Fragment key={question.id}>
                 {shell}
                 <li className="space-y-1.5 py-2.5 pl-[2.625rem] pr-3" data-testid="cdss-hf-hfpef-evidence">
-                  <p className="text-[11px] font-semibold text-muted-foreground">
-                    {isEnglish ? 'HFpEF criteria (ESC 2026 §5.2.2)' : 'HFpEF 診斷條件（ESC 2026 §5.2.2）'}
-                  </p>
-                  <DiagnosisReading summary={diagnosisSummary} isEnglish={isEnglish} showScores={false} showBasis={false} />
+                  {diagnosisSummary && diagnosisCard ? (
+                    <HfpEfCriteriaList
+                      summary={diagnosisSummary}
+                      card={diagnosisCard}
+                      isEnglish={isEnglish}
+                      symptomsHint={isEnglish ? 'tick them in questions 2 and 3 below' : '在下方第 2、3 題勾選'}
+                    />
+                  ) : null}
                   <HfpEfScoreLine
+                    compact
                     reading={hfpefReading}
                     isEnglish={isEnglish}
                     {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}

@@ -408,6 +408,23 @@ describe('real pack · the other scenarios', () => {
     const evidence = within(assessment).getByTestId('cdss-hf-hfpef-evidence')
     expect(evidence).toHaveTextContent('HFpEF 診斷條件')
     expect(evidence).toHaveTextContent('LVEF ≥50%')
+    // Three quiet rows that name what supports each criterion (clinician
+    // feedback: 「畫面太花」), with Table 10 itself one press away.
+    expect(within(evidence).getByTestId('cdss-hf-hfpef-criteria-count')).toHaveTextContent('2/3 成立')
+    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-lvef')).toHaveTextContent('62%，2026-09-20')
+    expect(within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('在下方第 2、3 題勾選')
+    const objective = within(evidence).getByTestId('cdss-hf-hfpef-criterion-line-objective-abnormality')
+    expect(objective).toHaveTextContent('E/e′ 15')
+    expect(objective).toHaveTextContent('TR Vmax 2.9 m/s')
+    expect(objective).toHaveTextContent('NT-proBNP 680 pg/mL')
+    const table10 = within(evidence).getByTestId('cdss-hf-hfpef-criterion-objective-abnormality').querySelector('details')!
+    expect(table10.open).toBe(false)
+    fireEvent.click(within(table10).getByText('Table 10'))
+    expect(table10.open).toBe(true)
+    const rows = within(table10).getByTestId('cdss-hf-hfpef-criterion-evidence')
+    expect(rows).toHaveTextContent('門檻 >2.8 m/s')
+    expect(rows).toHaveTextContent('未取得：')
+    expect(evidence.querySelector('.bg-emerald-50')).toBeNull()
     expect(within(assessment).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('還不確定')
     // Under question 1, before the symptoms that supply criterion (i)…
     expect(evidence.compareDocumentPosition(within(assessment).getByTestId('cdss-hf-question-symptoms')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
