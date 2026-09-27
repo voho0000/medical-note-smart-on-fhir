@@ -5,10 +5,11 @@
  * uses, each showing where this patient stands on it.
  *
  * Which pack modules speak for a point is the specification's crosswalk (02
- * §9). Three points have no rule of their own yet and read 「尚未納入」 rather
+ * §9). Two points have no rule of their own yet and read 「尚未納入」 rather
  * than borrowing a neighbour's state: DP-16 LAAO referral (its text sits on
- * the anticoagulation card, G-31), DP-22 event-driven reassessment (G-10) and
- * DP-24 follow-up scheduling (G-11). DP-03, the visit checklist, is data
+ * the anticoagulation card, G-31) and DP-22 event-driven reassessment (G-10);
+ * DP-24 has no scheduling rule (G-11) but carries the anticoagulant
+ * follow-up-lab card (moved from DP-11, see below). DP-03, the visit checklist, is data
  * rather than a decision and is not counted.
  *
  * Placement only: the state of a point is the status its modules already
@@ -81,10 +82,7 @@ export const AF_DECISION_MAP_GROUPS: readonly DecisionMapGroupDef[] = [
       point('DP-08', 'af.oac-agent', 'DOAC 或 VKA（瓣膜）', 'DOAC or VKA (valves)', ['af-anticoagulant-selection-safety']),
       point('DP-09', 'af.doac-dose', 'DOAC 劑量（Table 11）', 'DOAC dose (Table 11)', ['af-doac-renal-dose-check']),
       point('DP-10', 'af.oac-ddi', '抗凝交互作用', 'Anticoagulant interactions', ['af-drug-interactions']),
-      point('DP-11', 'af.vka-quality', 'Warfarin INR／TTR', 'Warfarin INR/TTR', [
-        'af-warfarin-ttr',
-        'af-anticoagulation-monitoring',
-      ]),
+      point('DP-11', 'af.vka-quality', 'Warfarin INR／TTR', 'Warfarin INR/TTR', ['af-warfarin-ttr']),
       point('DP-12', 'af.antithrombotic-combo', '抗凝＋抗血小板', 'Anticoagulant plus antiplatelet', ['antithrombotic-coordination']),
       point('DP-13', 'af.bleeding-risk', '可修正出血因子', 'Modifiable bleeding risk', [
         'af-bleeding-risk-data-gaps',
@@ -124,7 +122,11 @@ export const AF_DECISION_MAP_GROUPS: readonly DecisionMapGroupDef[] = [
     points: [
       point('DP-22', 'af.reassessment', '條件改變重算', 'Reassess on change', []),
       point('DP-23', 'af.hf-signal', 'HF 發生／惡化訊號', 'Heart-failure signal', ['af-hf-prognosis']),
-      point('DP-24', 'af.follow-up-plan', '回診與檢驗排程', 'Follow-up schedule', []),
+      // The anticoagulant follow-up-lab card (INR, Hb, platelets, Cr, weight by
+      // agent) sits here rather than under DP-11 as the 02 §9 crosswalk had it:
+      // under DP-11 its stale-lab prompt showed as 「Warfarin INR／TTR 需補資料」
+      // for a patient on a DOAC.
+      point('DP-24', 'af.follow-up-plan', '回診與檢驗排程', 'Follow-up schedule', ['af-anticoagulation-monitoring']),
     ],
   },
 ]

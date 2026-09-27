@@ -43,7 +43,10 @@ describe('AF decision map (spec DP-00–DP-24)', () => {
   it('does not borrow a state for points without a rule of their own', () => {
     const map = buildDecisionMap(build(known), AF_DECISION_MAP_GROUPS)
     const state = (dp: string) => map.groups.flatMap((g) => g.cells).find((c) => c.point.dp === dp)!.state
-    for (const dp of ['DP-16', 'DP-22', 'DP-24']) expect(state(dp)).toBe('not-included')
+    for (const dp of ['DP-16', 'DP-22']) expect(state(dp)).toBe('not-included')
+    // A DOAC-only patient has no warfarin card: DP-11 does not apply.
+    expect(state('DP-11')).toBe('not-applicable')
+    expect(state('DP-24')).not.toBe('not-included')
     expect(state('DP-19')).toBe('actionable')
     expect(map.total).toBe(24)
   })
