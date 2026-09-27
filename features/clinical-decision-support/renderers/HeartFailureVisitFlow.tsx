@@ -559,6 +559,10 @@ export function HeartFailureMapSurfaces({
     question.id === 'hf-suspicion' ? ['hf-suspicion'] : question.id === 'hfpef-confirmation' ? ['hfpef-diagnosis-confirmation'] : []
   ))
   const asksHfpef = flow.questions.some((question) => question.id === 'hfpef-confirmation')
+  // A diagnosis the record carries (an I50 code), not one written by a
+  // confirmation on this page.
+  const recordHoldsDiagnosis = !phenotypeAnswer?.diagnosisConfirmation && recommendations
+    .some((recommendation) => recommendation.patientEvidence.some((evidence) => evidence.factKeys.includes('heartFailureDiagnosis')))
   const slots: HeartFailureMapSurfaceSlots = {
     ...(canEdit ? {
       editValues: () => editing.setRecordValuesOpen(true),
@@ -586,8 +590,14 @@ export function HeartFailureMapSurfaces({
     diagnosticAssessment: (
       <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
         {/* One confirmation: where question 1 asks the diagnosis, or the HFpEF
-            question stands beside its criteria, that answer is it. */}
-        {!asksHfpef && !flow.questions.some((question) => question.id === 'hf-suspicion') ? <HfDiagnosisConfirmation
+            question stands beside its criteria, that answer is it. And none
+            where the record already holds the diagnosis (clinician feedback
+            2026-09-28: 「補記診斷確認紀錄你覺得有需要留嗎？」): the pack reads
+            the code already, a confirmation beside it writes nothing, and
+            DP-01 names the diagnosis. It stays only where it changes the
+            page — HFrEF opened on an LVEF below 50% with no I50 on record,
+            whose every card carries the 「無診斷紀錄」 caveat until then. */}
+        {!asksHfpef && !flow.questions.some((question) => question.id === 'hf-suspicion') && !recordHoldsDiagnosis ? <HfDiagnosisConfirmation
           answer={phenotypeAnswer}
           onConfirm={flow.readOnly ? undefined : onAnswerPhenotype}
           now={now}

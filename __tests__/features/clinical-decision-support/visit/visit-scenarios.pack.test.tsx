@@ -279,6 +279,19 @@ describe('real pack · P6 hyperkalaemia', () => {
   })
 })
 
+describe('real pack · P4 on 01’s 診斷 view', () => {
+  // Clinician feedback 2026-09-28: 「補記診斷確認紀錄你覺得有需要留嗎？」 — a
+  // diagnosis the record already carries is not confirmed a second time.
+  it('offers no 補記診斷確認紀錄 for a diagnosis the record holds; DP-01 names it', () => {
+    render(<ScenarioMap id="p4-stable-optimised" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
+    expect(within(view).queryByText('補記診斷確認紀錄')).toBeNull()
+    expect(cell('DP-01')).toHaveTextContent('HFrEF')
+  })
+})
+
 describe('real pack · P7 worsening congestion', () => {
   it('reassesses on the NT-proBNP rise and queues the diuretic, the weight asked rather than prefilled', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
