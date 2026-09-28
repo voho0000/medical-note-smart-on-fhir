@@ -17,6 +17,7 @@
   --section-surface: #eff6ff;
   --section-heading: #dbeafe;
   --section-ink: #1e3a5f;
+  --section-accent: #60a5fa;
 }
 
 .section {
@@ -32,6 +33,7 @@
   --section-surface: #eef9f5;
   --section-heading: #d5eee5;
   --section-ink: #164e43;
+  --section-accent: #34d399;
 }
 
 .section[data-section='prognosis'],
@@ -39,6 +41,7 @@
   --section-surface: #f5f2fc;
   --section-heading: #e8dff7;
   --section-ink: #503774;
+  --section-accent: #a78bfa;
 }
 
 .heading {
@@ -106,23 +109,33 @@
   padding: 1rem;
 }
 
+/* On the map the section colour is an accent, not a fill (clinician feedback
+   2026-09-28: the green and purple fills beside the boxes inside 「有點不協調」):
+   a closed tab is neutral with a stripe of its colour, the open tab keeps its
+   tint and wears its colour as a border, and the open panel is neutral, framed
+   in the same colour, so the boxes inside sit on one plain surface. */
 .mapToggle {
   border-color: var(--border);
-  background: var(--section-heading);
+  border-top: 3px solid var(--section-accent);
+  background: var(--card);
   color: var(--section-ink);
 }
 
 .mapToggle:hover {
-  background: color-mix(in srgb, var(--section-heading) 90%, var(--section-ink));
+  background: color-mix(in srgb, var(--card) 70%, var(--section-heading));
 }
 
 .mapToggle[aria-expanded='true'] {
-  border-color: var(--section-ink);
-  box-shadow: inset 0 0 0 1px var(--section-ink);
+  border-color: var(--section-accent);
+  border-top-color: var(--section-accent);
+  background: var(--section-heading);
+  box-shadow: inset 0 0 0 1px var(--section-accent);
 }
 
 .mapPanel {
-  background: var(--section-surface);
+  border-color: color-mix(in srgb, var(--section-accent) 55%, var(--border));
+  border-top: 3px solid var(--section-accent);
+  background: var(--card);
 }
 
 .poster :global([data-cdss-action]) {
@@ -136,6 +149,7 @@
   --section-surface: #152538;
   --section-heading: #203952;
   --section-ink: #c9e2ff;
+  --section-accent: #3b82f6;
 }
 
 :global(.dark) .section[data-section='treatment'],
@@ -143,6 +157,7 @@
   --section-surface: #142b27;
   --section-heading: #204039;
   --section-ink: #c4eee0;
+  --section-accent: #10b981;
 }
 
 :global(.dark) .section[data-section='prognosis'],
@@ -150,6 +165,7 @@
   --section-surface: #282239;
   --section-heading: #3b3153;
   --section-ink: #e7dbff;
+  --section-accent: #8b5cf6;
 }
 
 :global(.dark) .poster :global([data-cdss-action]) {
