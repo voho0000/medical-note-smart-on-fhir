@@ -131,4 +131,43 @@ describe('ProblemListCard', () => {
     expect(within(screen.getByRole('group', { name: '依狀態篩選' })).getByRole('button', { name: '全部' })).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: '依慢性分類篩選' })).getByRole('button', { name: '全部' })).toBeInTheDocument()
   })
+
+  it('keeps each visit diagnosis on one row with 起／最近, count and 曾住院', () => {
+    mockData({
+      encounters: [
+        ...medcloudVisits,
+        { id: 'e6', class: { code: 'IMP' }, period: { start: '2026-05-01' }, reasonCode: [{ text: '肺炎', coding: [{ system: ICD, code: 'J18.9' }] }] },
+      ],
+    })
+    render(<ProblemListCard />)
+    const rows = within(screen.getByTestId('visit-primary-diagnoses')).getAllByRole('listitem')
+
+    const [dm] = rows
+    expect(dm.children).toHaveLength(3)
+    expect(dm).toHaveTextContent(/起 · 最近 /)
+    expect(dm.lastElementChild).toHaveTextContent('共 2 次')
+    const pneumonia = rows.find((r) => r.textContent?.startsWith('J18.9'))!
+    expect(within(pneumonia).getByText('曾住院')).toBeInTheDocument()
+    expect(pneumonia).not.toHaveTextContent('起')
+  })
+
+  it('lays a recorded condition out on one row, date last', () => {
+    mockData({
+      conditions: [{
+        id: 'c1',
+        code: { text: 'Hypertension' },
+        clinicalStatus: 'active',
+        verificationStatus: 'confirmed',
+        onsetDateTime: '2019-03-01',
+      }],
+    })
+    render(<ProblemListCard />)
+
+    const row = screen.getByText('Hypertension').closest('li')!
+    expect(row).toHaveClass('flex', 'flex-wrap')
+    expect(within(row).getByText('進行中')).toBeInTheDocument()
+    expect(within(row).getByText('已確診')).toBeInTheDocument()
+    expect(row.lastElementChild).toHaveClass('ml-auto')
+  })
 })
+

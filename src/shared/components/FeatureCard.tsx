@@ -21,6 +21,10 @@ interface FeatureCardProps {
   emptyMessage?: string
   titleAccessory?: ReactNode
   headerAction?: ReactNode
+  /** One row: title, content and action side by side. For a card whose whole
+   *  content is a line or two of context, so it does not spend a header row
+   *  on it. The content drops below the title when the card is too narrow. */
+  inline?: boolean
   className?: string
   children: ReactNode
 }
@@ -35,6 +39,7 @@ export function FeatureCard({
   emptyMessage = "No data available",
   titleAccessory,
   headerAction,
+  inline = false,
   className,
   children
 }: FeatureCardProps) {
@@ -42,6 +47,59 @@ export function FeatureCard({
   const theme = featureId ? FEATURE_CARD_THEMES[featureId] : null
   const Icon = customIcon || theme?.icon
   const hasTitle = !!title
+
+  const titleContent = (
+    <>
+      <span
+        data-slot="clinical-section-marker"
+        aria-hidden="true"
+        className="h-4 w-0.5 shrink-0 rounded-sm bg-primary/70"
+      />
+      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+      {title}
+      {titleAccessory}
+    </>
+  )
+  const body = (
+    <>
+      {isLoading && (inline ? <div className="h-5 w-2/3 animate-pulse rounded bg-muted" /> : <LoadingSkeleton />)}
+      {!isLoading && error && <ErrorMessage error={error} context={(title ?? featureId ?? '').toLowerCase()} />}
+      {!isLoading && !error && isEmpty && <EmptyState message={emptyMessage} />}
+      {!isLoading && !error && !isEmpty && children}
+    </>
+  )
+
+  if (inline) {
+    // Title | content | action on one row; min-h-8 matches the action button
+    // so the title and the content's first line share a baseline. Under 36rem
+    // of card width the content moves to a second row and the action stays up
+    // beside the title.
+    return (
+      <Card className={cn("@container/inline-card gap-0 rounded-lg border-border bg-card py-1.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none", className)}>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-3 sm:px-5 @max-[36rem]/inline-card:grid-cols-[minmax(0,1fr)_auto]">
+          {hasTitle && (
+            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base">
+              {titleContent}
+            </CardTitle>
+          )}
+          <div
+            data-slot="card-content"
+            className={cn(
+              "col-start-2 row-start-1 min-w-0 py-1.5 text-sm leading-5 @max-[36rem]/inline-card:col-span-2 @max-[36rem]/inline-card:col-start-1 @max-[36rem]/inline-card:pt-0.5",
+              hasTitle ? "@max-[36rem]/inline-card:row-start-2" : "col-span-2 col-start-1",
+            )}
+          >
+            {body}
+          </div>
+          {headerAction && (
+            <div data-slot="card-action" className="col-start-3 row-start-1 flex min-h-8 items-center justify-end gap-1 @max-[36rem]/inline-card:col-start-2">
+              {headerAction}
+            </div>
+          )}
+        </div>
+      </Card>
+    )
+  }
 
   return (
   // Base Card is `flex flex-col gap-6 py-6` (shadcn). That 24px flex-gap +
@@ -54,23 +112,13 @@ export function FeatureCard({
       {hasTitle && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <span
-              data-slot="clinical-section-marker"
-              aria-hidden="true"
-              className="h-4 w-0.5 shrink-0 rounded-sm bg-primary/70"
-            />
-            {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
-            {title}
-            {titleAccessory}
+            {titleContent}
           </CardTitle>
           {headerAction && <CardAction>{headerAction}</CardAction>}
         </CardHeader>
       )}
       <CardContent className="px-3 sm:px-5">
-        {isLoading && <LoadingSkeleton />}
-        {!isLoading && error && <ErrorMessage error={error} context={(title ?? featureId ?? '').toLowerCase()} />}
-        {!isLoading && !error && isEmpty && <EmptyState message={emptyMessage} />}
-        {!isLoading && !error && !isEmpty && children}
+        {body}
       </CardContent>
     </Card>
   )

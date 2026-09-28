@@ -1,7 +1,10 @@
-// 就醫主診斷 rows — claim primary codes, one per ICD-10 code. Plain divided
-// rows rather than the bordered Condition rows above, so the two sections do
-// not read as the same kind of evidence. 全部／慢性／非慢性 filters on CCIR;
-// undetermined codes (Z, V–Y) show only under 全部.
+// 就醫主診斷 rows — claim primary codes, one per ICD-10 code. 全部／慢性／非慢性
+// filters on CCIR; undetermined codes (Z, V–Y) show only under 全部.
+//
+// One line per code so ten or more fit the first screen: code | name | dates |
+// count, with the codes, the 最近 dates and the counts each lined up. Below
+// 600px of list width the dates and count drop to a second line instead of
+// squeezing the name.
 "use client"
 
 import { useId, useState } from 'react'
@@ -29,17 +32,15 @@ export function VisitPrimaryDiagnosisList({ diagnoses }: VisitPrimaryDiagnosisLi
   ]
   const shown = filter === 'all' ? diagnoses : diagnoses.filter((d) => d.chronicity === filter)
 
-  const meta = (d: VisitPrimaryDiagnosis): string => {
+  const count = (d: VisitPrimaryDiagnosis): string =>
+    ((d.visitCount === 1 ? tt.visitCountOne : tt.visitCount) || '{count}')
+      .replace('{count}', String(d.visitCount))
+  const dates = (d: VisitPrimaryDiagnosis): string => {
     const first = formatDate(d.firstDate)
     const last = formatDate(d.lastDate)
-    const count = ((d.visitCount === 1 ? tt.visitCountOne : tt.visitCount) || '{count}')
-      .replace('{count}', String(d.visitCount))
-    const parts =
-      d.visitCount > 1 && first && last && first !== last
-        ? [(tt.visitSince || '{date}').replace('{date}', first), count, (tt.visitLatest || '{date}').replace('{date}', last)]
-        : [last || first, count].filter(Boolean)
-    if (d.inpatient) parts.push(tt.visitInpatient || 'Inpatient')
-    return parts.join(' · ')
+    return d.visitCount > 1 && first && last && first !== last
+      ? `${(tt.visitSince || '{date}').replace('{date}', first)} · ${(tt.visitLatest || '{date}').replace('{date}', last)}`
+      : last || first
   }
 
   return (
@@ -62,14 +63,29 @@ export function VisitPrimaryDiagnosisList({ diagnoses }: VisitPrimaryDiagnosisLi
       {shown.length === 0 ? (
         <p className="py-2 text-xs text-muted-foreground">{tt.filterNone || 'No items for this filter'}</p>
       ) : (
-        <ul className="mt-1 divide-y divide-border">
+        <ul className="@container/dx mt-1 divide-y divide-border text-sm">
           {shown.map((d) => (
-            <li key={d.key} className="py-2">
-              <div className="text-foreground">
-                <span className="tabular-nums">{d.code}</span>
-                {d.description && <span> {d.description}</span>}
-              </div>
-              <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">{meta(d)}</div>
+            <li
+              key={d.key}
+              className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto_4rem] items-baseline gap-x-3 py-1.5 leading-5 @max-[37.5rem]/dx:flex @max-[37.5rem]/dx:flex-wrap @max-[37.5rem]/dx:gap-x-1.5"
+            >
+              <span className="contents text-foreground @max-[37.5rem]/dx:block @max-[37.5rem]/dx:basis-full">
+                <span className="font-medium tabular-nums @max-[37.5rem]/dx:mr-1.5">{d.code}</span>{' '}
+                <span className="min-w-0 break-words">
+                  {d.description}
+                  {d.inpatient && (
+                    <span className="ml-1.5 inline-block rounded border border-border px-1 align-[1px] text-xs leading-4 whitespace-nowrap text-muted-foreground">
+                      {tt.visitInpatient || 'Inpatient'}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="whitespace-nowrap text-right text-xs text-muted-foreground tabular-nums @max-[37.5rem]/dx:text-left">
+                {dates(d)}
+              </span>
+              <span className="whitespace-nowrap text-right text-xs text-muted-foreground tabular-nums @max-[37.5rem]/dx:text-left @max-[37.5rem]/dx:before:content-['·_']">
+                {count(d)}
+              </span>
             </li>
           ))}
         </ul>

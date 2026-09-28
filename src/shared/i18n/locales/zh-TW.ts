@@ -810,6 +810,9 @@ export const zhTW = {
     // relationship codes, marital status, language codes.
     showMore: '顯示更多資料 (身分證、地址、聯絡人…)',
     showLess: '收合詳細資料',
+    // Compact card: the toggle sits beside 補充資料, so it keeps to two words.
+    moreDetails: '更多資料',
+    ageValue: '{age}歲',
     nationalId: '身分證字號',
     medicalRecordNumber: '病歷號',
     passportNumber: '護照號碼',
@@ -858,6 +861,15 @@ export const zhTW = {
     rr: '呼吸',
     temp: '體溫',
     spo2: '血氧SpO₂',
+    // How long ago a reading was taken, after its date: 2018/2/12（8 年前）
+    measuredOn: '{date}（{age}）',
+    ageToday: '今天',
+    ageDays: '{n} 天前',
+    ageDaysOne: '1 天前',
+    ageMonths: '{n} 個月前',
+    ageMonthsOne: '1 個月前',
+    ageYears: '{n} 年前',
+    ageYearsOne: '1 年前',
   },
 
   conditions: {

@@ -1,84 +1,70 @@
 // Vitals Grid Component
 //
-// Flat, low-chrome layout: each vital is a label-then-value pair laid out
-// horizontally with subtle dot separators. No nested borders / cards. The
-// label is muted, the value is foreground-emphasized.
-import type { VitalsView } from '../types'
+// One line per measurement day: the readings taken that day, then the date
+// and how long ago it was. Usually that is a single line — a health check
+// measures everything at once — but a height from 2018 and a blood pressure
+// from last month each keep their own date instead of sharing the newer one.
+import { Fragment } from 'react'
+import type { VitalKey, VitalsView } from '../types'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { Ruler, Weight, Activity, Heart } from 'lucide-react'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
+import { groupReadingsByDay, readingAge, type ReadingAge } from '../utils/reading-dates'
 
 interface VitalsGridProps {
   vitals: VitalsView
-  isLoading: boolean
-  error: Error | null
 }
 
-function Stat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon?: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-}) {
-  const empty = !value || value === '—'
-  return (
-    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-      {Icon && (
-        <Icon className="h-4 w-4 self-center text-muted-foreground/80" />
-      )}
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span
-        className={
-          empty
-            ? 'text-base font-semibold tabular-nums text-muted-foreground/60'
-            : 'text-base font-semibold tabular-nums'
-        }
-      >
-        {value || '—'}
-      </span>
-    </span>
-  )
-}
-
-function Sep() {
-  return <span className="text-muted-foreground/40 select-none">·</span>
-}
-
-export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
+export function VitalsGrid({ vitals }: VitalsGridProps) {
   const { t } = useLanguage()
+  const groups = groupReadingsByDay(vitals.readings)
 
-  if (isLoading) {
-    return <div className="text-sm text-muted-foreground">{t.common.loading}</div>
+  if (groups.length === 0) {
+    return <p className="text-muted-foreground">{t.vitals.noData}</p>
   }
 
-  if (error) {
-    return <div className="text-sm text-destructive">{error.message}</div>
+  const labels: Record<VitalKey, string> = {
+    height: t.vitals.height,
+    weight: t.vitals.weight,
+    bmi: t.vitals.bmi,
+    bp: t.vitals.bp,
+    hr: t.vitals.hr,
+  }
+  const ageText = (age: ReadingAge): string => {
+    if (age.unit === 'today') return t.vitals.ageToday
+    const [many, one] = {
+      days: [t.vitals.ageDays, t.vitals.ageDaysOne],
+      months: [t.vitals.ageMonths, t.vitals.ageMonthsOne],
+      years: [t.vitals.ageYears, t.vitals.ageYearsOne],
+    }[age.unit]
+    return age.n === 1 ? one : many.replace('{n}', String(age.n))
+  }
+  const measuredOn = (day: string): string => {
+    const age = readingAge(day)
+    return age
+      ? t.vitals.measuredOn.replace('{date}', formatDate(day)).replace('{age}', ageText(age))
+      : formatDate(day)
   }
 
-  // Show only the static / slow-changing measurements. RR / Temp / SpO2 are
-  // realtime vitals where a historical value isn't clinically useful in this
-  // summary view — omit them entirely.
   return (
-    <div className="space-y-1 leading-tight">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <Stat icon={Ruler}    label={t.vitals.height} value={vitals.height} />
-        <Sep />
-        <Stat icon={Weight}   label={t.vitals.weight} value={vitals.weight} />
-        <Sep />
-        <Stat icon={Activity} label={t.vitals.bmi}    value={vitals.bmi} />
-      </div>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <Stat icon={Heart}    label={t.vitals.bp} value={vitals.bp} />
-        <Sep />
-        <Stat                 label={t.vitals.hr} value={vitals.hr} />
-      </div>
-      {vitals.time && (
-        <div className="text-xs text-muted-foreground/80 pt-0.5">
-          {vitals.time}
-        </div>
-      )}
+    <div className="space-y-0.5">
+      {groups.map((group) => (
+        <p key={group.day || 'undated'} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {group.readings.map((reading, i) => (
+            <Fragment key={reading.key}>
+              {i > 0 && <span aria-hidden="true" className="text-muted-foreground/50">·</span>}
+              <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+                <span className="text-muted-foreground">{labels[reading.key]}</span>
+                <span className="font-semibold tabular-nums">{reading.value}</span>
+              </span>
+            </Fragment>
+          ))}
+          {group.day && (
+            <time dateTime={group.day} className="ml-1 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+              {measuredOn(group.day)}
+            </time>
+          )}
+        </p>
+      ))}
     </div>
   )
 }
