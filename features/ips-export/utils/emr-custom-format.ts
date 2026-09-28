@@ -41,7 +41,12 @@ export interface EmrFormatInputs {
   exams: Record<EmrExamKind, EmrExamResolution>
   examDecisions?: Partial<Record<EmrExamKind, EmrExamDecision>>
   now?: Date
+  /** Printed after a value whose source gave no unit, inside a series that
+   *  mixes units — in the UI language. */
+  unknownUnitLabel?: string
 }
+
+const DEFAULT_UNKNOWN_UNIT_LABEL = '(unit not given)'
 
 export type EmrFormatNote =
   | { type: 'labMissing'; line: number; lab: string; day: string; lastDate?: string; lastValue?: string }
@@ -257,9 +262,11 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
     }
     // A series that crosses units ("88.4 umol/L" then "1 mg/dL", often two
     // hospitals) is never converted and never printed as if it were one
-    // unit: EVERY value carries its own unit, and the line says so. The one
-    // exception avoids "1 mg/dL mg/dL": when this lab's unit field follows
-    // the series directly, that field prints the newest value's unit.
+    // unit: EVERY value carries its own unit, and the line says so. A value
+    // whose source gave no unit says so too — left bare, "88.4→1 mg/dL" reads
+    // as 88.4 mg/dL. The one exception avoids "1 mg/dL mg/dL": when this
+    // lab's unit field follows the series directly AND the newest value has
+    // a unit, that field prints it.
     const seriesValues = (id: string, point: PinnedLabPoint, count: number, unitFieldFollows: boolean): string => {
       const series = seriesOf(id, point, count)
       const unitOf = (p: PinnedLabPoint) => (p.cell.unit ?? '').trim()
@@ -271,11 +278,13 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
         notes.push({ type: 'labSeriesUnits', line: lineNo, lab: id, units })
       }
       const newestIndex = series.length - 1
+      const unknownUnit = inputs.unknownUnitLabel ?? DEFAULT_UNKNOWN_UNIT_LABEL
       return series
         .map((p, index) => {
           const unit = unitOf(p)
+          if (!unit) return `${p.value} ${unknownUnit}`
           const unitSuppliedAfter = index === newestIndex && unitFieldFollows
-          return unit && !unitSuppliedAfter ? `${p.value} ${unit}` : p.value
+          return unitSuppliedAfter ? p.value : `${p.value} ${unit}`
         })
         .join(SERIES_JOIN)
     }

@@ -291,6 +291,26 @@ describe('renderEmrCustomFormat — 最近 N 次', () => {
     expect(renderEmrCustomFormat(format(unitFirst), inputsMixed).text).toBe('(mg/dL) 88.4 umol/L→1 mg/dL')
   })
 
+  it('never lets a unitless value borrow another value\'s unit (review r3)', () => {
+    const tokens = [series('chem:CREA', 'value', 2), t(' '), lab('chem:CREA', 'unit')]
+    // A history value whose source gave no unit, then 1 mg/dL: "88.4→1 mg/dL"
+    // would read as 88.4 mg/dL.
+    const historyUnitless = inputs([
+      obs('CREA', '2026-05-25', 88.4),
+      obs('CREA', '2026-06-02', 1, { unit: 'mg/dL' }),
+    ])
+    expect(renderEmrCustomFormat(format(tokens), historyUnitless).text).toBe('88.4 (unit not given)→1 mg/dL')
+    // The newest one unitless: the unit field has nothing to supply.
+    const newestUnitless = inputs([
+      obs('CREA', '2026-05-25', 88.4, { unit: 'umol/L' }),
+      obs('CREA', '2026-06-02', 1),
+    ])
+    expect(renderEmrCustomFormat(format(tokens), newestUnitless).text).toBe('88.4 umol/L→1 (unit not given) ')
+    // The label follows the UI language.
+    const zh = { ...historyUnitless, unknownUnitLabel: '（單位未提供）' }
+    expect(renderEmrCustomFormat(format(tokens), zh).text).toBe('88.4 （單位未提供）→1 mg/dL')
+  })
+
   it('leaves a same-unit series unlabelled', () => {
     const same = [
       obs('CREA', '2026-05-25', 1.1, { unit: 'mg/dL' }),
