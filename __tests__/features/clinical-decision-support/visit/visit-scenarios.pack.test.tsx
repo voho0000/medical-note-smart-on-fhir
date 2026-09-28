@@ -344,17 +344,21 @@ describe('real pack · P6 hyperkalaemia', () => {
 describe('real pack · the status line\'s clinical values fold', () => {
   afterEach(() => useVisitValuesStore.setState({ open: false }))
 
-  it('opens folded, keeps the safety value in view, and opens on 臨床數值', () => {
+  // As the three sections' 「臨床數值與來源 · LVEF 62%」, in the map's form:
+  // folded, the line keeps LVEF and what stands out (「LVEF 還是顯示，跟異常值」).
+  it('opens folded on LVEF and the safety value, and opens in full on 臨床數值', () => {
     useVisitValuesStore.setState({ open: false })
     render(<ScenarioMap id="p6-hyperkalaemia" />)
     const toggle = screen.getByTestId('cdss-visit-values-toggle')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByTestId('cdss-visit-key-values')).not.toBeVisible()
-    expect(screen.getByTestId('cdss-visit-key-values-alert')).toHaveTextContent('K')
+    const summary = screen.getByTestId('cdss-visit-key-values-summary')
+    expect([...summary.querySelectorAll('[data-key]')].map((item) => item.getAttribute('data-key'))).toEqual(['LVEF', 'potassium'])
+    expect(summary.querySelector('[data-key="potassium"]')).toHaveAttribute('data-alert', 'true')
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByTestId('cdss-visit-key-values')).toBeVisible()
-    expect(screen.queryByTestId('cdss-visit-key-values-alert')).toBeNull()
+    expect(screen.queryByTestId('cdss-visit-key-values-summary')).toBeNull()
   })
 })
 
