@@ -161,7 +161,7 @@ export function p5Model(): VisitDecisionModel {
         headline: 'bisoprolol 2.5 mg／目標 10 mg', why: 'HR 82、SBP 112',
         chain: [{ id: 'whether', state: 'done', text: 'HFrEF → 需要' }, { id: 'which', state: 'done', text: 'bisoprolol' }, { id: 'dose', state: 'current', text: '2.5 mg／目標 10 mg' }],
         actions: [
-          action('uptitrate-bb', '上調至 5 mg', 'dose-adjusted', { primary: true, responseCheck: { text: '心率、血壓', interval: '1–2 週' } }),
+          action('uptitrate-bb', '上調至 5 mg', 'dose-adjusted', { primary: true, responseCheck: { text: '心率、血壓' } }),
           action('bb-max-tolerated', '已達耐受上限', 'at-max-tolerated', { reopenWhen: 'HR <50、SBP 明顯下降或新的 HF 住院' }),
         ],
         moduleIds: ['heart-failure-beta-blocker'],
@@ -368,7 +368,7 @@ export function p2Model(): VisitDecisionModel {
       point({ dp: 'DP-02', label: '基線評估', state: 'info', block: 'status', group: 'baseline', why: '紀錄缺 ferritin、TSAT、TSH、HbA1c' }),
       point({ dp: 'DP-01', label: '確診與分型', state: 'done', block: 'status', group: 'diagnosis', why: 'HFrEF · LVEF 28%' }),
       point({ dp: 'DP-29', label: '病因', state: 'not-included', block: 'status', group: 'diagnosis' }),
-      start('DP-08', 'β 阻斷劑', '開始 β 阻斷劑（bisoprolol 1.25 mg）？', 'start-bb', '開始 β 阻斷劑', { text: '心率、血壓', interval: '1–2 週' }),
+      start('DP-08', 'β 阻斷劑', '開始 β 阻斷劑（bisoprolol 1.25 mg）？', 'start-bb', '開始 β 阻斷劑', { text: '心率、血壓' }),
       start('DP-07', 'RAS 抑制', '開始 ARNI？', 'start-arni', '開始 ARNI', { text: 'K、Cr、血壓', interval: '1–2 週' }),
       start('DP-09', 'MRA', '開始 MRA？', 'start-mra', '開始 MRA', { text: 'K、Cr、血壓', interval: '1–2 週' }),
       start('DP-10', 'SGLT2i', '開始 SGLT2i？', 'start-sglt2', '開始 SGLT2i'),

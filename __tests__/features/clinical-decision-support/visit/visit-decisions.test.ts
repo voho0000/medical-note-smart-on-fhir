@@ -75,13 +75,16 @@ describe('visit decision placement', () => {
   it('plans the decided checks, timed ones first, and derives no return date', () => {
     const plan = buildVisitPlan(p5Model(), decided({
       'visit:hf:DP-07': { actionId: 'switch-arni', responseCheck: { text: 'K、Cr' } },
-      'visit:hf:DP-08': { actionId: 'uptitrate-bb', decision: 'dose-adjusted', responseCheck: { text: '心率、血壓', interval: '1–2 週' } },
+      // ESC 2026 S6 prints no time for the β-blocker's heart rate and BP (#33 review).
+      'visit:hf:DP-08': { actionId: 'uptitrate-bb', decision: 'dose-adjusted', responseCheck: { text: '心率、血壓' } },
+      'visit:hf:DP-09': { actionId: 'start-mra', responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' } },
       'visit:hf:DP-10': { actionId: 'start-sglt2' },
     }), NOW)
-    expect(plan.items.map((item) => item.point.dp)).toEqual(['DP-08', 'DP-07'])
+    expect(plan.items.map((item) => item.point.dp)).toEqual(['DP-09', 'DP-07', 'DP-08'])
     expect(plan).not.toHaveProperty('withinDays')
     expect(checkIntervalSuffix(plan.items[0].check, false)).toBe('，1–2 週內')
     expect(checkIntervalSuffix(plan.items[1].check, false)).toBe('')
+    expect(checkIntervalSuffix(plan.items[2].check, false)).toBe('')
     // A decision stored before the pack wrote its interval in words reads back its days.
     expect(checkIntervalSuffix({ withinDays: 14 }, false)).toBe('，14 天內')
     expect(buildVisitPlan(p5Model(), {}, NOW)).toEqual({ items: [], notes: [] })
