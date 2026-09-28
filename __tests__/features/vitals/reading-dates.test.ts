@@ -30,6 +30,18 @@ describe('groupReadingsByDay', () => {
     ])
   })
 
+  it('keeps a same-day reading from another source on its own line', () => {
+    const groups = groupReadingsByDay([
+      { key: 'height', value: '155 cm', effective: '2026-01-13', sourceProgram: 'adult-preventive' },
+      { key: 'bp', value: '147/79 mmHg', effective: '2026-01-13T10:00:00+08:00' },
+      { key: 'weight', value: '61 kg', effective: '2026-01-13', sourceProgram: 'adult-preventive' },
+    ])
+    expect(groups.map((g) => [g.day, g.sourceProgram, g.readings.map((r) => r.key)])).toEqual([
+      ['2026-01-13', 'adult-preventive', ['height', 'weight']],
+      ['2026-01-13', undefined, ['bp']],
+    ])
+  })
+
   it('makes one group when a health check measured everything at once', () => {
     const groups = groupReadingsByDay([
       { key: 'height', value: '168 cm', effective: '2018-02-12' },

@@ -4,11 +4,13 @@
 // and how long ago it was. Usually that is a single line — a health check
 // measures everything at once — but a height from 2018 and a blood pressure
 // from last month each keep their own date instead of sharing the newer one.
+// Readings the source tags as 成人預防保健 carry that badge after the date.
 import { Fragment } from 'react'
 import type { VitalKey, VitalsView } from '../types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import { groupReadingsByDay, readingAge, type ReadingAge } from '../utils/reading-dates'
+import { ReportSourceProgramBadge } from '../../reports/components/ReportSourceProgramBadge'
 
 interface VitalsGridProps {
   vitals: VitalsView
@@ -27,6 +29,8 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
     weight: t.vitals.weight,
     bmi: t.vitals.bmi,
     bp: t.vitals.bp,
+    bpSys: t.vitals.systolic,
+    bpDia: t.vitals.diastolic,
     hr: t.vitals.hr,
   }
   const ageText = (age: ReadingAge): string => {
@@ -48,7 +52,7 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
   return (
     <div className="space-y-0.5">
       {groups.map((group) => (
-        <p key={group.day || 'undated'} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <p key={`${group.day}|${group.sourceProgram ?? ''}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           {group.readings.map((reading, i) => (
             <Fragment key={reading.key}>
               {i > 0 && <span aria-hidden="true" className="text-muted-foreground/50">·</span>}
@@ -58,10 +62,18 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
               </span>
             </Fragment>
           ))}
-          {group.day && (
-            <time dateTime={group.day} className="ml-1 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-              {measuredOn(group.day)}
-            </time>
+          {/* Date and 成人預防保健 move to the next line as one piece, so the
+              badge never ends up alone; they split only when the pair is wider
+              than a whole line (enlarged text on a phone) rather than overflow. */}
+          {(group.day || group.sourceProgram) && (
+            <span className="ml-1 inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              {group.day && (
+                <time dateTime={group.day} className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+                  {measuredOn(group.day)}
+                </time>
+              )}
+              <ReportSourceProgramBadge sourceProgram={group.sourceProgram} label={t.vitals.adultPreventive} />
+            </span>
           )}
         </p>
       ))}

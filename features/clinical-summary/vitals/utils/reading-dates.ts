@@ -1,11 +1,15 @@
-// Dating vital readings: group readings taken on the same day, and say how long
-// ago that day was. Both read the calendar date as the source wrote it, so a
-// reading never moves to a neighbouring day with the viewer's timezone.
+// Dating vital readings: group readings taken on the same day from the same
+// source program, and say how long ago that day was. Both read the calendar
+// date as the source wrote it, so a reading never moves to a neighbouring day
+// with the viewer's timezone.
 import type { VitalReading } from '../types'
 
 export interface VitalReadingGroup {
   /** '2018-02-12', or '2018-02' / '2018' for a partial date; '' when undated. */
   day: string
+  /** Shared by every reading in the group, so a 成人預防保健 badge on the line
+   *  never covers a same-day reading from elsewhere. */
+  sourceProgram?: VitalReading['sourceProgram']
   readings: VitalReading[]
 }
 
@@ -19,16 +23,18 @@ export function readingDay(effective?: string): string {
   return effective ? (DAY_PREFIX.exec(effective.trim())?.[0] ?? '') : ''
 }
 
-/** Same-day readings together, newest day first, undated last; readings keep
- *  their display order within a day. */
+/** Same-day, same-source readings together, newest day first, undated last;
+ *  readings keep their display order within a group. */
 export function groupReadingsByDay(readings: VitalReading[]): VitalReadingGroup[] {
-  const groups = new Map<string, VitalReading[]>()
+  const groups = new Map<string, VitalReadingGroup>()
   for (const r of readings) {
     const day = readingDay(r.effective)
-    groups.set(day, [...(groups.get(day) ?? []), r])
+    const key = `${day}|${r.sourceProgram ?? ''}`
+    const group = groups.get(key) ?? { day, sourceProgram: r.sourceProgram, readings: [] }
+    group.readings.push(r)
+    groups.set(key, group)
   }
-  return [...groups.entries()]
-    .map(([day, rs]) => ({ day, readings: rs }))
+  return [...groups.values()]
     .sort((a, b) => (a.day === '' ? 1 : b.day === '' ? -1 : b.day.localeCompare(a.day)))
 }
 

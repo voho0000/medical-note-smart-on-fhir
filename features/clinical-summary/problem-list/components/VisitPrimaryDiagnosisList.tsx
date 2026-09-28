@@ -4,10 +4,11 @@
 // One line per code so ten or more fit the first screen: code | name | dates |
 // count, with the codes, the 最近 dates and the counts each lined up. Below
 // 600px of list width the dates and count drop to a second line instead of
-// squeezing the name.
+// squeezing the name, and may wrap between 起 and 最近 so enlarged text still
+// fits a phone.
 "use client"
 
-import { useId, useState } from 'react'
+import { Fragment, useId, useState } from 'react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate } from '../../diagnosis/utils/fhir-helpers'
 import type { VisitPrimaryDiagnosis } from '../utils/visit-primary-diagnoses'
@@ -35,12 +36,12 @@ export function VisitPrimaryDiagnosisList({ diagnoses }: VisitPrimaryDiagnosisLi
   const count = (d: VisitPrimaryDiagnosis): string =>
     ((d.visitCount === 1 ? tt.visitCountOne : tt.visitCount) || '{count}')
       .replace('{count}', String(d.visitCount))
-  const dates = (d: VisitPrimaryDiagnosis): string => {
+  const dates = (d: VisitPrimaryDiagnosis): string[] => {
     const first = formatDate(d.firstDate)
     const last = formatDate(d.lastDate)
     return d.visitCount > 1 && first && last && first !== last
-      ? `${(tt.visitSince || '{date}').replace('{date}', first)} · ${(tt.visitLatest || '{date}').replace('{date}', last)}`
-      : last || first
+      ? [(tt.visitSince || '{date}').replace('{date}', first), (tt.visitLatest || '{date}').replace('{date}', last)]
+      : [last || first]
   }
 
   return (
@@ -80,8 +81,13 @@ export function VisitPrimaryDiagnosisList({ diagnoses }: VisitPrimaryDiagnosisLi
                   )}
                 </span>
               </span>
-              <span className="whitespace-nowrap text-right text-xs text-muted-foreground tabular-nums @max-[37.5rem]/dx:text-left">
-                {dates(d)}
+              <span className="whitespace-nowrap text-right text-xs text-muted-foreground tabular-nums @max-[37.5rem]/dx:min-w-0 @max-[37.5rem]/dx:whitespace-normal @max-[37.5rem]/dx:text-left">
+                {dates(d).map((part, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && ' · '}
+                    <span className="whitespace-nowrap">{part}</span>
+                  </Fragment>
+                ))}
               </span>
               <span className="whitespace-nowrap text-right text-xs text-muted-foreground tabular-nums @max-[37.5rem]/dx:text-left @max-[37.5rem]/dx:before:content-['·_']">
                 {count(d)}

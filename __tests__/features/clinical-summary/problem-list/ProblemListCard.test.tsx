@@ -146,6 +146,13 @@ describe('ProblemListCard', () => {
     expect(dm.children).toHaveLength(3)
     expect(dm).toHaveTextContent(/起 · 最近 /)
     expect(dm.lastElementChild).toHaveTextContent('共 2 次')
+    // 起 and 最近 are separate unbreakable pieces, so a narrow list with
+    // enlarged text wraps between them instead of pushing 最近 off-screen.
+    const dates = dm.children[1]
+    expect(dates.children).toHaveLength(2)
+    expect(dates.children[0]).toHaveTextContent(/起$/)
+    expect(dates.children[1]).toHaveTextContent(/^最近 /)
+    expect(dates).toHaveClass('@max-[37.5rem]/dx:whitespace-normal')
     const pneumonia = rows.find((r) => r.textContent?.startsWith('J18.9'))!
     expect(within(pneumonia).getByText('曾住院')).toBeInTheDocument()
     expect(pneumonia).not.toHaveTextContent('起')

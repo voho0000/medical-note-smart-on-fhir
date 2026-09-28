@@ -6,12 +6,14 @@ export type { Observation, CodeableConcept, Quantity, Coding, ObservationCompone
 export type ObsComponent = ObservationComponent
 /** The measurements the patient tab shows. RR / Temp / SpO2 are realtime
  *  vitals whose historical value is not useful in this summary. */
-export type VitalKey = 'height' | 'weight' | 'bmi' | 'bp' | 'hr'
+export type VitalKey = 'height' | 'weight' | 'bmi' | 'bp' | 'bpSys' | 'bpDia' | 'hr'
 export interface VitalReading {
   key: VitalKey
   value: string
   /** When this reading was taken, as the source wrote it (FHIR dateTime). */
   effective?: string
+  /** Set only when the source tags the Observation as 成人預防保健. */
+  sourceProgram?: 'adult-preventive'
 }
 export interface VitalsView {
   /** Latest reading per vital, in display order; vitals with no value are left out. */

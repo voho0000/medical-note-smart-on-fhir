@@ -72,27 +72,28 @@ export function FeatureCard({
   if (inline) {
     // Title | content | action on one row; min-h-8 matches the action button
     // so the title and the content's first line share a baseline. Under 36rem
-    // of card width the content moves to a second row and the action stays up
-    // beside the title.
+    // of card width it becomes a wrapping row: title, then the action beside
+    // it or — with enlarged text — on the next line, then the content on a
+    // line of its own. The title never shrinks, so it cannot be squeezed out.
     return (
       <Card className={cn("@container/inline-card gap-0 rounded-lg border-border bg-card py-1.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none", className)}>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-3 sm:px-5 @max-[36rem]/inline-card:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-3 sm:px-5 @max-[36rem]/inline-card:flex @max-[36rem]/inline-card:flex-wrap @max-[36rem]/inline-card:items-center">
           {hasTitle && (
-            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base">
+            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base @max-[36rem]/inline-card:shrink-0 @max-[36rem]/inline-card:whitespace-nowrap">
               {titleContent}
             </CardTitle>
           )}
           <div
             data-slot="card-content"
             className={cn(
-              "col-start-2 row-start-1 min-w-0 py-1.5 text-sm leading-5 @max-[36rem]/inline-card:col-span-2 @max-[36rem]/inline-card:col-start-1 @max-[36rem]/inline-card:pt-0.5",
-              hasTitle ? "@max-[36rem]/inline-card:row-start-2" : "col-span-2 col-start-1",
+              "row-start-1 min-w-0 py-1.5 text-sm leading-5 @max-[36rem]/inline-card:order-last @max-[36rem]/inline-card:basis-full @max-[36rem]/inline-card:pt-0.5",
+              hasTitle ? "col-start-2" : "col-span-2 col-start-1",
             )}
           >
             {body}
           </div>
           {headerAction && (
-            <div data-slot="card-action" className="col-start-3 row-start-1 flex min-h-8 items-center justify-end gap-1 @max-[36rem]/inline-card:col-start-2">
+            <div data-slot="card-action" className="col-start-3 row-start-1 flex min-h-8 items-center justify-end gap-1 @max-[36rem]/inline-card:ml-auto @max-[36rem]/inline-card:flex-wrap">
               {headerAction}
             </div>
           )}
