@@ -346,10 +346,15 @@ export function VisitDecisionScreen({
   // 2026-09-28: 「治療隨時 HFrEF 的四大支柱呢…都要出現」): a pillar with a
   // decision takes it in its own box, the others say where they stand. They
   // are neither rows of 待決定 nor cells of 02 其餘.
-  const pillarDps = useMemo(() => [...(surfaces?.pillars?.dps ?? []), ...(surfaces?.pillars?.whenActive ?? [])], [surfaces?.pillars])
+  const pillarDps = useMemo(() => [...(surfaces?.pillars?.dps ?? []), ...(surfaces?.pillars?.whenActive ?? []), ...(surfaces?.pillars?.followedBy?.dps ?? [])], [surfaces?.pillars])
   const isPillar = useCallback((point: DecisionPointView) => point.source === sourceOfPage && pillarDps.includes(point.dp), [pillarDps, sourceOfPage])
   const rowOfPoint = (point: DecisionPointView) => rows.find((candidate) => candidate.steps[0].point.dp === point.dp && candidate.steps[0].point.source === point.source)
+  const followDps = surfaces?.pillars?.followedBy?.dps ?? []
+  const followPoints = followDps
+    .map((dp) => model.points.find((point) => point.dp === dp && point.source === sourceOfPage))
+    .filter((point): point is DecisionPointView => Boolean(point) && point!.state !== 'not-applicable')
   const pillarPoints = pillarDps
+    .filter((dp) => !followDps.includes(dp))
     .map((dp) => model.points.find((point) => point.dp === dp && point.source === sourceOfPage))
     .filter((point): point is DecisionPointView => Boolean(point))
     // DP-26 and its like only while they ask for something.
@@ -402,21 +407,39 @@ export function VisitDecisionScreen({
     else pairs[pairs.length - 1].push(point)
     return pairs
   }, [])
-  const pillarGroup = pillarPoints.length > 0 && surfaces?.pillars ? (
-    <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-title" data-testid="cdss-visit-pillars">
-      <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.title}</h3>
-      <div className="space-y-2">
-        {pillarPairs.map((pair) => {
-          const opened = pair.find((point) => detailFor(point))
-          return (
-            <div key={pair.map((point) => point.dp).join('-')} className="space-y-2">
-              <div className="grid items-start gap-2 @min-[48rem]:grid-cols-2">{pair.map(pillarBox)}</div>
-              {opened ? detailFor(opened) : null}
-            </div>
-          )
-        })}
-      </div>
-    </section>
+  const followPairs = followPoints.reduce<DecisionPointView[][]>((pairs, point, index) => {
+    if (index % 2 === 0) pairs.push([point])
+    else pairs[pairs.length - 1].push(point)
+    return pairs
+  }, [])
+  const boxPairs = (pairs: DecisionPointView[][]) => (
+    <div className="space-y-2">
+      {pairs.map((pair) => {
+        const opened = pair.find((point) => detailFor(point))
+        return (
+          <div key={pair.map((point) => point.dp).join('-')} className="space-y-2">
+            <div className="grid items-start gap-2 @min-[48rem]:grid-cols-2">{pair.map(pillarBox)}</div>
+            {opened ? detailFor(opened) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+  const pillarGroup = (pillarPoints.length > 0 || followPoints.length > 0) && surfaces?.pillars ? (
+    <div className="space-y-3">
+      {pillarPoints.length > 0 ? (
+        <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-title" data-testid="cdss-visit-pillars">
+          <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.title}</h3>
+          {boxPairs(pillarPairs)}
+        </section>
+      ) : null}
+      {followPoints.length > 0 && surfaces.pillars.followedBy ? (
+        <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-follow-title" data-testid="cdss-visit-pillars-follow">
+          <h3 id="cdss-visit-pillars-follow-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.followedBy.title}</h3>
+          {boxPairs(followPairs)}
+        </section>
+      ) : null}
+    </div>
   ) : null
   const decisionList = (block: VisitBlock, title: string) => (
     <TodayQueue
@@ -559,6 +582,8 @@ export function VisitDecisionScreen({
         now={now}
         onEditValues={surfaces?.editValues}
         onEditValue={surfaces?.editValue}
+        {...(surfaces?.statusLine?.valueAddons ? { valueAddons: surfaces.statusLine.valueAddons } : {})}
+        {...(surfaces?.statusLine?.extras ? { extras: surfaces.statusLine.extras } : {})}
       />
       {surfaces?.statusPanel}
       <DecisionMapColumns

@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, PencilLine } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { QueueRow } from './visit-decisions'
@@ -43,6 +44,8 @@ export function VisitStatusHeader({
   now,
   onEditValues,
   onEditValue,
+  valueAddons,
+  extras,
 }: {
   model: VisitDecisionModel
   rows: readonly QueueRow[]
@@ -52,6 +55,14 @@ export function VisitStatusHeader({
   onEditValues?: () => void
   /** Opens it at one value; offered on values that are stale or missing. */
   onEditValue?: (key: string) => void
+  /** Drawn after a value, by its key (LVEF's 報告). */
+  valueAddons?: Partial<Record<string, ReactNode>>
+  /**
+   * The page's other values, in the line's own grammar and inside it — the
+   * rhythm, Na, Hb, SpO₂, BMI and what the record lacks — so everything the
+   * decisions read sits in one compact place (clinician feedback 2026-09-28).
+   */
+  extras?: ReactNode
 }) {
   const pending = rows.filter((row) => row.current).length
   const allDecided = rows.length > 0 && pending === 0
@@ -137,9 +148,11 @@ export function VisitStatusHeader({
                     {item.stale ? `${displayDate(item.date, now) ? ' · ' : ''}${isEnglish ? 'Past window' : '已超過窗期'}` : ''}
                   </dd>
                 ) : null}
+                {valueAddons?.[item.key] ? <dd className="self-center">{valueAddons[item.key]}</dd> : null}
               </div>
             )
           })}
+          {extras}
         </dl>
       ) : null}
       {model.triggers.length ? (

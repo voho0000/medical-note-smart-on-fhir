@@ -49,6 +49,8 @@ import { HfpefInputsDialog } from './HfpefInputsDialog'
 import { CareTimeline } from './CareTimeline'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { EchoReportButton } from './EchoReportButton'
+import { HeartRhythmInline } from './HeartRhythmPanel'
+import { displayDate } from './visit/VisitStatusHeader'
 import { RecordMetricEditor } from './RecordMetricEditor'
 import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { DiagnosisReading } from './DiagnosisReading'
@@ -474,8 +476,16 @@ export interface HeartFailureMapSurfaceSlots {
   followUpPriorities?: ReactNode
   /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
   diagnosticAssessment: ReactNode
-  /** The clinical values with their sources and echo report, the rhythm, and the course. */
-  recordAndCourse: ReactNode
+  /**
+   * What the map's status line adds beside the pack's values: the rhythm, the
+   * record's other values (Na, Hb, SpO₂, BMI) and what it lacks, given the
+   * keys the line already shows so none is printed twice.
+   */
+  statusExtras: (shownKeys: readonly string[]) => ReactNode
+  /** The echo report, opened from LVEF on the status line. */
+  lvefReport?: ReactNode
+  /** The care timeline, where the record has one. */
+  careTimeline?: ReactNode
 }
 
 /**
@@ -500,7 +510,6 @@ export function HeartFailureMapSurfaces({
   onAnswerPhenotype,
   hfpefReading,
   onSaveHfpefInputs,
-  rhythmPanel,
   followUpHistory,
   assessmentAsksSuspicion = false,
   children,
@@ -523,6 +532,7 @@ export function HeartFailureMapSurfaces({
   onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
   hfpefReading?: HfpefReading
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
+  /** Unused on the map: the rhythm sits on the status line (HeartRhythmInline). */
   rhythmPanel?: ReactNode
   followUpHistory?: HfFollowUpHistory
   children: (slots: HeartFailureMapSurfaceSlots) => ReactNode
@@ -567,6 +577,7 @@ export function HeartFailureMapSurfaces({
     />
   )
   const canEdit = Boolean(onSaveClinicVitals)
+  const lvefMetric = editing.allEditableMetrics.find((metric) => metric.factKey === 'LVEF')
   // The physician-input requests the map's own questions ask, so a decision
   // point whose answer is one of them is not asked again beside them.
   const askedRequests = flow.questions.flatMap((question) => (
@@ -625,12 +636,22 @@ export function HeartFailureMapSurfaces({
         {diagnosticFlow.questions.length ? questionsCard(diagnosticFlow) : null}
       </div>
     ),
-    recordAndCourse: (
-      <div className="space-y-2" data-testid="cdss-visit-hf-record-and-course">
-        <RecordCard rhythmPanel={rhythmPanel} metrics={editing.allEditableMetrics} isEnglish={isEnglish} canEdit={canEdit} onOpenForm={() => editing.setRecordValuesOpen(true)} />
-        {board.timeline ? <CareTimeline timeline={board.timeline} isEnglish={isEnglish} /> : null}
-      </div>
+    statusExtras: (shownKeys) => (
+      <HfStatusExtras
+        metrics={editing.allEditableMetrics}
+        shownKeys={shownKeys}
+        isEnglish={isEnglish}
+        now={now}
+        rhythm={hfpefReading?.inputs.find((input) => input.key === 'rhythm')}
+        {...(canEdit ? { onEditValue: (key: string) => {
+          const metric = editing.allEditableMetrics.find((candidate) => candidate.factKey === key)
+          if (metric) editing.setEditingMetric(metric)
+          else editing.setRecordValuesOpen(true)
+        } } : {})}
+      />
     ),
+    ...(lvefMetric?.value ? { lvefReport: <EchoReportButton variant="link" metric={lvefMetric} isEnglish={isEnglish} /> } : {}),
+    ...(board.timeline ? { careTimeline: <CareTimeline timeline={board.timeline} isEnglish={isEnglish} /> } : {}),
   }
   return (
     <>
@@ -826,6 +847,80 @@ function metricSourceLine(
   }
   if (!day) return undefined
   return day
+}
+
+/**
+ * The map's status line, continued: the rhythm, then the record's values the
+ * pack's line does not carry (Na, Hb, SpO₂, BMI), then one 「未取得」 for what
+ * the record lacks — each a way into the editor where the page can edit. In
+ * the line's own grammar, so the values sit in one compact place instead of a
+ * second grid at 01's foot (clinician feedback 2026-09-28: 「跟最上面整合吧…
+ * 我傾向最上面這種最不佔空間的擺法」).
+ */
+function HfStatusExtras({
+  metrics,
+  shownKeys,
+  isEnglish,
+  now,
+  rhythm,
+  onEditValue,
+}: {
+  metrics: readonly HeartFailureMetric[]
+  shownKeys: readonly string[]
+  isEnglish: boolean
+  now: Date
+  rhythm?: HfpefReading['inputs'][number]
+  onEditValue?: (factKey: string) => void
+}) {
+  const shown = new Set(shownKeys)
+  const weight = Number.parseFloat(metrics.find((item) => item.factKey === 'bodyWeight')?.value ?? '')
+  const height = Number.parseFloat(metrics.find((item) => item.factKey === 'bodyHeight')?.value ?? '')
+  const bmi = Number.isFinite(weight) && weight > 0 && Number.isFinite(height) && height > 0
+    ? (weight / (height / 100) ** 2).toFixed(1)
+    : undefined
+  const rest = metrics
+    .filter((metric) => !shown.has(metric.factKey) && metric.factKey !== 'LVEF')
+    .map((metric) => metric.factKey === 'bodyHeight'
+      ? { metric, label: 'BMI', value: bmi, date: undefined }
+      : { metric, label: metric.label, value: metric.value, date: metric.date })
+  const present = rest.filter((item) => item.value !== undefined)
+  const missing = rest.filter((item) => item.value === undefined)
+  const sep = isEnglish ? ', ' : '、'
+  return (
+    <>
+      <HeartRhythmInline isEnglish={isEnglish} {...(rhythm ? { reading: rhythm } : {})} dateLabel={(date) => displayDate(date, now)} />
+      {present.map(({ metric, label, value, date }) => (
+        <div key={metric.factKey} className="flex items-baseline gap-1.5" data-key={metric.factKey} data-testid={`cdss-status-extra-${metric.factKey}`}>
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
+          {displayDate(date, now) ? <dd className="text-xs tabular-nums text-muted-foreground">{displayDate(date, now)}</dd> : null}
+        </div>
+      ))}
+      {missing.length ? (
+        <div className="flex items-baseline gap-1.5" data-testid="cdss-status-missing">
+          <dt className="text-xs text-muted-foreground">{isEnglish ? 'Not in record' : '未取得'}</dt>
+          <dd className="text-xs text-muted-foreground">
+            {missing.map(({ metric, label }, index) => (
+              <span key={metric.factKey}>
+                {index > 0 ? sep : ''}
+                {onEditValue ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-8 items-center rounded px-0.5 underline decoration-dotted underline-offset-4 hover:bg-muted pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => onEditValue(metric.factKey === 'bodyHeight' ? 'bodyHeight' : metric.factKey)}
+                    aria-label={`${isEnglish ? 'Add' : '補填'} ${label}`}
+                    data-visit-edit-value={metric.factKey}
+                  >
+                    {label}
+                  </button>
+                ) : label}
+              </span>
+            ))}
+          </dd>
+        </div>
+      ) : null}
+    </>
+  )
 }
 
 function RecordCard({

@@ -6,7 +6,8 @@ import { classifyReport, extractEcgFindings, reportNarrative } from '@voho0000/p
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { EchoReportButton } from './EchoReportButton'
 
-export function HeartRhythmPanel({ isEnglish, reading }: { isEnglish: boolean; reading?: HfpefInputReading; onSave?: (patch: HfpefInputsPatch) => void }) {
+/** The rhythm the record's latest ECG report reads, or the clinician's override. */
+function useRhythmReading(isEnglish: boolean, reading?: HfpefInputReading) {
   const { diagnosticReports } = useClinicalData()
   const reports = diagnosticReports.filter(report => {
     const text = reportNarrative(report)
@@ -19,12 +20,37 @@ export function HeartRhythmPanel({ isEnglish, reading }: { isEnglish: boolean; r
   const date = report?.effectiveDateTime ?? report?.effectivePeriod?.start ?? report?.issued
   const override = reading?.origin === 'physician' ? reading : undefined
   const label = override?.value === 'af' ? 'AF' : override?.value === 'sr' ? 'Sinus rhythm' : recordLabel
+  const shownDate = (override?.date ?? date)?.slice(0, 10)
+  const reportMetric = report ? { factKey: 'rhythm', label, date, kind: 'measure' as const, stale: false, entered: false, evaluated: Boolean(rhythm), evidence: { label: 'ECG', value: label, factKeys: [], sources: [{ resourceType: 'DiagnosticReport' as const, resourceId: report.id ?? '' }] } } : undefined
+  return { label, shownDate, report, reportMetric, documented: Boolean(report || override) }
+}
+
+/**
+ * The rhythm as one entry of the map's status line (「心律 Sinus rhythm 09-20
+ * 報告」), in the line's own grammar, so the values the decisions read sit in
+ * one place (clinician feedback 2026-09-28: 「跟最上面整合…最不佔空間的擺法」).
+ */
+export function HeartRhythmInline({ isEnglish, reading, dateLabel }: { isEnglish: boolean; reading?: HfpefInputReading; dateLabel: (date: string | undefined) => string | undefined }) {
+  const { label, shownDate, reportMetric, documented } = useRhythmReading(isEnglish, reading)
+  if (!documented) return null
+  return (
+    <div className="flex items-baseline gap-1.5" data-key="rhythm" data-testid="cdss-status-rhythm">
+      <dt className="text-xs text-muted-foreground">{isEnglish ? 'Rhythm' : '心律'}</dt>
+      <dd className="font-semibold text-foreground">{label}</dd>
+      {dateLabel(shownDate) ? <dd className="text-xs tabular-nums text-muted-foreground">{dateLabel(shownDate)}</dd> : null}
+      {reportMetric ? <dd className="self-center"><EchoReportButton ecg variant="link" isEnglish={isEnglish} metric={reportMetric} /></dd> : null}
+    </div>
+  )
+}
+
+export function HeartRhythmPanel({ isEnglish, reading }: { isEnglish: boolean; reading?: HfpefInputReading; onSave?: (patch: HfpefInputsPatch) => void }) {
+  const { label, shownDate, report, reportMetric } = useRhythmReading(isEnglish, reading)
   return <>
     <div className="text-xs text-muted-foreground">{isEnglish ? 'Rhythm' : '心律'}</div>
     <div className="flex items-center gap-2"><div className="mt-1 text-base font-semibold">{label}</div>
     </div>
-    <div className="flex w-full items-center justify-between gap-2"><span className="whitespace-nowrap text-xs text-muted-foreground">{(override?.date ?? date)?.slice(0, 10).replaceAll('-', '/')}</span>
-    {report ? <EchoReportButton ecg isEnglish={isEnglish} metric={{ factKey: 'rhythm', label, date, kind: 'measure', stale: false, entered: false, evaluated: Boolean(rhythm), evidence: { label: 'ECG', value: label, factKeys: [], sources: [{ resourceType: 'DiagnosticReport', resourceId: report.id ?? '' }] } }} /> : (
+    <div className="flex w-full items-center justify-between gap-2"><span className="whitespace-nowrap text-xs text-muted-foreground">{shownDate?.replaceAll('-', '/')}</span>
+    {report && reportMetric ? <EchoReportButton ecg isEnglish={isEnglish} metric={reportMetric} /> : (
       <span className="text-xs text-muted-foreground">{isEnglish ? 'No ECG report found' : '查無心電圖報告'}</span>
     )}
     </div>

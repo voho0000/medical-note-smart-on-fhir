@@ -19,6 +19,11 @@ export interface VisitMapSurfaces {
   editValue?: (key: string) => void
   /** An inline editor opened from the status line, drawn right under it. */
   statusPanel?: ReactNode
+  /** What the page adds to the status line: after a value (by key), and after the values. */
+  statusLine?: {
+    valueAddons?: Partial<Record<string, ReactNode>>
+    extras?: ReactNode
+  }
   /**
    * DP-03's fuller questions, folded under the every-visit asks. Opens by
    * itself at a first assessment and when an ask comes back worse.
@@ -61,6 +66,12 @@ export interface VisitMapSurfaces {
     dps: readonly string[]
     /** Shown with them only while it needs the clinician (HF: DP-26, a paused pillar). */
     whenActive?: readonly string[]
+    /**
+     * Prescribing points drawn right under them, under their own title (HF:
+     * DP-06 鬱血與利尿劑 — clinician feedback 2026-09-28: 「也關乎開藥，要不要
+     * 位置放在藥物下面」), deciding in their own boxes the same way.
+     */
+    followedBy?: { title: string; dps: readonly string[] }
   }
   /** Inputs a decision point reads, drawn inside that point's opened card. */
   pointExtras?: (point: DecisionPointView) => ReactNode

@@ -331,7 +331,7 @@ describe('HF surfaces on the decision map', () => {
     // primary buttons first.
     const treatment = screen.getByTestId('cdss-visit-column-treatment')
     expect(treatment.firstElementChild).toBe(screen.getByTestId('cdss-visit-lead-treatment'))
-    expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toBe(screen.getByTestId('cdss-visit-pillars'))
+    expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toContainElement(screen.getByTestId('cdss-visit-pillars'))
     const firstPrimary = screen.getByTestId('cdss-visit-pillars').querySelector('[data-visit-primary]')
     expect(firstPrimary).not.toBeNull()
     expect(treatment.querySelector('[data-visit-primary]')).toBe(firstPrimary)
@@ -432,18 +432,21 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
   })
 
-  it('keeps the record values with the rhythm panel and the course at 01’s foot, one press away', () => {
+  // Clinician feedback 2026-09-28: the second grid of values at 01's foot
+  // 「放這裡就很奇怪，跟最上面整合吧…我傾向最上面這種最不佔空間的擺法」.
+  it('carries the record\'s other values on the status line, not in a grid at 01\'s foot', () => {
     render(<HfHarness model={p5Model()} />)
-    // 01 is open at first paint, so the folded foot is in view straight away.
-    expect(screen.getByTestId('cdss-visit-section-toggle-status')).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
-    const foot = screen.getByTestId('cdss-visit-hf-record-foot')
-    expect(foot).not.toHaveAttribute('open')
-    expect(foot.querySelector('summary')).toBeVisible()
-    expect(foot).toHaveTextContent('臨床數值、心律與病程時間軸')
-    expect(within(foot).getByTestId('cdss-hf-record-values')).toBeInTheDocument()
-    expect(within(foot).getByText('心律')).toBeInTheDocument()
-    fireEvent.click(within(foot).getByTestId('cdss-hf-record-values-edit'))
+    expect(screen.queryByTestId('cdss-hf-record-values')).toBeNull()
+    const line = screen.getByTestId('cdss-visit-key-values')
+    // Whatever the pack's line does not carry is on it — a value, or the one 「未取得」.
+    expect(line.querySelector('[data-testid^="cdss-status-extra-"], [data-testid="cdss-status-missing"]')).not.toBeNull()
+    for (const key of ['LVEF', 'NTproBNP', 'potassium', 'eGFR']) {
+      expect(line.querySelectorAll(`[data-key="${key}"]`).length).toBeLessThanOrEqual(1)
+    }
+    // A foot is left only for the course, where the record has one.
+    const foot = screen.queryByTestId('cdss-visit-hf-record-foot')
+    if (foot) expect(foot).toHaveTextContent('病程時間軸')
+    fireEvent.click(screen.getByTestId('cdss-visit-edit-values'))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 

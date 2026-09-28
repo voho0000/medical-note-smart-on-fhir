@@ -81,18 +81,26 @@ export function heartFailureVisitSurfaces(
         : (isEnglish ? 'Four pillars' : '四支柱'),
       dps: ['DP-07', 'DP-08', 'DP-09', 'DP-10'],
       whenActive: ['DP-26'],
+      // Decongestion prescribes too: right under the pillars, not among 02's other cells.
+      followedBy: { title: isEnglish ? 'Diuretics' : '利尿劑', dps: ['DP-06'] },
     },
-    columnFooters: {
-      status: (
-        <>
+    // The values the decisions read live in the status line, with the rhythm
+    // and the reports; 01's foot keeps only the course, where there is one.
+    statusLine: {
+      extras: slots.statusExtras(model.keyValues.map((item) => item.key)),
+      ...(slots.lvefReport ? { valueAddons: { LVEF: slots.lvefReport } } : {}),
+    },
+    ...(slots.careTimeline ? {
+      columnFooters: {
+        status: (
           <details className="rounded-md border border-border bg-background" data-testid="cdss-visit-hf-record-foot">
             <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-              {isEnglish ? 'Clinical values, rhythm and course' : '臨床數值、心律與病程時間軸'}
+              {isEnglish ? 'Course timeline' : '病程時間軸'}
             </summary>
-            <div className="@container border-t border-border p-2">{slots.recordAndCourse}</div>
+            <div className="@container border-t border-border p-2">{slots.careTimeline}</div>
           </details>
-        </>
-      ),
-    },
+        ),
+      },
+    } : {}),
   }
 }

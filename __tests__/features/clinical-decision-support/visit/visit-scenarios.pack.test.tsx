@@ -111,6 +111,14 @@ function pillar(dp: string): HTMLElement {
   return box
 }
 
+/** A box in 02's 利尿劑, right under the pillars (DP-06), and the state it shows. */
+function diureticBox(dp: string): HTMLElement {
+  const box = document.querySelector<HTMLElement>(`[data-testid="cdss-visit-pillars-follow"] [data-visit-queue-dp="${dp}"], [data-testid="cdss-visit-pillars-follow"] [data-visit-point-box="${dp}"]`)
+  if (!box) throw new Error(`no diuretic box ${dp}`)
+  return box
+}
+const boxState = (box: HTMLElement) => box.getAttribute('data-state') ?? box.getAttribute('data-visit-queue-state')
+
 /** A row's 「依據與細節」: a queued point has no cell; its card opens under the row. */
 function rowDetail(dp: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
@@ -466,11 +474,13 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(row('DP-14')).toHaveTextContent('AF')
     // Weight is the clinician's answer now; until it is given DP-06 waits,
     // and 「減少」 on a loop diuretic asks whether it can come down.
-    expect(cell('DP-06')).toHaveAttribute('data-state', 'ask')
+    // DP-06 prescribes, so it sits under the drugs (「利尿劑」), not among 02's cells.
+    expect(queryCell('DP-06')).toBeUndefined()
+    expect(boxState(diureticBox('DP-06'))).toBe('ask')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
-    expect(cell('DP-06')).toHaveAttribute('data-state', 'confirm')
-    expect(cell('DP-06')).toHaveTextContent('體重減少 → 利尿劑是否減量？')
+    expect(boxState(diureticBox('DP-06'))).toBe('confirm')
+    expect(diureticBox('DP-06')).toHaveTextContent('體重減少 → 利尿劑是否減量？')
   })
 })
 
