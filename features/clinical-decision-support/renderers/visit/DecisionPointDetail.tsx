@@ -10,7 +10,7 @@ import type { QueueStep } from './visit-decisions'
 import { blockTitle, stateLabel } from './visit-decisions'
 import type { ChainStep, DecisionPointChecklistItem, DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
-import { ChainStepName, StatePill } from './visit-presentation'
+import { ChainStepName } from './visit-presentation'
 import { statusLabel, statusStyle, StatusIcon } from '../status-presentation'
 
 export const VISIT_DETAIL_ID = 'cdss-visit-dp-detail'
@@ -77,6 +77,7 @@ const STEP_STATE: Record<ChainStep['state'], { zh: string; en: string; className
 export function DecisionPointDetail({
   extras,
   point,
+  shownAbove = { headline: false, why: false },
   steps,
   isEnglish,
   sourceOfPage,
@@ -87,6 +88,12 @@ export function DecisionPointDetail({
   onClose,
 }: {
   point: DecisionPointView
+  /**
+   * What the line the card opens under already prints — the pack's question,
+   * its reason — so the card leaves it out. The DP code, name and state are
+   * always on that line.
+   */
+  shownAbove?: { headline: boolean; why: boolean }
   /**
    * The point's steps as far as today's decisions reach — the point, and its
    * next step once the action revealing it was recorded — from the same store
@@ -109,6 +116,8 @@ export function DecisionPointDetail({
   const listedMissing = new Set((point.checklist ?? []).filter((item) => !item.present).map((item) => item.label))
   const needsData = (point.needsData ?? []).filter((item) => !listedMissing.has(item))
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const showHeadline = Boolean(point.headline) && !shownAbove.headline
+  const showWhy = Boolean(point.why) && !shownAbove.why
   const sectionRef = useRef<HTMLElement>(null)
   // Opening a cell moves focus to what it opened, so a keyboard or screen
   // reader user lands on the card rather than having to find it. The page
@@ -130,32 +139,43 @@ export function DecisionPointDetail({
       ref={sectionRef}
       id={VISIT_DETAIL_ID}
       aria-labelledby={`${VISIT_DETAIL_ID}-title`}
-      className="space-y-3 rounded-lg border border-border bg-card p-3"
+      className={cn('relative space-y-3 rounded-lg border border-border bg-card p-3', !showHeadline && !showWhy && 'pr-11')}
       data-testid="cdss-visit-detail"
       data-dp={point.dp}
       data-state={point.state}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1 space-y-1">
+      {/* The line above already names the point (DP code, name, state): the
+          card opens with only 收起, beside whatever of the question and its
+          reason that line does not print (clinician decision 2026-09-28:
+          「卡片開頭精簡成只剩關閉鈕」). The heading stays for a screen reader
+          and for focus. */}
+      <div className={cn('flex items-start gap-2', !showHeadline && !showWhy && 'contents')}>
+        <div className={cn('min-w-0 flex-1 space-y-0.5', !showHeadline && !showWhy && 'contents')}>
           <h4
             id={`${VISIT_DETAIL_ID}-title`}
             ref={headingRef}
             tabIndex={-1}
-            className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="sr-only"
           >
-            <span className="font-mono">{point.dp}</span>
-            <span>{point.label}</span>
-            <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} />
-            {point.source !== sourceOfPage ? (
-              <Badge variant="outline" className="h-5 px-1.5 text-[11px]">{point.source.toUpperCase()}</Badge>
-            ) : null}
+            {point.dp} {point.label}
+            {' · '}
+            {decision ? (isEnglish ? 'Recorded' : '已記錄') : stateLabel(point.state, isEnglish)}
+            {point.source !== sourceOfPage ? ` · ${point.source.toUpperCase()}` : ''}
+            {' · '}
+            {blockTitle(point.block, isEnglish)}
           </h4>
-          <p className="text-xs text-muted-foreground">{blockTitle(point.block, isEnglish)}</p>
+          {showHeadline ? <p className="text-sm font-medium text-foreground">{point.headline}</p> : null}
+          {showWhy ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
         </div>
         <Button
           type="button"
           variant="ghost"
-          className="h-11 min-w-11 px-3"
+          // With nothing beside it, 收起 sits in the corner and the card's
+          // content starts at its top rather than under an empty line.
+          className={cn(
+            'h-8 min-w-8 shrink-0 px-2 pointer-coarse:h-11 pointer-coarse:min-w-11',
+            showHeadline || showWhy ? '-mr-1 -mt-1' : 'absolute right-1.5 top-1.5 !mt-0',
+          )}
           onClick={onClose}
           aria-label={isEnglish ? `Close ${point.dp}` : `收起 ${point.dp}`}
           data-testid="cdss-visit-detail-close"
@@ -163,13 +183,6 @@ export function DecisionPointDetail({
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
-
-      {point.headline || point.why ? (
-        <div className="space-y-0.5">
-          {point.headline ? <p className="text-sm font-medium text-foreground">{point.headline}</p> : null}
-          {point.why ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
-        </div>
-      ) : null}
 
       {point.chain?.length ? (
         <ol className="grid gap-2 @min-[40rem]:grid-cols-3" aria-label={isEnglish ? 'Decision chain' : '決策鏈'}>

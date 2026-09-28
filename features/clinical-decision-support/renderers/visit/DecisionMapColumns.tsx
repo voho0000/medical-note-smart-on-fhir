@@ -410,7 +410,8 @@ export function DecisionMapColumns({
               : `顯示全部 ${model.coverage.total} 點`}
         </button>
       </div>}
-      <div ref={sentinelRef} aria-hidden="true" className="h-px" />
+      {/* The section buttons sit close under it: the header above already leaves its gap. */}
+      <div ref={sentinelRef} aria-hidden="true" className="h-px !mb-0.5" />
       {/* On a wide screen the three buttons stay at the top of the screen
           while the open section scrolls beneath them, so another section is
           one press away from anywhere in the map. */}
@@ -581,7 +582,15 @@ export function DecisionMapColumns({
             ) : null}
             {/* A point hidden by the fold (opened before 顯示全部 was turned
                 off) still shows its card, at the foot. */}
-            {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !leadDetailDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? detail : null}
+            {open && openPointBlock === block && openPoint && !rowDps?.has(openPoint.dp) && !leadDetailDps?.has(openPoint.dp) && !visible.some((point) => visitDecisionKey(point) === openKey) ? (
+              // No row above it here, so the card's point is named over it.
+              <div className="space-y-1.5">
+                <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                  <span className="font-mono">{openPoint.dp}</span> {openPoint.label}
+                </p>
+                {detail}
+              </div>
+            ) : null}
             {columnFooters?.[block]}
             {block === 'outlook' ? outlookSlot : null}
             {stepsBeforeNext?.[block] ? (

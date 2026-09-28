@@ -147,14 +147,16 @@ export function VisitStatusHeader({
     )
   }
   return (
+    // Tight to the sections below it: no rule, no padding under the values
+    // (clinician feedback 2026-09-28: 「中間空白太多」).
     <section
-      className="space-y-2 border-b border-border pb-3"
+      className="space-y-1.5"
       aria-labelledby="cdss-visit-headline"
       data-testid="cdss-visit-status"
       data-stage={model.stage}
       data-flags={model.flags?.join(' ') || undefined}
     >
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
         <h3 id="cdss-visit-headline" className="min-w-0 flex-1 text-base font-semibold leading-snug text-foreground">
           {headline}
         </h3>
@@ -162,7 +164,7 @@ export function VisitStatusHeader({
         {onEditValues ? (
           <button
             type="button"
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onEditValues}
             data-testid="cdss-visit-edit-values"
           >

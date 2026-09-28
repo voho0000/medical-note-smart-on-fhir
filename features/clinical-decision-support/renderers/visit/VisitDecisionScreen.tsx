@@ -297,29 +297,6 @@ export function VisitDecisionScreen({
     })
     .join(' · ')
 
-  const detailNode = openPoint ? (
-    <DecisionPointDetail
-      key={visitDecisionKey(openPoint)}
-      extras={detailExtras}
-      point={openPoint}
-      steps={pointSteps(openPoint, decisions, now)}
-      isEnglish={isEnglish}
-      sourceOfPage={sourceOfPage}
-      modules={modules}
-      renderDetail={renderDetail}
-      onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
-      onClear={onClearDecision ? (step) => clear(step.key) : undefined}
-      onClose={() => {
-        const { dp, source } = openPoint
-        setOpenKey(null)
-        // Back to the cell (or row) that opened it.
-        requestAnimationFrame(() => {
-          const targets = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp], [data-visit-row-detail]')
-          ;[...targets].find((target) => (target.dataset.dp === dp && target.dataset.source === source) || target.dataset.visitRowDetail === dp)?.focus()
-        })
-      }}
-    />
-  ) : null
   const toggleOpen = (point: DecisionPointView) => {
     const key = visitDecisionKey(point)
     setOpenKey((current) => (current === key ? null : key))
@@ -360,6 +337,39 @@ export function VisitDecisionScreen({
     ...queuedPointDps(allRows),
     ...model.points.filter(askedHere).map((point) => point.dp),
   ]), [allRows, askedHere, model.points])
+  // What the line the card opens under already says, so the card does not say
+  // it again (clinician decision 2026-09-28: 「卡片開頭精簡成只剩關閉鈕」): a
+  // pillar's or a decision's row prints the question and its reason; a cell
+  // prints the question (else the reason), or today's decision once taken.
+  const shownAbove = (point: DecisionPointView): { headline: boolean; why: boolean } => {
+    if (isPillar(point) || queuedPointDps(allRows).has(point.dp)) return { headline: true, why: true }
+    if (decisionOf(point)) return { headline: false, why: false }
+    return point.headline ? { headline: true, why: false } : { headline: false, why: true }
+  }
+  const detailNode = openPoint ? (
+    <DecisionPointDetail
+      key={visitDecisionKey(openPoint)}
+      extras={detailExtras}
+      point={openPoint}
+      shownAbove={shownAbove(openPoint)}
+      steps={pointSteps(openPoint, decisions, now)}
+      isEnglish={isEnglish}
+      sourceOfPage={sourceOfPage}
+      modules={modules}
+      renderDetail={renderDetail}
+      onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
+      onClear={onClearDecision ? (step) => clear(step.key) : undefined}
+      onClose={() => {
+        const { dp, source } = openPoint
+        setOpenKey(null)
+        // Back to the cell (or row) that opened it.
+        requestAnimationFrame(() => {
+          const targets = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp], [data-visit-row-detail]')
+          ;[...targets].find((target) => (target.dataset.dp === dp && target.dataset.source === source) || target.dataset.visitRowDetail === dp)?.focus()
+        })
+      }}
+    />
+  ) : null
   const detailFor = (point: DecisionPointView) => (openPoint && openPoint.dp === point.dp && openPoint.source === point.source ? detailNode : undefined)
   const decideRow = onRecordDecision ? (step: QueueStep, action: VisitAction) => record(step.key, step.point, action, 'queue') : undefined
   const clearRow = onClearDecision ? (step: QueueStep) => clear(step.key) : undefined
@@ -546,7 +556,7 @@ export function VisitDecisionScreen({
 
   return (
     <div
-      className="space-y-4"
+      className="space-y-3"
       data-testid="cdss-visit-screen"
       data-pack={model.packId}
       data-stage={model.stage}
@@ -563,7 +573,7 @@ export function VisitDecisionScreen({
         actions={(
           <button
             type="button"
-            className="inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-expanded={showAllPoints}
             onClick={() => setShowAllPoints((value) => !value)}
             data-testid="cdss-visit-map-show-all"

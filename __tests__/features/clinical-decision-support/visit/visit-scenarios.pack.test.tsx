@@ -237,9 +237,13 @@ describe('real pack · P4 stable and optimised', () => {
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
     fireEvent.click(rowDetail('DP-09'))
     const detail = screen.getByTestId('cdss-visit-detail')
-    // Right under the pair of pillar boxes it was opened from.
+    // Right under the pillar row it was opened from, which carries the reason;
+    // the card does not print it again (「卡片開頭精簡成只剩關閉鈕」).
     expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(detail)
-    expect(detail).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
+    const pillarRow = document.querySelector<HTMLElement>('[data-visit-point-box="DP-09"]')!
+    expect(pillarRow).toHaveTextContent('Table 11 目標 50 mg o.d.；RALES 試驗劑量 25 mg')
+    expect(detail).not.toHaveTextContent('RALES 試驗劑量 25 mg')
+    expect(within(detail).getByRole('heading', { level: 4 })).toHaveTextContent('DP-09 MRA')
     expect(within(detail).queryByRole('button', { name: '上調至 50 mg' })).toBeNull()
     const evidence = screen.getByTestId('cdss-visit-detail-module-heart-failure-mra')
     expect(evidence).not.toHaveAttribute('open')
