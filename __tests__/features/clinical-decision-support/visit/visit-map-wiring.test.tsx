@@ -139,8 +139,9 @@ describe('decision map wiring', () => {
 
     expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cdss-layout-switch-map')).toHaveTextContent('決策地圖')
-    for (const kept of ['sections', 'flow', 'board']) {
-      expect(screen.getByTestId(`cdss-layout-switch-${kept}`)).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
+    for (const retired of ['flow', 'board']) {
+      expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
     }
     // Nothing in the header is hidden by the map: the module counts stay.
     // The header's 優先／需資料 counts are left out on the map: 今天要決定 says it, item by item.

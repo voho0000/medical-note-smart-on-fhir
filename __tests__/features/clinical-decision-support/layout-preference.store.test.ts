@@ -31,12 +31,20 @@ describe('guidance layout preference', () => {
     expect(defaultLayoutFor('some-future-pack')).toBe('sections')
   })
 
-  it('offers the decision map beside the layouts each disease already had', () => {
-    // `c` and `classic` stay in the type and in the view for what still reads
-    // them; neither is a face a pilot user can be sent back to.
-    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections', 'flow', 'board'])
+  it('offers only the decision map and 三區塊 (lipid: 三區塊 and 健保表一)', () => {
+    // `flow`, `board`, `c` and `classic` stay in the type and in the view for
+    // what still reads them; none is a face a pilot user can be sent back to.
+    expect(CDSS_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
     expect(AF_SWITCHABLE_LAYOUTS).toEqual(['map', 'sections'])
-    expect(LIPID_SWITCHABLE_LAYOUTS).toEqual(['sections', 'nhi', 'board'])
+    expect(LIPID_SWITCHABLE_LAYOUTS).toEqual(['sections', 'nhi'])
+  })
+
+  it('reads a browser that stored 新版流程 or 原版看板 as no choice', () => {
+    for (const retired of ['flow', 'board']) {
+      localStorage.setItem(CDSS_LAYOUT_STORAGE_KEY, JSON.stringify({ state: { layout: retired }, version: 0 }))
+      useCdssLayoutStore.persist.rehydrate()
+      expect(useCdssLayoutStore.getState().layout).toBeNull()
+    }
   })
 
   it('keeps a browser that stored a layout on it, and one that stored nothing on the default', () => {

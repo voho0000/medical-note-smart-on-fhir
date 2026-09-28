@@ -363,13 +363,16 @@ export function DecisionMapColumns({
 
   return (
     <section aria-labelledby="cdss-visit-map-title" className="space-y-2" data-testid="cdss-visit-map">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
+      {/* The layout switch already names the map; its title is for screen
+          readers, and 顯示全部 keeps a slim row of its own, so the sections
+          start near the top (clinician feedback 2026-09-28). */}
+      <div className="-mb-1 flex items-center justify-end">
+        <h3 id="cdss-visit-map-title" className="sr-only">
           {isEnglish ? 'Decision map' : '決策地圖'}
         </h3>
         <button
           type="button"
-          className="ml-auto inline-flex h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary hover:underline pointer-coarse:h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-expanded={showAll}
           onClick={() => setShowAll((value) => !value)}
           data-testid="cdss-visit-map-show-all"

@@ -18,22 +18,27 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /**
- * `map` is the visit decision map, `sections` the three sections, `flow` the
- * visit flow, `board` the status board and `nhi` the lipid Table 1 review.
- * `c` was direction C — the decision summary — and `classic` is the
- * module-first table the other packs use; both stay in the type and in the
- * view so nothing that reads them breaks, and neither is offered in the
- * switch. A browser that stored `c` reads as `sections`.
+ * `map` is the visit decision map, `sections` the three sections and `nhi`
+ * the lipid Table 1 review — the layouts the switch offers. `flow` (新版流程)
+ * and `board` (原版看板) are retired (clinician decision 2026-09-28: 「要淘汰
+ * 了，暫時會只有三區塊跟決策地圖」), as `c` (direction C) was before them;
+ * `classic` is the module-first table the other packs use. They stay in the
+ * type and in the view so nothing that reads them breaks, and none is
+ * offered in the switch. A browser that stored `c` reads as `sections`, one
+ * that stored `flow` or `board` as no choice — the pack's default.
  */
 export type CdssLayout = 'map' | 'sections' | 'flow' | 'nhi' | 'c' | 'board' | 'classic'
 
 export const CDSS_LAYOUT_STORAGE_KEY = 'cdss-layout-preference'
 
 /** The layouts the heart-failure switch offers. */
-export const CDSS_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections', 'flow', 'board']
+export const CDSS_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections']
 
 /** Dyslipidemia has a dedicated Table 1 review instead of a second generic flow. */
-export const LIPID_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'nhi', 'board']
+export const LIPID_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'nhi']
+
+/** Layouts no longer offered: a stored one opens the pack's default instead. */
+export const RETIRED_LAYOUTS: readonly CdssLayout[] = ['flow', 'board']
 
 /** Atrial fibrillation: the decision map, or its own three-section visit flow. */
 export const AF_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections']
@@ -70,6 +75,7 @@ export const useCdssLayoutStore = create<LayoutPreferenceState>()(
       // anyone who picked a layout on purpose.
       merge: (persisted, current) => {
         const stored = (persisted as Partial<LayoutPreferenceState> | undefined)?.layout
+        if (stored && RETIRED_LAYOUTS.includes(stored)) return { ...current, layout: null }
         return { ...current, layout: stored === 'c' ? 'sections' : stored ?? null }
       },
     },

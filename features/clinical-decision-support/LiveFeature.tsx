@@ -56,6 +56,7 @@ import {
   AF_SWITCHABLE_LAYOUTS,
   CDSS_SWITCHABLE_LAYOUTS,
   LIPID_SWITCHABLE_LAYOUTS,
+  RETIRED_LAYOUTS,
   defaultLayoutFor,
   type CdssLayout,
   useCdssLayoutStore,
@@ -225,7 +226,7 @@ function LayoutSwitcher({
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const labels: Record<'map' | 'sections' | 'flow' | 'nhi' | 'board', { label: string; title: string }> = {
+  const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
     map: {
       label: isEnglish ? 'Decision map' : '決策地圖',
       title: isEnglish
@@ -236,23 +237,11 @@ function LayoutSwitcher({
       label: isEnglish ? 'Three sections' : '三區塊',
       title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
     },
-    flow: {
-      label: isEnglish ? 'Visit flow' : '新版流程',
-      title: isEnglish
-        ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
-        : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
-    },
     nhi: {
       label: isEnglish ? 'NHI Table 1' : '健保表一',
       title: isEnglish
         ? 'Review the NHI lipid tier, supporting criteria and treatment response'
         : '核對健保血脂分級、支持條件與治療反應',
-    },
-    board: {
-      label: isEnglish ? 'Original board' : '原版看板',
-      title: isEnglish
-        ? 'The status board: safety inputs, the four pillars, then the module rows'
-        : '原本的看板：安全數據、四支柱，再列模組',
     },
   }
   const layoutIds = (packId === LIPID_PACK_ID
@@ -525,7 +514,8 @@ export default function LiveClinicalDecisionSupportFeature({
 
   // The layout this browser chose, or — when it never chose — the pack's own
   // default: the decision map for heart failure and atrial fibrillation.
-  const preferredLayout: CdssLayout = layout ?? defaultLayoutFor(selectedPack.id)
+  // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
+  const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
   const wantsMap = preferredLayout === 'map'
     && (selectedPack.id === HEART_FAILURE_PACK_ID || selectedPack.id === AF_PACK_ID)
 
@@ -720,12 +710,13 @@ export default function LiveClinicalDecisionSupportFeature({
           ? `Clinical rules ${result.packVersion}`
           : `臨床規則版本 ${result.packVersion}`}
       >
-        <div className="flex min-w-0 flex-1 items-center">
-          <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
-            {result.title}
-          </h2>
-        </div>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-3">
+        {/* One line: the title, the disease and the layout side by side, so
+            the page's own content starts near the top (clinician feedback
+            2026-09-28: 「集中一行，不然資訊都一半的頁高才出現」). */}
+        <h2 className="shrink-0 truncate text-base font-semibold tracking-tight text-foreground">
+          {result.title}
+        </h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}

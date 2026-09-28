@@ -10,6 +10,7 @@ import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: () => ({
@@ -212,24 +213,27 @@ describe('Live personalized-guidance pathway list', () => {
     })
   })
 
-  it('defaults to the decision map and remembers the selected layout', () => {
+  // Clinician decision 2026-09-28: 新版流程 and 原版看板 are retired — 「暫時會只有
+  // 三區塊跟決策地圖」.
+  it('defaults to the decision map, offers only it and 三區塊, and remembers the choice', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    // Heart failure opens on 決策地圖 for a browser that never chose a layout;
-    // 三區塊, 新版流程 and 原版看板 stay one press away.
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
     expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
-    expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
-    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
-      .toMatchObject({ state: { layout: 'board' } })
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-flow'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
+    for (const retired of ['flow', 'board', 'classic', 'c']) {
+      expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
+    }
     fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toHaveAttribute('aria-pressed', 'true')
+    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
+      .toMatchObject({ state: { layout: 'sections' } })
+  })
+
+  it('opens a browser that stored a retired layout on the pack default', () => {
+    useCdssLayoutStore.setState({ layout: 'board' })
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
   })
 
   it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {
@@ -239,7 +243,7 @@ describe('Live personalized-guidance pathway list', () => {
 
     expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
     expect(screen.getByTestId('cdss-layout-switch-nhi')).toHaveTextContent('健保表一')
-    expect(screen.getByTestId('cdss-layout-switch-board')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-board')).not.toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
@@ -247,7 +251,7 @@ describe('Live personalized-guidance pathway list', () => {
 
     fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.getByTestId('cdss-layout-switch-flow')).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-nhi')).not.toBeInTheDocument()
   })
 
