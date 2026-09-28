@@ -13,9 +13,9 @@ import {
   type LabCategoryDecision,
 } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
-import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
 import { findRowIdentifier, isShortResultText } from './identifier-scan'
+import { isLaboratoryObservation } from './laboratory-scope'
 import {
   LAB_DATA_REPORT_MAX_RANGE_TEXT,
   LAB_DATA_REPORT_MAX_ROWS,
@@ -135,9 +135,10 @@ export function collectLabDataReportCandidates(
     if (observation?.resourceType && observation.resourceType !== 'Observation') continue
     const { category, decidedBy } = categorizeObservationWithReason(observation)
     if (!category) continue
-    // Policy boundary: laboratory results only. A vital sign or survey that a
-    // LOINC match pulled into a lab panel is counted, never sent.
-    if (inferGroupFromObservation(observation) !== 'lab') {
+    // Policy boundary: laboratory results only, by FHIR category. A vital
+    // sign, survey or uncategorised row that a panel rule pulled into the
+    // table is counted, never sent.
+    if (!isLaboratoryObservation(observation)) {
       excludedNonLabRows += 1
       continue
     }
@@ -320,7 +321,8 @@ function readCodings(codings: unknown, budget: StringBudget): LabDataReportCodin
 
 function readCategories(categories: unknown, budget: StringBudget): string[] {
   const list = Array.isArray(categories) ? categories : categories ? [categories] : []
-  const codes = new Set<string>()
+  // "laboratory" first: the server checks for it, so the cap never cuts it.
+  const codes = new Set<string>(['laboratory'])
   for (const concept of list) {
     for (const coding of Array.isArray((concept as any)?.coding) ? (concept as any).coding : []) {
       const code = safeText(coding?.code, budget, 64)
@@ -397,11 +399,29 @@ function readSourceTags(observation: any, budget: StringBudget): string[] {
   return [...result].slice(0, 16)
 }
 
+// The bridges print the 10-digit 醫事機構代碼 as its own segment of the
+// performer display: "院所;科別;0601160016", "院所 / 科別 / 0936050029".
+// Only this field is known to carry one, so only here is it taken out — the
+// rest of the string then gets the same scan as every other (a chart or
+// mobile number anywhere else still drops it).
+const PERFORMER_SEGMENT = /\s*[;；/／|｜]\s*/
+
+export function stripInstitutionCodes(display: string): string {
+  const normalized = display.normalize('NFKC')
+  const separator = normalized.match(PERFORMER_SEGMENT)?.[0] ?? ';'
+  return normalized
+    .split(PERFORMER_SEGMENT)
+    .filter((segment) => !/^\d{10}$/.test(segment.trim()))
+    .join(separator)
+    .trim()
+}
+
 function readPerformers(observation: any, budget: StringBudget): string[] {
   const performers: any[] = Array.isArray(observation?.performer) ? observation.performer : []
   const names = new Set<string>()
   for (const performer of performers) {
-    const name = safeText(performer?.display, budget, 120)
+    const display = typeof performer?.display === 'string' ? stripInstitutionCodes(performer.display) : undefined
+    const name = safeText(display, budget, 120)
     if (name) names.add(name)
   }
   return [...names].slice(0, 3)

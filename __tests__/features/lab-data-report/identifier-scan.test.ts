@@ -18,8 +18,10 @@ describe('lab-data report identifier scan', () => {
     expect(isShortResultText(text)).toBe(expected)
   })
 
-  it('does not apply the 7-digit rule to source rows (institution codes)', () => {
-    expect(findRowIdentifier('0601160016')).toBeNull()
-    expect(findDescriptionIdentifiers('0601160016')).toContain('long-number')
+  it('gives source rows and the reporter\'s note the same rules', () => {
+    for (const text of ['0601160016', '病歷號 12345678', '0912345678', '生日 65/3/12']) {
+      expect(findRowIdentifier(text)).not.toBeNull()
+      expect(findDescriptionIdentifiers(text)).toContain(findRowIdentifier(text))
+    }
   })
 })

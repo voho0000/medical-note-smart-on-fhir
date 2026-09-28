@@ -101,7 +101,8 @@ describe('lab-data report builder', () => {
     ]))
     expect(row.timeOfDay).toBe('09:30:00')
     expect(row.day).toBe(0)
-    expect(row.performer).toEqual(['測試醫院;0936050029'])
+    // The institution code is taken out; the hospital name travels.
+    expect(row.performer).toEqual(['測試醫院'])
     expect(row.value).toEqual({ kind: 'quantity', value: 13.2, magnitude: 1, decimals: 1 })
   })
 
@@ -182,6 +183,33 @@ describe('lab-data report builder', () => {
     expect(payload.droppedStrings).toBe(2)
   })
 
+  it('drops chart numbers, bare mobiles and old ROC birth dates in any source string', () => {
+    const texts = ['病歷號 12345678', '0912345678', '生日 65/3/12', '出生日期 79年3月12日']
+    const rows = texts.map((text) => {
+      const row = hbUnderUrine('2026-03-01', 13.2)
+      row.referenceRange = [{ text }]
+      return row
+    })
+    const { payload } = build(rows)
+    expect(payload.rows.map((row) => row.referenceRange)).toEqual([[], [], [], []])
+    expect(payload.droppedStrings).toBe(4)
+  })
+
+  it('takes only the 10-digit institution code out of performer', () => {
+    const slashed = hbUnderUrine('2026-03-01', 13.2)
+    slashed.performer = [{ display: '臺北榮民總醫院 / 檢驗科 / 0601160016' }]
+    const chart = hbUnderUrine('2026-03-02', 13.1)
+    chart.performer = [{ display: '測試醫院;病歷號12345678' }]
+    const mobile = hbUnderUrine('2026-03-03', 13.0)
+    mobile.performer = [{ display: '測試醫院 0912345678' }]
+    const { payload } = build([slashed, chart, mobile])
+    const byDay = Object.fromEntries(payload.rows.map((row) => [row.day, row.performer]))
+    expect(byDay[0]).toEqual(['臺北榮民總醫院 / 檢驗科'])
+    expect(byDay[1]).toEqual([])
+    expect(byDay[2]).toEqual([])
+    expect(payload.droppedStrings).toBe(2)
+  })
+
   it('counts, but never sends, non-laboratory observations shown in a lab panel', () => {
     const vital = {
       resourceType: 'Observation',
@@ -200,6 +228,28 @@ describe('lab-data report builder', () => {
     const { payload } = build([vital, glucose])
     expect(payload.rows).toHaveLength(1)
     expect(payload.excludedNonLabRows).toBe(1)
+  })
+
+  it('decides laboratory from the FHIR category, never from the name', () => {
+    const category = (code: string) => ({ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code }] })
+    const glucose = (overrides: Record<string, any>) => lab({
+      code: { text: 'Blood pressure questionnaire', coding: [{ system: LOINC, code: '2345-7', display: 'Glucose' }] },
+      effectiveDateTime: '2026-03-01',
+      valueQuantity: { value: 98, unit: 'mg/dL' },
+      ...overrides,
+    })
+    const survey = glucose({ category: [category('survey')] })
+    const labAndSurvey = glucose({ category: [category('laboratory'), category('survey')] })
+    const uncategorised = glucose({ category: undefined })
+    const systemless = glucose({ category: [{ coding: [{ code: 'laboratory' }] }] })
+    const localOnly = glucose({ category: [{ coding: [{ system: 'urn:local', code: 'LAB' }] }] })
+    const legacySystem = glucose({ category: [{ coding: [{ system: 'http://hl7.org/fhir/observation-category', code: 'laboratory' }] }] })
+    const withLocal = glucose({ category: [category('laboratory'), { coding: [{ system: 'urn:local', code: 'chemistry' }] }] })
+    const { payload } = build([survey, labAndSurvey, uncategorised, systemless, localOnly, legacySystem, withLocal])
+    expect(payload.excludedNonLabRows).toBe(5)
+    expect(payload.rows).toHaveLength(2)
+    expect(payload.rows.every((row) => row.category[0] === 'laboratory')).toBe(true)
+    expect(payload.rows.map((row) => row.category).sort()).toEqual([['laboratory'], ['laboratory', 'chemistry']])
   })
 
   it('newest first, day 0 = earliest kept row, capped at the row limit', () => {
