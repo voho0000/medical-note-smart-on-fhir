@@ -557,11 +557,9 @@ describe('visit decision screen · reachability and copy', () => {
   })
 })
 
-// Clinician request 2026-09-28: 「DP 改成一行式而不是一格然後一行有兩格」 — a
-// trial layout, switched in this browser only, to compare on screen.
-describe('visit decision screen · 一行式 trial layout', () => {
-  it('draws the same rows and cells one line each in one frame, and decides the same way', () => {
-    localStorage.setItem('visit-point-layout', 'rows')
+// Clinician decision 2026-09-28: 「用一行式，設成預設」.
+describe('visit decision screen · one line per point', () => {
+  it('draws the rows and cells one line each in one frame, and decides in place', () => {
     render(<Harness model={p5Model()} />)
     expect(queueRows('treatment').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
     expect(screen.getByTestId('cdss-visit-queue-treatment').querySelector('ol')).toHaveClass('list')

@@ -237,7 +237,8 @@ export function DecisionPointDetail({
             </ul>
             <ol className="space-y-1.5" data-testid="cdss-visit-detail-guideline-references">
               {point.guideline.references.map((reference) => (
-                <li key={`${reference.section}-${reference.page}-${reference.quote.slice(0, 24)}`} className="text-[11px] leading-4 text-muted-foreground">
+                // The whole quote: two lines of one section and page can open alike (DP-12's 「Intravenous iron supplementation…」).
+                <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className="text-[11px] leading-4 text-muted-foreground">
                   <span className="font-medium text-foreground">
                     {reference.source} §{reference.section} · p.{reference.page}
                     {reference.recommendation ? ` · Class ${reference.recommendation.class}, ${reference.recommendation.level}` : ''}

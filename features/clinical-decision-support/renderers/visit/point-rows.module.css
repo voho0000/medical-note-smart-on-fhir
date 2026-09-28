@@ -1,6 +1,8 @@
-/* 一行式: every point on one line, in four columns that line up down the
-   whole section — name, state, what it says (and its buttons), 依據. A group's
-   points share one frame, split by hairlines, rather than a box each. */
+/* 一行式 (clinician decision 2026-09-28: 「用一行式，設成預設」): every point
+   on one line, in four columns that line up down the whole section — name,
+   state, what it says (and its buttons), 依據. A group's points share one
+   frame, split by hairlines, rather than a box each; narrow, a row folds to
+   two lines. */
 
 .list {
   overflow: hidden;
@@ -91,6 +93,18 @@ button.row:focus-visible {
 
 .absent {
   background: transparent;
+}
+
+/* A line under a row that belongs to its content (a checklist), set in the
+   content's column. */
+.aside {
+  padding: 0 0.625rem 0.5rem;
+}
+
+@container (min-width: 40rem) {
+  .aside {
+    padding-left: calc(0.625rem + 12rem + 5.25rem + 1.25rem);
+  }
 }
 
 /* The opened card, under its row and inside the same frame. */

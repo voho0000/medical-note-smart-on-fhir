@@ -5,7 +5,6 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
 import { StatePill } from './visit-presentation'
-import { usePointLayout } from './point-layout'
 import rowStyles from './point-rows.module.css'
 import type { DecisionPointState, VisitAnswers, VisitAsk, VisitStage } from '../../types'
 
@@ -45,9 +44,9 @@ export function isFirstAssessment(stage: VisitStage): boolean {
  * on screen has a reason on screen.
  *
  * Drawn as the map draws a point (clinician feedback 2026-09-28: the plain
- * folded row was 「好不顯眼，UI 上也跟決策地圖不搭」): its DP code and name, the
- * state in the map's pill with what is still open, and 展開／收合 where a cell
- * has 依據與細節.
+ * folded row was 「好不顯眼，UI 上也跟決策地圖不搭」), on one line in the map's
+ * columns (「用一行式，設成預設」): its DP code and name, the state in the map's
+ * pill with what is still open, and 展開／收合 where a row has 依據與細節.
  */
 export function VisitAsksDetail({
   id,
@@ -81,7 +80,6 @@ export function VisitAsksDetail({
   onToggle: (open: boolean) => void
 }) {
   const opening = openingAnswers(asks, answers)
-  const layout = usePointLayout()
   const reason = opening.length
     ? `${opening.map((item) => `${item.ask.label}${isEnglish ? ' ' : ''}${item.label}`).join(isEnglish ? ', ' : '、')}${isEnglish ? ': opened for the fuller assessment' : '，已展開完整評估'}`
     : firstAssessment
@@ -124,59 +122,30 @@ export function VisitAsksDetail({
       data-testid="cdss-visit-asks-detail"
       data-state={state}
     >
-      {layout === 'rows' ? (
-        // 一行式: the same four columns as the map's rows (see point-layout).
-        <summary
-          className={cn(rowStyles.row, 'cursor-pointer list-none rounded-md hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden')}
-          data-testid="cdss-visit-asks-detail-toggle"
-        >
-          <span className={rowStyles.lead}>
-            <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{dp}</span>
-            <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{label}</span>
-          </span>
-          <span className={rowStyles.state}><StatePill state={state} isEnglish={isEnglish} /></span>
-          <span className={cn(rowStyles.main, 'space-y-0.5')}>
-            <span className={cn('block text-sm leading-snug text-foreground', state === 'ask' && 'font-semibold')} data-testid="cdss-visit-asks-detail-headline">{headline}</span>
-            {reason ? (
-              <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">{reason}</span>
-            ) : null}
-          </span>
-          <span className={cn(rowStyles.link, 'gap-0.5 text-xs font-medium text-primary')}>
-            {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
-            <ChevronDown
-              className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
-              aria-hidden="true"
-            />
-          </span>
-        </summary>
-      ) : (
+      {/* One line, in the same four columns as the map's rows. */}
       <summary
-        className="block cursor-pointer list-none space-y-1.5 rounded-md px-2.5 py-2 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        className={cn(rowStyles.row, 'cursor-pointer list-none rounded-md hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden')}
         data-testid="cdss-visit-asks-detail-toggle"
       >
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className={rowStyles.lead}>
           <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{dp}</span>
-          <span className="text-sm font-medium text-foreground">{label}</span>
-          <span className="ml-auto inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-primary pointer-coarse:min-h-11">
-            {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
-            <ChevronDown
-              className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
-              aria-hidden="true"
-            />
-          </span>
+          <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{label}</span>
         </span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <StatePill state={state} isEnglish={isEnglish} />
-          {/* Bold only while it waits on the clinician, as a decision row is; quiet otherwise, as a cell is. */}
-          <span className={cn('text-sm leading-snug text-foreground', state === 'ask' && 'font-semibold')} data-testid="cdss-visit-asks-detail-headline">{headline}</span>
+        <span className={rowStyles.state}><StatePill state={state} isEnglish={isEnglish} /></span>
+        <span className={cn(rowStyles.main, 'space-y-0.5')}>
+          <span className={cn('block text-sm leading-snug text-foreground', state === 'ask' && 'font-semibold')} data-testid="cdss-visit-asks-detail-headline">{headline}</span>
+          {reason ? (
+            <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">{reason}</span>
+          ) : null}
         </span>
-        {reason ? (
-          <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">
-            {reason}
-          </span>
-        ) : null}
+        <span className={cn(rowStyles.link, 'gap-0.5 text-xs font-medium text-primary')}>
+          {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
+          <ChevronDown
+            className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </span>
       </summary>
-      )}
       <div className="border-t border-border">
         {content}
       </div>

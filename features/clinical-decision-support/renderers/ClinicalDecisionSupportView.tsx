@@ -61,7 +61,6 @@ import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { CdssModuleSections } from './CdssModuleSections'
 import { LipidModuleSections } from './LipidModuleSections'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
-import { usePointLayout } from './visit/point-layout'
 import pointRowStyles from './visit/point-rows.module.css'
 import type { Autofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
@@ -99,7 +98,7 @@ import { heartFailureVisitSurfaces } from './visit/heart-failure-map-surfaces'
 import { AtrialFibrillationMapSurfaces } from './visit/AtrialFibrillationMapSurfaces'
 import type { VisitMapSurfaces } from './visit/visit-surfaces'
 
-/** The map's row columns, for the prognosis models under 03 in the 一行式 layout. */
+/** The map's row columns, for the prognosis models under 03: they line up with the points above. */
 const PROGNOSIS_ROW_CLASSES = {
   list: pointRowStyles.list,
   row: pointRowStyles.row,
@@ -2201,7 +2200,6 @@ export function ClinicalDecisionSupportView({
   // One clock per mount: the board prints how old each safety input is, and a
   // clock read on every render would make the same value drift across ticks.
   const [now] = useState(() => new Date())
-  const pointLayout = usePointLayout()
   const board = useMemo(
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
@@ -2460,7 +2458,7 @@ export function ClinicalDecisionSupportView({
               <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
                 {isEnglish ? 'Prognosis models' : '預後模型'}
               </p>
-              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} {...(pointLayout === 'rows' ? { rowClasses: PROGNOSIS_ROW_CLASSES } : {})} />
+              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} rowClasses={PROGNOSIS_ROW_CLASSES} />
             </section>
           ) : undefined}
           footer={(

@@ -41,7 +41,6 @@ import type { VisitMapSurfaces } from './visit-surfaces'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
-import { usePointLayout } from './point-layout'
 import rowStyles from './point-rows.module.css'
 
 const ASKS_DETAIL_ID = 'cdss-visit-asks-detail'
@@ -178,7 +177,6 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const pointLayout = usePointLayout()
   // 顯示全部, on the status line beside 補填／修改量測 rather than a row of its own.
   const [showAllPoints, setShowAllPoints] = useState(false)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
@@ -391,39 +389,16 @@ export function VisitDecisionScreen({
       <PointBox key={point.dp} point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpenDetail={toggleOpen} detailOpen={Boolean(detailFor(point))} />
     )
   }
-  // Two to a row on a wide screen; an opened card spans its row, right under
-  // the box that opened it, as the map's cells do.
-  const pillarPairs = pillarPoints.reduce<DecisionPointView[][]>((pairs, point, index) => {
-    if (index % 2 === 0) pairs.push([point])
-    else pairs[pairs.length - 1].push(point)
-    return pairs
-  }, [])
-  const followPairs = followPoints.reduce<DecisionPointView[][]>((pairs, point, index) => {
-    if (index % 2 === 0) pairs.push([point])
-    else pairs[pairs.length - 1].push(point)
-    return pairs
-  }, [])
-  // 一行式: one frame, a row per pillar, its card under it (see point-layout).
-  const boxPairs = (pairs: DecisionPointView[][]) => pointLayout === 'rows' ? (
+  // One frame, a row per pillar, its card under it (clinician decision
+  // 2026-09-28: 「用一行式，設成預設」).
+  const pillarList = (points: readonly DecisionPointView[]) => (
     <div className={rowStyles.list}>
-      {pairs.flat().map((point) => (
+      {points.map((point) => (
         <Fragment key={point.dp}>
           {pillarBox(point)}
           {detailFor(point) ? <div className={rowStyles.detail}>{detailFor(point)}</div> : null}
         </Fragment>
       ))}
-    </div>
-  ) : (
-    <div className="space-y-2">
-      {pairs.map((pair) => {
-        const opened = pair.find((point) => detailFor(point))
-        return (
-          <div key={pair.map((point) => point.dp).join('-')} className="space-y-2">
-            <div className="grid items-start gap-2 @min-[48rem]:grid-cols-2">{pair.map(pillarBox)}</div>
-            {opened ? detailFor(opened) : null}
-          </div>
-        )
-      })}
     </div>
   )
   const pillarGroup = (pillarPoints.length > 0 || followPoints.length > 0) && surfaces?.pillars ? (
@@ -431,13 +406,13 @@ export function VisitDecisionScreen({
       {pillarPoints.length > 0 ? (
         <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-title" data-testid="cdss-visit-pillars">
           <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">{surfaces.pillars.title}</h3>
-          {boxPairs(pillarPairs)}
+          {pillarList(pillarPoints)}
         </section>
       ) : null}
       {followPoints.length > 0 && surfaces.pillars.followedBy ? (
         <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-follow-title" data-testid="cdss-visit-pillars-follow">
           <h3 id="cdss-visit-pillars-follow-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">{surfaces.pillars.followedBy.title}</h3>
-          {boxPairs(followPairs)}
+          {pillarList(followPoints)}
         </section>
       ) : null}
     </div>
