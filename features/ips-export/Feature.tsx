@@ -123,9 +123,11 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
-      <Tabs defaultValue={showEmrTab ? "emr" : "ai"} className="space-y-5">
+    <div className="mx-auto max-w-5xl space-y-3">
+      {/* The right-panel tab already names this page; a visible title here
+          only pushed the clinician's content down. */}
+      <h1 className="sr-only">{x.hubTitle}</h1>
+      <Tabs defaultValue={showEmrTab ? "emr" : "ai"} className="space-y-3">
         <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
           {/* Clinicians open this hub to get data back into the chart far more
               often than to hand it to an AI or download a file, so 帶回紀錄
