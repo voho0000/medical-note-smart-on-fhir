@@ -59,6 +59,12 @@ it('on the decision map, leaves 喘 and the weight-change buttons to the questio
   // Everything else stays: other tracked complaints, adding one, the weight records.
   expect(screen.getByText('其他主訴')).toBeVisible()
   expect(screen.getByText('胸悶')).toBeVisible()
-  expect(screen.getByText('新增／補記其他主訴')).toBeVisible()
+  // In the map's form (「這邊的 UI 設計也跟決策地圖不符合」): 「＋ 新增」 opens a
+  // one-row entry with the map's tinted save; the weight box carries its own.
+  fireEvent.click(screen.getByTestId('cdss-followup-complaint-add'))
+  expect(screen.getByTestId('cdss-followup-complaint-form')).toBeVisible()
+  expect(screen.getByRole('button', { name: '儲存' })).toBeDisabled()
+  expect(screen.getByTestId('cdss-followup-weight-latest')).toHaveTextContent('70.0 kg · 2026-09-10')
+  expect(screen.getByRole('button', { name: '記錄體重' })).toBeInTheDocument()
   expect(screen.getByTestId('cdss-weight-records')).toBeInTheDocument()
 })

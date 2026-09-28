@@ -8,6 +8,7 @@ import { todayIsoDate, type ClinicVitals, type ClinicVitalsPatch } from '../stor
 import { EMPTY_HF_HISTORY, type HfFollowUpHistory, type SymptomChange, type FollowUpComplaint } from '../utils/hf-follow-up'
 import type { VisitAnswers, VisitAsk } from '../types'
 import { answerToneClass, type AnswerTone } from './visit/answer-tones'
+import { TINTED_PRIMARY } from './visit/visit-presentation'
 
 type WeightChange = NonNullable<HfFollowUpHistory['weightChanges']>[number]['value']
 
@@ -42,6 +43,9 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const [date, setDate] = useState(today)
   const [weight, setWeight] = useState('')
   const [weightDate, setWeightDate] = useState(today)
+  const [adding, setAdding] = useState(false)
+  const [notesOpen, setNotesOpen] = useState<string | null>(null)
+  const [weightRecordsOpen, setWeightRecordsOpen] = useState(false)
   const local = vitals?.hfFollowUp ?? EMPTY_HF_HISTORY
   const complaints = [...history.complaints, ...local.complaints].filter(item => item.date <= today)
   const previousDate = complaints.filter(item => item.date < today).map(item => item.date).sort().at(-1)
@@ -69,6 +73,90 @@ export function HfFollowUpPriorities({ history = EMPTY_HF_HISTORY, vitals, onSav
   const xy = range.map(point => `${10 + (Date.parse(point.date) - start) / Math.max(1, end - start) * 280},${70 - (point.value - low) / Math.max(1, high - low) * 50}`).join(' ')
   const choices: [SymptomChange, string, string][] = [['worse', '惡化', 'Worse'], ['unchanged', '穩定', 'Stable'], ['improved', '進步', 'Improved']]
   const sourceName = (source: string) => source === 'clinic' ? (isEnglish ? 'Clinic entry' : '門診輸入') : source
+  const saveNewComplaint = () => { if (!text.trim() || !date || date > today) return; saveComplaint({ text: text.trim(), date, source: 'clinic' }); setText(''); setAdding(false) }
+  const saveWeight = () => { const value = Number(weight); if (!Number.isFinite(value) || value <= 0 || !weightDate || weightDate > today) return; onSave?.({ entries: { bodyWeight: { value, measuredOn: weightDate } } }); setWeight('') }
+  const chart = range.length > 1
+    ? <svg viewBox="0 0 300 90" role="img" aria-label={isEnglish ? 'Weight trend; dated measurements below' : '體重趨勢，日期與數值詳見下表'} className="h-28 w-full text-primary"><polyline points={xy} fill="none" stroke="currentColor" strokeWidth="2" />{xy.split(' ').map((pair, index) => <circle key={range[index].date} cx={pair.split(',')[0]} cy={pair.split(',')[1]} r="3" fill="currentColor" />)}</svg>
+    : <p className="text-xs text-muted-foreground">{isEnglish ? 'At least two dated weights are needed for a trend.' : '至少兩筆不同日期的體重才能顯示趨勢。'}</p>
+
+  // The decision map's form (clinician feedback 2026-09-28: 「這邊的 UI 設計也跟
+  // 決策地圖不符合」): two boxes drawn as the questions above them are — a name,
+  // a line of what the record holds, and a text link where the other boxes
+  // have 修改／收合 — with each entry on one row and the map's tinted save.
+  if (trendAsksElsewhere) {
+    const BOX = 'rounded-md border border-border bg-background px-2.5 py-2'
+    const LINK = 'ml-auto inline-flex min-h-8 shrink-0 items-center rounded-md px-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    const FIELD = 'h-9 pointer-coarse:h-11'
+    return <div className="space-y-2" data-testid="cdss-followup-priorities">
+      <section className={BOX} aria-label={isEnglish ? 'Other complaints' : '其他主訴'} data-testid="cdss-followup-complaints">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className="text-sm font-medium text-foreground">{isEnglish ? 'Other complaints' : '其他主訴'}</span>
+          <span className="text-xs text-muted-foreground">
+            {rows.length ? (previousDate ? `${isEnglish ? 'previous record' : '上次紀錄'} ${previousDate}` : '') : (isEnglish ? 'none followed' : '沒有追蹤中的其他主訴')}
+          </span>
+          {onSave ? (
+            <button type="button" className={LINK} aria-expanded={adding} onClick={() => setAdding(open => !open)} data-testid="cdss-followup-complaint-add">
+              {adding ? (isEnglish ? 'Cancel' : '取消') : (isEnglish ? '+ Add' : '＋ 新增')}
+            </button>
+          ) : null}
+        </div>
+        {rows.map(item => {
+          const recorded = current.find(row => row.text === item.text)
+          const baseline = previous.find(row => row.text === item.text)
+          const noteOpen = notesOpen === item.text
+          return <div key={item.text} className="mt-2 space-y-1.5 border-t border-border pt-2" data-testid="cdss-followup-complaint-row">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="break-words text-sm font-medium text-foreground">{item.text}</span>
+              <span className="text-xs text-muted-foreground">{baseline ? `${baseline.date} · ${sourceName(baseline.source)}` : recorded ? `${item.date} · ${sourceName(item.source)}` : (isEnglish ? 'not yet recorded' : '尚未記錄')}</span>
+              <button type="button" className={LINK} aria-expanded={noteOpen} onClick={() => setNotesOpen(noteOpen ? null : item.text)}>
+                {recorded?.note ? (isEnglish ? 'Note ✓' : '補充 ✓') : (isEnglish ? 'Note' : '補充')}
+              </button>
+            </div>
+            <div role="group" aria-label={`${item.text} ${isEnglish ? 'change' : '變化'}`} className="flex flex-wrap gap-1">{choices.map(([value, zh, en]) => <Button key={value} variant="outline" className={cn('h-9 min-w-14 px-3 pointer-coarse:h-11', answerToneClass(SYMPTOM_TONE[value] ?? 'neutral', recorded?.change === value))} disabled={!onSave} aria-pressed={recorded?.change === value} onClick={() => saveComplaint({ text: item.text, date: today, source: 'clinic', change: value, comparedWith: baseline?.date })}>{isEnglish ? en : zh}</Button>)}</div>
+            {recorded?.change === 'resolved' ? <p className="text-xs text-muted-foreground">{isEnglish ? 'Previously recorded: resolved' : '既有紀錄：已消失'}</p> : null}
+            {noteOpen ? <Input key={`${item.text}-${today}`} className={FIELD} aria-label={isEnglish ? 'Details (saved on leaving field)' : '補充細節（離開欄位時儲存）'} placeholder={isEnglish ? 'Details, saved on leaving the field' : '補充細節，離開欄位時儲存'} defaultValue={recorded?.note ?? ''} disabled={!onSave} maxLength={1000} onBlur={event => { if (event.target.value !== (recorded?.note ?? '')) saveComplaint({ text: item.text, date: today, source: 'clinic', note: event.target.value, comparedWith: baseline?.date }) }} /> : null}
+          </div>
+        })}
+        {adding ? (
+          <form className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2" onSubmit={event => { event.preventDefault(); saveNewComplaint() }} data-testid="cdss-followup-complaint-form">
+            <Input className={cn(FIELD, 'min-w-48 flex-1')} aria-label={isEnglish ? 'Complaint' : '主訴'} value={text} maxLength={500} onChange={event => setText(event.target.value)} placeholder={isEnglish ? 'e.g. breathlessness when walking' : '例如：走路會喘、腳腫'} autoFocus />
+            <Input className={cn(FIELD, 'w-40')} type="date" aria-label={isEnglish ? 'Complaint date' : '主訴日期'} value={date} max={today} onChange={event => setDate(event.target.value)} />
+            <Button type="submit" variant="outline" className={cn('h-9 px-4 font-semibold pointer-coarse:h-11', TINTED_PRIMARY)} disabled={!text.trim() || !date || date > today}>{isEnglish ? 'Save' : '儲存'}</Button>
+          </form>
+        ) : null}
+      </section>
+      <section className={BOX} aria-label={isEnglish ? 'Weight' : '體重'} data-testid="cdss-followup-weight">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className="text-sm font-medium text-foreground">{isEnglish ? 'Weight' : '體重'}</span>
+          <span className="text-xs tabular-nums text-muted-foreground" data-testid="cdss-followup-weight-latest">
+            {latest
+              ? `${latest.value.toFixed(1)} kg · ${latest.date}${prior ? `（${isEnglish ? 'previous' : '前次'} ${prior.value.toFixed(1)} kg · ${prior.date}，Δ ${(latest.value - prior.value).toFixed(1)}）` : ''}`
+              : (isEnglish ? 'not recorded yet' : '尚無紀錄')}
+          </span>
+          {points.length ? (
+            <button type="button" className={LINK} aria-expanded={weightRecordsOpen} onClick={() => setWeightRecordsOpen(open => !open)} data-testid="cdss-weight-records">
+              {weightRecordsOpen ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Trend and sources' : '趨勢與來源')}
+            </button>
+          ) : null}
+        </div>
+        {onSave ? (
+          <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); saveWeight() }}>
+            <Input className={cn(FIELD, 'w-28')} type="number" step="0.1" min="0.1" aria-label={isEnglish ? 'Weight (kg)' : '體重（kg）'} placeholder="kg" value={weight} onChange={event => setWeight(event.target.value)} />
+            <Input className={cn(FIELD, 'w-40')} type="date" aria-label={isEnglish ? 'Measurement date' : '量測日期'} max={today} value={weightDate} onChange={event => setWeightDate(event.target.value)} />
+            <Button type="submit" variant="outline" className={cn('h-9 px-4 font-semibold pointer-coarse:h-11', TINTED_PRIMARY)} disabled={!weight || Number(weight) <= 0 || !weightDate || weightDate > today}>{isEnglish ? 'Record weight' : '記錄體重'}</Button>
+          </form>
+        ) : null}
+        {weightRecordsOpen ? (
+          <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+            {chart}
+            {range.length > 1 ? <p className="text-xs text-muted-foreground">{range[0].date} → {range.at(-1)?.date} · {low.toFixed(1)}–{high.toFixed(1)} kg</p> : null}
+            <ul className="space-y-0.5 text-xs text-muted-foreground">{range.map(point => <li key={point.date} className="break-words tabular-nums">{point.date} · {point.value.toFixed(1)} kg · {sourceName(point.source)}</li>)}</ul>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  }
+
   return <div className="space-y-4 px-3 py-3" data-testid="cdss-followup-priorities">
     <section className="space-y-3" aria-label={isEnglish ? 'Chief complaint follow-up' : '主訴追蹤'}>
       <h4 className="font-semibold">{trendAsksElsewhere ? (isEnglish ? 'Other complaints' : '其他主訴') : (isEnglish ? 'Chief complaint · change since last visit' : '主要主訴・與上次相比')}</h4>
