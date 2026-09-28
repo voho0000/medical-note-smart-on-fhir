@@ -59,7 +59,7 @@ export function heartFailureVisitSurfaces(
         <div className="space-y-3" data-testid="cdss-visit-hf-diagnosis-view">
           {model.asks.length ? null : (
             <section className="space-y-1.5" aria-label={isEnglish ? 'Diagnostic assessment' : '診斷評估'}>
-              <h4 className="px-0.5 text-[11px] font-semibold text-muted-foreground">{isEnglish ? 'Diagnostic assessment' : '診斷評估'}</h4>
+              <h4 className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">{isEnglish ? 'Diagnostic assessment' : '診斷評估'}</h4>
               {slots.followUpQuestions}
             </section>
           )}

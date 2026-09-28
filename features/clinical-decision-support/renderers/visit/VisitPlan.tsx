@@ -12,7 +12,7 @@ import { checkIntervalSuffix } from './visit-decisions'
 export function VisitPlan({ plan, isEnglish }: { plan: VisitPlanModel; isEnglish: boolean }) {
   return (
     <div className="space-y-1.5 border-t border-border pt-2" data-testid="cdss-visit-plan">
-      <h5 className="text-xs font-semibold text-foreground">{isEnglish ? 'Plan' : '計畫'}</h5>
+      <h5 className="text-xs font-semibold text-foreground" data-map-heading="">{isEnglish ? 'Plan' : '計畫'}</h5>
       {plan.notes.length ? (
         <ul className="space-y-0.5 text-sm font-semibold leading-relaxed text-foreground" data-testid="cdss-visit-plan-notes">
           {plan.notes.map((note) => <li key={note.text}>{note.text}</li>)}

@@ -2444,7 +2444,7 @@ export function ClinicalDecisionSupportView({
             // 「預後模型能預設展開嗎」): one line per model, so there is
             // nothing left to fold.
             <section className="space-y-1.5" data-testid="cdss-visit-prognosis">
-              <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground">
+              <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
                 {isEnglish ? 'Prognosis models' : '預後模型'}
               </p>
               <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} />

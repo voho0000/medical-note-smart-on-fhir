@@ -497,7 +497,7 @@ export function DecisionMapColumns({
             ) : null}
             {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
             {leads?.[block] && buckets.length ? (
-              <p className="px-0.5 pt-1 text-[11px] font-semibold text-muted-foreground">
+              <p className="px-0.5 pt-1 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
                 {isEnglish ? 'Other points' : `${blockTitle(block, isEnglish).split(' ')[0]} 其餘`}
               </p>
             ) : null}
@@ -508,7 +508,7 @@ export function DecisionMapColumns({
             {buckets.map((bucket) => (
               <div key={bucket.key} className="space-y-1.5">
                 {bucket.label ? (
-                  <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={bucket.key}>
+                  <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground" data-map-group={bucket.key} data-map-heading="">
                     {bucket.label}
                   </p>
                 ) : null}

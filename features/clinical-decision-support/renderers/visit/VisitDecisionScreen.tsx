@@ -417,13 +417,13 @@ export function VisitDecisionScreen({
     <div className="space-y-3">
       {pillarPoints.length > 0 ? (
         <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-title" data-testid="cdss-visit-pillars">
-          <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.title}</h3>
+          <h3 id="cdss-visit-pillars-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">{surfaces.pillars.title}</h3>
           {boxPairs(pillarPairs)}
         </section>
       ) : null}
       {followPoints.length > 0 && surfaces.pillars.followedBy ? (
         <section className="space-y-1.5" aria-labelledby="cdss-visit-pillars-follow-title" data-testid="cdss-visit-pillars-follow">
-          <h3 id="cdss-visit-pillars-follow-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground">{surfaces.pillars.followedBy.title}</h3>
+          <h3 id="cdss-visit-pillars-follow-title" className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">{surfaces.pillars.followedBy.title}</h3>
           {boxPairs(followPairs)}
         </section>
       ) : null}
