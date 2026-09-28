@@ -45,7 +45,9 @@ export function DecisionPointChecklist({
         </li>
       ))}
       {missing.length > 0 ? (
-        <li className="flex min-w-0 items-baseline gap-1.5 @min-[40rem]:col-span-2" data-testid="cdss-visit-checklist-missing" data-present="false">
+        // Spanning both columns only where there are two: on the map's compact
+        // list a span would add an implicit second column.
+        <li className={cn('flex min-w-0 items-baseline gap-1.5', !compact && '@min-[40rem]:col-span-2')} data-testid="cdss-visit-checklist-missing" data-present="false">
           <span className="shrink-0 font-semibold text-amber-800 dark:text-amber-300">{isEnglish ? 'Missing' : '缺'}</span>
           <span className="min-w-0 text-muted-foreground">
             {missing.map((item) => (
