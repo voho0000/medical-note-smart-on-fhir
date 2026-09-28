@@ -515,7 +515,8 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
     expect(boxState(diureticBox('DP-06'))).toBe('confirm')
-    expect(diureticBox('DP-06')).toHaveTextContent('體重減少 → 利尿劑是否減量？')
+    // The drug and its prescribed daily dose lead the question (「利尿劑加量沒顯示原本用什麼利尿劑跟原本劑量」).
+    expect(diureticBox('DP-06')).toHaveTextContent('furosemide 每日 20 mg：體重減少，是否減量？')
   })
 })
 
