@@ -96,9 +96,12 @@ export interface PointDecision {
  *
  * Nor is one whose action kept its id but changed what it says: 「apixaban 5 mg
  * bid」 recorded, then a weight of 58 kg and a Cr of 1.6 turn the same action
- * into 「apixaban 2.5 mg bid」. The label is the decision the clinician saw and
- * took, so a different label asks again (#166 review). A record from before
- * labels were kept has none, and stands on its id.
+ * into 「apixaban 2.5 mg bid」 (#166 review). What changes there is a number —
+ * a dose, a strength, a ratio — so the numbers the recorded label states are
+ * compared with the action's, and a different set asks again. The words around
+ * them are not compared: they change with the language, and 「開始抗凝」 read
+ * back as 「Start anticoagulation」 is the same decision (#166 re-review). A
+ * record from before labels were kept has none, and stands on its id.
  */
 export function decisionFor(
   point: DecisionPointView,
@@ -110,8 +113,13 @@ export function decisionFor(
   if (!record || !record.actionId || !isSameLocalDay(record.recordedAt, now)) return undefined
   const action = point.actions.find((candidate) => candidate.id === record.actionId)
   if (!action) return undefined
-  if (record.actionLabel !== undefined && record.actionLabel !== action.label) return undefined
+  if (record.actionLabel !== undefined && labelNumbers(record.actionLabel) !== labelNumbers(action.label)) return undefined
   return { key, record, action }
+}
+
+/** The numbers a label states, in order — 「sacubitril/valsartan 49/51 mg」 → `49/51`. */
+function labelNumbers(label: string): string {
+  return (label.match(/\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*/g) ?? []).join(' ')
 }
 
 /**

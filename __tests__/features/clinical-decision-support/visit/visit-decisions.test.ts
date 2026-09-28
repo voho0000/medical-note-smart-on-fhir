@@ -66,6 +66,20 @@ describe('visit decision placement', () => {
     expect(decisionFor(reduced, decided({ 'visit:af:DP-09': { actionId: 'apixaban-5' } }), NOW)?.action.label).toBe('apixaban 2.5 mg bid')
   })
 
+  // #166 re-review: switching the page to English is not a new decision.
+  it('keeps a decision taken in one language when the page reads in the other, and still asks again on a new dose', () => {
+    const base = p3Model()
+    const inEnglish = (dp: string, labels: Record<string, string>) => {
+      const point = base.points.find((item) => item.dp === dp)!
+      return { ...point, actions: point.actions.map((action) => ({ ...action, label: labels[action.id] ?? action.label })) }
+    }
+    const started = decided({ 'visit:af:DP-07': { actionId: 'start-oac', actionLabel: '開始抗凝' } })
+    expect(decisionFor(inEnglish('DP-07', { 'start-oac': 'Start anticoagulation' }), started, NOW)?.action.id).toBe('start-oac')
+    const titrated = decided({ 'visit:af:DP-09': { actionId: 'apixaban-5', actionLabel: 'apixaban 5 mg bid' } })
+    expect(decisionFor(inEnglish('DP-09', { 'apixaban-5': 'apixaban 5 mg b.i.d.' }), titrated, NOW)?.action.id).toBe('apixaban-5')
+    expect(decisionFor(inEnglish('DP-09', { 'apixaban-5': 'apixaban 2.5 mg b.i.d.' }), titrated, NOW)).toBeUndefined()
+  })
+
   // #166 review: taking back 「開始抗凝」 takes its dose with it.
   it('names the decisions that followed from a step: later steps of its row and its revealed steps', () => {
     const model = p3Model()
