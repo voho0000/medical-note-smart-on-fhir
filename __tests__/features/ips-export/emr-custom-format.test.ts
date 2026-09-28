@@ -71,6 +71,16 @@ describe('renderEmrCustomFormat — labs', () => {
     expect(result.text).toBe('【血脂】  101 ( mg/dL )  \n\n  尾巴 ')
   })
 
+  it('prints a same-day value with its own unit, comparator and flag — never another record\'s (PR #170 review)', () => {
+    const sameDay = [
+      { ...obs('K', '2026-09-18', 9.9, { unit: 'mmol/L', interpretation: 'H' }), status: 'entered-in-error' },
+      { ...obs('K', '2026-09-18', 4.4, { unit: 'mmol/L' }), status: 'final' },
+    ]
+    const tokens = [lab('chem:K', 'value'), t(' '), lab('chem:K', 'unit'), t(' '), lab('chem:K', 'flag')]
+    // The entered-in-error 9.9 H is gone before anything is picked.
+    expect(renderEmrCustomFormat(format(tokens), inputs(sameDay)).text).toBe('4.4 mmol/L ')
+  })
+
   it('allows reusing and reordering fields freely', () => {
     const tokens = [
       lab('lipid:TG', 'value'), t(' '), lab('lipid:TG', 'value'), t(' '), lab('lipid:LDL', 'flag'),
@@ -255,6 +265,17 @@ describe('renderEmrCustomFormat — 最近 N 次', () => {
     // 同一天 picks the newest day either has (06/02): K is missing there.
     expect(renderEmrCustomFormat(format(tokens), inputs(withK)).text).toBe('1.3→1.5 / —')
     expect(renderEmrCustomFormat(format(tokens, { labRule: 'eachLatest' }), inputs(withK)).text).toBe('1.3→1.5 / 4.1')
+  })
+
+  it('never prints a series as if it were one unit (PR #170 review)', () => {
+    const mixed = [
+      obs('CREA', '2026-05-25', 88.4, { unit: 'umol/L' }),
+      obs('CREA', '2026-06-02', 1, { unit: 'mg/dL' }),
+    ]
+    const tokens = [series('chem:CREA', 'value', 2), t(' '), lab('chem:CREA', 'unit')]
+    const result = renderEmrCustomFormat(format(tokens), inputs(mixed))
+    expect(result.text).toBe('88.4 umol/L→1 mg/dL')
+    expect(result.notes).toEqual([{ type: 'labSeriesUnits', line: 1, lab: 'chem:CREA', units: ['umol/L', 'mg/dL'] }])
   })
 
   it('prints what there is and says so when fewer results exist', () => {

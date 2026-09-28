@@ -46,12 +46,77 @@ export interface LabCell {
   unitInferred?: boolean
   sourceProvenance?: 'nhi-medicloud'
   sourceInstitution?: string
-  /** Per-result provenance retained when a same-day cell contains multiple values. */
-  sourceRecords?: Array<{
-    value: string
-    provenance?: 'nhi-medicloud'
-    institution?: string
-  }>
+  /** Every source record behind this cell, in arrival order. A same-day cell
+   *  merges several records into one slot and its top-level unit / status /
+   *  flag are merged too, so anything that prints ONE value (copy formats)
+   *  must read that value's own details from here. */
+  sourceRecords?: LabCellRecord[]
+}
+
+export interface LabCellRecord {
+  value: string
+  provenance?: 'nhi-medicloud'
+  institution?: string
+  unit?: string
+  comparator?: string
+  isAbnormal?: boolean
+  interpretationCode?: string
+  status?: string
+}
+
+const INVALID_RECORD_STATUSES = new Set(['entered-in-error', 'cancelled'])
+
+function isInvalidRecord(record: LabCellRecord): boolean {
+  const status = record.status?.trim().toLowerCase()
+  const value = record.value?.trim()
+  return (!!status && INVALID_RECORD_STATUSES.has(status)) || !value || value === '—'
+}
+
+/** "<5" must never read as "5": the comparator goes back in front. The
+ *  source text is otherwise left exactly as it came. */
+export function recordDisplayValue(record: LabCellRecord): string {
+  const text = record.value
+  return record.comparator && !/^\s*[<>≤≥]/.test(text) ? `${record.comparator}${text.trim()}` : text
+}
+
+/**
+ * The one record a single-value reader (the overview cell, a copy format)
+ * shows for this cell, plus every valid record of that day.
+ *
+ * A same-day cell merges several records into one slot, and its top-level
+ * status / unit / comparator / flag are merged too — a status of
+ * "entered-in-error|final", the first value beside another record's unit or H.
+ * So each record is judged on its own: invalid ones (entered-in-error,
+ * cancelled, empty) are dropped BEFORE anything is picked, and the picked
+ * value keeps its own unit, comparator and flag. The one merge kept whole is
+ * the qualitative + quantitative pair ("Reactive (0.012)"), two halves of one
+ * result. Null when no record is usable.
+ */
+export function primaryCellRecord(cell: LabCell): { record: LabCellRecord; valid: LabCellRecord[] } | null {
+  const records: LabCellRecord[] = cell.sourceRecords?.length
+    ? cell.sourceRecords
+    : [{
+      value: cell.value,
+      unit: cell.unit,
+      comparator: cell.comparator,
+      isAbnormal: cell.isAbnormal,
+      interpretationCode: cell.interpretationCode,
+      status: cell.status,
+    }]
+  const valid = records.filter((record) => !isInvalidRecord(record))
+  if (valid.length === 0) return null
+  const qualQuantPair = !cell.allValues && records.length === 2 && valid.length === 2
+  if (qualQuantPair && cell.value?.trim()) {
+    const combined: LabCellRecord = {
+      value: cell.value,
+      unit: cell.unit,
+      isAbnormal: cell.isAbnormal,
+      interpretationCode: cell.interpretationCode,
+      status: cell.status,
+    }
+    return { record: combined, valid: [combined] }
+  }
+  return { record: valid[0]!, valid }
 }
 
 export interface LabRow {
@@ -745,6 +810,11 @@ export function buildLabPivots(
         value: cell.value,
         provenance: cell.sourceProvenance,
         institution: cell.sourceInstitution,
+        unit: cell.unit,
+        comparator: cell.comparator,
+        isAbnormal: cell.isAbnormal,
+        interpretationCode: cell.interpretationCode,
+        status: cell.status,
       }]
       // Same analyte, same day: default is last-write-wins (a revised result
       // supersedes the earlier one). EXCEPTION — a qualitative + quantitative

@@ -13,7 +13,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
-import { buildLabPivots, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, primaryCellRecord, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
 import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
@@ -425,16 +425,24 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       const pivot = pivots[category.id]
       if (!pivot) continue
       for (const row of pivot.rows) {
-        const cells = shownDays.map((day) => row.values.get(day))
+        // A day whose every record is entered-in-error / cancelled has no
+        // result to show, and a cell is abnormal only through a VALID record —
+        // judged per record, never from the same-day merge (primaryCellRecord).
+        const cells = shownDays.map((day) => {
+          const cell = row.values.get(day)
+          return cell && primaryCellRecord(cell) ? cell : undefined
+        })
         // Pinned stub rows (injected so a standard panel always shows its
         // columns) carry no values — the overview only lists analytes the
         // patient actually has inside the window.
         if (!cells.some(Boolean)) continue
-        const hasAbnormal = cells.some((cell) => !!cell?.isAbnormal)
+        const cellAbnormal = (cell: LabCell | undefined) =>
+          !!cell && !!primaryCellRecord(cell)?.valid.some((record) => record.isAbnormal)
+        const hasAbnormal = cells.some(cellAbnormal)
         for (const cell of cells) {
           if (!cell) continue
           resultCount += 1
-          if (cell.isAbnormal) abnormalCount += 1
+          if (cellAbnormal(cell)) abnormalCount += 1
         }
         const isPinned = isOverviewPinnedAnalyte(category.id, row.testKey)
         if (isPinned) pinnedRowCount += 1

@@ -12,6 +12,7 @@ export interface EmrNoteStrings {
     labNoResult: string
     labSameDayMany: string
     labFewer: string
+    labSeriesUnits: string
     mixedDates: string
     labUnknown: string
     examMissing: string
@@ -54,6 +55,8 @@ export function describeEmrNote(
       return fill(n.labSameDayMany, { line: note.line, lab: labLabel(note.lab), date: date(note.date), count: note.count, value: note.value })
     case 'labFewer':
       return fill(n.labFewer, { line: note.line, lab: labLabel(note.lab), wanted: note.wanted, got: note.got })
+    case 'labSeriesUnits':
+      return fill(n.labSeriesUnits, { line: note.line, lab: labLabel(note.lab), units: note.units.join('、') })
     case 'mixedDates':
       return fill(n.mixedDates, {
         line: note.line,
