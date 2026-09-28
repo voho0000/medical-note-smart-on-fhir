@@ -109,7 +109,8 @@ describe('VitalsCard', () => {
     // Date and badge share one wrapper, so they wrap to a new line together.
     const time = container.querySelector('time')!
     expect(badge.parentElement).toBe(time.parentElement)
-    expect(time).toHaveClass('whitespace-nowrap')
+    // The date and its age are separate unbreakable pieces.
+    expect([...time.children].map((c) => c.textContent)).toEqual([expect.stringMatching(/2026/), '（8 個月前）'])
   })
 
   it('counts an untagged blood pressure from the exam day as 成人預防保健', () => {

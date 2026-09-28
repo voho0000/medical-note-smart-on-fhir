@@ -42,12 +42,6 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
     }[age.unit]
     return age.n === 1 ? one : many.replace('{n}', String(age.n))
   }
-  const measuredOn = (day: string): string => {
-    const age = readingAge(day)
-    return age
-      ? t.vitals.measuredOn.replace('{date}', formatDate(day)).replace('{age}', ageText(age))
-      : formatDate(day)
-  }
 
   return (
     <div className="space-y-0.5">
@@ -56,9 +50,11 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
           {group.readings.map((reading, i) => (
             <Fragment key={reading.key}>
               {i > 0 && <span aria-hidden="true" className="text-muted-foreground/50">·</span>}
-              <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
-                <span className="text-muted-foreground">{labels[reading.key]}</span>
-                <span className="font-semibold tabular-nums">{reading.value}</span>
+              {/* Label and value break apart only when the pair is wider than
+                  the line (a phone with enlarged text); neither splits itself. */}
+              <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                <span className="whitespace-nowrap text-muted-foreground">{labels[reading.key]}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums">{reading.value}</span>
               </span>
             </Fragment>
           ))}
@@ -67,16 +63,34 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
               than a whole line (enlarged text on a phone) rather than overflow. */}
           {(group.day || group.sourceProgram) && (
             <span className="ml-1 inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-              {group.day && (
-                <time dateTime={group.day} className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
-                  {measuredOn(group.day)}
-                </time>
-              )}
-              <ReportSourceProgramBadge sourceProgram={group.sourceProgram} label={t.vitals.adultPreventive} />
+              {group.day && <ReadingDate day={group.day} ageText={ageText} ageInParens={t.vitals.ageInParens} />}
+              {/* May shrink and wrap its words on a very narrow card instead
+                  of overflowing it. */}
+              <ReportSourceProgramBadge sourceProgram={group.sourceProgram} label={t.vitals.adultPreventive} className="shrink" />
             </span>
           )}
         </p>
       ))}
     </div>
+  )
+}
+
+// 2018/2/12（8 年前）— the date and the age are each unbreakable, but the age
+// may drop below the date when both do not fit the line.
+function ReadingDate({
+  day,
+  ageText,
+  ageInParens,
+}: {
+  day: string
+  ageText: (age: ReadingAge) => string
+  ageInParens: string
+}) {
+  const age = readingAge(day)
+  return (
+    <time dateTime={day} className="inline-flex flex-wrap items-baseline gap-x-0.5 text-xs text-muted-foreground tabular-nums">
+      <span className="whitespace-nowrap">{formatDate(day)}</span>
+      {age && <span className="whitespace-nowrap">{ageInParens.replace('{age}', ageText(age))}</span>}
+    </time>
   )
 }

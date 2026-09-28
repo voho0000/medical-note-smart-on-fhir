@@ -861,11 +861,11 @@ export const zhTW = {
     rr: '呼吸',
     temp: '體溫',
     spo2: '血氧SpO₂',
-    // How long ago a reading was taken, after its date: 2018/2/12（8 年前）
     systolic: '收縮壓',
     diastolic: '舒張壓',
     adultPreventive: '成人預防保健',
-    measuredOn: '{date}（{age}）',
+    // How long ago a reading was taken, after its date: 2018/2/12（8 年前）
+    ageInParens: '（{age}）',
     ageToday: '今天',
     ageDays: '{n} 天前',
     ageDaysOne: '1 天前',

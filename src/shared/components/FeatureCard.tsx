@@ -74,12 +74,13 @@ export function FeatureCard({
     // so the title and the content's first line share a baseline. Under 36rem
     // of card width it becomes a wrapping row: title, then the action beside
     // it or — with enlarged text — on the next line, then the content on a
-    // line of its own. The title never shrinks, so it cannot be squeezed out.
+    // line of its own. The action wraps before the title shrinks, and a title
+    // wider than the card (Patient Information at 200% text) wraps its words.
     return (
       <Card className={cn("@container/inline-card gap-0 rounded-lg border-border bg-card py-1.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none", className)}>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-3 sm:px-5 @max-[36rem]/inline-card:flex @max-[36rem]/inline-card:flex-wrap @max-[36rem]/inline-card:items-center">
           {hasTitle && (
-            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base @max-[36rem]/inline-card:shrink-0 @max-[36rem]/inline-card:whitespace-nowrap">
+            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base">
               {titleContent}
             </CardTitle>
           )}

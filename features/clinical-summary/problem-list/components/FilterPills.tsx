@@ -12,7 +12,8 @@ interface FilterPillsProps<K extends string> {
 
 export function FilterPills<K extends string>({ label, options, value, onChange }: FilterPillsProps<K>) {
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-1">
+    // Wraps rather than overflowing the card when text is enlarged.
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1">
       {options.map((option) => (
         <button
           key={option.key}
