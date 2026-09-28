@@ -772,6 +772,7 @@ export default function LiveClinicalDecisionSupportFeature({
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
       <ClinicalDecisionSupportView
+        calculatorAutofill={autofill}
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}

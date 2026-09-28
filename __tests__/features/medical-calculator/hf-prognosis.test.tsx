@@ -1,9 +1,17 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { HF_PROGNOSIS_MODELS, evidenceForModel, matchesPrognosisRequest, type PrognosisRequest, type PrognosisResponse } from '@/features/medical-calculator/prognosis/models'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
 import { hfPrognosisEvidence } from '@/features/clinical-decision-support/utils/hf-prognosis-evidence'
 import { prognosisAutofillEvidence } from '@/features/medical-calculator/prognosis/autofill-evidence'
+
+jest.mock('@/features/medical-calculator/hooks/use-lab-autofill.hook', () => ({
+  useLabAutofill: jest.fn(),
+}))
+const mockUseLabAutofill = jest.mocked(useLabAutofill)
+const emptyAutofill = { resolve: () => undefined, sex: undefined }
 
 const request: PrognosisRequest = {
   requestId: 'request-1', patientId: 'synthetic-A', modelId: 'maggic', modelVersion: 'test-1',
@@ -47,15 +55,24 @@ describe('HF prognosis calculator boundary', () => {
     const resolve = jest.fn(source => source?.kind === 'labSpecimen' && source.specimen === 'blood' && source.keys[0] === 'CREA' ? { value: 90, unit: 'µmol/L', date: '2026-08-01' } : undefined)
     expect(prognosisAutofillEvidence({ resolve }).serumCreatinine?.value).toBe('90 µmol/L')
   })
-  it('opens the shared calculator with references but never presents an uncomputed risk', () => {
+  it('keeps a model with no calculator as a checklist that never presents an uncomputed risk', () => {
     render(<HfPrognosisModels locale="zh-TW" evidence={{ LVEF: { value: '30%', date: '2026-09-01' } }} />)
-    const card = screen.getByTestId('hf-prognosis-model-maggic')
-    fireEvent.click(card.querySelector('summary')!)
-    fireEvent.click(screen.getByTestId('open-prognosis-calculator-maggic'))
+    fireEvent.click(screen.getByTestId('open-prognosis-calculator-shfm'))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByRole('status')).toHaveTextContent('尚未計算風險')
     expect(within(dialog).getByText('30%')).toBeVisible()
-    expect(within(dialog).getByRole('link', { name: /Pocock/ })).toHaveAttribute('href', 'https://pubmed.ncbi.nlm.nih.gov/23095984/')
-    expect(within(dialog).getByRole('link', { name: '開啟外部計算機' })).toHaveAttribute('href', 'https://www.heartfailurerisk.org/')
+  })
+  // Clinician feedback 2026-09-28: 「醫療計算機明明有，直接複用就好」.
+  it('opens the medical calculator itself for a model it implements (MAGGIC), inputs and all', () => {
+    mockUseLabAutofill.mockReturnValue({ autofill: emptyAutofill, isLoading: false, error: null, retry: jest.fn(async () => {}) } as unknown as ReturnType<typeof useLabAutofill>)
+    render(<LanguageProvider><HfPrognosisModels locale="zh-TW" evidence={{ LVEF: { value: '30%', date: '2026-09-01' } }} /></LanguageProvider>)
+    const card = screen.getByTestId('hf-prognosis-model-maggic')
+    expect(card).not.toHaveTextContent('公式待串接')
+    fireEvent.click(screen.getByTestId('open-prognosis-calculator-maggic'))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('NYHA 功能分級')).toBeInTheDocument()
+    expect(within(dialog).getAllByText('糖尿病').length).toBeGreaterThan(0)
+    // LIFE-Preserved is an HFpEF model: not offered beside an LVEF of 30%.
+    expect(screen.queryByTestId('hf-prognosis-model-life-preserved')).toBeNull()
   })
 })

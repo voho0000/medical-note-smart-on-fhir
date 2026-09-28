@@ -111,7 +111,7 @@ export default function MedicalCalculatorFeature() {
       {/* Filter chips — Favorites / Recent (MDCalc-style) + specialty (科別) */}
       {audience === 'medical' && (filter === 'all' || filter === 'cardiac') && (!query.trim() || /hf|heart|maggic|shfm|gwtg|心衰|預後|prognos/i.test(query)) ? <details className="rounded-lg border border-border" data-testid="calculator-hf-prognosis">
         <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring">{zh ? 'HF 預後模型・公式待串接' : 'HF prognosis models · formulas pending'}</summary>
-        <HfPrognosisModels locale={locale} evidence={prognosisAutofillEvidence(autofill)} />
+        <HfPrognosisModels locale={locale} evidence={prognosisAutofillEvidence(autofill)} autofill={autofill} />
       </details> : null}
       <div className="-mx-1 flex flex-wrap gap-1 px-1 pb-1">
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>

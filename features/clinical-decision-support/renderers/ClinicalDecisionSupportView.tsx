@@ -61,6 +61,7 @@ import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { CdssModuleSections } from './CdssModuleSections'
 import { LipidModuleSections } from './LipidModuleSections'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
+import type { Autofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
 import { AtrialFibrillationVisitFlow } from './AtrialFibrillationVisitFlow'
 import { buildDiseaseBoard, AF_BOARD_CONFIG } from './disease-board'
@@ -146,6 +147,8 @@ interface ClinicalDecisionSupportViewProps {
    * original board shows the pack's own reading of the same facts.
    */
   hfpefReading?: HfpefReading
+  /** The page's patient data for the medical calculators (a prognosis model's result on its row). */
+  calculatorAutofill?: Autofill
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   /** Changes when the NHI page returns to its record-only default state. */
   nhiPageResetKey?: number
@@ -2137,6 +2140,7 @@ export function ClinicalDecisionSupportView({
   onRecordDecision,
   onClearDecision,
   hfpefReading,
+  calculatorAutofill,
   onSaveHfpefInputs,
   nhiPageResetKey = 0,
   visitModel,
@@ -2442,7 +2446,7 @@ export function ClinicalDecisionSupportView({
               <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {isEnglish ? 'Prognosis models' : '預後模型'}
               </summary>
-              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} defaultOpen />
+              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} defaultOpen {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} />
             </details>
           ) : undefined}
           footer={(
