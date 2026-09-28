@@ -13,6 +13,8 @@
 //    the newest day any of them has. A lab missing that day prints the
 //    format's own missing text; an older value is never pulled in to fill it.
 //  * 各項最新: each lab its own latest; a line mixing days is reported.
+//  * 最近 N 次 (a value or date field's own count): the N collection days that
+//    end at the day the line picked, oldest first — "1.2→1.3→1.5".
 //  * An exam line whose exam is absent, or whose newest report has no text,
 //    is left out and reported — never replaced by an older report unless the
 //    clinician chooses that for this patient.
@@ -45,6 +47,7 @@ export type EmrFormatNote =
   | { type: 'labMissing'; line: number; lab: string; day: string; lastDate?: string; lastValue?: string }
   | { type: 'labNoResult'; line: number; lab: string }
   | { type: 'labSameDayMany'; line: number; lab: string; date: string; count: number; value: string }
+  | { type: 'labFewer'; line: number; lab: string; wanted: number; got: number }
   | { type: 'mixedDates'; line: number; labs: Array<{ lab: string; date?: string }> }
   | { type: 'labUnknown'; line: number; lab: string }
   | { type: 'examMissing'; line: number; exam: EmrExamKind; newerWithoutTextDate?: string }
@@ -83,6 +86,9 @@ export function formatEmrDate(iso: string, style: EmrDateStyle, now: Date = new 
   // error, not a formatting one.
   return y === String(now.getFullYear()) ? `${m}/${d}` : `${y}/${m}/${d}`
 }
+
+/** Between the values of a 最近 N 次 field, oldest → newest. */
+const SERIES_JOIN = '→'
 
 function flagText(point: PinnedLabPoint): string {
   if (!point.cell.isAbnormal) return ''
@@ -237,6 +243,17 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
     }
 
     // ── Spell the line out ───────────────────────────────────────────────
+    // 最近 N 次: the N collection days ending at the day this line picked,
+    // oldest first. Fewer on record prints what there is and says so.
+    const seriesOf = (id: string, point: PinnedLabPoint, count: number): PinnedLabPoint[] => {
+      const all = resolved.get(id)?.points ?? [point]
+      const start = all.findIndex((p) => p.date === point.date)
+      const series = (start < 0 ? [point] : all.slice(start, start + count)).reverse()
+      if (series.length < count && !notes.some((n) => n.type === 'labFewer' && n.line === lineNo && n.lab === id)) {
+        notes.push({ type: 'labFewer', line: lineNo, lab: id, wanted: count, got: series.length })
+      }
+      return series
+    }
     let text = ''
     for (const token of tokens) {
       if (token.kind === 'text') {
@@ -251,11 +268,15 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
         } else if (!point) {
           text += token.field === 'value' || token.field === 'date' ? format.missingText : ''
         } else if (token.field === 'value') {
-          text += point.value
+          text += token.count
+            ? seriesOf(token.lab, point, token.count).map((p) => p.value).join(SERIES_JOIN)
+            : point.value
         } else if (token.field === 'unit') {
           text += point.cell.unit ?? ''
         } else if (token.field === 'date') {
-          text += formatEmrDate(point.date, format.dateStyle, now)
+          text += token.count
+            ? seriesOf(token.lab, point, token.count).map((p) => formatEmrDate(p.date, format.dateStyle, now)).join(SERIES_JOIN)
+            : formatEmrDate(point.date, format.dateStyle, now)
         } else if (token.field === 'flag') {
           text += flagText(point)
         }

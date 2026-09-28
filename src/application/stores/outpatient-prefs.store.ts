@@ -36,12 +36,17 @@ export const EMR_LAB_FIELDS: EmrLabField[] = ['name', 'value', 'unit', 'date', '
 export const EMR_EXAM_KINDS: EmrExamKind[] = ['echo', 'ecg']
 export const EMR_EXAM_FIELDS: EmrExamField[] = ['title', 'date', 'org', 'conclusion', 'text']
 
+/** 最近 N 次 for a lab's value or date field ("1.2→1.3→1.5"). Absent = one. */
+export const EMR_LAB_RECENT_COUNTS = [2, 3, 4, 5] as const
+/** Fields that can print a series. */
+export const EMR_LAB_SERIES_FIELDS: EmrLabField[] = ['value', 'date']
+
 /** One piece of a copy format. Text is kept verbatim — spaces, slashes,
  *  CJK punctuation — and a newline is its own token. */
 export type EmrFormatToken =
   | { kind: 'text'; text: string }
   | { kind: 'newline' }
-  | { kind: 'lab'; lab: string; field: EmrLabField }
+  | { kind: 'lab'; lab: string; field: EmrLabField; count?: number }
   | { kind: 'exam'; exam: EmrExamKind; field: EmrExamField }
 
 /** 同一行的檢驗: all from one collection day, or each its own latest. */
@@ -66,7 +71,7 @@ export interface OutpatientPrefs {
   /** Pinned analyte ids (`chem:CREA`) and reminder rows (`note:…`), in the
    *  clinician's order. `null` = never customised. */
   pinnedLabs: string[] | null
-  /** Last overview lab mode chosen, so 「我的固定」 is what the next patient
+  /** Last overview lab mode chosen, so 「自訂」 is what the next patient
    *  opens with. */
   labMode: OverviewLabMode | null
   formats: EmrCustomFormat[]
@@ -101,10 +106,14 @@ function sanitizeToken(raw: unknown): EmrFormatToken | null {
         : null
     case 'newline':
       return { kind: 'newline' }
-    case 'lab':
-      return isString(token.lab) && token.lab.includes(':') && EMR_LAB_FIELDS.includes(token.field as EmrLabField)
-        ? { kind: 'lab', lab: token.lab, field: token.field as EmrLabField }
-        : null
+    case 'lab': {
+      if (!isString(token.lab) || !token.lab.includes(':') || !EMR_LAB_FIELDS.includes(token.field as EmrLabField)) return null
+      const field = token.field as EmrLabField
+      const count = EMR_LAB_SERIES_FIELDS.includes(field) && (EMR_LAB_RECENT_COUNTS as readonly unknown[]).includes(token.count)
+        ? token.count as number
+        : undefined
+      return { kind: 'lab', lab: token.lab, field, ...(count ? { count } : {}) }
+    }
     case 'exam':
       return EMR_EXAM_KINDS.includes(token.exam as EmrExamKind) && EMR_EXAM_FIELDS.includes(token.field as EmrExamField)
         ? { kind: 'exam', exam: token.exam as EmrExamKind, field: token.field as EmrExamField }
