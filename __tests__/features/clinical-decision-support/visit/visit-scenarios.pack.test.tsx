@@ -40,13 +40,13 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 const PATIENT = 'scenario-patient'
 
 /** The map for a scenario, rebuilt by the pack from every answer given on it. */
-function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page?: 'hf' | 'af'; layout?: 'map' | 'sections' }) {
+function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { id: ScenarioId; page?: 'hf' | 'af'; layout?: 'map' | 'sections'; firstVisit?: boolean }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const phenotype = usePhenotypeAnswer(PATIENT)
   const intolerant = useMemo(() => intolerantPillars(decisions), [decisions])
-  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant }), [answers, id, intolerant, page, phenotype])
+  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit }), [answers, firstVisit, id, intolerant, page, phenotype])
   const afAnswers = useAfAnswers(PATIENT)
   return (
     <ClinicalDecisionSupportView
@@ -310,6 +310,30 @@ describe('real pack · P6 hyperkalaemia', () => {
   })
 })
 
+// Clinician decision 2026-09-28: whether a diagnosis is new is not the
+// record's to say (the cloud record covers about a year). With no stored CDSS
+// visit the page is the system's first look: 01 opens on 診斷, the clinician
+// answers the diagnosis, and the baseline work-up is there.
+describe('real pack · P4 at the system’s first visit', () => {
+  it('opens on 診斷 with the diagnosis unanswered, the record beside it; one press answers it', () => {
+    render(<ScenarioMap id="p4-stable-optimised" firstVisit />)
+    expect(document.body.textContent).toContain('HFrEF（LVEF 35%，03-10）：首次評估')
+    expect(document.body.textContent).not.toContain('新診斷')
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
+    const dp01 = within(view).getByTestId('cdss-hf-question-hf-suspicion')
+    expect(dp01).toHaveAttribute('data-state', 'open')
+    expect(dp01).toHaveTextContent('I50.22')
+    expect(within(dp01).queryByTestId('cdss-hf-question-answer-hf-suspicion')).toBeNull()
+    expect(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref')).not.toBeChecked()
+    fireEvent.click(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref'))
+    expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]).toMatchObject({ diagnosis: 'hfrEF' })
+    expect(screen.getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（醫師判斷）')
+    // The baseline work-up is on 診斷 for this first look.
+    expect(cell('DP-02')).toHaveAttribute('data-state', 'confirm')
+  })
+})
+
 describe('real pack · P4 on 01’s 診斷 view', () => {
   // Clinician feedback 2026-09-28: 「補記診斷確認紀錄你覺得有需要留嗎？」 — a
   // diagnosis the record already carries is not confirmed a second time.
@@ -542,7 +566,8 @@ describe('real pack · the other scenarios', () => {
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
     const { model } = scenarioRun('p2-new-hfref')
     expect(model.stage).toBe('baseline')
-    expect(model.queue).toEqual(['DP-08', 'DP-07', 'DP-09', 'DP-10'])
+    // The system's first visit: the diagnosis is the clinician's to answer first.
+    expect(model.queue).toEqual(['DP-01', 'DP-08', 'DP-07', 'DP-09', 'DP-10'])
     expect(point('p2-new-hfref', 'DP-08').headline).toContain('bisoprolol 1.25 mg')
     expect(point('p2-new-hfref', 'DP-02').headline).toMatch(/ferritin.*TSAT.*TSH.*HbA1c/)
   })

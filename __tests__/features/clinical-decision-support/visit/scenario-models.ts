@@ -14,6 +14,7 @@ import {
   ATRIAL_FIBRILLATION_GUIDELINE_PACK,
   HEART_FAILURE_GUIDELINE_PACK,
   applyFmtIntolerance,
+  applyPreviousVisit,
   applyVisitAnswers,
   buildVisitDecisionModel,
 } from '@voho0000/personalized-care'
@@ -69,14 +70,29 @@ export function scenarioProfile(id: ScenarioId): CdssPatientProfile {
   return applyAfCalculatorResults(record)
 }
 
-/** The model the decision map draws for this scenario on the given page. */
+/**
+ * The stored previous visit a returning scenario brings in (`previousVisit` in
+ * the harness index), as the harness hands it to LiveFeature.
+ */
+export function scenarioPreviousVisit(id: ScenarioId): string | undefined {
+  const index = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, 'index.json'), 'utf8')) as { id: string; previousVisit?: string }[]
+  return index.find((item) => item.id === id)?.previousVisit
+}
+
+/**
+ * The model the decision map draws for this scenario on the given page. A
+ * returning scenario carries its stored visit; `firstVisit` drops it — the
+ * same patient on the system's first visit.
+ */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {}, phenotype, intolerant = [] }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[] } = {},
+  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean } = {},
 ): ScenarioRun {
   // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the
-  // profile; so does a pillar marked 「不耐受」.
-  const profile = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype), intolerant)
+  // profile; so does a pillar marked 「不耐受」, and the stored previous visit.
+  const previous = firstVisit ? undefined : scenarioPreviousVisit(id)
+  const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype), intolerant)
+  const profile = previous ? applyPreviousVisit(answered, previous) : answered
   if (page === 'af') {
     const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     return {

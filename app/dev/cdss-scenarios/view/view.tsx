@@ -8,7 +8,7 @@ import { FontSizeProvider } from '@/src/application/providers/font-size.provider
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { installMeasure } from './measure'
 import { installSimulate } from './simulate'
 import { getCdssDecisionTimings } from '@/features/clinical-decision-support/stores/cdss-decision-timing.store'
@@ -18,7 +18,36 @@ import { DataSelectionProvider } from '@/src/application/providers/data-selectio
 // StrictMode runs effects twice in development; measure once per page load.
 let measuring = false
 
+/** The scenario's stored previous visit, if it brings one (the loader sets it). */
+function readPreviousVisit(): string | undefined {
+  try {
+    return sessionStorage.getItem('sim-previous-visit') || undefined
+  } catch {
+    return undefined
+  }
+}
+
+const PREVIOUS_VISIT_EVENT = 'sim-previous-visit'
+const subscribePreviousVisit = (callback: () => void) => {
+  window.addEventListener(PREVIOUS_VISIT_EVENT, callback)
+  return () => window.removeEventListener(PREVIOUS_VISIT_EVENT, callback)
+}
+const subscribeNothing = () => () => {}
+
 export default function View() {
+  // sessionStorage is not there during the server render: LiveFeature mounts
+  // once the browser's value is known, so it mounts once.
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
+  const previousVisit = useSyncExternalStore(subscribePreviousVisit, readPreviousVisit, () => undefined)
+  // Either standing for the same patient: the system's first visit, or a
+  // return with a stored visit three months back.
+  const togglePreviousVisit = () => {
+    try {
+      if (previousVisit) sessionStorage.removeItem('sim-previous-visit')
+      else sessionStorage.setItem('sim-previous-visit', '2026-06-26')
+    } catch { /* nothing to flip without storage */ }
+    window.dispatchEvent(new Event(PREVIOUS_VISIT_EVENT))
+  }
   useEffect(() => {
     installMeasure()
     installSimulate()
@@ -61,8 +90,14 @@ export default function View() {
               <DataSelectionProvider>
                 <div className="flex min-h-screen justify-end bg-muted/30">
                   <aside data-testid="sim-right-panel" className="@container w-[880px] max-w-full border-l border-border bg-background p-3">
-                    <a href="/dev/cdss-scenarios" className="mb-2 block text-xs text-muted-foreground underline">← 換病人</a>
-                    <LiveFeature />
+                    <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <a href="/dev/cdss-scenarios" className="underline">← 換病人</a>
+                      <span data-testid="sim-previous-visit">{previousVisit ? `模擬：有上次 CDSS 紀錄（${previousVisit}）` : '模擬：CDSS 首次接觸這位病人'}</span>
+                      <button type="button" onClick={togglePreviousVisit} className="rounded border border-border px-2 py-0.5" data-testid="sim-previous-visit-toggle">
+                        {previousVisit ? '改看首次' : '改看有上次紀錄'}
+                      </button>
+                    </div>
+                    {hydrated ? <LiveFeature key={previousVisit ?? 'first'} {...(previousVisit ? { previousCdssVisit: previousVisit } : {})} /> : null}
                   </aside>
                 </div>
               </DataSelectionProvider>

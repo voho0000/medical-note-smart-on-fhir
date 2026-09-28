@@ -50,6 +50,11 @@ export default function Loader() {
     sessionStorage.clear()
     for (const [key, value] of Object.entries(keep)) sessionStorage.setItem(key, value)
     sessionStorage.setItem('sim-current', id)
+    // A returning scenario brings in its stored previous visit, as a CDSS
+    // store will; the others are the system's first visit with the patient.
+    const previous = index.find((s) => s.id === id)?.previousVisit
+    if (previous) sessionStorage.setItem('sim-previous-visit', previous)
+    else sessionStorage.removeItem('sim-previous-visit')
     const store = useBetaFeaturesStore.getState()
     store.setBetaFeaturesEnabled('guest', true)
     await LocalBundleService.save(BUNDLES[id], { importId: `sim-${id}-${Date.now()}` })
@@ -85,7 +90,7 @@ export default function Loader() {
           <li key={s.id}>
             <button type="button" data-scenario={s.id} disabled={busy !== null} onClick={() => load(s.id)}
               className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/40">
-              <span className="font-mono text-xs text-muted-foreground">{s.id} · {s.kind} · {s.page}</span>
+              <span className="font-mono text-xs text-muted-foreground">{s.id} · {s.kind} · {s.page}{s.previousVisit ? ` · 上次 CDSS ${s.previousVisit}` : ' · CDSS 首次'}</span>
               <span className="block font-medium">{s.title}</span>
               <span className="block text-sm text-muted-foreground">{s.oneLine}</span>
             </button>

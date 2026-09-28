@@ -41,7 +41,8 @@
   "visit": {
    "dyspnea": "穩定",
    "weight": "不變"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p5-titrating-af",
@@ -52,7 +53,8 @@
   "visit": {
    "dyspnea": "穩定",
    "weight": "不變"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p6-hyperkalaemia",
@@ -63,7 +65,8 @@
   "visit": {
    "dyspnea": "穩定",
    "weight": "不變"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p7-worsening-congestion",
@@ -74,7 +77,8 @@
   "visit": {
    "dyspnea": "變差",
    "weight": "增加"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p8-post-discharge",
@@ -85,7 +89,8 @@
   "visit": {
    "dyspnea": "進步",
    "weight": "不變"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p9-hfpef-af-dose",
@@ -96,7 +101,8 @@
   "visit": {
    "dyspnea": "穩定",
    "weight": "減少"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p10-improved-ef",
@@ -107,7 +113,8 @@
   "visit": {
    "dyspnea": "穩定",
    "weight": "不變"
-  }
+  },
+  "previousVisit": "2026-06-26"
  },
  {
   "id": "p11-af-dabigatran-renal",
@@ -118,6 +125,7 @@
   "visit": {
    "afSymptoms": "無",
    "bleeding": "無"
-  }
+  },
+  "previousVisit": "2026-06-26"
  }
 ]

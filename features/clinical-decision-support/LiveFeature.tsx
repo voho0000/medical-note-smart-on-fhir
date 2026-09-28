@@ -66,7 +66,7 @@ import {
   useVisitAnswersStore,
   visitAnswersOf,
 } from './stores/visit-answers.store'
-import { applyFmtIntolerance, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
+import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
 import { intolerantPillars } from './renderers/visit/visit-decisions'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
@@ -296,7 +296,17 @@ function LayoutSwitcher({
   )
 }
 
-export default function LiveClinicalDecisionSupportFeature() {
+export default function LiveClinicalDecisionSupportFeature({
+  previousCdssVisit,
+}: {
+  /**
+   * The date of the last visit this CDSS recorded for the patient, when a
+   * store hands one in. None yet: every visit is the system's first, which
+   * shows the baseline work-up and asks the diagnosis (clinician decision
+   * 2026-09-28). The scenario harness passes one for a returning patient.
+   */
+  previousCdssVisit?: string
+}) {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
   const { autofill } = useLabAutofill()
@@ -466,19 +476,23 @@ export default function LiveClinicalDecisionSupportFeature() {
   // The every-visit answers enter last, as the pack's own facts
   // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
   // on every layout, not only on the map where it was asked. A pillar the
-  // clinician marked 「不耐受」 travels the same way, for DP-19.
+  // clinician marked 「不耐受」 travels the same way, for DP-19, and so does a
+  // stored previous visit, which makes this one a follow-up.
   const intolerant = useMemo(() => intolerantPillars(physicianDecisions), [physicianDecisions])
   const profile = useMemo(() => (
     answeredProfile
-      ? applyFmtIntolerance(
-        applyVisitAnswers(
-          applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
-          visitAnswers,
+      ? applyPreviousVisit(
+        applyFmtIntolerance(
+          applyVisitAnswers(
+            applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
+            visitAnswers,
+          ),
+          intolerant,
         ),
-        intolerant,
+        previousCdssVisit,
       )
       : null
-  ), [answeredProfile, hfpefReading, intolerant, preventReading, visitAnswers])
+  ), [answeredProfile, hfpefReading, intolerant, preventReading, previousCdssVisit, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []

@@ -438,9 +438,13 @@ export function VisitDecisionScreen({
     if (drawnUndiagnosed && !undiagnosed) setStatusViewOverride({ reason: 'follow-up', view: 'diagnosis' })
   }
   const diagnosisView = surfaces?.diagnosis
-  // 01 opens on 診斷 before a diagnosis and on 追蹤 after it; the clinician's
-  // own choice holds until that standing changes.
-  const defaultStatusView: StatusView = undiagnosed ? 'diagnosis' : 'follow-up'
+  // 01 opens on 診斷 before a diagnosis, and at the system's first visit with
+  // the patient, where the clinician answers the diagnosis (clinician decision
+  // 2026-09-28: 「沒資料的都還是需要點診斷」); on 追蹤 once a stored visit
+  // brings the diagnosis in. The clinician's own choice holds until that
+  // standing changes.
+  const firstVisit = model.stage === 'baseline' && Boolean(diagnosisView)
+  const defaultStatusView: StatusView = undiagnosed || firstVisit ? 'diagnosis' : 'follow-up'
   const statusView: StatusView = undiagnosed
     ? 'diagnosis'
     : statusViewOverride && statusViewOverride.reason === defaultStatusView ? statusViewOverride.view : defaultStatusView

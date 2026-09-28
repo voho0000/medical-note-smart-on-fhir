@@ -11,6 +11,7 @@
  */
 import {
   applyFmtIntolerance as packApplyFmtIntolerance,
+  applyPreviousVisit as packApplyPreviousVisit,
   applyVisitAnswers as packApplyVisitAnswers,
   buildVisitDecisionModel,
 } from '@voho0000/personalized-care'
@@ -55,6 +56,19 @@ export function applyVisitAnswers(profile: CdssPatientProfile, answers: VisitAns
 export function applyFmtIntolerance(profile: CdssPatientProfile, dps: readonly string[]): CdssPatientProfile {
   if (typeof packApplyFmtIntolerance !== 'function' || dps.length === 0) return profile
   return packApplyFmtIntolerance(profile, dps)
+}
+
+/**
+ * The last visit this CDSS recorded for the patient, as the pack reads it:
+ * with one the page opens on 追蹤; without one the visit is the system's first
+ * and asks the baseline work-up and the diagnosis. Nothing stores visits yet,
+ * so the app passes none and every visit is a first one; the scenario harness
+ * passes one to show a returning patient. A package without the step leaves
+ * the profile as it was.
+ */
+export function applyPreviousVisit(profile: CdssPatientProfile, date: string | undefined): CdssPatientProfile {
+  if (typeof packApplyPreviousVisit !== 'function' || !date) return profile
+  return packApplyPreviousVisit(profile, date)
 }
 
 /**

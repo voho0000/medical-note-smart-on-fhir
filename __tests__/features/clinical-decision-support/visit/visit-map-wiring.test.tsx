@@ -32,6 +32,7 @@ jest.mock('@/features/clinical-decision-support/renderers/visit/visit-model.sour
   buildVisitModel: (input: BuildVisitDecisionModelInput) => mockBuildVisitModel(input),
   applyVisitAnswers: (profile: CdssPatientProfile, answers: VisitAnswers) => mockApplyVisitAnswers(profile, answers),
   applyFmtIntolerance: (profile: CdssPatientProfile) => profile,
+  applyPreviousVisit: (profile: CdssPatientProfile) => profile,
 }))
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
