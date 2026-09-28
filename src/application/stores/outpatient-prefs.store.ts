@@ -178,6 +178,9 @@ export interface OutpatientPrefsSyncMeta {
   /** Stamp of the account copy these settings were last based on; null until
    *  this browser has synced this account once. */
   baseUpdatedAt: number | null
+  /** That account copy itself — what both this browser and any other device
+   *  started from, so a merge can tell which side changed what. */
+  base: OutpatientPrefs | null
 }
 
 /** 'error' = the account refused the write or could not be read; the
@@ -201,10 +204,15 @@ function sanitizeSyncMeta(raw: unknown): OutpatientPrefsSyncMeta | null {
   if (!raw || typeof raw !== 'object') return null
   const meta = raw as Record<string, unknown>
   if (typeof meta.updatedAt !== 'number' || !Number.isFinite(meta.updatedAt)) return null
+  // A stamp without the copy it names cannot anchor a merge: treat this
+  // browser as never synced rather than guess what the account held.
+  const synced = typeof meta.baseUpdatedAt === 'number' && Number.isFinite(meta.baseUpdatedAt)
+    && !!meta.base && typeof meta.base === 'object'
   return {
     updatedAt: meta.updatedAt,
     dirty: meta.dirty === true,
-    baseUpdatedAt: typeof meta.baseUpdatedAt === 'number' && Number.isFinite(meta.baseUpdatedAt) ? meta.baseUpdatedAt : null,
+    baseUpdatedAt: synced ? meta.baseUpdatedAt as number : null,
+    base: synced ? sanitizeOutpatientPrefs(meta.base) : null,
   }
 }
 
@@ -226,7 +234,12 @@ export const useOutpatientPrefsStore = create<OutpatientPrefsStore>()(
           },
           syncMeta: {
             ...state.syncMeta,
-            [key]: { updatedAt, dirty: true, baseUpdatedAt: previous?.baseUpdatedAt ?? null },
+            [key]: {
+              updatedAt,
+              dirty: true,
+              baseUpdatedAt: previous?.baseUpdatedAt ?? null,
+              base: previous?.base ?? null,
+            },
           },
         }
       }),

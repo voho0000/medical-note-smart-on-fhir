@@ -8,16 +8,20 @@
 // the account has it, and a dirty edit survives a reload.
 //
 // Conflicts: two devices can both change the settings before either sees the
-// other. Neither side's work is dropped — formats are merged by id (the newer
-// side's version of a format both touched wins), and the single choices
-// (pinned list, filters, modes) take the newer side. A format deleted on one
-// device while the other edited it comes back rather than being lost.
+// other. Each browser remembers the account copy it last synced — the copy
+// both sides started from — and a merge compares each side with it, one
+// format and one choice at a time: whatever only one side changed takes that
+// side, and only a format or choice BOTH changed goes to the newer side. A
+// deletion never beats an edit: a format deleted on one device while the
+// other edited it comes back rather than being lost.
 
 import { doc, onSnapshot, runTransaction, type DocumentData } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
 import {
+  EMPTY_OUTPATIENT_PREFS,
   sanitizeOutpatientPrefs,
   useOutpatientPrefsStore,
+  type EmrCustomFormat,
   type OutpatientPrefs,
 } from '@/src/application/stores/outpatient-prefs.store'
 
@@ -45,20 +49,53 @@ export function toRemoteOutpatientPrefs(prefs: OutpatientPrefs, updatedAt: numbe
   return JSON.parse(JSON.stringify({ pinnedLabs, labMode, formats, activeFormatId, handoffMode, updatedAt }))
 }
 
-/** Both sides changed: keep every format (the preferred side's version of a
- *  format both have), and each single choice from the preferred side unless
- *  it never set one. */
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+/**
+ * Three-way merge of two copies that both started from `base`. Each format
+ * (by id) and each single choice is decided on its own: the side that changed
+ * it wins; when both changed the same one, the newer side (`mineIsNewer`)
+ * wins — except that a deletion never beats an edit. Formats keep `mine`'s
+ * order, then any only `theirs` has.
+ */
 export function mergeOutpatientPrefs(
-  preferred: OutpatientPrefs,
-  other: OutpatientPrefs,
+  base: OutpatientPrefs,
+  mine: OutpatientPrefs,
+  theirs: OutpatientPrefs,
+  mineIsNewer: boolean,
 ): OutpatientPrefs {
-  const ids = new Set(preferred.formats.map((format) => format.id))
+  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode'>(key: K): OutpatientPrefs[K] => {
+    const mineChanged = !same(mine[key], base[key])
+    const theirsChanged = !same(theirs[key], base[key])
+    if (mineChanged && theirsChanged) return mineIsNewer ? mine[key] : theirs[key]
+    return mineChanged ? mine[key] : theirs[key]
+  }
+  const byId = (formats: EmrCustomFormat[]) => new Map(formats.map((format) => [format.id, format]))
+  const baseFormats = byId(base.formats)
+  const mineFormats = byId(mine.formats)
+  const theirFormats = byId(theirs.formats)
+  const keep = (id: string): EmrCustomFormat | undefined => {
+    const was = baseFormats.get(id)
+    const ours = mineFormats.get(id)
+    const their = theirFormats.get(id)
+    if (same(ours, was)) return their
+    if (same(their, was)) return ours
+    // Both sides touched it. Deleted on one side, edited on the other: keep
+    // the edit. Edited on both: the newer side.
+    if (!ours) return their
+    if (!their) return ours
+    return mineIsNewer ? ours : their
+  }
+  const ids = [
+    ...mine.formats.map((format) => format.id),
+    ...theirs.formats.map((format) => format.id).filter((id) => !mineFormats.has(id)),
+  ]
   return sanitizeOutpatientPrefs({
-    pinnedLabs: preferred.pinnedLabs ?? other.pinnedLabs,
-    labMode: preferred.labMode ?? other.labMode,
-    formats: [...preferred.formats, ...other.formats.filter((format) => !ids.has(format.id))],
-    activeFormatId: preferred.activeFormatId ?? other.activeFormatId,
-    handoffMode: preferred.handoffMode ?? other.handoffMode,
+    pinnedLabs: choice('pinnedLabs'),
+    labMode: choice('labMode'),
+    formats: ids.map(keep).filter((format): format is EmrCustomFormat => !!format),
+    activeFormatId: choice('activeFormatId'),
+    handoffMode: choice('handoffMode'),
   })
 }
 
@@ -98,9 +135,9 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       const result = await runTransaction(database, async (transaction) => {
         const current = readRemoteOutpatientPrefs((await transaction.get(userRef)).data())
         const changedElsewhere = current !== null && current.updatedAt !== (meta?.baseUpdatedAt ?? null)
-        const localIsNewer = !current || (meta?.updatedAt ?? 0) >= current.updatedAt
+        const mineIsNewer = !current || (meta?.updatedAt ?? 0) >= current.updatedAt
         const next = changedElsewhere
-          ? localIsNewer ? mergeOutpatientPrefs(local, current.prefs) : mergeOutpatientPrefs(current.prefs, local)
+          ? mergeOutpatientPrefs(meta?.base ?? EMPTY_OUTPATIENT_PREFS, local, current.prefs, mineIsNewer)
           : local
         const stamp = Math.max(meta?.updatedAt ?? Date.now(), (current?.updatedAt ?? 0) + 1)
         const field = toRemoteOutpatientPrefs(next, stamp)
@@ -111,15 +148,18 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       const state = store.getState()
       const now = state.byUser[userId]
       const nowMeta = state.syncMeta[userId]
+      // The account now holds result.next: that is the new common copy.
+      const synced = { baseUpdatedAt: result.stamp, base: result.next }
       if (nowMeta?.updatedAt === meta?.updatedAt || !now) {
-        state.replace(userId, result.next, { updatedAt: result.stamp, dirty: false, baseUpdatedAt: result.stamp })
+        state.replace(userId, result.next, { ...synced, updatedAt: result.stamp, dirty: false })
       } else {
-        // Edited again while this was on its way: keep the newer edit, fold
-        // in whatever the merge brought from the account, and send again.
-        state.replace(userId, mergeOutpatientPrefs(now, result.next), {
+        // Edited again while this was on its way: replay just those edits —
+        // what changed since the copy that was sent, deletions included —
+        // onto what the account now holds, and send again.
+        state.replace(userId, mergeOutpatientPrefs(local, now, result.next, true), {
+          ...synced,
           updatedAt: Math.max(nowMeta?.updatedAt ?? 0, result.stamp + 1),
           dirty: true,
-          baseUpdatedAt: result.stamp,
         })
         again = true
       }
@@ -164,18 +204,31 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       if (local && (!meta || meta.dirty || meta.baseUpdatedAt === null)) void push()
       return
     }
+    const accountCopy = { updatedAt: remote.updatedAt, dirty: false, baseUpdatedAt: remote.updatedAt, base: remote.prefs }
     if (!local) {
-      state.replace(userId, remote.prefs, { updatedAt: remote.updatedAt, dirty: false, baseUpdatedAt: remote.updatedAt })
+      state.replace(userId, remote.prefs, accountCopy)
       return
     }
-    if (!meta || meta.baseUpdatedAt === null) {
-      // First sync of this account in this browser, with settings made here
-      // before: keep both, the account's choices first.
-      const merged = mergeOutpatientPrefs(remote.prefs, local)
+    if (!meta || meta.baseUpdatedAt === null || !meta.base) {
+      // First sync of this account in this browser. With no copy in common,
+      // everything set on either side counts as a change: a format only one
+      // side has is kept, and a choice both made goes to the newer side — an
+      // edit made here since signing in over an older account copy; settings
+      // an older build saved here (no stamp) under the account's.
+      const localIsNewer = !!meta?.dirty && meta.updatedAt > remote.updatedAt
+      // The account's formats first, then the ones only this browser has.
+      const merged = mergeOutpatientPrefs(EMPTY_OUTPATIENT_PREFS, remote.prefs, local, !localIsNewer)
       if (samePrefs(merged, remote.prefs)) {
-        state.replace(userId, remote.prefs, { updatedAt: remote.updatedAt, dirty: false, baseUpdatedAt: remote.updatedAt })
+        state.replace(userId, remote.prefs, accountCopy)
       } else {
-        state.replace(userId, merged, { updatedAt: remote.updatedAt + 1, dirty: true, baseUpdatedAt: remote.updatedAt })
+        state.replace(userId, merged, {
+          ...accountCopy,
+          updatedAt: Math.max(meta?.updatedAt ?? 0, remote.updatedAt + 1),
+          dirty: true,
+        })
+        // The stamp may not move (an edit here already carried it), so the
+        // store subscription cannot be relied on to send this.
+        schedule()
       }
       return
     }
@@ -184,7 +237,7 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       return
     }
     if (remote.updatedAt !== meta.baseUpdatedAt) {
-      state.replace(userId, remote.prefs, { updatedAt: remote.updatedAt, dirty: false, baseUpdatedAt: remote.updatedAt })
+      state.replace(userId, remote.prefs, accountCopy)
     }
   }, (error) => {
     console.warn('[Outpatient prefs sync] Could not read the account:', error)

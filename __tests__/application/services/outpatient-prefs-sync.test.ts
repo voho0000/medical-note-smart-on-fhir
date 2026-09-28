@@ -79,7 +79,8 @@ it('restores the account settings in a fresh browser without writing them back',
   await settle()
   expect(local()?.pinnedLabs).toEqual(['chem:CREA'])
   expect(local()?.formats.map((f) => f.id)).toEqual(['f1'])
-  expect(meta()).toEqual({ updatedAt: 100, dirty: false, baseUpdatedAt: 100 })
+  expect(meta()).toMatchObject({ updatedAt: 100, dirty: false, baseUpdatedAt: 100 })
+  expect(meta()?.base?.pinnedLabs).toEqual(['chem:CREA'])
   expect(runTransaction).not.toHaveBeenCalled()
   expect(doc).toHaveBeenCalledWith({}, 'users', 'a')
 })
@@ -188,7 +189,7 @@ it('merges when both devices changed: every format kept, the newer choice wins',
 
 it('sends an edit left unsaved by a closed tab or an outage when the account is next read', async () => {
   store.getState().update('a', { pinnedLabs: ['chem:ALT'] })
-  store.getState().setSyncMeta('a', { ...meta()!, baseUpdatedAt: 100 })
+  store.getState().setSyncMeta('a', { ...meta()!, baseUpdatedAt: 100, base: prefs({ pinnedLabs: ['chem:CREA'] }) })
   account = remoteField({ pinnedLabs: ['chem:CREA'] }, 100)
   stop = syncOutpatientPrefsForAccount('a')
   emit(snapshot(account))
@@ -276,17 +277,126 @@ it('stops reading and writing an account after sign-out or a switch', async () =
   expect(meta()?.dirty).toBe(true)
 })
 
-describe('mergeOutpatientPrefs', () => {
-  it('keeps the preferred side’s version of a format both sides have', () => {
-    const merged = mergeOutpatientPrefs(
-      prefs({ formats: [format('f1', 'mine')] }),
-      prefs({ formats: [format('f1', 'theirs'), format('f2')] }),
-    )
-    expect(merged.formats.map((f) => [f.id, f.name])).toEqual([['f1', 'mine'], ['f2', 'f2']])
+// ── PR #173 review ─────────────────────────────────────────────────────
+// Who wins is decided per format and per choice, against the copy both sides
+// started from — never by whichever whole copy was saved last.
+
+const savedFormats = () => (account as { formats: EmrCustomFormat[] }).formats
+const savedNames = () => savedFormats().map((f) => `${f.id}:${f.name}`)
+
+it('keeps an unsaved format edit here when another device later changed something else', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ formats: [format('f1', 'old')] }, 100)))
+  await settle()
+  // Edited here while the account could not be reached.
+  ;(runTransaction as jest.Mock).mockRejectedValueOnce(new Error('unavailable'))
+  jest.setSystemTime(1_000)
+  store.getState().update('a', { formats: [format('f1', 'edited here')] })
+  await settle()
+  expect(meta()?.dirty).toBe(true)
+  // Later, another device only switched the lab filter.
+  account = remoteField({ formats: [format('f1', 'old')], labMode: 'abnormal' }, 5_000)
+  emit(snapshot(account))
+  await settle()
+  expect(savedNames()).toEqual(['f1:edited here'])
+  expect(account).toMatchObject({ labMode: 'abnormal' })
+  expect(local()?.formats.map((f) => f.name)).toEqual(['edited here'])
+  expect(local()?.labMode).toBe('abnormal')
+})
+
+it('keeps a format edited on another device when this one later changed something else', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ formats: [format('g', 'old')] }, 100)))
+  await settle()
+  // Another device edits the format; this one has not seen it yet.
+  account = remoteField({ formats: [format('g', 'edited there')] }, 5_000)
+  jest.setSystemTime(9_000)
+  store.getState().update('a', { pinnedLabs: ['chem:K'] })
+  await settle()
+  expect(savedNames()).toEqual(['g:edited there'])
+  expect(account).toMatchObject({ pinnedLabs: ['chem:K'] })
+  expect(local()?.formats.map((f) => f.name)).toEqual(['edited there'])
+})
+
+it('does not bring back a format deleted while a save was on its way', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ formats: [format('f1'), format('f2')] }, 100)))
+  await settle()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  transaction.get.mockImplementationOnce(async () => { await gate; return snapshot(account) })
+  store.getState().update('a', { pinnedLabs: ['chem:K'] })
+  await jest.advanceTimersByTimeAsync(700)
+  // Deleted while the pinned-list save waits on the account.
+  store.getState().update('a', { formats: [format('f1')] })
+  release()
+  await settle()
+  await settle()
+  expect(local()?.formats.map((f) => f.id)).toEqual(['f1'])
+  expect(savedFormats().map((f) => f.id)).toEqual(['f1'])
+  expect(account).toMatchObject({ pinnedLabs: ['chem:K'] })
+  expect(meta()?.dirty).toBe(false)
+})
+
+it('keeps an edit made here before this browser first read the account', async () => {
+  // Signed in, edited, and the account not read yet (slow or no network).
+  jest.setSystemTime(9_000)
+  store.getState().update('a', { pinnedLabs: ['chem:ALT'] })
+  expect(meta()).toMatchObject({ dirty: true, baseUpdatedAt: null })
+  account = remoteField({ pinnedLabs: ['chem:CREA'], formats: [format('f1')] }, 100)
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(account))
+  await settle()
+  expect(local()?.pinnedLabs).toEqual(['chem:ALT'])
+  expect(local()?.formats.map((f) => f.id)).toEqual(['f1'])
+  expect(account).toMatchObject({ pinnedLabs: ['chem:ALT'] })
+  expect(meta()?.dirty).toBe(false)
+})
+
+it('keeps a format one device edited when the other deleted it', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ formats: [format('f1', 'old'), format('f2')] }, 100)))
+  await settle()
+  account = remoteField({ formats: [format('f1', 'edited there'), format('f2')] }, 5_000)
+  jest.setSystemTime(9_000)
+  store.getState().update('a', { formats: [format('f2')] })
+  await settle()
+  expect(savedNames()).toEqual(['f2:f2', 'f1:edited there'])
+})
+
+describe('mergeOutpatientPrefs (three-way)', () => {
+  const base = prefs({ pinnedLabs: ['chem:CREA'], labMode: 'pinned', formats: [format('f1'), format('f2')] })
+  const names = (merged: OutpatientPrefs) => merged.formats.map((f) => `${f.id}:${f.name}`)
+
+  it('takes each change from the side that made it, whichever copy is newer', () => {
+    const mine = prefs({ ...base, formats: [format('f1', 'mine'), format('f2')] })
+    const theirs = prefs({ ...base, labMode: 'abnormal' })
+    for (const mineIsNewer of [true, false]) {
+      const merged = mergeOutpatientPrefs(base, mine, theirs, mineIsNewer)
+      expect(names(merged)).toEqual(['f1:mine', 'f2:f2'])
+      expect(merged.labMode).toBe('abnormal')
+    }
   })
 
-  it('falls back to the other side for a choice the preferred side never made', () => {
-    const merged = mergeOutpatientPrefs(prefs({ labMode: 'mine' }), prefs({ pinnedLabs: ['chem:K'], handoffMode: 'custom' }))
-    expect(merged).toMatchObject({ labMode: 'mine', pinnedLabs: ['chem:K'], handoffMode: 'custom' })
+  it('gives a format or choice both sides changed to the newer side', () => {
+    const mine = prefs({ ...base, labMode: 'mine', formats: [format('f1', 'mine'), format('f2')] })
+    const theirs = prefs({ ...base, labMode: 'all', formats: [format('f1', 'theirs'), format('f2')] })
+    expect(mergeOutpatientPrefs(base, mine, theirs, true)).toMatchObject({ labMode: 'mine' })
+    expect(names(mergeOutpatientPrefs(base, mine, theirs, true))).toEqual(['f1:mine', 'f2:f2'])
+    expect(mergeOutpatientPrefs(base, mine, theirs, false)).toMatchObject({ labMode: 'all' })
+    expect(names(mergeOutpatientPrefs(base, mine, theirs, false))).toEqual(['f1:theirs', 'f2:f2'])
+  })
+
+  it('honours a deletion the other side did not touch, and keeps additions from both', () => {
+    const mine = prefs({ ...base, formats: [format('f1'), format('mine-new')] })
+    const theirs = prefs({ ...base, formats: [format('f1'), format('f2'), format('their-new')] })
+    expect(names(mergeOutpatientPrefs(base, mine, theirs, false))).toEqual(['f1:f1', 'mine-new:mine-new', 'their-new:their-new'])
+  })
+
+  it('never lets a deletion beat an edit', () => {
+    const mine = prefs({ ...base, formats: [format('f1')] })
+    const theirs = prefs({ ...base, formats: [format('f1'), format('f2', 'edited')] })
+    expect(names(mergeOutpatientPrefs(base, mine, theirs, true))).toEqual(['f1:f1', 'f2:edited'])
+    expect(names(mergeOutpatientPrefs(base, theirs, mine, true))).toEqual(['f1:f1', 'f2:edited'])
   })
 })
