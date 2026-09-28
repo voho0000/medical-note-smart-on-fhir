@@ -821,15 +821,20 @@ describe('real pack · reading the map without scrolling back up', () => {
     const better = document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!
     const down = document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!
     expect(worse).toHaveTextContent('變差')
-    // Open answers are neutral; a chosen one wears the page's selected tint,
-    // a warning the risk colour, an improvement the success green.
+    // Open answers carry their colour on the frame only, on one ground
+    // (「沒選的時候可以只有外框有顏色」); a chosen one fills in: the page's
+    // selected tint, a warning the risk colour, an improvement the success green.
     for (const open of [worse, better, down]) expect(open.className).toContain('bg-card')
+    expect(worse.className).toContain('border-destructive/45')
+    expect(better.className).toContain('border-emerald-600/45')
+    expect(down.className).toContain('border-amber-500/55')
     fireEvent.click(worse)
     expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!.className).toContain('bg-destructive/10')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!)
     expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="better"]')!.className).toContain('bg-emerald-50')
     fireEvent.click(down)
-    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="down"]')!.className).toContain('bg-primary/10')
+    // 體重減少: amber — dry weight or dehydration, look at which.
+    expect(document.querySelector('[data-visit-ask="weight-trend"][data-value="down"]')!.className).toContain('bg-amber-50')
   })
 })
 

@@ -36,15 +36,32 @@ export function visitAnswerTone(id: VisitAsk['id'], value: string): AnswerTone {
 const SELECTED = 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/10 dark:bg-primary/15'
 const SELECTED_RISK = 'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/10 dark:bg-destructive/20'
 const SELECTED_GOOD = 'border-emerald-600/50 bg-emerald-50 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-200'
-const OPEN = 'border-border bg-card text-foreground hover:bg-muted/40'
+/*
+ * 體重減少 is neither: decongestion toward dry weight, or dehydration and
+ * wasting. It wears the warning amber — 「look at which」 — apart from the
+ * stable blue and clear of 變差's red (clinician question 2026-09-28: 「體重減少
+ * 不確定是好的還壞的徵兆…用黃色或橘色這種跟穩定的藍色有區別的顏色？」).
+ */
+const SELECTED_CHANGE = 'border-amber-500/60 bg-amber-50 text-amber-900 hover:bg-amber-50 dark:border-amber-400/50 dark:bg-amber-500/15 dark:text-amber-200'
+/*
+ * Before one is chosen each answer's frame already carries its colour, on the
+ * same ground as the others — so 變差 reads as the red one and 進步 as the
+ * green one at a glance; choosing fills it in and sets the words in the
+ * colour, bold (clinician feedback 2026-09-28: 「能沒選擇時就有一點顏色區隔
+ * 嗎」, then 「沒選的時候可以只有外框有顏色，其他底色維持大家都一樣」).
+ */
+const IDLE_NEUTRAL = 'border-primary/40 bg-card text-foreground hover:bg-primary/5'
+const IDLE_RISK = 'border-destructive/45 bg-card text-foreground hover:bg-destructive/5'
+const IDLE_GOOD = 'border-emerald-600/45 bg-card text-foreground hover:bg-emerald-50/60 dark:border-emerald-400/40 dark:hover:bg-emerald-500/10'
+const IDLE_CHANGE = 'border-amber-500/55 bg-card text-foreground hover:bg-amber-50/60 dark:border-amber-400/45 dark:hover:bg-amber-500/10'
 
-const IDLE: Readonly<Record<AnswerTone, string>> = { concern: OPEN, neutral: OPEN, reassuring: OPEN, change: OPEN }
+const IDLE: Readonly<Record<AnswerTone, string>> = { concern: IDLE_RISK, neutral: IDLE_NEUTRAL, reassuring: IDLE_GOOD, change: IDLE_CHANGE }
 
-const CHOSEN: Readonly<Record<AnswerTone, string>> = { concern: SELECTED_RISK, neutral: SELECTED, reassuring: SELECTED_GOOD, change: SELECTED }
+const CHOSEN: Readonly<Record<AnswerTone, string>> = { concern: SELECTED_RISK, neutral: SELECTED, reassuring: SELECTED_GOOD, change: SELECTED_CHANGE }
 
 /**
  * A choice button's colours at the page's own size (1px border, no icon):
- * open, chosen, and — while it is the record's reading, not yet the
+ * open (its tone on the frame only), chosen (filled, bold), and — while it is the record's reading, not yet the
  * clinician's answer — chosen with a dashed border.
  */
 export function answerToneClass(tone: AnswerTone, selected: boolean, prefilled = false): string {
