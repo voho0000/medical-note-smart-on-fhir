@@ -272,23 +272,38 @@ export function EmrHandoffPanel() {
     { id: 'builtin', label: x.custom.modeBuiltin },
   ]
 
+  // The top of this panel is ONE row: the format source and its ⓘ on the
+  // left, the primary action on the right. The page title and the prose that
+  // explains the text rules live in the ⓘ — reference material earns a
+  // tooltip, not permanent lines above the content the clinician copies.
+  const modeControl = (
+    <div className="flex items-center gap-1.5">
+      <SegmentedControl
+        label={x.custom.modeLabel}
+        value={handoffMode}
+        options={modeOptions}
+        onChange={prefs.setHandoffMode}
+        hideLabel
+      />
+      <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
+        <span className="block font-semibold">{x.pageTitle}</span>
+        <span className="mt-1 block">{x.pageDescription}</span>
+        <span className="mt-2 block">{x.presetHint}</span>
+        {isCustom && <span className="mt-2 block">{x.custom.patientNote}</span>}
+      </InfoHint>
+    </div>
+  )
+
   return (
-    <div className="space-y-4">
-      {/* The prose that explains the text rules lives in the ⓘ — reference
-          material earns a tooltip, not a permanent line above a dense panel.
-          The primary action sits up here rather than under both cards: this
+    <div className="space-y-3">
+      <h2 className="sr-only">{x.pageTitle}</h2>
+      {/* The primary action sits up here rather than under both cards: this
           panel is taller than the viewport, so a footer button is permanently
           below the fold. The character count rides with it — it is the only
           warning of how much text is about to land in the chart. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex items-center gap-1.5">
-          <h2 className="text-lg font-semibold tracking-tight">{x.pageTitle}</h2>
-          <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
-            <span className="block">{x.pageDescription}</span>
-            <span className="mt-2 block">{x.presetHint}</span>
-          </InfoHint>
-        </div>
-        {hasAnything && !isCustom && (
+      {hasAnything && !isCustom && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          {modeControl}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {x.footerMeta.replace('{chars}', String(allText.length))}
@@ -298,16 +313,7 @@ export function EmrHandoffPanel() {
               {copiedKey === 'all' ? x.copiedAll : x.copyAll}
             </Button>
           </div>
-        )}
-      </div>
-
-      {hasAnything && (
-        <SegmentedControl
-          label={x.custom.modeLabel}
-          value={handoffMode}
-          options={modeOptions}
-          onChange={prefs.setHandoffMode}
-        />
+        </div>
       )}
 
       {!hasAnything && (
@@ -324,6 +330,7 @@ export function EmrHandoffPanel() {
           diagnosticReports={data?.diagnosticReports ?? []}
           copiedKey={copiedKey}
           onCopy={(text) => void doCopy('custom', text)}
+          toolbarLead={modeControl}
         />
       )}
 
@@ -597,15 +604,19 @@ function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  hideLabel = false,
 }: {
   label: string
   value: T
   options: ReadonlyArray<{ id: T; label: string }>
   onChange: (value: T) => void
+  /** Keep the label for assistive tech only, where the options speak for
+   *  themselves and the row has no room to spare. */
+  hideLabel?: boolean
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={hideLabel ? 'sr-only' : 'text-xs text-muted-foreground'}>{label}</span>
       <div className={SEGMENT_GROUP} role="group" aria-label={label}>
         {options.map((option) => (
           <button

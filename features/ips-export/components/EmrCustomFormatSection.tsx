@@ -8,7 +8,7 @@
 // exam line waiting for a decision is left out of the copy until the
 // clinician picks, for this patient only.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Check, Copy, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -37,11 +37,14 @@ export function EmrCustomFormatSection({
   diagnosticReports,
   copiedKey,
   onCopy,
+  toolbarLead,
 }: {
   pivots: Record<string, LabPivot>
   diagnosticReports: any[]
   copiedKey: string
   onCopy: (text: string) => void
+  /** The owner's format-source switch; shares this section's top row. */
+  toolbarLead?: ReactNode
 }) {
   const { t } = useLanguage()
   const c = t.ipsExport.emrHandoff.custom
@@ -113,20 +116,23 @@ export function EmrCustomFormatSection({
 
   if (rendered.length === 0) {
     return (
-      <section className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-semibold">{c.emptyTitle}</h3>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{c.emptyBody}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {([
-            ['lipid', c.starterLipid],
-            ['pinnedPerLine', c.starterPinned],
-            ['exams', c.starterExams],
-            ['blank', c.starterBlank],
-          ] as Array<[EmrStarterId, string]>).map(([starter, label]) => (
-            <Button key={starter} type="button" variant="outline" size="sm" onClick={() => startNew(starter, label)}>
-              {label}
-            </Button>
-          ))}
+      <section className="space-y-3">
+        {toolbarLead}
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-semibold">{c.emptyTitle}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{c.emptyBody}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {([
+              ['lipid', c.starterLipid],
+              ['pinnedPerLine', c.starterPinned],
+              ['exams', c.starterExams],
+              ['blank', c.starterBlank],
+            ] as Array<[EmrStarterId, string]>).map(([starter, label]) => (
+              <Button key={starter} type="button" variant="outline" size="sm" onClick={() => startNew(starter, label)}>
+                {label}
+              </Button>
+            ))}
+          </div>
         </div>
         {editorDialog}
       </section>
@@ -134,15 +140,15 @@ export function EmrCustomFormatSection({
   }
 
   return (
-    <section className="rounded-xl border bg-card p-4">
+    <section>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 flex-1 text-[0.6875rem] text-muted-foreground">{c.patientNote}</p>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => startNew('blank', '')}>
+        {toolbarLead}
+        <Button type="button" variant="outline" size="sm" className="ml-auto h-8 gap-1.5 text-xs" onClick={() => startNew('blank', '')}>
           <Plus className="h-3.5 w-3.5" />{c.newFormat}
         </Button>
       </div>
 
-      <ul ref={listRef} className="mt-2 divide-y divide-border">
+      <ul ref={listRef} className="mt-1 divide-y divide-border">
         {rendered.map(({ format, result }) => {
           const excluded = result.lines.filter((line) => !line.included)
           const copied = copiedKey === 'custom' && lastCopiedId === format.id
