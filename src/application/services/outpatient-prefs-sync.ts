@@ -112,6 +112,11 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
   let inFlight = false
   let again = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  /** The newest account read not yet acted on. A read that lands while a
+   *  save of ours is scheduled or on its way waits here until that save
+   *  settles — it is never dropped (the save may not happen at all, or may
+   *  have gone up before this other device's change). */
+  let pendingRemote: { data: DocumentData | undefined } | null = null
 
   const schedule = () => {
     if (timer) clearTimeout(timer)
@@ -128,8 +133,12 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
     if (inFlight) { again = true; return }
     const local = store.getState().byUser[userId]
     const meta = store.getState().syncMeta[userId]
-    // Nothing new to send (a queued retry after the edit already went up).
-    if (!local || (meta && !meta.dirty && meta.baseUpdatedAt !== null)) return
+    // Nothing new to send (a queued retry after the edit already went up):
+    // this was the last thing an account read could be waiting on.
+    if (!local || (meta && !meta.dirty && meta.baseUpdatedAt !== null)) {
+      reconcile()
+      return
+    }
     inFlight = true
     try {
       const result = await runTransaction(database, async (transaction) => {
@@ -174,6 +183,8 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       if (again && active) {
         again = false
         void push()
+      } else {
+        reconcile()
       }
     }
   }
@@ -184,13 +195,14 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
     schedule()
   })
 
-  const unsubscribeRemote = onSnapshot(userRef, { includeMetadataChanges: true }, (snapshot) => {
-    if (!active || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return
-    // A save of ours is on its way; its transaction reconciles with the
-    // account, and the snapshot after it reflects the result.
-    if (inFlight || timer) return
+  // Act on the newest account read, once no save of ours is scheduled or on
+  // its way (each of those calls back here when it settles).
+  function reconcile() {
+    if (!active || inFlight || timer || !pendingRemote) return
+    const { data } = pendingRemote
+    pendingRemote = null
     const state = store.getState()
-    const remote = readRemoteOutpatientPrefs(snapshot.data())
+    const remote = readRemoteOutpatientPrefs(data)
     const local = state.byUser[userId]
     const meta = state.syncMeta[userId]
     // A read that works clears an old read error; a failed save stays shown
@@ -236,9 +248,18 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
       void push()
       return
     }
-    if (remote.updatedAt !== meta.baseUpdatedAt) {
+    // Every save stamps the account higher than the copy it read, so a read
+    // at or below this browser's base is one it already holds (a read that
+    // waited out a save that since went up on top of it).
+    if (remote.updatedAt > meta.baseUpdatedAt) {
       state.replace(userId, remote.prefs, accountCopy)
     }
+  }
+
+  const unsubscribeRemote = onSnapshot(userRef, { includeMetadataChanges: true }, (snapshot) => {
+    if (!active || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return
+    pendingRemote = { data: snapshot.data() }
+    reconcile()
   }, (error) => {
     console.warn('[Outpatient prefs sync] Could not read the account:', error)
     if (active) store.getState().setSyncStatus(userId, 'error')
@@ -248,6 +269,7 @@ export function syncOutpatientPrefsForAccount(userId: string): () => void {
     active = false
     if (timer) clearTimeout(timer)
     timer = null
+    pendingRemote = null
     unsubscribeStore()
     unsubscribeRemote()
   }

@@ -364,6 +364,70 @@ it('keeps a format one device edited when the other deleted it', async () => {
   expect(savedNames()).toEqual(['f2:f2', 'f1:edited there'])
 })
 
+// ── PR #173 review, round 2 ────────────────────────────────────────────
+// An account update that arrives while a save of ours is pending is kept and
+// read once the save settles — never dropped.
+
+const stampOf = () => (account as { updatedAt: number }).updatedAt
+
+it('takes another device’s change that arrives between back-to-back saves', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ pinnedLabs: ['chem:CREA'] }, 100)))
+  await settle()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  transaction.get.mockImplementationOnce(async () => { await gate; return snapshot(account) })
+  store.getState().update('a', { pinnedLabs: ['chem:K'] })
+  await jest.advanceTimersByTimeAsync(700)
+  // A second edit while the first save waits: it schedules its own save.
+  store.getState().update('a', { pinnedLabs: ['chem:K', 'chem:ALT'] })
+  release()
+  // Both edits go up (the second right after the first) before that
+  // scheduled save comes due.
+  await jest.advanceTimersByTimeAsync(10)
+  expect(account).toMatchObject({ pinnedLabs: ['chem:K', 'chem:ALT'] })
+  // Another device now switches the filter.
+  account = { ...(account as object), labMode: 'abnormal', updatedAt: stampOf() + 1_000 }
+  emit(snapshot(account))
+  await settle()
+  expect(local()?.labMode).toBe('abnormal')
+  expect(local()?.pinnedLabs).toEqual(['chem:K', 'chem:ALT'])
+  expect(meta()).toMatchObject({ dirty: false, baseUpdatedAt: stampOf() })
+})
+
+it('takes another device’s change whose update arrives while a save is on its way', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ pinnedLabs: ['chem:CREA'] }, 100)))
+  await settle()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  transaction.get.mockImplementationOnce(async () => { await gate; return snapshot(account) })
+  store.getState().update('a', { pinnedLabs: ['chem:K'] })
+  await jest.advanceTimersByTimeAsync(700)
+  // The other device saves right after ours lands (so it holds our list),
+  // and its update reaches this browser before our save reports back.
+  const other = remoteField({ pinnedLabs: ['chem:K'], labMode: 'abnormal' }, Date.now() + 60_000)
+  emit(snapshot(other))
+  release()
+  await settle()
+  expect(local()?.labMode).toBe('abnormal')
+  expect(local()?.pinnedLabs).toEqual(['chem:K'])
+  expect(meta()).toMatchObject({ dirty: false, baseUpdatedAt: other.updatedAt })
+})
+
+it('does not roll back to an older account copy delivered after a save', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({ pinnedLabs: ['chem:CREA'] }, 100)))
+  await settle()
+  store.getState().update('a', { pinnedLabs: ['chem:K'] })
+  await settle()
+  expect(account).toMatchObject({ pinnedLabs: ['chem:K'] })
+  emit(snapshot(remoteField({ pinnedLabs: ['chem:CREA'] }, 100)))
+  await settle()
+  expect(local()?.pinnedLabs).toEqual(['chem:K'])
+  expect(meta()?.dirty).toBe(false)
+})
+
 describe('mergeOutpatientPrefs (three-way)', () => {
   const base = prefs({ pinnedLabs: ['chem:CREA'], labMode: 'pinned', formats: [format('f1'), format('f2')] })
   const names = (merged: OutpatientPrefs) => merged.formats.map((f) => `${f.id}:${f.name}`)
