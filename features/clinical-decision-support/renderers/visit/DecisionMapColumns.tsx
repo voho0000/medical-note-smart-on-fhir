@@ -17,6 +17,8 @@ import type { DecisionPointState, DecisionPointView, VisitBlock, VisitDecisionMo
 import { ChainDots, StatePill } from './visit-presentation'
 import { DecisionPointChecklist, VISIT_DETAIL_ID } from './DecisionPointDetail'
 import styles from '../cdss-poster.module.css'
+import rowStyles from './point-rows.module.css'
+import { usePointLayout } from './point-layout'
 
 /** The three-section layout's section each map block is, for its colours. */
 const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
@@ -71,6 +73,48 @@ function MapCell({
     ? [decision.record.actionLabel ?? decision.action.label, check?.text].filter(Boolean).join(' · ')
     : point.headline ?? point.why
   const title = [point.headline, point.why].filter(Boolean).join(' · ') || undefined
+  const layout = usePointLayout()
+  if (layout === 'rows') {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-expanded={open}
+        aria-controls={open ? VISIT_DETAIL_ID : undefined}
+        className={cn(
+          rowStyles.row,
+          'scroll-mt-2 @min-[40rem]:scroll-mt-24',
+          open && rowStyles.open,
+          absent && !open && rowStyles.absent,
+          point.state === 'safety' && !decision && rowStyles.safety,
+        )}
+        title={title}
+        data-dp={point.dp}
+        data-state={point.state}
+        data-source={point.source}
+        data-decided={decision ? 'true' : undefined}
+        data-in-queue={inQueue ? 'true' : undefined}
+      >
+        <span className={rowStyles.lead}>
+          <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+          <span className={cn('min-w-0 truncate text-sm font-medium', absent ? 'text-muted-foreground' : 'text-foreground')}>{point.label}</span>
+          {point.source !== sourceOfPage ? (
+            <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+          ) : null}
+        </span>
+        <span className={rowStyles.state}>
+          <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} inQueue={inQueue} />
+        </span>
+        <span className={cn(rowStyles.main, 'flex min-h-5 items-center gap-2')}>
+          <span className={cn('min-w-0 flex-1 truncate text-sm', absent ? 'text-muted-foreground' : 'text-foreground')}>{sub}</span>
+          <ChainDots chain={point.chain} isEnglish={isEnglish} />
+        </span>
+        <span className={rowStyles.link} aria-hidden="true">
+          <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none', open && 'rotate-180')} />
+        </span>
+      </button>
+    )
+  }
   return (
     <button
       type="button"
@@ -272,6 +316,7 @@ export function DecisionMapColumns({
   onShowAllChange?: (showAll: boolean) => void
 }) {
   const [ownShowAll, setOwnShowAll] = useState(false)
+  const layout = usePointLayout()
   const showAll = controlledShowAll ?? ownShowAll
   const setShowAll = (next: boolean | ((value: boolean) => boolean)) => {
     const value = typeof next === 'function' ? next(showAll) : next
@@ -512,7 +557,7 @@ export function DecisionMapColumns({
                     {bucket.label}
                   </p>
                 ) : null}
-                <ul className="grid grid-flow-dense gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3">
+                <ul className={layout === 'rows' ? rowStyles.list : 'grid grid-flow-dense gap-1.5 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3'}>
                   {bucket.points.flatMap((point) => {
                     const key = visitDecisionKey(point)
                     const item = (
@@ -540,7 +585,7 @@ export function DecisionMapColumns({
                     // The opened point's card sits directly under the cell that
                     // opened it, not at the foot of the section.
                     const opened = openKey === key && open && detail ? (
-                      <li key={`${key}-detail`} className="col-span-full space-y-1.5" data-testid="cdss-visit-detail-slot">
+                      <li key={`${key}-detail`} className={cn('col-span-full space-y-1.5', layout === 'rows' && rowStyles.detail)} data-testid="cdss-visit-detail-slot">
                         {detail}
                         <DetailStepper
                           current={point}

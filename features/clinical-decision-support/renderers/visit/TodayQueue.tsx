@@ -8,6 +8,8 @@ import type { QueueRow, QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
 import { StatePill } from './visit-presentation'
+import { usePointLayout } from './point-layout'
+import rowStyles from './point-rows.module.css'
 
 /**
  * 今天要決定: the only place on the screen with the day's treatment buttons in
@@ -46,6 +48,7 @@ export function TodayQueue({
   onOpenDetail?: (point: DecisionPointView) => void
 }) {
   const listRef = useRef<HTMLOListElement>(null)
+  const layout = usePointLayout()
   const headingRef = useRef<HTMLHeadingElement>(null)
   // The row a decision was just taken on, so focus can move on once the store
   // has re-rendered the queue: to the same row when its chain moved on or its
@@ -99,7 +102,7 @@ export function TodayQueue({
           {isEnglish ? 'Nothing to decide today.' : '今天沒有要決定的事。'}
         </p>
       ) : (
-        <ol ref={listRef} className="space-y-2">
+        <ol ref={listRef} className={layout === 'rows' ? rowStyles.list : 'space-y-2'}>
           {rows.map((row) => (
             <QueueRowBox
               key={row.key}
@@ -154,6 +157,43 @@ function BoxHeader({
         </button>
       ) : null}
     </div>
+  )
+}
+
+/** A row's first column: DP code, name and source, as the box's header has them. */
+function RowLead({ point, sourceOfPage }: { point: DecisionPointView; sourceOfPage: DecisionPointView['source'] }) {
+  return (
+    <span className={rowStyles.lead}>
+      <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+      <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{point.label}</span>
+      {point.source !== sourceOfPage ? (
+        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+      ) : null}
+    </span>
+  )
+}
+
+/** A row's last column: 依據與細節. */
+function RowLink({ point, isEnglish, detailOpen, onOpenDetail }: {
+  point: DecisionPointView
+  isEnglish: boolean
+  detailOpen: boolean
+  onOpenDetail?: (point: DecisionPointView) => void
+}) {
+  return (
+    <span className={rowStyles.link}>
+      {onOpenDetail ? (
+        <button
+          type="button"
+          className={DETAIL_LINK}
+          aria-expanded={detailOpen}
+          onClick={() => onOpenDetail(point)}
+          data-visit-row-detail={point.dp}
+        >
+          {isEnglish ? 'Reasons and guideline' : '依據與細節'}
+        </button>
+      ) : null}
+    </span>
   )
 }
 
@@ -212,6 +252,63 @@ export function QueueRowBox({
   const shown = current ?? row.steps[row.steps.length - 1]
   const point = shown.point
   const detail = detailFor?.(point)
+  const layout = usePointLayout()
+  if (layout === 'rows') {
+    const open = detailOpen ?? Boolean(detail)
+    return (
+      <Element
+        className="scroll-mt-2"
+        data-visit-queue-row={queued ? row.key : undefined}
+        data-visit-point-box={queued ? undefined : point.dp}
+        data-visit-queue-dp={row.steps[0].point.dp}
+        data-visit-current-dp={current?.point.dp}
+        data-visit-queue-state={point.state}
+        data-decided={current ? 'false' : 'true'}
+      >
+        <div className={cn(rowStyles.row, row.safety && current && rowStyles.safety, open && rowStyles.open)}>
+          <RowLead point={point} sourceOfPage={sourceOfPage} />
+          <span className={rowStyles.state}>
+            <StatePill state={row.safety && current ? 'safety' : point.state} isEnglish={isEnglish} inQueue decided={!current} />
+          </span>
+          <div className={rowStyles.main}>
+            {current ? (
+              // Wide, the buttons keep the row's right edge and the words wrap
+              // beside them; narrow, they drop under the words.
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 @min-[40rem]:flex-nowrap">
+                <div className="min-w-0 flex-1 basis-56 space-y-0.5 @min-[40rem]:basis-auto">
+                  <ChainDone steps={decidedSteps} />
+                  <p className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">{point.headline ?? point.label}</p>
+                  {point.why ? <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p> : null}
+                </div>
+                <div className="shrink-0">
+                  <VisitDecisionControls
+                    point={point}
+                    surface="queue"
+                    isEnglish={isEnglish}
+                    onDecide={onDecide ? (action) => onDecide(current, action) : undefined}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                <p className="sr-only" data-visit-decided-about="">{point.label}</p>
+                <ChainDone steps={decidedSteps.slice(0, -1)} />
+                <VisitDecisionControls
+                  point={point}
+                  decision={shown.decision}
+                  surface="queue"
+                  isEnglish={isEnglish}
+                  onClear={onClear ? () => onClear(shown) : undefined}
+                />
+              </div>
+            )}
+          </div>
+          <RowLink point={point} isEnglish={isEnglish} detailOpen={open} {...(onOpenDetail ? { onOpenDetail } : {})} />
+        </div>
+        {detail ? <div className={rowStyles.detail}>{detail}</div> : null}
+      </Element>
+    )
+  }
   return (
     <Element
       className={cn(BOX, row.safety && current ? 'border-destructive/50' : 'border-border')}
@@ -283,6 +380,24 @@ export function PointBox({
   detailOpen?: boolean
 }) {
   const absent = point.state === 'not-applicable' || point.state === 'not-included'
+  const layout = usePointLayout()
+  if (layout === 'rows') {
+    const open = detailOpen ?? Boolean(detail)
+    return (
+      <div data-visit-point-box={point.dp} data-state={point.state} className="scroll-mt-2">
+        <div className={cn(rowStyles.row, absent && rowStyles.absent, open && rowStyles.open)}>
+          <RowLead point={point} sourceOfPage={sourceOfPage} />
+          <span className={rowStyles.state}><StatePill state={point.state} isEnglish={isEnglish} /></span>
+          <div className={cn(rowStyles.main, 'space-y-0.5')}>
+            <p className={cn('text-sm leading-snug', absent ? 'text-muted-foreground' : 'text-foreground')}>{point.headline ?? point.label}</p>
+            {point.why && !absent ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
+          </div>
+          <RowLink point={point} isEnglish={isEnglish} detailOpen={open} {...(onOpenDetail ? { onOpenDetail } : {})} />
+        </div>
+        {detail ? <div className={rowStyles.detail}>{detail}</div> : null}
+      </div>
+    )
+  }
   return (
     <div
       className={cn(BOX, absent ? 'border-dashed border-border bg-transparent' : 'border-border')}

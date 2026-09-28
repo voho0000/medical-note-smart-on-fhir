@@ -1,0 +1,104 @@
+/* 一行式: every point on one line, in four columns that line up down the
+   whole section — name, state, what it says (and its buttons), 依據. A group's
+   points share one frame, split by hairlines, rather than a box each. */
+
+.list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--background);
+}
+
+.list > * + * {
+  border-top: 1px solid var(--border);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "lead lead link"
+    "state main main";
+  align-items: start;
+  column-gap: 0.625rem;
+  row-gap: 0.375rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+}
+
+@container (min-width: 40rem) {
+  .row {
+    grid-template-columns: 12rem 5.25rem minmax(0, 1fr) auto;
+    grid-template-areas: "lead state main link";
+  }
+}
+
+/* The DP code sits on the name's first line when a long name wraps. */
+.lead {
+  grid-area: lead;
+  display: flex;
+  min-width: 0;
+  min-height: 1.25rem;
+  align-items: baseline;
+  gap: 0.375rem;
+  padding-top: 0.0625rem;
+}
+
+.state {
+  grid-area: state;
+  display: flex;
+  min-height: 1.25rem;
+  align-items: center;
+}
+
+.main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.link {
+  grid-area: link;
+  display: flex;
+  min-height: 1.25rem;
+  align-items: center;
+  justify-self: end;
+}
+
+/* A row whose card is open, and a row that is a button (the map's cells). */
+.open {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+
+button.row {
+  transition: background-color 120ms ease;
+}
+
+button.row:hover {
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+
+button.row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* A safety row keeps the map's red, as a bar down its edge rather than a frame. */
+.safety {
+  box-shadow: inset 3px 0 0 var(--destructive);
+}
+
+.absent {
+  background: transparent;
+}
+
+/* The opened card, under its row and inside the same frame. */
+.detail {
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.row { transition: none; }
+}

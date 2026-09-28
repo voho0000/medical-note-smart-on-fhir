@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../../types'
 import type {
@@ -41,6 +41,8 @@ import type { VisitMapSurfaces } from './visit-surfaces'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
+import { usePointLayout } from './point-layout'
+import rowStyles from './point-rows.module.css'
 
 const ASKS_DETAIL_ID = 'cdss-visit-asks-detail'
 
@@ -176,6 +178,7 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
+  const pointLayout = usePointLayout()
   // 顯示全部, on the status line beside 補填／修改量測 rather than a row of its own.
   const [showAllPoints, setShowAllPoints] = useState(false)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
@@ -400,7 +403,17 @@ export function VisitDecisionScreen({
     else pairs[pairs.length - 1].push(point)
     return pairs
   }, [])
-  const boxPairs = (pairs: DecisionPointView[][]) => (
+  // 一行式: one frame, a row per pillar, its card under it (see point-layout).
+  const boxPairs = (pairs: DecisionPointView[][]) => pointLayout === 'rows' ? (
+    <div className={rowStyles.list}>
+      {pairs.flat().map((point) => (
+        <Fragment key={point.dp}>
+          {pillarBox(point)}
+          {detailFor(point) ? <div className={rowStyles.detail}>{detailFor(point)}</div> : null}
+        </Fragment>
+      ))}
+    </div>
+  ) : (
     <div className="space-y-2">
       {pairs.map((pair) => {
         const opened = pair.find((point) => detailFor(point))

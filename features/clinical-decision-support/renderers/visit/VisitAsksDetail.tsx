@@ -5,6 +5,8 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
 import { StatePill } from './visit-presentation'
+import { usePointLayout } from './point-layout'
+import rowStyles from './point-rows.module.css'
 import type { DecisionPointState, VisitAnswers, VisitAsk, VisitStage } from '../../types'
 
 /**
@@ -79,6 +81,7 @@ export function VisitAsksDetail({
   onToggle: (open: boolean) => void
 }) {
   const opening = openingAnswers(asks, answers)
+  const layout = usePointLayout()
   const reason = opening.length
     ? `${opening.map((item) => `${item.ask.label}${isEnglish ? ' ' : ''}${item.label}`).join(isEnglish ? ', ' : '、')}${isEnglish ? ': opened for the fuller assessment' : '，已展開完整評估'}`
     : firstAssessment
@@ -121,6 +124,32 @@ export function VisitAsksDetail({
       data-testid="cdss-visit-asks-detail"
       data-state={state}
     >
+      {layout === 'rows' ? (
+        // 一行式: the same four columns as the map's rows (see point-layout).
+        <summary
+          className={cn(rowStyles.row, 'cursor-pointer list-none rounded-md hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden')}
+          data-testid="cdss-visit-asks-detail-toggle"
+        >
+          <span className={rowStyles.lead}>
+            <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{dp}</span>
+            <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{label}</span>
+          </span>
+          <span className={rowStyles.state}><StatePill state={state} isEnglish={isEnglish} /></span>
+          <span className={cn(rowStyles.main, 'space-y-0.5')}>
+            <span className={cn('block text-sm leading-snug text-foreground', state === 'ask' && 'font-semibold')} data-testid="cdss-visit-asks-detail-headline">{headline}</span>
+            {reason ? (
+              <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">{reason}</span>
+            ) : null}
+          </span>
+          <span className={cn(rowStyles.link, 'gap-0.5 text-xs font-medium text-primary')}>
+            {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
+            <ChevronDown
+              className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
+              aria-hidden="true"
+            />
+          </span>
+        </summary>
+      ) : (
       <summary
         className="block cursor-pointer list-none space-y-1.5 rounded-md px-2.5 py-2 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
         data-testid="cdss-visit-asks-detail-toggle"
@@ -147,6 +176,7 @@ export function VisitAsksDetail({
           </span>
         ) : null}
       </summary>
+      )}
       <div className="border-t border-border">
         {content}
       </div>

@@ -556,3 +556,26 @@ describe('visit decision screen · reachability and copy', () => {
     expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
   })
 })
+
+// Clinician request 2026-09-28: 「DP 改成一行式而不是一格然後一行有兩格」 — a
+// trial layout, switched in this browser only, to compare on screen.
+describe('visit decision screen · 一行式 trial layout', () => {
+  it('draws the same rows and cells one line each in one frame, and decides the same way', () => {
+    localStorage.setItem('visit-point-layout', 'rows')
+    render(<Harness model={p5Model()} />)
+    expect(queueRows('treatment').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
+    expect(screen.getByTestId('cdss-visit-queue-treatment').querySelector('ol')).toHaveClass('list')
+    expect(row('DP-07').firstElementChild).toHaveClass('row')
+    expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
+    expect(row('DP-07')).toHaveTextContent('LVEF 30%、ACEi 中；SBP 112、K 4.6、eGFR 48')
+    expect(cell('DP-08')).toHaveClass('row')
+    expect(cell('DP-08')).toHaveTextContent('需你確認')
+
+    openSection('treatment')
+    fireEvent.click(primaryOf(row('DP-07')))
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(row('DP-07')).toHaveTextContent('已記錄')
+    expect(row('DP-07')).toHaveTextContent('回應檢查：K、Cr、血壓，1–2 週內')
+    expect(primaryOf(row('DP-09'))).toHaveFocus()
+  })
+})
