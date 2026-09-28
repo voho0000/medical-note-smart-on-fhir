@@ -2440,14 +2440,15 @@ export function ClinicalDecisionSupportView({
             </>
           )}
           outlookContent={result.packId === HEART_FAILURE_PACK_ID ? (
-            // Open at first paint, the models too (clinician feedback
-            // 2026-09-28: 「預後模型能預設展開嗎」); each still folds.
-            <details open className="border-t border-border pt-2" data-testid="cdss-visit-prognosis">
-              <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            // A group of the map, always shown (clinician feedback 2026-09-28:
+            // 「預後模型能預設展開嗎」): one line per model, so there is
+            // nothing left to fold.
+            <section className="space-y-1.5" data-testid="cdss-visit-prognosis">
+              <p className="px-0.5 pt-1.5 text-[11px] font-semibold text-muted-foreground">
                 {isEnglish ? 'Prognosis models' : '預後模型'}
-              </summary>
-              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} defaultOpen {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} />
-            </details>
+              </p>
+              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} {...(calculatorAutofill ? { autofill: calculatorAutofill } : {})} />
+            </section>
           ) : undefined}
           footer={(
             <>

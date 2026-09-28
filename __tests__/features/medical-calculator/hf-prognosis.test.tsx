@@ -62,6 +62,24 @@ describe('HF prognosis calculator boundary', () => {
     expect(within(dialog).getByRole('status')).toHaveTextContent('尚未計算風險')
     expect(within(dialog).getByText('30%')).toBeVisible()
   })
+  // Clinician feedback 2026-09-28: 「能幫我改一行式畫面，而且 UI 要符合決策地圖」.
+  it('draws each model as one row that is itself the button: name, outcome, status, and what it opens', () => {
+    render(<HfPrognosisModels locale="zh-TW" evidence={{ LVEF: { value: '60%', date: '2026-09-01' } }} autofill={emptyAutofill as never} />)
+    const maggic = screen.getByTestId('open-prognosis-calculator-maggic')
+    expect(maggic.tagName).toBe('BUTTON')
+    expect(maggic).toHaveTextContent('MAGGIC')
+    expect(maggic).toHaveTextContent('1、3 年全因死亡風險')
+    expect(maggic).toHaveTextContent(/待填 \d+ 項/)
+    expect(maggic).toHaveTextContent('計算機')
+    const shfm = screen.getByTestId('open-prognosis-calculator-shfm')
+    // The row carries the acronym; the full name stays in its title and dialog.
+    expect(shfm).toHaveTextContent(/^SHFM/)
+    expect(shfm).toHaveTextContent('公式待串接')
+    expect(shfm).toHaveTextContent('資料與引用')
+    expect(shfm).toHaveAttribute('title', expect.stringContaining('Seattle Heart Failure Model'))
+    // Nothing folds: no <details> left inside the list.
+    expect(screen.getByTestId('hf-prognosis-models').querySelector('details')).toBeNull()
+  })
   // Clinician feedback 2026-09-28: 「醫療計算機明明有，直接複用就好」.
   it('opens the medical calculator itself for a model it implements (MAGGIC), inputs and all', () => {
     mockUseLabAutofill.mockReturnValue({ autofill: emptyAutofill, isLoading: false, error: null, retry: jest.fn(async () => {}) } as unknown as ReturnType<typeof useLabAutofill>)
