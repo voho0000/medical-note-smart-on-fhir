@@ -2436,11 +2436,13 @@ export function ClinicalDecisionSupportView({
             </>
           )}
           outlookContent={result.packId === HEART_FAILURE_PACK_ID ? (
-            <details className="border-t border-border pt-2" data-testid="cdss-visit-prognosis">
+            // Open at first paint, the models too (clinician feedback
+            // 2026-09-28: 「預後模型能預設展開嗎」); each still folds.
+            <details open className="border-t border-border pt-2" data-testid="cdss-visit-prognosis">
               <summary className="flex min-h-11 cursor-pointer items-center text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {isEnglish ? 'Prognosis models' : '預後模型'}
               </summary>
-              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} />
+              <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} defaultOpen />
             </details>
           ) : undefined}
           footer={(

@@ -7,7 +7,8 @@ import { tr } from '../types'
 import { HF_PROGNOSIS_MODELS, evidenceForModel, type PrognosisEvidence, type HfPrognosisModelId } from './models'
 import { PrognosisModelDetail } from './PrognosisModelDetail'
 
-export function HfPrognosisModels({ locale, evidence = {} }: { locale: string; evidence?: PrognosisEvidence }) {
+/** `defaultOpen`: each model starts unfolded (the decision map's 03); it still folds. */
+export function HfPrognosisModels({ locale, evidence = {}, defaultOpen = false }: { locale: string; evidence?: PrognosisEvidence; defaultOpen?: boolean }) {
   const [selected, setSelected] = useState<HfPrognosisModelId | null>(null)
   const model = HF_PROGNOSIS_MODELS.find(item => item.id === selected)
   const en = locale === 'en'
@@ -15,7 +16,7 @@ export function HfPrognosisModels({ locale, evidence = {} }: { locale: string; e
     {HF_PROGNOSIS_MODELS.map(item => {
       const values = evidenceForModel(item, evidence)
       const missing = item.fields.filter(field => !values[field.key]?.value)
-      return <details key={item.id} className="border-t border-border" data-testid={`hf-prognosis-model-${item.id}`}>
+      return <details key={item.id} open={defaultOpen || undefined} className="border-t border-border" data-testid={`hf-prognosis-model-${item.id}`}>
         <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span className="font-semibold">{item.name}</span>
           <span className="mt-1 block text-xs text-muted-foreground">{tr(locale, item.outcome)} · {en ? 'Formula pending' : '公式待串接'}</span>
