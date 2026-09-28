@@ -143,4 +143,39 @@ describe('resolvePinnedLab', () => {
   it('ignores reminder ids', () => {
     expect(resolvePinnedLab({}, makePinnedLabReminder('x')).points).toEqual([])
   })
+
+  describe('several records on one day (PR #170 review)', () => {
+    it('drops an entered-in-error record before picking, not after merging', () => {
+      const pivots = buildLabPivots([
+        obs('K', '2026-09-18', 9.9, { unit: 'mmol/L', status: 'entered-in-error' }),
+        // The merged cell's status becomes "entered-in-error|final".
+        obs('K', '2026-09-18', 4.4, { unit: 'mmol/L', status: 'final' }),
+      ])
+      const latest = resolvePinnedLab(pivots, 'chem:K').latest
+      expect(latest?.value).toBe('4.4')
+      expect(latest?.sameDayCount).toBe(1)
+    })
+
+    it('keeps the picked value with its own unit', () => {
+      const pivots = buildLabPivots([
+        obs('CREA', '2026-09-18', 88.4, { unit: 'umol/L' }),
+        obs('CREA', '2026-09-18', 1, { unit: 'mg/dL' }),
+      ])
+      const latest = resolvePinnedLab(pivots, 'chem:CREA').latest
+      expect(latest?.value).toBe('88.4')
+      expect(latest?.cell.unit).toBe('umol/L')
+      expect(latest?.sameDayCount).toBe(2)
+    })
+
+    it('keeps the picked value with its own comparator and flag', () => {
+      const pivots = buildLabPivots([
+        obs('CRP', '2026-09-18', 0.5, { unit: 'mg/dL', comparator: '<' }),
+        obs('CRP', '2026-09-18', 3.2, { unit: 'mg/dL', interpretation: 'H' }),
+      ])
+      const latest = resolvePinnedLab(pivots, 'chem:CRP').latest
+      expect(latest?.value).toBe('<0.5')
+      expect(latest?.cell.isAbnormal).toBeFalsy()
+      expect(latest?.cell.interpretationCode).toBeUndefined()
+    })
+  })
 })

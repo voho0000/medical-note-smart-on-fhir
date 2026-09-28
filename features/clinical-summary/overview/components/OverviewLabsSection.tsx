@@ -17,7 +17,14 @@ import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs
 import type { OverviewLabMode } from '@/src/application/stores/outpatient-prefs.store'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
-import { buildLabPivots, type LabCell, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  buildLabPivots,
+  primaryCellRecord,
+  recordDisplayValue,
+  type LabCell,
+  type LabCellRecord,
+  type LabRow,
+} from '@/src/shared/utils/lab-pivot.utils'
 import { useLabTrendOpener } from '@/features/clinical-summary/reports/hooks/useLabTrendOpener'
 import { preloadCumulativeLabTrendModule } from '@/features/clinical-summary/reports/components/cumulative-lab-trend-loader'
 import type { OverviewLabRow, OverviewLabsData } from '../hooks/useOverviewData'
@@ -50,16 +57,44 @@ function shortDayLabel(day: string): string {
  * view, but in a ~57px overview column that string is the only thing that
  * truncates, and it truncates into a number nobody can read.
  *
- * The FIRST record is the one shown. For eGFR — where these pairs mostly come
- * from — the second value is the NHI's own automatic calculation alongside the
- * reporting lab's, not a revision of it, so "latest wins" would quietly prefer
- * the derived number over the reported one. The superscript is the total count
- * for that day, and the cell's tooltip still carries every value.
+ * The FIRST valid record is the one shown. For eGFR — where these pairs mostly
+ * come from — the second value is the NHI's own automatic calculation
+ * alongside the reporting lab's, not a revision of it, so "latest wins" would
+ * quietly prefer the derived number over the reported one.
+ *
+ * The shown value carries ITS OWN comparator and flag (primaryCellRecord): the
+ * cell's merged flag belongs to "some record that day", and gluing another
+ * record's ↑ to a normal number is a clinical error. Entered-in-error and
+ * cancelled records never show. When another valid record of the day is
+ * abnormal, the count marker says so in the abnormal colour, and the tooltip
+ * lists every value with its own unit and flag.
  */
-function summariseCellValue(cell: LabCell): { shown: string; total: number } {
-  const all = cell.allValues
-  if (!all || all.length < 2) return { shown: cell.value, total: 1 }
-  return { shown: all[0], total: all.length }
+function flagArrow(record: LabCellRecord): string {
+  if (!record.isAbnormal) return ''
+  if (record.interpretationCode?.startsWith('H')) return ' ↑'
+  if (record.interpretationCode?.startsWith('L')) return ' ↓'
+  return ''
+}
+
+function summariseCell(cell: LabCell): {
+  shown: string
+  record: LabCellRecord
+  total: number
+  otherAbnormal: boolean
+  everyValue: string
+} | null {
+  const primary = primaryCellRecord(cell)
+  if (!primary) return null
+  const { record, valid } = primary
+  return {
+    shown: recordDisplayValue(record),
+    record,
+    total: valid.length,
+    otherAbnormal: valid.some((other) => other !== record && other.isAbnormal),
+    everyValue: valid
+      .map((each) => `${recordDisplayValue(each)}${flagArrow(each)}${each.unit ? ` ${each.unit}` : ''}`)
+      .join(' / '),
+  }
 }
 
 // A cell narrow enough to clip its content is the one place the pivot hides
@@ -362,7 +397,8 @@ export function OverviewLabsSection({
         visibleIndexes.forEach((sourceIndex, index) => {
           const cell = row.cells[sourceIndex]
           const key = `${row.mapKey}-${visibleColumns[index]?.day ?? index}`
-          if (!cell) {
+          const summary = cell ? summariseCell(cell) : null
+          if (!summary) {
             nodes.push(
               <div
                 key={key}
@@ -376,22 +412,22 @@ export function OverviewLabsSection({
             )
             return
           }
-          const { shown, total } = summariseCellValue(cell)
+          const { shown, record, total, otherAbnormal, everyValue } = summary
           // Narrative microbiology results must not size an entire date column.
           // Numeric values keep their intrinsic width and are never truncated.
           const numeric = /^[<>≤≥]?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
-          const valueText = `${shown}${cell.isAbnormal && cell.interpretationCode?.startsWith('H') ? ' ↑' : ''}${cell.isAbnormal && cell.interpretationCode?.startsWith('L') ? ' ↓' : ''}`
+          const valueText = `${shown}${flagArrow(record)}`
           nodes.push(
             <div
               key={key}
               className={cn(
                 'min-w-0 flex items-center justify-center px-2 py-0.5 text-center text-xs leading-[14px] tabular-nums',
                 index > 0 && 'border-l border-border',
-                cell.isAbnormal
+                record.isAbnormal
                   ? 'bg-clinical-abnormal/[0.06] font-bold text-clinical-abnormal'
                   : cn('text-foreground', zebra),
               )}
-              title={cell.unit ? `${cell.value} ${cell.unit}` : cell.value}
+              title={everyValue}
             >
               {numeric ? (
                 <span className="whitespace-nowrap">{valueText}</span>
@@ -402,8 +438,11 @@ export function OverviewLabsSection({
                 // One character, so the value keeps the column. "+1"
                 // cost twice this and pushed 37.87 into an ellipsis.
                 <sup
-                  aria-label={strings.labs.sameDayCount.replace('{count}', String(total))}
-                  className="shrink-0 text-[0.5rem] font-normal leading-none text-muted-foreground"
+                  aria-label={(otherAbnormal ? strings.labs.sameDayOtherAbnormal : strings.labs.sameDayCount).replace('{count}', String(total))}
+                  className={cn(
+                    'shrink-0 text-[0.5rem] leading-none',
+                    otherAbnormal ? 'font-bold text-clinical-abnormal' : 'font-normal text-muted-foreground',
+                  )}
                 >
                   {total}
                 </sup>

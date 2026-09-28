@@ -48,6 +48,7 @@ export type EmrFormatNote =
   | { type: 'labNoResult'; line: number; lab: string }
   | { type: 'labSameDayMany'; line: number; lab: string; date: string; count: number; value: string }
   | { type: 'labFewer'; line: number; lab: string; wanted: number; got: number }
+  | { type: 'labSeriesUnits'; line: number; lab: string; units: string[] }
   | { type: 'mixedDates'; line: number; labs: Array<{ lab: string; date?: string }> }
   | { type: 'labUnknown'; line: number; lab: string }
   | { type: 'examMissing'; line: number; exam: EmrExamKind; newerWithoutTextDate?: string }
@@ -254,6 +255,24 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
       }
       return series
     }
+    // A series that crosses units ("88.4 umol/L" then "1 mg/dL", often two
+    // hospitals) is never converted and never printed as if it were one
+    // unit: a value whose unit differs from the newest one carries its own
+    // unit, the format's unit field keeps the newest, and the line says so.
+    const seriesValues = (id: string, point: PinnedLabPoint, count: number): string => {
+      const series = seriesOf(id, point, count)
+      const unitOf = (p: PinnedLabPoint) => (p.cell.unit ?? '').trim()
+      const unitKey = (p: PinnedLabPoint) => unitOf(p).normalize('NFKC').replace(/\s+/g, '').toLowerCase()
+      const newest = unitKey(point)
+      const differs = (p: PinnedLabPoint) => unitKey(p) !== newest
+      if (series.some(differs) && !notes.some((n) => n.type === 'labSeriesUnits' && n.line === lineNo && n.lab === id)) {
+        const units = [...new Set(series.map((p) => unitOf(p) || '—'))]
+        notes.push({ type: 'labSeriesUnits', line: lineNo, lab: id, units })
+      }
+      return series
+        .map((p) => (differs(p) && unitOf(p) ? `${p.value} ${unitOf(p)}` : p.value))
+        .join(SERIES_JOIN)
+    }
     let text = ''
     for (const token of tokens) {
       if (token.kind === 'text') {
@@ -269,7 +288,7 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
           text += token.field === 'value' || token.field === 'date' ? format.missingText : ''
         } else if (token.field === 'value') {
           text += token.count
-            ? seriesOf(token.lab, point, token.count).map((p) => p.value).join(SERIES_JOIN)
+            ? seriesValues(token.lab, point, token.count)
             : point.value
         } else if (token.field === 'unit') {
           text += point.cell.unit ?? ''

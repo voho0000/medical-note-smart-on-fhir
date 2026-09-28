@@ -23,6 +23,8 @@ import { categorizeObservation, LAB_CATEGORIES } from './lab-categories'
 import {
   getLabCompatibilityCanonicalDisplay,
   labKeyInCategory,
+  primaryCellRecord,
+  recordDisplayValue,
   resolveLabTextKey,
   type LabCell,
   type LabPivot,
@@ -320,15 +322,16 @@ export function searchPinnableLabs(query: string, catalog = getPinnableLabCatalo
 // Resolving one pinned analyte for the current patient
 // ---------------------------------------------------------------------------
 
-const INVALID_STATUSES = new Set(['entered-in-error', 'cancelled'])
-
 export interface PinnedLabPoint {
   /** Collection day, "YYYY-MM-DD". */
   date: string
+  /** The ONE record this point prints — its unit, comparator and flag are
+   *  that record's own, never merged from another record of the same day. */
   cell: LabCell
-  /** The value printed for this day: the FIRST source record. When the day
-   *  holds several, `sameDayCount` says so and `cell.allValues` has them all. */
+  /** The value printed for this day: the first valid source record, with its
+   *  comparator. When the day holds several, `sameDayCount` says so. */
   value: string
+  /** Valid (not entered-in-error / cancelled) records on this day. */
   sameDayCount: number
 }
 
@@ -341,15 +344,28 @@ export interface ResolvedPinnedLab {
   points: PinnedLabPoint[]
 }
 
-function usableValue(cell: LabCell | undefined): string | null {
-  if (!cell) return null
-  if (cell.status && INVALID_STATUSES.has(cell.status)) return null
-  const first = (cell.allValues?.[0] ?? cell.value ?? '').trim()
-  if (!first || first === '—') return null
-  // "<5" must never paste as "5". The comparator belongs to the cell's single
-  // record; with several same-day records it is not known which one it was.
-  const single = !cell.allValues || cell.allValues.length < 2
-  return single && cell.comparator && !/^[<>≤≥]/.test(first) ? `${cell.comparator}${first}` : first
+/**
+ * The record one pinned value is read from, for one collection day — the
+ * same record the overview cell shows (see primaryCellRecord): invalid
+ * records dropped first, the value with its own unit, comparator and flag.
+ */
+function pickRecord(cell: LabCell): { cell: LabCell; value: string; count: number } | null {
+  const primary = primaryCellRecord(cell)
+  if (!primary) return null
+  const { record, valid } = primary
+  return {
+    cell: {
+      value: record.value,
+      unit: record.unit,
+      comparator: record.comparator,
+      isAbnormal: record.isAbnormal,
+      interpretationCode: record.interpretationCode,
+      status: record.status,
+      effectiveDateTime: cell.effectiveDateTime,
+    },
+    value: recordDisplayValue(record).trim(),
+    count: valid.length,
+  }
 }
 
 /**
@@ -366,15 +382,14 @@ export function resolvePinnedLab(pivots: Record<string, LabPivot>, id: string): 
   for (const row of pivot.rows) {
     if (row.testKey !== parsed.testKey) continue
     for (const [date, cell] of row.values) {
-      const value = usableValue(cell)
-      if (!value) continue
-      const count = cell.allValues?.length ?? 1
+      const picked = pickRecord(cell)
+      if (!picked) continue
       const existing = byDay.get(date)
       if (existing) {
-        existing.sameDayCount += count
+        existing.sameDayCount += picked.count
         continue
       }
-      byDay.set(date, { date, cell, value, sameDayCount: count })
+      byDay.set(date, { date, cell: picked.cell, value: picked.value, sameDayCount: picked.count })
     }
   }
   const points = [...byDay.values()].sort((a, b) => b.date.localeCompare(a.date))

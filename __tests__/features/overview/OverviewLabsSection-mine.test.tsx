@@ -133,6 +133,42 @@ describe('OverviewLabsSection — 自訂', () => {
     expect(card().queryByRole('button', { name: '查看 ALT 趨勢' })).toBeNull()
   })
 
+  describe('a day with several records (PR #170 review)', () => {
+    const sameDay = (records: NonNullable<LabCell['sourceRecords']>): LabCell => ({
+      value: records.map((record) => record.value).join(' / '),
+      allValues: records.map((record) => record.value),
+      unit: 'mmol/L',
+      // What the pivot merge leaves at the top level: "some record" flags.
+      isAbnormal: records.some((record) => record.isAbnormal),
+      interpretationCode: records.find((record) => record.interpretationCode)?.interpretationCode,
+      status: records.map((record) => record.status).filter(Boolean).join('|'),
+      sourceRecords: records,
+    })
+    const render1 = (cell: LabCell) => {
+      useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:K'], labMode: 'mine' })
+      renderSection({ ...DATA, columns: [DATA.columns[1]!], rows: [row('K', 'K', [cell])] })
+    }
+
+    it('never shows an entered-in-error value', () => {
+      render1(sameDay([
+        { value: '9.9', unit: 'mmol/L', isAbnormal: true, interpretationCode: 'H', status: 'entered-in-error' },
+        { value: '4.4', unit: 'mmol/L', status: 'final' },
+      ]))
+      expect(card().getByText('4.4')).toBeInTheDocument()
+      expect(card().queryByText(/9\.9/)).toBeNull()
+    })
+
+    it("does not glue another record's ↑ to a normal value, but says another one is abnormal", () => {
+      render1(sameDay([
+        { value: '4.0', unit: 'mmol/L', status: 'final' },
+        { value: '6.1', unit: 'mmol/L', isAbnormal: true, interpretationCode: 'H', status: 'final' },
+      ]))
+      expect(card().getByText('4.0')).toBeInTheDocument()
+      expect(card().queryByText('4.0 ↑')).toBeNull()
+      expect(card().getByLabelText(zhTW.overview.labs.sameDayOtherAbnormal.replace('{count}', '2'))).toBeInTheDocument()
+    })
+  })
+
   it('says so when no pinned test has a result in the period', () => {
     useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:NT-PROBNP'], labMode: 'mine' })
     renderSection()
