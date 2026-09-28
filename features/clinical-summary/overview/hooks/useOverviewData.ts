@@ -76,6 +76,9 @@ export interface OverviewLabsData {
   unpivotedCount: number
   /** An Observation id used to jump into the 報告 tab. */
   navResourceId?: string
+  /** Every loaded Observation, not cut to the window: a trend reads the
+   *  whole chart. */
+  allObservations?: readonly any[]
 }
 
 export interface OverviewReportItem {
@@ -468,8 +471,9 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       abnormalCount,
       unpivotedCount,
       navResourceId,
+      allObservations: Array.isArray(observations) ? observations : [],
     }
-  }, [audience, categoryLabels, displayLang, locale, pivots, windowedObservations])
+  }, [audience, categoryLabels, displayLang, locale, observations, pivots, windowedObservations])
 
   // ── 影像／檢查報告 ───────────────────────────────────────────────────────
   const { reportRows } = useReportsData(windowedReports, windowedStudies)

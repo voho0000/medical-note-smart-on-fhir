@@ -8,8 +8,8 @@
 // LabPivot model (buildLabPivots) and reuses the cell tones — no second pivot
 // builder, and no app-side abnormal determiner: `cell.isAbnormal` comes from
 // the source's own interpretation / reference range.
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
-import { ClipboardCopy, FlaskConical, Pencil } from 'lucide-react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { ClipboardCopy, FlaskConical, Pencil, TrendingUp } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
@@ -17,7 +17,9 @@ import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs
 import type { OverviewLabMode } from '@/src/application/stores/outpatient-prefs.store'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
-import type { LabCell } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, type LabCell, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import { useLabTrendOpener } from '@/features/clinical-summary/reports/hooks/useLabTrendOpener'
+import { preloadCumulativeLabTrendModule } from '@/features/clinical-summary/reports/components/cumulative-lab-trend-loader'
 import type { OverviewLabRow, OverviewLabsData } from '../hooks/useOverviewData'
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
@@ -34,6 +36,7 @@ import { selectPinnedOverviewRows, systemDefaultPinnedLabIds } from '../utils/ov
 
 type LabMode = OverviewLabMode
 
+const NO_OBSERVATIONS: readonly any[] = []
 
 function shortDayLabel(day: string): string {
   return day.length >= 10 ? `${day.slice(5, 7)}/${day.slice(8, 10)}` : day
@@ -142,6 +145,40 @@ export function OverviewLabsSection({
   const pinnedIds = useMemo(() => prefs.pinnedLabs ?? [], [prefs.pinnedLabs])
   const systemDefaultIds = useMemo(() => systemDefaultPinnedLabIds(), [])
 
+  // The whole chart, pivoted once and only after first paint: it only adds
+  // the trend buttons, never the card's own values, so the card must not
+  // wait for it.
+  const allObservations = data.allObservations ?? NO_OBSERVATIONS
+  const deferredObservations = useDeferredValue(allObservations, NO_OBSERVATIONS)
+  const fullPivots = useMemo(
+    () => (deferredObservations.length ? buildLabPivots(deferredObservations as any[]) : null),
+    [deferredObservations],
+  )
+  const { openTrend, activeTrendSourceId, trendDialog } = useLabTrendOpener({ observations: allObservations as any[] })
+  // A row's trend is the cumulative report's trend for the same analyte: same
+  // series, same chartability rule (`trendChartable` from the pivot build).
+  const trendRows = useMemo(() => {
+    const byMapKey = new Map<string, LabRow>()
+    const byTestKey = new Map<string, LabRow>()
+    for (const pivot of Object.values(fullPivots ?? {})) {
+      for (const row of pivot.rows) {
+        if (!row.trendChartable) continue
+        byMapKey.set(`${pivot.category.id}|${row.mapKey}`, row)
+        if (!byTestKey.has(`${pivot.category.id}|${row.testKey}`)) byTestKey.set(`${pivot.category.id}|${row.testKey}`, row)
+      }
+    }
+    return { byMapKey, byTestKey }
+  }, [fullPivots])
+  const trendRowFor = (row: OverviewLabRow): LabRow | undefined => {
+    // 自訂 rows with nothing in the window carry no pivot mapKey.
+    if (row.mapKey.startsWith('pinned-empty:')) {
+      return row.testKey ? trendRows.byTestKey.get(`${row.categoryId}|${row.testKey}`) : undefined
+    }
+    // The overview prefixes the pivot's mapKey with its category.
+    const prefix = `${row.categoryId}:`
+    const pivotMapKey = row.mapKey.startsWith(prefix) ? row.mapKey.slice(prefix.length) : row.mapKey
+    return trendRows.byMapKey.get(`${row.categoryId}|${pivotMapKey}`)
+  }
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardWidth, setCardWidth] = useState(0)
   useEffect(() => {
@@ -265,22 +302,60 @@ export function OverviewLabsSection({
             </div>,
           )
         }
+        // The analyte name opens the same trend the 累積報告 column header
+        // opens, when the whole chart makes one chartable.
+        const trendRow = trendRowFor(row)
+        const sourceId = trendRow ? `cumulative-trend:${row.categoryId}:${trendRow.mapKey}` : undefined
+        const trendLabel = locale.startsWith('zh') ? `查看 ${row.name} 趨勢` : `View ${row.name} trend`
+        const unit = row.unit && (
+          <span className="shrink-0 whitespace-nowrap text-[0.5625rem] text-muted-foreground">
+            {row.unit}
+          </span>
+        )
         nodes.push(
           <div
             key={`${row.mapKey}-name`}
             className={cn(
-              'sticky left-0 z-10 flex max-w-48 flex-wrap items-baseline gap-x-1 border-r border-border px-2 py-0.5 leading-[14px]',
-              'bg-card',
+              'sticky left-0 z-10 border-r border-border',
+              sourceId && sourceId === activeTrendSourceId ? 'bg-primary/10' : 'bg-card',
+              !trendRow && 'flex max-w-48 flex-wrap items-baseline gap-x-1 px-2 py-0.5 leading-[14px]',
             )}
           >
-            <CellText
-              text={row.name}
-              className="truncate text-xs font-medium text-foreground"
-            />
-            {row.unit && (
-              <span className="shrink-0 whitespace-nowrap text-[0.5625rem] text-muted-foreground">
-                {row.unit}
-              </span>
+            {trendRow && sourceId ? (
+              <button
+                type="button"
+                data-detail-source-id={sourceId}
+                onPointerEnter={preloadCumulativeLabTrendModule}
+                onFocus={preloadCumulativeLabTrendModule}
+                onClick={() => {
+                  // The full list is a modal; the trend opens beside it.
+                  if (expanded) setListOpen(false)
+                  openTrend({
+                    categoryId: row.categoryId,
+                    mapKey: trendRow.mapKey,
+                    testKey: trendRow.testKey,
+                    displayName: trendRow.displayName,
+                    nameMode: 'standardized',
+                    sourceId,
+                    title: row.name,
+                  })
+                }}
+                aria-label={trendLabel}
+                title={trendLabel}
+                className="flex h-full w-full min-w-0 flex-wrap items-baseline gap-x-1 px-2 py-0.5 text-left leading-[14px] hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+              >
+                <span className="min-w-0 truncate text-xs font-medium text-foreground">{row.name}</span>
+                {unit}
+                <TrendingUp aria-hidden="true" className="h-3 w-3 shrink-0 self-center text-primary" />
+              </button>
+            ) : (
+              <>
+                <CellText
+                  text={row.name}
+                  className="truncate text-xs font-medium text-foreground"
+                />
+                {unit}
+              </>
             )}
           </div>,
         )
@@ -461,6 +536,7 @@ export function OverviewLabsSection({
       )}
     >
       {editor}
+      {trendDialog}
       {isMine && pinnedIds.length === 0 ? mineEmpty : isMine && !mineHasResults ? (
         <>
           <div className={OVERVIEW_EMPTY_CLASS}>{strings.myLabs.noneInRange}</div>
