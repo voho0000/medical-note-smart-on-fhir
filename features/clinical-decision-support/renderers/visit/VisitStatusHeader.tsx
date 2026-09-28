@@ -46,6 +46,7 @@ export function VisitStatusHeader({
   onEditValue,
   valueAddons,
   extras,
+  actions,
 }: {
   model: VisitDecisionModel
   rows: readonly QueueRow[]
@@ -57,6 +58,8 @@ export function VisitStatusHeader({
   onEditValue?: (key: string) => void
   /** Drawn after a value, by its key (LVEF's 報告). */
   valueAddons?: Partial<Record<string, ReactNode>>
+  /** Page-wide links drawn beside 補填／修改量測 (the map's 顯示全部). */
+  actions?: ReactNode
   /**
    * The page's other values, in the line's own grammar and inside it — the
    * rhythm, Na, Hb, SpO₂, BMI and what the record lacks — so everything the
@@ -82,6 +85,7 @@ export function VisitStatusHeader({
         <h3 id="cdss-visit-headline" className="min-w-0 flex-1 text-base font-semibold leading-snug text-foreground">
           {headline}
         </h3>
+        {actions}
         {onEditValues ? (
           <button
             type="button"

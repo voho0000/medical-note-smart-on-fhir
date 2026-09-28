@@ -221,6 +221,8 @@ export function DecisionMapColumns({
   initialOpen,
   stepsBeforeNext,
   leadDetailDps,
+  showAll: controlledShowAll,
+  onShowAllChange,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -261,8 +263,21 @@ export function DecisionMapColumns({
   stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
   /** Points whose card a lead draws itself (02's 四支柱), never again at a section's foot. */
   leadDetailDps?: ReadonlySet<string>
+  /**
+   * 顯示全部, held by the screen so its switch can sit on the status line
+   * rather than on a row of its own (clinician feedback 2026-09-28: 「顯示全部
+   * 37 點不要自己佔一行」). Without it the map keeps its own.
+   */
+  showAll?: boolean
+  onShowAllChange?: (showAll: boolean) => void
 }) {
-  const [showAll, setShowAll] = useState(false)
+  const [ownShowAll, setOwnShowAll] = useState(false)
+  const showAll = controlledShowAll ?? ownShowAll
+  const setShowAll = (next: boolean | ((value: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(showAll) : next
+    if (onShowAllChange) onShowAllChange(value)
+    else setOwnShowAll(value)
+  }
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
   const [stuck, setStuck] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
@@ -364,12 +379,13 @@ export function DecisionMapColumns({
   return (
     <section aria-labelledby="cdss-visit-map-title" className="space-y-2" data-testid="cdss-visit-map">
       {/* The layout switch already names the map; its title is for screen
-          readers, and 顯示全部 keeps a slim row of its own, so the sections
-          start near the top (clinician feedback 2026-09-28). */}
-      <div className="-mb-1 flex items-center justify-end">
-        <h3 id="cdss-visit-map-title" className="sr-only">
-          {isEnglish ? 'Decision map' : '決策地圖'}
-        </h3>
+          readers. 顯示全部 sits on the status line where the screen holds it,
+          and only otherwise on a slim row here (clinician feedback
+          2026-09-28). */}
+      <h3 id="cdss-visit-map-title" className="sr-only">
+        {isEnglish ? 'Decision map' : '決策地圖'}
+      </h3>
+      {onShowAllChange ? null : <div className="-mb-1 flex items-center justify-end">
         <button
           type="button"
           className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary hover:underline pointer-coarse:h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -383,7 +399,7 @@ export function DecisionMapColumns({
               ? `Show all ${model.coverage.total}`
               : `顯示全部 ${model.coverage.total} 點`}
         </button>
-      </div>
+      </div>}
       <div ref={sentinelRef} aria-hidden="true" className="h-px" />
       {/* On a wide screen the three buttons stay at the top of the screen
           while the open section scrolls beneath them, so another section is

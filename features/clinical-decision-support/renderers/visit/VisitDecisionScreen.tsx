@@ -174,6 +174,8 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // 顯示全部, on the status line beside 補填／修改量測 rather than a row of its own.
+  const [showAllPoints, setShowAllPoints] = useState(false)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
   // The standing the page last drew: undiagnosed (no every-visit asks) or not.
@@ -584,6 +586,21 @@ export function VisitDecisionScreen({
         onEditValue={surfaces?.editValue}
         {...(surfaces?.statusLine?.valueAddons ? { valueAddons: surfaces.statusLine.valueAddons } : {})}
         {...(surfaces?.statusLine?.extras ? { extras: surfaces.statusLine.extras } : {})}
+        actions={(
+          <button
+            type="button"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-expanded={showAllPoints}
+            onClick={() => setShowAllPoints((value) => !value)}
+            data-testid="cdss-visit-map-show-all"
+          >
+            {showAllPoints
+              ? (isEnglish ? 'Fold what does not apply' : '收起不適用與尚未納入')
+              : isEnglish
+                ? `Show all ${model.coverage.total}`
+                : `顯示全部 ${model.coverage.total} 點`}
+          </button>
+        )}
       />
       {surfaces?.statusPanel}
       <DecisionMapColumns
@@ -598,13 +615,15 @@ export function VisitDecisionScreen({
         cellFilters={cellFilters}
         initialOpen={initialOpen}
         leadDetailDps={new Set(pillarPoints.map((point) => point.dp))}
+        showAll={showAllPoints}
+        onShowAllChange={setShowAllPoints}
         {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
           ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
           : {})}
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
-        outlookSummary={plan.notes[0]?.text ?? (plan.items[0] ? `${isEnglish ? 'Recheck' : '複驗'} ${plan.items[0].check.text}${checkIntervalSuffix(plan.items[0].check, isEnglish)}` : undefined)}
+        outlookSummary={plan.notes[0]?.text ?? (plan.items[0] ? `${plan.items[0].actionLabel}${isEnglish ? ': ' : '：'}${plan.items[0].check.text}${checkIntervalSuffix(plan.items[0].check, isEnglish)}` : undefined)}
         outlookSlot={(
           <>
             {outlookModules.map((item) => (
