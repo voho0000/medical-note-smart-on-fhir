@@ -810,6 +810,8 @@ export const en = {
     // PatientInfoDisplay.
     showMore: 'Show more (ID, address, contacts…)',
     showLess: 'Hide details',
+    moreDetails: 'More details',
+    ageValue: '{age} years',
     nationalId: 'National ID',
     medicalRecordNumber: 'Medical Record Number',
     passportNumber: 'Passport Number',
@@ -858,6 +860,17 @@ export const en = {
     rr: 'RR',
     temp: 'Temp',
     spo2: 'SpO₂',
+    systolic: 'Systolic',
+    diastolic: 'Diastolic',
+    adultPreventive: 'Adult health exam',
+    ageInParens: '({age})',
+    ageToday: 'today',
+    ageDays: '{n} days ago',
+    ageDaysOne: '1 day ago',
+    ageMonths: '{n} months ago',
+    ageMonthsOne: '1 month ago',
+    ageYears: '{n} years ago',
+    ageYearsOne: '1 year ago',
   },
 
   conditions: {
