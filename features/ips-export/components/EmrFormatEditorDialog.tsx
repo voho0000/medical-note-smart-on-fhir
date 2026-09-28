@@ -55,6 +55,7 @@ import {
   type EmrStarterId,
 } from '../utils/emr-custom-format'
 import { describeEmrNote } from './emr-format-notes'
+import { OutpatientPrefsStorageNote } from '@/features/auth/components/OutpatientPrefsStorageNote'
 
 const QUICK_TEXT: Array<{ label: string; text: string; ariaKey?: 'quickSpace' | 'quickNewline' }> = [
   { label: '/', text: '/' },
@@ -641,6 +642,7 @@ export function EmrFormatEditorDialog({
               <Trash2 className="h-4 w-4" />{e.deleteFormat}
             </Button>
           )}
+          <OutpatientPrefsStorageNote className="min-w-0 basis-full sm:basis-0 sm:flex-1" />
           <Button type="button" variant="outline" onClick={onClose}>{t.common.cancel}</Button>
           <Button type="button" onClick={() => onSave({ ...draftFormat, name: draftFormat.name || initial.name })}>{t.common.save}</Button>
         </DialogFooter>

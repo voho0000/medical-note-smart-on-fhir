@@ -38,6 +38,7 @@ import {
 } from '@/src/application/telemetry/launch-context'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { syncBetaFeaturesForAccount } from '@/src/application/services/beta-features-sync'
+import { syncOutpatientPrefsForAccount } from '@/src/application/services/outpatient-prefs-sync'
 export interface User {
   uid: string
   email: string | null
@@ -239,6 +240,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!signedInUid) return
     return syncBetaFeaturesForAccount(signedInUid)
+  }, [signedInUid])
+
+  // 門診偏好 (自訂 labs, copy formats) follow the account the same way.
+  // Anonymous and guest settings are never synced: they stay in this browser.
+  useEffect(() => {
+    if (!signedInUid) return
+    return syncOutpatientPrefsForAccount(signedInUid)
   }, [signedInUid])
 
   // Reported separately from the sign-in properties: the version is fetched

@@ -2,7 +2,8 @@
 
 // The current visitor's 門診偏好 — pinned analytes and copy formats — with the
 // storage key resolved the same way as the Beta switch: signed-in account,
-// then the anonymous session, then one shared guest key.
+// then the anonymous session, then one shared guest key. A signed-in account's
+// copy is kept in step with the account by outpatient-prefs-sync.ts.
 
 import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
@@ -17,9 +18,6 @@ import {
 } from '@/src/application/stores/outpatient-prefs.store'
 
 export interface OutpatientPrefsApi extends OutpatientPrefs {
-  /** 'account' when a signed-in account owns these settings; otherwise they
-   *  belong to this browser's anonymous or guest session. */
-  scope: 'account' | 'browser'
   setPinnedLabs: (ids: string[] | null) => void
   setLabMode: (mode: OverviewLabMode) => void
   saveFormat: (format: EmrCustomFormat) => void
@@ -59,12 +57,11 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
 
   return useMemo(() => ({
     ...prefs,
-    scope: user?.uid ? 'account' : 'browser',
     setPinnedLabs,
     setLabMode,
     saveFormat,
     deleteFormat,
     setActiveFormat,
     setHandoffMode,
-  }), [prefs, user?.uid, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode])
+  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode])
 }

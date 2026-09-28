@@ -117,6 +117,14 @@ export const en = {
     more: 'More',
     managePinned: 'Customize tabs',
   },
+  outpatientPrefs: {
+    storage: {
+      local: 'Saved on this computer only; sign in to keep it across devices.',
+      signIn: 'Sign in',
+      account: 'Saved to your account; other devices signed in to it see the same.',
+      error: 'Can’t reach your account right now; saved on this computer and sent once the connection is back.',
+    },
+  },
   overview: {
     title: 'Last {months}-month overview',
     yearTitle: 'Past-year overview',
@@ -196,8 +204,6 @@ export const en = {
         remove: 'Remove {name}',
         clear: 'Clear',
         resetDefault: 'Back to the default list',
-        storageAccount: 'Saved in this browser for your signed-in account; it stays the same across patients.',
-        storageBrowser: 'Saved in this browser (not signed in); it stays the same across patients.',
       },
     },
     reports: {
