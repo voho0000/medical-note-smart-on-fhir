@@ -72,8 +72,55 @@ describe('EmrCustomFormatSection', () => {
     const onCopy = jest.fn()
     render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={onCopy} />)
     expect(screen.getByTestId('emr-custom-preview').textContent).toBe('LDL/HDL/TG 101/50/182')
-    fireEvent.click(screen.getByRole('button', { name: x.custom.copy }))
+    fireEvent.click(screen.getByRole('button', { name: `${x.custom.copy} 血脂` }))
     expect(onCopy).toHaveBeenCalledWith('LDL/HDL/TG 101/50/182')
+  })
+
+  it('lists every format with its own preview and copy button — no picking one first', () => {
+    useOutpatientPrefsStore.getState().update('doc-1', {
+      formats: [
+        { id: 'f1', name: '血脂', tokens: starterTokens('lipid', []), labRule: 'sameDay', missingText: '—', dateStyle: 'md', emptyLines: 'omit' },
+        { id: 'f2', name: 'LDL', tokens: [{ kind: 'text', text: 'LDL ' }, { kind: 'lab', lab: 'lipid:LDL', field: 'value' }], labRule: 'sameDay', missingText: '—', dateStyle: 'md', emptyLines: 'omit' },
+      ],
+      activeFormatId: 'f1',
+    })
+    const onCopy = jest.fn()
+    render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={onCopy} />)
+    expect(screen.getAllByTestId('emr-custom-preview').map((node) => node.textContent)).toEqual(['LDL/HDL/TG 101/50/182', 'LDL 101'])
+    expect(screen.queryByRole('combobox')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: `${x.custom.copy} LDL` }))
+    expect(onCopy).toHaveBeenCalledWith('LDL 101')
+  })
+
+  it('asks before deleting a format', () => {
+    seed()
+    render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={jest.fn()} />)
+    const openEditor = () => fireEvent.click(screen.getByRole('button', { name: `${x.custom.edit} 血脂` }))
+    const formats = () => useOutpatientPrefsStore.getState().byUser['doc-1'].formats.map((format) => format.name)
+
+    openEditor()
+    fireEvent.click(screen.getByRole('button', { name: x.editor.deleteFormat }))
+    const confirm = within(screen.getByRole('alertdialog'))
+    expect(confirm.getByText(x.editor.deleteConfirmTitle.replace('{name}', '血脂'))).toBeInTheDocument()
+    fireEvent.click(confirm.getByRole('button', { name: zhTW.common.cancel }))
+    expect(formats()).toEqual(['血脂'])
+
+    fireEvent.click(screen.getByRole('button', { name: x.editor.deleteFormat }))
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: x.editor.deleteConfirmAction }))
+    expect(formats()).toEqual([])
+  })
+
+  it('adds a new format beside the existing one', () => {
+    seed()
+    render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={jest.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: x.custom.newFormat }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByPlaceholderText(x.editor.namePlaceholder), { target: { value: '空白' } })
+    fireEvent.change(dialog.getByRole('textbox', { name: x.editor.editorLabel }), { target: { value: 'x' } })
+    fireEvent.click(dialog.getByRole('button', { name: zhTW.common.save }))
+    expect(useOutpatientPrefsStore.getState().byUser['doc-1'].formats.map((format) => format.name)).toEqual(['血脂', '空白'])
+    expect(screen.getByRole('heading', { name: '血脂' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '空白' })).toBeInTheDocument()
   })
 
   it('holds back an exam line whose newest report has no text until the clinician decides', () => {
@@ -94,7 +141,7 @@ describe('EmrCustomFormatSection', () => {
   it('builds a format by typing and inserting fields, and saves it', () => {
     seed([])
     render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={jest.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: x.custom.edit }))
+    fireEvent.click(screen.getByRole('button', { name: `${x.custom.edit} 血脂` }))
     const dialog = within(screen.getByRole('dialog'))
     const editor = dialog.getByRole('textbox', { name: x.editor.editorLabel })
     fireEvent.change(editor, { target: { value: 'LDL ' } })
@@ -120,7 +167,7 @@ describe('EmrCustomFormatSection', () => {
   it('takes Chinese IME text only when composition ends', () => {
     seed([])
     render(<EmrCustomFormatSection pivots={PIVOTS} diagnosticReports={[]} copiedKey="" onCopy={jest.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: x.custom.edit }))
+    fireEvent.click(screen.getByRole('button', { name: `${x.custom.edit} 血脂` }))
     const dialog = within(screen.getByRole('dialog'))
     const editor = dialog.getByRole('textbox', { name: x.editor.editorLabel }) as HTMLTextAreaElement
     fireEvent.compositionStart(editor)
