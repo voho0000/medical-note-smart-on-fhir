@@ -238,10 +238,15 @@ export function QueueRowBox({
         </span>
         <div className={rowStyles.main}>
           {current ? (
-            // Wide, the buttons keep the row's right edge and the words wrap
-            // beside them; narrow, they drop under the words.
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 @min-[40rem]:flex-nowrap">
-              <div className="min-w-0 flex-1 basis-56 space-y-0.5 @min-[40rem]:basis-auto">
+            // With room, the buttons keep the row's right edge and the words
+            // sit beside them; without it they drop under the words, which
+            // never go narrower than 14rem. Decided by the room in this
+            // column, not the page's width: the map in the screen's middle
+            // panel with three answers (AF DP-01) squeezed the words to a
+            // few characters a line (clinician feedback 2026-09-29: 「你要假設
+            // 今天是在畫面的正中央都能好好呈現」).
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <div className="min-w-0 flex-1 basis-56 space-y-0.5">
                 <ChainDone steps={decidedSteps} />
                 <p className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">{point.headline ?? point.label}</p>
                 {point.why ? <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p> : null}
