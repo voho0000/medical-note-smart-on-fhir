@@ -257,24 +257,40 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
     }
     // A series that crosses units ("88.4 umol/L" then "1 mg/dL", often two
     // hospitals) is never converted and never printed as if it were one
-    // unit: a value whose unit differs from the newest one carries its own
-    // unit, the format's unit field keeps the newest, and the line says so.
-    const seriesValues = (id: string, point: PinnedLabPoint, count: number): string => {
+    // unit: EVERY value carries its own unit, and the line says so. The one
+    // exception avoids "1 mg/dL mg/dL": when this lab's unit field follows
+    // the series directly, that field prints the newest value's unit.
+    const seriesValues = (id: string, point: PinnedLabPoint, count: number, unitFieldFollows: boolean): string => {
       const series = seriesOf(id, point, count)
       const unitOf = (p: PinnedLabPoint) => (p.cell.unit ?? '').trim()
       const unitKey = (p: PinnedLabPoint) => unitOf(p).normalize('NFKC').replace(/\s+/g, '').toLowerCase()
-      const newest = unitKey(point)
-      const differs = (p: PinnedLabPoint) => unitKey(p) !== newest
-      if (series.some(differs) && !notes.some((n) => n.type === 'labSeriesUnits' && n.line === lineNo && n.lab === id)) {
+      const mixed = new Set(series.map(unitKey)).size > 1
+      if (!mixed) return series.map((p) => p.value).join(SERIES_JOIN)
+      if (!notes.some((n) => n.type === 'labSeriesUnits' && n.line === lineNo && n.lab === id)) {
         const units = [...new Set(series.map((p) => unitOf(p) || '—'))]
         notes.push({ type: 'labSeriesUnits', line: lineNo, lab: id, units })
       }
+      const newestIndex = series.length - 1
       return series
-        .map((p) => (differs(p) && unitOf(p) ? `${p.value} ${unitOf(p)}` : p.value))
+        .map((p, index) => {
+          const unit = unitOf(p)
+          const unitSuppliedAfter = index === newestIndex && unitFieldFollows
+          return unit && !unitSuppliedAfter ? `${p.value} ${unit}` : p.value
+        })
         .join(SERIES_JOIN)
     }
+    // Does this lab's unit field come right after token `index` (only
+    // whitespace text between)?
+    const unitFieldFollows = (index: number, lab: string): boolean => {
+      for (let next = index + 1; next < tokens.length; next += 1) {
+        const token = tokens[next]!
+        if (token.kind === 'text' && !token.text.trim()) continue
+        return token.kind === 'lab' && token.lab === lab && token.field === 'unit'
+      }
+      return false
+    }
     let text = ''
-    for (const token of tokens) {
+    for (const [index, token] of tokens.entries()) {
       if (token.kind === 'text') {
         text += token.text
         continue
@@ -288,7 +304,7 @@ export function renderEmrCustomFormat(format: EmrCustomFormat, inputs: EmrFormat
           text += token.field === 'value' || token.field === 'date' ? format.missingText : ''
         } else if (token.field === 'value') {
           text += token.count
-            ? seriesValues(token.lab, point, token.count)
+            ? seriesValues(token.lab, point, token.count, unitFieldFollows(index, token.lab))
             : point.value
         } else if (token.field === 'unit') {
           text += point.cell.unit ?? ''

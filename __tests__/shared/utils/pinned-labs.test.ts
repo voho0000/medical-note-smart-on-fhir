@@ -167,6 +167,17 @@ describe('resolvePinnedLab', () => {
       expect(latest?.sameDayCount).toBe(2)
     })
 
+    it('keeps the comparator and unit inside a qualitative + quantitative pair (review r2)', () => {
+      const pivots = buildLabPivots([
+        obs('CRP', '2026-09-18', 'Negative'),
+        obs('CRP', '2026-09-18', 0.5, { unit: 'mg/dL', comparator: '<' }),
+      ])
+      const latest = resolvePinnedLab(pivots, 'chem:CRP').latest
+      expect(latest?.value).toBe('Negative (<0.5)')
+      expect(latest?.cell.unit).toBe('mg/dL')
+      expect(latest?.sameDayCount).toBe(1)
+    })
+
     it('keeps the picked value with its own comparator and flag', () => {
       const pivots = buildLabPivots([
         obs('CRP', '2026-09-18', 0.5, { unit: 'mg/dL', comparator: '<' }),
