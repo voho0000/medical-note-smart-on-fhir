@@ -86,6 +86,19 @@ button.row:focus-visible {
   outline-offset: -2px;
 }
 
+/* A row decided today wears the green of its ✓ the same way, so what was
+   done at this visit reads apart from what the record already had settled
+   (「已定」 keeps the plain ground) (clinician feedback 2026-09-28: 「今天有做
+   紀錄的 row 也可以有個區分的底色嗎」). */
+.recorded {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #059669 65%, transparent);
+  background: color-mix(in srgb, #10b981 6%, var(--background));
+}
+
+:global(.dark) .recorded {
+  background: color-mix(in srgb, #10b981 12%, var(--background));
+}
+
 /* A row with its buttons out — a dose to raise, a drug to start — wears the
    primary button's blue the same way, lighter than safety's red (clinician
    feedback 2026-09-28: 「可以做事情的，例如可以調整劑量的，可不可以也改底色」).
@@ -136,6 +149,10 @@ button.row:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   button.row { transition: none; }
+}
+
+button.row.recorded:hover {
+  background: color-mix(in srgb, #10b981 10%, var(--background));
 }
 
 button.row.safety:hover {

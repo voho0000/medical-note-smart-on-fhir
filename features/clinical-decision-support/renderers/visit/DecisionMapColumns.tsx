@@ -90,6 +90,7 @@ function MapCell({
         open && rowStyles.open,
         absent && !open && rowStyles.absent,
         point.state === 'safety' && !decision && rowStyles.safety,
+        decision && rowStyles.recorded,
       )}
       title={title}
       data-dp={point.dp}

@@ -231,7 +231,7 @@ export function QueueRowBox({
       data-visit-queue-state={point.state}
       data-decided={current ? 'false' : 'true'}
     >
-      <div className={cn(rowStyles.row, open && rowStyles.open, current && (row.safety ? rowStyles.safety : rowStyles.actionable))}>
+      <div className={cn(rowStyles.row, open && rowStyles.open, current ? (row.safety ? rowStyles.safety : rowStyles.actionable) : rowStyles.recorded)}>
         <RowLead point={point} sourceOfPage={sourceOfPage} />
         <span className={rowStyles.state}>
           <StatePill state={row.safety && current ? 'safety' : point.state} isEnglish={isEnglish} inQueue decided={!current} />
