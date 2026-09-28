@@ -1284,21 +1284,24 @@ function HfpEfScoreLine({
               </span>
             </p>
           ))}
+          {/* One line (clinician feedback 2026-09-28): the calculator, the echo it
+              read, and what it could not obtain — a report value or a record
+              reading such as the antihypertensive count, hence 「未取得」. */}
           <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
             {isEnglish
               ? `By calculator ${HFPEF_CALCULATOR_VERSION}${date ? ` · echo ${date}` : ''}`
               : `依計算機 ${HFPEF_CALCULATOR_VERSION}${date ? ` · 心超 ${date}` : ''}`}
+            {missing ? (
+              <span
+                className={cn(compact ? 'text-muted-foreground' : 'text-amber-800 dark:text-amber-300')}
+                data-testid="cdss-hf-hfpef-score-missing"
+              >
+                {isEnglish
+                  ? ` · not obtained: ${missing.missingEn.join(', ')} (at most +${missing.upper - missing.score})`
+                  : ` · 未取得：${missing.missingZh.join('、')}（最多再 +${missing.upper - missing.score}）`}
+              </span>
+            ) : null}
           </p>
-          {missing ? (
-            <p
-              className={cn('mt-0.5 text-[11px] leading-4', compact ? 'text-muted-foreground' : 'text-amber-800 dark:text-amber-300')}
-              data-testid="cdss-hf-hfpef-score-missing"
-            >
-              {isEnglish
-                ? `Not reported: ${missing.missingEn.join(', ')} (at most +${missing.upper - missing.score})`
-                : `報告未提供：${missing.missingZh.join('、')}（最多再 +${missing.upper - missing.score}）`}
-            </p>
-          ) : null}
         </>
       )}
 

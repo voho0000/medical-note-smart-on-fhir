@@ -15,7 +15,11 @@ import { statusLabel, statusStyle, StatusIcon } from '../status-presentation'
 
 export const VISIT_DETAIL_ID = 'cdss-visit-dp-detail'
 
-/** A point's checklist — what the record holds and what it lacks, item by item. */
+/**
+ * A point's checklist: what the record holds, one row each with its value and
+ * date, then what it lacks on one line (clinician feedback 2026-09-28: 「不用缺
+ * 一項就一行，可以集中一行放」).
+ */
 export function DecisionPointChecklist({
   items,
   isEnglish,
@@ -25,23 +29,31 @@ export function DecisionPointChecklist({
   isEnglish: boolean
   compact?: boolean
 }) {
+  const present = items.filter((item) => item.present)
+  const missing = items.filter((item) => !item.present)
   return (
     <ul className={cn('grid gap-x-3 gap-y-0.5 text-xs', !compact && '@min-[40rem]:grid-cols-2')} data-testid="cdss-visit-checklist">
-      {items.map((item) => (
-        <li key={item.key} className="flex min-w-0 items-baseline gap-1.5" data-checklist-item={item.key} data-present={item.present ? 'true' : 'false'}>
-          {item.present ? (
-            <Check className="h-3.5 w-3.5 shrink-0 self-center text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
-          ) : (
-            <span className="shrink-0 font-semibold text-amber-800 dark:text-amber-300">{isEnglish ? 'Missing' : '缺'}</span>
-          )}
-          <span className={cn('min-w-0', item.present ? 'text-foreground' : 'text-muted-foreground')}>
-            {item.present ? <span className="sr-only">{isEnglish ? 'In the record: ' : '已有：'}</span> : null}
+      {present.map((item) => (
+        <li key={item.key} className="flex min-w-0 items-baseline gap-1.5" data-checklist-item={item.key} data-present="true">
+          <Check className="h-3.5 w-3.5 shrink-0 self-center text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+          <span className="min-w-0 text-foreground">
+            <span className="sr-only">{isEnglish ? 'In the record: ' : '已有：'}</span>
             {item.label}
             {item.value ? <span className="tabular-nums"> {item.value}</span> : null}
             {item.date ? <span className="tabular-nums text-muted-foreground">（{item.date}）</span> : null}
           </span>
         </li>
       ))}
+      {missing.length > 0 ? (
+        <li className="flex min-w-0 items-baseline gap-1.5 @min-[40rem]:col-span-2" data-testid="cdss-visit-checklist-missing" data-present="false">
+          <span className="shrink-0 font-semibold text-amber-800 dark:text-amber-300">{isEnglish ? 'Missing' : '缺'}</span>
+          <span className="min-w-0 text-muted-foreground">
+            {missing.map((item) => (
+              <span key={item.key} data-checklist-item={item.key} data-present="false">{item.label}</span>
+            )).flatMap((node, index) => (index === 0 ? [node] : [isEnglish ? ', ' : '、', node]))}
+          </span>
+        </li>
+      ) : null}
     </ul>
   )
 }

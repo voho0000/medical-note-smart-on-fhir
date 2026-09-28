@@ -14,7 +14,7 @@
  * (「建議 N 天內回診」, 「今天的決定都記下了」 when the pack has none) are chrome.
  */
 import { useMemo } from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import type { VisitAnswers } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
@@ -335,11 +335,17 @@ describe('real pack · P4 on 01’s 診斷 view', () => {
 })
 
 describe('real pack · P7 worsening congestion', () => {
-  it('reassesses on the NT-proBNP rise and queues the diuretic, the weight asked rather than prefilled', () => {
+  // ESC 2026 p.73: an NT-proBNP rise reopens nothing; the worsening is the
+  // clinician's 喘變差, which DP-04 reads as clinical deterioration.
+  it('stays a follow-up on the NT-proBNP rise and queues the diuretic once 喘變差 is answered, the weight asked rather than prefilled', () => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
-    expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'reassess')
-    expect(screen.getByTestId('cdss-visit-triggers')).toHaveTextContent('NT-proBNP 1200→2600')
+    expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'follow-up')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
+    expect(queue()).toEqual([])
+    act(() => {
+      useVisitAnswersStore.getState().answer(PATIENT, 'dyspnoea-trend', 'worse')
+      useVisitAnswersStore.getState().answer(PATIENT, 'weight-trend', 'up')
+    })
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
     // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
     // stands, so 01 opens on 追蹤 and DP-04's cell is under 診斷.

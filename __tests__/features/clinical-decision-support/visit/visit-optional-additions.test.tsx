@@ -149,7 +149,9 @@ describe('optional additions', () => {
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟（pack）')
   })
 
-  it('shows a baseline checklist in 01, missing items named as missing', () => {
+  // Clinician feedback 2026-09-28: what the record holds, one row each; what
+  // it lacks, together on one line.
+  it('shows a baseline checklist in 01, the missing items together on one line', () => {
     const model = p2Model()
     model.points = model.points.map((item) => (item.dp === 'DP-02'
       ? { ...item, checklist: [
@@ -164,7 +166,9 @@ describe('optional additions', () => {
     expect(items.map((item) => [item.dataset.checklistItem, item.dataset.present])).toEqual([
       ['ntProBnp', 'true'], ['ferritin', 'false'], ['tsat', 'false'],
     ])
-    expect(items[1]).toHaveTextContent('缺ferritin')
+    const missing = within(status).getByTestId('cdss-visit-checklist-missing')
+    expect(missing).toHaveTextContent('缺ferritin、TSAT')
+    expect(within(missing).getAllByText(/ferritin|TSAT/)).toHaveLength(2)
   })
 
   it('hands an action’s structured answer back when it is recorded', () => {
