@@ -61,7 +61,7 @@ export function StatePill({
       {decided
         ? (isEnglish ? 'Recorded' : '已記錄')
         : promoted
-          ? (isEnglish ? 'To decide today' : '今天要決定')
+          ? (isEnglish ? 'Today' : '今天要決定')
           : stateLabel(state, isEnglish)}
     </span>
   )

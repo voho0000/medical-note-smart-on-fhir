@@ -51,8 +51,23 @@
 .state {
   grid-area: state;
   display: flex;
+  min-width: 0;
   min-height: 1.25rem;
   align-items: center;
+}
+
+/* A state's words are short in both languages (「等上一步」／「Waiting」,
+   clinician feedback 2026-09-28: 「翻譯太長」), so each fits the column. Should
+   one ever run longer, the pill wraps inside its column rather than running
+   into the text beside it (#166 review). */
+.state > span {
+  max-width: 100%;
+  height: auto;
+  min-height: 1.25rem;
+  padding-block: 0.125rem;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .main {

@@ -345,12 +345,12 @@ export function stateLabel(state: DecisionPointState, isEnglish: boolean): strin
     case 'safety': return isEnglish ? 'Safety' : '安全'
     case 'act': return isEnglish ? 'To decide' : '需處理'
     case 'confirm': return isEnglish ? 'Your call' : '需你確認'
-    case 'ask': return isEnglish ? 'Awaiting answer' : '等你回答'
-    case 'waiting': return isEnglish ? 'After previous step' : '等上一步'
+    case 'ask': return isEnglish ? 'To answer' : '等你回答'
+    case 'waiting': return isEnglish ? 'Waiting' : '等上一步'
     case 'done': return isEnglish ? 'Settled' : '已定'
-    case 'info': return isEnglish ? 'For reference' : '供參考'
-    case 'not-applicable': return isEnglish ? 'Not applicable' : '不適用'
-    case 'not-included': return isEnglish ? 'Not yet included' : '尚未納入'
+    case 'info': return isEnglish ? 'Info' : '供參考'
+    case 'not-applicable': return isEnglish ? 'N/A' : '不適用'
+    case 'not-included': return isEnglish ? 'Not covered' : '尚未納入'
   }
 }
 
