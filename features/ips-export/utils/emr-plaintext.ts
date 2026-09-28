@@ -22,7 +22,7 @@ import { formatReportText } from '@/src/shared/utils/report-text-format'
 import { markdownToPlainText } from '@/src/shared/utils/markdown-to-text'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
-import type { LabCell, LabPivot } from '@/src/shared/utils/lab-pivot.utils'
+import { cellDisplayValue, type LabCell, type LabPivot } from '@/src/shared/utils/lab-pivot.utils'
 
 /** 'last' / 'last3' count DRAWS (a panel's own most recent collection days);
  *  the rest are calendar windows. Counting draws is what a clinician means by
@@ -91,7 +91,8 @@ function shortDate(iso: string, preset: EmrPreset, currentYear: number): string 
  * rather than pasting a dash into the chart.
  */
 function cellText(cell: LabCell | undefined): string | null {
-  const raw = (cell?.value ?? '').trim()
+  // The comparator is part of the result: "<0.5" pasted as "0.5" is wrong.
+  const raw = (cell ? cellDisplayValue(cell) : '').trim()
   if (!cell || !raw || raw === '—') return null
   if (!cell.isAbnormal) return raw
   const code = cell.interpretationCode && cell.interpretationCode !== 'N' ? cell.interpretationCode : ''

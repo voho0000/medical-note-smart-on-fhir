@@ -31,15 +31,20 @@ import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 
 export interface LabCell {
   adultPreventive?: boolean
+  /** A single record's value — for a Quantity, the bare number. A same-day
+   *  merge ("a / b", "Reactive (0.5)") is display text that already carries
+   *  each record's comparator. Print it through `cellDisplayValue`. */
   value: string
-  /** Every source value when multiple records share one analyte/day cell. */
+  /** Every source value, as display text with its own comparator, when
+   *  multiple records share one analyte/day cell. */
   allValues?: string[]
   unit?: string
   interpretationCode?: string  // 'H'|'L'|'N'|'A'|'AA'|'HH'|'LL' (HL7)
   isAbnormal?: boolean
   /** Quantity.comparator ('<' | '<=' | '>=' | '>') when the source sent one.
    *  `value` holds only the number, so a reader that prints a value on its own
-   *  must put this back in front of it. */
+   *  must put this back in front of it. Unset on a same-day merge, whose
+   *  `value` already carries each record's comparator. */
   comparator?: string
   effectiveDateTime?: string
   status?: string
@@ -125,6 +130,15 @@ export function primaryCellRecord(cell: LabCell): { record: LabCellRecord; valid
   return { record: valid[0]!, valid }
 }
 
+/** A cell's value as a clinician or the AI must read it: "<0.5", never "0.5".
+ *  Every reader that prints a pivot cell goes through this. A missing value
+ *  stays the placeholder — a comparator never turns "—" into "<—". */
+export function cellDisplayValue(cell: LabCell): string {
+  const text = cell.value?.trim()
+  if (!text || text === '—') return cell.value
+  return recordDisplayValue({ value: cell.value, comparator: cell.comparator })
+}
+
 export interface LabRow {
   mapKey: string              // unique pivot key (NHI_CODE:testKey or testKey)
   testKey: string             // canonical analyte name; may match across institutions
@@ -162,7 +176,8 @@ function isNumericCellValue(v: string | undefined): boolean {
 
 function cellContainsNumericValue(cell: LabCell): boolean {
   if (isNumericCellValue(cell.value)) return true
-  return cell.allValues?.some(isNumericCellValue) ?? false
+  // allValues are display text: "<0.5" is still a number for the unit rule.
+  return cell.allValues?.some((v) => isNumericCellValue(v.replace(/^\s*[<>≤≥]=?/, ''))) ?? false
 }
 
 interface TrendAvailabilityStats {
@@ -830,14 +845,19 @@ export function buildLabPivots(
       // merge into one cell "Reactive (0.012)". Guarded narrowly to exactly
       // one-numeric-one-qualitative, so serial numerics (two glucose draws in a
       // day) still last-write-win rather than concatenating into garbage.
+      //
+      // A merged value is display text, so each record's comparator goes in
+      // with it ("<0.5 / 0.7", "Reactive (<0.5)") and the cell-level
+      // comparator is cleared — it could only ever describe one of them.
       const prev = row.values.get(date)
       const incomingNumeric = numericValue !== undefined
       if (prev?.allValues) {
-        const allValues = [...prev.allValues, cell.value]
+        const allValues = [...prev.allValues, cellDisplayValue(cell)]
         row.values.set(date, {
           ...prev,
           value: allValues.join(' / '),
           allValues,
+          comparator: undefined,
           isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
@@ -850,7 +870,7 @@ export function buildLabPivots(
         const qual = incomingNumeric ? prev : cell
         const quant = incomingNumeric ? cell : prev
         row.values.set(date, {
-          value: `${qual.value} (${quant.value})`,
+          value: `${cellDisplayValue(qual)} (${cellDisplayValue(quant)})`,
           isAbnormal: !!qual.isAbnormal || !!quant.isAbnormal,
           interpretationCode: qual.interpretationCode || quant.interpretationCode,
           effectiveDateTime: cell.effectiveDateTime || prev.effectiveDateTime,
@@ -863,11 +883,12 @@ export function buildLabPivots(
       } else if (prev) {
         // Never overwrite a same-analyte/same-day source record. A pivot cell is
         // one visual slot, so retain every value explicitly inside that slot.
-        const allValues = [prev.value, cell.value]
+        const allValues = [cellDisplayValue(prev), cellDisplayValue(cell)]
         row.values.set(date, {
           ...cell,
           value: allValues.join(' / '),
           allValues,
+          comparator: undefined,
           isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,

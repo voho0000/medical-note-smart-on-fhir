@@ -8,7 +8,7 @@ import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpe
 import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
-import { buildLabPivots, type LabPivot, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, cellDisplayValue, type LabPivot, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 
@@ -157,8 +157,9 @@ function pivotCellText(row: LabRow, date: string): string {
   const cell = row.values.get(date)
   if (!cell) return '-'
   const status = labStatusSuffix(cell.status)
-  if (!cell.isAbnormal) return `${cell.value}${status}`
-  return `${cell.value} ${cell.interpretationCode || '*'}${status}`
+  const value = cellDisplayValue(cell)
+  if (!cell.isAbnormal) return `${value}${status}`
+  return `${value} ${cell.interpretationCode || '*'}${status}`
 }
 
 function capPointsPerAnalyte(points: LabPoint[], maxPoints: number): LabPoint[] {
@@ -209,7 +210,7 @@ function renderKeyTrends(pivots: Record<string, LabPivot>, maxTrendPoints: numbe
     const recent = series.slice(-maxTrendPoints)
     const omitted = series.length - recent.length
     const trend = recent
-      .map(([date, cell]) => `${cell.value}${cell.isAbnormal ? `[${cell.interpretationCode || '*'}]` : ''} (${date})`)
+      .map(([date, cell]) => `${cellDisplayValue(cell)}${cell.isAbnormal ? `[${cell.interpretationCode || '*'}]` : ''} (${date})`)
       .join(' → ')
     const head = row.unit ? `${row.displayName} (${row.unit})` : row.displayName
     return `${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`

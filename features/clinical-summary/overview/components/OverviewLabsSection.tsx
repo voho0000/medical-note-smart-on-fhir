@@ -415,7 +415,7 @@ export function OverviewLabsSection({
           const { shown, record, total, otherAbnormal, everyValue } = summary
           // Narrative microbiology results must not size an entire date column.
           // Numeric values keep their intrinsic width and are never truncated.
-          const numeric = /^[<>≤≥]?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
+          const numeric = /^(?:[<>]=?|[≤≥])?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
           const valueText = `${shown}${flagArrow(record)}`
           nodes.push(
             <div
