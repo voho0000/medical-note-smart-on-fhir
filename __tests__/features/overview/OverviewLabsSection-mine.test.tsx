@@ -1,9 +1,10 @@
-// 總覽 → 檢驗 → 我的固定: the clinician's own pins, each with its own latest
-// result and date, independent of the overview window.
+// 總覽 → 檢驗 → 自訂: the same analyte × collection-day pivot as 常用／全部,
+// with the clinician's own rows in their own order.
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { OverviewLabsSection } from '@/features/clinical-summary/overview/components/OverviewLabsSection'
-import type { OverviewLabsData } from '@/features/clinical-summary/overview/hooks/useOverviewData'
+import type { OverviewLabRow, OverviewLabsData } from '@/features/clinical-summary/overview/hooks/useOverviewData'
+import type { LabCell } from '@/src/shared/utils/lab-pivot.utils'
 import { useOutpatientPrefsStore } from '@/src/application/stores/outpatient-prefs.store'
 
 jest.mock('@/src/application/providers/language.provider', () => {
@@ -17,53 +18,55 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
 jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => ({ user: { uid: 'doc-1' }, anonymousUid: null }),
 }))
-const mockSetActiveTab = jest.fn()
+const mockRevealTab = jest.fn()
 jest.mock('@/src/application/providers/right-panel.provider', () => ({
-  useRightPanel: () => ({ revealTab: mockSetActiveTab }),
+  useRightPanel: () => ({ revealTab: mockRevealTab }),
 }))
 
-function obs(id: string, code: string, date: string, value: number, unit: string, interpretation?: string) {
+const cell = (value: string, high = false): LabCell => ({
+  value,
+  ...(high ? { isAbnormal: true, interpretationCode: 'H' } : {}),
+})
+
+function row(testKey: string, name: string, cells: (LabCell | undefined)[], categoryId = 'chem'): OverviewLabRow {
   return {
-    resourceType: 'Observation',
-    id,
-    status: 'final',
-    code: { text: code },
-    effectiveDateTime: `${date}T09:00:00+08:00`,
-    valueQuantity: { value, unit },
-    ...(interpretation ? { interpretation: [{ coding: [{ code: interpretation }] }] } : {}),
+    mapKey: `${categoryId}:${testKey}`,
+    categoryId,
+    categoryLabel: '生化',
+    testKey,
+    name,
+    isPinned: false,
+    hasAbnormal: cells.some((c) => c?.isAbnormal),
+    cells,
   }
 }
 
-const OBSERVATIONS = [
-  obs('o1', 'CREA', '2026-09-18', 1.32, 'mg/dL', 'H'),
-  obs('o2', 'CREA', '2026-06-30', 1.28, 'mg/dL', 'H'),
-  obs('o3', 'ALT', '2026-09-18', 22, 'U/L'),
-  obs('o4', 'AST', '2026-09-18', 30, 'U/L'),
-  obs('o5', 'NT-PROBNP', '2025-11-02', 2105, 'pg/mL', 'H'),
-]
-
-jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
-  useClinicalData: () => ({ observations: OBSERVATIONS }),
-}))
-
-const EMPTY_DATA: OverviewLabsData = {
-  columns: [],
-  rows: [],
-  pinnedRowCount: 0,
+// Two collection days inside the window; NT-proBNP was last done outside it.
+const DATA: OverviewLabsData = {
+  columns: [{ day: '2026-06-30', institution: '示範醫院' }, { day: '2026-09-18', institution: '示範醫院' }],
+  rows: [
+    row('CREA', 'CREA', [cell('1.28', true), cell('1.32', true)]),
+    row('ALT', 'ALT', [undefined, cell('22')]),
+    row('AST', 'AST', [undefined, cell('30')]),
+  ],
+  pinnedRowCount: 2,
   hiddenDayCount: 0,
-  resultCount: 0,
-  abnormalCount: 0,
+  resultCount: 4,
+  abnormalCount: 2,
   unpivotedCount: 0,
+  navResourceId: 'o1',
 }
 
-function renderSection() {
-  return render(<OverviewLabsSection data={EMPTY_DATA} fit={{ bounded: false }} />)
+function renderSection(data: OverviewLabsData = DATA) {
+  return render(<OverviewLabsSection data={data} fit={{ bounded: false }} />)
 }
 
-describe('OverviewLabsSection — 我的固定', () => {
+const card = () => within(document.getElementById('overview-section-labs')!)
+
+describe('OverviewLabsSection — 自訂', () => {
   beforeEach(() => {
     useOutpatientPrefsStore.setState({ byUser: {} })
-    mockSetActiveTab.mockReset()
+    mockRevealTab.mockReset()
   })
 
   it('offers to choose pins when there are none yet', () => {
@@ -74,38 +77,42 @@ describe('OverviewLabsSection — 我的固定', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('shows each pin in the chosen order with its own latest date, even outside the overview window', () => {
+  it('draws the same date-column pivot, with only the pinned rows in the chosen order', () => {
     useOutpatientPrefsStore.getState().update('doc-1', {
-      pinnedLabs: ['chem:NT-PROBNP', 'chem:ALT', 'chem:CREA', 'lipid:LDL', 'note:Digoxin 濃度'],
+      pinnedLabs: ['chem:NT-PROBNP', 'chem:ALT', 'chem:CREA', 'note:Digoxin 濃度'],
       labMode: 'mine',
     })
     renderSection()
-    const card = within(document.getElementById('overview-section-labs')!)
-    // NT-proBNP from last year still shows, with its full date.
-    expect(card.getByText('NT-proBNP')).toBeInTheDocument()
-    expect(card.getByText('2105 ↑')).toBeInTheDocument()
-    expect(card.getByText(/^2025\/11\/02 · /)).toBeInTheDocument()
+    // Date columns, exactly as 常用 shows them (jsdom has no width, so the
+    // card's column budget keeps only the newest day).
+    expect(card().getByText('09/18')).toBeInTheDocument()
+    expect(card().getByText('1.32 ↑')).toBeInTheDocument()
+    expect(card().getByText('22')).toBeInTheDocument()
     // ALT without AST.
-    expect(card.getByText('22')).toBeInTheDocument()
-    expect(card.queryByText('AST')).not.toBeInTheDocument()
-    // Latest and previous creatinine, each with its date.
-    expect(card.getByText('1.32 ↑')).toBeInTheDocument()
-    expect(card.getByText('1.28 ↑')).toBeInTheDocument()
-    // A pin with no result keeps its row and says so.
-    expect(card.getByText(zhTW.overview.myLabs.noResult)).toBeInTheDocument()
-    // A reminder row for an unsupported test.
-    expect(card.getByText('Digoxin 濃度')).toBeInTheDocument()
-    expect(card.getByText(zhTW.overview.myLabs.reminderBadge)).toBeInTheDocument()
+    expect(card().queryByText('AST')).not.toBeInTheDocument()
+    // A pin with nothing in the window keeps its (empty) row; so does a reminder.
+    const names = card().getAllByText(/^(NT-proBNP|ALT|CREA|Digoxin 濃度)$/).map((node) => node.textContent)
+    expect(names).toEqual(['NT-proBNP', 'ALT', 'CREA', 'Digoxin 濃度'])
+  })
 
-    const labels = card.getAllByText(/^(NT-proBNP|ALT|CREA|LDL|Digoxin 濃度)$/).map((node) => node.textContent)
-    expect(labels).toEqual(['NT-proBNP', 'ALT', 'CREA', 'LDL', 'Digoxin 濃度'])
+  it('says so when no pinned test has a result in the period', () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:NT-PROBNP'], labMode: 'mine' })
+    renderSection()
+    expect(card().getByText(zhTW.overview.myLabs.noneInRange)).toBeInTheDocument()
+    expect(card().getByRole('button', { name: zhTW.overview.labs.editPinned })).toBeInTheDocument()
+  })
+
+  it('keeps the header the same as the other filters', () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA'], labMode: 'mine' })
+    renderSection()
+    expect(card().getByRole('button', { name: zhTW.overview.expandList })).toBeInTheDocument()
   })
 
   it('opens the handoff tab from the card', () => {
     useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA'], labMode: 'mine' })
     renderSection()
     fireEvent.click(screen.getByRole('button', { name: zhTW.overview.labs.handoff }))
-    expect(mockSetActiveTab).toHaveBeenCalledWith('ips-export')
+    expect(mockRevealTab).toHaveBeenCalledWith('ips-export')
   })
 
   it('saves pins picked one by one in the editor', () => {

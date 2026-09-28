@@ -1,4 +1,4 @@
-// 我的固定檢驗 — the pinnable catalog and the per-pin latest/previous reader.
+// 自訂檢驗 — the pinnable catalog and the per-pin latest/previous reader.
 import {
   findPinnableLab,
   getPinnableLabCatalog,

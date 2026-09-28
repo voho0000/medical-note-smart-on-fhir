@@ -8,13 +8,12 @@
 // LabPivot model (buildLabPivots) and reuses the cell tones — no second pivot
 // builder, and no app-side abnormal determiner: `cell.isAbnormal` comes from
 // the source's own interpretation / reference range.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { ClipboardCopy, FlaskConical, Pencil } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
-import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import type { OverviewLabMode } from '@/src/application/stores/outpatient-prefs.store'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -29,12 +28,12 @@ import {
   OverviewFullListDialog,
   OverviewTruncationNote,
 } from './OverviewSectionParts'
-import { overviewChipClass } from './overview-styles'
-import { PinnedLabsList } from './PinnedLabsList'
+import { OVERVIEW_EMPTY_CLASS, overviewChipClass } from './overview-styles'
 import { PinnedLabsEditorDialog } from './PinnedLabsEditorDialog'
-import { systemDefaultPinnedLabIds, usePinnedLabs, type PinnedLabRow } from '../hooks/usePinnedLabs'
+import { selectPinnedOverviewRows, systemDefaultPinnedLabIds } from '../utils/overview-selectors'
 
 type LabMode = OverviewLabMode
+
 
 function shortDayLabel(day: string): string {
   return day.length >= 10 ? `${day.slice(5, 7)}/${day.slice(8, 10)}` : day
@@ -129,13 +128,12 @@ export function OverviewLabsSection({
   flash?: boolean
   headingRef?: Ref<HTMLDivElement>
 }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const strings = t.overview
   const { audience } = useAudience()
   const { revealTab } = useRightPanel()
-  const navigate = useResourceNavigationStore((state) => state.navigate)
   const prefs = useOutpatientPrefs()
-  // The last mode chosen is remembered, so a clinician who reads 「我的固定」
+  // The last mode chosen is remembered, so a clinician who reads 「自訂」
   // opens every next patient on it.
   const mode: LabMode = prefs.labMode ?? 'pinned'
   const setMode = prefs.setLabMode
@@ -143,21 +141,7 @@ export function OverviewLabsSection({
   const [editorOpen, setEditorOpen] = useState(false)
   const pinnedIds = useMemo(() => prefs.pinnedLabs ?? [], [prefs.pinnedLabs])
   const systemDefaultIds = useMemo(() => systemDefaultPinnedLabIds(), [])
-  const { rows: pinnedRows, navResourceId: pinnedNavId } = usePinnedLabs(mode === 'mine', pinnedIds)
-  const openPinnedLab = useCallback((row: PinnedLabRow) => {
-    if (!pinnedNavId || !row.categoryId) return
-    navigate({
-      resourceType: 'Observation',
-      resourceId: pinnedNavId,
-      reportView: 'cumulative',
-      cumulativeCategoryId: row.categoryId,
-      ...(row.testKey ? { cumulativeAnalyteKey: row.testKey } : {}),
-    })
-  }, [navigate, pinnedNavId])
-  const openReports = useCallback(() => {
-    if (!pinnedNavId) return
-    navigate({ resourceType: 'Observation', resourceId: pinnedNavId })
-  }, [navigate, pinnedNavId])
+
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardWidth, setCardWidth] = useState(0)
   useEffect(() => {
@@ -176,11 +160,17 @@ export function OverviewLabsSection({
   const effectiveMode: LabMode = mode === 'pinned' && data.pinnedRowCount === 0 ? 'all' : mode
   const isMine = effectiveMode === 'mine'
 
-  const matched = useMemo(() => data.rows.filter((row) => {
-    if (effectiveMode === 'pinned' && !row.isPinned) return false
-    if (effectiveMode === 'abnormal' && !row.hasAbnormal) return false
-    return true
-  }), [data.rows, effectiveMode])
+  // 「自訂」 is the same pivot as the other three filters — the clinician's
+  // own rows, in their order, over the same collection-day columns.
+  const matched = useMemo(() => {
+    if (isMine) return selectPinnedOverviewRows(pinnedIds, data.rows, data.columns.length)
+    return data.rows.filter((row) => {
+      if (effectiveMode === 'pinned' && !row.isPinned) return false
+      if (effectiveMode === 'abnormal' && !row.hasAbnormal) return false
+      return true
+    })
+  }, [data.rows, data.columns.length, effectiveMode, isMine, pinnedIds])
+  const mineHasResults = isMine && matched.some((row) => row.cells.some(Boolean))
 
   // Row budget. Category dividers are charged where they actually occur —
   // reserving one per category up-front would leave most of the card empty,
@@ -213,14 +203,14 @@ export function OverviewLabsSection({
     resourceId: data.navResourceId,
     tabLabel: t.tabs.reports,
     reportView: 'cumulative' as const,
-    cumulativeCategoryId: shown[0]?.categoryId ?? data.rows[0]?.categoryId,
+    cumulativeCategoryId: shown.find((row) => row.categoryId)?.categoryId ?? data.rows[0]?.categoryId,
     seeAllLabel: strings.labs.seeAllCumulative,
   }
 
   // One renderer for the card and the full-length dialog (see
   // OverviewExpandButton): the card draws what fits, the dialog draws every
   // matched analyte, and neither can drift from the other.
-  const showCategories = effectiveMode !== 'pinned'
+  const showCategories = effectiveMode === 'all' || effectiveMode === 'abnormal'
 
   const renderPivot = (rows: OverviewLabRow[], expanded = false) => {
     // Filter before applying the card's date budget so empty pinned days
@@ -396,40 +386,14 @@ export function OverviewLabsSection({
     </>
   )
 
-  // 「我的固定」 reads the whole loaded chart, not the overview window, so it
-  // has its own body, its own scope line and no date-column pivot.
-  const mineBody = (
-    <div className={cn('min-w-0 space-y-2', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]')}>
-      {pinnedIds.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-border px-3 py-4">
-          <p className="text-xs text-muted-foreground">{strings.myLabs.empty}</p>
-          <button
-            type="button"
-            onClick={() => setEditorOpen(true)}
-            className="rounded-md border border-primary/60 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-          >
-            {strings.myLabs.emptyAction}
-          </button>
-        </div>
-      ) : (
-        <>
-          <p className="text-[0.6875rem] text-muted-foreground">{strings.myLabs.scopeNote}</p>
-          <PinnedLabsList
-            rows={pinnedRows}
-            onOpenLab={pinnedNavId ? openPinnedLab : undefined}
-            onOpenReports={pinnedNavId ? openReports : undefined}
-          />
-        </>
-      )}
-    </div>
-  )
-
+  // 「自訂」 keeps the card header identical to the other filters; its two
+  // actions sit on the footer line, beside the route to the 累積報告.
   const mineActions = (
-    <>
+    <span className="flex flex-wrap items-center gap-1.5">
       <button
         type="button"
         onClick={() => setEditorOpen(true)}
-        className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
       >
         <Pencil aria-hidden="true" className="h-3 w-3" />
         {strings.labs.editPinned}
@@ -438,13 +402,26 @@ export function OverviewLabsSection({
         <button
           type="button"
           onClick={() => revealTab('ips-export')}
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/50 px-2 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/50 px-2 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <ClipboardCopy aria-hidden="true" className="h-3 w-3" />
           {strings.labs.handoff}
         </button>
       )}
-    </>
+    </span>
+  )
+
+  const mineEmpty = (
+    <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-border px-3 py-4">
+      <p className="text-xs text-muted-foreground">{strings.myLabs.empty}</p>
+      <button
+        type="button"
+        onClick={() => setEditorOpen(true)}
+        className="rounded-md border border-primary/60 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        {strings.myLabs.emptyAction}
+      </button>
+    </div>
   )
 
   const editor = editorOpen ? (
@@ -475,18 +452,21 @@ export function OverviewLabsSection({
       actions={(
         <>
           {filterChips}
-          {isMine ? mineActions : (
-            <OverviewExpandButton
-              label={t.overview.expandList}
-              onClick={() => setListOpen(true)}
-              disabled={matched.length === 0 || columns.length === 0}
-            />
-          )}
+          <OverviewExpandButton
+            label={t.overview.expandList}
+            onClick={() => setListOpen(true)}
+            disabled={matched.length === 0 || columns.length === 0 || (isMine && !mineHasResults)}
+          />
         </>
       )}
     >
       {editor}
-      {isMine ? mineBody : shown.length === 0 || columns.length === 0 ? (
+      {isMine && pinnedIds.length === 0 ? mineEmpty : isMine && !mineHasResults ? (
+        <>
+          <div className={OVERVIEW_EMPTY_CLASS}>{strings.myLabs.noneInRange}</div>
+          <div className="flex justify-end">{mineActions}</div>
+        </>
+      ) : shown.length === 0 || columns.length === 0 ? (
         <OverviewEmptyRow hasWindowData={data.rows.length > 0 || data.unpivotedCount > 0} />
       ) : (
         <>
@@ -496,7 +476,14 @@ export function OverviewLabsSection({
           {/* The same footer the other three cards use. 「常用」 is a chosen
               short list rather than a fitting artefact, so the route to the
               full record is offered whether or not anything was cut. */}
-          <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          {isMine ? (
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+              {mineActions}
+            </div>
+          ) : (
+            <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          )}
           <OverviewFullListDialog
             open={listOpen}
             onOpenChange={setListOpen}
