@@ -1926,6 +1926,10 @@ function QuestionsCard({
  * own, the question's number where a point has its code, its name, and —
  * folded — the answer in one line with 修改; open, its controls under a
  * header that carries 收合. No green tick, no stamp, no pill of 「：−」s.
+ *
+ * Answered, the question steps back to a grey label and the answer reads as
+ * the result: bolder, on a rule of its own (clinician feedback 2026-09-28:
+ * 「結果跟標題可以有一點 UI 上的區隔嗎」).
  */
 function MapQuestionBox({
   question,
@@ -1945,6 +1949,7 @@ function MapQuestionBox({
 }) {
   const answered = question.state === 'answered'
   const open = Boolean(children)
+  const settled = answered && !open
   const action = 'min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
   return (
     <li
@@ -1956,21 +1961,21 @@ function MapQuestionBox({
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">{question.number}</span>
-        <span className={cn('text-sm font-medium', question.state === 'locked' ? 'text-muted-foreground' : 'text-foreground')}>{question.label}</span>
-        {answered && !open && answerBadge ? answerBadge : null}
+        <span className={cn('text-sm font-medium', question.state === 'locked' || settled ? 'text-muted-foreground' : 'text-foreground')}>{question.label}</span>
+        {settled && answerBadge ? answerBadge : null}
         {open && onCollapse ? (
           <button type="button" className={cn('ml-auto', action)} onClick={onCollapse} data-testid={`cdss-hf-question-collapse-${question.id}`}>
             {isEnglish ? 'Collapse' : '收合'}
           </button>
         ) : null}
-        {answered && !open && onEdit ? (
+        {settled && onEdit ? (
           <button type="button" className={cn('ml-auto', action)} onClick={onEdit} data-testid={`cdss-hf-question-edit-${question.id}`}>
             {isEnglish ? 'Edit' : '修改'}
           </button>
         ) : null}
       </div>
-      {answered && !open && question.answerText ? (
-        <p className="mt-1 text-sm text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</p>
+      {settled && question.answerText ? (
+        <p className="mt-1.5 border-l-2 border-primary/50 pl-2 text-sm font-semibold leading-snug text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</p>
       ) : null}
       {question.state === 'locked' ? (
         <p className="mt-1 text-xs text-muted-foreground">{question.lockedReason}</p>
