@@ -10,7 +10,17 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { ArrowLeft, ArrowRight, Delete, Search, Trash2, Undo2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -124,6 +134,7 @@ export function EmrFormatEditorDialog({
   const [examSel, setExamSel] = useState<EmrExamKind>('echo')
   const [draft, setDraft] = useState('')
   const [focused, setFocused] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const composingRef = useRef(false)
 
@@ -626,13 +637,32 @@ export function EmrFormatEditorDialog({
 
         <DialogFooter className="flex-row flex-wrap items-center gap-2 border-t border-border pt-3">
           {!isNew && onDelete && (
-            <Button type="button" variant="ghost" className="mr-auto gap-1.5 text-destructive hover:text-destructive" onClick={onDelete}>
+            <Button type="button" variant="ghost" className="mr-auto gap-1.5 text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
               <Trash2 className="h-4 w-4" />{e.deleteFormat}
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose}>{t.common.cancel}</Button>
           <Button type="button" onClick={() => onSave({ ...draftFormat, name: draftFormat.name || initial.name })}>{t.common.save}</Button>
         </DialogFooter>
+        {/* A format is the clinician's own work and there is no undo once it
+            is gone, so deleting asks first. */}
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{e.deleteConfirmTitle.replace('{name}', name || initial.name || c.formatLabel)}</AlertDialogTitle>
+              <AlertDialogDescription>{e.deleteConfirmBody}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+              <AlertDialogAction
+                className={buttonVariants({ variant: 'destructive' })}
+                onClick={() => onDelete?.()}
+              >
+                {e.deleteConfirmAction}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )
