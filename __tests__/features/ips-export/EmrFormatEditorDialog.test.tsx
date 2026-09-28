@@ -7,6 +7,9 @@ import type { EmrCustomFormat } from '@/src/application/stores/outpatient-prefs.
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW', t: jest.requireActual('@/src/shared/i18n/locales/zh-TW').zhTW }),
 }))
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, anonymousUid: null }),
+}))
 
 const EMPTY: EmrCustomFormat = {
   id: 'f1',

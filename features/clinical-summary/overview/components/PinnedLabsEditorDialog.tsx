@@ -31,6 +31,7 @@ import {
   searchPinnableLabs,
   type PinnableLab,
 } from '@/src/shared/utils/pinned-labs'
+import { OutpatientPrefsStorageNote } from '@/features/auth/components/OutpatientPrefsStorageNote'
 
 type Pack = { key: 'packCardio'; ids: string[] }
 
@@ -52,14 +53,12 @@ export function PinnedLabsEditorDialog({
   onOpenChange,
   initialIds,
   systemDefaultIds,
-  storageScope,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialIds: string[]
   systemDefaultIds: string[]
-  storageScope: 'account' | 'browser'
   onSave: (ids: string[]) => void
 }) {
   const { t, locale } = useLanguage()
@@ -283,9 +282,7 @@ export function PinnedLabsEditorDialog({
         </div>
 
         <DialogFooter className="flex-col items-stretch gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
-          <p className="flex-1 text-[0.6875rem] text-muted-foreground">
-            {storageScope === 'account' ? s.storageAccount : s.storageBrowser}
-          </p>
+          <OutpatientPrefsStorageNote className="flex-1" />
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t.common.cancel}</Button>
           <Button type="button" onClick={() => { onSave(selected); onOpenChange(false) }}>{t.common.save}</Button>
         </DialogFooter>

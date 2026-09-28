@@ -118,6 +118,14 @@ export const zhTW = {
     more: '更多',
     managePinned: '自訂常駐分頁',
   },
+  outpatientPrefs: {
+    storage: {
+      local: '目前存在這台電腦；若要跨裝置保存，需要登入。',
+      signIn: '登入',
+      account: '已存到帳號，登入同一帳號的其他裝置也會看到。',
+      error: '目前無法同步到帳號，先存在這台電腦；連線恢復後會自動補上。',
+    },
+  },
   overview: {
     title: '近{months}個月總覽',
     yearTitle: '近1年總覽',
@@ -197,8 +205,6 @@ export const zhTW = {
         remove: '移除 {name}',
         clear: '清空',
         resetDefault: '改回系統常用',
-        storageAccount: '存在這個瀏覽器，跟著你登入的帳號；換病人不會變。',
-        storageBrowser: '存在這個瀏覽器（目前未登入）；換病人不會變。',
       },
     },
     reports: {

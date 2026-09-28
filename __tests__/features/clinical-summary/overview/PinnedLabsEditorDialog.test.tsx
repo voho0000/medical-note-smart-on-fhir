@@ -4,6 +4,9 @@ import { PinnedLabsEditorDialog } from '@/features/clinical-summary/overview/com
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW', t: jest.requireActual('@/src/shared/i18n/locales/zh-TW').zhTW }),
 }))
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, anonymousUid: null }),
+}))
 
 const CARDIO = ['chem:CREA', 'chem:EGFR(M)', 'chem:K', 'chem:ALT', 'glucose:GLUCOSE-AC', 'glucose:HBA1C', 'lipid:LDL', 'lipid:HDL', 'lipid:TG', 'chem:NT-PROBNP']
 const SYSTEM = ['cbc:HB', 'cbc:WBC', 'cbc:PLT', 'chem:CREA', 'chem:K']
@@ -16,7 +19,6 @@ function renderEditor(initialIds: string[] = SYSTEM) {
       onOpenChange={() => {}}
       initialIds={initialIds}
       systemDefaultIds={SYSTEM}
-      storageScope="browser"
       onSave={onSave}
     />,
   )

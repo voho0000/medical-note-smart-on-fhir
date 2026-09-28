@@ -8,8 +8,10 @@
 // result is recomputed from the loaded chart each time.
 //
 // Stored per visitor key (account uid, anonymous uid, or a shared guest key —
-// the same resolution the Beta switch uses), in this browser only. Nothing is
-// synced to the cloud yet, and the UI says so.
+// the same resolution the Beta switch uses). A signed-in account's settings
+// also go to that account (users/{uid}.outpatientPrefs, see
+// outpatient-prefs-sync.ts), so every device signed in to it shows the same;
+// anonymous and guest settings stay on this computer, and the UI says so.
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -164,35 +166,99 @@ export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
   }
 }
 
+/** Where this browser's copy of an account's settings stands against the
+ *  account. Kept per key; only account keys are ever synced. */
+export interface OutpatientPrefsSyncMeta {
+  /** When these settings last changed here — or, after the account copy was
+   *  applied, that copy's own stamp. */
+  updatedAt: number
+  /** Changed here and not yet confirmed saved to the account. Survives a
+   *  reload, so an edit made offline or just before closing still goes up. */
+  dirty: boolean
+  /** Stamp of the account copy these settings were last based on; null until
+   *  this browser has synced this account once. */
+  baseUpdatedAt: number | null
+}
+
+/** 'error' = the account refused the write or could not be read; the
+ *  settings stay in this browser and go up with the next change or read. */
+export type OutpatientPrefsSyncStatus = 'synced' | 'error'
+
 interface OutpatientPrefsStore {
   byUser: Record<string, OutpatientPrefs>
+  syncMeta: Record<string, OutpatientPrefsSyncMeta>
+  /** Not persisted: this session's connection only. */
+  syncStatus: Record<string, OutpatientPrefsSyncStatus>
   update: (key: string, patch: Partial<OutpatientPrefs>) => void
+  /** Sync only: put settings in place with the given meta, without marking
+   *  them as a change made here. */
+  replace: (key: string, prefs: OutpatientPrefs, meta: OutpatientPrefsSyncMeta) => void
+  setSyncMeta: (key: string, meta: OutpatientPrefsSyncMeta) => void
+  setSyncStatus: (key: string, status: OutpatientPrefsSyncStatus) => void
+}
+
+function sanitizeSyncMeta(raw: unknown): OutpatientPrefsSyncMeta | null {
+  if (!raw || typeof raw !== 'object') return null
+  const meta = raw as Record<string, unknown>
+  if (typeof meta.updatedAt !== 'number' || !Number.isFinite(meta.updatedAt)) return null
+  return {
+    updatedAt: meta.updatedAt,
+    dirty: meta.dirty === true,
+    baseUpdatedAt: typeof meta.baseUpdatedAt === 'number' && Number.isFinite(meta.baseUpdatedAt) ? meta.baseUpdatedAt : null,
+  }
 }
 
 export const useOutpatientPrefsStore = create<OutpatientPrefsStore>()(
   persist(
     (set) => ({
       byUser: {},
-      update: (key, patch) => set((state) => ({
-        byUser: {
-          ...state.byUser,
-          [key]: sanitizeOutpatientPrefs({ ...(state.byUser[key] ?? EMPTY_OUTPATIENT_PREFS), ...patch }),
-        },
+      syncMeta: {},
+      syncStatus: {},
+      update: (key, patch) => set((state) => {
+        const previous = state.syncMeta[key]
+        // Strictly after the previous stamp, so two edits in one millisecond
+        // (or a clock set back) still read as the newer change.
+        const updatedAt = Math.max(Date.now(), (previous?.updatedAt ?? 0) + 1)
+        return {
+          byUser: {
+            ...state.byUser,
+            [key]: sanitizeOutpatientPrefs({ ...(state.byUser[key] ?? EMPTY_OUTPATIENT_PREFS), ...patch }),
+          },
+          syncMeta: {
+            ...state.syncMeta,
+            [key]: { updatedAt, dirty: true, baseUpdatedAt: previous?.baseUpdatedAt ?? null },
+          },
+        }
+      }),
+      replace: (key, prefs, meta) => set((state) => ({
+        byUser: { ...state.byUser, [key]: sanitizeOutpatientPrefs(prefs) },
+        syncMeta: { ...state.syncMeta, [key]: meta },
       })),
+      setSyncMeta: (key, meta) => set((state) => ({ syncMeta: { ...state.syncMeta, [key]: meta } })),
+      setSyncStatus: (key, status) => set((state) => (
+        state.syncStatus[key] === status ? state : { syncStatus: { ...state.syncStatus, [key]: status } }
+      )),
     }),
     {
       name: 'mediprisma-outpatient-prefs',
       version: 1,
-      partialize: (state) => ({ byUser: state.byUser }),
+      partialize: (state) => ({ byUser: state.byUser, syncMeta: state.syncMeta }),
       merge: (persisted, current) => {
-        const stored = (persisted as { byUser?: unknown } | undefined)?.byUser
+        const stored = persisted as { byUser?: unknown; syncMeta?: unknown } | undefined
         const byUser: Record<string, OutpatientPrefs> = {}
-        if (stored && typeof stored === 'object') {
-          for (const [key, value] of Object.entries(stored as Record<string, unknown>)) {
+        if (stored?.byUser && typeof stored.byUser === 'object') {
+          for (const [key, value] of Object.entries(stored.byUser as Record<string, unknown>)) {
             byUser[key] = sanitizeOutpatientPrefs(value)
           }
         }
-        return { ...current, byUser }
+        const syncMeta: Record<string, OutpatientPrefsSyncMeta> = {}
+        if (stored?.syncMeta && typeof stored.syncMeta === 'object') {
+          for (const [key, value] of Object.entries(stored.syncMeta as Record<string, unknown>)) {
+            const meta = sanitizeSyncMeta(value)
+            if (meta && byUser[key]) syncMeta[key] = meta
+          }
+        }
+        return { ...current, byUser, syncMeta }
       },
     },
   ),
