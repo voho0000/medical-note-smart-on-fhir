@@ -24,6 +24,8 @@ import {
   EMR_EXAM_FIELDS,
   EMR_EXAM_KINDS,
   EMR_LAB_FIELDS,
+  EMR_LAB_RECENT_COUNTS,
+  EMR_LAB_SERIES_FIELDS,
   type EmrCustomFormat,
   type EmrDateStyle,
   type EmrEmptyLines,
@@ -117,6 +119,8 @@ export function EmrFormatEditorDialog({
   const supportedPins = useMemo(() => pinnedLabIds.filter((id) => findPinnableLab(id)), [pinnedLabIds])
   const [labSel, setLabSel] = useState<string>(supportedPins[0] ?? 'lipid:LDL')
   const [labQuery, setLabQuery] = useState('')
+  // 最近 N 次 for the next value/date field inserted; 1 = latest only.
+  const [labCount, setLabCount] = useState(1)
   const [examSel, setExamSel] = useState<EmrExamKind>('echo')
   const [draft, setDraft] = useState('')
   const [focused, setFocused] = useState(false)
@@ -235,11 +239,18 @@ export function EmrFormatEditorDialog({
 
   // What a screen reader hears for the (visual-only) content above the
   // hidden input: text as typed, fields as "LDL 的數值".
+  // A field chip's second half: "數值", or "數值 最近3次" for a series.
+  const fieldLabel = (unit: Extract<EmrEditUnit, { kind: 'lab' | 'exam' }>) => {
+    if (unit.kind === 'exam') return e.examFields[unit.field]
+    const base = e.labFields[unit.field]
+    return unit.count ? `${base} ${e.chipCount.replace('{n}', String(unit.count))}` : base
+  }
+
   const srSummary = units.map((unit) => {
     if (unit.kind === 'char') return unit.ch
     if (unit.kind === 'newline') return '\n'
     const what = unit.kind === 'lab' ? labLabel(unit.lab) : examName(unit.exam)
-    const field = unit.kind === 'lab' ? e.labFields[unit.field] : e.examFields[unit.field]
+    const field = fieldLabel(unit)
     return `[${e.chipAria.replace('{what}', what).replace('{field}', field)}]`
   }).join('')
 
@@ -249,7 +260,7 @@ export function EmrFormatEditorDialog({
   const caretBar = <span aria-hidden="true" className={cn('mx-px inline-block h-4 w-0.5 align-middle', focused ? 'animate-pulse bg-primary' : 'bg-primary/40')} />
 
   // Examples insert at the caret rather than replacing, so a clinician can
-  // stack 「我的固定檢驗」 and 「Echo／EKG」 into one format. 清空 replaces.
+  // stack 「自訂檢驗」 and 「Echo／EKG」 into one format. 清空 replaces.
   // An example is a block of whole lines: it starts on a line of its own and
   // does not glue onto what follows. (Text the clinician types is never
   // touched this way.)
@@ -351,7 +362,7 @@ export function EmrFormatEditorDialog({
                           )
                         }
                         const what = unit.kind === 'lab' ? labLabel(unit.lab) : examName(unit.exam)
-                        const field = unit.kind === 'lab' ? e.labFields[unit.field] : e.examFields[unit.field]
+                        const field = fieldLabel(unit)
                         const unsupported = unit.kind === 'lab' && !findPinnableLab(unit.lab)
                         return (
                           <span key={index} className="inline-flex items-center">
@@ -423,12 +434,28 @@ export function EmrFormatEditorDialog({
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="min-w-16 text-xs font-semibold">{labLabel(labSel)}</span>
-                {EMR_LAB_FIELDS.map((field) => (
-                  <button key={field} type="button" className={FIELD_BUTTON} onClick={() => insert([{ kind: 'lab', lab: labSel, field }])}>
-                    ＋ {e.labFields[field]}
-                  </button>
-                ))}
+                {EMR_LAB_FIELDS.map((field) => {
+                  const count = labCount > 1 && EMR_LAB_SERIES_FIELDS.includes(field) ? labCount : undefined
+                  return (
+                    <button key={field} type="button" className={FIELD_BUTTON} onClick={() => insert([{ kind: 'lab', lab: labSel, field, ...(count ? { count } : {}) }])}>
+                      ＋ {e.labFields[field]}{count ? `（${e.chipCount.replace('{n}', String(count))}）` : ''}
+                    </button>
+                  )
+                })}
               </div>
+              <label className="flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
+                {e.countLabel}
+                <select
+                  value={labCount}
+                  onChange={(event) => setLabCount(Number(event.target.value))}
+                  className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <option value={1}>{e.countLatest}</option>
+                  {EMR_LAB_RECENT_COUNTS.map((n) => (
+                    <option key={n} value={n}>{e.countRecent.replace('{n}', String(n))}</option>
+                  ))}
+                </select>
+              </label>
             </section>
 
             <section className="space-y-2 rounded-md border border-border p-3">

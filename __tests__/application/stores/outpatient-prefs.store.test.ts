@@ -57,6 +57,29 @@ describe('sanitizeOutpatientPrefs', () => {
     })
     expect(prefs.activeFormatId).toBe('a')
   })
+
+  it('keeps a 最近 N 次 count only on value/date fields and only 2–5', () => {
+    const tokens = sanitizeOutpatientPrefs({
+      formats: [{
+        id: 'a',
+        name: 'Cr',
+        tokens: [
+          { kind: 'lab', lab: 'chem:CREA', field: 'value', count: 3 },
+          { kind: 'lab', lab: 'chem:CREA', field: 'date', count: 2 },
+          { kind: 'lab', lab: 'chem:CREA', field: 'unit', count: 3 },
+          { kind: 'lab', lab: 'chem:CREA', field: 'value', count: 9 },
+          { kind: 'lab', lab: 'chem:CREA', field: 'value', count: '3' },
+        ],
+      }],
+    }).formats[0].tokens
+    expect(tokens).toEqual([
+      { kind: 'lab', lab: 'chem:CREA', field: 'value', count: 3 },
+      { kind: 'lab', lab: 'chem:CREA', field: 'date', count: 2 },
+      { kind: 'lab', lab: 'chem:CREA', field: 'unit' },
+      { kind: 'lab', lab: 'chem:CREA', field: 'value' },
+      { kind: 'lab', lab: 'chem:CREA', field: 'value' },
+    ])
+  })
 })
 
 describe('useOutpatientPrefsStore', () => {

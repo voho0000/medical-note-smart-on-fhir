@@ -227,3 +227,39 @@ describe('edit units', () => {
     expect(unitsToTokens(tokensToUnits([t('a\nb')]))).toEqual([t('a'), nl, t('b')])
   })
 })
+
+describe('renderEmrCustomFormat — 最近 N 次', () => {
+  const CREA = [
+    obs('CREA', '2026-03-01', 1.2, { unit: 'mg/dL' }),
+    obs('CREA', '2026-05-25', 1.3, { unit: 'mg/dL' }),
+    obs('CREA', '2026-06-02', 1.5, { unit: 'mg/dL', interpretation: 'H' }),
+    obs('CREA', '2025-12-01', 1.1, { unit: 'mg/dL' }),
+  ]
+  const series = (id: string, field: 'value' | 'date', count: number): EmrFormatToken => ({ kind: 'lab', lab: id, field, count })
+
+  it('prints the last N values oldest first, with the latest date', () => {
+    const tokens = [lab('chem:CREA', 'name'), t(' '), series('chem:CREA', 'value', 3), t(' ('), lab('chem:CREA', 'date'), t(')')]
+    const result = renderEmrCustomFormat(format(tokens), inputs(CREA))
+    expect(result.text).toBe('CREA 1.2→1.3→1.5 (06/02)')
+    expect(result.notes).toEqual([])
+  })
+
+  it('can print the matching dates as a series too', () => {
+    const result = renderEmrCustomFormat(format([series('chem:CREA', 'date', 2)]), inputs(CREA))
+    expect(result.text).toBe('05/25→06/02')
+  })
+
+  it('follows the line rule for the day the series ends on', () => {
+    const withK = [...CREA, obs('K', '2026-05-25', 4.1, { unit: 'mmol/L' })]
+    const tokens = [series('chem:CREA', 'value', 2), t(' / '), lab('chem:K', 'value')]
+    // 同一天 picks the newest day either has (06/02): K is missing there.
+    expect(renderEmrCustomFormat(format(tokens), inputs(withK)).text).toBe('1.3→1.5 / —')
+    expect(renderEmrCustomFormat(format(tokens, { labRule: 'eachLatest' }), inputs(withK)).text).toBe('1.3→1.5 / 4.1')
+  })
+
+  it('prints what there is and says so when fewer results exist', () => {
+    const result = renderEmrCustomFormat(format([series('chem:CREA', 'value', 5)]), inputs(CREA))
+    expect(result.text).toBe('1.1→1.2→1.3→1.5')
+    expect(result.notes).toEqual([{ type: 'labFewer', line: 1, lab: 'chem:CREA', wanted: 5, got: 4 }])
+  })
+})
