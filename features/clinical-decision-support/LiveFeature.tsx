@@ -16,7 +16,6 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import {
   getApplicableClinicalGuidelinePacks,
-  getClinicalGuidelinePack,
   getDefaultClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,
 } from './guideline-packs/registry'
@@ -54,20 +53,34 @@ import {
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
 import {
+  AF_SWITCHABLE_LAYOUTS,
   CDSS_SWITCHABLE_LAYOUTS,
   LIPID_SWITCHABLE_LAYOUTS,
+  RETIRED_LAYOUTS,
+  defaultLayoutFor,
   type CdssLayout,
   useCdssLayoutStore,
 } from './stores/layout-preference.store'
+import {
+  useVisitAnswerRecord,
+  useVisitAnswersHydrated,
+  useVisitAnswersStore,
+  visitAnswersOf,
+} from './stores/visit-answers.store'
+import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
+import { intolerantPillars } from './renderers/visit/visit-decisions'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
+import { useLocalDay } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
 import { applyPhenotypeAnswer } from './utils/apply-phenotype-answer'
 import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
-import { AF_PACK_ID, mergeAfIntoHeartFailure } from './utils/merge-af-into-hf'
-import type { CdssLocale, ClinicalGuidelinePack } from './types'
+import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
+
+const AF_PACK_ID = 'atrial-fibrillation-cdss'
+const LIPID_PACK_ID = 'hyperlipidemia-cdss'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
   return (
@@ -203,24 +216,27 @@ function LayoutSwitcher({
   locale,
   layout,
   packId,
+  mapAvailable,
   onSelect,
 }: {
   locale: CdssLocale
   layout: CdssLayout
   packId: string
+  /** Whether the pack produced a decision map for this record. */
+  mapAvailable: boolean
   onSelect: (layout: CdssLayout) => void
 }) {
   const isEnglish = locale === 'en'
-  const labels: Record<'sections' | 'flow' | 'nhi' | 'board', { label: string; title: string }> = {
+  const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
+    map: {
+      label: isEnglish ? 'Decision map' : '決策地圖',
+      title: isEnglish
+        ? "Today's decisions first, then the three sections as the map's three columns"
+        : '今天要決定的事在最上面；三區塊就是地圖的三欄',
+    },
     sections: {
       label: isEnglish ? 'Three sections' : '三區塊',
       title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
-    },
-    flow: {
-      label: isEnglish ? 'Visit flow' : '新版流程',
-      title: isEnglish
-        ? 'The visit in four steps: confirm, assess, decide, record — each question asked once'
-        : '四步走完一次門診：確認、評估、處置、紀錄；同一題只問一次',
     },
     nhi: {
       label: isEnglish ? 'NHI Table 1' : '健保表一',
@@ -228,16 +244,13 @@ function LayoutSwitcher({
         ? 'Review the NHI lipid tier, supporting criteria and treatment response'
         : '核對健保血脂分級、支持條件與治療反應',
     },
-    board: {
-      label: isEnglish ? 'Original board' : '原版看板',
-      title: isEnglish
-        ? 'The status board: safety inputs, the four pillars, then the module rows'
-        : '原本的看板：安全數據、四支柱，再列模組',
-    },
   }
-  const layoutIds = packId === 'hyperlipidemia-cdss'
+  const layoutIds = (packId === LIPID_PACK_ID
     ? LIPID_SWITCHABLE_LAYOUTS
-    : CDSS_SWITCHABLE_LAYOUTS
+    : packId === AF_PACK_ID
+      ? AF_SWITCHABLE_LAYOUTS
+      : CDSS_SWITCHABLE_LAYOUTS
+  ).filter((id) => id !== 'map' || mapAvailable)
   const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
@@ -273,7 +286,17 @@ function LayoutSwitcher({
   )
 }
 
-export default function LiveClinicalDecisionSupportFeature() {
+export default function LiveClinicalDecisionSupportFeature({
+  previousCdssVisit,
+}: {
+  /**
+   * The date of the last visit this CDSS recorded for the patient, when a
+   * store hands one in. None yet: every visit is the system's first, which
+   * shows the baseline work-up and asks the diagnosis (clinician decision
+   * 2026-09-28). The scenario harness passes one for a returning patient.
+   */
+  previousCdssVisit?: string
+}) {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
   const { autofill } = useLabAutofill()
@@ -311,6 +334,13 @@ export default function LiveClinicalDecisionSupportFeature() {
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
+  const visitAnswerRecord = useVisitAnswerRecord(patientId)
+  // Today's answers only, and 「today」 turns at midnight on an open page too.
+  const today = useLocalDay()
+  const visitAnswers = useMemo(() => visitAnswersOf(visitAnswerRecord, today), [today, visitAnswerRecord])
+  const hydrateVisitAnswers = useVisitAnswersStore((state) => state.hydrate)
+  const answerVisitAsk = useVisitAnswersStore((state) => state.answer)
+  const clearVisitAnswers = useVisitAnswersStore((state) => state.clearAnswers)
 
   // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
   // and 「還沒讀到」 render identically and mean opposite things, so the
@@ -322,6 +352,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     usePhysicianDecisionsHydrated(patientId),
     useHfpefInputsHydrated(patientId),
     usePhenotypeAnswerHydrated(patientId),
+    useVisitAnswersHydrated(patientId),
   ].every(Boolean)
 
   // The switches this physician set on this chart survive a reload, so they are
@@ -350,6 +381,13 @@ export default function LiveClinicalDecisionSupportFeature() {
   useEffect(() => {
     if (patientId) hydrateHfpefInputs(patientId)
   }, [hydrateHfpefInputs, patientId])
+
+  // Today's answers to the every-visit questions, for the same reason again:
+  // the pack reads them as facts.
+  // Again when the day turns, so an answer from an earlier day leaves storage too.
+  useEffect(() => {
+    if (patientId) hydrateVisitAnswers(patientId)
+  }, [hydrateVisitAnswers, patientId, today])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
@@ -428,9 +466,26 @@ export default function LiveClinicalDecisionSupportFeature() {
   ), [answeredProfile, autofill, hfpefInputs])
 
   const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
+  // The every-visit answers enter last, as the pack's own facts
+  // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
+  // on every layout, not only on the map where it was asked. A pillar the
+  // clinician marked 「不耐受」 travels the same way, for DP-19, and so does a
+  // stored previous visit, which makes this one a follow-up.
+  const intolerant = useMemo(() => intolerantPillars(physicianDecisions), [physicianDecisions])
   const profile = useMemo(() => (
-    answeredProfile ? applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)) : null
-  ), [answeredProfile, hfpefReading, preventReading])
+    answeredProfile
+      ? applyPreviousVisit(
+        applyFmtIntolerance(
+          applyVisitAnswers(
+            applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
+            visitAnswers,
+          ),
+          intolerant,
+        ),
+        previousCdssVisit,
+      )
+      : null
+  ), [answeredProfile, hfpefReading, intolerant, preventReading, previousCdssVisit, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -449,36 +504,65 @@ export default function LiveClinicalDecisionSupportFeature() {
     ?? applicablePacks[0]
     ?? getDefaultClinicalGuidelinePack()
 
-  // A heart-failure patient who also has AF is seen in the HF clinic, so the
-  // HF page carries the AF pack's own anticoagulation and rate cards when that
-  // pack says AF is established. The AF pack goes through the same visibility
-  // gate as the switcher: a route that shows released guidance only never
-  // gains an unreleased pack's cards this way. Any AF failure leaves the HF
-  // result untouched.
-  const buildSelected = useMemo(() => (
-    (targetProfile: NonNullable<typeof profile>, locale: CdssLocale) => {
-      const built = selectedPack.build({ profile: targetProfile, locale })
-      if (built.packId !== HEART_FAILURE_PACK_ID) return built
-      return mergeAfIntoHeartFailure(built, () => {
-        const afPack = getClinicalGuidelinePack(AF_PACK_ID)
-        return afPack && afPack.applies(targetProfile)
-          ? afPack.build({ profile: targetProfile, locale })
-          : undefined
-      })
-    }
-  ), [selectedPack])
-
   const result = useMemo(() => {
     if (!profile) return null
     return selectedPack.applies(profile)
-      ? buildSelected(profile, cdssLocale)
+      ? selectedPack.build({ profile, locale: cdssLocale })
       : null
-  }, [buildSelected, cdssLocale, profile, selectedPack])
+  }, [cdssLocale, profile, selectedPack])
 
   const englishResult = useMemo(() => {
     if (cdssLocale === 'en') return result
-    return profile && selectedPack.applies(profile) ? buildSelected(profile, 'en') : null
-  }, [buildSelected, cdssLocale, profile, result, selectedPack])
+    return profile && selectedPack.applies(profile) ? selectedPack.build({ profile, locale: 'en' }) : null
+  }, [cdssLocale, profile, result, selectedPack])
+
+  // The layout this browser chose, or — when it never chose — the pack's own
+  // default: the decision map for heart failure and atrial fibrillation.
+  // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
+  const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
+  const wantsMap = preferredLayout === 'map'
+    && (selectedPack.id === HEART_FAILURE_PACK_ID || selectedPack.id === AF_PACK_ID)
+
+  // On the heart-failure page the map carries atrial fibrillation's
+  // anticoagulation and rate/rhythm points (DP-14, DP-28), read from the AF
+  // pack's own result. It is built only when that pack is visible here and
+  // applies to this record, and a failure there leaves heart failure as it is.
+  const afPack = useMemo(() => guidelinePacks.find((pack) => pack.id === AF_PACK_ID), [guidelinePacks])
+  const companionResult = useMemo((): CdssResult | undefined => {
+    if (!wantsMap || !profile || !result || result.packId !== HEART_FAILURE_PACK_ID || !afPack) return undefined
+    try {
+      return afPack.applies(profile) ? afPack.build({ profile, locale: cdssLocale }) : undefined
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[cdss] atrial-fibrillation companion could not be built', error)
+      }
+      return undefined
+    }
+  }, [afPack, cdssLocale, profile, result, wantsMap])
+
+  // The same companion in English, beside the page's own English build, so an
+  // AF card opened on the heart-failure page copies its rationale in English.
+  const englishCompanionResult = useMemo((): CdssResult | undefined => {
+    if (!companionResult || !profile || !afPack) return undefined
+    if (cdssLocale === 'en') return companionResult
+    try {
+      return afPack.build({ profile, locale: 'en' })
+    } catch {
+      return undefined
+    }
+  }, [afPack, cdssLocale, companionResult, profile])
+
+  const visitModel = useMemo(() => {
+    if (!wantsMap || !profile || !result) return undefined
+    if (result.packId !== HEART_FAILURE_PACK_ID && result.packId !== AF_PACK_ID) return undefined
+    return buildVisitModel({
+      packId: result.packId,
+      result,
+      profile,
+      ...(companionResult ? { companion: companionResult } : {}),
+      locale: cdssLocale,
+    })
+  }, [cdssLocale, companionResult, profile, result, wantsMap])
 
   // Keep the AI scope watcher mounted for the whole clinical workspace. A
   // chart revision must retire AI-derived tiering even while another lipid
@@ -576,12 +660,27 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   // A layout can be remembered while the clinician moves between diseases.
   // Map a disease-specific choice to its closest valid view without rewriting
-  // the stored preference; returning to that disease restores the choice.
-  const effectiveLayout: CdssLayout = result.packId === 'hyperlipidemia-cdss'
-    ? layout === 'flow' ? 'sections' : layout
-    : layout === 'nhi' ? 'sections' : layout
+  // the stored preference; returning to that disease restores the choice. The
+  // decision map exists only where the pack produced one; anywhere else, and
+  // whenever the model could not be built, the page opens on three sections.
+  const mapAvailable = Boolean(visitModel)
+  // The switch offers the map wherever the package can build one; only a map
+  // that was asked for and could not be built is withdrawn from it.
+  const mapOffered = (result.packId === HEART_FAILURE_PACK_ID || result.packId === AF_PACK_ID)
+    && isVisitModelSupported()
+    && (!wantsMap || mapAvailable)
+  const effectiveLayout: CdssLayout = result.packId === LIPID_PACK_ID
+    ? preferredLayout === 'flow' || preferredLayout === 'map' ? 'sections' : preferredLayout
+    : preferredLayout === 'nhi' || (preferredLayout === 'map' && !mapAvailable) ? 'sections' : preferredLayout
+  const isMap = effectiveLayout === 'map'
   const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
-  const isNhiTable = effectiveLayout === 'nhi' && result.packId === 'hyperlipidemia-cdss'
+  const isNhiTable = effectiveLayout === 'nhi' && result.packId === LIPID_PACK_ID
+  // Atrial fibrillation has two faces: the map, and its own three-section flow,
+  // which is what every other stored layout has always shown there.
+  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : effectiveLayout
+  const showLayoutSwitcher = result.packId === HEART_FAILURE_PACK_ID
+    || result.packId === LIPID_PACK_ID
+    || (result.packId === AF_PACK_ID && mapOffered)
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -600,6 +699,7 @@ export default function LiveClinicalDecisionSupportFeature() {
     clearPhysicianDecisions(patientId)
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
+    clearVisitAnswers(patientId)
     toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
   }
 
@@ -614,12 +714,13 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? `Clinical rules ${result.packVersion}`
           : `臨床規則版本 ${result.packVersion}`}
       >
-        <div className="flex min-w-0 flex-1 items-center">
-          <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
-            {result.title}
-          </h2>
-        </div>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-3">
+        {/* One line: the title, the disease and the layout side by side, so
+            the page's own content starts near the top (clinician feedback
+            2026-09-28: 「集中一行，不然資訊都一半的頁高才出現」). */}
+        <h2 className="shrink-0 truncate text-base font-semibold tracking-tight text-foreground">
+          {result.title}
+        </h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
@@ -627,8 +728,14 @@ export default function LiveClinicalDecisionSupportFeature() {
             selectedPackId={selectedPack.id}
             onSelect={setRequestedPackId}
           />
-          {result.packId === HEART_FAILURE_PACK_ID || result.packId === 'hyperlipidemia-cdss' ? (
-            <LayoutSwitcher locale={cdssLocale} layout={effectiveLayout} packId={result.packId} onSelect={setLayout} />
+          {showLayoutSwitcher ? (
+            <LayoutSwitcher
+              locale={cdssLocale}
+              layout={switcherLayout}
+              packId={result.packId}
+              mapAvailable={mapOffered}
+              onSelect={setLayout}
+            />
           ) : null}
           {(isVisitFlow || isNhiTable) && patientId ? (
             <Button
@@ -643,14 +750,19 @@ export default function LiveClinicalDecisionSupportFeature() {
               {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
             </Button>
           ) : null}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
-              {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
-            </Badge>
-            <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200">
-              {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
-            </Badge>
-          </div>
+          {/* The map's 今天要決定 says what needs the clinician, item by item;
+              these two counts would repeat it less exactly, so the map leaves
+              them out. */}
+          {isMap ? null : (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-200">
+                {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
+              </Badge>
+              <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200">
+                {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
+              </Badge>
+            </div>
+          )}
         </div>
       </header>
 
@@ -658,11 +770,13 @@ export default function LiveClinicalDecisionSupportFeature() {
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy
         button for it sits beside the one for this visit's summary.
       */}
-      {result.clinicalHandoff && !isVisitFlow && !isNhiTable ? (
+      {/* The map carries the handoff at its foot, beside the visit summary. */}
+      {result.clinicalHandoff && !isVisitFlow && !isNhiTable && !isMap ? (
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
       <ClinicalDecisionSupportView
+        calculatorAutofill={autofill}
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
         result={result}
@@ -693,8 +807,33 @@ export default function LiveClinicalDecisionSupportFeature() {
         onSaveHfpefInputs={patientId
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
+        visitModel={isMap ? visitModel : undefined}
+        companionResult={isMap ? companionResult : undefined}
+        englishCompanionResult={isMap ? englishCompanionResult : undefined}
+        visitAnswers={visitAnswers}
+        onVisitAnswer={patientId
+          ? (id, value) => answerVisitAsk(patientId, id, value)
+          : undefined}
       />
       </PreventReadingContext.Provider>
+      {/* On the map, the reset sits at the foot, after the summary: it clears
+          every answer and decision on the page, and has no business beside
+          the first things a clinician reads. */}
+      {isMap && patientId ? (
+        <div className="flex justify-end border-t border-border pt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1.5 px-2.5 text-xs text-muted-foreground shadow-none"
+            onClick={resetVisitDefaults}
+            data-testid="cdss-hf-reset-page-defaults"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {cdssLocale === 'en' ? 'Restore page defaults' : '恢復本頁預設'}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -39,6 +39,9 @@ export const HFPEF_NOT_CONFIRMED = 'not-assessed' as const
 /** The DP-00 answer: whether this clinician is asking about heart failure. */
 export type HeartFailureSuspicionAnswer = 'suspected' | 'not-suspected'
 
+/** The phenotype a clinician chose on DP-00 「診斷：HFrEF 還是 HFpEF？」. */
+export type HeartFailureDiagnosisChoice = 'hfrEF' | 'hfpEF'
+
 /** When each answer was last changed, as ISO timestamps. */
 export interface PhenotypeAnswerTimestamps {
   hfSuspicion?: string
@@ -55,6 +58,13 @@ export interface PhenotypeAnswer {
    * as 「不懷疑」 — it is the difference between a quiet card and a closed one.
    */
   hfSuspicion?: HeartFailureSuspicionAnswer
+  /**
+   * The phenotype chosen on DP-00, where one was. It is the clinician's
+   * diagnosis, and it is what that answer wrote beside it — the `choice`, and
+   * the `diagnosisConfirmation` (HFrEF) or `hfpEfConfirmed` (HFpEF) — so
+   * changing the answer knows exactly what to take back.
+   */
+  diagnosis?: HeartFailureDiagnosisChoice
   /**
    * Absent where the phenotype gate never asked — a patient whose record does
    * hold an LVEF can still reach the HFpEF confirmation below.
@@ -93,7 +103,8 @@ export function stampPhenotypeAnswer(
   const before = previous?.modifiedAt ?? {}
   const modifiedAt: PhenotypeAnswerTimestamps = {}
 
-  const suspicionChanged = previous?.hfSuspicion !== next.hfSuspicion
+  // One question: the phenotype chosen on DP-00 dates with the suspicion.
+  const suspicionChanged = previous?.hfSuspicion !== next.hfSuspicion || previous?.diagnosis !== next.diagnosis
   if (next.hfSuspicion !== undefined) {
     modifiedAt.hfSuspicion = suspicionChanged ? at : before.hfSuspicion ?? at
   }
@@ -117,6 +128,7 @@ export function stampPhenotypeAnswer(
 function sameAnswer(a: PhenotypeAnswer | undefined, b: PhenotypeAnswer): boolean {
   return Boolean(a)
     && a?.hfSuspicion === b.hfSuspicion
+    && a?.diagnosis === b.diagnosis
     && a?.choice === b.choice
     && a?.lvef === b.lvef
     && a?.measuredOn === b.measuredOn
@@ -175,6 +187,7 @@ function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
         && typeof confirmation.confirmedAt === 'string' && Number.isFinite(Date.parse(confirmation.confirmedAt))
         && typeof confirmation.basis === 'string' ? { diagnosisConfirmation: confirmation } : {}),
       ...(isSuspicion(record.hfSuspicion) ? { hfSuspicion: record.hfSuspicion } : {}),
+      ...(record.diagnosis === 'hfrEF' || record.diagnosis === 'hfpEF' ? { diagnosis: record.diagnosis } : {}),
       ...(isChoice(record.choice) ? { choice: record.choice } : {}),
       ...(typeof record.lvef === 'number' && Number.isFinite(record.lvef) ? { lvef: record.lvef } : {}),
       ...(typeof record.measuredOn === 'string' ? { measuredOn: record.measuredOn } : {}),

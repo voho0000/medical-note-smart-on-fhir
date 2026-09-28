@@ -544,7 +544,6 @@ export function OverviewLabsSection({
       onOpenChange={setEditorOpen}
       initialIds={prefs.pinnedLabs ?? systemDefaultIds}
       systemDefaultIds={systemDefaultIds}
-      storageScope={prefs.scope}
       onSave={(ids) => {
         prefs.setPinnedLabs(ids)
         setMode('mine')
