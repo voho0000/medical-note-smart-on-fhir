@@ -251,7 +251,10 @@ export function QueueRowBox({
                 <p className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">{point.headline ?? point.label}</p>
                 {point.why ? <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p> : null}
               </div>
-              <div className="shrink-0">
+              {/* Never wider than the column: in a narrow panel the buttons
+                  wrap among themselves instead of running past the frame,
+                  which clips them (#177 review: 「都有」 cut off at 320px). */}
+              <div className="min-w-0 max-w-full shrink-0">
                 <VisitDecisionControls
                   point={point}
                   surface="queue"
