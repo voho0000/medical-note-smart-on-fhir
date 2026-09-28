@@ -359,6 +359,12 @@ describe('real pack · the status line\'s clinical values fold', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByTestId('cdss-visit-key-values')).toBeVisible()
     expect(screen.queryByTestId('cdss-visit-key-values-summary')).toBeNull()
+    // The whole line folds it again, as the three sections' row does.
+    fireEvent.click(screen.getByTestId('cdss-visit-values-header'))
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // …while 報告 on it opens the report, not the fold.
+    fireEvent.click(within(screen.getByTestId('cdss-visit-key-values-summary')).getByTestId('cdss-status-echo-report'))
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 })
 

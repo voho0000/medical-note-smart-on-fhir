@@ -110,8 +110,9 @@ describe('decision map in the view', () => {
     expect(screen.getAllByTestId('cdss-visit-detail')).toHaveLength(1)
     expect(within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-af-anticoagulation')).toBeInTheDocument()
 
-    // What no point names stays at the foot, with the completed checks and the handoff.
-    expect(screen.getByTestId('cdss-visit-other-modules')).toHaveTextContent('心衰竭監測')
+    // The completed checks and the handoff stay at the foot.
+    // A card no point names is not folded at 02's foot any more (「沒用處了」).
+    expect(screen.queryByTestId('cdss-visit-other-modules')).toBeNull()
     expect(screen.getByTestId('cdss-visit-completed-checks')).toHaveTextContent('已完成檢核 A')
     expect(screen.getByTestId('cdss-clinical-handoff')).toBeInTheDocument()
   })

@@ -142,7 +142,7 @@ export function VisitStatusHeader({
             {item.stale ? `${displayDate(item.date, now) ? ' · ' : ''}${isEnglish ? 'Past window' : '已超過窗期'}` : ''}
           </dd>
         ) : null}
-        {valueAddons?.[item.key] ? <dd className="self-center">{valueAddons[item.key]}</dd> : null}
+        {valueAddons?.[item.key] ? <dd>{valueAddons[item.key]}</dd> : null}
       </div>
     )
   }
@@ -172,25 +172,43 @@ export function VisitStatusHeader({
         ) : null}
       </div>
       {hasValues ? (
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm" data-testid="cdss-visit-values-row">
-          <button
-            type="button"
-            className="-ml-1 inline-flex min-h-8 shrink-0 items-center gap-1 self-center rounded-md px-1 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-expanded={valuesOpen}
-            aria-controls="cdss-visit-values"
-            onClick={() => setValuesOpen(!valuesOpen)}
-            data-testid="cdss-visit-values-toggle"
+        // As the three sections' 「臨床數值與來源」 row, in the map's form: the
+        // whole first line opens and folds the values (clinician feedback
+        // 2026-09-28: 「一整個 row 都是可點擊 toggle」), not its first words
+        // alone; a link on it (報告) still does its own thing. The button is
+        // the control a keyboard reaches.
+        <div className="rounded-md border border-border bg-background" data-testid="cdss-visit-values-row">
+          <div
+            className="flex min-h-11 cursor-pointer flex-wrap items-baseline gap-x-4 gap-y-1 rounded-md px-2.5 py-2 text-sm hover:bg-muted/30"
+            // A larger mouse target for the button inside it; a button or link
+            // on the line (the toggle itself, 報告) handles its own press.
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest('button, a')) return
+              setValuesOpen(!valuesOpen)
+            }}
+            data-testid="cdss-visit-values-header"
           >
-            {isEnglish ? 'Clinical values' : '臨床數值'}
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', valuesOpen && 'rotate-180')} aria-hidden="true" />
-          </button>
-          {!valuesOpen && summaryValues.length ? (
-            <dl className="contents" data-testid="cdss-visit-key-values-summary">{summaryValues.map(renderValue)}</dl>
-          ) : null}
-          <dl id="cdss-visit-values" hidden={!valuesOpen} className={valuesOpen ? 'contents' : undefined} data-testid="cdss-visit-key-values">
-            {model.keyValues.map(renderValue)}
-            {extras}
-          </dl>
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-baseline gap-1 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={valuesOpen}
+              aria-controls="cdss-visit-values"
+              onClick={() => setValuesOpen(!valuesOpen)}
+              data-testid="cdss-visit-values-toggle"
+            >
+              {isEnglish ? 'Clinical values' : '臨床數值'}
+              <ChevronDown className={cn('h-3.5 w-3.5 translate-y-0.5 transition-transform motion-reduce:transition-none', valuesOpen && 'rotate-180')} aria-hidden="true" />
+            </button>
+            {!valuesOpen && summaryValues.length ? (
+              <dl className="contents" data-testid="cdss-visit-key-values-summary">{summaryValues.map(renderValue)}</dl>
+            ) : null}
+          </div>
+          <div hidden={!valuesOpen} className="border-t border-border px-2.5 py-2">
+            <dl id="cdss-visit-values" className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm" data-testid="cdss-visit-key-values">
+              {model.keyValues.map(renderValue)}
+              {extras}
+            </dl>
+          </div>
         </div>
       ) : null}
       {model.triggers.length ? (

@@ -109,33 +109,28 @@
   padding: 1rem;
 }
 
-/* On the map the section colour is an accent, not a fill (clinician feedback
-   2026-09-28: the green and purple fills beside the boxes inside 「有點不協調」):
-   a closed tab is neutral with a stripe of its colour, the open tab keeps its
-   tint and wears its colour as a border, and the open panel is neutral, framed
-   in the same colour, so the boxes inside sit on one plain surface. */
 .mapToggle {
   border-color: var(--border);
-  border-top: 3px solid var(--section-accent);
-  background: var(--card);
+  background: var(--section-heading);
   color: var(--section-ink);
 }
 
 .mapToggle:hover {
-  background: color-mix(in srgb, var(--card) 70%, var(--section-heading));
+  background: color-mix(in srgb, var(--section-heading) 90%, var(--section-ink));
 }
 
 .mapToggle[aria-expanded='true'] {
-  border-color: var(--section-accent);
-  border-top-color: var(--section-accent);
-  background: var(--section-heading);
-  box-shadow: inset 0 0 0 1px var(--section-accent);
+  border-color: var(--section-ink);
+  box-shadow: inset 0 0 0 1px var(--section-ink);
 }
 
+/* The open section's panel wears the page's own MediPrisma background, framed
+   in its colour: the boxes inside sit on the page rather than on a green or
+   purple fill (clinician feedback 2026-09-28: 「下面的內容區背景色是綠色紫色
+   怪怪的」, 「維持原本的 mediprisma 背景色」). The tabs above keep their fills. */
 .mapPanel {
   border-color: color-mix(in srgb, var(--section-accent) 55%, var(--border));
-  border-top: 3px solid var(--section-accent);
-  background: var(--card);
+  background: transparent;
 }
 
 .poster :global([data-cdss-action]) {

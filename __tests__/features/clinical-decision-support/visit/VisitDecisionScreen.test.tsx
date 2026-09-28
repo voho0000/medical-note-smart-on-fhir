@@ -525,11 +525,11 @@ describe('visit decision screen · stage shapes', () => {
 })
 
 describe('visit decision screen · reachability and copy', () => {
-  it('keeps cards no point names reachable at the foot', () => {
+  // Clinician feedback 2026-09-28: 「這個決策模組感覺可以拿掉，沒用處了」.
+  it('draws no 「其他模組」 fold for cards no point names', () => {
     render(<Harness model={p4Model()} unmapped={[card('heart-failure-monitoring')]} />)
-    const other = screen.getByTestId('cdss-visit-other-modules')
-    expect(other).toHaveTextContent('其他模組：模組 heart-failure-monitoring')
-    expect(within(other).getByTestId('detail-body-heart-failure-monitoring')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-visit-other-modules')).toBeNull()
+    expect(screen.queryByText(/其他模組/)).toBeNull()
   })
 
   it('copies a summary built from the pack wording and today’s decisions', async () => {

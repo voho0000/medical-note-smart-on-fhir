@@ -49,14 +49,16 @@ export function EchoReportButton({ metric, isEnglish, ecg = false, variant = 'bu
   const label = ecg ? (isEnglish ? 'ECG report' : '心電圖報告') : (isEnglish ? 'Echo report' : '心超報告')
   return <>
     {variant === 'link' ? (
+      // Inline, so it sits on the value's own baseline rather than centred
+      // beside it (clinician feedback 2026-09-28).
       <button
         type="button"
         aria-label={label}
-        className="inline-flex min-h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-1 text-xs font-medium text-primary hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline rounded px-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => setOpen(true)}
         data-testid={ecg ? 'cdss-status-ecg-report' : 'cdss-status-echo-report'}
       >
-        <FileText className="size-3" aria-hidden="true" />{isEnglish ? 'Report' : '報告'}
+        <FileText className="mr-0.5 inline-block size-3 align-[-1px]" aria-hidden="true" />{isEnglish ? 'Report' : '報告'}
       </button>
     ) : (
       <Button type="button" aria-label={label} variant="outline" size="sm" className="shrink-0 h-6 gap-1 px-1.5 text-xs shadow-none" onClick={() => setOpen(true)}>

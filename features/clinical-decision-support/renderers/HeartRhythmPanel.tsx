@@ -38,7 +38,7 @@ export function HeartRhythmInline({ isEnglish, reading, dateLabel }: { isEnglish
       <dt className="text-xs text-muted-foreground">{isEnglish ? 'Rhythm' : '心律'}</dt>
       <dd className="font-semibold text-foreground">{label}</dd>
       {dateLabel(shownDate) ? <dd className="text-xs tabular-nums text-muted-foreground">{dateLabel(shownDate)}</dd> : null}
-      {reportMetric ? <dd className="self-center"><EchoReportButton ecg variant="link" isEnglish={isEnglish} metric={reportMetric} /></dd> : null}
+      {reportMetric ? <dd><EchoReportButton ecg variant="link" isEnglish={isEnglish} metric={reportMetric} /></dd> : null}
     </div>
   )
 }

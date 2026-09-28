@@ -129,8 +129,11 @@ export interface VisitDecisionScreenProps {
   onAnswer?: (id: VisitAsk['id'], value: string | null) => void
   /** Every card a point can open, by module id — this pack's and the companion's. */
   modules: ReadonlyMap<string, CdssRecommendation>
-  /** This pack's cards that no decision point names, kept reachable at the foot. */
-  unmappedModules: readonly CdssRecommendation[]
+  /**
+   * This pack's cards that no decision point names. No longer drawn on the map
+   * (「沒用處了」, 2026-09-28); kept so callers need not change.
+   */
+  unmappedModules?: readonly CdssRecommendation[]
   renderDetail: (recommendation: CdssRecommendation) => ReactNode
   /** Extra outlook content — the prognosis models — at the foot of 03. */
   outlookContent?: ReactNode
@@ -165,7 +168,6 @@ export function VisitDecisionScreen({
   answers,
   onAnswer,
   modules,
-  unmappedModules,
   renderDetail,
   outlookContent,
   footer,
@@ -281,26 +283,10 @@ export function VisitDecisionScreen({
     </>
   ) : undefined
 
-  // Cards no decision point names sit at the foot of 02, inside the map, rather
-  // than as a stray line between the map and the summary.
-  const otherModules = unmappedModules.length ? (
-        <details className="rounded-lg border border-border" data-testid="cdss-visit-other-modules">
-          <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            {isEnglish ? 'Other modules: ' : '其他模組：'}
-            {unmappedModules.map((item) => item.moduleName ?? item.title).join(isEnglish ? ', ' : '、')}
-          </summary>
-          <div className="divide-y divide-border border-t border-border">
-            {unmappedModules.map((item) => (
-              <details key={item.id} className="group/module" data-testid={`cdss-visit-other-module-${item.id}`}>
-                <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                  {item.moduleName ?? item.title}
-                </summary>
-                <div className="px-3 pb-3">{renderDetail(item)}</div>
-              </details>
-            ))}
-          </div>
-        </details>
-      ) : null
+  // Cards no decision point names (HF: 「HFpEF 治療」) are not drawn on the map:
+  // every decision it asks is a point's, and the leftover fold at 02's foot
+  // was of no use (clinician feedback 2026-09-28: 「這個決策模組感覺可以拿掉，
+  // 沒用處了」). The three-section layout still lists every module.
 
   const answersLine = model.asks
     .flatMap((ask) => {
@@ -638,15 +624,7 @@ export function VisitDecisionScreen({
             {outlookContent}
           </>
         )}
-        columnFooters={{
-          ...surfaces?.columnFooters,
-          treatment: (
-            <>
-              {surfaces?.columnFooters?.treatment}
-              {otherModules}
-            </>
-          ),
-        }}
+        {...(surfaces?.columnFooters ? { columnFooters: surfaces.columnFooters } : {})}
         detail={detailNode}
       />
       <VisitSummary text={summaryText} isEnglish={isEnglish} />
