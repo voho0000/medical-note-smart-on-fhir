@@ -538,7 +538,8 @@ export function DecisionMapColumns({
                             onOpen(point)
                           }}
                         />
-                        {point.checklist?.length && block === 'status' ? (
+                        {/* Under the row while it is closed; open, the card below carries it. */}
+                        {point.checklist?.length && block === 'status' && openKey !== key ? (
                           <div className={rowStyles.aside}>
                             <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} compact />
                           </div>

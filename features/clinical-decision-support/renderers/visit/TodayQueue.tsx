@@ -1,7 +1,7 @@
 "use client"
 
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { QueueRow, QueueStep } from './visit-decisions'
@@ -119,7 +119,7 @@ export function TodayQueue({
   )
 }
 
-const DETAIL_LINK = 'ml-auto inline-flex min-h-8 shrink-0 items-center rounded-md px-1.5 text-xs font-medium text-primary hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const DETAIL_LINK = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** A row's first column: DP code, name and source. */
 function RowLead({ point, sourceOfPage }: { point: DecisionPointView; sourceOfPage: DecisionPointView['source'] }) {
@@ -134,7 +134,12 @@ function RowLead({ point, sourceOfPage }: { point: DecisionPointView; sourceOfPa
   )
 }
 
-/** A row's last column: 依據與細節. */
+/**
+ * A row's last column: the fold mark that opens its card (reasons, chain,
+ * guideline) — a chevron alone, as a map cell's is (clinician feedback
+ * 2026-09-28: 「依據與細節這字完全沒必要，就一個下拉的符號就好」); its name
+ * stays for a screen reader and a pointer's tooltip.
+ */
 function RowLink({ point, isEnglish, detailOpen, onOpenDetail }: {
   point: DecisionPointView
   isEnglish: boolean
@@ -148,10 +153,12 @@ function RowLink({ point, isEnglish, detailOpen, onOpenDetail }: {
           type="button"
           className={DETAIL_LINK}
           aria-expanded={detailOpen}
+          aria-label={isEnglish ? 'Reasons and guideline' : '依據與細節'}
+          title={isEnglish ? 'Reasons and guideline' : '依據與細節'}
           onClick={() => onOpenDetail(point)}
           data-visit-row-detail={point.dp}
         >
-          {isEnglish ? 'Reasons and guideline' : '依據與細節'}
+          <ChevronDown className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', detailOpen && 'rotate-180')} aria-hidden="true" />
         </button>
       ) : null}
     </span>
@@ -224,7 +231,7 @@ export function QueueRowBox({
       data-visit-queue-state={point.state}
       data-decided={current ? 'false' : 'true'}
     >
-      <div className={cn(rowStyles.row, row.safety && current && rowStyles.safety, open && rowStyles.open)}>
+      <div className={cn(rowStyles.row, open && rowStyles.open, current && (row.safety ? rowStyles.safety : rowStyles.actionable))}>
         <RowLead point={point} sourceOfPage={sourceOfPage} />
         <span className={rowStyles.state}>
           <StatePill state={row.safety && current ? 'safety' : point.state} isEnglish={isEnglish} inQueue decided={!current} />

@@ -86,9 +86,30 @@ button.row:focus-visible {
   outline-offset: -2px;
 }
 
-/* A safety row keeps the map's red, as a bar down its edge rather than a frame. */
+/* A row with its buttons out — a dose to raise, a drug to start — wears the
+   primary button's blue the same way, lighter than safety's red (clinician
+   feedback 2026-09-28: 「可以做事情的，例如可以調整劑量的，可不可以也改底色」).
+   Declared first, so a safety row's red wins where both apply. */
+.actionable {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 70%, transparent);
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+}
+
+:global(.dark) .actionable {
+  background: color-mix(in srgb, var(--primary) 10%, var(--background));
+}
+
+/* A safety row still to decide wears the map's red: a bar down its edge and
+   a wash of it behind the row, so a dose to cut stands out from the rows
+   around it (clinician feedback 2026-09-28: 「有安全問題要減量時能不能改底色
+   啊？比較能提醒 user」). Once decided it goes back to the others' ground. */
 .safety {
   box-shadow: inset 3px 0 0 var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 7%, var(--background));
+}
+
+:global(.dark) .safety {
+  background: color-mix(in srgb, var(--destructive) 14%, var(--background));
 }
 
 .absent {
@@ -115,4 +136,8 @@ button.row:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   button.row { transition: none; }
+}
+
+button.row.safety:hover {
+  background: color-mix(in srgb, var(--destructive) 11%, var(--background));
 }

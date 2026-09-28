@@ -46,7 +46,7 @@ export function isFirstAssessment(stage: VisitStage): boolean {
  * Drawn as the map draws a point (clinician feedback 2026-09-28: the plain
  * folded row was 「好不顯眼，UI 上也跟決策地圖不搭」), on one line in the map's
  * columns (「用一行式，設成預設」): its DP code and name, the state in the map's
- * pill with what is still open, and 展開／收合 where a row has 依據與細節.
+ * pill with what is still open, and the fold mark every row ends with.
  */
 export function VisitAsksDetail({
   id,
@@ -138,10 +138,11 @@ export function VisitAsksDetail({
             <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">{reason}</span>
           ) : null}
         </span>
-        <span className={cn(rowStyles.link, 'gap-0.5 text-xs font-medium text-primary')}>
-          {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
+        {/* The fold mark alone, as every row of the map ends. */}
+        <span className={cn(rowStyles.link, 'h-8 w-8 justify-center text-muted-foreground')}>
+          <span className="sr-only">{open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}</span>
           <ChevronDown
-            className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
+            className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
             aria-hidden="true"
           />
         </span>

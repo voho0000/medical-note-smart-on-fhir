@@ -104,6 +104,10 @@ export function DecisionPointDetail({
   extras?: ReactNode
 }) {
   const decision = [...steps].reverse().find((step) => step.decision)?.decision
+  // What the record lacks, said once: the checklist's 「缺」 line already names
+  // the items it lists (clinician feedback 2026-09-28: 「不然等於兩個地方都有」).
+  const listedMissing = new Set((point.checklist ?? []).filter((item) => !item.present).map((item) => item.label))
+  const needsData = (point.needsData ?? []).filter((item) => !listedMissing.has(item))
   const headingRef = useRef<HTMLHeadingElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
   // Opening a cell moves focus to what it opened, so a keyboard or screen
@@ -189,10 +193,10 @@ export function DecisionPointDetail({
 
       {point.checklist?.length ? <DecisionPointChecklist items={point.checklist} isEnglish={isEnglish} /> : null}
 
-      {point.needsData?.length ? (
+      {needsData.length ? (
         <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300" data-testid="cdss-visit-detail-needs-data">
           {isEnglish ? 'Not in the record: ' : '紀錄裡還缺：'}
-          {point.needsData.join(isEnglish ? ', ' : '、')}
+          {needsData.join(isEnglish ? ', ' : '、')}
         </p>
       ) : null}
 
