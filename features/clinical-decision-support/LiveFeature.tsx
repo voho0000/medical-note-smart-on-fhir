@@ -69,7 +69,7 @@ import {
 } from './stores/visit-answers.store'
 import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
 import { intolerantPillars } from './renderers/visit/visit-decisions'
-import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
+import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
 import { useLocalDay } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -353,6 +353,7 @@ export default function LiveClinicalDecisionSupportFeature({
     useHfpefInputsHydrated(patientId),
     usePhenotypeAnswerHydrated(patientId),
     useVisitAnswersHydrated(patientId),
+    useAfAnswersHydrated(patientId),
   ].every(Boolean)
 
   // The switches this physician set on this chart survive a reload, so they are

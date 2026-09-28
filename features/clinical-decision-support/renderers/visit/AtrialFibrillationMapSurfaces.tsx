@@ -23,7 +23,6 @@ import { firstPresentPoint, isPagePoint, type VisitMapSurfaces } from './visit-s
  * the AF flow's own.
  */
 const GROUP_HOMES: readonly { group: string; dps: readonly string[]; block: VisitBlock }[] = [
-  { group: 'diagnosis', dps: ['DP-01', 'DP-00'], block: 'status' },
   { group: 'screening', dps: ['DP-04', 'DP-05', 'DP-06'], block: 'status' },
   { group: 'safety', dps: ['DP-08', 'DP-07'], block: 'treatment' },
   { group: 'stroke', dps: ['DP-07', 'DP-08'], block: 'treatment' },
@@ -35,6 +34,19 @@ const GROUP_HOMES: readonly { group: string; dps: readonly string[]; block: Visi
 /** DP-03's groups: asked under the every-visit asks. */
 const ASKS_GROUPS = ['followup', 'bleeding', 'adverse'] as const
 
+/**
+ * Groups a decision point asks with its own buttons, so they are not drawn a
+ * second time: 「AF／flutter 診斷」 is DP-01's 「AF／AFL／都有」.
+ */
+const ASKED_BY_POINTS = ['diagnosis'] as const
+
+/**
+ * 01's cells under 診斷: the diagnosis, the evidence and screening behind it,
+ * and the baseline work-up — the HF page's split, so both pages open the same
+ * way (診斷 before a diagnosis and at the system's first visit, 追蹤 after).
+ */
+const DIAGNOSIS_VIEW_DPS = ['DP-01', 'DP-04', 'DP-05', 'DP-06'] as const
+
 /** The rate-or-rhythm choice and the groups each strategy opens. */
 const STRATEGY_DPS = ['DP-17', 'DP-18'] as const
 const STRATEGY_GROUPS: Record<AfControlStrategy, string> = { rate: 'rate', rhythm: 'nhi' }
@@ -44,7 +56,9 @@ const STRATEGY_GROUPS: Record<AfControlStrategy, string> = { rate: 'rate', rhyth
  * form, the record's AF inputs, every AF structured question group, and the
  * rate-or-rhythm choice — the components the AF visit flow draws, over the same
  * answers, each placed on the point it feeds. A group with no point to live
- * under goes to its column's 「其他問答」; none is dropped.
+ * under goes to its column's 「其他問答」; none is dropped, and the one DP-01
+ * asks with its own buttons (the diagnosis) is not drawn twice. 01 has the
+ * HF page's 診斷／追蹤 switch.
  */
 export function AtrialFibrillationMapSurfaces({
   model,
@@ -87,7 +101,7 @@ export function AtrialFibrillationMapSurfaces({
 
   const homes = GROUP_HOMES.map((home) => ({ ...home, dp: firstPresentPoint(model.points, 'af', home.dps) }))
   const strategyDp = firstPresentPoint(model.points, 'af', STRATEGY_DPS)
-  const placed = new Set<string>([...ASKS_GROUPS, ...homes.filter((home) => home.dp).map((home) => home.group)])
+  const placed = new Set<string>([...ASKS_GROUPS, ...ASKED_BY_POINTS, ...homes.filter((home) => home.dp).map((home) => home.group)])
   if (strategyDp) Object.values(STRATEGY_GROUPS).forEach((group) => placed.add(group))
 
   const strategyContent = (
@@ -143,6 +157,9 @@ export function AtrialFibrillationMapSurfaces({
       label: isEnglish ? 'Other symptoms, bleeding and adverse effects' : '其他症狀、出血與副作用',
       content: groups(ASKS_GROUPS),
     },
+    // DP-01 asks the diagnosis itself, as a row of 診斷決定: the view needs
+    // no content of its own.
+    diagnosis: { content: null, dps: DIAGNOSIS_VIEW_DPS },
     pointExtras: (point) => {
       const here = homes.filter((home) => home.dp && isPagePoint(point, 'af', [home.dp])).map((home) => home.group)
       const strategyHere = strategyDp !== undefined && isPagePoint(point, 'af', STRATEGY_DPS)

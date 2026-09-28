@@ -1,26 +1,107 @@
+/**
+ * What the physician answered on the AF page, for the chart in front of them.
+ *
+ * One chart at a time: changing the patient discards the previous patient's
+ * answers from memory. Each chart's answers are kept encrypted under this
+ * tab's session key, as the heart-failure phenotype answer is, so they survive
+ * a reload of this tab — the diagnosis confirmed on DP-01 stands beside the
+ * DP-01 decision it was recorded with, instead of the decision surviving and
+ * the diagnosis quietly going back to the record's.
+ */
 import { create } from 'zustand'
+import {
+  createHydrationGuard,
+  discardEncryptedAnswers,
+  hasEncryptedAnswers,
+  loadEncryptedAnswers,
+  persistEncryptedAnswers,
+} from '@/src/application/services/encrypted-answer-cache.service'
 import type { CdssPatientProfile } from '../types'
+
 export type AfAnswers = NonNullable<CdssPatientProfile['afClinicalAnswers']>
 const EMPTY: AfAnswers = Object.freeze({})
+
+const STORAGE_PREFIX = 'cdss-af-answers:'
+
+/** The key one patient's encrypted answers are kept under. */
+export function afAnswersStorageKey(patientId: string): string {
+  return `${STORAGE_PREFIX}${patientId}`
+}
+
+/** Only true and false survive a read; anything else is 「沒答」. */
+function toAfAnswers(parsed: unknown): AfAnswers {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY
+  const answers: Record<string, boolean> = {}
+  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value === 'boolean') answers[id] = value
+  }
+  return answers
+}
+
+function writeStored(patientId: string, answers: AfAnswers): void {
+  const key = afAnswersStorageKey(patientId)
+  if (Object.keys(answers).length === 0) discardEncryptedAnswers(key)
+  else persistEncryptedAnswers(key, answers)
+}
+
+const hydration = createHydrationGuard()
+
 interface State {
   patientId?: string
   answers: AfAnswers
+  /** The chart whose stored answers have been read back. */
+  hydratedPatientId?: string
   setPatient: (patientId: string | undefined) => void
   answer: (patientId: string, id: string, value: boolean | undefined) => void
 }
-/** Memory only. Changing the patient discards the previous patient's answers. */
-export const useAfAnswersStore = create<State>((set) => ({
+
+export const useAfAnswersStore = create<State>((set, get) => ({
   answers: EMPTY,
-  setPatient: (patientId) =>
-    set((state) => (state.patientId === patientId ? state : { patientId, answers: EMPTY })),
+  setPatient: (patientId) => {
+    const current = get()
+    if (current.patientId === patientId && (!patientId || current.hydratedPatientId === patientId || hydration.isPending(patientId))) return
+    // This chart's answers already in memory are this session's own and stay.
+    const kept = current.patientId === patientId ? current.answers : EMPTY
+    // A chart with nothing stored is read in the same tick: a first visit
+    // never waits on a decryption with nothing to decrypt.
+    if (!patientId || !hasEncryptedAnswers(afAnswersStorageKey(patientId))) {
+      set({ patientId, answers: kept, hydratedPatientId: patientId })
+      return
+    }
+    set({ patientId, answers: kept, hydratedPatientId: undefined })
+    const settle = hydration.begin(patientId)
+    const apply = (stored: AfAnswers) => {
+      if (!settle()) return
+      set((state) => {
+        if (state.patientId !== patientId) return state
+        // An answer given while the read was in flight is newer than storage.
+        const merged = { ...stored, ...state.answers }
+        if (Object.keys(state.answers).length > 0) writeStored(patientId, merged)
+        return { answers: merged, hydratedPatientId: patientId }
+      })
+    }
+    void loadEncryptedAnswers<unknown>(afAnswersStorageKey(patientId))
+      .then((stored) => apply(toAfAnswers(stored)))
+      // What cannot be read is a first visit's reading.
+      .catch(() => apply(EMPTY))
+  },
   answer: (patientId, id, value) =>
     set((state) => {
-      const answers = { ...(state.patientId === patientId ? state.answers : EMPTY) }
+      const answers: Record<string, boolean | undefined> = { ...(state.patientId === patientId ? state.answers : EMPTY) }
       if (value === undefined) delete answers[id]
       else answers[id] = value
+      // Before the stored answers are back, writing now would drop them; the
+      // read merges this answer in and writes the whole when it lands.
+      if (state.hydratedPatientId === patientId) writeStored(patientId, answers)
       return { patientId, answers }
     }),
 }))
+
 export function useAfAnswers(patientId?: string): AfAnswers {
   return useAfAnswersStore((state) => (patientId && state.patientId === patientId ? state.answers : EMPTY))
+}
+
+/** Whether this chart's stored AF answers have been read back yet. */
+export function useAfAnswersHydrated(patientId?: string): boolean {
+  return useAfAnswersStore((state) => !patientId || state.hydratedPatientId === patientId)
 }
