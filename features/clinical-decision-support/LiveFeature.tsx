@@ -701,6 +701,7 @@ export default function LiveClinicalDecisionSupportFeature({
     clearHfpefInputs(patientId)
     clearPhenotypeAnswer(patientId)
     clearVisitAnswers(patientId)
+    useAfAnswersStore.getState().clear(patientId)
     toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
   }
 

@@ -94,3 +94,41 @@ describe('the AF answers store', () => {
     expect(localStorage.getItem(afAnswersStorageKey('p1'))).toBeNull()
   })
 })
+
+describe('the AF answers store · 恢復本頁預設', () => {
+  useRealWebCrypto()
+
+  beforeEach(() => {
+    localStorage.clear()
+    reload()
+  })
+
+  it('clears a chart\'s answers and their sealed copy, so a reload does not bring them back', async () => {
+    useAfAnswersStore.getState().setPatient('p1')
+    useAfAnswersStore.getState().answer('p1', 'atrialFlutter', true)
+    await storedCiphertext(afAnswersStorageKey('p1'))
+
+    useAfAnswersStore.getState().clear('p1')
+    expect(useAfAnswersStore.getState().answers).toEqual({})
+    expect(localStorage.getItem(afAnswersStorageKey('p1'))).toBeNull()
+
+    reload()
+    useAfAnswersStore.getState().setPatient('p1')
+    expect(hydrated('p1')).toBe(true)
+    expect(useAfAnswersStore.getState().answers).toEqual({})
+  })
+
+  it('drops a read still in flight rather than letting it bring the answers back', async () => {
+    useAfAnswersStore.getState().setPatient('p1')
+    useAfAnswersStore.getState().answer('p1', 'atrialFlutter', true)
+    await storedCiphertext(afAnswersStorageKey('p1'))
+
+    reload()
+    useAfAnswersStore.getState().setPatient('p1')
+    expect(hydrated('p1')).toBe(false)
+    useAfAnswersStore.getState().clear('p1')
+    await new Promise((resolve) => { setTimeout(resolve, 100) })
+    expect(useAfAnswersStore.getState().answers).toEqual({})
+    expect(hydrated('p1')).toBe(true)
+  })
+})

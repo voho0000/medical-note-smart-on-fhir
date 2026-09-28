@@ -53,6 +53,12 @@ interface State {
   hydratedPatientId?: string
   setPatient: (patientId: string | undefined) => void
   answer: (patientId: string, id: string, value: boolean | undefined) => void
+  /**
+   * 「恢復本頁預設」: this chart's answers go, and so does their sealed copy —
+   * else DP-01's 「AFL（醫師確認）」 outlives the reset and a reload brings it
+   * back (#177 review).
+   */
+  clear: (patientId: string) => void
 }
 
 export const useAfAnswersStore = create<State>((set, get) => ({
@@ -95,6 +101,13 @@ export const useAfAnswersStore = create<State>((set, get) => ({
       if (state.hydratedPatientId === patientId) writeStored(patientId, answers)
       return { patientId, answers }
     }),
+  clear: (patientId) => {
+    if (!patientId) return
+    discardEncryptedAnswers(afAnswersStorageKey(patientId))
+    // A read still in flight would bring the discarded answers back.
+    if (hydration.isPending(patientId)) hydration.invalidate()
+    set((state) => (state.patientId === patientId ? { answers: EMPTY, hydratedPatientId: patientId } : state))
+  },
 }))
 
 export function useAfAnswers(patientId?: string): AfAnswers {
