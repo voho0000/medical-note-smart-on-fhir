@@ -371,3 +371,17 @@ export function buildVisitSummaryText(input: {
   if (plan.withinDays !== undefined) lines.push(returnVisitLabel(plan.withinDays, isEnglish))
   return lines.join('\n')
 }
+
+/**
+ * The FMT pillars whose 「不耐受」 the clinician recorded on the map, as DP
+ * numbers (`DP-08`). The pack's action ids name them — `dp08-intolerant`, and
+ * `dp07-arni-intolerant` for the ARNI — so nothing here reads the label.
+ */
+export function intolerantPillars(decisions: Readonly<Record<string, { actionId?: string; decision?: string }>>): string[] {
+  const dps = new Set<string>()
+  for (const decision of Object.values(decisions)) {
+    const match = /^dp(07|08|09|10)-(?:arni-)?intolerant$/.exec(decision.actionId ?? '')
+    if (match) dps.add(`DP-${match[1]}`)
+  }
+  return [...dps].sort()
+}

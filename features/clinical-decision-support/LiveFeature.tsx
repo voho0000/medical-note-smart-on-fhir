@@ -66,7 +66,8 @@ import {
   useVisitAnswersStore,
   visitAnswersOf,
 } from './stores/visit-answers.store'
-import { applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
+import { applyFmtIntolerance, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
+import { intolerantPillars } from './renderers/visit/visit-decisions'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -464,15 +465,20 @@ export default function LiveClinicalDecisionSupportFeature() {
   const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
   // The every-visit answers enter last, as the pack's own facts
   // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
-  // on every layout, not only on the map where it was asked.
+  // on every layout, not only on the map where it was asked. A pillar the
+  // clinician marked 「不耐受」 travels the same way, for DP-19.
+  const intolerant = useMemo(() => intolerantPillars(physicianDecisions), [physicianDecisions])
   const profile = useMemo(() => (
     answeredProfile
-      ? applyVisitAnswers(
-        applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
-        visitAnswers,
+      ? applyFmtIntolerance(
+        applyVisitAnswers(
+          applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
+          visitAnswers,
+        ),
+        intolerant,
       )
       : null
-  ), [answeredProfile, hfpefReading, preventReading, visitAnswers])
+  ), [answeredProfile, hfpefReading, intolerant, preventReading, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []

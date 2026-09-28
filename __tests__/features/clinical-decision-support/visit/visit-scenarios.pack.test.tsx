@@ -15,6 +15,7 @@
  */
 import { useMemo } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { intolerantPillars } from '@/features/clinical-decision-support/renderers/visit/visit-decisions'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import type { VisitAnswers } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
@@ -44,7 +45,8 @@ function ScenarioMap({ id, page = 'hf', layout = 'map' }: { id: ScenarioId; page
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const phenotype = usePhenotypeAnswer(PATIENT)
-  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype }), [answers, id, page, phenotype])
+  const intolerant = useMemo(() => intolerantPillars(decisions), [decisions])
+  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant }), [answers, id, intolerant, page, phenotype])
   const afAnswers = useAfAnswers(PATIENT)
   return (
     <ClinicalDecisionSupportView
@@ -656,6 +658,23 @@ describe('real pack · one answer, one decision, on every page', () => {
     fireEvent.click(within(breath).getByRole('button', { name: '惡化' }))
     expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT])['dyspnoea-trend']).toBe('worse')
     expect(within(breath).getByRole('button', { name: '惡化' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('real pack · 「不耐受」 is the clinician’s', () => {
+  // Clinician decision 2026-09-28: 「讓 user 來按下不耐受的按鈕」 — a pillar
+  // marked 不耐受 is ESC Table 15's prognostic medication intolerance at DP-19.
+  it('turns 「不耐受」 on the β-blocker into an I NEED HELP item at DP-19 (P5)', () => {
+    render(<ScenarioMap id="p5-titrating-af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-outlook'))
+    expect(cell('DP-19')).not.toHaveAttribute('data-state', 'confirm')
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    // Beside 「上調至 5 mg」, the alternatives fold under 「其他」.
+    fireEvent.click(within(pillar('DP-08')).getByRole('button', { name: /其他/ }))
+    fireEvent.click(within(pillar('DP-08')).getByRole('button', { name: '不耐受' }))
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-outlook'))
+    expect(cell('DP-19')).toHaveAttribute('data-state', 'confirm')
+    expect(cell('DP-19')).toHaveTextContent('進階 HF 風險：轉介評估？')
   })
 })
 

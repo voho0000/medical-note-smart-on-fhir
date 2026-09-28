@@ -13,6 +13,7 @@ import path from 'node:path'
 import {
   ATRIAL_FIBRILLATION_GUIDELINE_PACK,
   HEART_FAILURE_GUIDELINE_PACK,
+  applyFmtIntolerance,
   applyVisitAnswers,
   buildVisitDecisionModel,
 } from '@voho0000/personalized-care'
@@ -71,10 +72,11 @@ export function scenarioProfile(id: ScenarioId): CdssPatientProfile {
 /** The model the decision map draws for this scenario on the given page. */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {}, phenotype }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer } = {},
+  { page = 'hf', answers = {}, phenotype, intolerant = [] }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[] } = {},
 ): ScenarioRun {
-  // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the profile.
-  const profile = applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype)
+  // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the
+  // profile; so does a pillar marked 「不耐受」.
+  const profile = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype), intolerant)
   if (page === 'af') {
     const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     return {

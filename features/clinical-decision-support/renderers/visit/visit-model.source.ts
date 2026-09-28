@@ -10,6 +10,7 @@
  * throws costs the clinician the map, never the page.
  */
 import {
+  applyFmtIntolerance as packApplyFmtIntolerance,
   applyVisitAnswers as packApplyVisitAnswers,
   buildVisitDecisionModel,
 } from '@voho0000/personalized-care'
@@ -44,6 +45,16 @@ export function isVisitModelSupported(): boolean {
 export function applyVisitAnswers(profile: CdssPatientProfile, answers: VisitAnswers): CdssPatientProfile {
   if (typeof packApplyVisitAnswers !== 'function' || Object.keys(answers).length === 0) return profile
   return packApplyVisitAnswers(profile, answers)
+}
+
+/**
+ * The pillars the clinician recorded as 「不耐受」, as facts the pack reads:
+ * DP-19 counts them as ESC Table 15's prognostic medication intolerance. A
+ * package without the step leaves the profile as it was.
+ */
+export function applyFmtIntolerance(profile: CdssPatientProfile, dps: readonly string[]): CdssPatientProfile {
+  if (typeof packApplyFmtIntolerance !== 'function' || dps.length === 0) return profile
+  return packApplyFmtIntolerance(profile, dps)
 }
 
 /**
