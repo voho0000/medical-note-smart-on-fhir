@@ -329,6 +329,24 @@ describe('real pack · P6 hyperkalaemia', () => {
   })
 })
 
+// Clinician feedback 2026-09-28: the folded 「其他症狀、徵象與 NYHA」 row was
+// 「好不顯眼，UI 上也跟決策地圖不搭」 — it is drawn as a map point now.
+describe('real pack · DP-03\'s fuller questions, drawn as a point', () => {
+  it('reads 供參考 at a follow-up, 等你回答 with the open questions named once 喘 comes back worse', () => {
+    render(<ScenarioMap id="p4-stable-optimised" />)
+    const box = screen.getByTestId('cdss-visit-asks-detail')
+    expect(box).toHaveAttribute('data-state', 'info')
+    expect(within(box).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('DP-03')
+    expect(screen.getByTestId('cdss-visit-asks-detail-headline')).toHaveTextContent('選填：症狀、徵象、NYHA、代償狀態')
+    fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="worse"]')!)
+    expect(box).toHaveAttribute('data-state', 'ask')
+    expect(screen.getByTestId('cdss-visit-asks-detail-headline')).toHaveTextContent('待補：症狀、徵象、NYHA、代償狀態')
+    expect(screen.getByTestId('cdss-visit-asks-detail-reason')).toHaveTextContent('喘比上次變差，已展開完整評估')
+    expect(box).toHaveAttribute('open')
+    expect(within(box).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('收合')
+  })
+})
+
 // Clinician decision 2026-09-28: whether a diagnosis is new is not the
 // record's to say (the cloud record covers about a year). With no stored CDSS
 // visit the page is the system's first look: 01 opens on 診斷, the clinician

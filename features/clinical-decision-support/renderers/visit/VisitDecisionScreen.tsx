@@ -480,6 +480,7 @@ export function VisitDecisionScreen({
           label={surfaces.asksDetail.label}
           content={surfaces.asksDetail.content}
           openCount={surfaces.asksDetail.openCount}
+          {...(surfaces.asksDetail.pendingLabels ? { pendingLabels: surfaces.asksDetail.pendingLabels } : {})}
           firstAssessment={firstAssessment}
           asks={model.asks}
           answers={answers}

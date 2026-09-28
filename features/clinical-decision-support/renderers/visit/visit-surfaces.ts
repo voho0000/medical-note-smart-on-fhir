@@ -27,6 +27,8 @@ export interface VisitMapSurfaces {
     label: string
     content: ReactNode
     openCount?: number
+    /** The short names of the questions still open (症狀、徵象、NYHA…), where the content knows them. */
+    pendingLabels?: readonly string[]
     /**
      * Physician-input requests the block asks itself (the HF page's 懷疑 HF？
      * before a diagnosis). A queue row whose every action only answers one of

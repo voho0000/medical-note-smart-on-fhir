@@ -443,6 +443,15 @@ function metricKeyOf(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
+/** A question's name in one or two words, for a line that lists what is still open. */
+const QUESTION_SHORT_NAMES: Partial<Record<VisitQuestionId, [string, string]>> = {
+  symptoms: ['症狀', 'Symptoms'],
+  signs: ['徵象', 'Signs'],
+  nyha: ['NYHA', 'NYHA'],
+  compensation: ['代償狀態', 'Compensation'],
+  'hf-suspicion': ['診斷', 'Diagnosis'],
+}
+
 /** What the decision map places from the heart-failure page's own surfaces. */
 export interface HeartFailureMapSurfaceSlots {
   /** Opens the clinical-values editor with every value. */
@@ -453,6 +462,8 @@ export interface HeartFailureMapSurfaceSlots {
   followUpQuestions: ReactNode
   /** How many of those questions are still open. */
   followUpOpenCount: number
+  /** Their short names, in order (症狀、徵象、NYHA、代償). */
+  followUpPendingLabels: readonly string[]
   /**
    * Physician-input requests the follow-up questions ask themselves — 懷疑
    * HF？ before a diagnosis, as their question 1 — so the map does not list
@@ -577,6 +588,9 @@ export function HeartFailureMapSurfaces({
     } : {}),
     followUpQuestions: followUpFlow.questions.length ? questionsCard(followUpFlow) : null,
     followUpOpenCount: followUpFlow.openQuestionCount,
+    followUpPendingLabels: followUpFlow.questions
+      .filter((question) => question.counted && question.state === 'open')
+      .map((question) => QUESTION_SHORT_NAMES[question.id]?.[isEnglish ? 1 : 0] ?? question.label),
     followUpRequests: askedRequests,
     followUpPriorities: followUp ? (
       <HfFollowUpPriorities

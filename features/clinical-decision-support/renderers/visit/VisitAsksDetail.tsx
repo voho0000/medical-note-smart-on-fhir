@@ -4,7 +4,8 @@ import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
-import type { VisitAnswers, VisitAsk, VisitStage } from '../../types'
+import { StatePill } from './visit-presentation'
+import type { DecisionPointState, VisitAnswers, VisitAsk, VisitStage } from '../../types'
 
 /**
  * The ask values that open the fuller questions: breathlessness worse, weight
@@ -37,15 +38,22 @@ export function isFirstAssessment(stage: VisitStage): boolean {
 /**
  * DP-03's fuller half, under the two asks: the symptom, sign and NYHA
  * questions (AF: symptoms, bleeding and adverse effects) the page already has,
- * folded to one line at a follow-up visit. It opens by itself at a first
- * assessment, and whenever an ask comes back worse — and says which, in one
- * line, so the change on screen has a reason on screen.
+ * folded at a follow-up visit. It opens by itself at a first assessment, and
+ * whenever an ask comes back worse — and says which, in one line, so the change
+ * on screen has a reason on screen.
+ *
+ * Drawn as the map draws a point (clinician feedback 2026-09-28: the plain
+ * folded row was 「好不顯眼，UI 上也跟決策地圖不搭」): its DP code and name, the
+ * state in the map's pill with what is still open, and 展開／收合 where a cell
+ * has 依據與細節.
  */
 export function VisitAsksDetail({
   id,
+  dp = 'DP-03',
   label,
   content,
   openCount,
+  pendingLabels,
   firstAssessment,
   asks,
   answers,
@@ -54,10 +62,14 @@ export function VisitAsksDetail({
   onToggle,
 }: {
   id: string
+  /** The decision point these questions complete. */
+  dp?: string
   label: string
   content: ReactNode
   /** Questions still unanswered inside, when the content knows. */
   openCount?: number
+  /** Their short names (症狀、徵象、NYHA…), when the content knows them. */
+  pendingLabels?: readonly string[]
   /** Whether this visit asks the whole checklist (the screen decides: stage, page, gate). */
   firstAssessment: boolean
   asks: readonly VisitAsk[]
@@ -72,11 +84,25 @@ export function VisitAsksDetail({
     : firstAssessment
       ? (isEnglish ? 'First assessment: opened in full' : '初次評估，已完整展開')
       : undefined
-  // At a follow-up these questions are optional; a pending count would read as
-  // unfinished work. It shows only when the visit calls for them.
-  // Open, the questions inside count themselves (「還有 n 題」); the line says
-  // it only while folded, so the number is never on screen twice.
-  const showCount = !open && Boolean(reason) && typeof openCount === 'number' && openCount > 0
+  const sep = isEnglish ? ', ' : '、'
+  const pending = typeof openCount === 'number' ? openCount : undefined
+  const names = pendingLabels && pendingLabels.length > 0 ? pendingLabels.join(sep) : undefined
+  // The state, in the map's own words. At a follow-up these questions are
+  // optional and a pending count would read as unfinished work, so it is
+  // 「供參考」 until the visit calls for them (a first assessment, an ask
+  // come back worse); then what is open is named, 「等你回答」.
+  const state: DecisionPointState = pending === 0 ? 'done' : reason ? 'ask' : 'info'
+  const headline = pending === 0
+    ? (isEnglish ? 'All answered' : '已填完')
+    : reason
+      ? names
+        ? (isEnglish ? `To answer: ${names}` : `待補：${names}`)
+        : pending !== undefined
+          ? (isEnglish ? `${pending} to answer` : `${pending} 題待補`)
+          : (isEnglish ? 'Open to answer' : '展開填寫')
+      : names
+        ? (isEnglish ? `Optional: ${names}` : `選填：${names}`)
+        : (isEnglish ? 'Optional at a follow-up' : '追蹤時選填')
   // A <details> rather than a button-and-region: the questions inside are the
   // same ones other cards jump to (「前往第 2 題」, 「記錄喘的細節」), and that
   // jump opens every folded <details> on its way. The open state is still the
@@ -88,31 +114,39 @@ export function VisitAsksDetail({
       onToggle={(event) => {
         if (event.currentTarget.open !== open) onToggle(event.currentTarget.open)
       }}
-      className="rounded-md border border-border"
+      className={cn(
+        'scroll-mt-2 rounded-md border bg-background',
+        state === 'ask' ? 'border-amber-400/70 dark:border-amber-400/50' : 'border-border',
+      )}
       data-testid="cdss-visit-asks-detail"
+      data-state={state}
     >
       <summary
-        className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        className="block cursor-pointer list-none space-y-1.5 rounded-md px-2.5 py-2 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
         data-testid="cdss-visit-asks-detail-toggle"
       >
-        <span className="min-w-0 flex-1">
-          {label}
-          {showCount ? (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {isEnglish ? `${openCount} pending` : `${openCount} 題待補`}
-            </span>
-          ) : null}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{dp}</span>
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="ml-auto inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-primary pointer-coarse:min-h-11">
+            {open ? (isEnglish ? 'Fold' : '收合') : (isEnglish ? 'Open' : '展開')}
+            <ChevronDown
+              className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
+              aria-hidden="true"
+            />
+          </span>
         </span>
-        <ChevronDown
-          className={cn('h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
-          aria-hidden="true"
-        />
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <StatePill state={state} isEnglish={isEnglish} />
+          {/* Bold only while it waits on the clinician, as a decision row is; quiet otherwise, as a cell is. */}
+          <span className={cn('text-sm leading-snug text-foreground', state === 'ask' && 'font-semibold')} data-testid="cdss-visit-asks-detail-headline">{headline}</span>
+        </span>
+        {reason ? (
+          <span className="block text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">
+            {reason}
+          </span>
+        ) : null}
       </summary>
-      {reason ? (
-        <p className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground" data-testid="cdss-visit-asks-detail-reason">
-          {reason}
-        </p>
-      ) : null}
       <div className="border-t border-border">
         {content}
       </div>

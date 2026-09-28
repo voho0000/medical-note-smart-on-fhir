@@ -41,6 +41,7 @@ export function heartFailureVisitSurfaces(
         ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA')
         : (isEnglish ? 'Diagnostic assessment' : '診斷評估'),
       openCount: slots.followUpOpenCount,
+      pendingLabels: slots.followUpPendingLabels,
       requests: slots.followUpRequests,
       content: (
         <div className="space-y-2" data-testid="cdss-visit-hf-follow-up-questions">
