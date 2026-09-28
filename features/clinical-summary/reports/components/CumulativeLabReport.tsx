@@ -48,6 +48,7 @@ import {
   resolveCumulativeCategoryOrder,
 } from "../utils/cumulative-order.utils"
 import type { TrendWindow } from "../utils/trend-time-scale"
+import { LabDataReportButton } from "@/features/lab-data-report"
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -340,6 +341,15 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
     setCategoryOrder(next)
   }, [availableIds, persistedOrder, setCategoryOrder])
 
+  // One 回報 for the whole report: it sends every lab panel, and the
+  // clinician may tick which panels look wrong (chips in this order).
+  const reportPanels = useMemo(
+    () => nonEmpty
+      .filter((pivot) => pivot.dates.length > 0)
+      .map((pivot) => ({ id: pivot.category.id, label: categoryLabels[pivot.category.id] || pivot.category.id })),
+    [categoryLabels, nonEmpty],
+  )
+
   const stackedEntries = useMemo(
     () => nonEmpty.map((pivot) => ({
       pivot,
@@ -384,7 +394,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
           />
         )}
         {isStacked ? (
-          <div className="hidden min-w-0 justify-self-center @min-[820px]:flex">
+          <div className="hidden min-w-0 justify-self-center @min-[1040px]:flex">
             <CumulativeRangeSelector value={range} onChange={setRange} />
           </div>
         ) : (
@@ -409,14 +419,21 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
         <div className="col-start-2 flex items-center gap-2 justify-self-end @min-[390px]:col-start-3">
           {layoutToggle}
           {nameModeControl ?? <ReportNameModeSwitch responsiveLabels />}
+          {reportPanels.length > 0 && (
+            <LabDataReportButton
+              panels={reportPanels}
+              observations={observations}
+              nameMode={nameMode}
+            />
+          )}
         </div>
       </div>
-      {/* The five range options need ~320px beside the 220px finder and the
-          layout/name controls (~250px): only a wide panel (≥820px, e.g.
-          fullscreen or a wide split) fits them in the utility row. Everything
+      {/* The range options measure ~410px, beside a 220px finder and the
+          回報 + layout + naming controls (~370px): only a wide panel
+          (≥1040px, e.g. fullscreen) fits them in the utility row. Everything
           narrower gets its own scrollable pill row directly under it. */}
       {isStacked && (
-        <div className="mb-1 flex min-w-0 shrink-0 @min-[820px]:hidden">
+        <div className="mb-1 flex min-w-0 shrink-0 @min-[1040px]:hidden">
           <CumulativeRangeSelector value={range} onChange={setRange} scrollable />
         </div>
       )}
