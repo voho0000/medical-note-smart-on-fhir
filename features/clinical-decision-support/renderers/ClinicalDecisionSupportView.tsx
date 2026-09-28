@@ -94,7 +94,7 @@ import { statusStyle, StatusIcon } from './status-presentation'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { VisitDecisionScreen } from './visit/VisitDecisionScreen'
 import type { VisitAnswers, VisitAsk, VisitDecisionModel } from '../types'
-import { phenotypeAnswerForInput } from './visit/physician-input'
+import { afAnswersForInput, phenotypeAnswerForInput } from './visit/physician-input'
 import { heartFailureVisitSurfaces } from './visit/heart-failure-map-surfaces'
 import { AtrialFibrillationMapSurfaces } from './visit/AtrialFibrillationMapSurfaces'
 import type { VisitMapSurfaces } from './visit/visit-surfaces'
@@ -2424,9 +2424,16 @@ export function ClinicalDecisionSupportView({
           onClearDecision={onClearDecision}
           answers={visitAnswers ?? {}}
           onAnswer={onVisitAnswer}
-          onPhysicianInput={onAnswerPhenotype ? (input) => {
-            const next = phenotypeAnswerForInput(input, phenotypeAnswer, new Date())
-            if (next) onAnswerPhenotype(next)
+          onPhysicianInput={onAnswerPhenotype || onAfAnswer ? (input) => {
+            // AF DP-01 answers the AF diagnosis and its type; the rest are the
+            // heart-failure phenotype gate's.
+            const af = afAnswersForInput(input)
+            if (af) {
+              for (const answer of af) onAfAnswer?.(answer.id, answer.value)
+              return
+            }
+            const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
+            if (next) onAnswerPhenotype?.(next)
           } : undefined}
           modules={visitModules}
           unmappedModules={unmappedVisitModules}

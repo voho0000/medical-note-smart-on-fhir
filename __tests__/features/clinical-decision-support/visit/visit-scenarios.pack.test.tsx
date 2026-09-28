@@ -47,8 +47,8 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const phenotype = usePhenotypeAnswer(PATIENT)
   const intolerant = useMemo(() => intolerantPillars(decisions), [decisions])
-  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit }), [answers, firstVisit, id, intolerant, page, phenotype])
   const afAnswers = useAfAnswers(PATIENT)
+  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit, afAnswers }), [afAnswers, answers, firstVisit, id, intolerant, page, phenotype])
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -141,17 +141,61 @@ beforeEach(() => {
   useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useClinicVitalsStore.setState({ byPatientId: {} })
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
-  useAfAnswersStore.setState({ patientId: undefined, answers: {} })
+  useAfAnswersStore.setState({ patientId: undefined, answers: {}, hydratedPatientId: undefined })
 })
 
 describe('real pack · P3 new AF (AF page)', () => {
+  it('opens a first visit on 診斷 with the coded AF to confirm, as the HF page does', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(queue('status')).toEqual([{ dp: 'DP-01', primary: 'AF' }])
+    // A question, not a recommendation: the answers alike, side by side.
+    expect([...row('DP-01').querySelectorAll('[data-visit-action]')].map((button) => button.textContent)).toEqual(['AF', 'AFL', '都有'])
+    fireEvent.click(primaryOf('DP-01'))
+    expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: true, atrialFlutter: false })
+    expect(queue('status')).toEqual([])
+    // The cell carries today's answer, as every decided cell does.
+    expect(cell('DP-01', 'af')).toHaveTextContent('已記錄AF')
+    expect(cell('DP-01', 'af')).toHaveAttribute('data-state', 'done')
+    // The follow-up asks wait in 追蹤, named by the switch; nothing moves by itself.
+    expect(screen.getByTestId('cdss-visit-status-view-other-pending')).toHaveTextContent('AF 症狀')
+    expect(document.querySelector('[data-visit-ask="af-symptoms"]')).toBeNull()
+  })
+
+  it('「都有」 names both, and the answer can be changed from its cell', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(row('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-both"]')!)
+    expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: true, atrialFlutter: true })
+    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AF＋AFL 首次評估/)
+    expect(queue('treatment').map((item) => item.dp)).toContain('DP-07')
+    // Opened from its cell, DP-01 says what was recorded and lets it change.
+    fireEvent.click(cell('DP-01', 'af'))
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-visit-change="DP-01"]')!)
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-testid="cdss-visit-detail"] [data-visit-action="af-dp01-af"]')!)
+    expect(useAfAnswersStore.getState().answers).toMatchObject({ atrialFibrillation: true, atrialFlutter: false })
+    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AF 首次評估/)
+  })
+
+  it('「AFL」 keeps the anticoagulation row and leaves AF\'s rate and rhythm rules out', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(row('DP-01').querySelector<HTMLButtonElement>('[data-visit-action="af-dp01-flutter"]')!)
+    expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: false, atrialFlutter: true })
+    expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AFL 首次評估/)
+    expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
+    // Not drawn until 顯示全部, and then said for what it is.
+    expect(queryCell('DP-18', 'af')).toBeUndefined()
+    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
+    expect(cell('DP-18', 'af')).toHaveTextContent('AFL：本 pack 未納入')
+  })
+
   it('asks symptoms and bleeding and walks the anticoagulation chain in one row', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     expect(document.querySelector('[data-visit-ask="af-symptoms"]')).not.toBeNull()
     expect(document.querySelector('[data-visit-ask="bleeding"]')).not.toBeNull()
-    expect(queue()).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
+    expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
     fireEvent.click(primaryOf('DP-07'))
-    expect(queue()).toHaveLength(1)
+    expect(queue('treatment')).toHaveLength(1)
     expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
     expect(primaryOf('DP-07')).toHaveTextContent('apixaban 5 mg bid')
     expect(row('DP-07')).toHaveTextContent('0/3')
@@ -166,6 +210,7 @@ describe('real pack · P3 new AF (AF page)', () => {
 
   it('queues rhythm control once symptoms are answered 「有」, and keeps screening out of the queue', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)
     expect(queue().map((item) => item.dp)).toContain('DP-18')
     expect(primaryOf('DP-18')).toHaveTextContent('討論節律控制')
@@ -694,6 +739,7 @@ describe('real pack · what a clinician reads without opening anything', () => {
 
   it('keeps the AF follow-up questions folded at a first AF visit until an ask says 有 (P3)', () => {
     render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-status-view-follow-up'))
     expect(screen.getByTestId('cdss-visit-asks-detail')).not.toHaveAttribute('open')
     expect(screen.getByTestId('cdss-visit-asks-detail-toggle')).not.toHaveTextContent('待')
     fireEvent.click(document.querySelector('[data-visit-ask="af-symptoms"][data-value="yes"]')!)

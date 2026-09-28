@@ -284,7 +284,7 @@ beforeEach(() => {
   usePhysicianDecisionsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useHfpefInputsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
-  useAfAnswersStore.setState({ patientId: PATIENT, answers: {} })
+  useAfAnswersStore.setState({ patientId: PATIENT, answers: {}, hydratedPatientId: PATIENT })
 })
 
 /* ----------------------------------------------------------- HF */
@@ -470,6 +470,9 @@ describe('AF surfaces on the decision map', () => {
 
   it('asks symptoms, bleeding and adverse effects under the asks', () => {
     render(<AfHarness model={afModel()} />)
+    // A first visit opens 01 on 診斷, as on the HF page; the asks are 追蹤's.
+    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(statusView('follow-up'))
     const detail = asksDetail()
     expect(within(detail).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('其他症狀、出血與副作用')
     const groups = within(detail).getByTestId('cdss-af-question-groups').dataset.groups!.split(' ')
@@ -492,7 +495,10 @@ describe('AF surfaces on the decision map', () => {
     expect(groupsIn('DP-21')).toEqual(['comorbidity'])
     expect(groupsIn('DP-04')).toEqual(['screening'])
     fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
-    expect(groupsIn('DP-01')).toEqual(['diagnosis'])
+    // DP-01 asks the diagnosis with its own buttons (AF／AFL／還不確定): the
+    // card's 「AF／flutter 診斷」 row is not drawn a second time, anywhere.
+    expect(groupsIn('DP-01')).toEqual([])
+    expect(document.querySelector('[data-af-question-group="diagnosis"]')).toBeNull()
   })
 
   it('puts the rate-or-rhythm choice in DP-17’s card, opening that strategy’s questions', () => {

@@ -75,6 +75,25 @@ export function diagnosisOptionOf(answer: PhenotypeAnswer | undefined): string |
 }
 
 /**
+ * The AF answers an AF DP-01 press writes. 「AF」, 「AFL」 and 「都有」 are each
+ * a confirmed diagnosis — `diagnosisConfirmed` true, the answer the AF card's
+ * 「AF／flutter 診斷」 row writes — with `atrialFibrillation` and
+ * `atrialFlutter` saying which the patient has. Undefined for any other input.
+ */
+export function afAnswersForInput(
+  input: VisitPhysicianInput,
+): { id: 'diagnosisConfirmed' | 'atrialFibrillation' | 'atrialFlutter'; value: boolean }[] | undefined {
+  if (input.request !== 'af-diagnosis') return undefined
+  const has = { af: [true, false], flutter: [false, true], both: [true, true] }[input.optionId ?? '']
+  if (!has) return undefined
+  return [
+    { id: 'diagnosisConfirmed', value: true },
+    { id: 'atrialFibrillation', value: has[0] },
+    { id: 'atrialFlutter', value: has[1] },
+  ]
+}
+
+/**
  * The phenotype answer after `input`, or undefined when the input is not one
  * this host knows how to write — in which case nothing is written and the
  * card's own control remains the way to answer.
