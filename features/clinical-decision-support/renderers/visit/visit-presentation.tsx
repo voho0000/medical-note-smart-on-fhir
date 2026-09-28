@@ -6,6 +6,17 @@ import { stateLabel } from './visit-decisions'
 import type { ChainStep, ChainStepId, DecisionPointState } from '../../types'
 
 /**
+ * The CDSS pages' filled button, in the tint of the map's 「需處理」 label
+ * rather than a solid fill that outweighs the card around it (clinician
+ * feedback 2026-09-28: the dark blue 「跟決策地圖 UI 風格不太符合」). Used with
+ * the outline variant, beside outlined alternatives; the selected side of a
+ * 診斷／追蹤 switch wears it too.
+ */
+export const TINTED_PRIMARY = 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary dark:border-primary/50 dark:bg-primary/15 dark:text-primary dark:hover:bg-primary/25'
+/** The same on a safety row, in the 「安全」 label's tint. */
+export const TINTED_SAFETY = 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:border-destructive/50 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30'
+
+/**
  * State pills reuse the module badges' tints where the meaning is the same —
  * a thing to do, data or an answer awaited, settled, a clinician's call — so a
  * clinician who learned the badge on one layout reads it on this one. The text

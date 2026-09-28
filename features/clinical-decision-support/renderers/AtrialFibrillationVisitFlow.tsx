@@ -5,6 +5,7 @@ import { Check, ChevronDown, Copy, PencilLine } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { TINTED_PRIMARY } from './visit/visit-presentation'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import type { CdssRecommendation, CdssResult } from '../types'
 import type { AfAnswers } from '../stores/af-answers.store'
@@ -626,16 +627,16 @@ export function AtrialFibrillationVisitFlow({
           className="flex gap-2 px-3 py-3"
         >
           <Button
-            variant={followUp ? 'outline' : 'default'}
-            className="min-h-11"
+            variant="outline"
+            className={cn('min-h-11', !followUp && cn('font-semibold', TINTED_PRIMARY))}
             aria-pressed={!followUp}
             onClick={() => selectMode(false)}
           >
             {en ? 'Diagnosis' : '診斷'}
           </Button>
           <Button
-            variant={followUp ? 'default' : 'outline'}
-            className="min-h-11"
+            variant="outline"
+            className={cn('min-h-11', followUp && cn('font-semibold', TINTED_PRIMARY))}
             aria-pressed={followUp}
             onClick={() => selectMode(true)}
           >

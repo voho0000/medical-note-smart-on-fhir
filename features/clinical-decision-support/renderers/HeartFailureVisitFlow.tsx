@@ -55,7 +55,7 @@ import { DiagnosisReading } from './DiagnosisReading'
 import { HfpEfCriteriaList } from './HfpEfCriteriaList'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
 import { diagnosisAnswer } from './visit/physician-input'
-import { StatePill } from './visit/visit-presentation'
+import { StatePill, TINTED_PRIMARY } from './visit/visit-presentation'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
@@ -320,8 +320,8 @@ export function HeartFailureVisitFlow({
           renderDetail={renderDetail}
           followUp={showFollowUp}
           diagnosisModeControl={<div role="group" aria-label={isEnglish ? 'Diagnosis or follow-up' : '診斷或追蹤'} className="mt-3 flex flex-wrap gap-1">
-            <Button variant={!showFollowUp ? 'default' : 'outline'} aria-pressed={!showFollowUp} className="min-h-11" onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
-            <Button variant={showFollowUp ? 'default' : 'outline'} aria-pressed={showFollowUp} className="min-h-11" disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
+            <Button variant="outline" aria-pressed={!showFollowUp} className={cn('min-h-11', !showFollowUp && cn('font-semibold', TINTED_PRIMARY))} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
+            <Button variant="outline" aria-pressed={showFollowUp} className={cn('min-h-11', showFollowUp && cn('font-semibold', TINTED_PRIMARY))} disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
           </div>}
           sectionSummary={prognosisContent ? { prognosis: isEnglish ? 'Medical calculators · formulas pending' : '醫學計算機・公式待串接' } : undefined}
           sectionContent={{ prognosis: prognosisContent, diagnosis: <>
