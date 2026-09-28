@@ -148,8 +148,11 @@ describe('real pack · P3 new AF (AF page)', () => {
     expect(row('DP-07')).toHaveTextContent('0/3')
     fireEvent.click(primaryOf('DP-07'))
     expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    // What to recheck, with no day count: ESC 2024 AF prints none, so the
+    // plan names no return date of its own (clinician decision 2026-09-28).
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('Hb、Cr')
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 30 天內回診')
+    expect(screen.getByTestId('cdss-visit-plan')).not.toHaveTextContent(/\d+ 天/)
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 
   it('queues rhythm control once symptoms are answered 「有」, and keeps screening out of the queue', () => {
