@@ -1,9 +1,10 @@
 "use client"
 
-// 編輯我的固定檢驗 — pick analytes one by one, order them, remove any.
+// 編輯自訂檢驗 — pick analytes one by one, order them, remove any.
 //
-// Categories are only a way to find things: ticking ALT never adds AST, and a
-// quick-add pack adds individual pins the clinician can then remove singly.
+// Categories are only a way to find things: ticking ALT never adds AST. A
+// specialty pack replaces the list with individual pins the clinician can then
+// remove singly; pressing the pack again puts the previous list back.
 // A search the catalog cannot answer is said out loud ("not recognised
 // automatically yet"); the clinician may keep a reminder row for it, but no
 // match rule is ever built from what they typed.
@@ -31,18 +32,14 @@ import {
   type PinnableLab,
 } from '@/src/shared/utils/pinned-labs'
 
-const PACKS: Array<{ key: 'packCardio' | 'packNephro' | 'packMetabolic'; ids: string[] }> = [
+type Pack = { key: 'packCardio'; ids: string[] }
+
+// Cardiology only for now (owner decision 2026-09-27); other specialties'
+// sets wait until their clinicians have said what belongs in them.
+const PACKS: Pack[] = [
   {
     key: 'packCardio',
     ids: ['chem:CREA', 'chem:EGFR(M)', 'chem:K', 'chem:ALT', 'glucose:GLUCOSE-AC', 'glucose:HBA1C', 'lipid:LDL', 'lipid:HDL', 'lipid:TG', 'chem:NT-PROBNP'],
-  },
-  {
-    key: 'packNephro',
-    ids: ['chem:BUN', 'chem:CREA', 'chem:EGFR(M)', 'chem:NA', 'chem:K', 'chem:CA', 'chem:IP', 'chem:UA', 'chem:ALB', 'cbc:HB'],
-  },
-  {
-    key: 'packMetabolic',
-    ids: ['glucose:GLUCOSE-AC', 'glucose:HBA1C', 'chem:CREA', 'chem:EGFR(M)', 'lipid:LDL', 'lipid:HDL', 'lipid:TG', 'chem:ALT'],
   },
 ]
 
@@ -91,10 +88,26 @@ export function PinnedLabsEditorDialog({
     ;[next[index], next[target]] = [next[target], next[index]]
     return next
   })
-  const addPack = (ids: string[]) => setSelected((prev) => [
-    ...prev,
-    ...ids.filter((id) => !prev.includes(id) && findPinnableLab(id)),
-  ])
+  // A pack REPLACES the list (the usual starting point is the system's common
+  // set, which a cardiologist wants swapped out, not added to). It reads as on
+  // while the list is exactly that pack, in any order; pressing it again puts
+  // back the list from before — or the system's set when the pack was already
+  // saved before this editor opened.
+  const [beforePack, setBeforePack] = useState<string[] | null>(null)
+  const packIds = (pack: Pack) => pack.ids.filter((id) => findPinnableLab(id))
+  const packOn = (pack: Pack) => {
+    const ids = packIds(pack)
+    return ids.length > 0 && ids.length === selected.length && ids.every((id) => selected.includes(id))
+  }
+  const togglePack = (pack: Pack) => {
+    if (packOn(pack)) {
+      setSelected(beforePack ?? systemDefaultIds)
+      setBeforePack(null)
+      return
+    }
+    setBeforePack(selected)
+    setSelected(packIds(pack))
+  }
   const reminderId = trimmed ? makePinnedLabReminder(trimmed) : ''
 
   const item = (entry: PinnableLab, showCategory: boolean) => {
@@ -156,16 +169,24 @@ export function PinnedLabsEditorDialog({
 
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[0.6875rem] text-muted-foreground">{s.quickAdd}</span>
-              {PACKS.map((pack) => (
-                <button
-                  key={pack.key}
-                  type="button"
-                  onClick={() => addPack(pack.ids)}
-                  className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                >
-                  ＋ {s[pack.key]}
-                </button>
-              ))}
+              {PACKS.map((pack) => {
+                const on = packOn(pack)
+                return (
+                  <button
+                    key={pack.key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => togglePack(pack)}
+                    className={cn(
+                      'inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      on ? 'border-primary/60 bg-primary/5 font-semibold text-foreground' : 'border-border hover:bg-muted',
+                    )}
+                  >
+                    {on ? <Check aria-hidden="true" className="h-3.5 w-3.5 text-primary" /> : <span aria-hidden="true">＋</span>}
+                    {s[pack.key]}
+                  </button>
+                )
+              })}
             </div>
 
             <div className="pr-1 md:min-h-0 md:flex-1 md:overflow-y-auto">

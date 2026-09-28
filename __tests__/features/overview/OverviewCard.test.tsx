@@ -180,7 +180,7 @@ describe('OverviewCard (demo bundle)', () => {
     expect(dialog.getByText('No growth')).toBeInTheDocument()
   })
 
-  it('shows abnormal non-common analytes when switching from 常用 to 只看異常', () => {
+  it('shows abnormal non-common analytes when switching from 常用 to 異常', () => {
     const lab = ({
       id,
       code,

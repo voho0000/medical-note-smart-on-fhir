@@ -1,4 +1,4 @@
-// 我的固定檢驗 — the analytes a clinician pins for every patient, and how each
+// 自訂檢驗 — the analytes a clinician pins for every patient, and how each
 // one's latest result is read.
 //
 // Two separate questions live here, and they must never be answered by each
