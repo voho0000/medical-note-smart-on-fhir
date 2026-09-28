@@ -51,7 +51,9 @@ describe('physician decisions · visit map fields', () => {
     })
   })
 
-  it('reads an older record without the new fields, and drops a malformed check', async () => {
+  // A check's interval is optional (ESC gives none for some checks): a
+  // malformed one is dropped, the text kept.
+  it('reads an older record without the new fields, and drops a malformed interval', async () => {
     await sealAnswers(physicianDecisionsStorageKey('p1'), {
       'heart-failure-mra': { decision: 'deferred', reasons: ['high-potassium'], recordedAt: AT.toISOString(), packVersion: '2.0.0' },
       'visit:hf:DP-08': {
@@ -66,7 +68,7 @@ describe('physician decisions · visit map fields', () => {
     })
     expect(getPhysicianDecisions('p1')['visit:hf:DP-08']).toEqual({
       decision: 'at-max-tolerated', reasons: [], recordedAt: AT.toISOString(), packVersion: '2.3.0',
-      dp: 'DP-08', actionId: 'bb-max-tolerated',
+      dp: 'DP-08', actionId: 'bb-max-tolerated', responseCheck: { text: '心率' },
     })
   })
 })

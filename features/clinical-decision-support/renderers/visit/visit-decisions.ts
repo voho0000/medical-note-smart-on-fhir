@@ -235,7 +235,7 @@ export interface PlanItem {
   key: string
   point: DecisionPointView
   actionLabel: string
-  check: { text: string; withinDays: number }
+  check: { text: string; withinDays?: number }
   reopenWhen?: string
 }
 
@@ -271,10 +271,12 @@ export function buildVisitPlan(
       })
     }
   }
-  items.sort((a, b) => a.check.withinDays - b.check.withinDays)
+  // A check with no interval (ESC gives none) sorts after those with one and
+  // does not set the return visit.
+  items.sort((a, b) => (a.check.withinDays ?? Infinity) - (b.check.withinDays ?? Infinity))
   const notes = [...(model.planNotes ?? [])]
   const days = [
-    ...items.map((item) => item.check.withinDays),
+    ...items.flatMap((item) => (typeof item.check.withinDays === 'number' ? [item.check.withinDays] : [])),
     ...notes.flatMap((note) => (typeof note.withinDays === 'number' ? [note.withinDays] : [])),
   ]
   return {
@@ -324,6 +326,11 @@ export function withinDaysLabel(days: number, isEnglish: boolean): string {
   return isEnglish ? `within ${days} days` : `${days} 天內`
 }
 
+/** 「，14 天內」 after a check's text, or nothing where the check has no interval. */
+export function checkIntervalSuffix(days: number | undefined, isEnglish: boolean): string {
+  return typeof days === 'number' ? `${isEnglish ? ', ' : '，'}${withinDaysLabel(days, isEnglish)}` : ''
+}
+
 export function returnVisitLabel(days: number, isEnglish: boolean): string {
   return isEnglish ? `Suggested return within ${days} days` : `建議 ${days} 天內回診`
 }
@@ -361,7 +368,7 @@ export function buildVisitSummaryText(input: {
     if (!decision) return []
     const check = decision.record.responseCheck
     return [`- ${point.dp} ${point.label}${isEnglish ? ': ' : '：'}${decision.record.actionLabel ?? decision.action.label}${
-      check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}，${withinDaysLabel(check.withinDays, isEnglish)}）` : ''
+      check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}${checkIntervalSuffix(check.withinDays, isEnglish)}）` : ''
     }`]
   }))
   lines.push(isEnglish ? "Today's decisions:" : '今天的決定：')

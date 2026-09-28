@@ -1,7 +1,7 @@
 "use client"
 
 import type { VisitPlanModel } from './visit-decisions'
-import { returnVisitLabel, withinDaysLabel } from './visit-decisions'
+import { checkIntervalSuffix, returnVisitLabel, withinDaysLabel } from './visit-decisions'
 
 /**
  * 計畫: every decision recorded today that asked for a response check, the
@@ -45,8 +45,7 @@ export function VisitPlan({ plan, isEnglish }: { plan: VisitPlanModel; isEnglish
                 <span className="text-muted-foreground">{isEnglish ? ' — ' : '：'}</span>
                 <span className="text-foreground">{item.check.text}</span>
                 <span className="text-muted-foreground">
-                  {isEnglish ? ', ' : '，'}
-                  {withinDaysLabel(item.check.withinDays, isEnglish)}
+                  {checkIntervalSuffix(item.check.withinDays, isEnglish)}
                 </span>
                 {item.reopenWhen ? (
                   <span className="block text-muted-foreground">

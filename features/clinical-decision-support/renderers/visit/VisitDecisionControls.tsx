@@ -5,7 +5,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PointDecision } from './visit-decisions'
-import { withinDaysLabel } from './visit-decisions'
+import { checkIntervalSuffix } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 
 export interface VisitDecisionControlsProps {
@@ -79,8 +79,7 @@ export function VisitDecisionControls({
             <span className="block text-xs text-muted-foreground" data-visit-response-check="">
               {isEnglish ? 'Response check: ' : '回應檢查：'}
               {check.text}
-              {isEnglish ? ', ' : '，'}
-              {withinDaysLabel(check.withinDays, isEnglish)}
+              {checkIntervalSuffix(check.withinDays, isEnglish)}
             </span>
           ) : null}
           {decision.record.reopenWhen ? (

@@ -275,15 +275,19 @@ describe('real pack · P5 titrating with AF', () => {
 })
 
 describe('real pack · P6 hyperkalaemia', () => {
-  it('puts the MRA hold first as a safety row and does not titrate RAS', () => {
+  // ESC 2026 Supplementary Table S8: above 5.5 the MRA is halved and the
+  // chemistry 「monitored closely」 — no interval, so the plan names what to
+  // check and sets no return visit of its own.
+  it('puts the MRA halving first as a safety row and does not titrate RAS', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
-    expect(queue()).toEqual([{ dp: 'DP-09', primary: '暫停 MRA' }])
+    expect(queue()).toEqual([{ dp: 'DP-09', primary: '減半劑量' }])
     expect(row('DP-09')).toHaveAttribute('data-visit-queue-state', 'safety')
-    expect(row('DP-09')).toHaveTextContent('K 5.7 → 暫停 MRA？')
+    expect(row('DP-09')).toHaveTextContent('K 5.7 → MRA 減半？')
     expect(pillar('DP-07')).toHaveAttribute('data-state', 'info')
     fireEvent.click(primaryOf('DP-09'))
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr，7 天內')
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr')
+    expect(screen.getByTestId('cdss-visit-plan')).not.toHaveTextContent('天內')
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 
   it('shows the pack’s own status on the card a row or cell opens, not the host re-grade', () => {
@@ -356,7 +360,7 @@ describe('real pack · P7 worsening congestion', () => {
     fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(primaryOf('DP-06'))
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，7 天內')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，14 天內')
   })
 })
 

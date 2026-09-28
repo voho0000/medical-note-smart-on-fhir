@@ -62,7 +62,8 @@ export type PhysicianDecisionKind =
  */
 export interface DecisionResponseCheck {
   text: string
-  withinDays: number
+  /** Absent where ESC gives no interval: the pack names what to check, not when. */
+  withinDays?: number
 }
 
 /**
@@ -165,8 +166,12 @@ function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
     ...(typeof record.actionId === 'string' && record.actionId ? { actionId: record.actionId } : {}),
     ...(typeof record.actionLabel === 'string' && record.actionLabel ? { actionLabel: record.actionLabel } : {}),
     ...(check && typeof check === 'object' && typeof check.text === 'string' && check.text
-      && typeof withinDays === 'number' && Number.isFinite(withinDays) && withinDays >= 0
-      ? { responseCheck: { text: check.text, withinDays } }
+      ? {
+          responseCheck: {
+            text: check.text,
+            ...(typeof withinDays === 'number' && Number.isFinite(withinDays) && withinDays >= 0 ? { withinDays } : {}),
+          },
+        }
       : {}),
     ...(typeof record.reopenWhen === 'string' && record.reopenWhen ? { reopenWhen: record.reopenWhen } : {}),
   }
