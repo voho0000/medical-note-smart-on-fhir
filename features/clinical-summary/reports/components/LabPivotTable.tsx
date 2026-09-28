@@ -14,6 +14,7 @@ import { ReportSourceProgramBadge } from "./ReportSourceProgramBadge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
+import { cellDisplayValue } from "@/src/shared/utils/lab-pivot.utils"
 import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
@@ -287,7 +288,7 @@ export const LabPivotTable = memo(function LabPivotTable({
             className={`border-l px-1 py-1 text-center ${cls} ${isFocusedCell ? 'relative bg-primary/15 ring-2 ring-inset ring-primary' : ''}`}
             title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
           >
-            <span>{cell.value}</span>
+            <span>{cellDisplayValue(cell)}</span>
             {!test.unit && cell.unit && (
               <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
                 {cell.unit}
