@@ -402,17 +402,18 @@ function readSourceTags(observation: any, budget: StringBudget): string[] {
 // The bridges print the 10-digit 醫事機構代碼 as its own segment of the
 // performer display: "院所;科別;0601160016", "院所 / 科別 / 0936050029".
 // Only this field is known to carry one, so only here is it taken out — the
-// rest of the string then gets the same scan as every other (a chart or
-// mobile number anywhere else still drops it).
-const PERFORMER_SEGMENT = /\s*[;；/／|｜]\s*/
+// segment and the one separator before it, nothing else. Every other
+// character stays as the source wrote it (a "/" inside "65/3/12" must stay a
+// "/"), so the rest of the string gets the same scan as every other and a
+// date, chart or mobile number anywhere else still drops it.
+const INSTITUTION_CODE_SEGMENT = /(?:^|\s*[;/|]\s*)\d{10}(?=\s*(?:[;/|]|$))/g
 
 export function stripInstitutionCodes(display: string): string {
-  const normalized = display.normalize('NFKC')
-  const separator = normalized.match(PERFORMER_SEGMENT)?.[0] ?? ';'
-  return normalized
-    .split(PERFORMER_SEGMENT)
-    .filter((segment) => !/^\d{10}$/.test(segment.trim()))
-    .join(separator)
+  // NFKC first: full-width ；／｜ and digits become their ASCII forms.
+  return display
+    .normalize('NFKC')
+    .replace(INSTITUTION_CODE_SEGMENT, '')
+    .replace(/^\s*[;/|]\s*/, '')
     .trim()
 }
 

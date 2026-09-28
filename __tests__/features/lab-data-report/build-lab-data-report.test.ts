@@ -2,6 +2,7 @@ import {
   buildLabDataReport,
   collectLabDataReportCandidates,
   detectLabDataSource,
+  stripInstitutionCodes,
 } from '@/features/lab-data-report/utils/build-lab-data-report'
 import { LAB_DATA_REPORT_MAX_ROWS, type LabDataReportContext } from '@/features/lab-data-report/types'
 
@@ -193,6 +194,33 @@ describe('lab-data report builder', () => {
     const { payload } = build(rows)
     expect(payload.rows.map((row) => row.referenceRange)).toEqual([[], [], [], []])
     expect(payload.droppedStrings).toBe(4)
+  })
+
+  it.each([
+    ['臺北榮民總醫院;0601160016', '臺北榮民總醫院'],
+    ['臺北榮民總醫院 / 檢驗科 / 0601160016', '臺北榮民總醫院 / 檢驗科'],
+    ['0601160016;臺北榮民總醫院', '臺北榮民總醫院'],
+    ['臺北榮民總醫院;0601160016;檢驗科', '臺北榮民總醫院;檢驗科'],
+    ['臺北榮民總醫院／檢驗科；０６０１１６００１６', '臺北榮民總醫院/檢驗科'],
+    // Everything but the code is left exactly as written — mixed separators too.
+    ['測試醫院;生日 65/3/12', '測試醫院;生日 65/3/12'],
+    ['測試醫院;採檢 2026/03/01;0601160016', '測試醫院;採檢 2026/03/01'],
+    ['測試醫院|檢驗科/血液組', '測試醫院|檢驗科/血液組'],
+    // Not a whole segment: left in place for the scan to drop.
+    ['測試醫院0601160016', '測試醫院0601160016'],
+    ['測試醫院;12345678901', '測試醫院;12345678901'],
+  ])('stripInstitutionCodes(%j) → %j', (display, expected) => {
+    expect(stripInstitutionCodes(display)).toBe(expected)
+  })
+
+  it('still drops a performer whose remaining text holds a date, with mixed separators', () => {
+    const birthday = hbUnderUrine('2026-03-01', 13.2)
+    birthday.performer = [{ display: '測試醫院;生日 65/3/12' }]
+    const western = hbUnderUrine('2026-03-02', 13.1)
+    western.performer = [{ display: '測試醫院 / 採檢 2026/03/01 / 0601160016' }]
+    const { payload } = build([birthday, western])
+    expect(payload.rows.map((row) => row.performer)).toEqual([[], []])
+    expect(payload.droppedStrings).toBe(2)
   })
 
   it('takes only the 10-digit institution code out of performer', () => {
