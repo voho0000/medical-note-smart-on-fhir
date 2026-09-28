@@ -23,6 +23,7 @@ import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/fe
 import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
+import { useVisitValuesStore } from '@/features/clinical-decision-support/stores/visit-values.store'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -334,6 +335,26 @@ describe('real pack · P6 hyperkalaemia', () => {
     const ras = within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-module-heart-failure-ras-inhibition')
     expect(ras.querySelector('[data-module-status]')).toHaveAttribute('data-module-status', 'review')
     expect(pillar('DP-07')).toHaveTextContent('先處理高血鉀')
+  })
+})
+
+// Clinician feedback 2026-09-28: 「user 都先看完 lab data 後才進來點 CDSS」 —
+// MediPrisma shows the record on the left; the map's values fold, as the three
+// sections' do, and a value behind today's safety item stays in view.
+describe('real pack · the status line\'s clinical values fold', () => {
+  afterEach(() => useVisitValuesStore.setState({ open: false }))
+
+  it('opens folded, keeps the safety value in view, and opens on 臨床數值', () => {
+    useVisitValuesStore.setState({ open: false })
+    render(<ScenarioMap id="p6-hyperkalaemia" />)
+    const toggle = screen.getByTestId('cdss-visit-values-toggle')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('cdss-visit-key-values')).not.toBeVisible()
+    expect(screen.getByTestId('cdss-visit-key-values-alert')).toHaveTextContent('K')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-key-values')).toBeVisible()
+    expect(screen.queryByTestId('cdss-visit-key-values-alert')).toBeNull()
   })
 })
 
