@@ -129,15 +129,26 @@
    purple fill (clinician feedback 2026-09-28: 「下面的內容區背景色是綠色紫色
    怪怪的」, 「維持原本的 mediprisma 背景色」). The tabs above keep their fills.
 
-   The boxes themselves are one step lighter than the page, with a breath of
-   the section's colour, and the group headings wear the section's ink
+   The boxes themselves are one step lighter than the page, a blue-white in
+   every section, and the group headings wear the section's ink
    (「顏色好單調，按鈕顏色跟背景色可以有一點點區隔」). Every `bg-background`
    inside the panel reads `--background`, so the cells, question boxes and
-   rows lift together without each learning a new class. */
+   rows lift together without each learning a new class.
+
+   Mixed in sRGB, never OKLCH: the production build writes `--card` as a hex,
+   a hex's hue comes out missing in an OKLCH mix, and the missing hue was
+   drawn as 0 — the boxes turned pale pink on the site while the dev server,
+   which keeps `oklch()`, showed them blue (clinician feedback 2026-09-28:
+   「新版的淡粉我不喜歡」). */
 .mapPanel {
   border-color: color-mix(in srgb, var(--section-accent) 55%, var(--border));
   background: transparent;
-  --background: color-mix(in oklch, var(--card) 70%, var(--section-surface));
+  --map-box-tint: #eff6ff;
+  --background: color-mix(in srgb, var(--card) 70%, var(--map-box-tint));
+}
+
+:global(.dark) .mapPanel {
+  --map-box-tint: #152538;
 }
 
 .mapPanel :global([data-map-heading]) {
