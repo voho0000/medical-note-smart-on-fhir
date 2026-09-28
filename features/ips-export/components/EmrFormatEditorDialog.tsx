@@ -147,6 +147,15 @@ export function EmrFormatEditorDialog({
       return { ...state, caret: Math.max(0, Math.min(state.units.length, target)) }
     })
   }
+  // After a button edits the format, typing carries on in the format: a
+  // reflexive space must type a space, not press the same button again and
+  // insert the field twice. Touch screens are left alone so the on-screen
+  // keyboard does not cover the dialog after every tap. (From the keyboard
+  // the hidden textarea already has focus, so this is a no-op there.)
+  const returnToEditor = () => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches) return
+    inputRef.current?.focus({ preventScroll: true })
+  }
   const insert = (inserted: EmrEditUnit[]) => {
     if (!inserted.length) return
     apply((state) => {
@@ -154,25 +163,39 @@ export function EmrFormatEditorDialog({
       next.splice(state.caret, 0, ...inserted)
       return { units: next, caret: state.caret + inserted.length }
     })
+    returnToEditor()
   }
-  const replaceAll = (next: EmrEditUnit[]) => apply(() => ({ units: next, caret: next.length }))
-  const deleteBack = () => apply((state) => {
-    if (state.caret === 0) return null
-    const next = [...state.units]
-    next.splice(state.caret - 1, 1)
-    return { units: next, caret: state.caret - 1 }
-  })
+  const replaceAll = (next: EmrEditUnit[]) => {
+    apply(() => ({ units: next, caret: next.length }))
+    returnToEditor()
+  }
+  const deleteBack = () => {
+    apply((state) => {
+      if (state.caret === 0) return null
+      const next = [...state.units]
+      next.splice(state.caret - 1, 1)
+      return { units: next, caret: state.caret - 1 }
+    })
+    returnToEditor()
+  }
+  const moveCaret = (delta: number) => {
+    setCaret((state) => state.caret + delta)
+    returnToEditor()
+  }
   const deleteForward = () => apply((state) => {
     if (state.caret >= state.units.length) return null
     const next = [...state.units]
     next.splice(state.caret, 1)
     return { units: next, caret: state.caret }
   })
-  const undo = () => setEdit((state) => {
-    const last = state.history[state.history.length - 1]
-    if (!last) return state
-    return { units: last.units, caret: last.caret, history: state.history.slice(0, -1) }
-  })
+  const undo = () => {
+    setEdit((state) => {
+      const last = state.history[state.history.length - 1]
+      if (!last) return state
+      return { units: last.units, caret: last.caret, history: state.history.slice(0, -1) }
+    })
+    returnToEditor()
+  }
 
   // Keys that edit structure are handled here; anything that produces text is
   // left to the textarea and picked up from its input event below.
@@ -277,6 +300,7 @@ export function EmrFormatEditorDialog({
       next.splice(state.caret, 0, ...inserted)
       return { units: next, caret: state.caret + lead.length + block.length }
     })
+    returnToEditor()
   }
 
   return (
@@ -388,10 +412,10 @@ export function EmrFormatEditorDialog({
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={e.caretLeft} onClick={() => setCaret((state) => state.caret - 1)}>
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={e.caretLeft} onClick={() => moveCaret(-1)}>
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
-                <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={e.caretRight} onClick={() => setCaret((state) => state.caret + 1)}>
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={e.caretRight} onClick={() => moveCaret(1)}>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
                 <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" disabled={caret === 0} onClick={deleteBack}>
