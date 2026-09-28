@@ -26,15 +26,27 @@ describe('icdChronicity (AHRQ HCUP CCIR)', () => {
     expect(icdChronicity('門診追蹤')).toBe('undetermined')
   })
 
+  // CCIR v2026.1 codes that are listed themselves but have children of another
+  // value. They once fell through the prefix table (Q21.1 showed under 全部 but
+  // vanished under 慢性); scripts/build-ccir-table.mjs now re-checks all 75,725.
+  it.each([
+    ['D59.3', 'nonChronic'], ['D72.1', 'chronic'], ['D84.8', 'chronic'], ['F43.8', 'nonChronic'],
+    ['F50.8', 'nonChronic'], ['I31.3', 'nonChronic'], ['J82', 'nonChronic'], ['J84.17', 'chronic'],
+    ['K86.8', 'nonChronic'], ['N42.3', 'nonChronic'], ['N61', 'nonChronic'], ['P04.1', 'nonChronic'],
+    ['P04.8', 'nonChronic'], ['P29.3', 'nonChronic'], ['Q21.1', 'chronic'], ['Z28.3', 'undetermined'],
+  ] as const)('keeps the explicit class of listed parent code %s', (code, expected) => {
+    expect(icdChronicity(code)).toBe(expected)
+  })
+
   it('ships a generated table whose prefixes never overlap', () => {
     expect(CCIR_VERSION).toMatch(/^v\d{4}\.\d+$/)
     const all = Object.values(CCIR_PREFIXES).flatMap((list) => list.split(','))
-    const set = new Set(all)
-    expect(set.size).toBe(all.length)
-    // A longest-prefix lookup must hit exactly one entry: no listed prefix is
-    // the ancestor of another.
-    for (const prefix of all) {
-      for (let i = 1; i < prefix.length; i++) expect(set.has(prefix.slice(0, i))).toBe(false)
+    expect(new Set(all).size).toBe(all.length)
+    // Exact entries ("Q211$") may sit under a prefix; prefixes may not nest, so a
+    // longest-prefix lookup hits exactly one of them.
+    const prefixes = new Set(all.filter((entry) => !entry.endsWith('$')))
+    for (const prefix of prefixes) {
+      for (let i = 1; i < prefix.length; i++) expect(prefixes.has(prefix.slice(0, i))).toBe(false)
     }
   })
 })
