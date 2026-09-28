@@ -278,6 +278,29 @@ describe('renderEmrCustomFormat — 最近 N 次', () => {
     expect(result.notes).toEqual([{ type: 'labSeriesUnits', line: 1, lab: 'chem:CREA', units: ['umol/L', 'mg/dL'] }])
   })
 
+  it('gives every value of a cross-unit series its own unit when no unit field follows (review r2)', () => {
+    const mixed = [
+      obs('CREA', '2026-05-25', 88.4, { unit: 'umol/L' }),
+      obs('CREA', '2026-06-02', 1, { unit: 'mg/dL' }),
+    ]
+    const inputsMixed = inputs(mixed)
+    // Only the series: the newest value must not end up unitless.
+    expect(renderEmrCustomFormat(format([series('chem:CREA', 'value', 2)]), inputsMixed).text).toBe('88.4 umol/L→1 mg/dL')
+    // A unit field placed BEFORE the series does not stand in for the newest.
+    const unitFirst = [t('('), lab('chem:CREA', 'unit'), t(') '), series('chem:CREA', 'value', 2)]
+    expect(renderEmrCustomFormat(format(unitFirst), inputsMixed).text).toBe('(mg/dL) 88.4 umol/L→1 mg/dL')
+  })
+
+  it('leaves a same-unit series unlabelled', () => {
+    const same = [
+      obs('CREA', '2026-05-25', 1.1, { unit: 'mg/dL' }),
+      obs('CREA', '2026-06-02', 1.2, { unit: 'mg/dL' }),
+    ]
+    const result = renderEmrCustomFormat(format([series('chem:CREA', 'value', 2)]), inputs(same))
+    expect(result.text).toBe('1.1→1.2')
+    expect(result.notes).toEqual([])
+  })
+
   it('prints what there is and says so when fewer results exist', () => {
     const result = renderEmrCustomFormat(format([series('chem:CREA', 'value', 5)]), inputs(CREA))
     expect(result.text).toBe('1.1→1.2→1.3→1.5')

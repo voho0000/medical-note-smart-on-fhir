@@ -807,7 +807,7 @@ export const en = {
           labNoResult: 'Line {line}: no {lab} result in the loaded data.',
           labSameDayMany: 'Line {line}: {count} {lab} results on {date}; used the first, {value}.',
           labFewer: 'Line {line}: {lab} is set to the last {wanted}, but the loaded records hold {got}; all of them are included.',
-          labSeriesUnits: 'Line {line}: {lab} results use different units ({units}) and are not converted; a value in a different unit from the latest carries its own unit.',
+          labSeriesUnits: 'Line {line}: {lab} results use different units ({units}) and are not converted; every value carries its own unit.',
           mixedDates: 'Line {line} mixes dates: {items}. Add a date field to this line if needed.',
           labUnknown: 'Line {line}: a test is no longer supported — replace it in Edit format.',
           examMissing: 'Line {line}: no {exam} report with text in the loaded data, so the line is left out.',

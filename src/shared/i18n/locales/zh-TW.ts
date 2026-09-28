@@ -806,7 +806,7 @@ export const zhTW = {
           labNoResult: '第 {line} 行：{lab} 在已載入資料中沒有結果。',
           labSameDayMany: '第 {line} 行：{lab} 在 {date} 有 {count} 筆，已取第一筆 {value}。',
           labFewer: '第 {line} 行：{lab} 設定最近 {wanted} 次，已載入資料只有 {got} 次，已全部放入。',
-          labSeriesUnits: '第 {line} 行：{lab} 這幾次的單位不同（{units}），沒有換算；單位跟最新一次不同的數值後面已標上它自己的單位。',
+          labSeriesUnits: '第 {line} 行：{lab} 這幾次的單位不同（{units}），沒有換算；每個數值都標上它自己的單位。',
           mixedDates: '第 {line} 行混了不同日期：{items}。需要的話在這一行放「日期」欄位。',
           labUnknown: '第 {line} 行：有一項檢驗已不在支援清單，請到「編輯格式」換掉。',
           examMissing: '第 {line} 行：已載入資料未見有文字的{exam}報告，這一行沒有放入。',

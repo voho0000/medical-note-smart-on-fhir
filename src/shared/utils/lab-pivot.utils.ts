@@ -106,13 +106,19 @@ export function primaryCellRecord(cell: LabCell): { record: LabCellRecord; valid
   const valid = records.filter((record) => !isInvalidRecord(record))
   if (valid.length === 0) return null
   const qualQuantPair = !cell.allValues && records.length === 2 && valid.length === 2
-  if (qualQuantPair && cell.value?.trim()) {
+  if (qualQuantPair) {
+    // Rebuilt from the two records rather than the merged cell, which keeps
+    // neither the number's comparator nor its unit: "Reactive (<0.5)" with
+    // the number's own unit, not "Reactive (0.5)".
+    const [first, second] = valid as [LabCellRecord, LabCellRecord]
+    const quant = isNumericCellValue(first.value) ? first : second
+    const qual = quant === first ? second : first
     const combined: LabCellRecord = {
-      value: cell.value,
-      unit: cell.unit,
-      isAbnormal: cell.isAbnormal,
-      interpretationCode: cell.interpretationCode,
-      status: cell.status,
+      value: `${qual.value.trim()} (${recordDisplayValue(quant).trim()})`,
+      unit: quant.unit,
+      isAbnormal: !!qual.isAbnormal || !!quant.isAbnormal,
+      interpretationCode: qual.interpretationCode || quant.interpretationCode,
+      status: qual.status === quant.status ? qual.status : undefined,
     }
     return { record: combined, valid: [combined] }
   }
