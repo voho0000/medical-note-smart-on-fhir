@@ -139,6 +139,13 @@ export function VisitDecisionControls({
   // 「其他」 folds alternatives only when there are enough to crowd the row;
   // one or two sit beside the recommendation, never one press away behind it.
   const folded = surface === 'queue' && others.length >= 3
+  // The recommendation in the map's own tint — the colour of its 「需處理」
+  // (or, on a safety row, 「安全」) label — rather than a solid fill that
+  // outweighs the card it sits in (clinician feedback 2026-09-28). Still the
+  // one filled button beside outlined alternatives.
+  const primaryTone = point.state === 'safety'
+    ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:border-destructive/50 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30'
+    : 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary dark:border-primary/50 dark:bg-primary/15 dark:text-primary dark:hover:bg-primary/25'
   const showOthers = folded && otherOpen
   return (
     <div ref={containerRef} className="min-w-0 space-y-2" data-testid="cdss-visit-controls">
@@ -146,7 +153,8 @@ export function VisitDecisionControls({
         <Button
           ref={primaryRef}
           type="button"
-          className="h-11 min-w-11 px-4 text-sm font-semibold shadow-none"
+          variant="outline"
+          className={cn('h-11 min-w-11 px-4 text-sm font-semibold shadow-none', primaryTone)}
           disabled={readOnly}
           onClick={() => decide(primary)}
           data-visit-primary={point.dp}

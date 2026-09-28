@@ -7,6 +7,11 @@ import type { VisitMapSurfaces } from './visit-surfaces'
 /** 01's cells under 診斷: suspicion, diagnosis and phenotype, HFpEF, baseline work-up, reassessment, aetiology. */
 const DIAGNOSIS_VIEW_DPS = ['DP-00', 'DP-01', 'DP-34', 'DP-02', 'DP-04', 'DP-29', 'DP-30'] as const
 
+/** Whether the pack set RAS and β-blocker aside as not FMT here — HFpEF's pillars. */
+function hfpefPillars(model: VisitDecisionModel): boolean {
+  return ['DP-07', 'DP-08'].every((dp) => model.points.find((point) => point.dp === dp && point.source === 'hf')?.state === 'not-applicable')
+}
+
 /**
  * Where the heart-failure page's surfaces sit on the map:
  *
@@ -65,8 +70,17 @@ export function heartFailureVisitSurfaces(
       // 「還不確定」 path ends at DP-34's confirmation, in the same card.
       answeredBy: { request: 'hf-suspicion', dps: ['DP-00', 'DP-01', 'DP-34'] },
     },
-    // HFrEF's four pillars, always in view at the head of 02.
-    pillars: { title: isEnglish ? 'Four pillars' : '四支柱', dps: ['DP-07', 'DP-08', 'DP-09', 'DP-10'], whenActive: ['DP-26'] },
+    // HFrEF's four pillars, always in view at the head of 02. In HFpEF the
+    // RAS and β-blocker points are not FMT and step aside (the screen drops
+    // a not-applicable pillar), leaving the two ESC 2026 p.35 names:
+    // 「Foundational medical therapy for HFpEF includes SGLT2-Is and MRAs」.
+    pillars: {
+      title: hfpefPillars(model)
+        ? (isEnglish ? 'HFpEF foundational therapy' : 'HFpEF 基礎藥物')
+        : (isEnglish ? 'Four pillars' : '四支柱'),
+      dps: ['DP-07', 'DP-08', 'DP-09', 'DP-10'],
+      whenActive: ['DP-26'],
+    },
     columnFooters: {
       status: (
         <>

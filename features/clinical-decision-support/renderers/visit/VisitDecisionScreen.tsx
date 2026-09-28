@@ -354,6 +354,10 @@ export function VisitDecisionScreen({
     .filter((point): point is DecisionPointView => Boolean(point))
     // DP-26 and its like only while they ask for something.
     .filter((point) => surfaces?.pillars?.dps.includes(point.dp) || Boolean(rowOfPoint(point)) || DECISION_STATES.has(point.state))
+    // A pillar the phenotype does not have (HFpEF's RAS and β-blocker) is not
+    // shown as 「不適用」 beside the ones it does (clinician feedback
+    // 2026-09-28: 「HFpEF 不用出現不適用的」); in HFrEF none is.
+    .filter((point) => point.state !== 'not-applicable')
   const listRowsIn = (block: VisitBlock) => rowsIn(block).filter((row) => !isPillar(row.steps[0].point))
   // Every point a row stands for — and a question the lead asks itself — is
   // not repeated as a cell. (The pillars leave 02's cells through its cell

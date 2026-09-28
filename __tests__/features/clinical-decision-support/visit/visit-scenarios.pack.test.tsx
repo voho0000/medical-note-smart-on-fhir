@@ -207,6 +207,22 @@ describe('real pack · P4 stable and optimised', () => {
     expect(within(pillars).queryByText('暫停與重啟')).toBeNull()
   })
 
+  // Clinician feedback 2026-09-28: 「HFpEF 不用出現不適用的吧」 — the four
+  // pillars stay in HFrEF; in HFpEF the block holds its two, MRA and SGLT2i.
+  it('shows HFpEF its two pillars only, with no 「不適用」 box', () => {
+    render(<ScenarioMap id="p9-hfpef-af-dose" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    const pillars = screen.getByTestId('cdss-visit-pillars')
+    expect(pillars).toHaveTextContent('HFpEF 基礎藥物')
+    expect(pillars).not.toHaveTextContent('四支柱')
+    expect(pillars).not.toHaveTextContent('不適用')
+    for (const dp of ['DP-09', 'DP-10']) expect(pillars).toContainElement(pillar(dp))
+    for (const dp of ['DP-07', 'DP-08']) {
+      expect(() => pillar(dp)).toThrow()
+      expect(queryCell(dp)).toBeUndefined()
+    }
+  })
+
   it('opens the settled DP-09 with the 50 mg target in its reason, no button, the guideline folded', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
