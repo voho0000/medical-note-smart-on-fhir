@@ -649,8 +649,39 @@ function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
   return !nhi || sections.some((p) => nhi.startsWith(p))
 }
 
+/**
+ * Which step of categorizeObservation placed an observation. Reported by the
+ * clinician-initiated lab-data problem report so a mis-filed row says WHY it
+ * landed where it did (e.g. `text-urine` = Pass 5 matched 「尿」 in a name).
+ */
+export type LabCategoryDecision =
+  | 'microbiology'        // Pass 0
+  | 'specimen-urine'      // Pass 1, specimen says urine
+  | 'specimen-non-blood'  // Pass 1, non-blood specimen → 其他 catch-all (or none)
+  | 'loinc'               // Pass 2
+  | 'code'                // Pass 3
+  | 'display'             // Pass 4
+  | 'canonical'           // Pass 4.5
+  | 'text-urine'          // Pass 5
+  | 'qualitative'         // Pass 6
+  | 'fallback'            // no pass matched → 其他 catch-all (or none)
+  | 'none'                // no observation
+
+export interface LabCategoryResult {
+  category: LabCategory | null
+  decidedBy: LabCategoryDecision
+}
+
 export function categorizeObservation(obs: any): LabCategory | null {
-  if (!obs) return null
+  return categorizeObservationWithReason(obs).category
+}
+
+/**
+ * categorizeObservation plus the pass that decided it. The routing itself
+ * lives here; categorizeObservation only drops the reason.
+ */
+export function categorizeObservationWithReason(obs: any): LabCategoryResult {
+  if (!obs) return { category: null, decidedBy: 'none' }
 
   const codings: any[] = Array.isArray(obs.code?.coding) ? obs.code.coding : []
   const codeNorms = codings.map((c: any) => (c?.code ? normalize(c.code) : '')).filter(Boolean)
@@ -708,7 +739,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
     || (!hasKnownNonMicrobiologyLoinc && isMicrobiologyNhiOrder)
     || isMicrobiologyName
   ) {
-    return microbiology || null
+    return { category: microbiology || null, decidedBy: 'microbiology' }
   }
 
   // ── Pass 1: specimen-based routing ─────────────────────────────────────
@@ -723,24 +754,24 @@ export function categorizeObservation(obs: any): LabCategory | null {
   let specimenBlocksPanels = false
   if (specimenText) {
     if (/urine|urinaly|尿/i.test(specimenText)) {
-      return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+      return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'specimen-urine' }
     }
     specimenBlocksPanels = !specimenSaysBlood
   }
 
-  if (specimenBlocksPanels) return fallbackCategory(obs)
+  if (specimenBlocksPanels) return { category: fallbackCategory(obs), decidedBy: 'specimen-non-blood' }
 
   // ── Pass 2: LOINC against cat.loincCodes (authoritative) ───────────────
   for (const { category: cat, loincCodes: loincSet } of CATEGORY_MATCHERS) {
     for (const cand of codeNorms) {
-      if (loincSet.has(cand)) return cat
+      if (loincSet.has(cand)) return { category: cat, decidedBy: 'loinc' }
     }
   }
 
   // ── Pass 3: exact short-code match against cat.codes ───────────────────
   for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of exactCandidates) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'code' }
     }
   }
 
@@ -757,7 +788,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
     .filter(Boolean)
   for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of strippedDisplays) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'display' }
     }
   }
 
@@ -779,7 +810,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
   for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
     for (const key of canonicalKeys) {
-      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs)) return cat
+      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'canonical' }
     }
   }
 
@@ -787,7 +818,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // Skip when bridge declared specimen=Blood — see big comment above for
   // the 尿酸 / 尿素氮 substring trap this guard avoids.
   if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
-    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+    return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
   }
 
   // ── Pass 6: qualitative-result fallback ────────────────────────────────
@@ -801,10 +832,10 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // leading "1+". Uncoded sandbox/orphan dipstick rows (no NHI code) still fall
   // through here as before.
   if (!specimenSaysBlood && !nhiOrderCode(obs) && isQualitativeResult(obs)) {
-    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+    return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'qualitative' }
   }
 
-  return fallbackCategory(obs)
+  return { category: fallbackCategory(obs), decidedBy: 'fallback' }
 }
 
 /**
