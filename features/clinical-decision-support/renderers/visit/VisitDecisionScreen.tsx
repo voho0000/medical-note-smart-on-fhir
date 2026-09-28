@@ -14,12 +14,12 @@ import {
   buildQueueRows,
   buildVisitPlan,
   buildVisitSummaryText,
+  checkIntervalSuffix,
   decisionInputFor,
   effectiveAnswer,
   latestDecisionFor,
   pointSteps,
   queuedPointDps,
-  returnVisitLabel,
   visitDecisionKey,
   type QueueRow,
   type QueueStep,
@@ -604,7 +604,7 @@ export function VisitDecisionScreen({
         isEnglish={isEnglish}
         sourceOfPage={sourceOfPage}
         answersLine={answersLine || undefined}
-        outlookSummary={plan.withinDays !== undefined ? returnVisitLabel(plan.withinDays, isEnglish) : plan.notes[0]?.text}
+        outlookSummary={plan.notes[0]?.text ?? (plan.items[0] ? `${isEnglish ? 'Recheck' : '複驗'} ${plan.items[0].check.text}${checkIntervalSuffix(plan.items[0].check, isEnglish)}` : undefined)}
         outlookSlot={(
           <>
             {outlookModules.map((item) => (

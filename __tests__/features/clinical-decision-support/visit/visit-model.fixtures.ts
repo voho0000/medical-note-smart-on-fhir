@@ -150,7 +150,7 @@ export function p5Model(): VisitDecisionModel {
         headline: 'ramipril → 換 ARNI？', why: 'LVEF 30%、ACEi 中；SBP 112、K 4.6、eGFR 48',
         chain: [{ id: 'whether', state: 'done', text: 'HFrEF → 需要' }, { id: 'which', state: 'current', text: 'ramipril（ACEi）→ ARNI 優先' }, { id: 'dose', state: 'later', text: '換藥後重新起算' }],
         actions: [
-          action('switch-arni', '換 ARNI', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', withinDays: 14 } }),
+          action('switch-arni', '換 ARNI', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' } }),
           action('keep-acei', '維持 ACEi', 'reviewed'),
           ...DECLINE,
         ],
@@ -161,7 +161,7 @@ export function p5Model(): VisitDecisionModel {
         headline: 'bisoprolol 2.5 mg／目標 10 mg', why: 'HR 82、SBP 112',
         chain: [{ id: 'whether', state: 'done', text: 'HFrEF → 需要' }, { id: 'which', state: 'done', text: 'bisoprolol' }, { id: 'dose', state: 'current', text: '2.5 mg／目標 10 mg' }],
         actions: [
-          action('uptitrate-bb', '上調至 5 mg', 'dose-adjusted', { primary: true, responseCheck: { text: '心率、血壓', withinDays: 14 } }),
+          action('uptitrate-bb', '上調至 5 mg', 'dose-adjusted', { primary: true, responseCheck: { text: '心率、血壓', interval: '1–2 週' } }),
           action('bb-max-tolerated', '已達耐受上限', 'at-max-tolerated', { reopenWhen: 'HR <50、SBP 明顯下降或新的 HF 住院' }),
         ],
         moduleIds: ['heart-failure-beta-blocker'],
@@ -171,7 +171,7 @@ export function p5Model(): VisitDecisionModel {
         headline: '開始 MRA？', why: 'K 4.6（<5.0）、eGFR 48（>30）',
         chain: [{ id: 'whether', state: 'current', text: '未使用 · 可開始' }, { id: 'which', state: 'later', text: 'spironolactone／eplerenone' }, { id: 'dose', state: 'later', text: '起始後依 K、Cr 調整' }],
         actions: [
-          action('start-mra', '開始 MRA', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', withinDays: 14 } }),
+          action('start-mra', '開始 MRA', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' } }),
           ...DECLINE,
         ],
         moduleIds: ['heart-failure-mra'],
@@ -210,8 +210,8 @@ export function p6Model(): VisitDecisionModel {
         dp: 'DP-09', label: 'MRA', state: 'safety', group: 'pillars',
         headline: 'K 5.7 → 暫停 MRA？', why: 'K 5.7（09-24）>5.5；eGFR 45→38',
         actions: [
-          action('hold-mra', '暫停 MRA', 'held', { primary: true, responseCheck: { text: 'K、Cr', withinDays: 7 }, reopenWhen: 'K 回到 <5.0 時重新開始' }),
-          action('halve-mra', '減半劑量', 'dose-adjusted', { responseCheck: { text: 'K、Cr', withinDays: 7 } }),
+          action('hold-mra', '暫停 MRA', 'held', { primary: true, responseCheck: { text: 'K、Cr' }, reopenWhen: 'K 回到 <5.0 時重新開始' }),
+          action('halve-mra', '減半劑量', 'dose-adjusted', { responseCheck: { text: 'K、Cr' } }),
           action('keep-mra', '維持（已複驗正常）', 'reviewed'),
         ],
         moduleIds: ['heart-failure-mra-safety'],
@@ -242,7 +242,7 @@ export function p7Model(): VisitDecisionModel {
         dp: 'DP-06', label: '鬱血與利尿劑', state: 'act', group: 'congestion',
         headline: '利尿劑加量？', why: '體重 65→68 kg、NT-proBNP 1200→2600',
         actions: [
-          action('increase-diuretic', '利尿劑加量', 'dose-adjusted', { primary: true, responseCheck: { text: '體重、K、Cr', withinDays: 7 } }),
+          action('increase-diuretic', '利尿劑加量', 'dose-adjusted', { primary: true, responseCheck: { text: '體重、K、Cr', interval: '1–2 週' } }),
           action('keep-diuretic', '維持', 'reviewed'),
           action('trigger-first', '先查誘因', 'reviewed'),
           action('defer-diuretic', '暫緩', 'deferred'),
@@ -267,7 +267,7 @@ export function p9Model(): VisitDecisionModel {
         dp: 'DP-14', label: 'AF 抗凝', state: 'act', group: 'af', source: 'af',
         headline: 'apixaban 5 → 2.5 mg bid？', why: '年齡 80、體重 58：減量條件 2/3',
         actions: [
-          action('reduce-apixaban', '減為 2.5 mg bid', 'dose-adjusted', { primary: true, responseCheck: { text: 'Hb、Cr', withinDays: 30 } }),
+          action('reduce-apixaban', '減為 2.5 mg bid', 'dose-adjusted', { primary: true, responseCheck: { text: 'Hb、Cr' } }),
           action('keep-apixaban', '維持 5 mg bid', 'reviewed'),
         ],
         moduleIds: ['af-doac-renal-dose-check'],
@@ -275,14 +275,14 @@ export function p9Model(): VisitDecisionModel {
       point({
         dp: 'DP-09', label: 'MRA', state: 'act', group: 'pillars',
         headline: '開始 MRA？', why: 'K 4.4、eGFR 40',
-        actions: [action('start-mra', '開始 MRA', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', withinDays: 14 } }), ...DECLINE],
+        actions: [action('start-mra', '開始 MRA', 'prescribed', { primary: true, responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' } }), ...DECLINE],
         moduleIds: ['heart-failure-mra'],
       }),
       point({
         dp: 'DP-06', label: '鬱血與利尿劑', state: 'confirm', group: 'congestion',
         headline: '體重減少 3 kg → 利尿劑是否減量？', why: '61→58 kg',
         actions: [
-          action('reduce-diuretic', '利尿劑減量', 'dose-adjusted', { primary: true, responseCheck: { text: '體重、K、Cr', withinDays: 7 } }),
+          action('reduce-diuretic', '利尿劑減量', 'dose-adjusted', { primary: true, responseCheck: { text: '體重、K、Cr', interval: '1–2 週' } }),
           action('keep-diuretic', '維持', 'reviewed'),
         ],
         moduleIds: ['heart-failure-congestion-diuretic'],
@@ -320,7 +320,7 @@ export function p3Model({ symptoms }: { symptoms?: 'yes' | 'no' } = {}): VisitDe
         headline: 'CHA₂DS₂-VA 4 → 開始抗凝？', why: '年齡 78、高血壓、糖尿病、女性不計分',
         chain: [{ id: 'whether', state: 'current', text: 'CHA₂DS₂-VA 4' }, { id: 'which', state: 'later', text: 'DOAC' }, { id: 'dose', state: 'later', text: '依減量條件' }],
         actions: [
-          action('start-oac', '開始抗凝', 'prescribed', { primary: true, responseCheck: { text: 'Hb、Cr', withinDays: 30 } }),
+          action('start-oac', '開始抗凝', 'prescribed', { primary: true, responseCheck: { text: 'Hb、Cr' } }),
           action('defer-oac', '暫緩', 'deferred'),
           action('preference-oac', '病人意願', 'patient-preference'),
         ],
@@ -331,7 +331,7 @@ export function p3Model({ symptoms }: { symptoms?: 'yes' | 'no' } = {}): VisitDe
         dp: 'DP-09', label: '抗凝劑量', state: 'waiting', group: 'A', source: 'af',
         headline: 'apixaban 5 mg bid', why: '減量條件 0/3（年齡 78、體重 62、Cr 0.9）',
         actions: [
-          action('apixaban-5', 'apixaban 5 mg bid', 'prescribed', { primary: true, responseCheck: { text: 'Hb、Cr', withinDays: 30 } }),
+          action('apixaban-5', 'apixaban 5 mg bid', 'prescribed', { primary: true, responseCheck: { text: 'Hb、Cr' } }),
           action('other-doac', '其他 DOAC', 'reviewed'),
         ],
         moduleIds: ['af-doac-renal-dose-check'],
@@ -368,9 +368,9 @@ export function p2Model(): VisitDecisionModel {
       point({ dp: 'DP-02', label: '基線評估', state: 'info', block: 'status', group: 'baseline', why: '紀錄缺 ferritin、TSAT、TSH、HbA1c' }),
       point({ dp: 'DP-01', label: '確診與分型', state: 'done', block: 'status', group: 'diagnosis', why: 'HFrEF · LVEF 28%' }),
       point({ dp: 'DP-29', label: '病因', state: 'not-included', block: 'status', group: 'diagnosis' }),
-      start('DP-08', 'β 阻斷劑', '開始 β 阻斷劑（bisoprolol 1.25 mg）？', 'start-bb', '開始 β 阻斷劑', { text: '心率、血壓', withinDays: 14 }),
-      start('DP-07', 'RAS 抑制', '開始 ARNI？', 'start-arni', '開始 ARNI', { text: 'K、Cr、血壓', withinDays: 14 }),
-      start('DP-09', 'MRA', '開始 MRA？', 'start-mra', '開始 MRA', { text: 'K、Cr、血壓', withinDays: 14 }),
+      start('DP-08', 'β 阻斷劑', '開始 β 阻斷劑（bisoprolol 1.25 mg）？', 'start-bb', '開始 β 阻斷劑', { text: '心率、血壓', interval: '1–2 週' }),
+      start('DP-07', 'RAS 抑制', '開始 ARNI？', 'start-arni', '開始 ARNI', { text: 'K、Cr、血壓', interval: '1–2 週' }),
+      start('DP-09', 'MRA', '開始 MRA？', 'start-mra', '開始 MRA', { text: 'K、Cr、血壓', interval: '1–2 週' }),
       start('DP-10', 'SGLT2i', '開始 SGLT2i？', 'start-sglt2', '開始 SGLT2i'),
       ...hfOutlookPoints(),
     ],

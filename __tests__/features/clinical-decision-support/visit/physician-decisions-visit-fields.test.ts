@@ -60,6 +60,11 @@ describe('physician decisions · visit map fields', () => {
         decision: 'at-max-tolerated', reasons: [], recordedAt: AT.toISOString(), packVersion: '2.3.0',
         dp: 'DP-08', actionId: 'bb-max-tolerated', responseCheck: { text: '心率', withinDays: 'soon' },
       },
+      // The guideline's own words for when (「1–2 週」) travel with the decision.
+      'visit:hf:DP-07': {
+        decision: 'prescribed', reasons: [], recordedAt: AT.toISOString(), packVersion: '2.3.0',
+        dp: 'DP-07', actionId: 'dp07-switch', responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' },
+      },
     })
     store().hydrate('p1')
     await until(() => Boolean(store().hydratedPatientIds.p1), 'p1 to hydrate')
@@ -70,5 +75,6 @@ describe('physician decisions · visit map fields', () => {
       decision: 'at-max-tolerated', reasons: [], recordedAt: AT.toISOString(), packVersion: '2.3.0',
       dp: 'DP-08', actionId: 'bb-max-tolerated', responseCheck: { text: '心率' },
     })
+    expect(getPhysicianDecisions('p1')['visit:hf:DP-07']?.responseCheck).toEqual({ text: 'K、Cr、血壓', interval: '1–2 週' })
   })
 })

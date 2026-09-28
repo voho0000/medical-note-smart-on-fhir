@@ -231,7 +231,7 @@ export function DecisionMapColumns({
   sourceOfPage: DecisionPointView['source']
   /** The every-visit answers in a line, for 01's summary. */
   answersLine?: string
-  /** The plan in a line (「建議 14 天內回診」), for 03's summary. */
+  /** The plan in a line (「6 週內密集回診」, 「複驗 K、Cr、血壓，1–2 週內」), for 03's summary. */
   outlookSummary?: string
   /** Rendered at the foot of 03: the plan, and the prognosis models. */
   outlookSlot?: ReactNode

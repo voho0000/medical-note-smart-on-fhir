@@ -11,7 +11,7 @@
  *   06-20 weight).
  *
  * Words are the pack's, so the assertions quote the pack; the host's own words
- * (「建議 N 天內回診」, 「今天的決定都記下了」 when the pack has none) are chrome.
+ * (「今天的決定都記下了」 when the pack has none) are chrome.
  */
 import { useMemo } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
@@ -294,8 +294,8 @@ describe('real pack · P5 titrating with AF', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     for (const dp of ['DP-07', 'DP-09', 'DP-10']) fireEvent.click(primaryOf(dp))
     const plan = screen.getByTestId('cdss-visit-plan')
-    expect(plan).toHaveTextContent('K、Cr、血壓，14 天內')
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
+    expect(plan).toHaveTextContent('K、Cr、血壓，1–2 週內')
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
   })
@@ -429,7 +429,7 @@ describe('real pack · P7 worsening congestion', () => {
     fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(primaryOf('DP-06'))
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，14 天內')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
   })
 })
 

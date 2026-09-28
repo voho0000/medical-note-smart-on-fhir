@@ -80,7 +80,7 @@ export function VisitDecisionControls({
             <span className="block text-xs text-muted-foreground" data-visit-response-check="">
               {isEnglish ? 'Response check: ' : '回應檢查：'}
               {check.text}
-              {checkIntervalSuffix(check.withinDays, isEnglish)}
+              {checkIntervalSuffix(check, isEnglish)}
             </span>
           ) : null}
           {decision.record.reopenWhen ? (

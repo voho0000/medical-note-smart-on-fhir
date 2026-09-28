@@ -130,12 +130,12 @@ describe('optional additions', () => {
     )
   })
 
-  it('lists plan notes that stand without a decision, and counts them in the return', () => {
-    const model: VisitDecisionModel = { ...p5Model(), flags: ['post-hfh'], planNotes: [{ text: 'HF 住院後 6 週內密集回診', withinDays: 7 }] }
+  it('lists plan notes that stand without a decision, and adds no return date of its own', () => {
+    const model: VisitDecisionModel = { ...p5Model(), flags: ['post-hfh'], planNotes: [{ text: 'HF 住院後 6 週內密集回診' }] }
     render(<Harness model={model} />)
     expect(screen.getByTestId('cdss-visit-status')).toHaveAttribute('data-flags', 'post-hfh')
-    expect(screen.getByTestId('cdss-visit-plan-notes')).toHaveTextContent('HF 住院後 6 週內密集回診，7 天內')
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
+    expect(screen.getByTestId('cdss-visit-plan-notes')).toHaveTextContent('HF 住院後 6 週內密集回診')
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 
   it('shows the pack’s decided headline once the queue is done', () => {

@@ -1,32 +1,21 @@
 "use client"
 
 import type { VisitPlanModel } from './visit-decisions'
-import { checkIntervalSuffix, returnVisitLabel, withinDaysLabel } from './visit-decisions'
+import { checkIntervalSuffix } from './visit-decisions'
 
 /**
- * 計畫: every decision recorded today that asked for a response check, the
- * earliest first, and the return interval that earliest check implies. The
- * checks are the pack's words; the host lists and counts them.
+ * 計畫: every decision recorded today that asked for a response check, with
+ * when in the guideline's own words, and the pack's own plan lines. No return
+ * date is derived from a recheck (「只說複驗，沒有說要回診」). The checks are
+ * the pack's words; the host lists and counts them.
  */
 export function VisitPlan({ plan, isEnglish }: { plan: VisitPlanModel; isEnglish: boolean }) {
   return (
     <div className="space-y-1.5 border-t border-border pt-2" data-testid="cdss-visit-plan">
       <h5 className="text-xs font-semibold text-foreground">{isEnglish ? 'Plan' : '計畫'}</h5>
-      {plan.withinDays !== undefined ? (
-        <p className="text-sm font-semibold text-foreground" data-testid="cdss-visit-plan-return">
-          {returnVisitLabel(plan.withinDays, isEnglish)}
-        </p>
-      ) : null}
       {plan.notes.length ? (
-        <ul className="space-y-0.5 text-xs leading-relaxed text-foreground" data-testid="cdss-visit-plan-notes">
-          {plan.notes.map((note) => (
-            <li key={note.text}>
-              {note.text}
-              {typeof note.withinDays === 'number' ? (
-                <span className="text-muted-foreground">{isEnglish ? ', ' : '，'}{withinDaysLabel(note.withinDays, isEnglish)}</span>
-              ) : null}
-            </li>
-          ))}
+        <ul className="space-y-0.5 text-sm font-semibold leading-relaxed text-foreground" data-testid="cdss-visit-plan-notes">
+          {plan.notes.map((note) => <li key={note.text}>{note.text}</li>)}
         </ul>
       ) : null}
       {plan.items.length === 0 ? (
@@ -45,7 +34,7 @@ export function VisitPlan({ plan, isEnglish }: { plan: VisitPlanModel; isEnglish
                 <span className="text-muted-foreground">{isEnglish ? ' — ' : '：'}</span>
                 <span className="text-foreground">{item.check.text}</span>
                 <span className="text-muted-foreground">
-                  {checkIntervalSuffix(item.check.withinDays, isEnglish)}
+                  {checkIntervalSuffix(item.check, isEnglish)}
                 </span>
                 {item.reopenWhen ? (
                   <span className="block text-muted-foreground">

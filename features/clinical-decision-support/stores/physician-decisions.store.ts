@@ -62,7 +62,9 @@ export type PhysicianDecisionKind =
  */
 export interface DecisionResponseCheck {
   text: string
-  /** Absent where ESC gives no interval: the pack names what to check, not when. */
+  /** When, in the guideline's own words (「1–2 週」); absent where ESC gives none. */
+  interval?: string
+  /** Kept only for decisions stored before `interval`. */
   withinDays?: number
 }
 
@@ -161,6 +163,7 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
 function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
   const check = record.responseCheck as Record<string, unknown> | undefined
   const withinDays = check && typeof check === 'object' ? check.withinDays : undefined
+  const interval = check && typeof check === 'object' ? check.interval : undefined
   return {
     ...(typeof record.dp === 'string' && record.dp ? { dp: record.dp } : {}),
     ...(typeof record.actionId === 'string' && record.actionId ? { actionId: record.actionId } : {}),
@@ -169,6 +172,7 @@ function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
       ? {
           responseCheck: {
             text: check.text,
+            ...(typeof interval === 'string' && interval ? { interval } : {}),
             ...(typeof withinDays === 'number' && Number.isFinite(withinDays) && withinDays >= 0 ? { withinDays } : {}),
           },
         }

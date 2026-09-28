@@ -251,7 +251,7 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
     expect(row('DP-07').querySelector('[data-visit-primary]')).toBeNull()
     expect(row('DP-07')).toHaveTextContent('換 ARNI')
-    expect(row('DP-07')).toHaveTextContent('回應檢查：K、Cr、血壓，14 天內')
+    expect(row('DP-07')).toHaveTextContent('回應檢查：K、Cr、血壓，1–2 週內')
     expect(within(row('DP-07')).getByRole('button', { name: '改 DP-07 的決定' })).toBeInTheDocument()
     expect(primaryOf(row('DP-09'))).toHaveFocus()
     // The row is the point's only place on the map (no cell repeats it); the
@@ -260,8 +260,9 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(treatmentToggle).toHaveTextContent('待決定 2')
 
     const plan = screen.getByTestId('cdss-visit-plan')
-    expect(within(plan).getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 14 天內回診')
-    expect(plan).toHaveTextContent('換 ARNI：K、Cr、血壓，14 天內')
+    // A recheck, not a return visit (「只說複驗，沒有說要回診」): no return date.
+    expect(within(plan).queryByTestId('cdss-visit-plan-return')).toBeNull()
+    expect(plan).toHaveTextContent('換 ARNI：K、Cr、血壓，1–2 週內')
 
     fireEvent.click(primaryOf(row('DP-09')))
     expect(primaryOf(row('DP-10'))).toHaveFocus()
@@ -302,7 +303,7 @@ describe('visit decision screen · P5 titrating with AF', () => {
       dp: 'DP-07',
       actionId: 'switch-arni',
       actionLabel: '換 ARNI',
-      responseCheck: { text: 'K、Cr、血壓', withinDays: 14 },
+      responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' },
       packVersion: 'test-1',
     })
     // The card reads the decision the row recorded.
@@ -373,8 +374,10 @@ describe('visit decision screen · P6 hyperkalaemia', () => {
       decision: 'held',
       reopenWhen: 'K 回到 <5.0 時重新開始',
     })
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 7 天內回診')
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr，7 天內')
+    // S8: 「monitor blood chemistry closely」 — what, with no interval and no return date.
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr')
+    expect(screen.getByTestId('cdss-visit-plan')).not.toHaveTextContent('天內')
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('重新評估：K 回到 <5.0 時重新開始')
   })
 })
@@ -396,7 +399,7 @@ describe('visit decision screen · P7 worsening congestion', () => {
     expect(cell('DP-04')).toBeVisible()
 
     fireEvent.click(primaryOf(row('DP-06')))
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，7 天內')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
   })
 
   it('stores the clinician answer over the prefill, and withdraws it on a second press', () => {
@@ -429,7 +432,7 @@ describe('visit decision screen · P9 HFpEF with AF', () => {
     expect(cell('DP-06')).toHaveAttribute('data-state', 'confirm')
     fireEvent.click(primaryOf(row('DP-14')))
     expect(getPhysicianDecisions(PATIENT)['visit:af:DP-14']).toMatchObject({ decision: 'dose-adjusted' })
-    expect(screen.getByTestId('cdss-visit-plan-return')).toHaveTextContent('建議 30 天內回診')
+    expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
   })
 })
 
@@ -517,7 +520,7 @@ describe('visit decision screen · stage shapes', () => {
     expect(cell('DP-02')).toHaveTextContent('紀錄缺 ferritin、TSAT、TSH、HbA1c')
     expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('尚未納入')
     fireEvent.click(primaryOf(row('DP-07')))
-    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr、血壓，14 天內')
+    expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr、血壓，1–2 週內')
   })
 })
 
@@ -540,8 +543,8 @@ describe('visit decision screen · reachability and copy', () => {
     const text = writeText.mock.calls[0][0] as string
     expect(text).toContain('HFrEF（LVEF 30%，2026-06-01）· 追蹤期 · 併 AF')
     expect(text).toContain('體重：不變（紀錄：70→70 kg（08-20→09-27））')
-    expect(text).toContain('- DP-07 RAS 抑制：換 ARNI（回應檢查：K、Cr、血壓，14 天內）')
-    expect(text).toContain('建議 14 天內回診')
+    expect(text).toContain('- DP-07 RAS 抑制：換 ARNI（回應檢查：K、Cr、血壓，1–2 週內）')
+    expect(text).not.toContain('天內回診')
     expect(screen.getByTestId('cdss-visit-summary-copy')).toHaveTextContent('已複製')
   })
 

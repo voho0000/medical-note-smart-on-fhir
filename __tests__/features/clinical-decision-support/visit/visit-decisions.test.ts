@@ -1,6 +1,7 @@
 import {
   buildQueueRows,
   buildVisitPlan,
+  checkIntervalSuffix,
   decisionFor,
   decisionInputFor,
   effectiveAnswer,
@@ -12,7 +13,7 @@ import { hfAsks, p3Model, p5Model, p6Model } from './visit-model.fixtures'
 const NOW = new Date('2026-09-27T10:00:00+08:00')
 const TODAY = '2026-09-27T09:30:00+08:00'
 
-function decided(entries: Record<string, { actionId: string; decision?: string; at?: string; responseCheck?: { text: string; withinDays: number }; actionLabel?: string }>): PhysicianDecisionMap {
+function decided(entries: Record<string, { actionId: string; decision?: string; at?: string; responseCheck?: { text: string; interval?: string; withinDays?: number }; actionLabel?: string }>): PhysicianDecisionMap {
   return Object.fromEntries(Object.entries(entries).map(([key, value]) => [key, {
     decision: (value.decision ?? 'prescribed') as PhysicianDecisionMap[string]['decision'],
     reasons: [],
@@ -38,7 +39,7 @@ describe('visit decision placement', () => {
       dp: 'DP-09',
       actionId: 'hold-mra',
       actionLabel: '暫停 MRA',
-      responseCheck: { text: 'K、Cr', withinDays: 7 },
+      responseCheck: { text: 'K、Cr' },
       reopenWhen: 'K 回到 <5.0 時重新開始',
     })
   })
@@ -69,14 +70,20 @@ describe('visit decision placement', () => {
     expect(deferred[0].current).toBeUndefined()
   })
 
-  it('plans the decided checks earliest first, and the return from the earliest', () => {
+  // Clinician decision 2026-09-28: 「只說複驗，沒有說要回診」 — a recheck sets
+  // no return date; its interval is shown in the guideline's words.
+  it('plans the decided checks, timed ones first, and derives no return date', () => {
     const plan = buildVisitPlan(p5Model(), decided({
-      'visit:hf:DP-07': { actionId: 'switch-arni', responseCheck: { text: 'K、Cr、血壓', withinDays: 14 } },
-      'visit:hf:DP-08': { actionId: 'uptitrate-bb', decision: 'dose-adjusted', responseCheck: { text: '心率、血壓', withinDays: 10 } },
+      'visit:hf:DP-07': { actionId: 'switch-arni', responseCheck: { text: 'K、Cr' } },
+      'visit:hf:DP-08': { actionId: 'uptitrate-bb', decision: 'dose-adjusted', responseCheck: { text: '心率、血壓', interval: '1–2 週' } },
       'visit:hf:DP-10': { actionId: 'start-sglt2' },
     }), NOW)
     expect(plan.items.map((item) => item.point.dp)).toEqual(['DP-08', 'DP-07'])
-    expect(plan.withinDays).toBe(10)
+    expect(plan).not.toHaveProperty('withinDays')
+    expect(checkIntervalSuffix(plan.items[0].check, false)).toBe('，1–2 週內')
+    expect(checkIntervalSuffix(plan.items[1].check, false)).toBe('')
+    // A decision stored before the pack wrote its interval in words reads back its days.
+    expect(checkIntervalSuffix({ withinDays: 14 }, false)).toBe('，14 天內')
     expect(buildVisitPlan(p5Model(), {}, NOW)).toEqual({ items: [], notes: [] })
   })
 

@@ -235,21 +235,21 @@ export interface PlanItem {
   key: string
   point: DecisionPointView
   actionLabel: string
-  check: { text: string; withinDays?: number }
+  check: { text: string; interval?: string; withinDays?: number }
   reopenWhen?: string
 }
 
 export interface VisitPlanModel {
   items: PlanItem[]
   /** Plan lines the pack gives without a decision (「6 週內密集回診」). */
-  notes: { text: string; withinDays?: number }[]
-  /** The earliest check, in days — 「建議 N 天內回診」. */
-  withinDays?: number
+  notes: { text: string }[]
 }
 
 /**
- * Every decision recorded today that asked for a response check, earliest
- * check first. The text is the pack's; the host only orders and counts.
+ * Every decision recorded today that asked for a response check, those with
+ * an interval first. The text is the pack's; the host only orders and counts.
+ * A recheck is not a return visit, so no return date is derived from one
+ * (clinician decision 2026-09-28: 「只說複驗，沒有說要回診」).
  */
 export function buildVisitPlan(
   model: VisitDecisionModel,
@@ -271,19 +271,10 @@ export function buildVisitPlan(
       })
     }
   }
-  // A check with no interval (ESC gives none) sorts after those with one and
-  // does not set the return visit.
-  items.sort((a, b) => (a.check.withinDays ?? Infinity) - (b.check.withinDays ?? Infinity))
-  const notes = [...(model.planNotes ?? [])]
-  const days = [
-    ...items.flatMap((item) => (typeof item.check.withinDays === 'number' ? [item.check.withinDays] : [])),
-    ...notes.flatMap((note) => (typeof note.withinDays === 'number' ? [note.withinDays] : [])),
-  ]
-  return {
-    items,
-    notes,
-    ...(days.length ? { withinDays: Math.min(...days) } : {}),
-  }
+  // A check with no interval (ESC gives none) sorts after those with one.
+  const timed = (item: PlanItem) => (item.check.interval || typeof item.check.withinDays === 'number' ? 0 : 1)
+  items.sort((a, b) => timed(a) - timed(b))
+  return { items, notes: (model.planNotes ?? []).map((note) => ({ text: note.text })) }
 }
 
 /** The answer each ask shows, and whether the record, not the clinician, gave it. */
@@ -322,23 +313,22 @@ export function stateLabel(state: DecisionPointState, isEnglish: boolean): strin
   }
 }
 
-export function withinDaysLabel(days: number, isEnglish: boolean): string {
-  return isEnglish ? `within ${days} days` : `${days} 天內`
-}
-
-/** 「，14 天內」 after a check's text, or nothing where the check has no interval. */
-export function checkIntervalSuffix(days: number | undefined, isEnglish: boolean): string {
-  return typeof days === 'number' ? `${isEnglish ? ', ' : '，'}${withinDaysLabel(days, isEnglish)}` : ''
-}
-
-export function returnVisitLabel(days: number, isEnglish: boolean): string {
-  return isEnglish ? `Suggested return within ${days} days` : `建議 ${days} 天內回診`
+/**
+ * 「，1–2 週內」 after a check's text, in the guideline's words, or nothing
+ * where the check has no interval. A decision stored before the pack gave its
+ * interval in words reads back its day count.
+ */
+export function checkIntervalSuffix(check: { interval?: string; withinDays?: number } | undefined, isEnglish: boolean): string {
+  const sep = isEnglish ? ', ' : '，'
+  if (check?.interval) return isEnglish ? `${sep}within ${check.interval}` : `${sep}${check.interval}內`
+  if (typeof check?.withinDays === 'number') return isEnglish ? `${sep}within ${check.withinDays} days` : `${sep}${check.withinDays} 天內`
+  return ''
 }
 
 /**
  * The text 「複製本次摘要」 puts on the clipboard: the pack's status line and
  * values, the answers as the pack worded the options, today's decisions with
- * their checks, and the return interval. Host words are labels only.
+ * their checks, and the pack's plan lines. Host words are labels only.
  */
 export function buildVisitSummaryText(input: {
   model: VisitDecisionModel
@@ -368,14 +358,13 @@ export function buildVisitSummaryText(input: {
     if (!decision) return []
     const check = decision.record.responseCheck
     return [`- ${point.dp} ${point.label}${isEnglish ? ': ' : '：'}${decision.record.actionLabel ?? decision.action.label}${
-      check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}${checkIntervalSuffix(check.withinDays, isEnglish)}）` : ''
+      check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}${checkIntervalSuffix(check, isEnglish)}）` : ''
     }`]
   }))
   lines.push(isEnglish ? "Today's decisions:" : '今天的決定：')
   lines.push(...(decided.length ? decided : [isEnglish ? '- none recorded' : '- 尚未記錄']))
   const plan = buildVisitPlan(model, decisions, now)
   lines.push(...plan.notes.map((note) => note.text))
-  if (plan.withinDays !== undefined) lines.push(returnVisitLabel(plan.withinDays, isEnglish))
   return lines.join('\n')
 }
 
