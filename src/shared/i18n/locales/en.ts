@@ -802,6 +802,7 @@ export const en = {
         excludedTitle: 'Left out this time',
         empty: 'This format is empty.',
         examNames: { echo: 'echo', ecg: 'ECG' },
+        unknownUnit: '(unit not given)',
         notes: {
           labMissing: 'Line {line}: no {lab} on {day}; printed “{missing}” (latest {lastDate}: {lastValue}). Older values are never borrowed.',
           labNoResult: 'Line {line}: no {lab} result in the loaded data.',

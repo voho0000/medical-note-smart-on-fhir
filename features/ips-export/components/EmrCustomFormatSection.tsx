@@ -59,7 +59,8 @@ export function EmrCustomFormatSection({
     labLabel: (id) => findPinnableLab(id)?.short ?? null,
     exams,
     examDecisions: decisions,
-  }), [pivots, exams, decisions])
+    unknownUnitLabel: c.unknownUnit,
+  }), [pivots, exams, decisions, c.unknownUnit])
 
   // Every format is drawn and ready to copy — no picking one first.
   const rendered = useMemo(

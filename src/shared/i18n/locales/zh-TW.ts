@@ -801,6 +801,7 @@ export const zhTW = {
         excludedTitle: '以下幾行這次沒有放入',
         empty: '這個格式目前是空的。',
         examNames: { echo: '心臟超音波', ecg: '心電圖' },
+        unknownUnit: '（單位未提供）',
         notes: {
           labMissing: '第 {line} 行：{lab} 在 {day} 這次沒有結果，顯示「{missing}」（最近一次 {lastDate}：{lastValue}），不拿舊值補。',
           labNoResult: '第 {line} 行：{lab} 在已載入資料中沒有結果。',
