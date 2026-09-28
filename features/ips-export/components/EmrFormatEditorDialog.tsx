@@ -322,8 +322,8 @@ export function EmrFormatEditorDialog({
           <DialogDescription className="text-xs leading-relaxed">{e.intro}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_22rem] lg:overflow-hidden">
-          <div className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_22rem] lg:overflow-hidden">
+          <div className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <label className="flex max-w-xs flex-col gap-1">
               <span className="text-[0.6875rem] font-semibold">{e.nameLabel}</span>
               <input
@@ -552,7 +552,7 @@ export function EmrFormatEditorDialog({
             </section>
           </div>
 
-          <aside className="flex flex-col gap-3 border-t border-border pt-3 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+          <aside className="flex min-w-0 flex-col gap-3 border-t border-border pt-3 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
             <div className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-xs font-semibold">{e.previewTitle}</h3>
