@@ -16,6 +16,7 @@ import {
   buildVisitSummaryText,
   checkIntervalSuffix,
   decisionInputFor,
+  dependentDecisionKeys,
   effectiveAnswer,
   latestDecisionFor,
   pointSteps,
@@ -238,13 +239,23 @@ export function VisitDecisionScreen({
     [decisions, now],
   )
 
+  // A step decided anew, or taken back, leaves the steps that followed from it
+  // without the decision they answered: they go too (#166 review), so the
+  // chain is walked again from here rather than restored as it was.
+  const clearDependents = (key: string) => {
+    for (const dependent of dependentDecisionKeys(key, allRows, decisions)) onClearDecision?.(dependent)
+  }
   const record = (key: string, point: DecisionPointView, action: VisitAction, surface: 'queue' | 'map') => {
     if (!onRecordDecision) return
+    clearDependents(key)
     onRecordDecision(key, decisionInputFor(point, action, packVersion))
     decisionRecorded(screenKey, key, surface)
     if (action.physicianInput) onPhysicianInput?.(action.physicianInput)
   }
-  const clear = (key: string) => onClearDecision?.(key)
+  const clear = (key: string) => {
+    clearDependents(key)
+    onClearDecision?.(key)
+  }
 
   // Cards the pack shows in 03 that are not decision points (CHA₂DS₂-VA,
   // HAS-BLED), each opening the existing detail in place.

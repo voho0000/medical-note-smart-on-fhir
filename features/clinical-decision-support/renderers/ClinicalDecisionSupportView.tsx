@@ -61,6 +61,7 @@ import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { CdssModuleSections } from './CdssModuleSections'
 import { LipidModuleSections } from './LipidModuleSections'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
+import { useTodayNow } from '../hooks/use-local-day.hook'
 import pointRowStyles from './visit/point-rows.module.css'
 import type { Autofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
@@ -2197,9 +2198,11 @@ export function ClinicalDecisionSupportView({
   } as const
 
   const [requestedExpandedId, setRequestedExpandedId] = useState<string | null>(null)
-  // One clock per mount: the board prints how old each safety input is, and a
-  // clock read on every render would make the same value drift across ticks.
-  const [now] = useState(() => new Date())
+  // One clock per day: the board prints how old each safety input is, and a
+  // clock read on every render would make the same value drift across ticks —
+  // but a page left open past midnight reads it again, so yesterday's answers
+  // and decisions stop counting as today's (#166 review).
+  const now = useTodayNow()
   const board = useMemo(
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],

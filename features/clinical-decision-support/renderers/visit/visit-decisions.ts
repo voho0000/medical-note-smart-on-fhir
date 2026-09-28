@@ -93,6 +93,12 @@ export interface PointDecision {
  * actions. A record from another day is last visit's, and a record whose
  * action the pack no longer offers answered a recommendation that has since
  * changed — neither is today's decision on today's question.
+ *
+ * Nor is one whose action kept its id but changed what it says: 「apixaban 5 mg
+ * bid」 recorded, then a weight of 58 kg and a Cr of 1.6 turn the same action
+ * into 「apixaban 2.5 mg bid」. The label is the decision the clinician saw and
+ * took, so a different label asks again (#166 review). A record from before
+ * labels were kept has none, and stands on its id.
  */
 export function decisionFor(
   point: DecisionPointView,
@@ -103,7 +109,34 @@ export function decisionFor(
   const record = decisions?.[key]
   if (!record || !record.actionId || !isSameLocalDay(record.recordedAt, now)) return undefined
   const action = point.actions.find((candidate) => candidate.id === record.actionId)
-  return action ? { key, record, action } : undefined
+  if (!action) return undefined
+  if (record.actionLabel !== undefined && record.actionLabel !== action.label) return undefined
+  return { key, record, action }
+}
+
+/**
+ * The decisions that followed from the one under `key`: the later steps of any
+ * queue row it heads or walks through (「開始抗凝」 → 「apixaban 5 mg bid」), and
+ * the steps a point reveals under `key:next`. Clearing or re-taking a step
+ * leaves them without the decision they answered, so they go with it — else
+ * re-pressing 「開始抗凝」 would bring the old dose back as decided (#166 review).
+ */
+export function dependentDecisionKeys(
+  key: string,
+  rows: readonly QueueRow[],
+  decisions: PhysicianDecisionMap | undefined,
+): string[] {
+  const dependents = new Set<string>()
+  for (const row of rows) {
+    const index = row.steps.findIndex((step) => step.key === key)
+    if (index < 0) continue
+    for (const step of row.steps.slice(index + 1)) dependents.add(step.key)
+  }
+  for (const stored of Object.keys(decisions ?? {})) {
+    if (stored.startsWith(`${key}:`)) dependents.add(stored)
+  }
+  dependents.delete(key)
+  return [...dependents].filter((dependent) => decisions?.[dependent])
 }
 
 /** What recording `action` on `point` writes to the decisions store. */

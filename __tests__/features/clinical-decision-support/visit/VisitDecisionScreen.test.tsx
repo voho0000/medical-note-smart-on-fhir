@@ -465,6 +465,40 @@ describe('visit decision screen · P3 new AF (AF page)', () => {
     expect(getPhysicianDecisions(PATIENT)['visit:af:DP-09']).toMatchObject({ actionId: 'apixaban-5' })
   })
 
+  // #166 review: 「開始抗凝 → apixaban」, then the first step changed and
+  // 開始抗凝 pressed again, brought the old dose back as decided.
+  it('walks the dose step again after its first step is taken back and re-taken', () => {
+    const base = p3Model()
+    const doseStep = base.points.find((point) => point.dp === 'DP-09')!
+    // The dose as the step DP-07 reveals (its `next`), as the HF page's DP-14 carries it.
+    const model = {
+      ...base,
+      points: base.points
+        .filter((point) => point.dp !== 'DP-09')
+        .map((point) => (point.dp === 'DP-07'
+          ? { ...point, next: { afterActionId: 'start-oac', headline: doseStep.headline!, why: doseStep.why, actions: doseStep.actions } }
+          : point)),
+    }
+    render(<Harness model={model} />)
+    openSection('treatment')
+    fireEvent.click(primaryOf(row('DP-07')))
+    fireEvent.click(primaryOf(row('DP-07')))
+    expect(getPhysicianDecisions(PATIENT)['visit:af:DP-07:next']).toMatchObject({ actionId: 'apixaban-5' })
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+
+    // Change the first step in the point's card.
+    fireEvent.click(rowDetail('DP-07'))
+    const detail = screen.getByTestId('cdss-visit-detail')
+    fireEvent.click(within(detail).getAllByRole('button', { name: '改 DP-07 的決定' })[0])
+    expect(getPhysicianDecisions(PATIENT)['visit:af:DP-07']).toBeUndefined()
+    expect(getPhysicianDecisions(PATIENT)['visit:af:DP-07:next']).toBeUndefined()
+
+    // 開始抗凝 again: the dose is asked again, not restored.
+    fireEvent.click(primaryOf(row('DP-07')))
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
+    expect(primaryOf(row('DP-07'))).toHaveTextContent('apixaban 5 mg bid')
+  })
+
   it('does not advance the chain on a deferral', () => {
     render(<Harness model={p3Model()} />)
     openSection('treatment')

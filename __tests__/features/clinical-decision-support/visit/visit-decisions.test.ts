@@ -4,6 +4,7 @@ import {
   checkIntervalSuffix,
   decisionFor,
   decisionInputFor,
+  dependentDecisionKeys,
   effectiveAnswer,
   visitDecisionKey,
 } from '@/features/clinical-decision-support/renderers/visit/visit-decisions'
@@ -51,6 +52,32 @@ describe('visit decision placement', () => {
     expect(decisionFor(point, decided({ 'visit:hf:DP-07': { actionId: 'an-action-the-pack-withdrew' } }), NOW)).toBeUndefined()
     // A module-keyed decision from another layout is not a point decision.
     expect(decisionFor(point, decided({ 'heart-failure-ras': { actionId: 'switch-arni' } }), NOW)).toBeUndefined()
+  })
+
+  // #166 review: the same action id with a new dose is a new decision.
+  it('asks again when the action it answered now says something else', () => {
+    const recorded = decided({ 'visit:af:DP-09': { actionId: 'apixaban-5', actionLabel: 'apixaban 5 mg bid' } })
+    const point = p3Model().points.find((item) => item.dp === 'DP-09')!
+    expect(decisionFor(point, recorded, NOW)?.action.label).toBe('apixaban 5 mg bid')
+    // Weight 58 kg and Cr 1.6: the pack now offers 2.5 mg under the same action id.
+    const reduced = { ...point, actions: point.actions.map((action) => (action.id === 'apixaban-5' ? { ...action, label: 'apixaban 2.5 mg bid' } : action)) }
+    expect(decisionFor(reduced, recorded, NOW)).toBeUndefined()
+    // A record from before labels were kept stands on its id.
+    expect(decisionFor(reduced, decided({ 'visit:af:DP-09': { actionId: 'apixaban-5' } }), NOW)?.action.label).toBe('apixaban 2.5 mg bid')
+  })
+
+  // #166 review: taking back 「開始抗凝」 takes its dose with it.
+  it('names the decisions that followed from a step: later steps of its row and its revealed steps', () => {
+    const model = p3Model()
+    const decisions = decided({
+      'visit:af:DP-07': { actionId: 'start-oac' },
+      'visit:af:DP-09': { actionId: 'apixaban-5' },
+      'visit:af:DP-07:next': { actionId: 'a-revealed-step' },
+    })
+    const rows = buildQueueRows(model, decisions, NOW)
+    expect(dependentDecisionKeys('visit:af:DP-07', rows, decisions).sort()).toEqual(['visit:af:DP-07:next', 'visit:af:DP-09'])
+    // The last step has nothing after it.
+    expect(dependentDecisionKeys('visit:af:DP-09', rows, decisions)).toEqual([])
   })
 
   it('walks a chain in one row only on a decision that carries it on', () => {

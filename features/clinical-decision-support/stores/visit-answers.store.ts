@@ -98,16 +98,24 @@ export function toVisitAnswerRecord(parsed: unknown, now: Date = new Date()): Vi
   }
 }
 
+function answeredOn(entry: VisitAnswerEntry, day: string): boolean {
+  const answeredAt = new Date(entry.answeredAt)
+  return !Number.isNaN(answeredAt.getTime()) && localDay(answeredAt) === day
+}
+
 /**
  * The answers alone, in the shape `applyVisitAnswers` takes, narrowed to the
- * values the pack reads.
+ * values the pack reads — and to those given on `day` (local `YYYY-MM-DD`,
+ * today by default). Hydration drops an old answer read back from storage,
+ * but one still held in memory from yesterday, on a page left open overnight,
+ * is dropped here (#166 review).
  */
-export function visitAnswersOf(record: VisitAnswerRecord | undefined): VisitAnswers {
+export function visitAnswersOf(record: VisitAnswerRecord | undefined, day: string = localDay(new Date())): VisitAnswers {
   if (!record) return EMPTY_ANSWERS
   const answers: Record<string, string> = {}
   for (const id of ASK_IDS) {
     const entry = record[id]
-    if (entry && isAnswerValue(id, entry.value)) answers[id] = entry.value
+    if (entry && isAnswerValue(id, entry.value) && answeredOn(entry, day)) answers[id] = entry.value
   }
   return Object.keys(answers).length ? (answers as VisitAnswers) : EMPTY_ANSWERS
 }
@@ -142,7 +150,21 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
   hydrate: (patientId, now = new Date()) => {
     if (!patientId) return
     const state = get()
-    if (state.hydratedPatientIds[patientId] || hydration.isPending(patientId)) return
+    if (hydration.isPending(patientId)) return
+    if (state.hydratedPatientIds[patientId]) {
+      // Opening a patient again, maybe the next day: answers from an earlier
+      // day are last visit's and go, from memory and from storage (#166 review).
+      const held = state.byPatientId[patientId] ?? EMPTY_RECORD
+      const day = localDay(now)
+      const kept = Object.fromEntries(
+        Object.entries(held).filter(([, entry]) => entry && answeredOn(entry, day)),
+      ) as VisitAnswerRecord
+      if (Object.keys(kept).length === Object.keys(held).length) return
+      const next = Object.keys(kept).length ? kept : EMPTY_RECORD
+      writeStored(patientId, next)
+      set((current) => ({ byPatientId: { ...current.byPatientId, [patientId]: next } }))
+      return
+    }
 
     if (state.byPatientId[patientId] || !hasEncryptedAnswers(visitAnswersStorageKey(patientId))) {
       set((current) => ({

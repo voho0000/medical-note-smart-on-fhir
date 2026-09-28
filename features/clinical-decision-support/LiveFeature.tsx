@@ -70,6 +70,7 @@ import {
 import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
 import { intolerantPillars } from './renderers/visit/visit-decisions'
 import { useAfAnswers, useAfAnswersStore } from './stores/af-answers.store'
+import { useLocalDay } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { applyClinicVitals } from './utils/apply-clinic-vitals'
@@ -334,7 +335,9 @@ export default function LiveClinicalDecisionSupportFeature({
   const layout = useCdssLayoutStore((state) => state.layout)
   const setLayout = useCdssLayoutStore((state) => state.setLayout)
   const visitAnswerRecord = useVisitAnswerRecord(patientId)
-  const visitAnswers = useMemo(() => visitAnswersOf(visitAnswerRecord), [visitAnswerRecord])
+  // Today's answers only, and 「today」 turns at midnight on an open page too.
+  const today = useLocalDay()
+  const visitAnswers = useMemo(() => visitAnswersOf(visitAnswerRecord, today), [today, visitAnswerRecord])
   const hydrateVisitAnswers = useVisitAnswersStore((state) => state.hydrate)
   const answerVisitAsk = useVisitAnswersStore((state) => state.answer)
   const clearVisitAnswers = useVisitAnswersStore((state) => state.clearAnswers)
@@ -381,9 +384,10 @@ export default function LiveClinicalDecisionSupportFeature({
 
   // Today's answers to the every-visit questions, for the same reason again:
   // the pack reads them as facts.
+  // Again when the day turns, so an answer from an earlier day leaves storage too.
   useEffect(() => {
     if (patientId) hydrateVisitAnswers(patientId)
-  }, [hydrateVisitAnswers, patientId])
+  }, [hydrateVisitAnswers, patientId, today])
 
   // The chart half of the profile: expensive, and independent of the switches.
   const recordProfile = useMemo(() => {
