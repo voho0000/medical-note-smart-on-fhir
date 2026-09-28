@@ -12,9 +12,20 @@ const mockCreateOpenAI = jest.fn((_config: unknown) => ({
   chat: mockChat,
   responses: mockResponses,
 }))
+const mockOpenRouterChat = jest.fn((modelId: string) => ({
+  kind: 'openrouter-chat-model',
+  modelId,
+}))
+const mockCreateOpenRouter = jest.fn((_config: unknown) => ({
+  chat: mockOpenRouterChat,
+}))
 
 jest.mock('@ai-sdk/openai', () => ({
   createOpenAI: (config: unknown) => mockCreateOpenAI(config),
+}))
+
+jest.mock('@openrouter/ai-sdk-provider', () => ({
+  createOpenRouter: (config: unknown) => mockCreateOpenRouter(config),
 }))
 
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
@@ -29,6 +40,8 @@ describe('AiProviderFactory routing', () => {
     mockChat.mockClear()
     mockResponses.mockClear()
     mockCreateOpenAI.mockClear()
+    mockOpenRouterChat.mockClear()
+    mockCreateOpenRouter.mockClear()
   })
 
   it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses'))(
@@ -119,6 +132,33 @@ describe('AiProviderFactory routing', () => {
     })
     expect(mockChat).toHaveBeenCalledWith('hospital-model-v2')
     expect(result.model).toEqual({ kind: 'chat-model', modelId: 'hospital-model-v2' })
+  })
+
+  it('uses the native OpenRouter adapter for official endpoints', () => {
+    const factory = new AiProviderFactory()
+    const result = factory.create({
+      modelId: CUSTOM_OPENAI_MODEL_ID,
+      useProxy: false,
+      openAiCompatible: {
+        enabled: true,
+        baseUrl: 'https://openrouter.ai/api/v1',
+        modelId: 'qwen/qwen3.6-35b-a3b',
+        apiKey: 'openrouter-test-key',
+      },
+    })
+
+    expect(mockCreateOpenRouter).toHaveBeenCalledWith(expect.objectContaining({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: 'openrouter-test-key',
+      fetch: expect.any(Function),
+      compatibility: 'strict',
+    }))
+    expect(mockOpenRouterChat).toHaveBeenCalledWith('qwen/qwen3.6-35b-a3b')
+    expect(mockCreateOpenAI).not.toHaveBeenCalled()
+    expect(result.model).toEqual({
+      kind: 'openrouter-chat-model',
+      modelId: 'qwen/qwen3.6-35b-a3b',
+    })
   })
 
   it('fails closed instead of creating any provider when the profile is disabled', () => {

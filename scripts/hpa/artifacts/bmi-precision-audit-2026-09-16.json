@@ -1,0 +1,125 @@
+{
+  "calibrationProfiles": 2714,
+  "syntheticOnly": true,
+  "hypotheses": [
+    {
+      "variant": "continuous",
+      "minimumEtaMargin": -1.3093306461900766e-8,
+      "eligible": 13091,
+      "exact": 13083,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-0",
+      "minimumEtaMargin": -0.05751444167756189,
+      "eligible": 13091,
+      "exact": 10862,
+      "levels": 12630
+    },
+    {
+      "variant": "bmi-1",
+      "minimumEtaMargin": -0.005533318818937236,
+      "eligible": 13091,
+      "exact": 12648,
+      "levels": 12755
+    },
+    {
+      "variant": "bmi-2",
+      "minimumEtaMargin": -0.0003990237313695399,
+      "eligible": 13091,
+      "exact": 12919,
+      "levels": 13026
+    },
+    {
+      "variant": "bmi-3",
+      "minimumEtaMargin": -0.00002328027950726798,
+      "eligible": 13091,
+      "exact": 13000,
+      "levels": 13090
+    },
+    {
+      "variant": "bmi-4",
+      "minimumEtaMargin": 2.9719443103333986e-7,
+      "eligible": 13091,
+      "exact": 13091,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-5",
+      "minimumEtaMargin": -7.86602121383293e-8,
+      "eligible": 13091,
+      "exact": 13078,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-6",
+      "minimumEtaMargin": -1.9164815274045566e-8,
+      "eligible": 13091,
+      "exact": 13083,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-7",
+      "minimumEtaMargin": -1.3159588635982545e-8,
+      "eligible": 13091,
+      "exact": 13084,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-8",
+      "minimumEtaMargin": -1.3055538010501522e-8,
+      "eligible": 13091,
+      "exact": 13083,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-truncate-4",
+      "minimumEtaMargin": -0.000001926030233044409,
+      "eligible": 13091,
+      "exact": 13040,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-float32",
+      "minimumEtaMargin": -1.8759880913281077e-8,
+      "eligible": 13091,
+      "exact": 13080,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-float32-ops",
+      "minimumEtaMargin": -1.7686506016329594e-8,
+      "eligible": 13091,
+      "exact": 13081,
+      "levels": 13091
+    },
+    {
+      "variant": "bmi-float32-cm",
+      "minimumEtaMargin": -3.731460202644259e-8,
+      "eligible": 13091,
+      "exact": 13082,
+      "levels": 13091
+    },
+    {
+      "variant": "input-float32",
+      "minimumEtaMargin": -4.914147551953363e-9,
+      "eligible": 13091,
+      "exact": 13084,
+      "levels": 13091
+    },
+    {
+      "variant": "risk-float32",
+      "minimumEtaMargin": -3.327349078296038e-8,
+      "eligible": 13091,
+      "exact": 13081,
+      "levels": 13091
+    },
+    {
+      "variant": "probability-float32",
+      "minimumEtaMargin": -3.26031423065789e-8,
+      "eligible": 13091,
+      "exact": 13082,
+      "levels": 13091
+    }
+  ]
+}

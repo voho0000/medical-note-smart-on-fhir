@@ -5,6 +5,14 @@
 // a FHIR bundle. The React layer (hooks/useOverviewData.ts) only adapts the
 // existing feature hooks into these shapes.
 
+import {
+  findPinnableLab,
+  isPinnedLabReminder,
+  pinnedLabId,
+  pinnedLabReminderLabel,
+} from '@/src/shared/utils/pinned-labs'
+import type { OverviewLabRow } from '../hooks/useOverviewData'
+
 export const OVERVIEW_RANGE_MONTHS = [1, 3, 6, 12] as const
 export type OverviewRangeMonths = (typeof OVERVIEW_RANGE_MONTHS)[number]
 export const DEFAULT_OVERVIEW_RANGE_MONTHS: OverviewRangeMonths = 3
@@ -205,8 +213,58 @@ export interface OverviewMedFact {
   startDay?: string
   endDay?: string
   isActive: boolean
+  /** Dose and frequency stay separate so display-only SIG suffixes do not
+   *  masquerade as a clinical adjustment. */
+  dose?: string
+  frequency?: string
   /** Normalised "dose · frequency"; absent when the source stated neither. */
   doseSignature?: string
+}
+
+function normalizedDirectionPart(value: string | undefined): string {
+  return value?.normalize('NFKC').trim().toUpperCase().replace(/\s+/g, '') ?? ''
+}
+
+function frequencyOpening(value: string): string {
+  return value.match(
+    /^(?:Q\d+(?:\.\d+)?H|QOD|QHS|QAM|QPM|QID|BID|TID|QD|QN|QW|QM|HS|PRN|STAT)/,
+  )?.[0] ?? ''
+}
+
+/**
+ * Some hospital SIGs append meal timing and route to the same frequency code:
+ * QD → QDACPO, QOD → QODPCPO, HS → HSPCPO. Those strings describe
+ * the same dosing frequency. Compare the recognized opening so QDACPO and
+ * QDPCPO also remain one frequency, while QD/QOD and Q1H/Q12H stay different.
+ */
+function sameFrequencyOpening(previous: string | undefined, latest: string | undefined): boolean {
+  const left = normalizedDirectionPart(previous)
+  const right = normalizedDirectionPart(latest)
+  if (!left || !right) return left === right
+  if (left === right) return true
+  const leftOpening = frequencyOpening(left)
+  const rightOpening = frequencyOpening(right)
+  if (leftOpening && rightOpening) return leftOpening === rightOpening
+
+  // Preserve the intended prefix behavior for an unfamiliar local code, but
+  // never collapse numeric intervals merely because their text shares Q1/Q2.
+  const [shorter, longer] = left.length < right.length ? [left, right] : [right, left]
+  return longer.startsWith(shorter) && /^[A-Z]+$/.test(longer.slice(shorter.length))
+}
+
+function sameMedicationDirection(previous: OverviewMedFact, latest: OverviewMedFact): boolean {
+  if (previous.doseSignature === latest.doseSignature) return true
+
+  // Older callers may only supply the combined signature. Preserve their
+  // exact comparison until dose and frequency are available independently.
+  const hasStructuredDirection = previous.dose !== undefined
+    || latest.dose !== undefined
+    || previous.frequency !== undefined
+    || latest.frequency !== undefined
+  if (!hasStructuredDirection) return false
+
+  return normalizedDirectionPart(previous.dose) === normalizedDirectionPart(latest.dose)
+    && sameFrequencyOpening(previous.frequency, latest.frequency)
 }
 
 /**
@@ -266,7 +324,7 @@ export function classifyMedicationChanges(
     const latest = inWindow[inWindow.length - 1]
     const previous = beforeWindow[beforeWindow.length - 1]
     if (!latest || !previous) return
-    if (latest.doseSignature === previous.doseSignature) return
+    if (sameMedicationDirection(previous, latest)) return
     verdicts.set(key, { kind: 'adjusted', previousDose: previous.doseSignature })
   })
 
@@ -330,4 +388,62 @@ export const OVERVIEW_PINNED_ANALYTES: Readonly<Record<string, readonly string[]
 
 export function isOverviewPinnedAnalyte(categoryId: string, testKey: string): boolean {
   return OVERVIEW_PINNED_ANALYTES[categoryId]?.includes(testKey) ?? false
+}
+
+/** The system 「常用」 list as individual pins — the starting point the editor
+ *  offers before a clinician has saved a list of their own. */
+export function systemDefaultPinnedLabIds(): string[] {
+  const ids: string[] = []
+  for (const [categoryId, keys] of Object.entries(OVERVIEW_PINNED_ANALYTES)) {
+    for (const key of keys) {
+      const id = pinnedLabId(categoryId, key)
+      if (findPinnableLab(id)) ids.push(id)
+    }
+  }
+  return ids
+}
+
+/**
+ * 「自訂」 rows for the overview pivot: the SAME rows 常用／全部 draw, picked
+ * and ordered by the clinician's pins. A pin with nothing in the window keeps
+ * its row with every cell empty, so "not done in this period" is visible
+ * rather than the analyte silently disappearing. It keeps its testKey so
+ * the name can still open the analyte's whole-chart trend.
+ */
+export function selectPinnedOverviewRows(
+  pinnedIds: readonly string[],
+  rows: readonly OverviewLabRow[],
+  columnCount: number,
+): OverviewLabRow[] {
+  const out: OverviewLabRow[] = []
+  const used = new Set<string>()
+  const placeholder = (id: string, name: string, categoryId = '', testKey = ''): OverviewLabRow => ({
+    mapKey: `pinned-empty:${id}`,
+    categoryId,
+    categoryLabel: '',
+    testKey,
+    name,
+    isPinned: true,
+    hasAbnormal: false,
+    cells: Array.from({ length: columnCount }, () => undefined),
+  })
+  for (const id of pinnedIds) {
+    if (isPinnedLabReminder(id)) {
+      out.push(placeholder(id, pinnedLabReminderLabel(id)))
+      continue
+    }
+    const entry = findPinnableLab(id)
+    const matches = entry
+      ? rows.filter((row) => row.categoryId === entry.categoryId && row.testKey === entry.testKey && !used.has(row.mapKey))
+      : []
+    if (matches.length === 0) {
+      out.push(placeholder(id, entry?.short ?? id.slice(id.indexOf(':') + 1), entry?.categoryId, entry?.testKey))
+      continue
+    }
+    for (const row of matches) {
+      used.add(row.mapKey)
+      out.push(row)
+    }
+  }
+  return out
 }

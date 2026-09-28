@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
 
 const npmArgs = process.argv.slice(2)
 
@@ -28,8 +29,12 @@ if (!githubToken) {
   process.exit(1)
 }
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const result = spawnSync(npmCommand, npmArgs, {
+// Windows cannot exec a .cmd file without a shell. Invoke npm's JS entry
+// directly, preserving argument boundaries and keeping credentials in env only.
+const npmCli = process.platform === 'win32'
+  ? process.env.npm_execpath || join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
+  : null
+const result = spawnSync(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...npmArgs] : npmArgs, {
   env: {
     ...process.env,
     NODE_AUTH_TOKEN: githubToken,

@@ -13,6 +13,7 @@ jest.mock("@/src/application/providers/language.provider", () => ({
         summaryGenerationDurationLabel: "耗時",
         summaryGenerationRunningLabel: "產生中",
         summaryGenerationRunningProvenance: "正在使用 {model} 產生摘要，已進行 {elapsed}",
+        summaryGenerationSlowWarning: "已等待至少 4 分鐘。長病歷可能需要較久；若連線中斷，請縮小「資料選擇」範圍後重試。",
         summaryPreGeneratedLabel: "預產生",
         summaryPreGeneratedProvenance: "預產生摘要，由 {model} 建立",
       },
@@ -154,6 +155,37 @@ describe("CustomInsightGenerationMeta", () => {
 
     unmount()
     expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it("warns after four minutes for a local model and clears the warning when generation ends", () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date("2026-08-27T06:32:00.000Z"))
+    const startedAt = Date.now()
+    const { rerender } = render(
+      <CustomInsightGenerationMeta activeGeneration={{
+        id: "run-1", modelName: "Tvghbrain 3.5", startedAt, isLocalModel: true,
+      }} />,
+    )
+
+    act(() => jest.advanceTimersByTime(4 * 60_000 - 1_000))
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+
+    act(() => jest.advanceTimersByTime(1_000))
+    expect(screen.getByRole("status")).toHaveTextContent("已等待至少 4 分鐘")
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite")
+    expect(screen.getByTestId("custom-insight-generation-meta")).toHaveTextContent("04:00")
+
+    rerender(<CustomInsightGenerationMeta />)
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+  })
+
+  it("does not show the local-model warning for another provider", () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date("2026-08-27T06:32:00.000Z"))
+    render(<CustomInsightGenerationMeta activeGeneration={{
+      id: "run-1", modelName: "Cloud model", startedAt: Date.now() - 5 * 60_000,
+    }} />)
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
   })
 
   it("does not invent a timestamp for legacy results that did not save one", () => {

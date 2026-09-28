@@ -1,4 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { stepCountIs, streamText } from 'ai'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import {
@@ -12,6 +13,7 @@ import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   isOpenAiCompatibleReady,
+  isOpenRouterApiEndpoint,
   openAiCompatibleEndpointUrl,
   resolveOpenAiCompatibleBaseUrl,
 } from '@/src/shared/utils/openai-compatible.utils'
@@ -45,6 +47,10 @@ const AGENT_CAPABILITY_PROBE_TIMEOUT_MS = 3 * 60_000
 // allowing the two-step 550B reasoning-model probe substantially more time.
 const NVIDIA_NEMOTRON_AGENT_CAPABILITY_PROBE_TIMEOUT_MS = 7 * 60_000
 const AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS = 1_024
+// OpenRouter reasoning tokens share the completion budget. A larger ceiling
+// prevents reasoning-first models from exhausting the probe before emitting
+// their forced tool call, while low effort keeps the synthetic check bounded.
+const OPENROUTER_AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS = 8_192
 const NVIDIA_NEMOTRON_3_ULTRA_MODEL_ID = 'nvidia/nemotron-3-ultra-550b-a55b'
 const NVIDIA_NEMOTRON_PROBE_REASONING_BUDGET = 1_024
 
@@ -121,7 +127,15 @@ export function createOpenAiCompatibleFetch(
 ): typeof fetch {
   return async (input, init) => {
     const headers = new Headers(init?.headers)
-    if (!apiKey?.trim()) headers.delete('authorization')
+    const normalizedApiKey = apiKey?.trim()
+    if (normalizedApiKey) {
+      // Treat the saved profile as the source of truth. Besides preventing a
+      // stale SDK header, this guarantees browser requests from providers that
+      // supply authentication outside `init.headers` still carry the key.
+      headers.set('Authorization', `Bearer ${normalizedApiKey}`)
+    } else {
+      headers.delete('authorization')
+    }
     return fetchImpl(input, {
       ...init,
       headers,
@@ -246,6 +260,27 @@ export function createConfiguredOpenAiCompatibleFetch(
 }
 export function openAiCompatibleSdkKey(apiKey: string | null | undefined): string {
   return apiKey?.trim() || NO_AUTH_SDK_KEY
+}
+
+/** Create the Chat Completions model used by both the capability probe and the
+ * real Agent. OpenRouter's native adapter preserves signed reasoning details
+ * in post-tool messages; generic endpoints retain the OpenAI-compatible SDK. */
+export function createOpenAiCompatibleChatModel(
+  config: OpenAiCompatibleConfig,
+  options: { fetchImpl?: typeof fetch; origin?: string } = {},
+) {
+  const baseURL = resolveOpenAiCompatibleBaseUrl(config.baseUrl, options.origin)
+  const fetchImpl = options.fetchImpl ?? createConfiguredOpenAiCompatibleFetch(config)
+  const apiKey = openAiCompatibleSdkKey(config.apiKey)
+  if (isOpenRouterApiEndpoint(config.baseUrl, options.origin)) {
+    return createOpenRouter({
+      baseURL,
+      apiKey,
+      fetch: fetchImpl,
+      compatibility: 'strict',
+    }).chat(config.modelId)
+  }
+  return createOpenAI({ baseURL, apiKey, fetch: fetchImpl }).chat(config.modelId)
 }
 
 async function readError(response: Response): Promise<string> {
@@ -555,17 +590,13 @@ export async function testOpenAiCompatibleAgentCapability(
     controller.abort()
   }, timeoutMs)
   const nonce = agentCapabilityProbeNonce()
+  const usesOpenRouter = isOpenRouterApiEndpoint(config.baseUrl, options.origin)
   let toolExecuted = false
   let sawToolCall = false
   let sawToolResult = false
   let finalText = ''
 
   try {
-    const sdk = createOpenAI({
-      baseURL: resolveOpenAiCompatibleBaseUrl(config.baseUrl, options.origin),
-      apiKey: openAiCompatibleSdkKey(config.apiKey),
-      fetch: probeFetch,
-    })
     const productionFhirTools = createFhirTools(() => ({
       patient: null,
       collection: null,
@@ -585,7 +616,10 @@ export async function testOpenAiCompatibleAgentCapability(
       },
     }
     const result = streamText({
-      model: sdk.chat(config.modelId),
+      model: createOpenAiCompatibleChatModel(config, {
+        fetchImpl: probeFetch,
+        origin: options.origin,
+      }),
       system: 'This is a capability test with synthetic data only. Follow the requested tool flow exactly.',
       messages: [
         {
@@ -595,8 +629,16 @@ export async function testOpenAiCompatibleAgentCapability(
       ],
       tools,
       stopWhen: stepCountIs(2),
-      maxOutputTokens: AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS,
-      ...(/^gpt-oss(?::|-)/i.test(config.modelId.trim())
+      maxOutputTokens: usesOpenRouter
+        ? OPENROUTER_AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS
+        : AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS,
+      ...(usesOpenRouter
+        ? {
+          providerOptions: {
+            openrouter: { reasoning: { effort: 'low' as const } },
+          },
+        }
+        : /^gpt-oss(?::|-)/i.test(config.modelId.trim())
         ? { providerOptions: { openai: { reasoningEffort: 'low' as const } } }
         : {}),
       maxRetries: 0,

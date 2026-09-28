@@ -44,7 +44,7 @@ import {
   BUNDLE_CHANGE_SETTLED_EVENT,
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
-import { runGenerationJob } from './run-generation-job'
+import { runGenerationJob, type AiGenerationMeasurement } from './run-generation-job'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
@@ -71,6 +71,8 @@ import { providerClinicalContextSafetyFraction } from './context-window-retry'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
+  /** Optional terminal measurement; does not change result/cache acceptance. */
+  measureResult?: (result: AiGenerationMeasurement) => void
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -509,6 +511,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           // after every fitting tier has been applied. Estimated once per
           // run (inside this callback), never on a render.
           contextTokens: estimateTokens(clinicalContext),
+          contextTrimmed: Boolean(contextAdaptation),
           // How big the underlying chart is, as opposed to how much of it
           // this run selected. Both numbers are needed to tell "the model
           // choked on a huge context" from "the model choked even though we
@@ -524,8 +527,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       shouldCommit: () => (
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
-      produce: () =>
+      produce: (measureResult) =>
         run({
+          measureResult,
           clinicalContext,
           piiLiterals,
           clinicalData: scopedClinicalData,

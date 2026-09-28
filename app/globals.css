@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Clinical text remains selectable even inside interactive controls. */
+body :where(button, [role="button"], [role="menuitem"], [role="option"], .select-none) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

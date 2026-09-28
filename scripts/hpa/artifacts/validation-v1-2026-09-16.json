@@ -1,0 +1,70 @@
+{
+  "candidateSha256": "f71c86faee58e4c808a1fd056eaa203469556894b39fa2554ea5a19784498e39",
+  "datasets": [
+    {
+      "path": "__tests__/features/medical-calculator/fixtures/hpa-official-validation-1-2026-09-16.json",
+      "profiles": 528,
+      "total": {
+        "eligible": 2573,
+        "exact": 2572,
+        "levels": 2573
+      },
+      "byOutcome": {
+        "chd": {
+          "eligible": 528,
+          "exact": 528,
+          "levels": 528
+        },
+        "diabetes": {
+          "eligible": 504,
+          "exact": 504,
+          "levels": 504
+        },
+        "hypertension": {
+          "eligible": 485,
+          "exact": 484,
+          "levels": 485
+        },
+        "stroke": {
+          "eligible": 528,
+          "exact": 528,
+          "levels": 528
+        },
+        "mace": {
+          "eligible": 528,
+          "exact": 528,
+          "levels": 528
+        }
+      },
+      "mismatches": [
+        {
+          "record": 85,
+          "sex": "male",
+          "outcome": "hypertension",
+          "raw": 26.994739223106578,
+          "displayed": 26,
+          "official": 27,
+          "level": 1,
+          "officialLevel": 1,
+          "kind": "fresh-validation-random",
+          "input": {
+            "age": 41,
+            "height": 189,
+            "weight": 56,
+            "waist": 84,
+            "sbp": 138,
+            "glu": 86,
+            "chol": 225,
+            "tg": 373,
+            "ldlc": 68,
+            "hdlc": 44,
+            "gender": 1,
+            "diabetes": 0,
+            "hbp": 0,
+            "smoke": 0
+          }
+        }
+      ]
+    }
+  ]
+}

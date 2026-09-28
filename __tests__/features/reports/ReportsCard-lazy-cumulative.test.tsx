@@ -86,18 +86,20 @@ jest.mock('@/features/clinical-summary/reports/components/CumulativeLabReport', 
     observations,
     activeCategoryId,
     focusAnalyteKey,
+    focusDate,
     focusNonce,
     nameModeControl,
   }: {
     observations: unknown[]
     activeCategoryId?: string
     focusAnalyteKey?: string
+    focusDate?: string
     focusNonce?: number
     nameModeControl?: ReactNode
   }) => (
     <div data-testid="cumulative-report">
       {nameModeControl}
-      observations: {observations.length}; category: {activeCategoryId}; focus: {focusAnalyteKey}; nonce: {focusNonce}
+      observations: {observations.length}; category: {activeCategoryId}; focus: {focusAnalyteKey}; date: {focusDate}; nonce: {focusNonce}
     </div>
   ),
 }))
@@ -293,6 +295,42 @@ describe('ReportsCard lazy cumulative loading', () => {
     })
     expect(screen.getByTestId('cumulative-report')).toHaveTextContent('category: chem')
     expect(screen.getByTestId('cumulative-report')).toHaveTextContent('focus: CRP')
+  })
+
+  it('derives an exact cumulative cell from an Observation-only destination', async () => {
+    const ldlObservation = {
+      id: 'observation-ldl',
+      resourceType: 'Observation',
+      status: 'final',
+      code: { coding: [{ system: 'http://loinc.org', code: '13457-7', display: 'LDL cholesterol' }] },
+      effectiveDateTime: '2026-08-04T08:30:00+08:00',
+      valueQuantity: { value: 53, unit: 'mg/dL' },
+    }
+    useResourceNavigationStore.setState({
+      pending: {
+        resourceType: 'Observation',
+        resourceId: 'observation-ldl',
+        reportView: 'cumulative',
+      },
+      seq: 7,
+      consumedSeq: 0,
+    })
+    mockUseClinicalData.mockReturnValue({
+      diagnosticReports: [],
+      imagingStudies: [],
+      observations: [ldlObservation],
+      procedures: [],
+      resourceReady: ALL_TYPES_READY,
+      error: null,
+    })
+
+    render(<ReportsCard />)
+
+    const cumulative = await screen.findByTestId('cumulative-report')
+    expect(cumulative).toHaveTextContent('category: lipid')
+    expect(cumulative).toHaveTextContent('focus: LDL')
+    expect(cumulative).toHaveTextContent('date: 2026-08-04')
+    await waitFor(() => expect(useResourceNavigationStore.getState().pending).toBeNull())
   })
 
   it('performance contract: selects a raw tab before any projection work is enabled', () => {

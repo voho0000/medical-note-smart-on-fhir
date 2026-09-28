@@ -58,6 +58,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Medication duration | The 2×2 card omits prescribed supply days. | Stacked rows, expanded list, and medication hover details retain supply days. | Explicit chat approval, 2026-09-10 |
 | Report, medication, and visit rows | Stacked layouts also use single-line records; long text may be truncated. | Existing report dialogs, row tooltips, and destination tabs retain details. | Explicit chat approval, 2026-09-10 |
 
+## Medical calculator display rules (all launch routes)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| 國健署五項慢性病風險 at `/`, `/app/`, `/app-hmc/` and their launch-query variants | Autofilled laboratory dates more than 7 days apart produce the existing source-date warning only; they no longer hide eligible risk percentages or grades. Known disease, diagnostic thresholds, missing inputs and validation-range checks remain unchanged. | Explicit owner request to remove the date-based blocker, 2026-09-16 |
+
 ## Medical Summary display rules (all launch routes)
 
 | Surface | Compact presentation | Where the full recovery action remains | Owner decision |
@@ -82,6 +88,12 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | HF clinical values dialog at `/` and launch-query variants | After restoring defaults, show the explanation once in the dialog header rather than repeating it below every field; retain each field's undo control. | Explicit owner request, 2026-09-12 |
 
 | HF views at `/` and launch-query variants | Hide the duplicate read-only `HFpEF 治療` card from both the new visit flow and original board; retain the HFpEF diagnosis panel, question 6, probability calculator, diagnostic evidence and confirmation controls. The source care-pack recommendation remains available internally to select the appropriate treatment pathway. | Explicit owner request, 2026-09-12 |
+
+## Dyslipidemia views (all launch routes)
+
+| Surface | Behaviour | Owner decision |
+|---|---|---|
+| 高血脂畫面切換 at `/` and launch-query variants | Hide「新版流程」for dyslipidemia because it rendered the same generic module list as「原版看板」. Keep「三區塊」and「原版看板」, and add the distinct「健保表一」review for NHI tier criteria, supporting evidence and treatment response. Heart-failure layout choices are unchanged. | Explicit owner request in chat, 2026-09-20 |
 
 ## Adding or changing a gate
 

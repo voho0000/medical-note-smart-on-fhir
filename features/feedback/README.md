@@ -10,12 +10,14 @@ This feature renders the in-app issue-report form. Deployment and email setup li
 features/feedback/
 ├── components/
 │   └── FeedbackDialog.tsx
+├── image-attachments.ts
 ├── index.ts
 └── README.md
 ```
 
 - `features/settings/components/DisplaySettings.tsx` owns the app entry and dialog open state, and renders `FeedbackDialog` directly.
-- `FeedbackDialog` validates input, collects non-patient system metadata, chooses the endpoint, submits JSON, and shows success/error state. Selecting `Feature Request` opens the shared feature-request pool instead of sending a private email.
+- `FeedbackDialog` validates input, previews optional screenshots, collects non-patient system metadata, chooses the endpoint, submits JSON, and keeps an explicit delivered/error state. Feature ideas remain in the separate feature-request pool rather than this issue form.
+- `image-attachments.ts` enforces the browser-side attachment contract, re-encodes pixels to remove embedded metadata, and serializes images without sending their local filenames.
 - `app/api/feedback/route.ts` is the optional same-repo Node endpoint; it is not part of static exports.
 
 ## Endpoint selection
@@ -24,13 +26,15 @@ features/feedback/
 const feedbackUrl = process.env.NEXT_PUBLIC_FEEDBACK_URL || '/api/feedback'
 ```
 
-When `NEXT_PUBLIC_PROXY_KEY` is present the client also sends `X-Client-Key`. This is a public marker, not authentication. Production functions should validate Firebase ID tokens and App Check independently.
+The client sends a Firebase ID token, an App Check token when available, and `x-proxy-key` when configured. The client key is a public marker, not authentication; production Functions validate Firebase Auth and App Check independently.
 
 ## Form contract
 
-Required fields for bug and issue reports: Email, issue type, description. Description must be at least 20 characters in the UI. Severity defaults to `medium`; reproduction steps are optional. Feature ideas use the separate `features/feature-request-pool` contract.
+Required fields for issue reports are Email, issue type, and description. Description must be at least 20 characters. `ai` covers AI response or clinical interpretation problems and changes the description guidance to request the problematic answer, expected content, or supporting reference without adding another form field. Impact defaults to `medium`; reproduction steps are optional and collapsed by default. Selecting a possible patient-safety or privacy incident does not add a warning or confirmation step. Feature ideas use the separate `features/feature-request-pool` contract.
 
-Automatically collected fields are timestamp, user agent, screen resolution, browser language, current path, and FHIR server URL. `patientId` is intentionally excluded. Do not add patient name, id, Bundle fragments, chat content, tokens, or API keys to the payload.
+Users may attach up to three JPG, PNG, or WebP images with a combined decoded size of 8 MB. Images remain in memory for preview, are re-encoded to remove EXIF/embedded metadata, and are serialized only when the report is submitted. Local filenames are not included in the request, and attaching images does not add a confirmation checkbox. The endpoint validates canonical base64, MIME allowlists, decoded size, and image signatures before forwarding attachments to Resend. Images are not written to app storage or a database.
+
+Automatically collected fields are timestamp, user agent, screen and viewport dimensions, pixel ratio, root font size, theme, time zone, browser language, current path/view, app version, launch source/site, and the FHIR server origin. `patientId`, the full FHIR URL, workstation, and query values are intentionally excluded. Do not add patient name, id, Bundle fragments, chat content, tokens, or API keys to the payload.
 
 ## i18n
 
@@ -63,4 +67,4 @@ The normal app entry is DisplaySettings; avoid mounting duplicate dialogs unless
 
 ## Security notes
 
-The built-in route has origin checks, a per-instance rate limit, input allowlists, size caps, HTML escaping and generic errors. It has no durable distributed rate limit or account authentication. For production static hosting, use the Firebase Function from the backend repo and follow the deployment guide.
+The built-in route has origin checks, a per-instance rate limit, input allowlists, size caps, image signature checks, HTML escaping and generic errors. A report is successful only when the endpoint confirms delivery and returns a report ID; retries reuse that ID as Resend's idempotency key. Missing mail configuration returns `503` and preserves the browser draft. The route has no durable distributed rate limit or account authentication. For production static hosting, use the Firebase Function from the backend repo and follow the deployment guide.

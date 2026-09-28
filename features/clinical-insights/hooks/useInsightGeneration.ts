@@ -20,6 +20,7 @@ import type {
   InsightLanguagePolicy,
   InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
+import { LOCAL_INSIGHT_MAX_OUTPUT_TOKENS } from '@/src/shared/constants/clinical-insights.constants'
 
 interface Panel {
   id: string
@@ -164,6 +165,7 @@ export function useInsightGeneration({
               id: activeGenerationId,
               modelName,
               startedAt,
+              isLocalModel: isCustomOpenAiModelId(model),
             },
           },
         }))
@@ -176,15 +178,21 @@ export function useInsightGeneration({
           )
           if (overflow) throw new Error(overflow)
           let modelExecution = createModelExecution(model, model, modelName)
+          let outputTruncated = false
           const fullText = await ai.query(messages, {
             onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
+            onOutputTruncated: (truncated) => { outputTruncated = truncated },
             modelId: model,
-            // Deterministic decoding improves factual repeatability on local
-            // OpenAI-compatible models. A bounded completion also prevents
-            // reasoning models from spending thousands of hidden tokens on a
-            // single concise card. Keep frontier-provider defaults intact.
+            // Apply the documented local-summary output guard. The 262K
+            // context window is input capacity, not a safe output budget;
+            // frontier-provider defaults remain unchanged.
             ...(isCustomOpenAiModelId(model)
-              ? { temperature: 0, maxTokens: 4096, reasoningEffort: 'low' as const }
+              ? {
+                temperature: 0,
+                maxTokens: LOCAL_INSIGHT_MAX_OUTPUT_TOKENS,
+                allowTruncatedOutput: true,
+                reasoningEffort: 'low' as const,
+              }
               : {}),
             operationKey: `clinical-insight:${owner}:${panel.id}`,
             diagnosticFeature: 'clinical-insights',
@@ -199,6 +207,7 @@ export function useInsightGeneration({
               ...generateInsight.buildMetadata(model),
               modelName: modelExecutionLabel(modelExecution),
               modelExecution,
+              ...(outputTruncated ? { outputTruncated: true } : {}),
               generatedAt,
               durationMs: Math.max(0, generatedAt - startedAt),
               outputFormat: panel.outputFormat,
@@ -209,7 +218,9 @@ export function useInsightGeneration({
           if (runIdRef.current !== runId || ownerChanged()) return
           const errorMessage = getUserErrorMessage(error)
           console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
-          errors[panel.id] = new Error(errorMessage)
+          // No text is available for this failure; keep its original type for
+          // the localized error message instead of publishing an empty result.
+          errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
         } finally {
           if (runIdRef.current === runId && !ownerChanged()) {
             setPanelStatus((prev) => {

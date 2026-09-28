@@ -34,6 +34,7 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
+import { LongCustomInsightPromptNotice } from "./LongCustomInsightPromptNotice"
 import type {
   InsightLanguagePolicy,
   InsightOutputFormat,
@@ -59,6 +60,7 @@ interface CustomInsightModuleEditorProps {
   autoModuleCount: number
   maxSummaryModules: number
   maxAutoModules: number
+  isCustomModel?: boolean
   onUpdate: (id: string, updates: Partial<InsightPanel>) => void
   onUpdateAndSave?: (id: string, updates: Partial<InsightPanel>) => Promise<void>
   onRemove: (id: string) => void
@@ -76,6 +78,7 @@ export function CustomInsightModuleEditor({
   autoModuleCount,
   maxSummaryModules,
   maxAutoModules,
+  isCustomModel = false,
   onUpdate,
   onUpdateAndSave,
   onRemove,
@@ -323,6 +326,7 @@ export function CustomInsightModuleEditor({
             className="h-64 min-h-48 max-h-[40vh] field-sizing-fixed resize-y overflow-y-auto text-sm leading-relaxed max-md:h-48 max-md:resize-none"
             placeholder={t.settings.promptPlaceholderInsight}
           />
+          <LongCustomInsightPromptNotice prompt={panel.prompt} isCustomModel={isCustomModel} />
         </div>
       </div>
 
@@ -354,6 +358,11 @@ export function CustomInsightModuleEditor({
             </div>
           </div>
           <div className="min-h-0 flex-1 p-3 sm:p-4">
+            <LongCustomInsightPromptNotice
+              prompt={panel.prompt}
+              isCustomModel={isCustomModel}
+              className="mb-2"
+            />
             <Textarea
               aria-label={`${t.settings.promptEditorTitle}: ${panel.title}`}
               value={panel.prompt}

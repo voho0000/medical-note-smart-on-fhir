@@ -96,6 +96,28 @@ describe('ai-config.store', () => {
   })
 
   describe('runtime-only OpenAI-compatible profile', () => {
+    it('does not republish an identical launch profile', () => {
+      const profile = {
+        profileId: 'vghtpe-tvghbrain',
+        runtimeOnly: true,
+        trustedAgentRuntime: true,
+        enabled: true,
+        baseUrl: 'https://whisper.vghtpe.gov.tw:30001/v1',
+        modelId: 'tvghbrain3.5',
+        apiKey: 'runtime-secret',
+        transport: 'direct' as const,
+      }
+
+      useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(profile)
+      const profiles = useAiConfigStore.getState().openAiCompatibleProfiles
+      const compatibilityView = useAiConfigStore.getState().openAiCompatible
+
+      useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(profile)
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toBe(profiles)
+      expect(useAiConfigStore.getState().openAiCompatible).toBe(compatibilityView)
+    })
+
     it('never persists the launch credential, including after another profile is saved', async () => {
       useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile({
         profileId: 'vghtpe-tvghbrain',

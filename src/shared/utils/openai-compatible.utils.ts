@@ -160,6 +160,23 @@ export function resolveOpenAiCompatibleBaseUrl(
   return resolved
 }
 
+/** Official OpenRouter endpoints need its native AI SDK adapter so reasoning
+ * details survive assistant/tool round-trips. Keep host matching exact (or an
+ * OpenRouter subdomain) so similarly named third-party hosts stay on the
+ * generic OpenAI-compatible path. */
+export function isOpenRouterApiEndpoint(
+  baseUrl: string,
+  origin?: string,
+): boolean {
+  try {
+    const hostname = new URL(resolveOpenAiCompatibleBaseUrl(baseUrl, origin))
+      .hostname.toLowerCase()
+    return hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai')
+  } catch {
+    return false
+  }
+}
+
 export function openAiCompatibleEndpointUrl(
   baseUrl: string,
   endpointPath: string,

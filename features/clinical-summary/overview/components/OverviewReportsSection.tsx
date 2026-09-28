@@ -6,7 +6,7 @@
 // so the title, the type badge and the institution label are identical; only
 // the density differs (one line in the 2×2 layout, two lines when stacked).
 import { useMemo, useState, type Ref } from 'react'
-import { Check, ChevronRight, Copy, ScanLine } from 'lucide-react'
+import { Check, ChevronRight, Copy, ExternalLink, Loader2, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { FormattedReportText } from '@/features/clinical-summary/reports/components/FormattedReportText'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -22,6 +22,14 @@ import { formatDate } from '@/src/shared/utils/date.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportTypeBadge } from '@/features/clinical-summary/reports/components/ReportTypeBadge'
 import { ReportInstitutionLabel } from '@/features/clinical-summary/reports/components/ReportInstitutionLabel'
+import {
+  NhiViewerActions,
+  NhiViewerTooltip,
+  nhiViewerFirstLabel,
+  nhiViewerOpenLabel,
+  nhiViewerPrerequisiteHint,
+  useNhiViewerOpener,
+} from '@/features/clinical-summary/reports/components/NhiViewerActions'
 import type { ReportGroup } from '@/features/clinical-summary/reports/types'
 import type { OverviewReportItem, OverviewReportsData } from '../hooks/useOverviewData'
 import type { OverviewSectionFit } from '../overview.types'
@@ -47,6 +55,61 @@ function reportTabForGroup(group: ReportGroup | undefined): string | undefined {
 
 function matchedGroupOf(items: { group: ReportGroup }[]): string | undefined {
   return reportTabForGroup(items[0]?.group)
+}
+
+/**
+ * The type badge IS the 健保影像 entry when the study carries one.
+ *
+ * A badge plus its own viewer button gave a row two targets for what the
+ * reader thinks of as one thing, and the row itself is a third. The badge
+ * already says 「影像」, so hanging 「開啟影像」 on it costs no extra width and
+ * leaves exactly one thing to aim at. Picking BETWEEN several studies stays in
+ * the opened report, where there is room to label them; out here the first one
+ * opens, which is what the reader wants in the common single-study case.
+ */
+function OverviewReportBadge({ item }: { item: OverviewReportItem }) {
+  const { locale } = useLanguage()
+  const { opening, open } = useNhiViewerOpener()
+  const actions = item.viewerActions ?? []
+
+  if (actions.length === 0) return <ReportTypeBadge group={item.group} className="h-5" />
+
+  const label = nhiViewerFirstLabel(locale, actions.length)
+  // The prerequisite rides the tooltip, not the accessible name: a screen
+  // reader would otherwise read the whole caveat on every imaging row.
+  const hint = actions.some((action) => action.kind === 'live')
+    ? nhiViewerPrerequisiteHint(locale)
+    : null
+  return (
+    <NhiViewerTooltip label={nhiViewerOpenLabel(locale)} hint={hint}>
+      <button
+        type="button"
+        disabled={opening}
+        aria-label={label}
+        // The row opens the narrative; this opens the images. Both are legitimate
+        // reads of a tap on the badge, so the badge has to claim the event.
+        onClick={(event) => {
+          event.stopPropagation()
+          void open(actions[0])
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        // The badge is small and the row is a fixed 26px, so the touch target is
+        // grown with padding that negative margin pays back: the hit box gets
+        // taller and wider, the laid-out box does not move.
+        className="-mx-1 -my-1.5 shrink-0 rounded-md px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-wait"
+      >
+        <ReportTypeBadge
+          group={item.group}
+          className="h-5 cursor-pointer gap-0.5 pr-1 transition-colors hover:brightness-95"
+          // Same glyph and size the 報告 tab's viewer buttons use, so the two
+          // surfaces teach the reader one symbol rather than two.
+          trailing={opening
+            ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            : <ExternalLink className="h-3 w-3" aria-hidden="true" />}
+        />
+      </button>
+    </NhiViewerTooltip>
+  )
 }
 
 export function OverviewReportsSection({
@@ -146,7 +209,7 @@ export function OverviewReportsSection({
               <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-foreground">
                 {item.day ? formatDate(item.day, locale) : '—'}
               </span>
-              <ReportTypeBadge group={item.group} className="h-5" />
+              <OverviewReportBadge item={item} />
               <span
                 className={cn(
                   // The exam name outranks the institution and the
@@ -195,6 +258,8 @@ export function OverviewReportsSection({
                   {strings.reports.imageOnly}
                 </span>
               )}
+              {/* No 健保影像 button out here — the badge above is the row's
+                  single viewer target. */}
               {hasText && (
                 <ChevronRight
                   aria-hidden="true"
@@ -291,6 +356,10 @@ export function OverviewReportsSection({
                       className="max-w-full text-xs"
                     />
                   )}
+                  {/* The reader opened this to decide something; sending them
+                      back to the list to find the images again would undo
+                      exactly what the dialog is for. */}
+                  <NhiViewerActions actions={opened?.viewerActions} />
                 </div>
               </DialogHeader>
               {/* The narrative is the reason the dialog exists: it scrolls

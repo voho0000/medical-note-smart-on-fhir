@@ -30,6 +30,13 @@ const profile = {
   apiKey: 'hospital-secret',
 }
 
+const openRouterProfile = {
+  enabled: true,
+  baseUrl: 'https://openrouter.ai/api/v1',
+  modelId: 'qwen/qwen3.6-35b-a3b',
+  apiKey: 'openrouter-secret',
+}
+
 const jsonResponse = (body: unknown, status = 200): Response => ({
   ok: status >= 200 && status < 300,
   status,
@@ -97,6 +104,50 @@ const firstToolCallStream = () => sseResponse([
   {
     id: 'chatcmpl-probe-1',
     model: 'hospital-model',
+    choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+  },
+])
+
+const firstOpenRouterToolCallStream = () => sseResponse([
+  {
+    id: 'chatcmpl-openrouter-probe-1',
+    model: 'qwen/qwen3.6-35b-a3b',
+    choices: [{
+      index: 0,
+      delta: {
+        role: 'assistant',
+        reasoning_details: [{
+          type: 'reasoning.text',
+          text: 'I should call the requested synthetic tool.',
+          signature: 'signed-reasoning-detail',
+          format: 'unknown',
+        }],
+      },
+      finish_reason: null,
+    }],
+  },
+  {
+    id: 'chatcmpl-openrouter-probe-1',
+    model: 'qwen/qwen3.6-35b-a3b',
+    choices: [{
+      index: 0,
+      delta: {
+        tool_calls: [{
+          index: 0,
+          id: 'call-openrouter-probe-1',
+          type: 'function',
+          function: {
+            name: 'getDataOverview',
+            arguments: '{}',
+          },
+        }],
+      },
+      finish_reason: null,
+    }],
+  },
+  {
+    id: 'chatcmpl-openrouter-probe-1',
+    model: 'qwen/qwen3.6-35b-a3b',
     choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
   },
 ])
@@ -341,6 +392,21 @@ describe('OpenAI-compatible browser client', () => {
     }
   })
 
+  it('attaches the configured API key when an SDK omits its Authorization header', async () => {
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+
+    await createOpenAiCompatibleFetch('  configured-provider-key  ', fetchMock)(
+      'https://openrouter.ai/api/v1/chat/completions',
+      { method: 'POST' },
+    )
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer configured-provider-key')
+  })
+
   it('routes an explicit Gateway profile through Firebase without confusing the two keys', async () => {
     const fetchImpl = jest.fn(async (
       _input: Parameters<typeof fetch>[0],
@@ -554,6 +620,53 @@ describe('OpenAI-compatible browser client', () => {
       expect.objectContaining({
         role: 'tool',
         tool_call_id: 'call-probe-1',
+      }),
+    ])
+  })
+
+  it('preserves OpenRouter reasoning details across the Agent tool round-trip', async () => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const body = JSON.parse(String(init?.body)) as {
+        messages?: Array<{ role?: string; content?: string }>
+      }
+      const toolMessage = body.messages?.find((message) => message.role === 'tool')
+      if (!toolMessage) return firstOpenRouterToolCallStream()
+      const nonce = JSON.parse(String(toolMessage.content)).data.nonce as string
+      return finalTextStream(nonce)
+    }) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleAgentCapability(openRouterProfile, { fetchImpl }))
+      .resolves.toEqual({ status: 'verified' })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const firstRequest = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))
+    const secondRequest = JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))
+    expect(firstRequest).toMatchObject({
+      model: 'qwen/qwen3.6-35b-a3b',
+      max_tokens: 8192,
+      reasoning: { effort: 'low' },
+    })
+    expect(secondRequest).toMatchObject({
+      max_tokens: 8192,
+      reasoning: { effort: 'low' },
+      tool_choice: 'none',
+    })
+    const assistantMessage = secondRequest.messages.find(
+      (message: { role?: string }) => message.role === 'assistant',
+    )
+    expect(assistantMessage.reasoning_details).toEqual([
+      expect.objectContaining({
+        type: 'reasoning.text',
+        signature: 'signed-reasoning-detail',
+      }),
+    ])
+    expect(assistantMessage.tool_calls).toEqual([
+      expect.objectContaining({
+        id: 'call-openrouter-probe-1',
+        function: expect.objectContaining({ name: 'getDataOverview' }),
       }),
     ])
   })

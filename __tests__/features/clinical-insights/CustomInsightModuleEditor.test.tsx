@@ -18,14 +18,14 @@ jest.mock('@/features/prompt-gallery/components/LoginRequiredDialog', () => ({
 describe('CustomInsightModuleEditor long prompt ergonomics', () => {
   const longPrompt = Array.from({ length: 300 }, (_, index) => `Line ${index + 1}`).join('\n')
 
-  const renderEditor = () => {
+  const renderEditor = (prompt = longPrompt, isCustomModel = false) => {
     const onUpdate = jest.fn()
     render(
       <CustomInsightModuleEditor
         panel={{
           id: 'hmc',
           title: 'HMC 門診病歷',
-          prompt: longPrompt,
+          prompt,
           showInSummary: true,
           autoGenerate: false,
           outputFormat: 'plain-text',
@@ -39,6 +39,7 @@ describe('CustomInsightModuleEditor long prompt ergonomics', () => {
         autoModuleCount={0}
         maxSummaryModules={5}
         maxAutoModules={2}
+        isCustomModel={isCustomModel}
         onUpdate={onUpdate}
         onRemove={jest.fn()}
         onMove={jest.fn()}
@@ -71,5 +72,25 @@ describe('CustomInsightModuleEditor long prompt ergonomics', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回模板' }))
     expect(screen.queryByRole('dialog', { name: '編輯 Prompt: HMC 門診病歷' }))
       .not.toBeInTheDocument()
+  })
+
+  it('warns at the review threshold for a custom model in both editors', () => {
+    renderEditor('x'.repeat(2000), true)
+
+    expect(screen.getByRole('status')).toHaveTextContent('2000 字元')
+    expect(screen.getByRole('status')).toHaveTextContent('字數沒有可靠的安全界線')
+
+    fireEvent.click(screen.getByRole('button', { name: '展開編輯' }))
+    expect(screen.getByRole('dialog')).toContainElement(screen.getByRole('status'))
+  })
+
+  it('does not warn below the review threshold', () => {
+    renderEditor('x'.repeat(1999), true)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('does not apply the Tvghbrain review cue to built-in models', () => {
+    renderEditor('x'.repeat(2000))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

@@ -53,7 +53,6 @@ yarn-error.log*
 next-env.d.ts
 *.pdf
 !public/clinical-guidelines/taiwan-nhi/*.pdf
-!public/clinical-guidelines/taiwan-t2dm-2022/*.pdf
 
 # IDE and editor files
 .claude
@@ -68,3 +67,7 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Internal hospital-model experiment write-ups (kept local, not published)
+docs/experiments/
+docs/TVGHBRAIN-*.md

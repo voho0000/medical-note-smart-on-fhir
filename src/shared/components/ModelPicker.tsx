@@ -56,6 +56,8 @@ interface ModelPickerProps {
   compact?: boolean
   /** Optional host-specific trigger sizing without changing other AI features. */
   triggerClassName?: string
+  /** Lock the choice while this feature's current request is running. */
+  disabled?: boolean
   /** Optional external control for recovery flows that reveal this picker. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -72,6 +74,7 @@ export function ModelPicker({
   align = "end",
   compact = false,
   triggerClassName,
+  disabled = false,
   open,
   onOpenChange,
   triggerRef,
@@ -129,10 +132,11 @@ export function ModelPicker({
         <button
           ref={triggerRef}
           type="button"
+          disabled={disabled}
           data-testid="model-picker-trigger"
           title={tooltip}
           className={cn(
-            "flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted",
+            "flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50",
             compact && "max-w-[14rem]",
             triggerClassName,
           )}

@@ -9,8 +9,8 @@ import type { ChatDataScope } from '@/src/core/entities/chat-message.entity'
 const TOOL_GROUPS = {
   patient: ['queryPatientInfo'],
   overview: ['getDataOverview'],
-  encounters: ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'listEncounterDepartments'],
-  conditions: ['queryConditions'],
+  encounters: ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'listEncounterDepartments', 'searchEncountersByDiagnosis'],
+  conditions: ['queryConditions', 'searchEncountersByDiagnosis'],
   labs: [
     'queryDiagnosticReports',
     'queryLabResultsByCategory',

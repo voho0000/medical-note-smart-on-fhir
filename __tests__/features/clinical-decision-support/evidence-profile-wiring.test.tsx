@@ -30,6 +30,22 @@ jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))
 
+// This unit renders the feature below its production provider boundary. The
+// AI hook is covered separately; keep this suite focused on profile wiring.
+jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
+  useNhiLipidAiAssist: () => ({
+    suggestions: {},
+    decisions: {},
+    isRunning: false,
+    isDataReady: false,
+    error: null,
+    modelId: 'test',
+    modelName: 'Test',
+    run: jest.fn(async () => undefined),
+    decide: jest.fn(),
+  }),
+}))
+
 // The real adapter still runs; the spy only records what it was handed.
 jest.mock('@voho0000/personalized-care-fhir', () => {
   const actual = jest.requireActual('@voho0000/personalized-care-fhir')

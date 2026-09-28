@@ -215,6 +215,7 @@ export function useReportInterpretation(
           surface: 'report_interp',
           modelId: effectiveModelId,
           contextTokens: estimateTokens(prepared.text),
+          contextTrimmed: prepared.truncated,
           counts: patientCounts,
           // This surface never receives a chart — the fed set is exactly the
           // one report the user pressed the button on.

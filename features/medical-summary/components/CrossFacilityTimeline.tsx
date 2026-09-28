@@ -100,6 +100,13 @@ export function CrossFacilityTimeline({
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2.5">
       <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{title}</h3>
+      {visible.some(event => event.resourceType === 'Composition' || event.resourceType === 'DocumentReference') ? (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {locale === 'zh-TW'
+            ? '文件列依來源日期排序，不一定是事件發生日期；請開啟原文核對事件時間。'
+            : 'Document rows use the source date, which may differ from the event date. Check event timing in the original document.'}
+        </p>
+      ) : null}
       {/* Events cap then scroll (title stays fixed); the timeline
           dots sit at x≥0 so the scroll box never clips them. @container: when
           the card spans the full panel width (timeline sits BELOW the 2-col
@@ -118,10 +125,17 @@ export function CrossFacilityTimeline({
             const organizationLabel = event.organization
               ? formatOrganizationDisplay(event.organization, locale)
               : ""
+            const evidence = event.documentEvidence?.find(item => item.source === event.key)
+            const isDocument = event.resourceType === 'Composition' || event.resourceType === 'DocumentReference'
+            const documentNeedsReview = isDocument &&
+              evidence?.verification !== 'exact' && evidence?.verification !== 'whitespace-restored'
             const inner = (
               <div className="@min-[30rem]:flex @min-[30rem]:items-baseline @min-[30rem]:gap-2">
                 <div className="flex flex-wrap items-center gap-1.5 @min-[30rem]:w-[16rem] @min-[30rem]:shrink-0">
-                  <span className="text-[0.6875rem] font-bold tabular-nums text-foreground/80">{displayedDate}</span>
+                  <span className="text-xs font-bold tabular-nums text-foreground/80">
+                    {isDocument ? <span className="font-normal">{locale === 'zh-TW' ? '文件來源日期：' : 'Document source date: '}</span> : null}
+                    {displayedDate}
+                  </span>
                   <span className={cn("rounded px-1.5 py-px text-[0.65rem] font-semibold", style.pill)}>
                     {pillLabel}
                   </span>
@@ -136,6 +150,11 @@ export function CrossFacilityTimeline({
                 </div>
                 <p className="mt-0.5 min-w-0 text-[0.8125rem] leading-snug text-foreground @min-[30rem]:mt-0 @min-[30rem]:flex-1">
                   {event.label}
+                  {documentNeedsReview ? (
+                    <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
+                      {locale === 'zh-TW' ? '原文引句待核對，請點開來源確認。' : 'Excerpt needs review. Open the source to check.'}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             )

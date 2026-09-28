@@ -107,7 +107,10 @@ export const DocumentEvidenceSchema = z.object({
   source: z.string().min(1),
   quote: clampedText(240),
 })
-export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema>
+export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema> & {
+  /** App-authored excerpt check. Never establishes clinical entailment. */
+  verification?: import('@/src/core/utils/document-evidence.utils').DocumentQuoteVerification
+}
 const optionalDocumentEvidence = () =>
   z.array(DocumentEvidenceSchema).max(4).optional()
 
@@ -162,8 +165,11 @@ export const SummaryInvestigationSchema = z.object({
   direction: z.string().optional(),
   /** Data-first display, e.g. "HbA1c 7.2% → 8.4%" or an imaging finding. */
   trend: clampedText(240),
-  /** One short, patient-specific interpretation of why the result matters. */
-  interpretation: clampedText(400),
+  /** One short, patient-specific interpretation of why the result matters.
+   * Local models sometimes emit null when no assessment is supported; keep the
+   * dated values instead of failing the whole card (finalizer fills a neutral
+   * sentence for an empty interpretation). */
+  interpretation: z.string().nullish().transform((s) => (s ?? '').slice(0, 400)),
   sources: clampedRequiredKeys(8),
   documentEvidence: optionalDocumentEvidence(),
 })
@@ -340,6 +346,9 @@ export interface ResolvedSourceRef {
    *  document. Never populated on the global source index; cards attach it
    *  while resolving the sources for one claim. */
   evidenceQuote?: string
+  /** A resolved document may exist while its claim-specific quote is missing
+   * or mismatched. Keep the original source navigable. */
+  evidenceWarning?: 'missing' | 'mismatch' | 'unchecked'
 }
 
 export interface SummaryTimelineEvent {

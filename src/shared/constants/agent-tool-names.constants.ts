@@ -12,6 +12,7 @@ export const AGENT_TOOL_NAMES = [
   'getRecentVisits',
   'getEncounterDetails',
   'listEncounterDepartments',
+  'searchEncountersByDiagnosis',
   // Diagnoses
   'queryConditions',
   // Reports

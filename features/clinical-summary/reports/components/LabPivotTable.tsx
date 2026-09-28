@@ -14,6 +14,7 @@ import { ReportSourceProgramBadge } from "./ReportSourceProgramBadge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
+import { cellDisplayValue } from "@/src/shared/utils/lab-pivot.utils"
 import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
@@ -79,6 +80,7 @@ export const LabPivotTable = memo(function LabPivotTable({
   fullHeight = false,
   stacked = false,
   focusAnalyteKey,
+  focusDate,
   focusNonce,
   nameMode,
   activeTrendSourceId,
@@ -93,6 +95,7 @@ export const LabPivotTable = memo(function LabPivotTable({
    *  row count and a virtualized block would fight the page scroll. */
   stacked?: boolean
   focusAnalyteKey?: string
+  focusDate?: string
   focusNonce?: number
   nameMode: AnalyteNameMode
   activeTrendSourceId?: string
@@ -123,11 +126,19 @@ export const LabPivotTable = memo(function LabPivotTable({
     ).find((element) => element.dataset.labTestKey === focusAnalyteKey)
     if (!header) return
 
+    const focusedCell = focusDate
+      ? Array.from(container.querySelectorAll<HTMLElement>('[data-lab-cell]')).find(
+          (element) => element.dataset.labTestKey === focusAnalyteKey
+            && element.dataset.labDate === focusDate,
+        )
+      : undefined
+    focusedCell?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+
     const centeredLeft = header.offsetLeft
       - (container.clientWidth / 2)
       + (header.offsetWidth / 2)
     container.scrollTo({ left: Math.max(0, centeredLeft), behavior: 'smooth' })
-  }, [focusAnalyteKey, focusNonce, pivot.category.id, pivot.rows, scrollEl])
+  }, [focusAnalyteKey, focusDate, focusNonce, pivot.category.id, pivot.rows, scrollEl])
 
   // Transposed layout (matches VGH 累積報告): dates = rows, tests = columns.
   // Group columns by subgroup; render a top-row of subgroup headers spanning
@@ -222,6 +233,7 @@ export const LabPivotTable = memo(function LabPivotTable({
     <tr
       key={date}
       data-index={dateIdx}
+      data-lab-date-row={date}
       ref={measureRef}
       className={dateIdx % 2 === 0 ? 'bg-card' : 'bg-muted/20'}
     >
@@ -265,13 +277,18 @@ export const LabPivotTable = memo(function LabPivotTable({
           return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
         }
         const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
+        const isFocusedCell = focusDate === date && test.testKey === focusAnalyteKey
         return (
           <td
             key={test.mapKey}
-            className={`border-l px-1 py-1 text-center ${cls}`}
+            data-lab-cell=""
+            data-lab-test-key={test.testKey}
+            data-lab-date={date}
+            data-evidence-focus={isFocusedCell ? 'true' : undefined}
+            className={`border-l px-1 py-1 text-center ${cls} ${isFocusedCell ? 'relative bg-primary/15 ring-2 ring-inset ring-primary' : ''}`}
             title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
           >
-            <span>{cell.value}</span>
+            <span>{cellDisplayValue(cell)}</span>
             {!test.unit && cell.unit && (
               <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
                 {cell.unit}

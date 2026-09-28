@@ -1,0 +1,87 @@
+{
+  "candidateSha256": "990c82b9aeb068a910084f43b25e9936a54db2eb181361c727a88befd08d1806",
+  "datasets": [
+    {
+      "path": "__tests__/features/medical-calculator/fixtures/hpa-official-validation-2-2026-09-16.json",
+      "profiles": 530,
+      "total": {
+        "eligible": 2585,
+        "exact": 2584,
+        "levels": 2585
+      },
+      "byOutcome": {
+        "chd": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "diabetes": {
+          "eligible": 504,
+          "exact": 504,
+          "levels": 504
+        },
+        "hypertension": {
+          "eligible": 491,
+          "exact": 490,
+          "levels": 491
+        },
+        "stroke": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "mace": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        }
+      },
+      "mismatches": [
+        {
+          "record": 294,
+          "sex": "female",
+          "outcome": "hypertension",
+          "raw": 31.994999999152956,
+          "displayed": 31,
+          "official": 32,
+          "level": 0,
+          "officialLevel": 0,
+          "kind": "fresh-validation-htn-boundary",
+          "input": {
+            "age": 48,
+            "height": 171,
+            "weight": 63.14999224,
+            "waist": 70,
+            "sbp": 95,
+            "glu": 112,
+            "chol": 153,
+            "tg": 147,
+            "ldlc": 188,
+            "hdlc": 61,
+            "gender": 0,
+            "diabetes": 0,
+            "hbp": 0,
+            "smoke": 1
+          }
+        }
+      ],
+      "byKind": {
+        "fresh-validation-htn-boundary": {
+          "eligible": 1440,
+          "exact": 1439,
+          "levels": 1440
+        },
+        "fresh-validation-random": {
+          "eligible": 1135,
+          "exact": 1135,
+          "levels": 1135
+        },
+        "repeated-drift-anchor": {
+          "eligible": 10,
+          "exact": 10,
+          "levels": 10
+        }
+      }
+    }
+  ]
+}

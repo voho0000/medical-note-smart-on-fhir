@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -13,7 +14,16 @@ const TONE_BY_GROUP: Record<ReportGroup, string> = {
   other: 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-400/35 dark:bg-slate-400/10 dark:text-slate-200',
 }
 
-export function ReportTypeBadge({ group, className }: { group: ReportGroup; className?: string }) {
+export function ReportTypeBadge({
+  group,
+  className,
+  trailing,
+}: {
+  group: ReportGroup
+  className?: string
+  /** Small glyph after the label, for callers that make the badge actionable. */
+  trailing?: ReactNode
+}) {
   const { t } = useLanguage()
   const labels = t.reports.typeBadges
   const labelByGroup: Record<ReportGroup, string> = {
@@ -37,6 +47,7 @@ export function ReportTypeBadge({ group, className }: { group: ReportGroup; clas
       )}
     >
       {labelByGroup[group]}
+      {trailing}
     </Badge>
   )
 }

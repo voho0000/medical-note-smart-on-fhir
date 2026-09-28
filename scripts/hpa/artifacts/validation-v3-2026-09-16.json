@@ -1,0 +1,87 @@
+{
+  "candidateSha256": "8700cecf2614c51cc598b74992ac54d9707d4fd98520bc7bcc9c3da7b7a30059",
+  "datasets": [
+    {
+      "path": "__tests__/features/medical-calculator/fixtures/hpa-official-validation-3-2026-09-16.json",
+      "profiles": 530,
+      "total": {
+        "eligible": 2571,
+        "exact": 2570,
+        "levels": 2571
+      },
+      "byOutcome": {
+        "chd": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "diabetes": {
+          "eligible": 499,
+          "exact": 499,
+          "levels": 499
+        },
+        "hypertension": {
+          "eligible": 482,
+          "exact": 481,
+          "levels": 482
+        },
+        "stroke": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        },
+        "mace": {
+          "eligible": 530,
+          "exact": 530,
+          "levels": 530
+        }
+      },
+      "mismatches": [
+        {
+          "record": 170,
+          "sex": "female",
+          "outcome": "hypertension",
+          "raw": 22.995096981697966,
+          "displayed": 23,
+          "official": 22,
+          "level": 0,
+          "officialLevel": 0,
+          "kind": "fresh-validation-random",
+          "input": {
+            "age": 47,
+            "height": 172.06,
+            "weight": 49.28,
+            "waist": 80.4,
+            "sbp": 108,
+            "glu": 96.98,
+            "chol": 183.22,
+            "tg": 144.35,
+            "ldlc": 137.12,
+            "hdlc": 59.7,
+            "gender": 0,
+            "diabetes": 0,
+            "hbp": 0,
+            "smoke": 0
+          }
+        }
+      ],
+      "byKind": {
+        "fresh-validation-htn-boundary": {
+          "eligible": 1440,
+          "exact": 1440,
+          "levels": 1440
+        },
+        "fresh-validation-random": {
+          "eligible": 1121,
+          "exact": 1120,
+          "levels": 1121
+        },
+        "repeated-drift-anchor": {
+          "eligible": 10,
+          "exact": 10,
+          "levels": 10
+        }
+      }
+    }
+  ]
+}

@@ -16,6 +16,8 @@ import { HEME } from './heme'
 import { NEURO } from './neuro'
 import { MENTAL } from './mental'
 import { GENERAL } from './general'
+import { HPA_RISK } from './hpa-risk'
+import { HEART_FAILURE_PROGNOSIS } from './heart-failure-prognosis'
 
 export const CALCULATORS: CalculatorDef[] = [
   ...RENAL,
@@ -25,11 +27,13 @@ export const CALCULATORS: CalculatorDef[] = [
   ...CARDIAC,
   PREVENT,
   ...HFPEF,
+  ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,
   ...HEME,
   ...NEURO,
   ...MENTAL,
   ...GENERAL,
+  ...HPA_RISK,
 ]
 
 export { CALC_TAGS, getCalcTags } from './tags'

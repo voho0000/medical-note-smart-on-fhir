@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { beginCollectorObservation, collectorError } from '@/src/application/telemetry/collector'
 import { toast } from "sonner"
 import { useAsr } from "@/src/application/providers/asr.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -182,6 +183,12 @@ export function useVoiceRecording(
         activeTranscriptionRef.current?.requestId === active.requestId
       )
 
+      const collector = beginCollectorObservation({
+        feature: 'transcription', modelId: useCustomEndpoint ? 'custom' : 'whisper-1',
+        provider: useCustomEndpoint ? 'custom' : 'openai', sampleKind: 'request', mode: 'audio',
+      })
+      let collectorHttpStatus: number | undefined
+      let collectorPhase: 'request' | 'parse' = 'request'
       try {
         const targetUrl = useCustomEndpoint
           ? openAiCompatibleEndpointUrl(openAiCompatible.baseUrl, 'audio/transcriptions')
@@ -217,12 +224,14 @@ export function useVoiceRecording(
           signal: abortController.signal,
         })
 
+        collectorHttpStatus = response.status
         if (!isCurrentRequest()) return null
 
         if (!response.ok) {
           throw new Error(`API request failed with status ${response.status}`)
         }
 
+        collectorPhase = 'parse'
         const result = await response.json()
         if (!isCurrentRequest()) return null
         const text =
@@ -231,6 +240,7 @@ export function useVoiceRecording(
           result?.openAiResponse?.text?.trim() ||
           ""
 
+        collector.finish({ outcome: 'ok', phase: 'parse', responseComplete: true, httpStatus: collectorHttpStatus })
         if (!text && isCurrentRequest()) {
           // Whisper returns empty when the clip has no detectable speech (e.g.
           // the user tapped record but didn't say anything). That's expected,
@@ -241,12 +251,15 @@ export function useVoiceRecording(
 
         return isCurrentRequest() ? text : null
       } catch (err) {
+        collector.finish({ outcome: !isCurrentRequest() ? 'aborted' : collectorError(err), phase: collectorPhase,
+          responseComplete: false, httpStatus: collectorHttpStatus })
         if (!isCurrentRequest()) return null
         console.error("ASR transcription error:", err)
         const message = err instanceof Error ? err.message : "Failed to transcribe audio"
         setAsrError(message)
         return null
       } finally {
+        collector.finish({ outcome: 'aborted', phase: collectorPhase, responseComplete: false, httpStatus: collectorHttpStatus })
         if (activeTranscriptionRef.current?.requestId === active.requestId) {
           activeTranscriptionRef.current = null
           if (mountedRef.current) setIsAsrLoading(false)

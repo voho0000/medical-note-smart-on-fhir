@@ -14,7 +14,6 @@
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import dynamic from "next/dynamic"
 import { ChevronDown, Loader2, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -26,35 +25,9 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { useReportNameMode } from "../context/report-name-mode.context"
-import { useOptionalRightDetail } from "@/src/application/providers/right-detail.provider"
-import {
-  buildLabTrendSeries,
-  type LabTrendSeries,
-} from "@/src/shared/utils/lab-trend.utils"
-import {
-  getResolvedCumulativeLabTrendModule,
-  loadCumulativeLabTrendModule,
-  preloadCumulativeLabTrendModule,
-} from "./cumulative-lab-trend-loader"
+import { preloadCumulativeLabTrendModule } from "./cumulative-lab-trend-loader"
+import { useLabTrendOpener } from "../hooks/useLabTrendOpener"
 
-// The trend chart chunk is loaded on demand (see cumulative-lab-trend-loader).
-// next/dynamic options must remain inline literals because Next statically
-// analyses them.
-const CumulativeLabTrendDetail = dynamic(
-  () => loadCumulativeLabTrendModule().then((m) => m.CumulativeLabTrendDetail),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-      </div>
-    ),
-  },
-)
-const CumulativeLabTrendDialog = dynamic(
-  () => loadCumulativeLabTrendModule().then((m) => m.CumulativeLabTrendDialog),
-  { ssr: false },
-)
 import {
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
@@ -62,7 +35,7 @@ import {
 import { AnalyteSearchBox } from "./AnalyteSearchBox"
 import { ReportNameModeSwitch } from "./ReportNameModeSwitch"
 import { MicrobiologyCumulativeView } from "./MicrobiologyCumulativeView"
-import { LabPivotTable, type OpenTrendTarget } from "./LabPivotTable"
+import { LabPivotTable } from "./LabPivotTable"
 import { CumulativeStackedView } from "./CumulativeStackedView"
 import {
   CumulativeLayoutToggle,
@@ -75,12 +48,6 @@ import {
   resolveCumulativeCategoryOrder,
 } from "../utils/cumulative-order.utils"
 import type { TrendWindow } from "../utils/trend-time-scale"
-
-interface OpenTrendRequest {
-  series: LabTrendSeries
-  title: string
-  sourceId: string
-}
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -102,6 +69,8 @@ interface CumulativeLabReportProps {
   onActiveCategoryResolved?: (id: string) => void
   /** Canonical test key to horizontally reveal (e.g. CRP) after navigation. */
   focusAnalyteKey?: string
+  /** Collection date whose analyte cell should be highlighted. */
+  focusDate?: string
   /** Re-triggers focus when the same analyte is requested again. */
   focusNonce?: number
   /** Last range explicitly selected by the user; shared across analytes. */
@@ -117,6 +86,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   onCategoryChange,
   onActiveCategoryResolved,
   focusAnalyteKey,
+  focusDate,
   focusNonce,
   trendWindow,
   onTrendWindowChange,
@@ -124,8 +94,12 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   const nameMode = useReportNameMode()
   const pivots = useLabPivot(observations, nameMode)
   const { t } = useLanguage()
-  const rightDetail = useOptionalRightDetail()
-  const [dialogTrend, setDialogTrend] = useState<OpenTrendRequest | null>(null)
+  const { openTrend, activeTrendSourceId, trendDialog } = useLabTrendOpener({
+    observations,
+    preferDialog: fullHeight,
+    trendWindow,
+    onTrendWindowChange,
+  })
   // Memoized because the `|| {}` fallback would otherwise hand a fresh object
   // to every memo that reads it, once per render.
   const categoryLabels = useMemo(
@@ -187,9 +161,9 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   // has no "active tab" to infer the owning section from.
   // `key` is optional: a citation can point at a whole panel (「見生化」) with
   // no analyte, and 直式 still has to scroll that section into view.
-  const [focusRequest, setFocusRequest] = useState<{ categoryId?: string; key?: string; seq: number } | null>(
+  const [focusRequest, setFocusRequest] = useState<{ categoryId?: string; key?: string; date?: string; seq: number } | null>(
     () => (focusAnalyteKey || activeCategoryId
-      ? { categoryId: activeCategoryId, key: focusAnalyteKey, seq: 0 }
+      ? { categoryId: activeCategoryId, key: focusAnalyteKey, date: focusDate, seq: 0 }
       : null),
   )
   const [seenPropNonce, setSeenPropNonce] = useState(focusNonce)
@@ -204,6 +178,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       setFocusRequest((previous) => ({
         categoryId: activeCategoryId,
         key: focusAnalyteKey,
+        date: focusDate,
         seq: (previous?.seq ?? 0) + 1,
       }))
     }
@@ -263,61 +238,6 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       if (timer !== undefined) window.clearTimeout(timer)
     }
   }, [activeId, isStacked, pendingCategoryId, readyCategoryIds])
-
-  const activeTrendSourceId = dialogTrend?.sourceId
-    ?? (rightDetail?.detail?.sourceId.startsWith('cumulative-trend:')
-      ? rightDetail.detail.sourceId
-      : undefined)
-
-  const openTrend = useCallback((target: OpenTrendTarget) => {
-    const series = buildLabTrendSeries(observations, {
-      categoryId: target.categoryId,
-      mapKey: target.mapKey,
-      testKey: target.testKey,
-      displayName: target.displayName,
-      nameMode: target.nameMode,
-    })
-    // Availability is indexed during the pivot build. Keep this final guard so
-    // a source update between render and click can never open an unsafe chart.
-    if (!series.chartable) return
-    const request: OpenTrendRequest = {
-      series,
-      title: target.title,
-      sourceId: target.sourceId,
-    }
-    // Keep cumulative-report trends on the same shared detail surface as the
-    // other report tabs at every split-workspace width. On phones this gives
-    // the clinician the fixed close/back header and preserves the originating
-    // tab + scroll position. The standalone fullscreen report still uses its
-    // own dialog because it does not have the split workspace beside it.
-    const canUseRightPane = !fullHeight && !!rightDetail
-
-    if (canUseRightPane) {
-      setDialogTrend(null)
-      const TrendDetail = getResolvedCumulativeLabTrendModule()?.CumulativeLabTrendDetail
-        ?? CumulativeLabTrendDetail
-      rightDetail.showDetail({
-        sourceId: request.sourceId,
-        title: (
-          <span className="inline-flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
-            {request.title} · {(t.reports as any).cumulativeTrend?.title ?? '趨勢'}
-          </span>
-        ),
-        node: (
-          <TrendDetail
-            key={request.sourceId}
-            series={request.series}
-            initialWindow={trendWindow}
-            onWindowChange={onTrendWindowChange}
-          />
-        ),
-      })
-      return
-    }
-
-    setDialogTrend(request)
-  }, [fullHeight, observations, onTrendWindowChange, rightDetail, t.reports, trendWindow])
 
   // Measure the real tab bar rather than relying on a screen-size breakpoint:
   // the left report pane can be resized independently from the window. The
@@ -397,6 +317,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
     setFocusRequest((previous) => ({
       categoryId: hit.categoryId,
       key: hit.testKey,
+      date: undefined,
       seq: (previous?.seq ?? 0) + 1,
     }))
   }
@@ -434,9 +355,6 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
       </div>
     )
   }
-
-  const TrendDialog = getResolvedCumulativeLabTrendModule()?.CumulativeLabTrendDialog
-    ?? CumulativeLabTrendDialog
 
   const layoutToggle = (
     <CumulativeLayoutToggle value={layoutMode} onChange={setLayoutMode} />
@@ -513,7 +431,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
             nameMode={nameMode}
             range={range}
             focusRequest={focusRequest?.categoryId
-              ? { categoryId: focusRequest.categoryId, key: focusRequest.key, seq: focusRequest.seq }
+              ? { categoryId: focusRequest.categoryId, key: focusRequest.key, date: focusRequest.date, seq: focusRequest.seq }
               : null}
             activeTrendSourceId={activeTrendSourceId}
             onOpenTrend={openTrend}
@@ -619,6 +537,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
                   pivot={p}
                   fullHeight={fullHeight}
                   focusAnalyteKey={p.category.id === activeId ? focusRequest?.key : undefined}
+                  focusDate={p.category.id === activeId ? focusRequest?.date : undefined}
                   focusNonce={focusRequest?.seq}
                   nameMode={nameMode}
                   activeTrendSourceId={activeTrendSourceId}
@@ -639,19 +558,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
         ))}
       </Tabs>
       )}
-      {dialogTrend && (
-        <TrendDialog
-          key={dialogTrend.sourceId}
-          title={`${dialogTrend.title} · ${(t.reports as any).cumulativeTrend?.title ?? '趨勢'}`}
-          series={dialogTrend.series}
-          initialWindow={trendWindow}
-          onWindowChange={onTrendWindowChange}
-          open
-          onOpenChange={(open) => {
-            if (!open) setDialogTrend(null)
-          }}
-        />
-      )}
+      {trendDialog}
     </div>
   )
 })

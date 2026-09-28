@@ -13,6 +13,8 @@ const FIBROSIS: L = { en: 'Liver fibrosis', zh: '肝纖維化' }
 const HEPATITIS: L = { en: 'Hepatitis', zh: '肝炎' }
 const AFIB: L = { en: 'Atrial fibrillation', zh: '心房顫動' }
 const DOSING: L = { en: 'Drug dosing', zh: '藥物劑量' }
+const HEART_FAILURE: L = { en: 'Heart failure', zh: '心衰竭' }
+const HFPEF_DISEASE: L = { en: 'HFpEF', zh: '射出分率保留型心衰竭' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
   'prevent-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'Dyslipidemia', zh: '血脂異常' }, { en: 'ASCVD prevention', zh: 'ASCVD 預防' }] },
@@ -31,8 +33,10 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
   'cha2ds2-va': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
-  'h2fpef': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
-  'hfa-peff': { purpose: ['diagnosis'], diseases: [{ en: 'HFpEF', zh: '射出分率保留型心衰竭' }] },
+  'h2fpef': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
+  'hfa-peff': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },
+  'maggic-hf': { purpose: ['prognosis', 'risk'], diseases: [HEART_FAILURE] },
+  'life-preserved': { purpose: ['prognosis', 'risk'], diseases: [HFPEF_DISEASE, HEART_FAILURE] },
   'map': { purpose: ['formula'], diseases: [{ en: 'Shock', zh: '休克' }, { en: 'Hypotension', zh: '低血壓' }] },
   'has-bled': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Anticoagulation', zh: '抗凝治療' }] },
   'curb-65': { purpose: ['severity', 'prognosis'], diseases: [{ en: 'Pneumonia', zh: '肺炎' }] },
@@ -65,6 +69,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'egfr-mdrd': { purpose: ['formula'], diseases: [CKD] },
   'ckd-kdigo-risk': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'End-stage renal disease', zh: '末期腎病' }] },
   'who-cvd-2019': { purpose: ['prognosis', 'risk', 'screening'], diseases: [{ en: 'Cardiovascular disease', zh: '心血管疾病' }, { en: 'Primary prevention', zh: '初級預防' }] },
+  'hpa-chronic-risk-reconstruction': { purpose: ['risk', 'screening'], diseases: [{ en: 'Chronic disease', zh: '慢性病' }, { en: 'Taiwan HPA', zh: '國健署' }] },
   'meld-3': { purpose: ['prognosis'], diseases: [CIRRHOSIS, { en: 'End-stage liver disease', zh: '末期肝病' }] },
   'maddrey-df': { purpose: ['prognosis', 'severity'], diseases: [{ en: 'Alcoholic hepatitis', zh: '酒精性肝炎' }] },
   'hcc-risk-reveal': { purpose: ['prognosis', 'risk', 'screening'], diseases: [HEPATITIS, { en: 'Liver cancer / HCC', zh: '肝癌' }] },

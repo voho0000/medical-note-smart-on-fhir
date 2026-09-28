@@ -9,6 +9,7 @@ import {
   type DataConsumer,
 } from '@/src/application/providers/data-selection.provider'
 import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import { scopeClinicalDataForNhiLipidAi } from '@/src/core/utils/nhi-lipid-ai-scope.utils'
 import {
   buildClinicalContextFitCandidate,
   clinicalContextTokenTarget,
@@ -120,6 +121,14 @@ export function useClinicalAiInput(
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const { locale } = useLanguage()
   const clinicalData = useClinicalData() as unknown as ClinicalAiDataInput | null
+  const consumerClinicalData = useMemo(
+    () => (clinicalData && consumer === 'nhiLipid'
+      ? scopeClinicalDataForNhiLipidAi(
+          clinicalData as unknown as Partial<ClinicalDataCollection>,
+        ) as ClinicalAiDataInput
+      : clinicalData),
+    [clinicalData, consumer],
+  )
   const dataSelection = useDataSelection()
   const savedProfile = dataSelection.getProfile(consumer)
   const requestedProfile = useMemo(() => ({
@@ -131,14 +140,19 @@ export function useClinicalAiInput(
   // deferred selection across a patient/data replacement, or expose a stale
   // input as generation-ready while its replacement is being calculated.
   const requestedInput = useMemo(() => ({
-    patientScope, clinicalData, profile: requestedProfile,
+    patientScope, clinicalData: consumerClinicalData, profile: requestedProfile,
     contextLimit: requestedContextLimit, targetFraction: requestedTargetFraction,
-  }), [patientScope, clinicalData, requestedProfile, requestedContextLimit, requestedTargetFraction])
+  }), [patientScope, consumerClinicalData, requestedProfile, requestedContextLimit, requestedTargetFraction])
   const deferredInput = useDeferredValue(requestedInput)
-  const input = deferredInput.patientScope === patientScope && deferredInput.clinicalData === clinicalData
+  const input = deferredInput.patientScope === patientScope && deferredInput.clinicalData === consumerClinicalData
     ? deferredInput : requestedInput
   const inputPending = input !== requestedInput
-  const { profile: activeProfile, contextLimit, targetFraction } = input
+  const {
+    clinicalData: activeClinicalData,
+    profile: activeProfile,
+    contextLimit,
+    targetFraction,
+  } = input
 
   const rawDataReady = !!clinicalData
     && !clinicalData.isLoading
@@ -150,16 +164,16 @@ export function useClinicalAiInput(
   // context. This keeps the cache/scope identity model-independent while the
   // actual outbound request below may use a smaller transient profile.
   const baseDocumentIds = useMemo(() => {
-    if (!rawDataReady || !clinicalData || !activeProfile.selection.documents) return []
+    if (!rawDataReady || !activeClinicalData || !activeProfile.selection.documents) return []
     const documents = listClinicalDocuments(
-      clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0],
+      activeClinicalData as unknown as Parameters<typeof listClinicalDocuments>[0],
     )
     return resolveSelectedDocuments(
       documents,
       activeProfile.documentMode ?? 'latestAdmission',
       activeProfile.documentIds ?? [],
     ).map((document) => document.id)
-  }, [rawDataReady, clinicalData, activeProfile])
+  }, [rawDataReady, activeClinicalData, activeProfile])
 
   // The demo chart is judged against its own as-of date, not the wall clock —
   // otherwise its medications age out of scope and the pre-generated citations
@@ -179,9 +193,9 @@ export function useClinicalAiInput(
   const needsBaseScope = includeSources || fitState.tier === 'prioritized'
 
   const baseScopedClinicalData = useMemo(
-    () => (rawDataReady && clinicalData && needsBaseScope
+    () => (rawDataReady && activeClinicalData && needsBaseScope
       ? scopeClinicalDataForAi(
-          clinicalData as unknown as Partial<ClinicalDataCollection>,
+          activeClinicalData as unknown as Partial<ClinicalDataCollection>,
           activeProfile.selection,
           activeProfile.filters,
           baseDocumentIds,
@@ -190,7 +204,7 @@ export function useClinicalAiInput(
       : null),
     [
       rawDataReady,
-      clinicalData,
+      activeClinicalData,
       activeProfile.selection,
       activeProfile.filters,
       baseDocumentIds,
@@ -253,8 +267,8 @@ export function useClinicalAiInput(
   // All these provider snapshots are immutable and change on patient/scope
   // changes; this key is local to this hook and is never a persisted cache key.
   const previewFitIdentity = useMemo(
-    () => ({ patient, clinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit }),
-    [patient, clinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit],
+    () => ({ patient, clinicalData: activeClinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit }),
+    [patient, activeClinicalData, activeProfile, scopeNowMs, targetTokens, contextLimit],
   )
   const fitKey = !Number.isFinite(targetTokens) ? ''
     : includeSources
@@ -280,7 +294,8 @@ export function useClinicalAiInput(
   )
   const contextView = useClinicalContext(consumer, {
     profile: fitCandidate.profile,
-    clinicalDataOverride: prioritizedResult?.data as ClinicalData | undefined,
+    clinicalDataOverride: (prioritizedResult?.data
+      ?? (consumer === 'nhiLipid' ? activeClinicalData : undefined)) as ClinicalData | undefined,
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
   })
@@ -357,9 +372,9 @@ export function useClinicalAiInput(
     // tier replaces them; the final settled tier still uses the same builder.
     () => (!includeSources || needsSmallerTier ? null : prioritizedResult
       ? prioritizedResult.data as ClinicalAiDataInput
-      : rawDataReady && clinicalData
+      : rawDataReady && activeClinicalData
         ? scopeClinicalDataForAi(
-          clinicalData as unknown as Partial<ClinicalDataCollection>,
+          activeClinicalData as unknown as Partial<ClinicalDataCollection>,
           fitCandidate.profile.selection,
           fitCandidate.profile.filters,
           includedDocumentIds,
@@ -369,7 +384,7 @@ export function useClinicalAiInput(
     [
       prioritizedResult,
       rawDataReady,
-      clinicalData,
+      activeClinicalData,
       fitCandidate.profile.selection,
       fitCandidate.profile.filters,
       includedDocumentIds,

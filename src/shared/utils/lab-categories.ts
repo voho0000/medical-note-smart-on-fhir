@@ -114,11 +114,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // NA·K·CL·CO2 set + magnesium); NT-PROBNP tails with the cardiac markers
     // (heart-failure marker, 生化室 assay). Canonical keys only here — text
     // variants live in `codes` — per feedback_canonical_only_in_preferredorder.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'CK', 'CKMB', 'NT-PROBNP'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'],
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -142,7 +142,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // (CO2 / MG / NT-PROBNP); added here so they categorise into 生化 instead
     // of falling to 其他 (user report 2026-07-07; live loinc.org re-check was
     // classifier-blocked, mappings reused from the verified in-repo table).
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7'],
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7', '67151-1', '22763-7'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG'] },
@@ -155,7 +155,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       // for the source name (canonicalKeyFromLoinc has no entry for 89579-7),
       // so it sits BESIDE TROP rather than inside it — same panel, adjacent
       // row, separate assay and separate reference range.
-      { id: 'cardiac',     members: ['TROP', 'HS-TROPONIN I', 'CK', 'CKMB', 'NT-PROBNP'] },
+      { id: 'cardiac',     members: ['TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'] },
     ],
     // 直式 splits 生化 in two so neither table needs a horizontal scroll on a
     // half-width panel: 腎功能＋電解質 (the routine renal/lyte draw) and
@@ -240,9 +240,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'lipid',
-    preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
+    preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'TC/HDL RATIO', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
     codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'TRIGLYCERIDE', 'HDLC', 'HDL', 'HDL-C', 'HDLC.', 'LDLC', 'LDL', 'LDL-C', 'LDLC.', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'VLDL-C', 'NON-HDLC', 'NON-HDL', 'NON-HDL-C', 'APO-A', 'APO-A1', 'APOA1', 'APO-B', 'APOB', 'LP(A)'],
-    loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7'],
+    loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7',
+      // 9830-1 = Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or
+      // Plasma (NLM Clinical Table Search, 2026-09-27) — fell to 其他 before.
+      '9830-1'],
     pinnedColumns: ['CHOL', 'TG', 'HDL', 'LDL'],
   },
   {
@@ -254,7 +257,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // 'GLUCOSE-AC' lived in preferredOrder/pinnedColumns but never here, so a
     // source emitting that exact name fell out of 血糖 entirely. Chinese names
     // added alongside it — 健保存摺 and hospital feeds both send them.
-    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'GLUCOSE-AC', 'GLUCOSE-PC', 'GLU-PC', 'GLUCOSE-FS', 'SUGAR', 'FINGER SUGAR', 'AC SUGAR', 'PC SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE', '葡萄糖', '血糖', '飯前血糖', '飯後血糖', '空腹血糖', '隨機血糖', '糖化血色素'],
+    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'GLUCOSE-AC', 'GLUCOSE-PC', 'GLU-PC', 'GLUCOSE PC', 'GLUCOSE P.C', 'GLUCOSE P.C.', 'GLUCOSE RANDOM', 'AC-SUG', 'PC-SUG', 'GLUCOSE-FS', 'SUGAR', 'FINGER SUGAR', 'AC SUGAR', 'PC SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE', '葡萄糖', '血糖', '飯前血糖', '飯後血糖', '空腹血糖', '隨機血糖', '糖化血色素'],
     loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9'],
     pinnedColumns: ['GLUCOSE-AC', 'GLUCOSE', 'HBA1C'],
   },
@@ -324,6 +327,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       'WBC', 'WBCPUS', 'WBC/HPF',
       'RBC', 'RBC/HPF',
       'EPITH', 'EPITH CELL', 'EPITHELIAL CELL',
+      'SQUAMOUS EPI', 'UROTHELIUM EPI', 'RTE-RENAL TUBE',
       'CAST1', 'CAST2', 'CAST3', 'CASTS',
       'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA', 'MUCUS',
       // ── Quantitative / ratio ────────────────────────────────
@@ -348,11 +352,16 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // categorise into urine via LOINC (they were absent and would only catch
     // via the qualitative-result text heuristic). 8247-9 is the corrected code
     // the bridge now emits for the mucus row (was panel code 24356-8).
-    loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1', '5792-7', '5818-0', '5770-3', '14957-5', '14959-1', '2161-8', '5787-7', '25145-4', '5783-6', '8247-9'],
+    loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1', '5792-7', '5818-0', '5770-3', '14957-5', '14959-1', '2161-8', '5787-7', '25145-4', '5783-6', '8247-9',
+      // 2026-09-27 (verified, NLM Clinical Table Search): test-strip glucose /
+      // ketones / urobilinogen, quantitative urine protein and sediment casts
+      // — real bundles carry these codes and they must categorise into 尿液
+      // by LOINC, not by whichever name the hospital printed.
+      '25428-4', '2514-8', '19161-9', '2888-6', '24124-0'],
     subgroups: [
       { id: 'physical',  members: ['COLOR', 'APPEARANCE', 'TURBIDITY', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PH'] },
       { id: 'chemical',  members: ['PROT', 'PROTEIN', 'GLUCOSE', 'SUGAR', 'KETONE', 'KETON', 'BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRITE', 'NITRIT', 'LE', 'OCCULT', 'BLOOD'] },
-      { id: 'micro',     members: ['WBC', 'WBCPUS', 'WBC/HPF', 'RBC', 'RBC/HPF', 'EPITH', 'EPITH CELL', 'CAST1', 'CAST2', 'CAST3', 'CASTS', 'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA', 'MUCUS'] },
+      { id: 'micro',     members: ['WBC', 'WBCPUS', 'WBC/HPF', 'RBC', 'RBC/HPF', 'EPITH', 'EPITH CELL', 'SQUAMOUS EPI', 'UROTHELIUM EPI', 'RTE-RENAL TUBE', 'CAST1', 'CAST2', 'CAST3', 'CASTS', 'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA', 'MUCUS'] },
       { id: 'ratio',     members: ['MALB', 'MALB(U)', 'CREA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR'] },
     ],
     stackedPanels: [['physical', 'chemical'], ['micro', 'ratio']],

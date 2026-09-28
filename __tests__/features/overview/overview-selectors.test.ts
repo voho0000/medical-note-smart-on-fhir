@@ -237,6 +237,55 @@ describe('classifyMedicationChanges', () => {
     expect(verdicts.get('lipitor')).toBeUndefined()
   })
 
+  it.each([
+    ['HS', 'HSPCPO'],
+    ['QN', 'QNPCPO'],
+    ['QOD', 'QODPCPO'],
+    ['QD', 'QDACPO'],
+    ['QDACPO', 'QDPCPO'],
+  ])('does NOT mark 調整 when %s and %s have the same frequency opening', (previousFrequency, latestFrequency) => {
+    const verdicts = classifyMedicationChanges(
+      [
+        fact({
+          key: 'same-frequency',
+          startDay: '2026-03-10',
+          frequency: previousFrequency,
+          doseSignature: previousFrequency,
+        }),
+        fact({
+          key: 'same-frequency',
+          startDay: '2026-08-19',
+          frequency: latestFrequency,
+          doseSignature: latestFrequency,
+        }),
+      ],
+      window,
+    )
+    expect(verdicts.get('same-frequency')).toBeUndefined()
+  })
+
+  it('still marks 調整 when the dose changed despite the same frequency opening', () => {
+    const verdicts = classifyMedicationChanges(
+      [
+        fact({ key: 'dose-change', startDay: '2026-03-10', dose: '1 tab', frequency: 'QD', doseSignature: '1 tab · QD' }),
+        fact({ key: 'dose-change', startDay: '2026-08-19', dose: '2 tab', frequency: 'QDACPO', doseSignature: '2 tab · QDACPO' }),
+      ],
+      window,
+    )
+    expect(verdicts.get('dose-change')).toEqual({ kind: 'adjusted', previousDose: '1 tab · QD' })
+  })
+
+  it('still marks 調整 when the underlying frequency changed', () => {
+    const verdicts = classifyMedicationChanges(
+      [
+        fact({ key: 'frequency-change', startDay: '2026-03-10', dose: '1 tab', frequency: 'QD', doseSignature: '1 tab · QD' }),
+        fact({ key: 'frequency-change', startDay: '2026-08-19', dose: '1 tab', frequency: 'QODPCPO', doseSignature: '1 tab · QODPCPO' }),
+      ],
+      window,
+    )
+    expect(verdicts.get('frequency-change')).toEqual({ kind: 'adjusted', previousDose: '1 tab · QD' })
+  })
+
   it('ignores facts with no key rather than bucketing them together', () => {
     expect(classifyMedicationChanges([fact({ key: '', startDay: '2026-08-19' })], window).size)
       .toBe(0)

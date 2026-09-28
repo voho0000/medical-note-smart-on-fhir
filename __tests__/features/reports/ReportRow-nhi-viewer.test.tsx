@@ -41,7 +41,19 @@ const baseRow = (): Row => ({
 })
 
 describe('ReportRow NHI DICOM viewer actions', () => {
-  it('renders the live action compactly before the institution and exposes no URL', () => {
+  // Radix positions the tooltip with a ResizeObserver; jsdom has none.
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      value: class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    })
+  })
+
+  it('renders the live action compactly before the institution and exposes no URL', async () => {
     const row = baseRow()
     row.viewerActions = [{
       kind: 'live',
@@ -65,6 +77,15 @@ describe('ReportRow NHI DICOM viewer actions', () => {
     expect(action).not.toHaveTextContent('開啟 DICOM Viewer')
     expect(action.compareDocumentPosition(institution) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(document.body.innerHTML).not.toContain('nhi.gov.tw')
+
+    // The request only succeeds while 雲端病歷 is open on this patient, and the
+    // app cannot check that — so the trigger says so rather than leaving the
+    // failure toast to be the first the reader hears of it. A native `title`
+    // would wait out the browser's own 1–2s dwell first.
+    expect(action).not.toHaveAttribute('title')
+    fireEvent.focus(action)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('需同時開著該病人的健保雲端病歷')
+    expect(action).toHaveAccessibleName('開啟 DICOM Viewer（健保影像）')
   })
 
   it('groups trusted legacy fallbacks behind one compact selector and re-rejects bad rows', () => {

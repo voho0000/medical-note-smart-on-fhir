@@ -21,6 +21,14 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Step E in the HFA-PEFF diagnostic workup of stable symptomatic patients with preserved EF.', zh: '穩定、有症狀且 EF 保留者之 HFA-PEFF 診斷流程 Step E。' },
     caveats: { en: 'Confirm age, sex and rhythm. Use averaged E/e′; E and both e′ values are only needed when the average ratio is not provided. Enter NT-proBNP or BNP with a confirmed assay. Missing values are unknown, not normal. Appcardio omits age and sex inputs; this implementation follows consensus-specific thresholds.', zh: '請確認年齡、性別與心律（由最近 EKG 帶入，需核對是否代表評估時心律）。E/e′ 應取平均值；若報告已有平均比值，不必再填 E 波以推算。NT-proBNP 或 BNP 擇已確認的檢驗填入。缺值不視為正常。Appcardio 未提供年齡、性別輸入，本計算機依原始共識門檻判讀。' },
   },
+  'maggic-hf': {
+    useWhen: { en: 'Discussing 1- and 3-year all-cause mortality in an adult with stable chronic heart failure across the LVEF spectrum.', zh: '成人慢性心衰竭穩定期，用於討論各種 LVEF 範圍的 1 年與 3 年全因死亡率。' },
+    caveats: { en: 'Not an acute-decompensation score. Use a clinically coherent stable-time-point dataset and verify medication exposure. The published lookup table covers scores 0–50; higher scores are shown without extrapolating a mortality probability.', zh: '不是急性失代償期評分。請使用同一穩定時點且彼此一致的資料，並核對實際用藥。原始機率表僅涵蓋 0–50 分；超過 50 分時只顯示分數，不外推死亡率。' },
+  },
+  'life-preserved': {
+    useWhen: { en: 'Confirmed HFpEF with current and all prior documented LVEF ≥50%, completed age 40–89, to estimate 2-year, 10-year and remaining-lifetime risk of first HF hospitalization or cardiovascular death.', zh: '已確認 HFpEF、目前及過去所有已記錄 LVEF 均 ≥50%、完成歲數 40–89 歲者，用於估算首次心衰竭住院或心血管死亡的 2 年、10 年與餘生風險。' },
+    caveats: { en: 'Do not use preserved LVEF alone to diagnose HFpEF, or apply this model to HF with improved EF after any prior LVEF <50%. Inputs outside the author calculator’s displayed ranges are not extrapolated. The model uses sex-specific SwedeHF baseline risks without Taiwan recalibration and treats non-CV death as a competing event. Investigational prognosis support only—not a medical device or treatment recommendation. Distinguish any prior HF hospitalization from one within the last 6 months.', zh: '不能僅憑 LVEF 保留診斷 HFpEF；若過去曾有 LVEF <50%（HFimpEF），亦不應套用。超出作者計算機顯示範圍的輸入不予外推。模型採用依性別區分的 SwedeHF 基準風險，尚未經台灣校正，並將非心血管死亡視為競爭事件。僅供研究性預後輔助；不是醫療器材或治療建議。請區分任何既往心衰竭住院與近 6 個月內住院。' },
+  },
   'egfr-ckd-epi-2021': {
     useWhen: { en: 'Staging and monitoring CKD in stable adults (≥18 y).', zh: '穩定成人（≥18 歲）之慢性腎臟病分期與追蹤。' },
     caveats: { en: 'Assumes steady-state creatinine — unreliable in AKI / rapidly changing renal function; less accurate at extremes of muscle mass, in pregnancy, or amputees.', zh: '假設肌酸酐處於穩定狀態 — 急性腎損傷或腎功能快速變化時不可靠；肌肉量極端、懷孕或截肢者較不準。' },
@@ -70,6 +78,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   'who-cvd-2019': {
     useWhen: { en: 'Primary-prevention 10-year CVD risk in adults aged 40–80 without known cardiovascular disease; a patient-facing estimate.', zh: '40–80 歲、無已知心血管疾病成人之10年心血管疾病風險（初級預防）；民眾可自用的估算。' },
     caveats: { en: 'This is the WHO 2019 model, NOT Taiwan\'s official NHI 健保 algorithm (whose coefficients are unpublished) — numbers may differ from 健保存摺. Uses the pooled, un-recalibrated baseline (not East-Asia-specific). Total cholesterol taken in mg/dL and converted to mmol/L. Not for people with established CVD; validated for ages 40–80. A screen, not a diagnosis.', zh: '此為 WHO 2019 模型，非健保署官方演算法（其係數未公開）— 數值可能與健保存摺不同。採用未經區域校正的合併基準（非東亞專屬）。總膽固醇以 mg/dL 輸入並換算為 mmol/L。不適用於已有心血管疾病者；驗證範圍為 40–80 歲。為風險評估非診斷。' },
+  },
+  'hpa-chronic-risk-reconstruction': {
+    useWhen: { en: 'A local, approximate 10-year estimate for Taiwanese adults 35–70, corresponding to the HPA website’s five outcomes.', zh: '35–70 歲成人之五項慢性病未來 10 年風險本地近似估計。' },
+    caveats: { en: 'The reconstructed model matched official displayed percentages and grades in the checked synthetic cases, not a clinical validation or a guarantee for all inputs. Ranges describe local testing, not normal values; do not alter a correct value just to obtain a result. Confirm history, fasting status and dates before interpretation.', zh: '重建公式在已驗算的合成案例中，顯示百分比與分級均與官網一致；這不是臨床準確率，也不保證所有輸入。驗算範圍不是正常值範圍，請勿為取得結果而改小或改大正確數值。判讀前請核對病史、空腹狀態與日期。' },
   },
   'child-pugh': {
     useWhen: { en: 'Cirrhosis severity, surgical risk, and prognosis.', zh: '肝硬化嚴重度、手術風險與預後。' },

@@ -11,7 +11,10 @@ import {
 } from "@/src/shared/config/ui-theme.config"
 import { Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import {
+  useResourceNavigationStore,
+  type ResourceNavTarget,
+} from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
@@ -24,7 +27,8 @@ import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 import { rowInnerMatch, rowMatchesSearch } from './utils/report-search'
-import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
+import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
 import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
@@ -53,6 +57,41 @@ type RawPreparationPriority = 'idle' | 'after-paint'
 // Clip rounded edges without creating a scroll container: the cumulative
 // category bar must stick to the report panel's actual scrolling viewport.
 const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-clip rounded-lg border-border shadow-none hover:shadow-none`
+
+interface CumulativeSourceFocus {
+  categoryId: string
+  analyteKey?: string
+  date?: string
+}
+
+/** Resolve one cited Observation to the exact cumulative-report column and
+ * collection-date row. Explicit destinations still win; Table 1 only needs to
+ * ask for the cumulative view and the report workspace can derive the rest
+ * from the original FHIR resource without duplicating lab-normalisation rules. */
+export function resolveCumulativeSourceFocus(
+  target: ResourceNavTarget | null | undefined,
+  observations: readonly any[],
+): CumulativeSourceFocus | null {
+  if (target?.reportView !== 'cumulative') return null
+  if (target.cumulativeCategoryId && CUMULATIVE_CATEGORY_IDS.has(target.cumulativeCategoryId)) {
+    return {
+      categoryId: target.cumulativeCategoryId,
+      analyteKey: target.cumulativeAnalyteKey,
+      date: target.date?.slice(0, 10),
+    }
+  }
+  if (target.resourceType !== 'Observation') return null
+  const observation = observations.find((candidate) => candidate?.id === target.resourceId)
+  if (!observation) return null
+  const category = categorizeObservation(observation)
+  if (!category || !CUMULATIVE_CATEGORY_IDS.has(category.id)) return null
+  const identity = getLabPivotTestIdentity(observation, category.id, 'standardized')
+  return {
+    categoryId: category.id,
+    analyteKey: identity.testKey,
+    date: (observation.effectiveDateTime ?? target.date)?.slice(0, 10),
+  }
+}
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -112,23 +151,24 @@ export function ReportsCard() {
   // Lifted here (not inside CumulativeLabReport) so the selected cumulative
   // sub-category (生化 …) survives the fullscreen toggle, which remounts the
   // reports content under a different parent.
-  const [cumulativeCategoryId, setCumulativeCategoryId] = useState<string | undefined>(() => {
-    const pending = useResourceNavigationStore.getState().pending
-    const categoryId = pending?.reportView === 'cumulative'
-      ? pending.cumulativeCategoryId
-      : undefined
-    return categoryId && CUMULATIVE_CATEGORY_IDS.has(categoryId) ? categoryId : undefined
-  })
+  const initialCumulativeFocus = resolveCumulativeSourceFocus(
+    useResourceNavigationStore.getState().pending,
+    observations,
+  )
+  const [cumulativeCategoryId, setCumulativeCategoryId] = useState<string | undefined>(
+    () => initialCumulativeFocus?.categoryId,
+  )
   const [cumulativeFocus, setCumulativeFocus] = useState<{
     analyteKey: string
+    date?: string
     nonce: number
-  } | null>(() => {
-    const state = useResourceNavigationStore.getState()
-    const analyteKey = state.pending?.reportView === 'cumulative'
-      ? state.pending.cumulativeAnalyteKey
-      : undefined
-    return analyteKey ? { analyteKey, nonce: state.seq } : null
-  })
+  } | null>(() => initialCumulativeFocus?.analyteKey
+    ? {
+        analyteKey: initialCumulativeFocus.analyteKey,
+        date: initialCumulativeFocus.date,
+        nonce: useResourceNavigationStore.getState().seq,
+      }
+    : null)
   // A trend range is a comparison preference, not an analyte default. Keep the
   // user's explicit choice while they move between tests or fullscreen modes.
   const [cumulativeTrendWindow, setCumulativeTrendWindow] = useState<TrendWindow>()
@@ -589,17 +629,21 @@ export function ReportsCard() {
   const navPending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
   const consumeNav = useResourceNavigationStore((s) => s.consume)
+  const cumulativeSourceFocus = useMemo(
+    () => resolveCumulativeSourceFocus(navPending, observations),
+    [navPending, observations],
+  )
   useEffect(() => {
     if (
       !clinicalTabActive
       || !navPending
-      || navPending.reportView === 'cumulative'
+      || (navPending.reportView === 'cumulative' && cumulativeSourceFocus)
       || rawReportsEnabled
     ) return
     if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
     const timer = window.setTimeout(() => setRawPreparationPriority('after-paint'), 0)
     return () => window.clearTimeout(timer)
-  }, [clinicalTabActive, navPending, rawReportsEnabled])
+  }, [clinicalTabActive, cumulativeSourceFocus, navPending, rawReportsEnabled])
 
   useEffect(() => {
     // ReportsCard is intentionally mounted in the background so opening the
@@ -607,9 +651,8 @@ export function ReportsCard() {
     // hidden: LeftPanelLayout owns the top-level tab switch, and only the
     // visible destination may acknowledge and consume the request.
     if (!clinicalTabActive || !navPending) return
-    if (navPending.reportView === 'cumulative') {
-      const categoryId = navPending.cumulativeCategoryId
-      if (!categoryId || !CUMULATIVE_CATEGORY_IDS.has(categoryId)) return
+    if (navPending.reportView === 'cumulative' && cumulativeSourceFocus) {
+      const { categoryId, analyteKey, date } = cumulativeSourceFocus
       consumeNav()
       // Consuming the store request re-runs this effect immediately. Schedule
       // the local view switch independently so that rerender cannot cancel it.
@@ -619,8 +662,8 @@ export function ReportsCard() {
         setActiveTab('cumulative')
         setVisitedTabs((prev) => prev.has('cumulative') ? prev : new Set(prev).add('cumulative'))
         setCumulativeCategoryId(categoryId)
-        setCumulativeFocus(navPending.cumulativeAnalyteKey
-          ? { analyteKey: navPending.cumulativeAnalyteKey, nonce: navSeq }
+        setCumulativeFocus(analyteKey
+          ? { analyteKey, date, nonce: navSeq }
           : null)
         setNavTarget(null)
       }, 0)
@@ -652,7 +695,7 @@ export function ReportsCard() {
       setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
       setNavTarget({ id: targetRow?.id ?? hit.id, tab: tab.value, nonce: navSeq })
     }, 0)
-  }, [clinicalTabActive, navPending, navSeq, rows, tabConfigs, consumeNav])
+  }, [clinicalTabActive, cumulativeSourceFocus, navPending, navSeq, rows, tabConfigs, consumeNav])
 
   if (isLoading) {
     return (
@@ -875,6 +918,7 @@ export function ReportsCard() {
                   activeCategoryId={cumulativeCategoryId}
                   onCategoryChange={handleCumulativeCategoryChange}
                   focusAnalyteKey={cumulativeFocus?.analyteKey}
+                  focusDate={cumulativeFocus?.date}
                   focusNonce={cumulativeFocus?.nonce}
                   trendWindow={cumulativeTrendWindow}
                   onTrendWindowChange={setCumulativeTrendWindow}

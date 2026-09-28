@@ -76,6 +76,8 @@ import {
   streamWithCardProgressTimeout,
 } from './card-progress-timeout'
 import { runWithContextWindowRetry } from '@/src/application/hooks/ai-generation/context-window-retry'
+import { measureSummaryCardOutcomes } from './summary-result-measurement'
+import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -96,6 +98,24 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
 
 const medicalSummaryResultModelId = (result: MedicalSummaryResult) =>
   result.generation?.modelId
+
+// zh-TW backstop for the safety card's model-written prose (title/detail/
+// recommendation). Evidence strings may be record excerpts and stay verbatim.
+function localizeSafetyProse<T extends { alerts: Array<{ title: string; detail: string; recommendation?: string }> }>(
+  safety: T,
+  locale: 'en' | 'zh-TW',
+): T {
+  if (locale !== 'zh-TW') return safety
+  return {
+    ...safety,
+    alerts: safety.alerts.map((alert) => ({
+      ...alert,
+      title: toTraditionalChinese(alert.title),
+      detail: toTraditionalChinese(alert.detail),
+      recommendation: toTraditionalChinese(alert.recommendation),
+    })),
+  }
+}
 
 // One initial batch plus at most two progressively smaller combined retries.
 // This is deliberately a hard cap: a persistently non-conforming model must
@@ -378,7 +398,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       state.setResult(ctx.operationKey, {
         ...finalized,
         safety: progressiveAggregate.safety
-          ? { ...progressiveAggregate.safety, generation: generation(generatedAt) }
+          ? { ...localizeSafetyProse(progressiveAggregate.safety, outputLocale), generation: generation(generatedAt) }
           : undefined,
         cardErrors: Object.keys(progressiveCardErrors).length > 0
           ? { ...progressiveCardErrors }
@@ -596,10 +616,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       },
     )
     const generatedAt = Date.now()
+    ctx.measureResult?.(measureSummaryCardOutcomes(settled))
     return {
       ...finalized,
       safety: aggregate.safety
-        ? { ...aggregate.safety, generation: generation(generatedAt) }
+        ? { ...localizeSafetyProse(aggregate.safety, outputLocale), generation: generation(generatedAt) }
         : undefined,
       cardErrors: Object.keys(cardErrors).length > 0 ? cardErrors : undefined,
       completedCardIds: [...completedCardIds],

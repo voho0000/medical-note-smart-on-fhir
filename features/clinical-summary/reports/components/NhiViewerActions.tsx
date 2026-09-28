@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,105 @@ const ERROR_EN: Record<NhiViewerErrorCode, string> = {
   EXTENSION_UNAVAILABLE: 'Cannot connect to the Health Catcher extension. Confirm it is enabled and retry.',
 }
 
+/**
+ * Open a 健保影像 study and report the failure, single-flight.
+ *
+ * Exported because the 總覽 rows hang the same action off the 影像 badge
+ * rather than a button of their own: two triggers spelling their own error
+ * wording (or forgetting the in-flight guard) is exactly how the same failure
+ * ends up explained two different ways.
+ */
+export function useNhiViewerOpener() {
+  const { locale } = useLanguage()
+  const [opening, setOpening] = useState(false)
+
+  const open = async (action: NhiViewerAction) => {
+    if (opening) return
+    if (action.kind === 'legacy') {
+      const opened = window.open(action.url, '_blank', 'noopener,noreferrer')
+      if (opened) opened.opener = null
+      return
+    }
+    setOpening(true)
+    try {
+      const result = await requestNhiViewerOpen(action.descriptor)
+      if (!result.ok) toast.error((locale === 'zh-TW' ? ERROR_ZH : ERROR_EN)[result.code] ?? ERROR_ZH.OPEN_FAILED)
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  return { opening, open }
+}
+
+/**
+ * The precondition a live request cannot check for itself.
+ *
+ * The Viewer URL is minted by the NHI session inside 雲端病歷; the app has no
+ * status channel to that window, so it cannot grey the trigger out or warn
+ * first — the miss only surfaces as a failure toast AFTER the press. Saying it
+ * on the trigger is the one place the reader can learn it beforehand.
+ */
+export function nhiViewerPrerequisiteHint(locale: string): string {
+  return locale === 'zh-TW'
+    ? '需同時開著該病人的健保雲端病歷'
+    : "Requires this patient's NHI cloud record to be open"
+}
+
+/**
+ * Instant two-line tooltip for a viewer trigger.
+ *
+ * A native `title` costs the browser's own 1–2 second dwell before it appears —
+ * long enough that the reader has already clicked and met the failure toast,
+ * which is exactly what saying the prerequisite up front was meant to avoid.
+ * Radix opens on the first hover frame and on keyboard focus.
+ */
+export function NhiViewerTooltip({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  /** The precondition line, or null for a trigger that has no precondition. */
+  hint: string | null
+  children: ReactElement
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[18rem]">
+        <span className="block">{label}</span>
+        {hint && <span className="mt-0.5 block text-background/70">{hint}</span>}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * What the tooltip SHOWS. Deliberately count-free: the trigger next to it
+ * already reads 「健保影像 2」, so spelling out 「共 2 筆中的第 1 筆」 in the
+ * bubble as well is noise in the reader's way.
+ */
+export function nhiViewerOpenLabel(locale: string): string {
+  return locale === 'zh-TW'
+    ? '開啟 DICOM Viewer（健保影像）'
+    : 'Open DICOM Viewer (NHI imaging)'
+}
+
+/**
+ * What a screen reader HEARS. Here the ordinal earns its length: without the
+ * visible 「健保影像 2」 beside it, "open imaging" on a split button gives no
+ * hint that the other studies are behind the chevron.
+ */
+export function nhiViewerFirstLabel(locale: string, count: number): string {
+  if (count > 1) {
+    return locale === 'zh-TW'
+      ? `開啟健保影像 1，共 ${count} 筆中的第 1 筆`
+      : `Open NHI imaging 1, first of ${count} studies`
+  }
+  return nhiViewerOpenLabel(locale)
+}
+
 const LIVE_ACTION_CLASS = 'inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-xs font-medium leading-none text-sky-800 transition-colors hover:border-sky-400 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-sky-300/50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/15'
 const LEGACY_ACTION_CLASS = 'inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium leading-none text-amber-800 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-amber-300/50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
 
@@ -57,9 +157,10 @@ function LiveViewerButton({
   const { locale } = useLanguage()
   const [loading, setLoading] = useState(false)
   const visibleLabel = locale === 'zh-TW' ? `健保影像${suffix}` : `NHI imaging${suffix}`
-  const accessibleLabel = locale === 'zh-TW'
-    ? `開啟 DICOM Viewer（健保影像）${suffix}`
-    : `Open DICOM Viewer (NHI imaging)${suffix}`
+  const accessibleLabel = `${nhiViewerFirstLabel(locale, 1)}${suffix}`
+  // Tooltip only — the prerequisite belongs on hover, not in the name a screen
+  // reader repeats on every row.
+  const hint = nhiViewerPrerequisiteHint(locale)
 
   const open = async () => {
     if (loading) return
@@ -80,45 +181,47 @@ function LiveViewerButton({
   )
   if (nestedInButton) {
     return (
-      <span
-        role="button"
-        tabIndex={loading ? -1 : 0}
-        aria-disabled={loading}
-        aria-label={action.title ? `${accessibleLabel}：${action.title}` : accessibleLabel}
-        title={accessibleLabel}
-        onClick={(event) => {
-          event.stopPropagation()
-          void open()
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation()
-          if (!loading && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault()
+      <NhiViewerTooltip label={nhiViewerOpenLabel(locale)} hint={hint}>
+        <span
+          role="button"
+          tabIndex={loading ? -1 : 0}
+          aria-disabled={loading}
+          aria-label={action.title ? `${accessibleLabel}：${action.title}` : accessibleLabel}
+          onClick={(event) => {
+            event.stopPropagation()
             void open()
-          }
-        }}
-        className={LIVE_ACTION_CLASS}
-      >
-        {content}
-      </span>
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            if (!loading && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault()
+              void open()
+            }
+          }}
+          className={LIVE_ACTION_CLASS}
+        >
+          {content}
+        </span>
+      </NhiViewerTooltip>
     )
   }
 
   return (
-    <button
-      type="button"
-      disabled={loading}
-      onClick={(event) => {
-        event.stopPropagation()
-        void open()
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-      className={LIVE_ACTION_CLASS}
-      aria-label={action.title ? `${accessibleLabel}：${action.title}` : accessibleLabel}
-      title={accessibleLabel}
-    >
-      {content}
-    </button>
+    <NhiViewerTooltip label={nhiViewerOpenLabel(locale)} hint={hint}>
+      <button
+        type="button"
+        disabled={loading}
+        onClick={(event) => {
+          event.stopPropagation()
+          void open()
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        className={LIVE_ACTION_CLASS}
+        aria-label={action.title ? `${accessibleLabel}：${action.title}` : accessibleLabel}
+      >
+        {content}
+      </button>
+    </NhiViewerTooltip>
   )
 }
 
@@ -232,9 +335,10 @@ function NhiViewerActionMenu({
   const menuAccessibleLabel = locale === 'zh-TW'
     ? `選擇健保影像，共 ${count} 筆`
     : `Choose NHI imaging, ${count} studies`
-  const primaryAccessibleLabel = locale === 'zh-TW'
-    ? `開啟健保影像 1，共 ${count} 筆中的第 1 筆`
-    : `Open NHI imaging 1, first of ${count} studies`
+  const primaryAccessibleLabel = nhiViewerFirstLabel(locale, count)
+  // A legacy-only cluster opens plain NHI links and needs nothing open, so it
+  // must not carry the live request's prerequisite.
+  const primaryHint = allLegacy ? null : nhiViewerPrerequisiteHint(locale)
 
   const openLive = async (action: Extract<NhiViewerAction, { kind: 'live' }>, index: number) => {
     if (openingIndex !== null) return
@@ -272,42 +376,46 @@ function NhiViewerActionMenu({
   const actionClassName = allLegacy ? LEGACY_ACTION_CLASS : LIVE_ACTION_CLASS
   const primaryClassName = cn(actionClassName, 'rounded-r-none border-r-0 pr-1.5')
   const menuTriggerClassName = cn(actionClassName, 'rounded-l-none px-1.5')
-  const primary = nestedInButton ? (
-    <span
-      role="button"
-      tabIndex={openingIndex === null ? 0 : -1}
-      aria-disabled={openingIndex !== null}
-      aria-label={primaryAccessibleLabel}
-      className={primaryClassName}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation()
-        openFirst()
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation()
-        if (openingIndex === null && (event.key === 'Enter' || event.key === ' ')) {
-          event.preventDefault()
-          openFirst()
-        }
-      }}
-    >
-      {primaryContent}
-    </span>
-  ) : (
-    <button
-      type="button"
-      disabled={openingIndex !== null}
-      aria-label={primaryAccessibleLabel}
-      className={primaryClassName}
-      onClick={(event) => {
-        event.stopPropagation()
-        openFirst()
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
-      {primaryContent}
-    </button>
+  const primary = (
+    <NhiViewerTooltip label={nhiViewerOpenLabel(locale)} hint={primaryHint}>
+      {nestedInButton ? (
+        <span
+          role="button"
+          tabIndex={openingIndex === null ? 0 : -1}
+          aria-disabled={openingIndex !== null}
+          aria-label={primaryAccessibleLabel}
+          className={primaryClassName}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            openFirst()
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            if (openingIndex === null && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault()
+              openFirst()
+            }
+          }}
+        >
+          {primaryContent}
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={openingIndex !== null}
+          aria-label={primaryAccessibleLabel}
+          className={primaryClassName}
+          onClick={(event) => {
+            event.stopPropagation()
+            openFirst()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {primaryContent}
+        </button>
+      )}
+    </NhiViewerTooltip>
   )
 
   const menuTrigger = nestedInButton ? (

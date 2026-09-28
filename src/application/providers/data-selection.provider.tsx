@@ -32,11 +32,13 @@ import { ensureCategoriesInitialized } from '@/src/core/categories/init'
 ensureCategoriesInitialized()
 
 type DataType = keyof DataSelection
-export type DataConsumer = 'chat' | 'insights' | 'ips' | 'aiExport'
+export type DataConsumer = 'chat' | 'insights' | 'nhiLipid' | 'ips' | 'aiExport'
 // Standard summary/insights use `insights`. The mirrored `chat` profile is kept
 // for stored-profile compatibility and the shared token meter; agent chat does
 // not preload either profile and queries FHIR tools on demand. IPS is configured
-// independently on its own tab. External AI export owns a fourth profile so
+// independently on its own tab. NHI lipid review has a separate clinical scope
+// because its evidence needs differ from general summaries. External AI export
+// owns another profile so
 // preparing a handoff never changes summary generation or IPS curation.
 const MAIN_TARGETS: DataConsumer[] = ['chat', 'insights']
 
@@ -190,6 +192,7 @@ function getInitialProfiles(): ProfilesState {
   return {
     chat: coerceProfile(saved?.chat),
     insights: coerceProfile(saved?.insights),
+    nhiLipid: coerceProfile(saved?.nhiLipid),
     ips: coerceProfile(saved?.ips, IPS_DEFAULT_DATA_FILTERS),
     aiExport: coerceProfile(saved?.aiExport),
   }

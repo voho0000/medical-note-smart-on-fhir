@@ -13,7 +13,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
-import { buildLabPivots, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, primaryCellRecord, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
 import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
@@ -26,7 +26,7 @@ import type { MedicationRow } from '@/features/clinical-summary/medications/type
 import { useReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { groupMultiRegionStudies } from '@/features/clinical-summary/reports/utils/multi-region-grouping'
 import { decodeReportEntities, separateGluedOrderCode } from '@/src/shared/utils/report-text-format'
-import type { ReportGroup, Row } from '@/features/clinical-summary/reports/types'
+import type { NhiViewerAction, ReportGroup, Row } from '@/features/clinical-summary/reports/types'
 import { useVisitHistory, type VisitRecord } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 import { useEncounterDetails, type EncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
 import { useClinicalNotes } from '@/features/clinical-summary/visit-history/hooks/useClinicalNotes'
@@ -76,11 +76,16 @@ export interface OverviewLabsData {
   unpivotedCount: number
   /** An Observation id used to jump into the 報告 tab. */
   navResourceId?: string
+  /** Every loaded Observation, not cut to the window: a trend reads the
+   *  whole chart. */
+  allObservations?: readonly any[]
 }
 
 export interface OverviewReportItem {
   /** Carries images or a viewer request, whether or not it has report text. */
   hasImages?: boolean
+  /** 健保影像 requests, exactly as the 報告 tab's imaging rows expose them. */
+  viewerActions?: NhiViewerAction[]
   /** >0 when this row stands for a multi-region study the bridge could not
    *  pair (Row.groupedRows). */
   groupedCount?: number
@@ -420,16 +425,24 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       const pivot = pivots[category.id]
       if (!pivot) continue
       for (const row of pivot.rows) {
-        const cells = shownDays.map((day) => row.values.get(day))
+        // A day whose every record is entered-in-error / cancelled has no
+        // result to show, and a cell is abnormal only through a VALID record —
+        // judged per record, never from the same-day merge (primaryCellRecord).
+        const cells = shownDays.map((day) => {
+          const cell = row.values.get(day)
+          return cell && primaryCellRecord(cell) ? cell : undefined
+        })
         // Pinned stub rows (injected so a standard panel always shows its
         // columns) carry no values — the overview only lists analytes the
         // patient actually has inside the window.
         if (!cells.some(Boolean)) continue
-        const hasAbnormal = cells.some((cell) => !!cell?.isAbnormal)
+        const cellAbnormal = (cell: LabCell | undefined) =>
+          !!cell && !!primaryCellRecord(cell)?.valid.some((record) => record.isAbnormal)
+        const hasAbnormal = cells.some(cellAbnormal)
         for (const cell of cells) {
           if (!cell) continue
           resultCount += 1
-          if (cell.isAbnormal) abnormalCount += 1
+          if (cellAbnormal(cell)) abnormalCount += 1
         }
         const isPinned = isOverviewPinnedAnalyte(category.id, row.testKey)
         if (isPinned) pinnedRowCount += 1
@@ -466,8 +479,9 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       abnormalCount,
       unpivotedCount,
       navResourceId,
+      allObservations: Array.isArray(observations) ? observations : [],
     }
-  }, [audience, categoryLabels, displayLang, locale, pivots, windowedObservations])
+  }, [audience, categoryLabels, displayLang, locale, observations, pivots, windowedObservations])
 
   // ── 影像／檢查報告 ───────────────────────────────────────────────────────
   const { reportRows } = useReportsData(windowedReports, windowedStudies)
@@ -490,6 +504,13 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
           text: separateGluedOrderCode(decodeReportEntities(reportNarrative(member))),
         }))
         .filter((entry) => !!entry.text)
+      // 健保影像 requests belong to the individual studies. A merged cluster's
+      // synthetic row copies the FIRST member's fields, so reading them off
+      // the row would show one member's viewer and silently drop the rest;
+      // when there are members they are the only source.
+      const viewerActions = members.length
+        ? members.flatMap((member) => member.viewerActions ?? [])
+        : (row.viewerActions ?? [])
       items.push({
         id: `${navResourceType}:${row.id}`,
         title: row.title,
@@ -499,8 +520,9 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         summary: firstLine(narrative || memberReports[0]?.text || ''),
         fullText: narrative,
         reports: memberReports.length ? memberReports : undefined,
-        hasImages: !!row.images?.length || !!row.viewerActions?.length
-          || members.some((member) => !!member.images?.length || !!member.viewerActions?.length),
+        hasImages: !!row.images?.length || viewerActions.length > 0
+          || members.some((member) => !!member.images?.length),
+        viewerActions: viewerActions.length > 0 ? viewerActions : undefined,
         groupedCount: members.length,
         hasAmbiguity: !!row.hasAmbiguity,
         narrativeCount: members.length ? memberReports.length : (narrative ? 1 : 0),
@@ -603,6 +625,8 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
         // supply window — and fall back to the raw status when a raw record
         // has no matching row (defensive; ids come from the same array).
         isActive: row ? !row.isInactive : !inactiveStatuses.has(status) && (!endDay || endDay >= window.endDay),
+        dose: dose || undefined,
+        frequency: frequency || undefined,
         doseSignature: signature || undefined,
       } satisfies OverviewMedFact
     })

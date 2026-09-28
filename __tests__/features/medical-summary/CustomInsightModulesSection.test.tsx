@@ -1,15 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { CustomInsightModulesSection } from "@/features/medical-summary/components/CustomInsightModulesSection"
 
+jest.mock("@/src/application/stores/model-prefs.store", () => ({
+  useEffectiveModel: () => "openai-compatible-custom",
+}))
+
+let mockTruncated = false
+let mockRetryError = false
+
 jest.mock("@/src/application/providers/language.provider", () => ({
   useLanguage: () => ({
+    locale: "zh-TW",
     t: {
       common: { stop: "停止", copied: "已複製", copyFailed: "複製失敗" },
-      settings: {
-        outputFormatPlain: "純文字",
-        outputFormatMarkdown: "Markdown",
-        outputFormatHtml: "HTML",
-      },
       medicalSummary: {
         customSummaryTab: "自訂摘要",
         customInsightsEmpty: "尚無摘要",
@@ -24,10 +27,18 @@ jest.mock("@/src/application/providers/language.provider", () => ({
         customPromptPreview: "模板提示",
         customResultPreview: "摘要結果",
         customGenerating: "正在產生",
+        customOutputTruncatedTitle: "輸出已截斷：以下為部分內容",
+        customOutputTruncatedDescription: "地端模型已達輸出上限（本功能最多 {tokens} 個 tokens）。已保留產生的文字，後續段落可能缺漏，請確認後再使用。",
         customDisplayAs: "顯示格式",
         customCopyText: "複製文字",
         customCopySource: "複製原始碼",
         editCustomInsight: "編輯",
+      },
+      settings: {
+        outputFormatPlain: "純文字",
+        outputFormatMarkdown: "Markdown",
+        outputFormatHtml: "HTML",
+        longCustomInsightPromptWarning: "此提示詞已達 {count} 字元。字數沒有可靠的安全界線；請檢查重複或矛盾的規則與範例，並核對產出的診斷。",
       },
     },
   }),
@@ -36,7 +47,7 @@ jest.mock("@/src/application/providers/language.provider", () => ({
 jest.mock("@/features/clinical-insights/ClinicalInsightsRuntimeProvider", () => ({
   useClinicalInsightsRuntime: () => ({
     panels: [
-      { id: "first", title: "第一張", prompt: "第一個提示", showInSummary: true, outputFormat: "markdown" },
+      { id: "first", title: "第一張", prompt: "x".repeat(2000), showInSummary: true, outputFormat: "markdown" },
       { id: "second", title: "第二張", prompt: "第二個提示", showInSummary: true, outputFormat: "markdown" },
       { id: "empty", title: "尚未產生", prompt: "第三個提示", showInSummary: true, outputFormat: "markdown" },
     ],
@@ -46,17 +57,45 @@ jest.mock("@/features/clinical-insights/ClinicalInsightsRuntimeProvider", () => 
       first: {
         text: "### 第一張標題\n\n**第一張的完整內容**\n\n更多資訊",
         isEdited: false,
-        metadata: null,
+        metadata: mockTruncated ? { modelId: "tvghbrain", provider: "custom", outputTruncated: true } : null,
       },
       second: { text: "第二張的完整內容", isEdited: false, metadata: null },
     },
-    panelStatus: {},
+    panelStatus: mockRetryError ? { first: { isLoading: false, error: new Error("retry failed") } } : {},
     runPanel: jest.fn(),
     stopPanel: jest.fn(),
   }),
 }))
 
 describe("CustomInsightModulesSection result disclosure", () => {
+  afterEach(() => { mockTruncated = false; mockRetryError = false })
+
+  it("marks partial output in the card and expanded view while keeping its text", () => {
+    mockTruncated = true
+    render(<CustomInsightModulesSection onManage={jest.fn()} />)
+
+    const warning = screen.getByRole("alert")
+    expect(warning).toHaveTextContent("輸出已截斷：以下為部分內容")
+    expect(warning).toHaveTextContent("4,096 個 tokens")
+    expect(screen.getAllByRole("button", { name: "重新產生摘要" })[0]).toBeEnabled()
+    expect(screen.getByText("第一張的完整內容")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "放大閱讀「第一張」摘要結果" }))
+    const dialog = screen.getByRole("dialog", { name: "第一張" })
+    expect(dialog).toHaveTextContent("輸出已截斷：以下為部分內容")
+    expect(dialog).toHaveTextContent("第一張的完整內容")
+  })
+
+  it("keeps the truncation warning and partial text visible after a failed retry", () => {
+    mockTruncated = true
+    mockRetryError = true
+    render(<CustomInsightModulesSection onManage={jest.fn()} />)
+
+    expect(screen.getAllByRole("alert")).toHaveLength(2)
+    expect(screen.getByText("輸出已截斷：以下為部分內容")).toBeInTheDocument()
+    expect(screen.getByText("第一張的完整內容")).toBeInTheDocument()
+  })
+
   it("collapses and expands each generated card independently", () => {
     const onManage = jest.fn()
     render(<CustomInsightModulesSection onManage={onManage} />)
@@ -128,5 +167,11 @@ describe("CustomInsightModulesSection result disclosure", () => {
     const dialog = screen.getByRole("dialog", { name: "尚未產生" })
     expect(dialog).toHaveTextContent("模板提示")
     expect(dialog).toHaveTextContent("第三個提示")
+  })
+
+  it("shows the review cue beside generation for an imported long custom prompt", () => {
+    render(<CustomInsightModulesSection onManage={jest.fn()} />)
+    expect(screen.getByRole("status")).toHaveTextContent("2000 字元")
+    expect(screen.getByRole("status")).toHaveTextContent("核對產出的診斷")
   })
 })

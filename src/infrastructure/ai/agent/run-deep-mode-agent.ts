@@ -12,17 +12,15 @@
  * infrastructure. The pure pieces it relies on (stream post-processing) remain
  * in core and are imported here.
  *
- * This is a VERBATIM extraction of the existing orchestration — the three
- * streamText rounds (main → follow-up → synthesis), the AI-SDK native
- * multi-step loop (stopWhen: stepCountIs(10)), tool-result summarisation and
- * citation post-processing are unchanged, so the eval measures the REAL current
- * harness as the v0 baseline. The only thing left behind in the hook is pure UI
+ * The UI and eval harness share these same three streamText rounds (main →
+ * follow-up → synthesis), tool-loop limits, tool-result summarisation and
+ * citation post-processing. The only thing left behind in the hook is pure UI
  * rendering: every setChatMessages call becomes an `onEvent` emission, and the
  * 100ms update throttling (a main-thread-blocking guard, not agent behaviour)
- * stays in the hook's event handler. Agent output is byte-identical.
+ * stays in the hook's event handler.
  */
 
-import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type ToolSet } from "ai"
+import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type StopCondition, type ToolSet } from "ai"
 import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
 import { withIdleTimeout } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -45,6 +43,16 @@ export interface AgentRunTranslations {
   queriedFhirData: string
   answerQuestion: string
   answerQuestionCitationsHint?: string
+  /** Shown to the reader (status trail + answer footnote) when the tool loop
+   * was stopped by `repeatedToolCallIs`. Optional: eval harnesses omit it. */
+  repeatedQueryStopped?: string
+  /** Appended to the follow-up instruction in the same case, so the model
+   * knows why it was cut off and does not repeat the query again. */
+  repeatedQueryHint?: string
+  /** Same pair for the generic step ceiling (`stepCountIs`): the loop ended
+   * because the budget ran out, not because the search was complete. */
+  stepLimitReached?: string
+  stepLimitHint?: string
   synthesizeResults: string
   queryResult: string
   queryFailed: string
@@ -119,6 +127,52 @@ export interface RunDeepModeAgentResult {
   usage: AgentRunUsage
 }
 
+function stableToolInput(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableToolInput).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableToolInput(entry)}`)
+      .join(',')}}`
+  }
+  const serialized = JSON.stringify(value)
+  return serialized === undefined ? String(value) : serialized
+}
+
+/** Stop a model that asks for the exact same tool data on consecutive steps.
+ * Smaller OpenAI-compatible models can otherwise keep receiving and requesting
+ * the same record until the generic ten-step ceiling, which looks like an
+ * endless spinner and needlessly repeats hospital queries. The result is
+ * already available for the normal no-text follow-up/synthesis path.
+ *
+ * Three, not two: a single repeat is something capable models do on purpose
+ * (a retry after a partial result, a re-read before answering) and then move
+ * on to a different query. Stopping there would cut off the rest of the
+ * investigation; a third identical batch is a loop. */
+/** Generic ceiling on tool-calling steps per turn. Every step re-sends the
+ * whole context, so cost and latency grow roughly quadratically with it. */
+export const MAX_TOOL_STEPS = 10
+
+export function repeatedToolCallIs(
+  consecutiveSteps = 3,
+): StopCondition<ToolSet> {
+  return ({ steps }) => {
+    if (consecutiveSteps < 2 || steps.length < consecutiveSteps) return false
+    const recent = steps.slice(-consecutiveSteps)
+    const signatures = recent.map((step) => {
+      if (step.toolCalls.length === 0) return null
+      return step.toolCalls
+        .map((call) => `${call.toolName}:${stableToolInput(call.input)}`)
+        .sort()
+        .join('|')
+    })
+    const first = signatures[0]
+    return first !== null && signatures.every((signature) => signature === first)
+  }
+}
+
 /**
  * Run the deep-mode agent once and return its final answer + trajectory.
  * Throws on stream error / abort (callers keep their own try/catch, exactly as
@@ -169,6 +223,21 @@ export async function runDeepModeAgent(
   }
 
   let accumulatedContent = ""
+
+  // Set by the stop conditions below; read by the follow-up prompt and the
+  // reader-facing note once the loop has ended.
+  let stoppedByRepeat = false
+  let stoppedByStepLimit = false
+  let stepCount = 0
+  let lastStepHadToolCalls = false
+  const loopStopNote = (): string | undefined =>
+    stoppedByRepeat ? t.repeatedQueryStopped : stoppedByStepLimit ? t.stepLimitReached : undefined
+  const repeatNote = (text: string): string => {
+    const note = loopStopNote()
+    return note && text.length > 0 ? `${text}
+
+_${note}_` : text
+  }
   const toolResults: Array<{ toolName: string; result: unknown }> = []
   const usedToolNames: string[] = []
 
@@ -198,11 +267,19 @@ export async function runDeepModeAgent(
     // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step loop:
     // after a tool call the SDK feeds the result back to the model automatically
     // and continues, up to N steps.
+    const repeatStop = repeatedToolCallIs(3)
     const result = await streamText({
       model,
       messages: messages as ModelMessage[],
       tools,
-      stopWhen: stepCountIs(10),
+      stopWhen: [
+        stepCountIs(MAX_TOOL_STEPS),
+        (context) => {
+          if (!repeatStop(context)) return false
+          stoppedByRepeat = true
+          return true
+        },
+      ],
       ...reasoningOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
@@ -211,6 +288,8 @@ export async function runDeepModeAgent(
         : undefined,
       abortSignal: abortController.signal,
       onStepFinish: ({ toolCalls }) => {
+        stepCount += 1
+        lastStepHadToolCalls = Boolean(toolCalls && toolCalls.length > 0)
         if (toolCalls && toolCalls.length > 0) {
           const toolNames = toolCalls
             .map((tc) => getToolDisplayName(tc?.toolName || "", t.toolNames))
@@ -253,9 +332,15 @@ export async function runDeepModeAgent(
       }
     }
     addUsage(await result.usage)
+    // The SDK continues after any step that called tools, so ending on the
+    // ceiling with tool calls means the ceiling stopped it, not the model.
+    stoppedByStepLimit = !stoppedByRepeat && stepCount >= MAX_TOOL_STEPS && lastStepHadToolCalls
+    const stopNote = loopStopNote()
+    if (stopNote) emit({ type: "status", state: `⚠️ ${stopNote}` })
   }
 
   if (accumulatedContent.length > 0) {
+    accumulatedContent = repeatNote(accumulatedContent)
     trajectory.push({ round: 1, kind: "text", text: accumulatedContent })
     emit({
       type: "final",
@@ -276,9 +361,10 @@ export async function runDeepModeAgent(
     // Only inject the citation-preservation hint when literature search actually
     // produced numbered references — otherwise the LLM hallucinates [1][2] tags.
     const answerQuestionText =
-      literatureCitations.length > 0
+      (literatureCitations.length > 0
         ? t.answerQuestion + (t.answerQuestionCitationsHint ?? "")
-        : t.answerQuestion
+        : t.answerQuestion) +
+      (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : stoppedByStepLimit ? (t.stepLimitHint ?? "") : "")
     const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
       messages,
       toolResultsSummary,
@@ -408,6 +494,7 @@ export async function runDeepModeAgent(
       })
       finalDisplayContent = processedContent
     }
+    finalDisplayContent = repeatNote(finalDisplayContent)
 
     emit({
       type: "final",

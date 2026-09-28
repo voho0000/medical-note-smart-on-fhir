@@ -1,0 +1,76 @@
+{
+  "calibrationProfiles": 1556,
+  "useRatioConstraints": false,
+  "hypotheses": [
+    {
+      "roundingDecimals": null,
+      "minimumEtaMargin": -0.38499205775818,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6019,
+        "levels": 7256
+      }
+    },
+    {
+      "roundingDecimals": 1,
+      "minimumEtaMargin": -0.03938760030998534,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6410,
+        "levels": 7298
+      }
+    },
+    {
+      "roundingDecimals": 2,
+      "minimumEtaMargin": 2.352297337138154e-06,
+      "allModelsFeasible": true,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 7445,
+        "levels": 7445
+      }
+    },
+    {
+      "roundingDecimals": 3,
+      "minimumEtaMargin": -0.03092169251879756,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6835,
+        "levels": 7359
+      }
+    },
+    {
+      "roundingDecimals": 4,
+      "minimumEtaMargin": -0.0911083973635079,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6349,
+        "levels": 7339
+      }
+    },
+    {
+      "roundingDecimals": 5,
+      "minimumEtaMargin": -0.14495477750390373,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6164,
+        "levels": 7321
+      }
+    },
+    {
+      "roundingDecimals": 6,
+      "minimumEtaMargin": -0.19187982979221996,
+      "allModelsFeasible": false,
+      "agreement": {
+        "eligible": 7445,
+        "exact": 6109,
+        "levels": 7316
+      }
+    }
+  ]
+}

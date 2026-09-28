@@ -20,6 +20,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       getRecentVisits: 'Get recent visits',
       getEncounterDetails: 'Get encounter details',
       listEncounterDepartments: 'List departments',
+      searchEncountersByDiagnosis: 'Search visits by diagnosis',
       queryConditions: 'Query conditions',
       queryObservations: 'Query observations',
       queryDiagnosticReports: 'Query reports',

@@ -2,9 +2,9 @@ import { classifyReport, reportNarrative, extractEchoMeasurements } from '@voho0
 import type { DiagnosticReportEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillValue } from './hooks/use-lab-autofill.hook'
 
-export type EchoKey = 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall'
+export type EchoKey = 'lvef' | 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall'
 export type EchoValues = Partial<Record<EchoKey, number>>
-const units: Record<EchoKey, string> = { ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm' }
+const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm' }
 
 /** Extends personalization's cross-hospital echo scanner. No diagnoses are inferred.
  * Only unequivocal point measurements are accepted; ranges/comparators are not numbers.
@@ -27,6 +27,8 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     const u = (match[2] ?? '').toLowerCase().replace(/\s/g, '').replace(/sec$/, 's')
     return u === 'm/s' && unit?.includes('cm') ? value * 100 : value
   }
+  const lvef = number('\\b(?:LVEF|LV\\s*(?:ejection\\s*fraction|EF)|left\\s*ventricular\\s*ejection\\s*fraction)', '%')
+  if (lvef !== undefined && lvef > 0) values.lvef = lvef
   const e = number('\\b(?:MV\\s*)?E(?:\\s*(?:max\\s*vel(?:ocity)?|vel(?:ocity)?|wave))?\\b(?!\\s*[/\\\'])', 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   // Some reports print both transmitral velocities as “MV E/A 54/89.1cm/s”.
   // Require both point values and a velocity unit; a dimensionless E/A ratio is not E.
@@ -75,7 +77,7 @@ export function parseCalculatorEcho(raw: string): EchoValues {
   if (values.wall === undefined && ivs !== undefined && pw !== undefined) values.wall = Math.max(ivs, pw)
   if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = 2 * pw / lvid
   // Reject implausible scales rather than auto-filling an unconverted unit.
-  const limits: Record<EchoKey, number> = { ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50 }
+  const limits: Record<EchoKey, number> = { lvef: 100, ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50 }
   for (const key of Object.keys(values) as EchoKey[]) {
     if (values[key]! < 0 || values[key]! > limits[key]) delete values[key]
   }
@@ -119,7 +121,7 @@ export function buildEchoAutofill(reports: DiagnosticReportEntity[], observation
   const { report, date, values } = latest
   const result: Partial<Record<EchoKey, AutofillValue>> = {}
   for (const key of Object.keys(values) as EchoKey[]) {
-    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
+    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
   }
   return result
 }

@@ -29,6 +29,7 @@ import {
   patientInfoSchema,
   healthSummarySnapshotSchema,
   encounterDetailsSchema,
+  encounterDiagnosisSearchSchema,
   activeMedicationsSchema,
   observationSearchSchema,
   recentVisitsSchema,
@@ -52,6 +53,7 @@ import {
   applyLimit,
 } from './_filter-helpers'
 import { scrubPii } from './_scrub-pii'
+import { CANONICAL_KEYS, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import {
   medicationClinicalIdentityKey,
@@ -98,6 +100,61 @@ export interface AgentDataSource {
 
 function pickName(concept: any): string | undefined {
   return concept?.text || concept?.coding?.[0]?.display
+}
+
+/**
+ * Every canonical analyte key a concept can be known by: its LOINC, and each
+ * text / display run through the shared alias table. A record coded LOINC
+ * 3094-0 with display "Urea nitrogen [Mass/volume] in Serum or Plasma" and
+ * text 「血中尿素氮」 is therefore reachable as BUN; a substring search for
+ * "BUN" alone finds none of those three strings and reports an absence the
+ * record contradicts.
+ */
+function conceptAnalyteKeys(concept: any): Set<string> {
+  const keys = new Set<string>()
+  const fromLoinc = canonicalKeyFromLoinc({ code: concept })
+  if (fromLoinc) keys.add(fromLoinc)
+  for (const raw of [concept?.text, ...((concept?.coding ?? []).map((coding: any) => coding?.display))]) {
+    if (typeof raw !== 'string' || !raw) continue
+    const key = canonicalTestKeyFromString(raw)
+    if (CANONICAL_KEYS.has(key)) keys.add(key)
+  }
+  return keys
+}
+
+/** Query spellings the shared table does not carry but clinicians type daily. */
+const QUERY_ANALYTE_ALIASES: Record<string, string> = {
+  CR: 'CREA',
+  SCR: 'CREA',
+  'S-CR': 'CREA',
+}
+
+/** The canonical analyte a free-text query names, if the alias table knows it.
+ * A specimen word in front ("blood urea nitrogen", "serum potassium") or a
+ * "level" behind it does not change which analyte is meant. */
+function queryAnalyteKey(query: string | undefined): string | undefined {
+  if (!query) return undefined
+  const candidates = [query]
+  const trimmed = query
+    .normalize('NFKC')
+    .replace(/^\s*(?:whole\s+blood|blood|serum|plasma|venous|arterial|s\.|b\.)\s+/i, '')
+    .replace(/\s+(?:levels?|values?|concentration)\s*$/i, '')
+    .trim()
+  if (trimmed && trimmed !== query) candidates.push(trimmed)
+  for (const candidate of candidates) {
+    const direct = QUERY_ANALYTE_ALIASES[candidate.toUpperCase()]
+    if (direct) return direct
+    const key = canonicalTestKeyFromString(candidate)
+    if (CANONICAL_KEYS.has(key)) return key
+  }
+  return undefined
+}
+
+/** Substring match on the concept's names and codes, or the same analyte by alias. */
+function conceptMatchesQuery(concept: any, query: string | undefined): boolean {
+  if (matchSubstring(conceptSearchText(concept), query)) return true
+  const key = queryAnalyteKey(query)
+  return key !== undefined && conceptAnalyteKeys(concept).has(key)
 }
 
 function conceptSearchText(concept: any): string {
@@ -375,10 +432,21 @@ function diagnosticReportQueryTerms(query?: string, queries?: string[]): string[
   return [...new Map(terms.map(term => [term.normalize('NFKC').toLowerCase(), term])).values()]
 }
 
+/** A report matches a term by substring anywhere in its text, or because its
+ * own code or one of its result observations is the analyte the term names. */
+function diagnosticReportMatchesTerm(report: any, term: string): boolean {
+  if (matchSubstring(diagnosticReportSearchText(report), term)) return true
+  const key = queryAnalyteKey(term)
+  if (key === undefined) return false
+  if (conceptAnalyteKeys(report?.code).has(key)) return true
+  return (report?._observations ?? []).some((observation: any) =>
+    observationConcepts(observation).some(concept => conceptAnalyteKeys(concept).has(key))
+  )
+}
+
 function matchesDiagnosticReportQuery(report: any, queryTerms: string[]): boolean {
   if (queryTerms.length === 0) return true
-  const searchText = diagnosticReportSearchText(report)
-  return queryTerms.some(term => matchSubstring(searchText, term))
+  return queryTerms.some(term => diagnosticReportMatchesTerm(report, term))
 }
 
 function selectDiagnosticReportPage(
@@ -395,9 +463,7 @@ function selectDiagnosticReportPage(
   const selected: any[] = []
   const seen = new Set<any>()
   for (const term of queryTerms) {
-    const representative = reports.find(report =>
-      matchSubstring(diagnosticReportSearchText(report), term)
-    )
+    const representative = reports.find(report => diagnosticReportMatchesTerm(report, term))
     if (representative && !seen.has(representative)) {
       selected.push(representative)
       seen.add(representative)
@@ -547,6 +613,13 @@ function calculateAge(birthDate?: string): number | null {
     && (m < 0 || (birthDate.length === 10 && m === 0 && today.getDate() < birth.getDate()))
   ) age--
   return age
+}
+
+/** Lower-case, NFKC, and strip the separators that vary between how an ICD
+ * code is written (R35.0 / R350 / r35-0) so a code or a diagnosis label can be
+ * matched as a plain substring. */
+function normalizeDiagnosisTerm(value: string): string {
+  return value.normalize('NFKC').toLowerCase().replace(/[\s.\-–—_·]/g, '')
 }
 
 function refToId(ref: string | undefined): string | undefined {
@@ -1337,6 +1410,59 @@ export function createFhirTools(getData: () => AgentDataSource) {
       },
     }),
 
+    searchEncountersByDiagnosis: tool({
+      description: 'Find every visit whose recorded diagnosis / reason (ICD code or text) matches, across the whole record, oldest first, with the first and latest occurrence. ONE call answers "when did X first appear", "how many visits carried X", "was X ever recorded" — do not page through visits with getEncounterDetails for that. Matching ignores case, dots, spaces and dashes (R350, R35.0 and 頻尿 all work) and a code matches as a prefix. Also returns matching problem-list Conditions. Visit-level codes are billing/reason codes, not confirmed diagnoses.',
+      inputSchema: encounterDiagnosisSearchSchema,
+      execute: async ({ query, dateFrom, dateTo, limit }: z.infer<typeof encounterDiagnosisSearchSchema>) => {
+        const { collection } = getData()
+        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
+        const needle = normalizeDiagnosisTerm(query)
+        if (!needle) return scrub({ success: false, summary: 'Empty query', data: [] })
+
+        const conceptMatches = (concept: any): boolean => {
+          const texts: unknown[] = [concept?.text, ...((concept?.coding ?? []) as any[]).flatMap((c) => [c?.code, c?.display])]
+          return texts.some((v) => typeof v === 'string' && normalizeDiagnosisTerm(v).includes(needle))
+        }
+
+        const hits: Array<{ encounterId: string; date?: string; type: string; department: string; matchedDiagnoses: Array<{ code?: string; label?: string }> }> = []
+        for (const e of collection.encounters as any[]) {
+          const date = encounterDate(e)
+          if ((dateFrom || dateTo) && !isWithinDateRange(date, dateFrom, dateTo)) continue
+          const matched = ((e.reasonCode ?? []) as any[]).filter(conceptMatches)
+          if (matched.length === 0) continue
+          hits.push({
+            encounterId: e.id,
+            date: date?.slice(0, 10),
+            type: classifyEncounterType(e),
+            department: encounterDeptText(e),
+            matchedDiagnoses: matched.map((rc: any) => ({ code: rc.coding?.[0]?.code, label: pickName(rc) || rc.text })),
+          })
+        }
+        hits.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+
+        const conditions = ((collection.conditions ?? []) as any[]).filter((c) => conceptMatches(c.code)).map((c) => ({
+          code: pickName(c.code),
+          clinicalStatus: typeof c.clinicalStatus === 'string' ? c.clinicalStatus : c.clinicalStatus?.coding?.[0]?.code,
+          recordedDate: c.recordedDate,
+          onsetDateTime: c.onsetDateTime,
+        }))
+
+        const first = hits[0]?.date
+        const latest = hits[hits.length - 1]?.date
+        return scrub({
+          success: true,
+          summary: hits.length > 0
+            ? `Found ${hits.length} visit(s) with a diagnosis matching "${query}" (first ${first ?? 'unknown date'}, latest ${latest ?? 'unknown date'}); ${conditions.length} matching problem-list Condition(s)`
+            : `No visit carries a diagnosis matching "${query}"; ${conditions.length} matching problem-list Condition(s)`,
+          count: hits.length,
+          firstOccurrence: first,
+          latestOccurrence: latest,
+          data: applyLimit(hits, limit, 100),
+          conditions,
+        })
+      },
+    }),
+
     // ── Diagnoses & Problems ───────────────────────────────────────────────
 
     queryConditions: tool({
@@ -1392,7 +1518,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             )
             if (!matchesCode) return false
           }
-          if (codeQuery && !observationConcepts(o).some(concept => matchSubstring(conceptSearchText(concept), codeQuery))) return false
+          if (codeQuery && !observationConcepts(o).some(concept => conceptMatchesQuery(concept, codeQuery))) return false
           if (abnormalOnly && !isAbnormalObservation(o)) return false
           return true
         })
@@ -1490,7 +1616,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           (diagnosticReportDate(b) || '').localeCompare(diagnosticReportDate(a) || '')
         )
         const matchedQueryTerms = requestedQueryTerms.filter(term =>
-          filtered.some(report => matchSubstring(diagnosticReportSearchText(report), term))
+          filtered.some(report => diagnosticReportMatchesTerm(report, term))
         )
         const unmatchedQueryTerms = requestedQueryTerms.filter(term =>
           !matchedQueryTerms.includes(term)
@@ -1793,9 +1919,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         // Match panel and component names/codes, then retain each dated panel
         // as a whole so systolic and diastolic readings cannot be mixed.
         const nameMatches = (o: any): boolean => {
-          return observationConcepts(o).some(concept =>
-            matchSubstring(conceptSearchText(concept), query)
-          )
+          return observationConcepts(o).some(concept => conceptMatchesQuery(concept, query))
         }
         const seedKeys = new Set(unique.filter(nameMatches).map((o: any) => codeKey(o.code)))
         // Expand to every observation sharing a matched LOINC, so display aliases
@@ -1828,7 +1952,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`,
+          summary: matches.length > 0
+            ? `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`
+            : `Matched 0 observation(s) for "${query}". Names are matched by substring and by analyte alias (BUN, CRP, uric acid, HbA1c, …); before concluding the test was never done, call listAvailableObservationCodes to see the names this record actually uses.`,
           count: capped.length,
           ...page,
           incomplete: false,

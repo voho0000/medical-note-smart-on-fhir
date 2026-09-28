@@ -1,7 +1,7 @@
 # MediPrisma 隱私權政策
 
-**生效／最後更新：2026-09-04**
-**適用程式基準：v0.43.0**
+**生效／最後更新：2026-09-22**
+**適用程式基準：v0.51.0**
 
 本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
 
@@ -75,10 +75,13 @@ Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplex
 
 若您使用「回報問題」，會傳送：
 
-- 您提供的 Email、問題類型、嚴重度、描述與重現步驟。
-- 時間、user agent、螢幕解析度、瀏覽器語言、目前 path 與 FHIR server URL。
+- 您提供的 Email、問題類型、影響程度、描述與重現步驟。
+- 您主動附加的問題畫面圖片（選填，最多三張且合計 8 MB）。
+- 時間、user agent、螢幕與視窗大小、像素比、根字級、主題、時區、瀏覽器語言、目前 path／檢視、app 版本、啟動來源／站點與 FHIR server origin。
 
-表單刻意不收 patientId，並提醒不要輸入姓名、病歷號等個資；自由文字仍由您控制。回饋可能經 Firebase Function 與 Resend 寄給維護者。
+表單刻意不收 patientId、完整 FHIR URL、launch query 或圖片本機檔名，並提醒不要輸入或保留姓名、病歷號等個資；自由文字與圖片內容仍由您控制。瀏覽器會先重編碼附圖以移除 EXIF 等中繼資料，介面不另設遮蔽確認勾選。附圖只在送出時傳給 feedback Function，通過格式與大小驗證後作為 Resend 郵件附件寄給維護者，不寫入 app storage、Firebase Storage 或 Firestore。郵件及服務端備份的保存期限由部署者與 Resend 政策決定。
+
+為限制濫用，正式 feedback Function 會以雜湊後的 Firebase uid 記錄每小時送出次數；該紀錄不包含回報文字、Email 或圖片。
 
 ### 2.7 一般裝置與網路資料
 
@@ -112,6 +115,14 @@ Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在
 **明確不記錄**：任何病人資料或 FHIR 內容（姓名、病歷號、檢驗值、報告與文件文字、翻譯與解讀結果、被引用資源的 id 與標題）、送給 AI 的提示詞與 AI 的回覆內容、複製到剪貼簿的文字、Firebase uid（從不呼叫 `setUserId`）、完整網址與其 query 參數。自動 `page_view` 已關閉（正是因為 SMART 啟動網址帶有 `iss` 與 OAuth `code`），Google Signals 與廣告個人化亦已關閉。依 Google 說明，GA4 不會記錄或保存個別 IP 位址（僅於伺服器端用於推導概略地理位置後即丟棄）；此為 Google 的產品行為，非本 app 可驗證或控制的部分。§2.7 所述的 hosting／Firebase 營運 log 不受此影響。
 
 程式端以白名單強制上述邊界：事件名稱、參數名稱與參數值都逐一比對允許清單，字串上限 64 字元，任何不符者整筆丟棄。相關程式集中在 `src/infrastructure/telemetry/usage-analytics.ts`。
+
+### 2.9 TVGH 診斷 Collector（指定站點自動紀錄）
+
+當前網址恰有一個 `site=vghtpe` 時，自動向部署指定的 Collector 位址背景傳送功能／請求的結果與效能紀錄，不需使用者手動啟用。資料包含隨機事件 UUID、操作時間、版本、固定功能／模型／錯誤分類、耗時，以及可量測時的就診、用藥、檢驗、報告、文件精確筆數、輸入 token 估計區間與裁切狀態。
+
+為排查診間電腦問題，此資料流使用 localStorage 保存隨機瀏覽器識別碼，並將其隨事件傳送；儲存受限時退回單頁識別碼。Gateway 接收現有 Firebase ID token 作驗證，記錄驗證成功的 UID、email（匿名帳號通常沒有 email）、連線來源 IP，以及管理員對照出的診間／電腦名稱。UID 不等於 Windows 或院內職工帳號，IP 也可能是共用出口。原 token 不保存。上述識別與事件內容一起加密，事件 UUID 與收件時間為明文索引；僅授權管理員可解密讀取，保存期限由部署者明確設定。
+
+此資料流不傳 prompt、AI 回覆、病歷內容、音訊、圖片、病人識別碼或其雜湊。不宣稱診斷資料不可識別。Firebase SDK 自動提供／更新憑證，Collector 不另存 token，也不要求使用者額外登入；Gateway 定期向 Google 取得公鑰，不將紀錄傳給 Google。認證、網路失敗或關頁可能漏記，但不影響原本 AI 或臨床功能。實作與限制見 [Collector 試行說明](docs/COLLECTOR-PILOT.md)。程式碼存在不代表正式部署已啟用。
 
 ## 3. 瀏覽器端儲存
 
@@ -176,7 +187,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | Firestore chat history | 直到使用者在 history 刪除或依部署者政策刪除；codebase 無自動 TTL |
 | User templates／modules | 登入時可同步至帳號；訪客保留於目前瀏覽器，直到使用者刪除、重設或移除網站資料 |
 | Shared prompts | 直到作者／管理者刪除或依社群政策移除 |
-| Feedback email／service logs | 由部署者、Resend 與服務政策決定 |
+| Feedback email／附圖附件／service logs | 由部署者、Resend 與服務政策決定 |
 
 點選「清除本地資料」可刪除 app 管理的 Bundle、影像與 AI result caches。清除瀏覽器網站資料也可移除 local storage；這不會自動刪除 Firestore 或第三方已收到的請求。
 

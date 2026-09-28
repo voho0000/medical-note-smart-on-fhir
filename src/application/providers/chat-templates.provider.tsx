@@ -322,6 +322,37 @@ export function getDefaultChatTemplates(language: 'en' | 'zh-TW', audience: Audi
   return base.map((t) => ({ ...t, audience }))
 }
 
+/**
+ * Keep the template list stable at persistence boundaries.
+ *
+ * A template id is only unique inside one audience because a few bundled
+ * medical/patient defaults intentionally share ids. Gallery imports have a
+ * stronger source key: one personal copy per source and audience is the
+ * contract already enforced by addTemplate(). Older browser/account data can
+ * predate that guard, so collapse only those two unambiguous duplicate cases.
+ * Deliberately do not compare label/content; users may intentionally create
+ * two similar manual templates.
+ */
+export function deduplicateChatTemplates(templates: ChatTemplate[]): ChatTemplate[] {
+  const seenIds = new Set<string>()
+  const seenSourceKeys = new Set<string>()
+
+  return templates.filter((template) => {
+    const idKey = `${template.audience}\u0000${template.id}`
+    if (seenIds.has(idKey)) return false
+
+    const sourcePromptKey = template.sourcePromptKey?.trim()
+    const sourceKey = sourcePromptKey
+      ? `${template.audience}\u0000${sourcePromptKey}`
+      : null
+    if (sourceKey && seenSourceKeys.has(sourceKey)) return false
+
+    seenIds.add(idKey)
+    if (sourceKey) seenSourceKeys.add(sourceKey)
+    return true
+  })
+}
+
 function getAllDefaults(language: 'en' | 'zh-TW'): ChatTemplate[] {
   return [
     ...getDefaultChatTemplates(language, 'medical'),
@@ -396,10 +427,10 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
           setCustomByAudience({ medical: false, patient: false })
           return
         }
-        const sanitized = parsed
+        const sanitized = deduplicateChatTemplates(parsed
           .map((e, i) => sanitizeTemplate(e, i))
           .filter((t): t is ChatTemplate => t !== null)
-          .slice(0, MAX_TEMPLATES)
+        ).slice(0, MAX_TEMPLATES)
 
         // If sanitized covers only one audience, seed defaults for the other audience so the user
         // still sees something when they switch.
@@ -428,10 +459,10 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
         try {
           const parsed = JSON.parse(stored)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const sanitized = parsed
+            const sanitized = deduplicateChatTemplates(parsed
               .map((e, i) => sanitizeTemplate(e, i))
               .filter((t): t is ChatTemplate => t !== null)
-              .slice(0, MAX_TEMPLATES)
+            ).slice(0, MAX_TEMPLATES)
             if (sanitized.length > 0) {
               batchSaveChatTemplates(user.uid, sanitized).catch((err) => {
                 console.warn('[Chat Templates] Migration to Firestore failed', err)
@@ -458,16 +489,17 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
 
     const unsubscribe = subscribeToChatTemplates(user.uid, (updated: ChatTemplate[]) => {
       if (isSyncing) return
-      if (updated.length === 0) {
+      const uniqueUpdated = deduplicateChatTemplates(updated)
+      if (uniqueUpdated.length === 0) {
         setAllTemplates(getAllDefaults(currentLang))
         setCustomByAudience({ medical: false, patient: false })
       } else {
-        const seen = new Set(updated.map((t) => t.audience))
-        const merged: ChatTemplate[] = [...updated.slice(0, MAX_TEMPLATES)]
+        const seen = new Set(uniqueUpdated.map((t) => t.audience))
+        const merged: ChatTemplate[] = [...uniqueUpdated.slice(0, MAX_TEMPLATES)]
         const customMap: Record<Audience, boolean> = { medical: false, patient: false }
         ;(['medical', 'patient'] as Audience[]).forEach((aud) => {
           if (seen.has(aud)) {
-            customMap[aud] = !templatesEqualDefaults(updated, currentLang, aud)
+            customMap[aud] = !templatesEqualDefaults(uniqueUpdated, currentLang, aud)
           } else {
             merged.push(...getDefaultChatTemplates(currentLang, aud))
           }
@@ -596,10 +628,10 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   // Called after restore confirmation or an explicit recovery action.
   const applyTemplates = async (replacement: ChatTemplate[]): Promise<boolean> => {
     if (isSaving || !hasLoadedFromStorage || (isLoading && user?.uid)) return false
-    const next = [
+    const next = deduplicateChatTemplates([
       ...allTemplatesRef.current.filter(template => template.audience !== audience),
       ...replacement.map((template, order) => ({ ...template, audience, order })),
-    ]
+    ])
     setIsSaving(true)
     setIsSyncing(true)
     try {
@@ -626,7 +658,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     setIsSaving(true)
     setIsSyncing(true)
     try {
-      const current = allTemplatesRef.current
+      const current = deduplicateChatTemplates(allTemplatesRef.current)
       // Renumber order within each audience to keep it tight
       const byAudience = new Map<Audience, ChatTemplate[]>()
       current.forEach((t) => {

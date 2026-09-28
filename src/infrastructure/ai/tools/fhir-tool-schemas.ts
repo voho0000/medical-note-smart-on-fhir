@@ -62,6 +62,14 @@ export const encountersSchema = z.object({
   summarize: summarizeParam,
 })
 
+export const encounterDiagnosisSearchSchema = z.object({
+  query: z.string().trim().min(1).max(120)
+    .describe('ICD code or diagnosis text to look for in every visit\'s recorded diagnoses / reasons, e.g. "R35.0", "R350", "頻尿", "E11". Matching ignores case, dots, spaces and dashes, and a code matches as a prefix (E11 matches E11.9).'),
+  dateFrom: z.string().optional().describe('Only visits from this date (YYYY-MM-DD)'),
+  dateTo: z.string().optional().describe('Only visits until this date (YYYY-MM-DD)'),
+  limit: limitParam,
+})
+
 export const diagnosticReportsSchema = z.object({
   category: z.string().optional().describe('Filter by category (e.g., "LAB", "RAD")'),
   query: z.string().optional().describe('Case- and separator-insensitive fuzzy search across report/panel/test name, code, component observation names, conclusion, notes, and attachment titles. Comma-separated test names are matched independently. Use this for "does the patient have X?" questions.'),
