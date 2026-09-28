@@ -57,6 +57,27 @@ const DATA: OverviewLabsData = {
   navResourceId: 'o1',
 }
 
+function obs(id: string, code: string, date: string, value: number, unit: string, interpretation?: string) {
+  return {
+    resourceType: 'Observation',
+    id,
+    status: 'final',
+    code: { text: code },
+    effectiveDateTime: `${date}T09:00:00+08:00`,
+    valueQuantity: { value, unit },
+    ...(interpretation ? { interpretation: [{ coding: [{ code: interpretation }] }] } : {}),
+  }
+}
+
+// The whole loaded chart: CREA twice in the window, one ALT, and an
+// NT-proBNP from before the window.
+const CHART = [
+  obs('o1', 'CREA', '2026-09-18', 1.32, 'mg/dL', 'H'),
+  obs('o2', 'CREA', '2026-06-30', 1.28, 'mg/dL', 'H'),
+  obs('o3', 'ALT', '2026-09-18', 22, 'U/L'),
+  obs('o5', 'NT-PROBNP', '2025-11-02', 2105, 'pg/mL', 'H'),
+]
+
 function renderSection(data: OverviewLabsData = DATA) {
   return render(<OverviewLabsSection data={data} fit={{ bounded: false }} />)
 }
@@ -93,6 +114,23 @@ describe('OverviewLabsSection — 自訂', () => {
     // A pin with nothing in the window keeps its (empty) row; so does a reminder.
     const names = card().getAllByText(/^(NT-proBNP|ALT|CREA|Digoxin 濃度)$/).map((node) => node.textContent)
     expect(names).toEqual(['NT-proBNP', 'ALT', 'CREA', 'Digoxin 濃度'])
+  })
+
+  it('keeps a pinned row empty in the period even when the chart holds an older result', async () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA', 'chem:NT-PROBNP'], labMode: 'mine' })
+    renderSection({ ...DATA, allObservations: CHART })
+    // Wait for the whole-chart pass (it adds CREA's trend button).
+    await card().findByRole('button', { name: '查看 CREA 趨勢' })
+    expect(card().getByText('NT-proBNP')).toBeInTheDocument()
+    expect(card().queryByText(/2105/)).toBeNull()
+  })
+
+  it('puts a trend button on an analyte the whole chart can plot', async () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA', 'chem:ALT'], labMode: 'mine' })
+    renderSection({ ...DATA, allObservations: CHART })
+    expect(await card().findByRole('button', { name: '查看 CREA 趨勢' })).toBeInTheDocument()
+    // A single ALT result is not a trend.
+    expect(card().queryByRole('button', { name: '查看 ALT 趨勢' })).toBeNull()
   })
 
   it('says so when no pinned test has a result in the period', () => {
