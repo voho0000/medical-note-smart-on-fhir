@@ -24,6 +24,12 @@
  * `packVersion` travels with each decision so a reader can tell 「這是對哪一版
  * 規則做的決定」 — a row whose wording changed between releases is not
  * necessarily the row that was decided.
+ *
+ * The visit decision map records here too, one decision per decision point
+ * rather than per module (`visitDecisionKey` in `renderers/visit/visit-decisions`),
+ * and adds the pack's action id and label, its response check and its reopen
+ * condition. The queue row and the map cell for one point write the same key,
+ * so a point is decided once wherever it was decided.
  */
 import { create } from 'zustand'
 import {
@@ -47,8 +53,41 @@ export type PhysicianDecisionKind =
   | 'exercise-cleared'
   | 'supervised-exercise'
   | 'reviewed'
+  | 'held'
+  | 'at-max-tolerated'
 
-export interface PhysicianDecision {
+/**
+ * What the pack asked to be checked after a decision, and within how many days.
+ * Pack wording, stored as it was shown so the plan reads back what was decided.
+ */
+export interface DecisionResponseCheck {
+  text: string
+  /** When, in the guideline's own words (「1–2 週」); absent where ESC gives none. */
+  interval?: string
+  /** Kept only for decisions stored before `interval`. */
+  withinDays?: number
+}
+
+/**
+ * Where a decision was taken on the visit decision map. A decision recorded
+ * there is keyed by its decision point rather than by a module, and carries the
+ * pack's own action, check and reopen condition. Decisions recorded on the
+ * other layouts have none of these, and a record written before they existed
+ * reads back without them.
+ */
+export interface VisitDecisionContext {
+  /** The decision point, e.g. `DP-07`. */
+  dp?: string
+  /** The pack's stable action id. */
+  actionId?: string
+  /** The action's label as the pack printed it (「換 ARNI」). */
+  actionLabel?: string
+  responseCheck?: DecisionResponseCheck
+  /** When the pack says to ask again (「K 回到 <5.0 時重新開始」). */
+  reopenWhen?: string
+}
+
+export interface PhysicianDecision extends VisitDecisionContext {
   decision: PhysicianDecisionKind
   /** Reason ids from `DECISION_REASONS`; free text goes in `note`. */
   reasons: readonly string[]
@@ -81,6 +120,8 @@ const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
   'exercise-cleared',
   'supervised-exercise',
   'reviewed',
+  'held',
+  'at-max-tolerated',
 ]
 
 function isDecisionKind(value: unknown): value is PhysicianDecisionKind {
@@ -109,11 +150,34 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
         ...(typeof record.note === 'string' && record.note ? { note: record.note } : {}),
         recordedAt: typeof record.recordedAt === 'string' ? record.recordedAt : '',
         packVersion: typeof record.packVersion === 'string' ? record.packVersion : '',
+        ...toVisitContext(record),
       }
     }
     return decisions
   } catch {
     return {}
+  }
+}
+
+/** The visit-map fields, each kept only when it is the shape it claims to be. */
+function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
+  const check = record.responseCheck as Record<string, unknown> | undefined
+  const withinDays = check && typeof check === 'object' ? check.withinDays : undefined
+  const interval = check && typeof check === 'object' ? check.interval : undefined
+  return {
+    ...(typeof record.dp === 'string' && record.dp ? { dp: record.dp } : {}),
+    ...(typeof record.actionId === 'string' && record.actionId ? { actionId: record.actionId } : {}),
+    ...(typeof record.actionLabel === 'string' && record.actionLabel ? { actionLabel: record.actionLabel } : {}),
+    ...(check && typeof check === 'object' && typeof check.text === 'string' && check.text
+      ? {
+          responseCheck: {
+            text: check.text,
+            ...(typeof interval === 'string' && interval ? { interval } : {}),
+            ...(typeof withinDays === 'number' && Number.isFinite(withinDays) && withinDays >= 0 ? { withinDays } : {}),
+          },
+        }
+      : {}),
+    ...(typeof record.reopenWhen === 'string' && record.reopenWhen ? { reopenWhen: record.reopenWhen } : {}),
   }
 }
 
@@ -129,7 +193,7 @@ function writeStoredDecisions(patientId: string, decisions: PhysicianDecisionMap
 const hydration = createHydrationGuard()
 
 /** What a decision is being recorded about, without the clock or the store. */
-export interface PhysicianDecisionInput {
+export interface PhysicianDecisionInput extends VisitDecisionContext {
   decision: PhysicianDecisionKind
   reasons?: readonly string[]
   note?: string
@@ -211,6 +275,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
           ...(input.note?.trim() ? { note: input.note.trim() } : {}),
           recordedAt: now.toISOString(),
           packVersion: input.packVersion,
+          ...toVisitContext(input as unknown as Record<string, unknown>),
         },
       }
       // In memory first; the encryption runs in the background and cannot

@@ -40,12 +40,31 @@ function EchoReportDialog({ metric, isEnglish, onClose, ecg = false }: { ecg?: b
   </Dialog>
 }
 
-export function EchoReportButton({ metric, isEnglish, ecg = false }: { ecg?: boolean; metric: HeartFailureMetric; isEnglish: boolean }) {
+/**
+ * Opens the original echo (or ECG) report. `link` is the status line's form:
+ * a small primary-coloured 「報告」 beside the value, as the map's other links.
+ */
+export function EchoReportButton({ metric, isEnglish, ecg = false, variant = 'button' }: { ecg?: boolean; metric: HeartFailureMetric; isEnglish: boolean; variant?: 'button' | 'link' }) {
   const [open, setOpen] = useState(false)
+  const label = ecg ? (isEnglish ? 'ECG report' : '心電圖報告') : (isEnglish ? 'Echo report' : '心超報告')
   return <>
-    <Button type="button" aria-label={ecg ? (isEnglish ? 'ECG report' : '心電圖報告') : (isEnglish ? 'Echo report' : '心超報告')} variant="outline" size="sm" className="shrink-0 h-6 gap-1 px-1.5 text-xs shadow-none" onClick={() => setOpen(true)}>
-      <FileText className="size-3" />{isEnglish ? 'Report' : '報告'}
-    </Button>
+    {variant === 'link' ? (
+      // Inline, so it sits on the value's own baseline rather than centred
+      // beside it (clinician feedback 2026-09-28).
+      <button
+        type="button"
+        aria-label={label}
+        className="inline rounded px-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => setOpen(true)}
+        data-testid={ecg ? 'cdss-status-ecg-report' : 'cdss-status-echo-report'}
+      >
+        <FileText className="mr-0.5 inline-block size-3 align-[-1px]" aria-hidden="true" />{isEnglish ? 'Report' : '報告'}
+      </button>
+    ) : (
+      <Button type="button" aria-label={label} variant="outline" size="sm" className="shrink-0 h-6 gap-1 px-1.5 text-xs shadow-none" onClick={() => setOpen(true)}>
+        <FileText className="size-3" />{isEnglish ? 'Report' : '報告'}
+      </Button>
+    )}
     {open ? <EchoReportDialog ecg={ecg} metric={metric} isEnglish={isEnglish} onClose={() => setOpen(false)} /> : null}
   </>
 }
