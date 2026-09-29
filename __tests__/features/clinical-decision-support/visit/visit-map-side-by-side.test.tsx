@@ -7,7 +7,7 @@
  * beside the column, and nothing jumps to show what is already in view.
  */
 import { useMemo } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { VisitDecisionScreen } from '@/features/clinical-decision-support/renderers/visit/VisitDecisionScreen'
 import { revealTop } from '@/features/clinical-decision-support/renderers/visit/reveal'
 import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
@@ -91,16 +91,71 @@ describe('the map beside its details', () => {
   it('keeps a section open when its name is pressed again, so the details are never empty', () => {
     atWidth(700)
     render(<Harness model={p4Model()} />)
+    // Beside the details a name shows its section and never folds it: the
+    // one shown is current, not expanded.
     const status = screen.getByTestId('cdss-visit-section-toggle-status')
-    expect(status).toHaveAttribute('aria-expanded', 'true')
+    expect(status).toHaveAttribute('aria-current', 'true')
+    expect(status).not.toHaveAttribute('aria-expanded')
     fireEvent.click(status)
-    expect(status).toHaveAttribute('aria-expanded', 'true')
+    expect(status).toHaveAttribute('aria-current', 'true')
     const outlook = screen.getByTestId('cdss-visit-section-toggle-outlook')
     fireEvent.click(outlook)
     fireEvent.click(outlook)
-    expect(outlook).toHaveAttribute('aria-expanded', 'true')
+    expect(outlook).toHaveAttribute('aria-current', 'true')
+    expect(status).not.toHaveAttribute('aria-current')
     expect(screen.getByTestId('cdss-visit-column-outlook')).toBeVisible()
     expect(screen.getByTestId('cdss-visit-column-status')).not.toBeVisible()
+  })
+
+  it('moves to the shown section when its name is pressed again, and leaves no move for later', () => {
+    atWidth(700)
+    const moved: string[] = []
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) { moved.push(this.id) }
+    render(<Harness model={p4Model()} />)
+    const status = screen.getByTestId('cdss-visit-section-toggle-status')
+    fireEvent.click(status)
+    moved.length = 0
+    // Pressed again: nothing changes but the page, which comes back to 01.
+    fireEvent.click(status)
+    expect(moved).toEqual(['cdss-visit-column-status'])
+    moved.length = 0
+    // A later press elsewhere goes where it goes, never back to 01's top.
+    const tile = screen.getByTestId('cdss-visit-overview-status').querySelector<HTMLButtonElement>('button[data-dp]')
+    fireEvent.click(tile!)
+    expect(moved).not.toContain('cdss-visit-column-status')
+  })
+
+  it('gives the column its measured height only as a column', () => {
+    atWidth(700)
+    render(<Harness model={p4Model()} />)
+    const column = screen.getByTestId('cdss-visit-overview')
+    expect(column.style.getPropertyValue('--cdss-column-height')).toMatch(/px$/)
+    expect(column.style.maxHeight).toBe('')
+    expect(column).toHaveClass('@min-[36rem]:max-h-(--cdss-column-height)')
+  })
+
+  it('stacks when the panel is narrowed, and stands beside again when widened', () => {
+    let width = 700
+    const observed: (() => void)[] = []
+    Element.prototype.getBoundingClientRect = function rect(this: Element) {
+      return this.getAttribute('data-testid') === 'cdss-visit-map' ? box(0, 800, width) : box(0, 0, 0)
+    }
+    window.ResizeObserver = class {
+      constructor(callback: () => void) { observed.push(callback) }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+    render(<Harness model={p4Model()} />)
+    const map = screen.getByTestId('cdss-visit-map')
+    expect(map).toHaveAttribute('data-layout', 'side-by-side')
+    width = 500
+    act(() => { for (const callback of observed) callback() })
+    expect(map).toHaveAttribute('data-layout', 'overview')
+    expect(screen.getByTestId('cdss-visit-overview').style.getPropertyValue('--cdss-column-height')).toBe('')
+    width = 900
+    act(() => { for (const callback of observed) callback() })
+    expect(map).toHaveAttribute('data-layout', 'side-by-side')
   })
 
   it('stacks under 36rem, where a section’s name folds it closed as before', () => {
@@ -115,17 +170,33 @@ describe('the map beside its details', () => {
 
 describe('moving the page only as far as it has to', () => {
   const scroll = jest.fn()
-  function target(top: number, height: number): Element {
+  const innerHeight = window.innerHeight
+  const made: Element[] = []
+  function target(top: number, height: number, parent: Element = document.body): HTMLElement {
     const element = document.createElement('div')
     element.getBoundingClientRect = () => box(top, height)
     element.scrollIntoView = scroll
-    document.body.appendChild(element)
+    parent.appendChild(element)
+    made.push(element)
+    return element
+  }
+  /** A panel that scrolls, at `top`, `height` tall, holding more than that. */
+  function panel(top: number, height: number): HTMLElement {
+    const element = target(top, height)
+    element.style.overflowY = 'auto'
+    Object.defineProperty(element, 'clientHeight', { value: height })
+    Object.defineProperty(element, 'scrollHeight', { value: height * 3 })
     return element
   }
 
   beforeEach(() => {
     scroll.mockClear()
     window.innerHeight = 800
+  })
+
+  afterEach(() => {
+    for (const element of made.splice(0)) element.remove()
+    window.innerHeight = innerHeight
   })
 
   it('leaves what is already in the upper part of the view where it is', () => {
@@ -143,5 +214,33 @@ describe('moving the page only as far as it has to', () => {
     expect(scroll).toHaveBeenLastCalledWith({ block: 'start' })
     revealTop(target(500, 1200))
     expect(scroll).toHaveBeenLastCalledWith({ block: 'start' })
+  })
+
+  it('measures against the panel that scrolls, not the window', () => {
+    const side = panel(100, 400)
+    // 50px into the panel: in view.
+    revealTop(target(150, 100, side))
+    expect(scroll).not.toHaveBeenCalled()
+    // In the window's upper part, but 350px into a 400px panel: not.
+    revealTop(target(450, 100, side))
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('passes over a layout that could scroll but holds nothing more than itself', () => {
+    const layout = target(0, 2000)
+    layout.style.overflowY = 'auto'
+    Object.defineProperty(layout, 'clientHeight', { value: 2000 })
+    Object.defineProperty(layout, 'scrollHeight', { value: 2000 })
+    const side = panel(100, 400)
+    layout.appendChild(side)
+    revealTop(target(450, 100, side))
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('does not count a top hidden under what is stuck above it as in view', () => {
+    const element = target(30, 200)
+    element.style.scrollMarginTop = '60px'
+    revealTop(element)
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' })
   })
 })

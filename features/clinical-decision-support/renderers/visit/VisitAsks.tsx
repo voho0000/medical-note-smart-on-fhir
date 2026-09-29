@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from 'react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
 import { answerToneClass, visitAnswerTone } from './answer-tones'
@@ -39,6 +40,7 @@ export function VisitAsks({
   onAnswer,
   pagePackId,
   sources,
+  testId = 'cdss-visit-asks',
 }: {
   asks: readonly VisitAsk[]
   answers: VisitAnswers
@@ -47,17 +49,22 @@ export function VisitAsks({
   /** This page's pack, to tell an answer given here from one given elsewhere. */
   pagePackId?: string
   sources?: VisitAnswerProvenance
+  /** A second copy on the page (the questions carried into 02 and 03) is told apart by its own. */
+  testId?: string
 }) {
+  // Its own ids: the questions can be on the page twice, in 01 and carried
+  // into the step the clinician is on, and each group names its own label.
+  const idBase = useId()
   if (asks.length === 0) return null
   return (
     <section
       className="space-y-2"
       aria-label={isEnglish ? 'Asked at every visit' : '每次必問'}
-      data-testid="cdss-visit-asks"
+      data-testid={testId}
     >
       {asks.map((ask) => {
         const { value, prefilled } = effectiveAnswer(ask, answers)
-        const labelId = `cdss-visit-ask-${ask.id}`
+        const labelId = `${idBase}-ask-${ask.id}`
         // Only the clinician's own answer has a page it was given on; the
         // record's reading (a prefill) does not.
         const source = !prefilled && value ? sources?.[ask.id] : undefined

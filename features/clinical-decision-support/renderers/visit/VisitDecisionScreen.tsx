@@ -241,6 +241,8 @@ export function VisitDecisionScreen({
     (point: DecisionPointView) => latestDecisionFor(point, decisions, now),
     [decisions, now],
   )
+  // What the summary holds so far, for its step's name.
+  const recordedToday = model.points.filter((point) => decisionOf(point)).length
 
   // A step decided anew, or taken back, leaves the steps that followed from it
   // without the decision they answered: they go too (#166 review), so the
@@ -572,9 +574,13 @@ export function VisitDecisionScreen({
     const parts: string[] = []
     const toAnswer = block === 'status' ? (undiagnosed ? surfaces?.asksDetail?.openCount ?? 0 : unanswered) : 0
     if (toAnswer) parts.push(isEnglish ? `${toAnswer} to answer` : `待答 ${toAnswer}`)
+    // An answer that opened the fuller questions (喘變差) left them to fill
+    // in 01, wherever it was given.
+    const toFillIn = block === 'status' && !undiagnosed && asksDetailOpen && asksAutoOpen ? surfaces?.asksDetail?.openCount ?? 0 : 0
+    if (toFillIn) parts.push(isEnglish ? `${toFillIn} to fill in` : `待補 ${toFillIn}`)
     if (pendingIn(block)) parts.push(isEnglish ? `${pendingIn(block)} to decide` : `待決定 ${pendingIn(block)}`)
     else if (decidedIn(block)) parts.push(isEnglish ? `${decidedIn(block)} decided` : `已決定 ${decidedIn(block)}`)
-    return parts.length ? { text: parts.join(' · '), attention: toAnswer > 0 || pendingIn(block) > 0 } : undefined
+    return parts.length ? { text: parts.join(' · '), attention: toAnswer > 0 || toFillIn > 0 || pendingIn(block) > 0 } : undefined
   }
   const leadSummaries: Partial<Record<VisitBlock, { text: string; attention: boolean }>> = {}
   for (const block of BLOCK_ORDER) {
@@ -655,8 +661,29 @@ export function VisitDecisionScreen({
         )}
         {...(surfaces?.columnFooters ? { columnFooters: surfaces.columnFooters } : {})}
         detail={detailNode}
+        summary={{
+          content: <VisitSummary text={summaryText} isEnglish={isEnglish} />,
+          status: recordedToday
+            ? (isEnglish ? `${recordedToday} recorded` : `已記錄 ${recordedToday}`)
+            : (isEnglish ? 'Nothing recorded yet' : '尚未記錄'),
+        }}
+        {...(model.asks.length > 0 ? {
+          asks: {
+            pending: unansweredAsks.length > 0,
+            content: (
+              <VisitAsks
+                asks={model.asks}
+                answers={answers}
+                isEnglish={isEnglish}
+                onAnswer={onAnswer}
+                pagePackId={model.packId}
+                testId="cdss-visit-asks-carried"
+                {...(answerSources ? { sources: answerSources } : {})}
+              />
+            ),
+          },
+        } : {})}
       />
-      <VisitSummary text={summaryText} isEnglish={isEnglish} />
       {footer}
     </div>
   )
