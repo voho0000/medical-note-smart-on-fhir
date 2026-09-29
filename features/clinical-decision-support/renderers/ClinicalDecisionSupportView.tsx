@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import { clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
+import { DIABETES_FACT_KEYS, clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -94,10 +94,11 @@ import { statusStyle, StatusIcon } from './status-presentation'
 import { ClinicalHandoffCard } from './ClinicalHandoffCard'
 import { VisitDecisionScreen } from './visit/VisitDecisionScreen'
 import type { VisitAnswers, VisitAsk, VisitDecisionModel } from '../types'
-import { phenotypeAnswerForInput } from './visit/physician-input'
+import { afAnswersForInput, phenotypeAnswerForInput } from './visit/physician-input'
 import { heartFailureVisitSurfaces } from './visit/heart-failure-map-surfaces'
 import { AtrialFibrillationMapSurfaces } from './visit/AtrialFibrillationMapSurfaces'
 import type { VisitMapSurfaces } from './visit/visit-surfaces'
+import type { VisitAnswerProvenance } from './visit/VisitAsks'
 
 /** The map's row columns, for the prognosis models under 03: they line up with the points above. */
 const PROGNOSIS_ROW_CLASSES = {
@@ -176,6 +177,8 @@ interface ClinicalDecisionSupportViewProps {
    */
   companionResult?: CdssResult
   visitAnswers?: VisitAnswers
+  /** Where each of today's answers was given, so another page can say so. */
+  visitAnswerSources?: VisitAnswerProvenance
   onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
   /** The companion's English build, so its cards' rationale copies in English too. */
   englishCompanionResult?: CdssResult
@@ -186,6 +189,7 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   age: ['age'],
   'low-hdl': ['HDL'],
   'met-bp': ['bloodPressure'],
+  'met-glucose': ['diabetesGlucoseLoweringTherapy'],
   'met-tg': ['triglycerides'],
   cad: ['coronaryArteryDiagnosis'],
   'recent-mi': ['myocardialInfarctionEventDate'],
@@ -193,12 +197,14 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   carotid: ['carotidStenosisDiagnosis'],
   acs: ['acuteCoronarySyndromeDiagnosis', 'myocardialInfarctionDiagnosis'],
   'stroke-atherosclerosis': ['ischemicStrokeDiagnosis'],
-  diabetes: ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis'],
+  // The pack's own list: E10, E11, E08/E09/E13, then current glucose-lowering
+  // therapy, which is often the only trace when a visit was billed as I10.
+  diabetes: DIABETES_FACT_KEYS,
   'predialysis-ckd': ['ckdChronicity', 'ckdDiagnosis'],
   'severe-ldl': ['LDL'],
 }
 
-function buildNhiRecordSources(
+export function buildNhiRecordSources(
   facts: CdssPatientProfile['facts'] | undefined,
 ): Readonly<Record<string, readonly CdssFactSource[]>> | undefined {
   if (!facts) return undefined
@@ -2158,6 +2164,7 @@ export function ClinicalDecisionSupportView({
   visitModel,
   companionResult,
   visitAnswers,
+  visitAnswerSources,
   onVisitAnswer,
   englishCompanionResult,
 }: ClinicalDecisionSupportViewProps) {
@@ -2423,10 +2430,18 @@ export function ClinicalDecisionSupportView({
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}
           answers={visitAnswers ?? {}}
+          {...(visitAnswerSources ? { answerSources: visitAnswerSources } : {})}
           onAnswer={onVisitAnswer}
-          onPhysicianInput={onAnswerPhenotype ? (input) => {
-            const next = phenotypeAnswerForInput(input, phenotypeAnswer, new Date())
-            if (next) onAnswerPhenotype(next)
+          onPhysicianInput={onAnswerPhenotype || onAfAnswer ? (input) => {
+            // AF DP-01 answers the AF diagnosis and its type; the rest are the
+            // heart-failure phenotype gate's.
+            const af = afAnswersForInput(input)
+            if (af) {
+              for (const answer of af) onAfAnswer?.(answer.id, answer.value)
+              return
+            }
+            const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
+            if (next) onAnswerPhenotype?.(next)
           } : undefined}
           modules={visitModules}
           unmappedModules={unmappedVisitModules}

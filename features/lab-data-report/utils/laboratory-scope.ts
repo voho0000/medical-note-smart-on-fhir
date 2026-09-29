@@ -33,7 +33,11 @@ function categoryCodings(observation: any): any[] {
 }
 
 export function isLaboratoryObservation(observation: any): boolean {
-  if (observation?.resourceType !== 'Observation') return false
+  if (!observation || typeof observation !== 'object') return false
+  // The app's ObservationEntity (FhirMapper.toObservation) carries no
+  // resourceType, so only a resource that names another type is refused;
+  // the category below is what decides.
+  if (observation.resourceType !== undefined && observation.resourceType !== 'Observation') return false
   const codings = categoryCodings(observation)
   const isLab = codings.some((coding) =>
     OBSERVATION_CATEGORY_SYSTEMS.has(coding?.system) && coding?.code === 'laboratory')

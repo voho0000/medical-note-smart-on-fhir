@@ -238,15 +238,23 @@ export function QueueRowBox({
         </span>
         <div className={rowStyles.main}>
           {current ? (
-            // Wide, the buttons keep the row's right edge and the words wrap
-            // beside them; narrow, they drop under the words.
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 @min-[40rem]:flex-nowrap">
-              <div className="min-w-0 flex-1 basis-56 space-y-0.5 @min-[40rem]:basis-auto">
+            // With room, the buttons keep the row's right edge and the words
+            // sit beside them; without it they drop under the words, which
+            // never go narrower than 14rem. Decided by the room in this
+            // column, not the page's width: the map in the screen's middle
+            // panel with three answers (AF DP-01) squeezed the words to a
+            // few characters a line (clinician feedback 2026-09-29: 「你要假設
+            // 今天是在畫面的正中央都能好好呈現」).
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <div className="min-w-0 flex-1 basis-56 space-y-0.5">
                 <ChainDone steps={decidedSteps} />
                 <p className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">{point.headline ?? point.label}</p>
                 {point.why ? <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{point.why}</p> : null}
               </div>
-              <div className="shrink-0">
+              {/* Never wider than the column: in a narrow panel the buttons
+                  wrap among themselves instead of running past the frame,
+                  which clips them (#177 review: 「都有」 cut off at 320px). */}
+              <div className="min-w-0 max-w-full shrink-0">
                 <VisitDecisionControls
                   point={point}
                   surface="queue"

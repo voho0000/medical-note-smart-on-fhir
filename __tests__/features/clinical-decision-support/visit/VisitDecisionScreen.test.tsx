@@ -2,12 +2,13 @@
  * The visit decision map, driven by hand-written models shaped like brief §7.
  *
  * What is under test is placement and recording, never clinical judgement:
+ * the overview shows every point the pack lists, once, whatever its state;
  * each section (01 / 02 / 03) opens with its own decision rows, in the pack's
- * order with the pack's words, and a point drawn as a row is not repeated as a
- * cell; pressing a primary button records `actions[0]` once, under one key,
- * whether it was pressed on the row or in the point's card opened under it; a
- * decided row collapses in place and focus moves on; the plan lists what was
- * decided with the pack's response checks; the stage decides the shape.
+ * order with the pack's words; pressing a primary button records `actions[0]`
+ * once, under one key, whether it was pressed on the row or in the point's
+ * card; a decided row collapses in place and focus moves on; the plan lists
+ * what was decided with the pack's response checks; the stage decides the
+ * shape.
  */
 import { useMemo } from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
@@ -102,15 +103,19 @@ function rowDetail(dp: string): HTMLButtonElement {
   return found
 }
 
-function queryCell(dp: string, source = 'hf'): HTMLElement | undefined {
-  return [...screen.getByTestId('cdss-visit-map').querySelectorAll<HTMLElement>('button[data-dp]')]
-    .find((element) => element.dataset.dp === dp && element.dataset.source === source)
+function tiles(scope: HTMLElement = screen.getByTestId('cdss-visit-map')): HTMLElement[] {
+  return [...scope.querySelectorAll<HTMLElement>('button[data-dp]')]
 }
 
+/** A point's tile on the overview. */
 function cell(dp: string, source = 'hf'): HTMLElement {
-  const found = queryCell(dp, source)
-  if (!found) throw new Error(`no map cell ${dp}`)
+  const found = tiles().find((element) => element.dataset.dp === dp && element.dataset.source === source)
+  if (!found) throw new Error(`no map tile ${dp}`)
   return found
+}
+
+function overview(block: VisitBlock): HTMLElement {
+  return screen.getByTestId(`cdss-visit-overview-${block}`)
 }
 
 /** Opens a section the way a clinician does, by its toggle; an open one stays open. */
@@ -156,14 +161,33 @@ describe('visit decision screen · P4 stable and optimised', () => {
     for (const state of ['act', 'confirm', 'safety']) {
       expect(map.querySelector(`[data-state="${state}"]`)).toBeNull()
     }
-    const treatment = screen.getByTestId('cdss-visit-column-treatment')
-    const treatmentStates = [...treatment.querySelectorAll<HTMLElement>('button[data-dp]')].map((element) => element.dataset.state)
+    // Every treatment point that applies is settled; the others keep their tiles, muted.
+    const treatmentStates = tiles(overview('treatment')).map((element) => element.dataset.state)
     expect(treatmentStates.length).toBeGreaterThan(0)
-    expect(new Set(treatmentStates)).toEqual(new Set(['done']))
+    expect(new Set(treatmentStates.filter((state) => state !== 'not-applicable' && state !== 'not-included'))).toEqual(new Set(['done']))
     expect(screen.getByTestId('cdss-visit-plan-empty')).toBeInTheDocument()
   })
 
-  it('opens 01 at first paint, one section at a time, and keeps folded points reachable', () => {
+  // Clinician feedback 2026-09-29: 「決策地圖點下去還是要看到所有的決策模組」.
+  it('shows every point on the overview at first paint, once each, whatever its state', () => {
+    const model = p4Model()
+    render(<Harness model={model} />)
+    const all = tiles()
+    expect(all).toHaveLength(model.points.length)
+    expect(new Set(all.map((element) => `${element.dataset.source}:${element.dataset.dp}`)).size).toBe(model.points.length)
+    for (const block of ['status', 'treatment', 'outlook'] as const) {
+      expect(tiles(overview(block)).map((element) => element.dataset.dp))
+        .toEqual(model.points.filter((point) => point.block === block).map((point) => point.dp))
+    }
+    // Nothing folds, so there is no 「顯示全部」 switch.
+    expect(cell('DP-29')).toHaveAttribute('data-state', 'not-included')
+    expect(cell('DP-29')).toBeVisible()
+    expect(cell('DP-34')).toHaveAttribute('data-state', 'not-applicable')
+    expect(screen.queryByTestId('cdss-visit-map-show-all')).toBeNull()
+    expect(screen.getByRole('heading', { name: `決策地圖 · 全部 ${model.points.length} 個決策點` })).toBeInTheDocument()
+  })
+
+  it('opens 01 at first paint, one section at a time, with the overview always in view', () => {
     render(<Harness model={p4Model()} />)
     const toggle = (block: string) => screen.getByTestId(`cdss-visit-section-toggle-${block}`)
     const section = (block: string) => screen.getByTestId(`cdss-visit-column-${block}`)
@@ -188,15 +212,13 @@ describe('visit decision screen · P4 stable and optimised', () => {
     fireEvent.click(toggle('treatment'))
     expect(section('treatment')).not.toBeVisible()
 
+    // With every section closed the overview still shows every point.
+    for (const block of ['status', 'treatment', 'outlook']) expect(section(block)).not.toBeVisible()
+    expect(cell('DP-07')).toBeVisible()
+    expect(cell('DP-17')).toBeVisible()
+
     fireEvent.click(toggle('status'))
     expect(section('status')).toBeVisible()
-    // Not-applicable and not-included points sit at the section foot until 顯示全部.
-    expect(within(section('status')).queryByText('病因')).toBeNull()
-    expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('另 4 點收起')
-    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
-    expect(screen.getByTestId('cdss-visit-map-show-all')).toHaveAttribute('aria-expanded', 'true')
-    expect(cell('DP-29')).toHaveAttribute('data-state', 'not-included')
-    expect(cell('DP-34')).toHaveAttribute('data-state', 'not-applicable')
   })
 
   it('opens a point’s section when the point is opened from its cell', () => {
@@ -209,15 +231,49 @@ describe('visit decision screen · P4 stable and optimised', () => {
     expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
   })
 
-  it('opens the card directly under the cell that was pressed, not at the section foot', () => {
+  it('opens a point’s card at the head of its section, the overview beside it, and walks on from there', () => {
     render(<Harness model={p4Model()} />)
-    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
+    expect(screen.getByTestId('cdss-visit-map')).toHaveAttribute('data-layout', 'overview')
     const pressed = cell('DP-07')
     fireEvent.click(pressed)
+    // Its section opens, with the card first in it.
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
     const slot = screen.getByTestId('cdss-visit-detail-slot')
-    // The very next item after the pressed cell is its card.
-    expect(pressed.closest('li')?.nextElementSibling).toBe(slot)
+    expect(screen.getByTestId('cdss-visit-column-treatment')).toContainElement(slot)
+    expect(slot).toHaveAttribute('data-dp', 'DP-07')
     expect(slot).toContainElement(screen.getByTestId('cdss-visit-detail'))
+    expect(pressed).toHaveAttribute('aria-expanded', 'true')
+    // On a wide panel the overview becomes the column beside the card.
+    expect(screen.getByTestId('cdss-visit-map')).toHaveAttribute('data-layout', 'module')
+
+    // The stepper walks the map in reading order.
+    const next = screen.getByTestId('cdss-visit-detail-next')
+    const nextDp = next.dataset.stepDp
+    fireEvent.click(next)
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', nextDp)
+
+    // Any other point is one press away on the overview.
+    fireEvent.click(cell('DP-17'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-outlook')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-17')
+
+    // 收合 closes the card and the overview spreads out again.
+    fireEvent.click(screen.getByTestId('cdss-visit-detail-collapse'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-map')).toHaveAttribute('data-layout', 'overview')
+  })
+
+  it('marks the points a search matches and dims the rest', () => {
+    render(<Harness model={p5Model()} />)
+    fireEvent.change(screen.getByTestId('cdss-visit-map-search'), { target: { value: 'mra' } })
+    expect(cell('DP-09')).not.toHaveAttribute('data-match')
+    expect(cell('DP-08')).toHaveAttribute('data-match', 'false')
+    expect(screen.getByTestId('cdss-visit-map-search-count')).toHaveTextContent('找到')
+    // A dimmed point still opens.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    fireEvent.change(screen.getByTestId('cdss-visit-map-search'), { target: { value: '' } })
+    expect(tiles().some((element) => element.dataset.match === 'false')).toBe(false)
   })
 })
 
@@ -232,8 +288,9 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(queueRows('treatment').map((element) => primaryOf(element).textContent)).toEqual(['換 ARNI', '開始 MRA', '開始 SGLT2i'])
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
     expect(row('DP-07')).toHaveTextContent('LVEF 30%、ACEi 中；SBP 112、K 4.6、eGFR 48')
-    // A point drawn as a row is not drawn again as a cell.
-    for (const dp of ['DP-07', 'DP-09', 'DP-10']) expect(queryCell(dp)).toBeUndefined()
+    // A point decided in a row keeps its tile on the overview, marked as today's.
+    for (const dp of ['DP-07', 'DP-09', 'DP-10']) expect(cell(dp)).toHaveAttribute('data-in-queue', 'true')
+    expect(cell('DP-08')).not.toHaveAttribute('data-in-queue')
     expect(cell('DP-08')).toHaveAttribute('data-state', 'confirm')
     expect(cell('DP-08')).toHaveTextContent('需你確認')
     expect(cell('DP-14', 'af')).toHaveAttribute('data-state', 'done')
@@ -254,9 +311,11 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(row('DP-07')).toHaveTextContent('回應檢查：K、Cr、血壓，1–2 週內')
     expect(within(row('DP-07')).getByRole('button', { name: '改 DP-07 的決定' })).toBeInTheDocument()
     expect(primaryOf(row('DP-09'))).toHaveFocus()
-    // The row is the point's only place on the map (no cell repeats it); the
-    // section's toggle counts what is left to decide in it.
-    expect(queryCell('DP-07')).toBeUndefined()
+    // The row decides; the tile reads back what was decided. The section's
+    // header counts what is left to decide in it.
+    expect(cell('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(cell('DP-07')).toHaveTextContent('已記錄')
+    expect(cell('DP-07')).toHaveTextContent('換 ARNI')
     expect(treatmentToggle).toHaveTextContent('待決定 2')
 
     const plan = screen.getByTestId('cdss-visit-plan')
@@ -282,10 +341,9 @@ describe('visit decision screen · P5 titrating with AF', () => {
   it('records one decision per point: the row and the card opened under it share it', () => {
     render(<Harness model={p5Model()} modules={[card('heart-failure-ras')]} />)
     openSection('treatment')
-    // A queued point has no cell; its card opens under its own row, from
-    // 「依據與細節」. (A decided row offers no 「依據與細節」, so the card is
-    // opened first and stays open through the decision.)
-    expect(queryCell('DP-07')).toBeUndefined()
+    // A queued point's card opens under its own row, from 「依據與細節」.
+    // (A decided row offers no 「依據與細節」, so the card is opened first
+    // and stays open through the decision.)
     fireEvent.click(rowDetail('DP-07'))
     expect(rowDetail('DP-07')).toHaveAttribute('aria-expanded', 'true')
     const detail = screen.getByTestId('cdss-visit-detail')
@@ -324,6 +382,20 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(row('DP-07')).toHaveTextContent('維持 ACEi')
     expect(Object.keys(getPhysicianDecisions(PATIENT))).toEqual(['visit:hf:DP-07'])
     expect(within(detail).getByTestId('cdss-visit-decided').querySelector('[tabindex="-1"]')).toHaveFocus()
+  })
+
+  it('opens a queued point’s card under its row from its tile, and closes back to the row', () => {
+    render(<Harness model={p5Model()} modules={[card('heart-failure-ras')]} />)
+    // Start with 02 closed: the tile opens it.
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    fireEvent.click(cell('DP-07'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+    const detail = screen.getByTestId('cdss-visit-detail')
+    expect(row('DP-07')).toContainElement(detail)
+    // Not a second copy at the section's head.
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    expect(cell('DP-07')).toHaveAttribute('aria-expanded', 'true')
+    expect(rowDetail('DP-07')).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('offers the other decisions behind one 其他 disclosure and records the one chosen', () => {
@@ -424,8 +496,8 @@ describe('visit decision screen · P9 HFpEF with AF', () => {
     expect(askButton('weight-trend', 'down')).toHaveAttribute('data-prefilled', 'true')
     expect(queueRows('treatment').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-14', 'DP-09'])
     expect(queueRows()).toHaveLength(2)
-    // The companion's point is a row here, so it is not also a cell.
-    expect(queryCell('DP-14', 'af')).toBeUndefined()
+    // The companion's point is a row here, and its tile says so.
+    expect(cell('DP-14', 'af')).toHaveAttribute('data-in-queue', 'true')
     expect(row('DP-14')).toHaveTextContent('AF')
     expect(row('DP-14')).toHaveTextContent('apixaban 5 → 2.5 mg bid？')
     expect(row('DP-14')).toHaveTextContent('年齡 80、體重 58：減量條件 2/3')
@@ -457,8 +529,9 @@ describe('visit decision screen · P3 new AF (AF page)', () => {
     expect(primaryOf(chain)).toHaveTextContent('apixaban 5 mg bid')
     expect(primaryOf(chain)).toHaveFocus()
     expect(chain).toHaveTextContent('減量條件 0/3')
-    // Now the row carries the dose step, so the map no longer repeats it as a cell.
-    expect(queryCell('DP-09', 'af')).toBeUndefined()
+    // Now the row carries the dose step, and the dose's tile reads as today's.
+    expect(cell('DP-09', 'af')).toHaveAttribute('data-in-queue', 'true')
+    expect(cell('DP-09', 'af')).toHaveTextContent('今天要決定')
 
     fireEvent.click(primaryOf(chain))
     expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
@@ -519,7 +592,7 @@ describe('visit decision screen · P3 new AF (AF page)', () => {
     view.rerender(<Harness model={p3Model({ symptoms: 'yes' })} />)
     expect(queueRows('treatment').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-18'])
     expect(queueRows()).toHaveLength(2)
-    expect(queryCell('DP-18', 'af')).toBeUndefined()
+    expect(cell('DP-18', 'af')).toHaveAttribute('data-in-queue', 'true')
     expect(primaryOf(row('DP-18'))).toHaveTextContent('討論節律控制')
     expect(cell('DP-13', 'af')).toHaveAttribute('data-state', 'confirm')
     expect(screen.getByTestId('cdss-visit-map')).not.toHaveTextContent('篩檢待辦')
@@ -530,19 +603,20 @@ describe('visit decision screen · stage shapes', () => {
   it('suspected: only 01 works; 02 opens once the diagnosis is confirmed', () => {
     render(<Harness model={p1Model()} />)
     expect(screen.getByTestId('cdss-visit-column-treatment-closed')).toHaveTextContent('確診後開啟')
-    expect(screen.getByTestId('cdss-visit-column-treatment').querySelector('button[data-dp]')).toBeNull()
+    // The overview says so on 02's header, and still lists 02's points.
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('確診後開啟')
+    expect(cell('DP-10')).toHaveAttribute('data-state', 'not-applicable')
+    expect(cell('DP-10')).toBeVisible()
     // 01's way on to 02 says why it is shut rather than opening an empty section.
     const next = screen.getByTestId('cdss-visit-next-status')
     expect(next).toBeDisabled()
     expect(next).toHaveTextContent('確診後開啟')
-    // 懷疑 HF？ is 01's own decision, in 01's lead, and not also a cell.
+    // 懷疑 HF？ is 01's own decision, in 01's lead; its tile marks it as today's.
     expect(queueRows('status').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-00'])
     expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
     expect(primaryOf(row('DP-00'))).toHaveTextContent('是')
-    expect(queryCell('DP-00')).toBeUndefined()
+    expect(cell('DP-00')).toHaveAttribute('data-in-queue', 'true')
     expect(cell('DP-34')).toHaveAttribute('data-state', 'waiting')
-    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
-    expect(cell('DP-10')).toHaveAttribute('data-state', 'not-applicable')
   })
 
   it('baseline: up to five rows and the baseline checklist open in 01', () => {
@@ -552,7 +626,8 @@ describe('visit decision screen · stage shapes', () => {
     expect(screen.getByTestId('cdss-visit-column-status')).not.toHaveAttribute('data-folded')
     expect(screen.getByTestId('cdss-visit-column-status')).toBeVisible()
     expect(cell('DP-02')).toHaveTextContent('紀錄缺 ferritin、TSAT、TSH、HbA1c')
-    expect(screen.getByTestId('cdss-visit-column-status-foot')).toHaveTextContent('尚未納入')
+    expect(cell('DP-29')).toHaveAttribute('data-state', 'not-included')
+    expect(within(overview('status')).getAllByText('尚未納入').length).toBeGreaterThan(0)
     fireEvent.click(primaryOf(row('DP-07')))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('K、Cr、血壓，1–2 週內')
   })
@@ -593,14 +668,14 @@ describe('visit decision screen · reachability and copy', () => {
 
 // Clinician decision 2026-09-28: 「用一行式，設成預設」.
 describe('visit decision screen · one line per point', () => {
-  it('draws the rows and cells one line each in one frame, and decides in place', () => {
+  it('draws the decision rows one line each in one frame, and decides in place', () => {
     render(<Harness model={p5Model()} />)
     expect(queueRows('treatment').map((element) => element.dataset.visitQueueDp)).toEqual(['DP-07', 'DP-09', 'DP-10'])
     expect(screen.getByTestId('cdss-visit-queue-treatment').querySelector('ol')).toHaveClass('list')
     expect(row('DP-07').firstElementChild).toHaveClass('row')
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
     expect(row('DP-07')).toHaveTextContent('LVEF 30%、ACEi 中；SBP 112、K 4.6、eGFR 48')
-    expect(cell('DP-08')).toHaveClass('row')
+    expect(cell('DP-08')).toHaveAttribute('data-map-tile')
     expect(cell('DP-08')).toHaveTextContent('需你確認')
 
     openSection('treatment')

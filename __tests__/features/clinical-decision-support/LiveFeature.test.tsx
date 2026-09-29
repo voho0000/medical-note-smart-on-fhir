@@ -11,6 +11,7 @@ import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/st
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
+import { afAnswersStorageKey, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: () => ({
@@ -271,6 +272,20 @@ describe('Live personalized-guidance pathway list', () => {
     expect(useHfpefInputsStore.getState().byPatientId[patientId]).toEqual({ entries: {} })
     expect(usePhenotypeAnswerStore.getState().byPatientId[patientId]).toBeUndefined()
     expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
+  })
+
+  // #177 review: 「AFL」 on DP-01 outlived the reset — the decision went, the
+  // diagnosis stayed, and its sealed copy brought it back after a reload.
+  it('restores the AF answers too — DP-01\'s diagnosis and its sealed copy', () => {
+    const patientId = 'switch-patient'
+    useAfAnswersStore.setState({ patientId, answers: { diagnosisConfirmed: true, atrialFibrillation: false, atrialFlutter: true }, hydratedPatientId: patientId })
+    window.localStorage.setItem(afAnswersStorageKey(patientId), '{"v":1,"iv":"x","data":"y","t":0}')
+
+    render(<LiveClinicalDecisionSupportFeature />)
+    fireEvent.click(screen.getByTestId('cdss-hf-reset-page-defaults'))
+
+    expect(useAfAnswersStore.getState().answers).toEqual({})
+    expect(window.localStorage.getItem(afAnswersStorageKey(patientId))).toBeNull()
   })
 
   it('restores the NHI page to record-only defaults without clearing HF work', () => {

@@ -10,6 +10,7 @@
 import {
   toVisitAnswerRecord,
   useVisitAnswersStore,
+  visitAnswerSourcesOf,
   visitAnswersOf,
   visitAnswersStorageKey,
 } from '@/features/clinical-decision-support/stores/visit-answers.store'
@@ -100,5 +101,39 @@ describe('visit answers', () => {
     store().clearAnswers('p1')
     expect(visitAnswersOf(store().byPatientId.p1)).toEqual({})
     expect(localStorage.getItem(visitAnswersStorageKey('p1'))).toBeNull()
+  })
+
+  // One answer per observation, whichever disease's page asked it, with the
+  // page it was given on — what a second page names instead of asking again.
+  it('keeps the page an answer was given on, and reads it back', () => {
+    store().answer('p1', 'dyspnoea-trend', 'worse', AT, { packId: 'heart-failure-cdss' })
+    store().answer('p1', 'bleeding', 'no', AT)
+    expect(visitAnswerSourcesOf(store().byPatientId.p1, AT_DAY)).toEqual({
+      'dyspnoea-trend': { answeredAt: AT.toISOString(), packId: 'heart-failure-cdss' },
+      bleeding: { answeredAt: AT.toISOString() },
+    })
+    // Read back from storage, the page comes with it.
+    const record = toVisitAnswerRecord({
+      'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString(), packId: 'heart-failure-cdss' },
+    }, AT)
+    expect(record['dyspnoea-trend']?.packId).toBe('heart-failure-cdss')
+    // A page id that is not a name is dropped; the answer stands without it.
+    const odd = toVisitAnswerRecord({
+      'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString(), packId: 42 },
+      bleeding: { value: 'no', answeredAt: AT.toISOString(), packId: '' },
+    }, AT)
+    expect(odd).toEqual({
+      'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString() },
+      bleeding: { value: 'no', answeredAt: AT.toISOString() },
+    })
+  })
+
+  it('accepts every observation the pack catalogue defines, and only its answers', () => {
+    // 今天有沒有喘 is in the pack's catalogue though no page asks it yet: a
+    // pack that starts asking it needs no change to this store.
+    store().answer('p1', 'dyspnoea-present', 'yes', AT)
+    expect(visitAnswersOf(store().byPatientId.p1, AT_DAY)).toEqual({ 'dyspnoea-present': 'yes' })
+    store().answer('p1', 'dyspnoea-present', 'maybe', AT)
+    expect(visitAnswersOf(store().byPatientId.p1, AT_DAY)).toEqual({ 'dyspnoea-present': 'yes' })
   })
 })

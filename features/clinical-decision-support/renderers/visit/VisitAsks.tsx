@@ -3,25 +3,50 @@
 import { cn } from '@/src/shared/utils/cn.utils'
 import { effectiveAnswer } from './visit-decisions'
 import { answerToneClass, visitAnswerTone } from './answer-tones'
-import type { VisitAnswers, VisitAsk } from '../../types'
+import type { VisitAnswers, VisitAsk, VisitObservationId } from '../../types'
+
+/**
+ * Where each of today's answers was given: when, and on which disease's page
+ * (its pack id and the page's name). Answers are kept per observation, not
+ * per page, so a page that asks what another page already asked shows that
+ * answer and says where it came from, rather than asking again.
+ */
+export type VisitAnswerProvenance = Readonly<Partial<Record<VisitObservationId, {
+  answeredAt: string
+  packId?: string
+  pageLabel?: string
+}>>>
+
+function clockTime(iso: string): string | undefined {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return undefined
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+}
 
 /**
  * The questions asked at every visit. A value the record already holds is
  * shown selected and marked as the record's, with the pack's basis beside it;
  * it counts as answered, and one press replaces it. Pressing the chosen answer
  * again withdraws the clinician's answer, and the record's reading — if the
- * pack has one — stands again.
+ * pack has one — stands again. An answer given today on another disease's
+ * page is shown answered here, with where and when it was given; one press
+ * changes it, for both pages.
  */
 export function VisitAsks({
   asks,
   answers,
   isEnglish,
   onAnswer,
+  pagePackId,
+  sources,
 }: {
   asks: readonly VisitAsk[]
   answers: VisitAnswers
   isEnglish: boolean
   onAnswer?: (id: VisitAsk['id'], value: string | null) => void
+  /** This page's pack, to tell an answer given here from one given elsewhere. */
+  pagePackId?: string
+  sources?: VisitAnswerProvenance
 }) {
   if (asks.length === 0) return null
   return (
@@ -33,6 +58,12 @@ export function VisitAsks({
       {asks.map((ask) => {
         const { value, prefilled } = effectiveAnswer(ask, answers)
         const labelId = `cdss-visit-ask-${ask.id}`
+        // Only the clinician's own answer has a page it was given on; the
+        // record's reading (a prefill) does not.
+        const source = !prefilled && value ? sources?.[ask.id] : undefined
+        const elsewhere = source?.packId && pagePackId && source.packId !== pagePackId
+          ? { packId: source.packId, pageLabel: source.pageLabel, time: clockTime(source.answeredAt) }
+          : undefined
         return (
           <div
             key={ask.id}
@@ -81,6 +112,13 @@ export function VisitAsks({
               <span className="text-xs text-muted-foreground" data-visit-prefill-basis={ask.id}>
                 {isEnglish ? 'Prefilled · ' : '預填 · '}
                 {ask.prefill.basis}
+              </span>
+            ) : null}
+            {elsewhere ? (
+              <span className="text-xs text-muted-foreground" data-visit-answer-source={ask.id} data-source-pack={elsewhere.packId}>
+                {isEnglish
+                  ? `Answered on the ${elsewhere.pageLabel ?? elsewhere.packId} page${elsewhere.time ? ` · ${elsewhere.time}` : ''}`
+                  : `已在「${elsewhere.pageLabel ?? elsewhere.packId}」頁回答${elsewhere.time ? ` · ${elsewhere.time}` : ''}`}
               </span>
             ) : null}
           </div>

@@ -15,6 +15,7 @@
  * the pack only through `applyVisitAnswers`, as facts on the profile.
  */
 import { create } from 'zustand'
+import { isVisitAnswer, VISIT_OBSERVATIONS } from '@voho0000/personalized-care'
 import {
   createHydrationGuard,
   discardEncryptedAnswers,
@@ -22,43 +23,52 @@ import {
   loadEncryptedAnswers,
   persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
-import type { VisitAnswers, VisitAsk } from '../types'
-
-export type VisitAskId = VisitAsk['id']
+import type { VisitAnswers, VisitObservationId } from '../types'
 
 /**
- * The answer values the pack reads, per ask — the literal unions of its
- * `VisitAnswers`, spelled out so a stored value outside them never reaches the
- * pack. Typed against the pack's own type: if it renames a value, this stops
- * compiling instead of silently dropping answers.
+ * An every-visit observation, as the pack's catalogue defines it. The store
+ * keeps one answer per patient and per observation — not per page — so an
+ * answer given on one disease's page is the answer on every page that asks
+ * the same thing.
  */
-const ANSWER_VALUES: { readonly [K in VisitAskId]-?: readonly NonNullable<VisitAnswers[K]>[] } = {
-  'dyspnoea-trend': ['worse', 'stable', 'better'],
-  'weight-trend': ['up', 'same', 'down'],
-  'af-symptoms': ['yes', 'no'],
-  bleeding: ['yes', 'no'],
-}
+export type VisitAskId = VisitObservationId
 
-const ASK_IDS = Object.keys(ANSWER_VALUES) as VisitAskId[]
+// The observations and their answers are the pack's catalogue, the one every
+// pack reads; a stored value outside it never reaches a pack. A pack that
+// starts asking something new needs no change here.
+const ASK_IDS = VISIT_OBSERVATIONS.map((concept) => concept.id)
 
 function isAskId(value: string): value is VisitAskId {
   return ASK_IDS.some((id) => id === value)
 }
 
 function isAnswerValue(id: VisitAskId, value: string): boolean {
-  return (ANSWER_VALUES[id] as readonly string[]).includes(value)
+  return isVisitAnswer(id, value)
 }
 
-/** One answer and when it was given, as an ISO timestamp. */
+/**
+ * One answer, when it was given (an ISO timestamp), and on which disease's
+ * page (its pack id). Where it was given is what a second page names when it
+ * shows the answer instead of asking again, and what a record of it written
+ * back would carry.
+ */
 export interface VisitAnswerEntry {
   value: string
   answeredAt: string
+  packId?: string
+}
+
+/** Where today's answer to one observation came from. */
+export interface VisitAnswerSource {
+  answeredAt: string
+  packId?: string
 }
 
 export type VisitAnswerRecord = Readonly<Partial<Record<VisitAskId, VisitAnswerEntry>>>
 
 const EMPTY_RECORD: VisitAnswerRecord = Object.freeze({})
 const EMPTY_ANSWERS: VisitAnswers = Object.freeze({})
+const EMPTY_SOURCES: Readonly<Partial<Record<VisitAskId, VisitAnswerSource>>> = Object.freeze({})
 
 const STORAGE_PREFIX = 'cdss-visit-answers:'
 
@@ -90,7 +100,11 @@ export function toVisitAnswerRecord(parsed: unknown, now: Date = new Date()): Vi
       if (typeof entry.answeredAt !== 'string') continue
       const answeredAt = new Date(entry.answeredAt)
       if (Number.isNaN(answeredAt.getTime()) || localDay(answeredAt) !== today) continue
-      record[id] = { value: entry.value, answeredAt: entry.answeredAt }
+      record[id] = {
+        value: entry.value,
+        answeredAt: entry.answeredAt,
+        ...(typeof entry.packId === 'string' && entry.packId ? { packId: entry.packId } : {}),
+      }
     }
     return Object.keys(record).length ? record : EMPTY_RECORD
   } catch {
@@ -120,6 +134,25 @@ export function visitAnswersOf(record: VisitAnswerRecord | undefined, day: strin
   return Object.keys(answers).length ? (answers as VisitAnswers) : EMPTY_ANSWERS
 }
 
+/**
+ * When, and on which disease's page, each of `day`'s answers was given — the
+ * same answers `visitAnswersOf` returns.
+ */
+export function visitAnswerSourcesOf(
+  record: VisitAnswerRecord | undefined,
+  day: string = localDay(new Date()),
+): Readonly<Partial<Record<VisitAskId, VisitAnswerSource>>> {
+  if (!record) return EMPTY_SOURCES
+  const sources: Partial<Record<VisitAskId, VisitAnswerSource>> = {}
+  for (const id of ASK_IDS) {
+    const entry = record[id]
+    if (entry && isAnswerValue(id, entry.value) && answeredOn(entry, day)) {
+      sources[id] = { answeredAt: entry.answeredAt, ...(entry.packId ? { packId: entry.packId } : {}) }
+    }
+  }
+  return Object.keys(sources).length ? sources : EMPTY_SOURCES
+}
+
 function writeStored(patientId: string, record: VisitAnswerRecord): void {
   const key = visitAnswersStorageKey(patientId)
   if (Object.keys(record).length === 0) {
@@ -138,8 +171,9 @@ interface VisitAnswersState {
   hydratedPatientIds: Readonly<Record<string, true>>
   hydrate: (patientId: string, now?: Date) => void
   /** Records an answer; `null` returns the question to unanswered (the
-   *  record's own reading, where the pack has one, stands again). */
-  answer: (patientId: string, id: VisitAskId, value: string | null, now?: Date) => void
+   *  record's own reading, where the pack has one, stands again). `source`
+   *  names the disease's page it was given on. */
+  answer: (patientId: string, id: VisitAskId, value: string | null, now?: Date, source?: { packId?: string }) => void
   clearAnswers: (patientId: string) => void
 }
 
@@ -193,7 +227,7 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
       .catch(() => apply(EMPTY_RECORD))
   },
 
-  answer: (patientId, id, value, now = new Date()) => {
+  answer: (patientId, id, value, now = new Date(), source) => {
     if (!patientId || !isAskId(id)) return
     if (value !== null && value !== '' && !isAnswerValue(id, value)) return
     set((state) => {
@@ -206,7 +240,10 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
         return { byPatientId: { ...state.byPatientId, [patientId]: next } }
       }
       if (current[id]?.value === value) return state
-      const next: VisitAnswerRecord = { ...current, [id]: { value, answeredAt: now.toISOString() } }
+      const next: VisitAnswerRecord = {
+        ...current,
+        [id]: { value, answeredAt: now.toISOString(), ...(source?.packId ? { packId: source.packId } : {}) },
+      }
       // In memory first; the encryption runs in the background.
       writeStored(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }

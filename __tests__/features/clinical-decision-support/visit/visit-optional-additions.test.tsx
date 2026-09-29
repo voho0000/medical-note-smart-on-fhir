@@ -94,10 +94,11 @@ beforeEach(() => {
 describe('optional additions', () => {
   it('follows the pack’s own next step in the same row, under its own key', () => {
     render(<Harness model={p3WithNext()} />)
-    // DP-07 is a row, not a cell; its card opens under the row from
-    // 「依據與細節」, which only an undecided row offers — so it is opened
-    // first and stays open while both steps are decided on the row.
-    expect(document.querySelector('button[data-dp="DP-07"]')).toBeNull()
+    // DP-07 is a row (its tile on the overview says it is today's); its card
+    // opens under the row from 「依據與細節」, which only an undecided row
+    // offers — so it is opened first and stays open while both steps are
+    // decided on the row.
+    expect(document.querySelector('button[data-dp="DP-07"]')).toHaveAttribute('data-in-queue', 'true')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-row-detail="DP-07"]')!)
     expect(row('DP-07')).toContainElement(screen.getByTestId('cdss-visit-detail'))
     fireEvent.click(primaryOf(row('DP-07')))
@@ -124,7 +125,7 @@ describe('optional additions', () => {
 
   it('prints the pack’s group labels as subheadings', () => {
     render(<Harness model={p3WithNext()} />)
-    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    const treatment = screen.getByTestId('cdss-visit-overview-treatment')
     expect([...treatment.querySelectorAll('[data-map-group]')].map((element) => element.textContent)).toEqual(
       expect.arrayContaining(['A 抗凝', 'R 節律']),
     )

@@ -86,12 +86,15 @@ export function scenarioPreviousVisit(id: ScenarioId): string | undefined {
  */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean } = {},
+  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false, afAnswers }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean; afAnswers?: CdssPatientProfile['afClinicalAnswers'] } = {},
 ): ScenarioRun {
   // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the
-  // profile; so does a pillar marked 「不耐受」, and the stored previous visit.
+  // profile; so does a pillar marked 「不耐受」, the stored previous visit, and
+  // the AF page's answers (AF DP-01 among them).
   const previous = firstVisit ? undefined : scenarioPreviousVisit(id)
-  const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(scenarioProfile(id), answers), phenotype), intolerant)
+  const loaded = scenarioProfile(id)
+  const withAf = afAnswers ? { ...loaded, afClinicalAnswers: afAnswers } : loaded
+  const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyVisitAnswers(withAf, answers), phenotype), intolerant)
   const profile = previous ? applyPreviousVisit(answered, previous) : answered
   if (page === 'af') {
     const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })

@@ -36,7 +36,7 @@ import type {
 import { DecisionMapColumns } from './DecisionMapColumns'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
-import { VisitAsks } from './VisitAsks'
+import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { VisitPlan } from './VisitPlan'
@@ -128,6 +128,8 @@ export interface VisitDecisionScreenProps {
   onRecordDecision?: (key: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (key: string) => void
   answers: VisitAnswers
+  /** Where each of today's answers was given, so an answer from another page says so. */
+  answerSources?: VisitAnswerProvenance
   onAnswer?: (id: VisitAsk['id'], value: string | null) => void
   /** Every card a point can open, by module id — this pack's and the companion's. */
   modules: ReadonlyMap<string, CdssRecommendation>
@@ -168,6 +170,7 @@ export function VisitDecisionScreen({
   onRecordDecision,
   onClearDecision,
   answers,
+  answerSources,
   onAnswer,
   modules,
   renderDetail,
@@ -178,8 +181,6 @@ export function VisitDecisionScreen({
 }: VisitDecisionScreenProps) {
   const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
   const [openKey, setOpenKey] = useState<string | null>(null)
-  // 顯示全部, on the status line beside 補填／修改量測 rather than a row of its own.
-  const [showAllPoints, setShowAllPoints] = useState(false)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
   // The standing the page last drew: undiagnosed (no every-visit asks) or not.
@@ -279,6 +280,11 @@ export function VisitDecisionScreen({
           type="button"
           className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => {
+            // The fuller questions live under 01's 追蹤; a first visit opens 01
+            // on 診斷, where they are not drawn (#179 review).
+            if (diagnosisView && !undiagnosed && statusView !== 'follow-up') {
+              setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
+            }
             setAsksDetailOpen(true)
             requestAnimationFrame(() => {
               const target = document.getElementById(ASKS_DETAIL_ID)
@@ -348,12 +354,21 @@ export function VisitDecisionScreen({
     ...queuedPointDps(allRows),
     ...model.points.filter(askedHere).map((point) => point.dp),
   ]), [allRows, askedHere, model.points])
+  // The points whose card a section's lead draws under its own row or box:
+  // the pillars, and the point each decision row shows now (a chain row shows
+  // its current step). Any other point's card opens at the head of its section.
+  const leadCardKeys = new Set([
+    ...pillarPoints,
+    ...followPoints,
+    ...BLOCK_ORDER.flatMap((block) => listRowsIn(block).map((row) => (row.current ?? row.steps[row.steps.length - 1]).point)),
+  ].map(visitDecisionKey))
   // What the line the card opens under already says, so the card does not say
   // it again (clinician decision 2026-09-28: 「卡片開頭精簡成只剩關閉鈕」): a
-  // pillar's or a decision's row prints the question and its reason; a cell
-  // prints the question (else the reason), or today's decision once taken.
+  // pillar's or a decision's row prints the question and its reason; the line
+  // over a card at a section's head prints the question (else the reason), or
+  // nothing once today's decision is taken.
   const shownAbove = (point: DecisionPointView): { headline: boolean; why: boolean } => {
-    if (isPillar(point) || queuedPointDps(allRows).has(point.dp)) return { headline: true, why: true }
+    if (leadCardKeys.has(visitDecisionKey(point))) return { headline: true, why: true }
     if (decisionOf(point)) return { headline: false, why: false }
     return point.headline ? { headline: true, why: false } : { headline: false, why: true }
   }
@@ -372,11 +387,16 @@ export function VisitDecisionScreen({
       onClear={onClearDecision ? (step) => clear(step.key) : undefined}
       onClose={() => {
         const { dp, source } = openPoint
+        const underRow = leadCardKeys.has(visitDecisionKey(openPoint))
         setOpenKey(null)
-        // Back to the cell (or row) that opened it.
+        // Back to what opened it: the row's 依據與細節 for a card drawn under
+        // its row, else the point's tile on the overview.
         requestAnimationFrame(() => {
-          const targets = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp], [data-visit-row-detail]')
-          ;[...targets].find((target) => (target.dataset.dp === dp && target.dataset.source === source) || target.dataset.visitRowDetail === dp)?.focus()
+          const target = underRow
+            ? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
+            : [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
+              .find((candidate) => candidate.dataset.dp === dp && candidate.dataset.source === source)
+          target?.focus()
         })
       }}
     />
@@ -493,7 +513,14 @@ export function VisitDecisionScreen({
   }
   const followUpLead = (
     <>
-      <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
+      <VisitAsks
+        asks={model.asks}
+        answers={answers}
+        isEnglish={isEnglish}
+        onAnswer={onAnswer}
+        pagePackId={model.packId}
+        {...(answerSources ? { sources: answerSources } : {})}
+      />
       {surfaces?.asksDetail ? (
         <VisitAsksDetail
           id={ASKS_DETAIL_ID}
@@ -554,16 +581,25 @@ export function VisitDecisionScreen({
   }
   // A safety row opens its own section; otherwise the visit starts at 01.
   const initialOpen: VisitBlock = rows.find((row) => row.safety && row.current)?.steps[0].point.block ?? 'status'
-  // 01's cells: the view's own, and never the every-visit point whose
-  // questions (喘／體重, AF 症狀／出血) are the asks right above.
-  const cellFilters: Partial<Record<VisitBlock, (point: DecisionPointView) => boolean>> = {
-    treatment: (point) => !isPillar(point),
-    status: (point) => {
-      if (model.asks.length && point.semanticId.endsWith('-visit-response')) return false
-      if (!diagnosisView) return true
-      return (statusView === 'diagnosis') === (point.source === sourceOfPage && diagnosisView.dps.includes(point.dp))
-    },
+  // A point the page asks in 01 itself (懷疑 HF？ stands for DP-00, DP-01 and
+  // DP-34) has a tile on the overview like every other, but pressing it goes
+  // to where it is asked — 01's 診斷 view, or the fuller questions under the
+  // asks — rather than opening a card that asks it a second time.
+  const goToWhereAsked = (point: DecisionPointView) => {
+    setOpenKey(null)
+    const toDiagnosis = Boolean(diagnosisView) && (undiagnosed || inDiagnosisView(point))
+    if (toDiagnosis) {
+      if (!undiagnosed) setStatusViewOverride({ reason: defaultStatusView, view: 'diagnosis' })
+    } else {
+      if (diagnosisView && !undiagnosed) setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
+      setAsksDetailOpen(true)
+    }
+    requestAnimationFrame(() => {
+      const target = toDiagnosis ? document.querySelector('[data-testid="cdss-visit-lead-status"]') : document.getElementById(ASKS_DETAIL_ID)
+      target?.scrollIntoView?.({ block: 'start' })
+    })
   }
+  const openFromMap = (point: DecisionPointView) => (askedHere(point) ? goToWhereAsked(point) : toggleOpen(point))
 
   return (
     <div
@@ -581,21 +617,6 @@ export function VisitDecisionScreen({
         onEditValue={surfaces?.editValue}
         {...(surfaces?.statusLine?.valueAddons ? { valueAddons: surfaces.statusLine.valueAddons } : {})}
         {...(surfaces?.statusLine?.extras ? { extras: surfaces.statusLine.extras } : {})}
-        actions={(
-          <button
-            type="button"
-            className="inline-flex min-h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-expanded={showAllPoints}
-            onClick={() => setShowAllPoints((value) => !value)}
-            data-testid="cdss-visit-map-show-all"
-          >
-            {showAllPoints
-              ? (isEnglish ? 'Fold what does not apply' : '收起不適用與尚未納入')
-              : isEnglish
-                ? `Show all ${model.coverage.total}`
-                : `顯示全部 ${model.coverage.total} 點`}
-          </button>
-        )}
       />
       {surfaces?.statusPanel}
       <DecisionMapColumns
@@ -603,15 +624,13 @@ export function VisitDecisionScreen({
         decisionOf={decisionOf}
         queuedDps={queuedDps}
         openKey={openPoint ? openKey : null}
-        onOpen={toggleOpen}
+        onOpen={openFromMap}
+        opensCard={(point) => !askedHere(point)}
         leads={leads}
         leadSummaries={leadSummaries}
         rowDps={rowDps}
-        cellFilters={cellFilters}
+        leadCardKeys={leadCardKeys}
         initialOpen={initialOpen}
-        leadDetailDps={new Set(pillarPoints.map((point) => point.dp))}
-        showAll={showAllPoints}
-        onShowAllChange={setShowAllPoints}
         {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
           ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
           : {})}
