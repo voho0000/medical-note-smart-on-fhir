@@ -198,6 +198,11 @@ export interface QueueStep {
   key: string
   point: DecisionPointView
   decision?: PointDecision
+  /**
+   * Other points of the page this step answers (DP-07's DOAC choice: DP-08,
+   * DP-09), set where a queue row reveals it.
+   */
+  decides?: readonly string[]
 }
 
 /**
@@ -313,6 +318,13 @@ export function buildQueueRows(
     // followed exactly; otherwise the row walks on to the chain's next waiting
     // point in the same group.
     const steps: QueueStep[] = pointSteps(head, decisions, now)
+    // A revealed step that answers other points covers them too — only the
+    // page's own points from the same pack: HF DP-14 folds AF DP-07's step,
+    // and HF's DP-08／DP-09 are not the ones it decides.
+    const decides = steps.length > 1
+      ? (nextStepExtras(head).decides ?? []).filter((dp) => model.points.some((point) => point.dp === dp && point.source === head.source))
+      : []
+    if (decides.length) steps[1] = { ...steps[1], decides }
     let last = steps[steps.length - 1]
     while (!head.next && last.decision && PROCEEDING_KINDS.has(last.decision.record.decision)) {
       const next = nextWaitingPoint(model.points, last.point, used)
@@ -331,9 +343,13 @@ export function buildQueueRows(
   return rows
 }
 
-/** The decision points each queue row currently covers, by dp. */
+/**
+ * The decision points each queue row currently covers, by dp — with the
+ * points a revealed step answers (DP-07's DOAC choice covers DP-08 and DP-09,
+ * as a chain walked onto them would), so they read as today's, not 「等上一步」.
+ */
 export function queuedPointDps(rows: readonly QueueRow[]): ReadonlySet<string> {
-  return new Set(rows.flatMap((row) => row.steps.map((step) => step.point.dp)))
+  return new Set(rows.flatMap((row) => row.steps.flatMap((step) => [step.point.dp, ...(step.decides ?? [])])))
 }
 
 export interface PlanItem {

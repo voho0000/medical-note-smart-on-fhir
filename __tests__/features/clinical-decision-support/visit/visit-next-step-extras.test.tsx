@@ -186,6 +186,48 @@ describe('a chained step the pack says decides other points, among equals', () =
     expect(why()).toBeVisible()
   })
 
+  // Once 「開始抗凝」 opens the choice, DP-08 and DP-09 wait on it, not on an
+  // earlier step: they read as today's, as a chain row walked onto them would.
+  it('reads DP-08 and DP-09 as today’s once the choice is open, not 「等上一步」', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).toHaveTextContent('等上一步')
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    for (const dp of ['DP-08', 'DP-09']) {
+      expect(tile(dp)).toHaveTextContent('今天要決定')
+      // The question the choice asks, not the point's own 「等 DP-07」.
+      expect(tile(dp)).toHaveTextContent('選 DOAC（劑量已依腎功能、年齡、體重算好）')
+      expect(tile(dp)).not.toHaveTextContent('等上一步')
+    }
+    fireEvent.click(tile('DP-09'))
+    expect(screen.getByTestId('cdss-visit-detail-slot')).not.toHaveTextContent('等上一步')
+  })
+
+  // HF DP-14 folds AF DP-07, `next` and all: the DP-08 and DP-09 its step
+  // decides are AF's, not the HF page's own points of the same codes.
+  it('leaves another pack’s points of the same codes alone', () => {
+    const af = afModel({ decides: ['DP-08', 'DP-09'], unranked: true }).points[0]
+    const model: VisitDecisionModel = {
+      ...afModel({}),
+      packId: 'hf-page-test',
+      headline: 'HF 追蹤',
+      queue: ['DP-14'],
+      points: [
+        point({
+          dp: 'DP-08', label: 'MRA', state: 'confirm', source: 'hf', headline: 'K 4.1：加 MRA？',
+          actions: [action('hf-dp08-add', '加 MRA', 'prescribed')],
+        }),
+        point({ dp: 'DP-09', label: 'SGLT2i', state: 'waiting', source: 'hf', headline: '等上一步' }),
+        { ...af, dp: 'DP-14', label: 'AF 抗凝' },
+      ],
+    }
+    renderAt02(model)
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    expect(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' })).toBeInTheDocument()
+    expect(tile('DP-09')).toHaveTextContent('等上一步')
+    expect(tile('DP-08')).not.toHaveTextContent('今天要決定')
+    expect(screen.getByTestId('cdss-visit-column-treatment').querySelector('[data-still-open="DP-08"]')).not.toBeNull()
+  })
+
   it('changes nothing for a pack that sends neither (2.8.x)', () => {
     renderAt02(afModel({}))
     fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))

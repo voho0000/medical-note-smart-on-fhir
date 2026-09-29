@@ -165,6 +165,7 @@ function MapTile({
   point,
   decision,
   inQueue,
+  pending,
   open,
   opensCard,
   matches,
@@ -175,6 +176,8 @@ function MapTile({
   point: DecisionPointView
   decision?: PointDecision
   inQueue: boolean
+  /** The question another row's step now asks for it (DP-09's 「選 DOAC」), over its own 「等 DP-07」. */
+  pending?: string
   open: boolean
   /** False for a point the page asks elsewhere (01's 診斷 view): the tile goes there instead. */
   opensCard: boolean
@@ -190,12 +193,13 @@ function MapTile({
   // the pack's one sentence for it (a waiting step the queue has moved on to
   // counts). The rest of the pack's words are in the card, and in the tile's
   // title for a pointer.
+  const sentence = pending ?? point.headline ?? point.why
   const sub = decision
     ? [decision.record.actionLabel ?? decision.action.label, check?.text].filter(Boolean).join(' · ')
     : SENTENCE_STATES.has(point.state) || (inQueue && point.state === 'waiting')
-      ? point.headline ?? point.why
+      ? sentence
       : undefined
-  const title = [point.dp, point.label, point.headline, point.why].filter(Boolean).join(' · ')
+  const title = [point.dp, point.label, pending ?? point.headline, point.why].filter(Boolean).join(' · ')
   return (
     <button
       type="button"
@@ -234,7 +238,7 @@ function MapTile({
         ) : null}
         <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} inQueue={inQueue} />
         {/* Out of sight, the pack's sentence is still read out. */}
-        {!sub && (point.headline ?? point.why) ? <span className="sr-only">{point.headline ?? point.why}</span> : null}
+        {!sub && sentence ? <span className="sr-only">{sentence}</span> : null}
       </span>
       {sub ? (
         <span className="flex w-full min-w-0 items-center gap-1.5">
@@ -820,6 +824,7 @@ export function DecisionMapColumns({
                                 point={point}
                                 decision={decisionOf(point)}
                                 inQueue={queuedDps.has(point.dp)}
+                                {...(pendingLine?.(point) ? { pending: pendingLine(point) } : {})}
                                 open={openKey === key && cardOpen}
                                 opensCard={opensCard(point)}
                                 matches={!needle || searchText(point).includes(needle)}
