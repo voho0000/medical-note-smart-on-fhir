@@ -15,6 +15,7 @@ import {
   buildVisitPlan,
   buildVisitSummaryText,
   checkIntervalSuffix,
+  decidedOnAnotherRow,
   decisionInputFor,
   dependentDecisionKeys,
   effectiveAnswer,
@@ -242,11 +243,14 @@ export function VisitDecisionScreen({
     [answers, decisions, isEnglish, model, now],
   )
   const decisionOf = useCallback(
-    (point: DecisionPointView) => latestDecisionFor(point, decisions, now),
-    [decisions, now],
+    (point: DecisionPointView) => latestDecisionFor(point, decisions, now)
+      ?? decidedOnAnotherRow(point, model.points, decisions, now),
+    [decisions, model.points, now],
   )
   // What the summary holds so far, for its step's name.
-  const recordedToday = model.points.filter((point) => decisionOf(point)).length
+  // Counted on the rows they were recorded on: one DOAC chosen on DP-07's row
+  // is one decision, not three for the points it also answers.
+  const recordedToday = model.points.filter((point) => latestDecisionFor(point, decisions, now)).length
 
   // A step decided anew, or taken back, leaves the steps that followed from it
   // without the decision they answered: they go too (#166 review), so the

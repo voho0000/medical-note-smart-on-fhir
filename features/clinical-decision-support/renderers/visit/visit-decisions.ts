@@ -40,10 +40,38 @@ export function nextStepDecisionKey(point: Pick<DecisionPointView, 'source' | 'd
 }
 
 /**
+ * What a pack's `next` may add (personalized-care after 2.8.1, #47): the
+ * points the step answers where they are not the row's own (AF DP-07's
+ * DOAC choice answers DP-08 and DP-09), and whether its actions are equals
+ * with none recommended (ESC names no preferred DOAC). Read defensively: an
+ * older pack sends neither, and nothing changes.
+ */
+export interface NextStepExtras {
+  decides?: readonly string[]
+  unranked?: boolean
+}
+
+export function nextStepExtras(point: Pick<DecisionPointView, 'next'>): NextStepExtras {
+  const next = point.next as (NextStepExtras & object) | undefined
+  return {
+    ...(next?.decides?.length ? { decides: next.decides } : {}),
+    ...(next?.unranked ? { unranked: true } : {}),
+  }
+}
+
+/** A step drawn from a point's `next`, carrying whether its actions are unranked. */
+export type VisitStepPoint = DecisionPointView & { unranked?: boolean }
+
+/** Whether a point's actions are equals, none of them the recommendation. */
+export function isUnranked(point: DecisionPointView): boolean {
+  return Boolean((point as VisitStepPoint).unranked)
+}
+
+/**
  * The step a point's `next` describes, as a point of its own: same decision
  * point, the pack's next question, reason and actions.
  */
-export function nextStepPoint(point: DecisionPointView): DecisionPointView | undefined {
+export function nextStepPoint(point: DecisionPointView): VisitStepPoint | undefined {
   if (!point.next) return undefined
   const { next } = point
   return {
@@ -53,6 +81,7 @@ export function nextStepPoint(point: DecisionPointView): DecisionPointView | und
     chain: next.chain,
     actions: next.actions,
     next: undefined,
+    ...(nextStepExtras(point).unranked ? { unranked: true } : {}),
   }
 }
 
@@ -196,6 +225,26 @@ export function latestDecisionFor(
 ): PointDecision | undefined {
   const steps = pointSteps(point, decisions, now)
   return [...steps].reverse().find((step) => step.decision)?.decision
+}
+
+/**
+ * The decision recorded for a point on another point's row: a `next` step
+ * that `decides` it (the DOAC chosen on DP-07's row answers DP-08 and DP-09),
+ * so the point shows what was chosen rather than 「等上一步」.
+ */
+export function decidedOnAnotherRow(
+  point: DecisionPointView,
+  points: readonly DecisionPointView[],
+  decisions: PhysicianDecisionMap | undefined,
+  now: Date,
+): PointDecision | undefined {
+  for (const owner of points) {
+    if (owner === point || owner.source !== point.source) continue
+    if (!nextStepExtras(owner).decides?.includes(point.dp)) continue
+    const decided = pointSteps(owner, decisions, now)[1]?.decision
+    if (decided) return decided
+  }
+  return undefined
 }
 
 export interface QueueRow {
@@ -408,11 +457,19 @@ export function buildVisitSummaryText(input: {
     return [`${ask.label}${isEnglish ? ': ' : '：'}${option.label}${prefilled && ask.prefill ? `（${ask.prefill.basis}）` : ''}`]
   })
   if (answered.length) lines.push(answered.join(isEnglish ? '; ' : '；'))
-  const decided = model.points.flatMap((point) => pointSteps(point, decisions, now).flatMap((step) => {
+  const decided = model.points.flatMap((point) => pointSteps(point, decisions, now).flatMap((step, index) => {
     const decision = step.decision
     if (!decision) return []
     const check = decision.record.responseCheck
-    return [`- ${point.dp} ${point.label}${isEnglish ? ': ' : '：'}${decision.record.actionLabel ?? decision.action.label}${
+    // A step that answers other points is named by them (「DP-08／DP-09 抗凝
+    // 選藥／DOAC 劑量」), not by the row it was recorded on.
+    const answered = index > 0 ? (nextStepExtras(point).decides ?? [])
+      .map((dp) => model.points.find((candidate) => candidate.dp === dp && candidate.source === point.source))
+      .filter((candidate): candidate is DecisionPointView => Boolean(candidate)) : []
+    const name = answered.length
+      ? `${answered.map((item) => item.dp).join('／')} ${answered.map((item) => item.label).join('／')}`
+      : `${point.dp} ${point.label}`
+    return [`- ${name}${isEnglish ? ': ' : '：'}${decision.record.actionLabel ?? decision.action.label}${
       check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}${checkIntervalSuffix(check, isEnglish)}）` : ''
     }`]
   }))

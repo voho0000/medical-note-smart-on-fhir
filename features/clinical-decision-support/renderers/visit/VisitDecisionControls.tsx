@@ -5,7 +5,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PointDecision } from './visit-decisions'
-import { checkIntervalSuffix } from './visit-decisions'
+import { checkIntervalSuffix, isUnranked } from './visit-decisions'
 import { TINTED_PRIMARY, TINTED_SAFETY } from './visit-presentation'
 import type { DecisionPointView, VisitAction } from '../../types'
 
@@ -112,9 +112,11 @@ export function VisitDecisionControls({
 
   // A question (懷疑 HF？ 是／否) has answers, not a recommendation: every
   // answer is shown, all alike, with none of them made the obvious one.
-  const question = point.actions.length > 1 && point.actions.every((action) => (
+  // Equals the pack ranks none of (the four DOACs, each at its dose) are drawn
+  // the same way.
+  const question = point.actions.length > 1 && (isUnranked(point) || point.actions.every((action) => (
     action.physicianInput && action.physicianInput.request === primary.physicianInput?.request
-  ))
+  )))
   if (question) {
     return (
       <div ref={containerRef} className="flex flex-wrap items-center gap-2" data-testid="cdss-visit-controls" data-visit-question="">
