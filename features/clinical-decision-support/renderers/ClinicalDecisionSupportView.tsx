@@ -98,6 +98,7 @@ import { afAnswersForInput, phenotypeAnswerForInput } from './visit/physician-in
 import { heartFailureVisitSurfaces } from './visit/heart-failure-map-surfaces'
 import { AtrialFibrillationMapSurfaces } from './visit/AtrialFibrillationMapSurfaces'
 import type { VisitMapSurfaces } from './visit/visit-surfaces'
+import type { VisitAnswerProvenance } from './visit/VisitAsks'
 
 /** The map's row columns, for the prognosis models under 03: they line up with the points above. */
 const PROGNOSIS_ROW_CLASSES = {
@@ -176,6 +177,8 @@ interface ClinicalDecisionSupportViewProps {
    */
   companionResult?: CdssResult
   visitAnswers?: VisitAnswers
+  /** Where each of today's answers was given, so another page can say so. */
+  visitAnswerSources?: VisitAnswerProvenance
   onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
   /** The companion's English build, so its cards' rationale copies in English too. */
   englishCompanionResult?: CdssResult
@@ -2161,6 +2164,7 @@ export function ClinicalDecisionSupportView({
   visitModel,
   companionResult,
   visitAnswers,
+  visitAnswerSources,
   onVisitAnswer,
   englishCompanionResult,
 }: ClinicalDecisionSupportViewProps) {
@@ -2426,6 +2430,7 @@ export function ClinicalDecisionSupportView({
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}
           answers={visitAnswers ?? {}}
+          {...(visitAnswerSources ? { answerSources: visitAnswerSources } : {})}
           onAnswer={onVisitAnswer}
           onPhysicianInput={onAnswerPhenotype || onAfAnswer ? (input) => {
             // AF DP-01 answers the AF diagnosis and its type; the rest are the
