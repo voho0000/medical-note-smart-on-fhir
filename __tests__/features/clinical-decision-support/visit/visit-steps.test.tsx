@@ -190,6 +190,22 @@ describe('the visit, step by step', () => {
     expect(screen.getByTestId('cdss-visit-summary-text')).toBeVisible()
   })
 
+  // The summary copies only what was decided: a section still asking for
+  // something is named there, one press from it, before the note leaves.
+  it('names on the summary the sections still asking for something, one press from each', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(step('summary'))
+    const left = screen.getByTestId('cdss-visit-summary-left')
+    expect(within(left).getAllByRole('button').map((button) => button.dataset.testid)).toEqual(['cdss-visit-summary-left-status'])
+    expect(screen.getByTestId('cdss-visit-summary-left-status')).toHaveTextContent('01 現況 · 待答 1')
+    fireEvent.click(screen.getByTestId('cdss-visit-summary-left-status'))
+    expect(step('status')).toHaveAttribute('aria-current', 'step')
+    expect(document.activeElement).toHaveAttribute('id', 'cdss-visit-column-status-title')
+    fireEvent.click(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
+    fireEvent.click(step('summary'))
+    expect(screen.queryByTestId('cdss-visit-summary-left')).toBeNull()
+  })
+
   it('asks the every-visit questions in 02 while one is unanswered, and keeps them, answered, until the clinician moves on', () => {
     render(<Harness model={p4Model()} />)
     // 01 asks its own questions and never repeats them as pending, even while one is open.

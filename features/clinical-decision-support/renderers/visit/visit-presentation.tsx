@@ -45,11 +45,15 @@ export function StatePill({
   isEnglish: boolean
   /** A point decided today reads 「已記錄」, whatever state the pack gave it. */
   decided?: boolean
-  /** A waiting step the queue has moved on to reads as today's, not as waiting. */
+  /**
+   * A waiting step the queue has moved on to reads as today's, not as
+   * waiting — as does a settled point a queued step decides anew (DP-08's
+   * agent, once 「改用其他 DOAC」 opens the switch).
+   */
   inQueue?: boolean
   className?: string
 }) {
-  const promoted = !decided && inQueue && state === 'waiting'
+  const promoted = !decided && inQueue && (state === 'waiting' || state === 'done')
   return (
     <span
       className={cn(

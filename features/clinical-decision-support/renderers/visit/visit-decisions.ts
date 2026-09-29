@@ -143,8 +143,22 @@ export function decisionFor(
   if (!record || !record.actionId || !isSameLocalDay(record.recordedAt, now)) return undefined
   const action = point.actions.find((candidate) => candidate.id === record.actionId)
   if (!action) return undefined
-  if (record.actionLabel !== undefined && labelNumbers(record.actionLabel) !== labelNumbers(action.label)) return undefined
+  // Stored under the words the note records (`recordLabel`) — or, from before
+  // the pack gave them, under the button's own.
+  const numbers = record.actionLabel === undefined ? undefined : labelNumbers(record.actionLabel)
+  if (numbers !== undefined && numbers !== labelNumbers(recordLabelOf(action)) && numbers !== labelNumbers(action.label)) return undefined
   return { key, record, action }
+}
+
+/**
+ * What the note records for an action: the pack's `recordLabel` where the
+ * button's ten characters leave the agent or dose out (「開始 β 阻斷劑」 →
+ * 「開始 β 阻斷劑（bisoprolol 1.25 mg）」, personalized-care after 2.9.0),
+ * else the label. Read defensively: an older pack sends none.
+ */
+export function recordLabelOf(action: VisitAction): string {
+  const recordLabel = (action as VisitAction & { recordLabel?: unknown }).recordLabel
+  return typeof recordLabel === 'string' && recordLabel ? recordLabel : action.label
 }
 
 /** The numbers a label states, in order — 「sacubitril/valsartan 49/51 mg」 → `49/51`. */
@@ -188,7 +202,7 @@ export function decisionInputFor(
     packVersion,
     dp: point.dp,
     actionId: action.id,
-    actionLabel: action.label,
+    actionLabel: recordLabelOf(action),
     ...(action.responseCheck ? { responseCheck: { ...action.responseCheck } } : {}),
     ...(action.reopenWhen ? { reopenWhen: action.reopenWhen } : {}),
   }

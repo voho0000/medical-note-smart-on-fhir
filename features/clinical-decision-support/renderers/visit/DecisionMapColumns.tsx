@@ -166,6 +166,7 @@ function MapTile({
   decision,
   inQueue,
   pending,
+  chain = point.chain,
   open,
   opensCard,
   matches,
@@ -176,8 +177,14 @@ function MapTile({
   point: DecisionPointView
   decision?: PointDecision
   inQueue: boolean
-  /** The question another row's step now asks for it (DP-09's 「選 DOAC」), over its own 「等 DP-07」. */
+  /**
+   * The question still open for it, over its own sentence: another row's step
+   * (DP-09's 「選 DOAC」, not 「等 DP-07」), or its own chain's next one
+   * (「開始抗凝 → 選 DOAC…」).
+   */
   pending?: string
+  /** Its chain as it stands today, where that differs from the pack's (see `chainOf`). */
+  chain?: DecisionPointView['chain']
   open: boolean
   /** False for a point the page asks elsewhere (01's 診斷 view): the tile goes there instead. */
   opensCard: boolean
@@ -196,7 +203,7 @@ function MapTile({
   const sentence = pending ?? point.headline ?? point.why
   const sub = decision
     ? [decision.record.actionLabel ?? decision.action.label, check?.text].filter(Boolean).join(' · ')
-    : SENTENCE_STATES.has(point.state) || (inQueue && point.state === 'waiting')
+    : SENTENCE_STATES.has(point.state) || (inQueue && (point.state === 'waiting' || point.state === 'done'))
       ? sentence
       : undefined
   const title = [point.dp, point.label, pending ?? point.headline, point.why].filter(Boolean).join(' · ')
@@ -244,7 +251,7 @@ function MapTile({
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-xs text-foreground/80">{sub}</span>
           <span className="shrink-0">
-            <ChainDots chain={point.chain} isEnglish={isEnglish} />
+            <ChainDots chain={chain} isEnglish={isEnglish} />
           </span>
         </span>
       ) : null}
@@ -466,6 +473,7 @@ export function DecisionMapColumns({
   initialOpen,
   stepsBeforeNext,
   pendingLine,
+  chainOf,
   summary,
   asks,
 }: {
@@ -519,6 +527,8 @@ export function DecisionMapColumns({
    * 「等上一步」.
    */
   pendingLine?: (point: DecisionPointView) => string | undefined
+  /** The chain a tile's dots show: the open step's, where a chain has moved on to one. */
+  chainOf?: (point: DecisionPointView) => DecisionPointView['chain']
   /**
    * The visit's summary — its text and 複製 — as the last step after 03, with
    * a line of what it holds so far for the step's name.
@@ -664,6 +674,8 @@ export function DecisionMapColumns({
     const combined = combinedSummary(block)
     return [block, { ...combined, nothing: combined.text === nothingText }]
   })) as Record<VisitBlock, { text: string; attention: boolean; nothing: boolean }>
+  // The open sections still asking for something, for the summary's foot-note.
+  const summaryLeft = BLOCK_ORDER.filter((block) => !closedNote(block) && stepSummaries[block].attention)
 
   // One bucket per group, groups in the order they first appear and points in
   // the pack's order within each, under the group's heading when the section
@@ -825,6 +837,7 @@ export function DecisionMapColumns({
                                 decision={decisionOf(point)}
                                 inQueue={queuedDps.has(point.dp)}
                                 {...(pendingLine?.(point) ? { pending: pendingLine(point) } : {})}
+                                {...(chainOf ? { chain: chainOf(point) } : {})}
                                 open={openKey === key && cardOpen}
                                 opensCard={opensCard(point)}
                                 matches={!needle || searchText(point).includes(needle)}
@@ -1054,6 +1067,29 @@ export function DecisionMapColumns({
             data-open={summaryShown ? 'true' : undefined}
           >
             <h3 id="cdss-visit-column-summary-title" tabIndex={-1} className="sr-only">{isEnglish ? 'This visit’s summary' : '本次摘要'}</h3>
+            {/* The summary is where a visit ends, and what it copies is only
+                what was decided: a section still asking for something says
+                so here, one press from it, before the note leaves the page. */}
+            {summaryLeft.length ? (
+              <div className="space-y-1.5" data-testid="cdss-visit-summary-left">
+                <p className="text-xs font-semibold text-muted-foreground">{isEnglish ? 'Still open' : '還沒處理'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {summaryLeft.map((block) => (
+                    <button
+                      key={block}
+                      type="button"
+                      className={nextButtonClass}
+                      data-section={SECTION_TONE[block]}
+                      onClick={() => showStep(block, true)}
+                      data-testid={`cdss-visit-summary-left-${block}`}
+                    >
+                      {`${blockShortTitle(block, isEnglish)} · ${stepSummaries[block].text}`}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {summary.content}
           </section>
         ) : null}
