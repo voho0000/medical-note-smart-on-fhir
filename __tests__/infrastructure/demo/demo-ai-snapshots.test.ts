@@ -116,25 +116,41 @@ describe('demo medical-summary snapshots', () => {
       .toBe(demoSafetyScanSnapshots['zh-TW'].patient)
   })
 
-  it.each(['zh-TW', 'en'] as const)('does not restore retired decisions cards in %s', (locale) => {
-    expect(demoMedicalSummarySnapshots[locale].medical.decisions).toEqual([])
-    expect(demoMedicalSummarySnapshots[locale].patient.decisions).toEqual([])
+  it.each(['zh-TW', 'en'] as const)('keeps 開藥前必看 clinician-only in %s', (locale) => {
+    expect(demoMedicalSummarySnapshots[locale].medical.mustKnow.length).toBeGreaterThan(0)
+    expect(demoMedicalSummarySnapshots[locale].patient.mustKnow).toEqual([])
+    // The mirror rule: benefit-first education is patient-only.
+    expect(demoMedicalSummarySnapshots[locale].medical.medicationEducation).toEqual([])
+    expect(demoMedicalSummarySnapshots[locale].patient.medicationEducation.length).toBeGreaterThan(0)
   })
 
-  it.each(['medical', 'patient'] as const)('ships non-empty English narrative for %s audience', (audience) => {
+  // Allergy is no longer a model slot: the app renders that row itself from the
+  // bundle's AllergyIntolerance records (or their absence), so the snapshots
+  // must not carry a model-written allergy row at all — and every remaining
+  // row must cite at least one key, which the keyless allergy row could not.
+  it.each(['zh-TW', 'en'] as const)('carries no model-written allergy row in %s', (locale) => {
+    for (const audience of ['medical', 'patient'] as const) {
+      const mustKnow = demoMedicalSummarySnapshots[locale][audience].mustKnow
+      expect(mustKnow.some((item) => item.slot === 'allergy')).toBe(false)
+      for (const item of mustKnow) expect(item.sources.length).toBeGreaterThan(0)
+    }
+  })
+
+  it.each(['medical', 'patient'] as const)('ships non-empty English content for %s audience', (audience) => {
     const snapshot = demoMedicalSummarySnapshots.en[audience]
     expect(snapshot.headline).toMatch(/[A-Za-z]/)
-    expect(snapshot.summary.map((segment) => segment.text).join('')).toMatch(/[A-Za-z]/)
-    expect(snapshot.investigations.length).toBeGreaterThan(0)
+    expect(snapshot.focus.map((item) => `${item.title}${item.text}`).join('')).toMatch(/[A-Za-z]/)
+    expect(snapshot.problems.length).toBeGreaterThan(0)
+    expect(snapshot.recent.length).toBeGreaterThan(0)
     expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
   })
 
-  it('keeps the compact English reconciliation fully English and de-identified', () => {
-    const reconciliation = demoMedicalSummarySnapshots.en.medical
-      .medicationReview.reconciliation.map((item) => item.text).join(' ')
-    expect(reconciliation).toContain('Aricept')
-    expect(reconciliation).not.toContain('示範')
-    expect(reconciliation).not.toMatch(/Demo (Grace|Sunny)/)
+  it('keeps the English problem list fully English and de-identified', () => {
+    const problems = demoMedicalSummarySnapshots.en.medical.problems
+      .map((item) => [item.label, item.basis, item.metric, item.medications].join(' '))
+      .join(' ')
+    expect(problems).toContain('Aricept')
+    expect(problems).not.toContain('示範')
   })
 
   it('resolves every bundled summary and safety citation against the enriched default demo AI scope', async () => {
@@ -178,21 +194,22 @@ describe('demo medical-summary snapshots', () => {
           locale,
         })
         expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-        expect(finalized.droppedTimelineCount).toBe(0)
+        expect(finalized.droppedRecentCount).toBe(0)
+        // Nothing in the bundled snapshot may already be covered by a focus
+        // item — the drop counter would hide content the author intended.
+        expect(finalized.droppedProblemCount).toBe(0)
         expect(finalized.problems.find((problem) => problem.sourceKeys.includes('D1')))
           .toEqual(expect.objectContaining({
             documentEvidence: expect.arrayContaining([
               expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
             ]),
           }))
-        const documentTimeline = finalized.timeline.find((event) => event.key === 'D1')
-        if (documentTimeline) {
-          expect(documentTimeline).toEqual(expect.objectContaining({
+        expect(finalized.focus.find((item) => item.sourceKeys.includes('D1')))
+          .toEqual(expect.objectContaining({
             documentEvidence: expect.arrayContaining([
               expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
             ]),
           }))
-        }
         expect(auditSummaryGrounding(snapshot, grounding)).toEqual([])
 
         const safetySnapshot = remapDemoSnapshotSourceKeys(
@@ -289,10 +306,12 @@ describe('demo medical-summary snapshots', () => {
     expect(aricept?.benefit).toContain('失智症治療')
     expect(glaucoma).toMatchObject({ sources: ['M2', 'M3', 'M4'] })
 
-    const regimen = demoMedicalSummarySnapshots['zh-TW'].medical.medicationReview.regimen
-    expect(regimen.some((item) => item.sources.includes('M13'))).toBe(true)
-    expect(regimen.some((item) => item.sources.includes('M5') && item.sources.includes('M11'))).toBe(true)
-    expect(regimen.some((item) => item.sources.includes('M10'))).toBe(true)
+    // The clinician list now carries medicines on the problem rows instead of
+    // a separate reconciliation card; the same records must still be cited.
+    const problems = demoMedicalSummarySnapshots['zh-TW'].medical.problems
+    expect(problems.some((item) => item.sources.includes('M13'))).toBe(true)
+    expect(problems.some((item) => item.sources.includes('M5') && item.sources.includes('M11'))).toBe(true)
+    expect(problems.some((item) => item.sources.includes('M10'))).toBe(true)
   })
 
   it.each(['medical', 'patient'] as const)(
@@ -325,7 +344,7 @@ describe('demo medical-summary snapshots', () => {
       )
 
       expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-      expect(finalized.droppedTimelineCount).toBe(0)
+      expect(finalized.droppedRecentCount).toBe(0)
       const remappedDocumentProblem = finalized.problems.find((problem) =>
         problem.documentEvidence?.some((entry) => entry.quote === 'Diebetes mellitus'),
       )

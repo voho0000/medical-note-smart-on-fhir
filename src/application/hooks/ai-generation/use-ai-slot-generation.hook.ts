@@ -44,7 +44,7 @@ import {
   BUNDLE_CHANGE_SETTLED_EVENT,
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
-import { runGenerationJob, type AiGenerationMeasurement } from './run-generation-job'
+import { runGenerationJob, type AiGenerationMeasurement, type AiRunMetrics } from './run-generation-job'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
@@ -67,6 +67,7 @@ import {
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
 import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
+import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { providerClinicalContextSafetyFraction } from './context-window-retry'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
@@ -78,6 +79,11 @@ export interface AiSlotRunContext {
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
   piiLiterals: string[]
   clinicalData: ClinicalAiDataInput | null
+  /** The loaded Patient. Demographics are already required for AI (the
+   *  demographics gate), and a deterministic snapshot needs sex/age. */
+  patient: PatientEntity | null
+  /** Demo as-of date for the demo chart, the real clock otherwise. */
+  clinicalNowMs: number
   catalog: SummarySourceCatalogEntry[]
   locale: Locale
   audience: Audience
@@ -129,6 +135,10 @@ export interface AiSlotGenerationConfig<T> {
   /** Streams + parses one generation; null = parse failed → 'PARSE_FAILED'.
    *  Any feature-specific modularization or retry policy lives in here. */
   run: (ctx: AiSlotRunContext) => Promise<T | null>
+  /** Measurements the producer took for THIS slot, read once after the run
+   *  settles and reported on `ai_result`. Omit when the feature measures
+   *  nothing beyond the end-to-end duration the engine already times. */
+  readRunMetrics?: (slotKey: string) => AiRunMetrics | undefined
   /** Demo bundle seeding: build the locale-matched pre-generated snapshot
    *  result (through the same parse/validate pipeline as a live reply) instead
    *  of burning an AI call. Only consulted for the demo patient + supported
@@ -215,6 +225,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     run,
     demoSeed,
     resultModelId,
+    readRunMetrics,
     retainResultOnModelChange = false,
   } = config
 
@@ -294,6 +305,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     inputSignature,
     sourceScopeSignature = '',
     clinicalData: scopedClinicalData,
+    patient,
+    clinicalNowMs,
     catalog,
     contextAdaptation,
     // Usage analytics only: the size of the whole loaded chart, from the hook
@@ -527,12 +540,15 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       shouldCommit: () => (
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
+      readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
       produce: (measureResult) =>
         run({
           measureResult,
           clinicalContext,
           piiLiterals,
           clinicalData: scopedClinicalData,
+          patient: patient ?? null,
+          clinicalNowMs,
           catalog,
           locale,
           audience,
@@ -557,7 +573,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts])
+  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

@@ -28,14 +28,14 @@ describe('auditSummaryGrounding', () => {
   })
 
   it('does NOT flag a decision that RECOMMENDS an echo (arrange, not asserted)', () => {
-    const ai = { decisions: [{ text: '安排心臟超音波評估', rationale: '心電圖顯示陳舊性梗塞', sources: ['L16'] }] }
+    const ai = { focus: [{ title: '心臟', text: '安排心臟超音波評估；心電圖顯示陳舊性梗塞', sources: ['L16'] }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([])
   })
 
-  it('flags a fabricated finding in a timeline label', () => {
-    const ai = { timeline: [{ label: '因咳血住院與胃鏡檢查（診斷胃炎）', ref: 'L1' }] }
+  it('flags a fabricated finding in a recent-event label', () => {
+    const ai = { recent: [{ label: '因咳血住院與胃鏡檢查（診斷胃炎）', ref: 'L1' }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([
-      expect.stringContaining('fabricated test "胃鏡" in timeline[0]'),
+      expect.stringContaining('fabricated test "胃鏡" in recent[0]'),
     ])
   })
 
@@ -45,19 +45,19 @@ describe('auditSummaryGrounding', () => {
     expect(issues).toEqual([expect.stringContaining('renal claim cites imaging L1')])
   })
 
-  it('audits investigation text and rejects a renal trend citing a chest X-ray', () => {
+  it('audits 開藥前必看 text and rejects a renal row citing a chest X-ray', () => {
     const ai = {
-      investigations: [
+      mustKnow: [
         {
-          label: '腎功能',
-          trend: 'eGFR 35 → 32',
-          interpretation: '數值下降',
+          slot: 'renal',
+          label: 'eGFR 32',
+          text: 'eGFR 35 → 32，數值下降',
           sources: ['L1'],
         },
       ],
     }
     expect(auditSummaryGrounding(ai, input)).toEqual([
-      expect.stringContaining('renal investigation cites imaging L1'),
+      expect.stringContaining('renal mustKnow cites imaging L1'),
     ])
   })
 
@@ -67,14 +67,14 @@ describe('auditSummaryGrounding', () => {
   })
 
   it('flags a positional cross-reference', () => {
-    const ai = { decisions: [{ text: '請照上述建議追蹤', rationale: '', sources: [] }] }
+    const ai = { focus: [{ title: '追蹤', text: '請照上述建議追蹤', sources: [] }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([expect.stringContaining('positional cross-ref')])
   })
 
   it('returns [] for a fully grounded summary', () => {
     const ai = {
       problems: [{ label: '慢性腎臟病', basis: '肌酸酐上升', sources: ['L7'] }],
-      timeline: [{ label: '胸部X光追蹤', ref: 'L1' }],
+      recent: [{ label: '胸部X光追蹤', ref: 'L1' }],
     }
     expect(auditSummaryGrounding(ai, input)).toEqual([])
   })
@@ -102,7 +102,7 @@ describe('auditSummaryGrounding', () => {
       resourceId: 'discharge-1',
     }])
     const ai = {
-      timeline: [{
+      recent: [{
         label: '住院期間接受上消化道內視鏡檢查，顯示逆流性食道炎與胃炎',
         ref: 'D1',
         documentEvidence: [{
@@ -129,10 +129,10 @@ describe('auditSummaryGrounding', () => {
       }],
     }
     const missing = {
-      timeline: [{ label: '接受胃鏡檢查', ref: 'D1' }],
+      recent: [{ label: '接受胃鏡檢查', ref: 'D1' }],
     }
     const translatedInsteadOfQuoted = {
-      timeline: [{
+      recent: [{
         label: '接受胃鏡檢查',
         ref: 'D1',
         documentEvidence: [{ source: 'D1', quote: '接受胃鏡檢查' }],

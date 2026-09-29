@@ -59,14 +59,14 @@ replay('same authorized real responses retain all clinical fields and source lin
           if (entry.verification === 'exact') exact++; else repaired++
         } else if (entry.verification === 'not-found') unmatched++; else unavailable++
       }
-      // Exercise all five manual failed-module retry choices. Retained cards
+      // Exercise every manual failed-module retry choice. Retained cards
       // must keep clinical fields AND excerpt metadata after draft rebuilding.
       for (const id of MEDICAL_SUMMARY_MODULE_IDS) {
         const draft = after.createAiDraftFromResult(newResult)
         const replacement = after.createAiDraftFromResult(newResult)
-        const retried = after.mergeModuleResult(draft, id, id === 'priorities'
-          ? { headline: replacement.headline, summary: replacement.summary, decisions: replacement.decisions }
-          : id === 'medications' ? { medicationEducation: replacement.medicationEducation, medicationReview: replacement.medicationReview }
+        const retried = after.mergeModuleResult(draft, id, id === 'overview'
+          ? { headline: replacement.headline, mustKnow: replacement.mustKnow, medicationEducation: replacement.medicationEducation }
+          : id === 'focus' ? { items: replacement.focus }
             : { [id]: replacement[id] } as any)
         const retryResult = after.finalizeResult(retried, catalog, options)
         expect(hash(withoutEvidence(retryResult))).toBe(hash(withoutEvidence(newResult)))

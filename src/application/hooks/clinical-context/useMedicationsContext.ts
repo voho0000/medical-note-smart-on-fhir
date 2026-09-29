@@ -14,13 +14,17 @@ import {
 import { routeAbbr } from "@/src/shared/utils/route-display"
 import {
   durationToDays,
-  filterMedicationRecords,
   isChronicMedicationRecord,
   isMedicationCurrentlyInUse,
+  MILESTONE_ENCOUNTER_FLOOR_DAYS,
   normalizeClinicalStatus,
+  selectMedicationRecords,
 } from "@/src/core/utils/clinical-context-selection.utils"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
+
+/** The floor's horizon, stated in the months the section heading uses. */
+const FLOOR_WINDOW_MONTHS = Math.round(MILESTONE_ENCOUNTER_FLOOR_DAYS / 30)
 
 interface MedSummary {
   name: string
@@ -30,6 +34,8 @@ interface MedSummary {
   startedOn?: string
   endDate?: string
   daysRemaining?: number
+  /** Days supply the source recorded, when it recorded one. */
+  supplyDays?: number
   state: 'current' | 'ended' | 'other'
   status: string
   isChronic: boolean
@@ -100,6 +106,7 @@ function summarize(
     startedOn: startedRaw ? String(startedRaw).slice(0, 10) : undefined,
     endDate,
     daysRemaining,
+    supplyDays: days,
     state,
     status,
     isChronic: isChronicMedicationRecord(med),
@@ -154,7 +161,7 @@ function formatNhiTerminology(m: MedSummary): string | undefined {
   return `[NHI terminology matched to this exact medication record: ${fields.join('; ')}]`
 }
 
-function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string {
+function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed'): string {
   const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
@@ -167,6 +174,9 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string 
   } else if (mode === 'recent') {
     if (m.endDate) parts.push(`— last ended ${m.endDate}`)
     else if (m.startedOn) parts.push(`— ${m.startedOn}`)
+  } else if (mode === 'lapsed') {
+    if (m.startedOn) parts.push(`— last dispensed ${m.startedOn}`)
+    if (m.supplyDays) parts.push(`(${m.supplyDays}d supply${m.endDate ? `, ended ${m.endDate}` : ''})`)
   } else {
     if (m.startedOn) parts.push(`— recorded ${m.startedOn}`)
     if (m.endDate) parts.push(`(calculated supply end ${m.endDate})`)
@@ -253,15 +263,21 @@ export function useMedicationsContext(
     // linked records may also be repeated under their encounter for chronology;
     // never remove them here, because the encounter and medication windows can
     // differ and cross-section "dedup" previously made records disappear.
-    const meds = filterMedicationRecords(
+    // `floor` are the recently dispensed medicines the latest-known floor added
+    // because too few are current. They are NOT current, so the buckets below
+    // would classify them as ended/other — and under the default 使用中 filter
+    // those buckets are cleared, which is how a whole lapsed DM regimen used to
+    // reach no AI module at all. They get their own labelled subsection instead.
+    const { selected: meds, floor } = selectMedicationRecords(
       clinicalData.medications,
       filters,
       clinicalData as { encounters?: any[] },
       nowMs,
     )
-    if (meds.length === 0) return null
+    if (meds.length === 0 && floor.length === 0) return null
 
     const summaries = meds.map((m: any) => summarize(m, nowMs))
+    const lapsed = dedupByDrug(floor.map((m: any) => summarize(m, nowMs)))
 
     const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -302,6 +318,15 @@ export function useMedicationsContext(
       items.push(`Currently in use (${active.length}):`)
       active.sort((a, b) => (a.daysRemaining ?? Infinity) - (b.daysRemaining ?? Infinity))
       active.forEach((m) => items.push(`  • ${formatLine(m, 'active')}`))
+    }
+
+    if (lapsed.length > 0) {
+      if (items.length > 0) items.push('')
+      items.push(
+        `Recently dispensed, supply ended (last ${FLOOR_WINDOW_MONTHS} months, ${lapsed.length}) — NOT currently in use:`,
+      )
+      lapsed.sort((a, b) => (b.startedOn || '').localeCompare(a.startedOn || ''))
+      lapsed.forEach((m) => items.push(`  • ${formatLine(m, 'lapsed')}`))
     }
 
     if (recent.length > 0) {

@@ -1,3 +1,4 @@
+import { DEFAULT_DOCUMENT_MODE } from '@/src/shared/constants/data-selection.constants'
 import type {
   DataFilters,
   DataSelection,
@@ -106,7 +107,7 @@ export function buildClinicalContextFitCandidate(
     // invalidate unrelated laboratory, encounter and medication calculations.
     selection: base.selection,
     filters: base.filters,
-    documentMode: base.documentMode ?? 'latestAdmission',
+    documentMode: base.documentMode ?? DEFAULT_DOCUMENT_MODE,
     documentIds: base.documentIds ?? [],
   }
   if (tier === 'full' || tier === 'prioritized') {

@@ -4,11 +4,11 @@
 //
 //   npx tsx scripts/validate-demo-snapshots.ts
 //
-// Fails if any citation doesn't resolve verified, any timeline pick is
-// dropped, the emphasis guardrails would demote the snapshot's highlights, OR
-// a grounding-audit issue is found (a fabricated test, a positional cross-ref,
-// or a topically-irrelevant citation — the "second pass" that mere citation
-// resolution misses).
+// Fails if any citation doesn't resolve verified, any recent-event pick is
+// dropped (unresolvable ref, or outside the 90-day window without being an
+// admission/procedure), a problem duplicates a focus item, OR a grounding-audit
+// issue is found (a fabricated test, a positional cross-ref, or a topically-
+// irrelevant citation — the "second pass" that mere citation resolution misses).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,12 +23,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 async function main() {
   const { LocalBundleService } = await import(path.join(ROOT, 'src/infrastructure/fhir/services/local-bundle.service.ts'))
   const { enrichBundleWithNhiDrugTerminology } = await import(path.join(ROOT, 'src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service.ts'))
-  const { generateMedicalSummaryUseCase, getSourceCatalog, EMPHASIS_MAX_COUNT, EMPHASIS_MAX_CHARS } =
+  const { generateMedicalSummaryUseCase, getSourceCatalog } =
     await import(path.join(ROOT, 'src/core/use-cases/medical-summary/generate-medical-summary.use-case.ts'))
   const { generateSafetyAlertsUseCase } = await import(path.join(ROOT, 'src/core/use-cases/safety-alerts/generate-safety-alerts.use-case.ts'))
   const { scopeClinicalDataForAi } = await import(path.join(ROOT, 'src/core/utils/ai-clinical-scope.utils.ts'))
   const { listClinicalDocuments, resolveSelectedDocuments } = await import(path.join(ROOT, 'src/core/utils/clinical-documents.utils.ts'))
-  const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
+  const { DEFAULT_DATA_FILTERS, DEFAULT_DATA_SELECTION, DEFAULT_DOCUMENT_MODE } = await import(path.join(ROOT, 'src/shared/constants/data-selection.constants.ts'))
   const { DEMO_DATA_AS_OF_MS } = await import(path.join(ROOT, 'src/shared/constants/demo-data.constants.ts'))
   const { demoMedicalSummarySnapshots, demoSafetyScanSnapshots, remapDemoSnapshotSourceKeys } = await import(path.join(ROOT, 'src/infrastructure/demo/demo-ai-snapshots.ts'))
 
@@ -42,7 +42,7 @@ async function main() {
   // and citation verification cannot drift from what localhost/production show.
   const includedDocumentIds = resolveSelectedDocuments(
     listClinicalDocuments(collection),
-    'latestAdmission',
+    DEFAULT_DOCUMENT_MODE,
     [],
   ).map((document: { id: string }) => document.id)
   const scopedClinicalData = scopeClinicalDataForAi(
@@ -77,11 +77,10 @@ async function main() {
       })
       const unverified = finalized.sourceIndex.filter((s: any) => !s.verified)
       if (unverified.length) fail(`summary[${tag}]: unverified keys ${unverified.map((s: any) => s.key).join(',')}`)
-      if (finalized.droppedTimelineCount > 0) fail(`summary[${tag}]: ${finalized.droppedTimelineCount} timeline picks dropped`)
-      const emph = finalized.summary.filter((s: any) => s.emphasis)
-      if (emph.length === 0) fail(`summary[${tag}]: zero emphasis survived`)
-      if (emph.length > EMPHASIS_MAX_COUNT) fail(`summary[${tag}]: ${emph.length} emphasis > cap`)
-      for (const e of emph) if (e.text.length > EMPHASIS_MAX_CHARS) fail(`summary[${tag}]: emphasis too long: ${e.text}`)
+      if (finalized.droppedRecentCount > 0) fail(`summary[${tag}]: ${finalized.droppedRecentCount} recent picks dropped`)
+      if (finalized.droppedProblemCount > 0) fail(`summary[${tag}]: ${finalized.droppedProblemCount} problems duplicate a focus item`)
+      if (finalized.focus.length === 0) fail(`summary[${tag}]: no focus items survived`)
+      if (aud === 'medical' && finalized.mustKnow.length === 0) fail(`summary[${tag}]: no 開藥前必看 rows survived`)
       for (const issue of auditSummaryGrounding(snapshot, grounding)) fail(`summary[${tag}] grounding: ${issue}`)
       if (aud === 'patient') {
         const education = snapshot.medicationEducation
@@ -97,7 +96,7 @@ async function main() {
           }
         }
       }
-      console.log(`✓ summary[${tag}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.investigations.length} investigation trends, ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
+      console.log(`✓ summary[${tag}]: ${finalized.mustKnow.length} 開藥前必看 rows, ${finalized.focus.length} focus items, ${finalized.problems.length} problems, ${finalized.recent.length} recent events, ${finalized.medicationEducation.length} education items, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
       // --- safety: same path as a live reply ---
       const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(

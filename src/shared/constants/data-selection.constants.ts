@@ -9,6 +9,11 @@ import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-co
 // + recent lab trends/imaging, time-bounded so the AI context stays complete
 // without drowning in noise. This is the seed for new profiles and for the
 // user's Custom template slot.
+/** Discharge summaries sent by default: the latest three admissions. One
+ *  admission's note was not enough for a first-visit overview and hid the
+ *  previous stay's anticoagulant history; 'all' would flood a 32K window. */
+export const DEFAULT_DOCUMENT_MODE = 'recentAdmissions' as const
+
 export const DEFAULT_DATA_SELECTION: DataSelection = {
   // Patient group
   patientInfo: true,
@@ -33,7 +38,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   immunizations: true,
 
   // Documents group
-  documents: true,         // On by default; documentMode 'latestAdmission' keeps
+  documents: true,         // On by default; DEFAULT_DOCUMENT_MODE keeps
                            // it to just the most recent 出院病摘 (bounded).
 }
 

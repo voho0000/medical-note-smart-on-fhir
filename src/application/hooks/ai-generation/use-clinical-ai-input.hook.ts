@@ -1,5 +1,6 @@
 'use client'
 
+import { DEFAULT_DOCUMENT_MODE } from '@/src/shared/constants/data-selection.constants'
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
@@ -170,7 +171,7 @@ export function useClinicalAiInput(
     )
     return resolveSelectedDocuments(
       documents,
-      activeProfile.documentMode ?? 'latestAdmission',
+      activeProfile.documentMode ?? DEFAULT_DOCUMENT_MODE,
       activeProfile.documentIds ?? [],
     ).map((document) => document.id)
   }, [rawDataReady, activeClinicalData, activeProfile])
@@ -232,7 +233,7 @@ export function useClinicalAiInput(
           {
             selection: activeProfile.selection,
             filters: activeProfile.filters,
-            documentMode: activeProfile.documentMode ?? 'latestAdmission',
+            documentMode: activeProfile.documentMode ?? DEFAULT_DOCUMENT_MODE,
             documentIds: activeProfile.documentIds ?? [],
           },
           baseScopedClinicalData,
@@ -431,6 +432,12 @@ export function useClinicalAiInput(
 
   return {
     patientId: patient?.id ?? '',
+    patient,
+    /** Reference "now" for recency rules — the demo's own as-of date for the
+     *  demo chart, the real clock otherwise. Exposed so a consumer deriving
+     *  its own evidence (the overview snapshot) judges "current medication"
+     *  against the same clock the scope was built with. */
+    clinicalNowMs: scopeNowMs,
     piiLiterals,
     dataReady,
     clinicalContext: isCalculating ? '' : clinicalContext,

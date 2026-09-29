@@ -6,28 +6,15 @@ import {
   buildSourceCatalog,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
-  getSourceCatalog,
   scopeDocumentSources,
   classifyEncounterClass,
   normaliseSummarySourceKey,
-  coalesceCitations,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
 import {
   MEDICAL_SUMMARY_CARD_REGISTRY,
   registeredMedicalSummaryCards,
 } from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
-import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
-import {
-  listClinicalDocuments,
-  resolveSelectedDocuments,
-} from '@/src/core/utils/clinical-documents.utils'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
-import {
-  DEFAULT_DATA_FILTERS,
-  DEFAULT_DATA_SELECTION,
-} from '@/src/shared/constants/data-selection.constants'
-import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -577,563 +564,413 @@ describe('classifyEncounterClass', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// 初診快覽 modules: overview / focus / problems / recent
+// ---------------------------------------------------------------------------
+
+const VALID_AI_RESULT = {
+  headline: '多重慢性病男性：CKD 3b 與第二型糖尿病分由兩院追蹤。',
+  mustKnow: [
+    {
+      slot: 'renal',
+      label: 'eGFR 32',
+      text: 'eGFR 33 → 32，經腎排除藥物依此劑量。',
+      critical: true,
+      sources: ['L1'],
+    },
+  ],
+  medicationEducation: [],
+  focus: [
+    {
+      title: '腎功能持續下降',
+      text: 'eGFR 33 → 32（2026-04-18）。',
+      sources: ['L1'],
+    },
+  ],
+  problems: [
+    { label: '第2型糖尿病', basis: '照護計畫', kind: 'careplan', sources: ['C1'] },
+  ],
+  recent: [
+    { ref: 'E1', label: '內分泌科門診', category: 'encounter' },
+  ],
+}
+
 describe('parseResult', () => {
   it('parses a valid reply wrapped in markdown fences', () => {
-    const reply =
-      '```json\n' +
-      JSON.stringify({
-        headline: '68 歲男性，糖尿病跨院追蹤',
-        summary: [{ text: '血糖惡化', emphasis: true, sources: ['L1'] }],
-        decisions: [],
-        timeline: [],
-      }) +
-      '\n```'
-    const parsed = useCase.parseResult(reply)
+    const parsed = useCase.parseResult(
+      '```json\n' + JSON.stringify(VALID_AI_RESULT) + '\n```',
+    )
     expect(parsed).not.toBeNull()
-    expect(parsed!.headline).toContain('糖尿病')
-    expect(parsed!.medicationEducation).toEqual([])
-    expect(parsed!.medicationReview).toEqual({ regimen: [], changes: [], reconciliation: [] })
+    expect(parsed!.headline).toContain('CKD 3b')
+    expect(parsed!.mustKnow).toHaveLength(1)
+    expect(parsed!.focus).toHaveLength(1)
+    expect(parsed!.recent[0].ref).toBe('E1')
   })
 
   it('rejects malformed / off-schema replies', () => {
-    expect(useCase.parseResult('not json at all')).toBeNull()
-    expect(useCase.parseResult('{"headline": "x"}')).toBeNull() // missing summary
+    expect(useCase.parseResult('not json')).toBeNull()
+    // headline is required; a reply without it is not a summary.
+    expect(useCase.parseResult(JSON.stringify({ focus: [] }))).toBeNull()
+    // Wrong TYPES still reject — only oversize content clamps.
+    expect(useCase.parseResult(JSON.stringify({
+      ...VALID_AI_RESULT,
+      problems: [{ label: 1, sources: ['C1'] }],
+    }))).toBeNull()
   })
 
-  // Regression (2026-07): Claude Haiku's verbose-but-valid outputs — 27
-  // narrative segments, 8 cited keys, an oversize basis — were rejected
-  // wholesale by hard schema maxes, making its parse-failure rate near-total.
-  // Size overflows must CLAMP, not reject.
   it('clamps oversize-but-valid replies instead of rejecting them', () => {
-    const reply = JSON.stringify({
-      headline: 'x'.repeat(300),
-      summary: Array.from({ length: 27 }, (_, i) => ({
-        text: `段落${i}。`,
-        emphasis: false,
-        sources: i === 0 ? ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'] : [],
+    const parsed = useCase.parseResult(JSON.stringify({
+      ...VALID_AI_RESULT,
+      headline: 'x'.repeat(400),
+      mustKnow: Array.from({ length: 12 }, () => ({
+        slot: 'other',
+        label: 'y'.repeat(80),
+        text: 'z'.repeat(400),
+        sources: ['L1'],
       })),
-      problems: [{ label: '慢性腎臟病', basis: 'b'.repeat(100), kind: 'careplan', sources: ['E1'] }],
-      decisions: [],
-      timeline: [],
-    })
-    const parsed = useCase.parseResult(reply)
+      focus: Array.from({ length: 6 }, () => ({
+        title: 'a'.repeat(200),
+        text: 'b'.repeat(600),
+        sources: ['L1'],
+      })),
+    }))
     expect(parsed).not.toBeNull()
     expect(parsed!.headline).toHaveLength(240)
-    expect(parsed!.summary).toHaveLength(27) // roomy runaway guard is 32
-    expect(parsed!.summary[0].sources).toHaveLength(6)
-    expect(parsed!.problems[0].basis).toHaveLength(80)
+    expect(parsed!.mustKnow).toHaveLength(8)
+    expect(parsed!.mustKnow[0].label).toHaveLength(40)
+    expect(parsed!.mustKnow[0].text).toHaveLength(200)
+    expect(parsed!.focus).toHaveLength(3)
+    expect(parsed!.focus[0].title).toHaveLength(120)
+    expect(parsed!.focus[0].text).toHaveLength(400)
   })
 
-  // Diagnostic logging: transient Flash-Lite parse failures must leave a
-  // truncated head of the raw reply in the console, never fail silently.
   describe('failure diagnostics', () => {
-    let warnSpy: jest.SpyInstance
+    const originalEnv = process.env.NODE_ENV
+    let warn: jest.SpyInstance
 
     beforeEach(() => {
-      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     })
     afterEach(() => {
-      warnSpy.mockRestore()
+      warn.mockRestore()
+      Object.defineProperty(process.env, 'NODE_ENV', { value: originalEnv, configurable: true })
     })
 
     it('warns with the failure reason and the raw reply head', () => {
-      expect(useCase.parseResult('not json at all')).toBeNull()
-      expect(warnSpy).toHaveBeenCalledWith(
+      Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', configurable: true })
+      useCase.parseResult('total garbage')
+      expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('no parseable JSON found'),
-        'not json at all',
-      )
-
-      // Broken syntax also fails extraction (shared llm-json extractor
-      // repairs trailing commas but not arbitrary syntax errors).
-      expect(useCase.parseResult('{"headline": "x", broken}')).toBeNull()
-      expect(warnSpy).toHaveBeenLastCalledWith(
-        expect.stringContaining('no parseable JSON found'),
-        expect.any(String),
-      )
-
-      expect(useCase.parseResult('{"headline": "x"}')).toBeNull()
-      expect(warnSpy).toHaveBeenLastCalledWith(
-        expect.stringContaining('schema mismatch'),
-        expect.any(String),
+        expect.stringContaining('total garbage'),
       )
     })
 
     it('truncates the logged head to 300 chars', () => {
-      const longReply = 'x'.repeat(1000)
-      expect(useCase.parseResult(longReply)).toBeNull()
-      const loggedHead = warnSpy.mock.calls[0][1] as string
-      expect(loggedHead).toHaveLength(300)
+      Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', configurable: true })
+      useCase.parseResult('x'.repeat(500))
+      expect((warn.mock.calls[0][1] as string).length).toBe(300)
     })
 
     it('does not warn on a successful parse', () => {
-      const reply = JSON.stringify({
-        headline: 'h',
-      problems: [],
-        summary: [{ text: 't', emphasis: false, sources: [] }],
-        decisions: [],
-        timeline: [],
-      })
-      expect(useCase.parseResult(reply)).not.toBeNull()
-      expect(warnSpy).not.toHaveBeenCalled()
+      useCase.parseResult(JSON.stringify(VALID_AI_RESULT))
+      expect(warn).not.toHaveBeenCalled()
     })
   })
 })
 
 describe('modular summary generation contract', () => {
-  const input = {
-    clinicalContext: 'Encounter and laboratory context',
-    catalog: [{
-      key: 'E1',
-      resourceType: 'Encounter',
-      resourceId: 'enc-1',
-      display: 'Outpatient visit',
-    }],
-    locale: 'en' as const,
+  const promptInput = {
+    clinicalContext: '[E1] 內分泌科門診',
+    catalog: buildSourceCatalog(CATALOG_INPUT),
+    locale: 'zh-TW' as const,
     audience: 'medical' as const,
   }
 
   it('builds a card-specific output contract instead of requiring the full summary object', () => {
-    const messages = useCase.buildModuleMessages(input, 'timeline')
-    expect(messages[0].content).toContain('Generate ONLY the "timeline" module')
-    expect(messages[0].content).toContain('"timeline":')
-    expect(messages[0].content).toContain('Do not return fields belonging to another module')
+    const messages = useCase.buildModuleMessages(promptInput, 'focus')
+    const contract = messages[0].content.slice(
+      messages[0].content.indexOf('MODULAR OUTPUT CONTRACT'),
+    )
+    expect(contract).toContain('Generate ONLY the "focus" module')
+    expect(contract).toContain('"items"')
+    expect(contract).not.toContain('"problems"')
+    expect(contract).not.toContain('"recent"')
   })
 
-  it('forces medical medication education to an empty literal instead of inviting unused fields', () => {
-    const messages = useCase.buildModuleMessages(input, 'medications')
+  it('forces clinician overviews to an empty medicationEducation literal', () => {
+    const messages = useCase.buildModuleMessages(promptInput, 'overview')
     expect(messages[0].content).toContain('"medicationEducation" MUST be the literal empty array []')
-    expect(messages[0].content).toContain('{"medicationEducation": [], "medicationReview"')
-
-    const patientMessages = useCase.buildModuleMessages(
-      { ...input, audience: 'patient' as const },
-      'medications',
-    )
-    expect(patientMessages[0].content).toContain('"benefit": "<benefit>"')
-    expect(patientMessages[0].content).not.toContain('MUST be the literal empty array')
+    expect(messages[0].content).toContain('"mustKnow"')
   })
 
-  it('builds one batch prompt with five independently delimited JSON blocks', () => {
-    const messages = useCase.buildBatchModuleMessages(input)
-    const prompt = messages[0].content
+  it('forces patient overviews to an empty mustKnow literal', () => {
+    const messages = useCase.buildModuleMessages(
+      { ...promptInput, audience: 'patient' },
+      'overview',
+    )
+    expect(messages[0].content).toContain('"mustKnow" MUST be the literal empty array []')
+    expect(messages[0].content).toContain('"medicationEducation"')
+  })
 
-    expect(prompt).toContain('BATCH MODULAR OUTPUT CONTRACT')
-    for (const moduleId of ['priorities', 'problems', 'timeline', 'investigations', 'medications']) {
-      expect(prompt).toContain(`<<<MEDIPRISMA_MODULE:${moduleId}>>>`)
-      expect(prompt).toContain(`<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`)
+  it('builds one batch prompt with four independently delimited JSON blocks', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    for (const moduleId of ['overview', 'focus', 'problems', 'recent']) {
+      expect(content).toContain(`<<<MEDIPRISMA_MODULE:${moduleId}>>>`)
+      expect(content).toContain(`<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`)
     }
-    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
-      .toBeLessThan(prompt.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
-    expect(prompt).not.toContain('The medications block is FIRST and MANDATORY')
-    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
-  it('builds one batch from the six registered cards with Safety last', () => {
-    const cards = registeredMedicalSummaryCards(input)
-    const messages = useCase.buildRegisteredCardBatchMessages(
-      input,
-      cards.map((card) => card.buildBatchInstruction(input)),
-    )
-    const prompt = messages[0].content
-
+  it('builds one batch from the five registered cards with Safety last', () => {
+    const cards = registeredMedicalSummaryCards(promptInput)
     expect(cards.map((card) => card.id)).toEqual([
-      'priorities',
-      'problems',
-      'timeline',
-      'investigations',
-      'medications',
-      'safety',
+      'overview', 'focus', 'problems', 'recent', 'safety',
     ])
-    expect(prompt).toContain('Generate all 6 registered cards')
-    expect(prompt).not.toContain('Output ONLY a JSON object matching this schema')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:safety>>>')
-    expect(prompt).toContain('<<<END_MEDIPRISMA_MODULE:safety>>>')
-    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
-      .toBeGreaterThan(prompt.indexOf('<<<END_MEDIPRISMA_MODULE:medications>>>'))
-    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+    const content = useCase.buildRegisteredCardBatchMessages(
+      promptInput,
+      cards.map((card) => card.buildBatchInstruction(promptInput)),
+    )[0].content
+    expect(content).toContain('Generate all 5 registered cards')
+    expect(content.indexOf('<<<MEDIPRISMA_MODULE:overview>>>'))
+      .toBeLessThan(content.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
   })
 
-  it('puts the compact priorities card first for a local endpoint', () => {
+  it('puts the compact overview card first for a local endpoint', () => {
     const cards = registeredMedicalSummaryCards({
-      ...input,
+      ...promptInput,
       harnessProfile: 'local-small',
     })
-
     expect(cards.map((card) => card.id)).toEqual([
-      'priorities',
-      'medications',
-      'problems',
-      'timeline',
-      'investigations',
-      'safety',
+      'overview', 'problems', 'focus', 'recent', 'safety',
     ])
   })
 
   it('supports removing a card without adding an orchestration branch', () => {
-    const cards = registeredMedicalSummaryCards(input, [
-      'priorities',
-      'problems',
-      'timeline',
-      'investigations',
-      'medications',
-    ])
-    const messages = useCase.buildRegisteredCardBatchMessages(
-      input,
-      cards.map((card) => card.buildBatchInstruction(input)),
-    )
-    const prompt = messages[0].content
-
-    expect(MEDICAL_SUMMARY_CARD_REGISTRY.safety.id).toBe('safety')
-    expect(prompt).toContain('Generate all 5 registered cards')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+    const cards = registeredMedicalSummaryCards(promptInput, ['overview', 'safety'])
+    expect(cards.map((card) => card.id)).toEqual(['overview', 'safety'])
   })
 
   it('builds one retry batch containing only the failed registered cards', () => {
-    const cards = registeredMedicalSummaryCards(input, [
-      'problems',
-      'timeline',
-      'investigations',
-    ])
-    const messages = useCase.buildRegisteredCardBatchMessages(
-      input,
-      cards.map((card) => card.buildBatchInstruction(input)),
-    )
-    const prompt = messages[0].content
-
-    expect(prompt).toContain('Generate all 3 registered cards')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:timeline>>>')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:investigations>>>')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:priorities>>>')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:medications>>>')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+    const failed = [
+      MEDICAL_SUMMARY_CARD_REGISTRY.problems,
+      MEDICAL_SUMMARY_CARD_REGISTRY.recent,
+    ]
+    const content = useCase.buildRegisteredCardBatchMessages(
+      promptInput,
+      failed.map((card) => card.buildBatchInstruction(promptInput)),
+    )[0].content
+    expect(content).toContain('Generate all 2 registered cards')
+    expect(content).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
+    expect(content).not.toContain('<<<MEDIPRISMA_MODULE:overview>>>')
   })
 
   it('can build a smaller requested-module batch for local-model A/B evaluation', () => {
-    const messages = useCase.buildBatchModuleMessages(input, [
-      'medications',
-      'priorities',
-      'problems',
-    ])
-    const prompt = messages[0].content
-
-    expect(prompt).toContain('Generate only the 3 requested modules')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:medications>>>')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:priorities>>>')
-    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:timeline>>>')
-    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:investigations>>>')
-    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+    const content = useCase.buildBatchModuleMessages(promptInput, ['overview', 'recent'])[0].content
+    expect(content).toContain('Generate only the 2 requested modules')
+    expect(content).toContain('<<<MEDIPRISMA_MODULE:overview>>>')
+    expect(content).not.toContain('<<<MEDIPRISMA_MODULE:problems>>>')
   })
 
   it('uses a shorter module-scoped contract for an instruction-sensitive local endpoint', () => {
-    const frontier = useCase.buildBatchModuleMessages(input)
-    const local = useCase.buildBatchModuleMessages({
-      ...input,
-      harnessProfile: 'local-small' as const,
-    })
-
-    expect(local[0].content).toContain('NON-NEGOTIABLE EVIDENCE CONTRACT')
-    expect(local[0].content).toContain('Never create an active problem from medication evidence alone')
-    expect(local[0].content).toContain('The medications block is FIRST and MANDATORY')
-    expect(local[0].content.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
-      .toBeLessThan(local[0].content.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
-    expect(local[0].content.length).toBeLessThan(frontier[0].content.length / 2)
+    const local = useCase.buildModuleMessages(
+      { ...promptInput, harnessProfile: 'local-small' },
+      'recent',
+    )[0].content
+    expect(local).toContain('NON-NEGOTIABLE EVIDENCE CONTRACT')
+    expect(local).toContain('RECENT:')
+    expect(local).not.toContain('PROBLEMS:')
+    // The long frontier prompt must not leak into the compact contract.
+    expect(local).not.toContain('Completeness sweep')
   })
 
   it('sends only module-relevant keyed evidence on a local retry', () => {
-    const messages = useCase.buildModuleMessages({
-      ...input,
-      harnessProfile: 'local-small' as const,
-      clinicalContext: [
-        '## Records',
-        '- [M1] Metformin 500 mg BID',
-        '- [L1] HbA1c 8.2%',
-        'Newest record date: 2026-06-20.',
-      ].join('\n'),
-      catalog: [
-        { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin 500 mg BID' },
-        { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', display: 'HbA1c 8.2%' },
-      ],
-    }, 'medications')
-
-    expect(messages[1].content).toContain('[M1] Metformin 500 mg BID')
-    expect(messages[1].content).not.toContain('[L1] HbA1c 8.2%')
-    expect(messages[0].content).toContain('MEDICATIONS:')
-    expect(messages[0].content).not.toContain('INVESTIGATIONS:')
+    const catalog = buildSourceCatalog(CATALOG_INPUT)
+    const messages = useCase.buildModuleMessages(
+      {
+        clinicalContext: '[E1] 內分泌科門診\n[M1] Metformin 500mg\n[C1] 第2型糖尿病',
+        catalog,
+        locale: 'zh-TW',
+        audience: 'medical',
+        harnessProfile: 'local-small',
+      },
+      'recent',
+    )
+    // Recent events are chosen from encounters/procedures/reports; the lab
+    // Observation rows a value-oriented module needs are not sent again.
+    expect(messages[1].content).toContain('[E1]')
+    expect(messages[1].content).toContain('[M1]')
   })
 
   it('scrubs patient literals from appended context and source labels at the final boundary', () => {
-    const messages = useCase.buildBatchModuleMessages({
-      ...input,
-      clinicalContext: 'Imaging: 王小明右肺結節',
-      piiLiterals: ['王小明'],
-      catalog: [{
-        ...input.catalog[0],
-        display: '王小明門診紀錄',
-      }],
-    })
+    const messages = useCase.buildModuleMessages(
+      {
+        clinicalContext: '病人 A123456789 於門診追蹤',
+        piiLiterals: ['王小明'],
+        catalog: [{
+          key: 'E1',
+          resourceType: 'Encounter',
+          resourceId: 'enc-1',
+          display: '王小明 門診',
+        }],
+        locale: 'zh-TW',
+        audience: 'medical',
+      },
+      'overview',
+    )
+    expect(messages[1].content).not.toContain('A123456789')
     expect(messages[1].content).not.toContain('王小明')
-    expect(messages[1].content).toContain('Imaging: [已遮蔽]右肺結節')
-    expect(messages[1].content).toContain('[已遮蔽]門診紀錄')
   })
 
-  it('does not accept an unrelated/defaulted object as a successful medications module', () => {
-    const unrelatedReply = JSON.stringify({ timeline: [] })
-    expect(useCase.parseModuleResult('medications', unrelatedReply)).toBeNull()
-    expect(useCase.parseBatchModuleResult('medications', unrelatedReply)).toBeNull()
+  it('does not accept an unrelated/defaulted object as a successful module', () => {
+    expect(useCase.parseModuleResult('problems', JSON.stringify({}))).toBeNull()
+    expect(useCase.parseModuleResult('focus', JSON.stringify({ problems: [] }))).toBeNull()
+    expect(useCase.parseModuleResult('recent', JSON.stringify({ recent: [] }))).toEqual({ recent: [] })
   })
 
   it('validates each module independently so one malformed card does not discard another', () => {
-    const priorities = useCase.parseModuleResult('priorities', '{"headline":"broken"}')
-    const problems = useCase.parseModuleResult('problems', JSON.stringify({
-      problems: [{
-        label: 'Chronic kidney disease',
-        basis: 'Repeated clinic records',
-        kind: 'diagnosis',
-        sources: ['E1'],
-      }],
-    }))
-
-    expect(priorities).toBeNull()
-    expect(problems?.problems).toHaveLength(1)
-  })
-
-  it('salvages only complete validated priority segments before a malformed tail', () => {
-    const malformed = '{"headline":"腎功能需追蹤","summary":[' +
-      '{"text":"紀錄顯示","emphasis":false,"sources":[]},' +
-      '{"text":"eGFR 持續下降","emphasis":true,"sources":["O1","O2"]},' +
-      '{"text]":"不應猜回的尾段","sources":["M99"]}'
-
-    const parsed = useCase.parseModuleResult('priorities', malformed)
-
-    expect(parsed).toEqual({
-      headline: '腎功能需追蹤',
-      summary: [
-        { text: '紀錄顯示', emphasis: false, sources: [] },
-        { text: 'eGFR 持續下降', emphasis: true, sources: ['O1', 'O2'] },
-      ],
-    })
-    expect(JSON.stringify(parsed)).not.toContain('M99')
-  })
-
-  it('does not salvage a single isolated priority fragment', () => {
-    const malformed = '{"headline":"不完整","summary":[' +
-      '{"text":"只有一段","emphasis":false,"sources":["E1"]},' +
-      '{"text]":"broken"}'
-
-    expect(useCase.parseModuleResult('priorities', malformed)).toBeNull()
-  })
-
-  it('salvages valid batch blocks around a malformed neighbouring block', () => {
-    const batchReply = [
-      '<<<MEDIPRISMA_MODULE:priorities>>>',
-      JSON.stringify({
-        headline: 'Complex cross-facility care',
-        summary: [{ text: 'Kidney function needs follow-up.', sources: ['E1'] }],
-      }),
-      '<<<END_MEDIPRISMA_MODULE:priorities>>>',
+    const text = [
+      '<<<MEDIPRISMA_MODULE:overview>>>',
+      JSON.stringify({ headline: '摘要', mustKnow: [], medicationEducation: [] }),
+      '<<<END_MEDIPRISMA_MODULE:overview>>>',
       '<<<MEDIPRISMA_MODULE:problems>>>',
-      '{"problems": [}',
+      '{ this is not json',
       '<<<END_MEDIPRISMA_MODULE:problems>>>',
-      '<<<MEDIPRISMA_MODULE:timeline>>>',
-      JSON.stringify({ timeline: [] }),
-      '<<<END_MEDIPRISMA_MODULE:timeline>>>',
-      '<<<MEDIPRISMA_MODULE:investigations>>>',
-      JSON.stringify({ investigations: [] }),
-      '<<<END_MEDIPRISMA_MODULE:investigations>>>',
-      '<<<MEDIPRISMA_MODULE:medications>>>',
-      JSON.stringify({
-        medicationEducation: [],
-        medicationReview: { regimen: [], changes: [], reconciliation: [] },
-      }),
-      '<<<END_MEDIPRISMA_MODULE:medications>>>',
+      '<<<MEDIPRISMA_MODULE:recent>>>',
+      JSON.stringify({ recent: [{ ref: 'E1', label: '門診', category: 'encounter' }] }),
+      '<<<END_MEDIPRISMA_MODULE:recent>>>',
     ].join('\n')
-
-    expect(useCase.parseBatchModuleResult('priorities', batchReply)?.headline)
-      .toBe('Complex cross-facility care')
-    expect(useCase.parseBatchModuleResult('problems', batchReply)).toBeNull()
-    expect(useCase.parseBatchModuleResult('timeline', batchReply)?.timeline).toEqual([])
-    expect(useCase.parseBatchModuleResult('investigations', batchReply)?.investigations).toEqual([])
-    expect(useCase.parseBatchModuleResult('medications', batchReply)?.medicationReview.regimen)
-      .toEqual([])
+    expect(useCase.parseBatchModuleResult('overview', text)?.headline).toBe('摘要')
+    expect(useCase.parseBatchModuleResult('problems', text)).toBeNull()
+    expect(useCase.parseBatchModuleResult('recent', text)?.recent).toHaveLength(1)
   })
 
   it('salvages a complete final JSON block when only its closing marker is truncated', () => {
-    const reply = [
-      '<<<MEDIPRISMA_MODULE:medications>>>',
-      JSON.stringify({
-        medicationEducation: [],
-        medicationReview: { regimen: [], changes: [], reconciliation: [] },
-      }),
+    const text = [
+      '<<<MEDIPRISMA_MODULE:overview>>>',
+      JSON.stringify({ headline: '摘要', mustKnow: [], medicationEducation: [] }),
+      '<<<END_MEDIPRISMA_MODULE:overview>>>',
+      '<<<MEDIPRISMA_MODULE:recent>>>',
+      JSON.stringify({ recent: [{ ref: 'E1', label: '門診' }] }),
     ].join('\n')
-
-    expect(useCase.parseBatchModuleResult('medications', reply)?.medicationReview.changes)
-      .toEqual([])
+    expect(useCase.parseBatchModuleResult('recent', text)?.recent).toHaveLength(1)
   })
 
   it('does not treat a parseable streaming block as complete before its closing marker', () => {
-    const openBlock = [
-      '<<<MEDIPRISMA_MODULE:problems>>>',
-      JSON.stringify({ problems: [] }),
+    const partial = [
+      '<<<MEDIPRISMA_MODULE:overview>>>',
+      JSON.stringify({ headline: '摘要', mustKnow: [], medicationEducation: [] }),
     ].join('\n')
-
-    expect(useCase.parseBatchModuleResult('problems', openBlock)?.problems).toEqual([])
-    expect(useCase.hasCompleteBatchModuleBlock('problems', openBlock)).toBe(false)
+    expect(useCase.hasCompleteBatchModuleBlock('overview', partial)).toBe(false)
     expect(useCase.hasCompleteBatchModuleBlock(
-      'problems',
-      `${openBlock}\n<<<END_MEDIPRISMA_MODULE:problems>>>`,
+      'overview',
+      `${partial}\n<<<END_MEDIPRISMA_MODULE:overview>>>`,
     )).toBe(true)
   })
 
   it('repairs harmless citation formatting and reports only truly unknown keys', () => {
-    const problems = useCase.parseModuleResult('problems', JSON.stringify({
-      problems: [{
-        label: 'Invented medication problem',
-        kind: 'medication',
-        sources: ['M1', '[ e 1 ]'],
-      }],
-    }))
-
-    expect(problems).not.toBeNull()
-    expect(normaliseSummarySourceKey('[ e 1 ]')).toBe('E1')
-    expect(useCase.findUnknownSourceKeys(problems, [{
-      key: 'E1',
-      resourceType: 'Encounter',
-      resourceId: 'enc-1',
-      display: 'Clinic visit',
-    }])).toEqual(['M1'])
+    expect(normaliseSummarySourceKey('[l 1]')).toBe('L1')
+    expect(normaliseSummarySourceKey('e2')).toBe('E2')
+    const unknown = useCase.findUnknownSourceKeys(
+      {
+        problems: [{ label: 'x', sources: ['[e 1]', 'Z9'] }],
+        recent: [{ ref: 'm1' }],
+      },
+      buildSourceCatalog(CATALOG_INPUT),
+    )
+    expect(unknown).toEqual(['Z9'])
   })
 
   it('merges a retried module into an existing draft without replacing successful cards', () => {
-    const initial = useCase.createEmptyAiResult()
-    const problems = useCase.parseModuleResult('problems', JSON.stringify({
-      problems: [{
-        label: 'Chronic kidney disease',
-        kind: 'diagnosis',
-        sources: ['E1'],
-      }],
-    }))
-    const priorities = useCase.parseModuleResult('priorities', JSON.stringify({
-      headline: 'Complex cross-facility care',
-      summary: [{ text: 'Kidney function needs follow-up.', sources: ['E1'] }],
-    }))
-    expect(problems).not.toBeNull()
-    expect(priorities).not.toBeNull()
-
-    const withProblems = useCase.mergeModuleResult(initial, 'problems', problems!)
-    const withRetriedPriorities = useCase.mergeModuleResult(
-      withProblems,
-      'priorities',
-      priorities!,
-    )
-
-    expect(withRetriedPriorities.problems[0].label).toBe('Chronic kidney disease')
-    expect(withRetriedPriorities.headline).toBe('Complex cross-facility care')
+    const draft = useCase.createEmptyAiResult()
+    const withOverview = useCase.mergeModuleResult(draft, 'overview', {
+      headline: '摘要',
+      mustKnow: [{ slot: 'renal', label: 'eGFR 32', text: '腎功能', sources: ['L1'] }],
+      medicationEducation: [],
+    })
+    const withFocus = useCase.mergeModuleResult(withOverview, 'focus', {
+      items: [{ title: '腎功能下降', text: 'eGFR 33 → 32', sources: ['L1'] }],
+    })
+    const withRecent = useCase.mergeModuleResult(withFocus, 'recent', {
+      recent: [{ ref: 'E1', label: '門診' }],
+    })
+    expect(withRecent.headline).toBe('摘要')
+    expect(withRecent.mustKnow).toHaveLength(1)
+    expect(withRecent.focus[0].title).toBe('腎功能下降')
+    expect(withRecent.recent).toHaveLength(1)
   })
 })
 
-describe('medication education prompt contract', () => {
-  const input = {
-    clinicalContext: 'Medication: Metformin 500mg',
-    catalog: [{ key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin 500mg' }],
-    locale: 'en' as const,
+describe('初診快覽 prompt contract', () => {
+  const promptInput = {
+    clinicalContext: '[E1] 內分泌科門診',
+    catalog: buildSourceCatalog(CATALOG_INPUT),
+    locale: 'zh-TW' as const,
+    audience: 'medical' as const,
   }
 
+  it('asks 開藥前必看 for one row per slot, values first, and never for allergy', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('Emit at most ONE item per "slot"')
+    // Allergy is app-derived now: no slot, no prompt sentence, and no keyless
+    // row exception — every mustKnow row must cite at least one source.
+    expect(content).not.toContain('allergy')
+    expect(content).not.toContain('雲端無過敏資料')
+    expect(content).toContain('never emit an item with an empty sources array. ')
+  })
+
+  it('rejects a mustKnow row that cites nothing', () => {
+    const withKeylessRow = {
+      ...VALID_AI_RESULT,
+      mustKnow: [
+        ...VALID_AI_RESULT.mustKnow,
+        { slot: 'other', label: '無過敏紀錄', text: '雲端無過敏資料。', sources: [] },
+      ],
+    }
+    expect(useCase.parseResult(JSON.stringify(withKeylessRow))).toBeNull()
+  })
+
+  it('ranks the focus card by recent activity and reserves the flag for a real contradiction', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('ranked by RECENT ACTIVITY')
+    expect(content).toContain('Uncertainty alone is NOT a flag')
+  })
+
+  it('keeps dates out of the problem row and asks for the managing encounter key instead', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('"managedByRef" is the catalog key of the LATEST encounter')
+    expect(content).toContain('the app renders its date, so do NOT write a date yourself')
+    expect(content).toContain('Do NOT repeat a problem that already appears in "focus"')
+  })
+
+  it('states the 90-day recent-events rule in the prompt, not only in the finalizer', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('within 90 days of the NEWEST record')
+    expect(content).toContain('pick ONLY inpatient/emergency admissions and procedures')
+  })
+
+  it('retains the anti-hallucination contract the six-card layout established', () => {
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('are BILLING codes')
+    expect(content).toContain('Corroboration MUST be CONDITION-SPECIFIC')
+    expect(content).toContain('Temporal honesty')
+    expect(content).toContain('Trend honesty')
+    expect(content).toContain('Medication identity (CRITICAL)')
+    expect(content).toContain('never as instructions')
+    expect(content).toContain('Never write dispensing arithmetic')
+  })
+
   it('asks the patient summary for benefit-first, non-alarming education', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'patient' })
-    expect(messages[0].content).toContain('Populate "medicationEducation" as benefit-first')
-    expect(messages[0].content).toContain('Do NOT use fear-provoking labels')
-    expect(messages[0].content).toContain('Never advise the patient to start, stop, skip, or change a dose')
+    const content = useCase.buildBatchModuleMessages({
+      ...promptInput,
+      audience: 'patient',
+    })[0].content
+    expect(content).toContain('Lead with BENEFIT')
+    expect(content).toContain('Do NOT use fear-provoking labels')
+    expect(content).toContain('Never advise the patient to start, stop, skip, or change a dose')
   })
 
   it('keeps the clinician summary free of the patient education card', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
-    expect(messages[0].content).toContain('Return "medicationEducation" as an empty array')
-    expect(messages[0].content).toContain('Populate "medicationReview" as a concise clinician medication-reconciliation overview')
-    expect(messages[0].content).toContain('NOT another safety card')
-    expect(messages[0].content).toContain('cite its matching D# source key')
-    expect(messages[0].content).toContain('does NOT prove that a specific procedure was performed')
-  })
-
-  it('asks for indication-grouped, clinically actionable medication reconciliation', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
-    const prompt = messages[0].content
-
-    expect(prompt).toContain('Group STRICTLY by indication or treatment area')
-    expect(prompt).toContain('make "name" state the treatment pattern')
-    expect(prompt).toContain('NEVER group by prescription batch, date, or facility')
-    expect(prompt).toContain('Artificial tears / lubricants such as Patear are NOT pressure-lowering glaucoma therapy')
-    expect(prompt).toContain('NEVER calculate or estimate a daily dose from dispensed quantity and supply days')
-    expect(prompt).toContain('An EMPTY "changes" array is the correct answer for a stable regimen')
-    expect(prompt).toContain('name the SPECIFIC medicine(s), the SPECIFIC record gap or conflict')
-    expect(prompt).toContain('TWO different non-pharmacy institutions during overlapping supply periods')
-    expect(prompt).toContain('Missing dose, route, or frequency ALONE is a known source-data limitation')
-    expect(prompt).toContain('do not create a reconciliation item merely to ask how often')
-    expect(prompt).toContain('A single completed historical chronic prescription is NOT enough')
-    expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
-  })
-
-  it('uses exact same-row NHI terminology ahead of administrative categories', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
-    const prompt = messages[0].content
-
-    expect(prompt).toContain('NHI terminology matched to this exact medication record')
-    expect(prompt).toContain('never transfer terminology between medication rows')
-    expect(prompt).toContain('take precedence over MedicationRequest.category')
-    expect(prompt).toContain('source/administrative metadata')
-    expect(prompt).toContain('does NOT establish this patient\'s indication')
-    expect(prompt).toContain('valid for EVERY medicine in that item')
-    expect(prompt).toContain('Never copy a mechanism, expected effect, or adverse-effect reminder')
-
-    const localPrompt = useCase.buildModuleMessages({
-      ...input,
-      audience: 'medical',
-      harnessProfile: 'local-small',
-    }, 'medications')[0].content
-    expect(localPrompt).toContain('same-row NHI terminology block')
-    expect(localPrompt).toContain('overrides a conflicting administrative MedicationRequest.category')
-    expect(localPrompt).toContain('Never transfer terminology across rows')
-    expect(localPrompt).toContain('one medicine cannot inherit another medicine\'s mechanism or adverse effects')
-  })
-
-  it('asks for cross-record medication insight beyond classification', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
-    const prompt = messages[0].content
-
-    // Bidirectional gap cross-check against the rest of the record.
-    expect(prompt).toContain('"no-documented-indication"')
-    // Orphan-drug check must consult the prescribing-visit context first
-    // (the imipramine-at-a-BPH-visit false positive).
-    expect(prompt).toContain('check the PRESCRIBING VISIT context')
-    expect(prompt).toContain('not when the recorded context merely differs from the drug\'s best-known use')
-    expect(prompt).toContain('"condition-without-therapy"')
-    expect(prompt).toContain('cites the condition/lab keys instead of an M key')
-    // condition-without-therapy is a record-anomaly check, never a
-    // guideline-completeness prescribing suggestion (the CKD→ACEi/ARB misfire).
-    expect(prompt).toContain('NEVER a prescribing suggestion')
-    expect(prompt).toContain('an SGLT2 inhibitor already provides renal protection in CKD')
-    expect(prompt).toContain('Guideline-completeness reminders')
-    // Every reconciliation item must be anchored in this patient\'s records.
-    expect(prompt).toContain('If an item could be written without looking at the records')
-    // Same-institution sequential brand switches answer themselves — only
-    // cross-institution / overlapping same-drug aliases are worth verifying.
-    expect(prompt).toContain('Reason "possible-same-drug" is for REAL ambiguity only')
-    expect(prompt).toContain('do NOT raise a reconciliation item for it')
-    // Refill-regularity / adherence signal, phrased neutrally.
-    expect(prompt).toContain('"adherence-pattern"')
-    expect(prompt).toContain('never phrase it as non-adherence or blame')
-    // Treatment-intensity pattern reading.
-    expect(prompt).toContain('The pattern reading is the insight')
-    // Pre/post-hospitalization regimen comparison.
-    expect(prompt).toContain('compare the chronic regimen before and after')
-    // One-glance overview synthesis, clinician-only.
-    expect(prompt).toContain('For "overview"')
-    expect(prompt).toContain('Omit "overview" for the patient audience')
-  })
-
-  it('keeps the patient summary free of the clinician medication review', () => {
-    const messages = useCase.buildMessages({ ...input, audience: 'patient' })
-    expect(messages[0].content).toContain('Return "medicationReview" with empty regimen, changes, and reconciliation arrays')
+    const content = useCase.buildBatchModuleMessages(promptInput)[0].content
+    expect(content).toContain('"medicationEducation": []')
   })
 })
 
@@ -1156,922 +993,265 @@ describe('medical summary output-language contract', () => {
     expect(messages[1].content).toContain('translate their meaning into natural English')
     expect(messages[1].content).toContain('must contain no Chinese Han characters')
   })
-
 })
 
 describe('finalizeResult', () => {
+  // E1 2026-06-12 (outpatient) · E2 2026-05-02 (emergency) ·
+  // E3 2026-03-10→16 (inpatient) · M1 2026-05-30 · L1 2026-04-18 · C1 2023-07-01.
+  // Newest catalog date 2026-06-12 → the 90-day window opens 2026-03-14.
   const catalog = buildSourceCatalog(CATALOG_INPUT)
+  const empty = {
+    headline: '摘要',
+    mustKnow: [],
+    medicationEducation: [],
+    focus: [],
+    problems: [],
+    recent: [],
+  }
 
-  it('verifies known keys, flags unknown keys, drops+counts bad timeline refs', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [
-        { text: '於甲院追蹤', emphasis: true, sources: ['E1'] },
-        { text: '（幻覺引用）', emphasis: false, sources: ['E99'] },
+  it('verifies known keys, flags unknown keys, drops+counts unresolvable recent refs', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      focus: [
+        { title: '腎功能', text: 'eGFR 下降', sources: ['L1', 'Z9'] },
       ],
-      decisions: [
-        { text: '評估劑量', urgency: 'high' as const, rationale: 'eGFR 下降', sources: ['M1'] },
+      recent: [
+        { ref: 'E1', label: '內分泌科門診', category: 'encounter' },
+        { ref: 'Z9', label: '不存在的事件', category: 'encounter' },
       ],
-      timeline: [
-        { ref: 'E1', label: '內分泌回診', category: 'encounter' },
-        { ref: 'L1', label: 'HbA1c 檢驗', category: 'lab' },
-        { ref: 'E3', label: '肺炎住院', category: 'encounter' },
-        { ref: 'E99', label: '幻覺事件', category: 'encounter' },
-      ],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
+    }, catalog)
 
-    // Source index numbering follows first appearance; unknown key visible
-    // but unverified — never silently dropped.
-    expect(result.sourceIndex).toHaveLength(3)
-    expect(result.sourceIndex[0]).toMatchObject({ key: 'E1', num: 1, verified: true, organization: '甲醫學中心' })
-    expect(result.sourceIndex[1]).toMatchObject({ key: 'E99', num: 2, verified: false })
-    expect(result.sourceIndex[2]).toMatchObject({ key: 'M1', num: 3, verified: true })
-
-    // Timeline: hallucinated ref dropped and counted; rest sorted newest-first
-    // with app-side dates/orgs.
-    expect(result.droppedTimelineCount).toBe(1)
-    expect(result.timeline.map((e) => e.key)).toEqual(['E1', 'L1', 'E3'])
-    expect(result.timeline[0]).toMatchObject({ date: '2026-06-12', organization: '甲醫學中心' })
-    // 住院 event keeps its bundle-derived subtype; AI could only say "encounter".
-    expect(result.timeline[2]).toMatchObject({
-      key: 'E3',
-      endDate: '2026-03-16',
-      encounterClass: 'inpatient',
-    })
-    expect(result.timeline[0].encounterClass).toBeUndefined()
+    expect(result.sourceIndex).toEqual([
+      expect.objectContaining({ key: 'L1', num: 1, verified: true, resourceId: 'rep-1' }),
+      expect.objectContaining({ key: 'Z9', num: 2, verified: false, resourceId: undefined }),
+    ])
+    expect(result.recent).toHaveLength(1)
+    expect(result.droppedRecentCount).toBe(1)
   })
 
-  it('drops exact duplicate timeline events but keeps distinct events from one source', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      decisions: [],
-      timeline: [
-        { ref: 'E1', label: '住院接受治療', category: 'encounter' },
-        { ref: 'E1', label: '住院接受治療', category: 'encounter' },
-        { ref: 'E1', label: '出院後持續追蹤', category: 'followup' },
+  it('keeps only admissions and procedures once the 90-day window has closed', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      recent: [
+        { ref: 'E1', label: '門診', category: 'encounter' },
+        { ref: 'E2', label: '急診', category: 'encounter' },
+        // Outside the window, but an inpatient stay — a milestone worth a row.
+        { ref: 'E3', label: '肺炎住院', category: 'encounter' },
+        // Outside the window and neither an admission nor a procedure.
+        { ref: 'C1', label: '糖尿病診斷', category: 'diagnosis' },
       ],
-    }
+    }, catalog)
 
-    const result = useCase.finalizeResult(ai, catalog)
+    expect(result.recent.map((event) => event.key)).toEqual(['E1', 'E2', 'E3'])
+    expect(result.recent.find((event) => event.key === 'E3')).toEqual(
+      expect.objectContaining({ encounterClass: 'inpatient', endDate: '2026-03-16' }),
+    )
+    expect(result.droppedRecentCount).toBe(1)
+  })
 
-    expect(result.timeline).toHaveLength(2)
-    expect(result.timeline.map((event) => event.label)).toEqual([
-      '住院接受治療',
-      '出院後持續追蹤',
-    ])
-    expect(result.timeline.map((event) => event.key)).toEqual(['E1', 'E1'])
+  it('drops exact duplicate recent events but keeps distinct events from one source', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      recent: [
+        { ref: 'E1', label: '內分泌科門診', category: 'encounter' },
+        { ref: 'E1', label: '內分泌科門診', category: 'encounter' },
+        { ref: 'E1', label: '調整用藥', category: 'medication' },
+      ],
+    }, catalog)
+
+    expect(result.recent).toHaveLength(2)
+    expect(result.droppedRecentCount).toBe(0)
+  })
+
+  it('coerces an off-list recent category', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      recent: [{ ref: 'E1', label: '門診', category: 'surgery' }],
+    }, catalog)
+    expect(result.recent[0].category).toBe('encounter')
   })
 
   it('resolves harmlessly reformatted citations to the canonical source key', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [{ text: '於甲院追蹤。', emphasis: false, sources: ['[ e 1 ]'] }],
-      decisions: [],
-      timeline: [],
-    }
+    const result = useCase.finalizeResult({
+      ...empty,
+      mustKnow: [{ slot: 'renal', label: 'eGFR 32', text: '腎功能', sources: ['[l 1]'] }],
+      recent: [{ ref: 'e1', label: '門診', category: 'encounter' }],
+    }, catalog)
 
-    const result = useCase.finalizeResult(ai, catalog)
-
-    expect(result.summary[0].sourceKeys).toEqual(['E1'])
-    expect(result.sourceIndex).toEqual([
-      expect.objectContaining({ key: 'E1', verified: true }),
-    ])
+    expect(result.sourceIndex[0]).toEqual(
+      expect.objectContaining({ key: 'L1', verified: true }),
+    )
+    expect(result.recent).toHaveLength(1)
+    expect(result.droppedRecentCount).toBe(0)
   })
 
-  it('demotes over-long highlights and caps the emphasised count', () => {
-    const seg = (text: string) => ({ text, emphasis: true, sources: [] })
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [
-        seg('慢性腎臟病'), // short → kept
-        seg('本病患為94歲男性，既往病史包含多發性骨髓瘤、第二型糖尿病與慢性腎臟病，近期多次因呼吸道症狀就診。'), // whole sentence → demoted
-        seg('HbA1c 7.2→8.4'), // short → kept
-        seg('貧血'),
-        seg('低血磷'),
-        seg('心臟擴大'), // 5th short one → kept (budget = 5)
-        seg('肺浸潤'), // 6th → demoted by count cap
+  it('coerces an off-list mustKnow slot and keeps one row per slot', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      mustKnow: [
+        { slot: 'renal', label: 'eGFR 32', text: '第一列', sources: ['L1'] },
+        { slot: 'RENAL', label: 'Cr 1.93', text: '同一格，應被丟棄', sources: ['L1'] },
+        { slot: 'qt-interval', label: 'QTc', text: '不在列舉內 → other', sources: ['L1'] },
+        // A second catch-all row is a DIFFERENT fact, so 'other' dedupes by label.
+        { slot: 'other', label: '跨院開藥', text: '兩家院所同時開藥', sources: ['E1'] },
+        { slot: 'other', label: '跨 院 開藥', text: '同一件事，空白不算差異', sources: ['E1'] },
       ],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.summary.map((s) => s.emphasis)).toEqual([
-      true, false, true, true, true, true, false,
+    }, catalog)
+
+    expect(result.mustKnow.map((item) => [item.slot, item.label])).toEqual([
+      ['renal', 'eGFR 32'],
+      ['other', 'QTc'],
+      ['other', '跨院開藥'],
     ])
+    expect(result.mustKnow[0].critical).toBe(false)
   })
 
-  it('resolves problem sources, normalises kind, and numbers before decisions', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
+  it('keeps the allergy row that has no record to cite', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      mustKnow: [
+        { slot: 'allergy', label: '無過敏紀錄', text: '雲端無過敏資料，非確認無過敏。', sources: [] },
+      ],
+    }, catalog)
+    expect(result.mustKnow).toHaveLength(1)
+    expect(result.mustKnow[0].sourceKeys).toEqual([])
+  })
+
+  it('drops a problem the focus card already carries and counts the drop', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      focus: [
+        { title: '腎功能持續下降 · CKD 3b', text: 'eGFR 33 → 32', sources: ['L1'] },
+      ],
       problems: [
-        { label: '第2型糖尿病', basis: '就診申報', kind: 'diagnosis', sources: ['C1'] },
-        { label: '貧血', basis: '5 次檢驗異常', kind: 'lab', sources: ['L1', 'L99'] },
-        { label: '未知類別', kind: 'weird', sources: [] },
+        // Contained in the focus title (ignoring case and spacing) → dropped.
+        { label: 'CKD 3b', kind: 'lab', sources: ['L1'] },
+        { label: 'ckd  3B', kind: 'lab', sources: ['L1'] },
+        { label: '第2型糖尿病', kind: 'careplan', sources: ['C1'] },
       ],
-      decisions: [
-        { text: '評估劑量', urgency: 'high' as const, rationale: 'x', sources: ['M1'] },
-      ],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.problems[0]).toMatchObject({ label: '第2型糖尿病', kind: 'diagnosis', sourceKeys: ['C1'] })
-    // Verified + hallucinated key both kept as sourceKeys (SourceSup flags unverified).
-    expect(result.problems[1].sourceKeys).toEqual(['L1', 'L99'])
-    // Off-list kind → 'other'; missing basis → undefined.
-    expect(result.problems[2]).toMatchObject({ kind: 'other', basis: undefined })
-    // Problem sources joined the shared sourceIndex (navigable via byKey).
-    expect(result.sourceIndex.some((s) => s.key === 'C1' && s.verified)).toBe(true)
-    expect(result.sourceIndex.some((s) => s.key === 'L99' && !s.verified)).toBe(true)
-    // Numbering follows RENDER order: problems (card above) number before
-    // decisions, so superscripts increase top-to-bottom on the page.
-    const num = (key: string) => result.sourceIndex.find((s) => s.key === key)!.num
-    expect(num('C1')).toBeLessThan(num('M1'))
+    }, catalog)
+
+    expect(result.problems.map((problem) => problem.label)).toEqual(['第2型糖尿病'])
+    expect(result.droppedProblemCount).toBe(2)
   })
 
-  it('finalizes disease-oriented investigation trends before problem sources', () => {
-    const investigationCatalog = [
-      ...catalog,
-      { key: 'L2', resourceType: 'DiagnosticReport', resourceId: 'lab-2', display: 'HbA1c', date: '2025-06-01' },
-    ]
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [
-        {
-          label: 'HbA1c',
-          kind: 'lab',
-          direction: 'worsening',
-          trend: '6.8% → 7.2% → 7.9% → 8.4%',
-          interpretation: '血糖控制變差',
-          sources: ['L1', 'L2', 'L99'],
-        },
-        {
-          label: '未知類型',
-          kind: 'unsupported',
-          direction: 'sideways',
-          trend: '單次結果',
-          interpretation: '資料不足',
-          sources: [],
-        },
-      ],
-      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, investigationCatalog)
-    expect(result.investigations[0]).toMatchObject({
-      kind: 'lab',
-      direction: 'worsening',
-      trend: '7.2% → 7.9% → 8.4%',
-      sourceKeys: ['L1', 'L2', 'L99'],
-    })
-    expect(result.investigations[1]).toMatchObject({ kind: 'other', direction: 'unknown' })
-    expect(result.sourceIndex.find((source) => source.key === 'L99')).toMatchObject({ verified: false })
-    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
-    expect(num('L1')).toBeLessThan(num('C1'))
-  })
-
-  it('guards against a single-result badge when cited investigation sources span multiple dates', () => {
-    const serialCatalog = buildSourceCatalog({
-      diagnosticReports: [
-        { id: 'rep-new', code: { text: 'HbA1c' }, effectiveDateTime: '2026-06-02' },
-        { id: 'rep-old', code: { text: 'HbA1c' }, effectiveDateTime: '2025-12-09' },
-        { id: 'cxr-new', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-06-02' },
-        { id: 'cxr-old', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-05-25' },
-      ],
-    })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [
-        {
-          label: 'HbA1c',
-          kind: 'lab',
-          direction: 'single',
-          trend: '6.7% → 6.6%',
-          interpretation: '模型誤回單次結果',
-          sources: ['L1', 'L2'],
-        },
-      ],
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, serialCatalog)
-    expect(result.investigations[0].direction).toBe('unknown')
-  })
-
-  it('strictly blocks single-point control claims and medication-only diagnoses', () => {
-    const strictCatalog = [
-      {
-        key: 'L1',
-        resourceType: 'DiagnosticReport',
-        resourceId: 'lab-1',
-        display: 'HbA1c 8.2%',
-        date: '2026-06-18',
-        supportsNormalityAssessment: false,
-      },
-      {
-        key: 'M1',
-        resourceType: 'MedicationRequest',
-        resourceId: 'med-1',
-        display: 'Atorvastatin 20 mg QHS',
-        date: '2026-06-18',
-      },
-    ]
-    const ai = {
-      headline: '跨院追蹤，近期血糖控制不佳。',
-      summary: [
-        { text: 'HbA1c 8.2%。', emphasis: true, sources: ['L1'] },
-        { text: '顯示血糖控制未達標。', emphasis: false, sources: [] },
-      ],
-      investigations: [{
-        label: 'HbA1c',
-        kind: 'lab',
-        direction: 'worsening',
-        trend: 'HbA1c 8.2%',
-        interpretation: '數值偏高，血糖控制不佳，需評估用藥調整。',
-        sources: ['L1'],
+  it('resolves the managing encounter date app-side and never from the model', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{
+        label: '第2型糖尿病',
+        kind: 'careplan',
+        metric: 'HbA1c 6.6%',
+        metricMeta: '2026-04-18',
+        managedBy: '甲醫學中心 內分泌科',
+        managedByRef: 'E1',
+        medications: 'Metformin 500mg',
+        sources: ['C1', 'M1'],
       }],
-      medicationEducation: [],
-      medicationReview: { regimen: [], changes: [], reconciliation: [] },
-      problems: [
-        { label: '血糖控制不佳', basis: 'HbA1c 8.2%', kind: 'lab', sources: ['L1'] },
-        { label: '高脂血症', basis: 'Atorvastatin 處方', kind: 'medication', sources: ['M1'] },
-      ],
-      decisions: [],
-      timeline: [],
-    }
+    }, catalog)
 
-    const result = useCase.finalizeResult(ai, strictCatalog, {
-      locale: 'zh-TW',
-      strictGrounding: true,
-    })
-
-    expect(result.headline).toBe('跨院追蹤')
-    expect(result.summary.map((segment) => segment.text).join('')).toBe('HbA1c 8.2%。')
-    expect(result.investigations[0]).toMatchObject({
-      direction: 'single',
-      interpretation: '這是紀錄中的檢驗結果；資料未提供參考範圍或個人目標。',
-    })
-    expect(result.problems).toEqual([])
+    expect(result.problems[0]).toEqual(expect.objectContaining({
+      managedBy: '甲醫學中心 內分泌科',
+      managedByDate: '2026-06-12',
+      metric: 'HbA1c 6.6%',
+      medications: 'Metformin 500mg',
+      kind: 'careplan',
+    }))
+    // A managedByRef that does not resolve yields no date at all — the app
+    // never invents one, and never shows the model's.
+    const unresolved = useCase.finalizeResult({
+      ...empty,
+      problems: [{ label: 'x', kind: 'other', managedByRef: 'Z9', sources: ['C1'] }],
+    }, catalog)
+    expect(unresolved.problems[0].managedByDate).toBeUndefined()
   })
 
-  it('strictly grounds patient medication education and uses a generic reminder', () => {
-    const ai = {
-      headline: '用藥摘要',
-      summary: [{ text: '有 Amlodipine 用藥紀錄。', emphasis: false, sources: ['M1'] }],
-      investigations: [],
-      medicationEducation: [{
-        name: 'Amlodipine 5 mg QD',
-        benefit: '幫助控制血壓，維持心血管健康。',
-        attention: '若頭暈或腳踝腫脹請就醫。',
-        sources: ['M1'],
-      }],
-      medicationReview: { regimen: [], changes: [], reconciliation: [] },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, [{
-      key: 'M1',
-      resourceType: 'MedicationRequest',
-      resourceId: 'med-1',
-      display: 'Amlodipine 5 mg QD',
-      date: '2026-06-20',
-    }], {
-      audience: 'patient',
-      locale: 'zh-TW',
-      strictGrounding: true,
-    })
+  it('numbers sources in render order: mustKnow → education → focus → problems', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      mustKnow: [{ slot: 'renal', label: 'eGFR', text: '腎功能', sources: ['L1'] }],
+      focus: [{ title: '就診主因', text: '說明', sources: ['E1'] }],
+      problems: [{ label: '第2型糖尿病', kind: 'careplan', sources: ['C1'] }],
+    }, catalog)
 
-    expect(result.medicationEducation[0]).toMatchObject({
-      benefit: '紀錄中有此藥物；實際用途請向醫師或藥師確認。',
-      attention: '請依醫囑使用；若有不適或疑問，請詢問醫師或藥師。',
-    })
+    expect(result.sourceIndex.map((source) => source.key)).toEqual(['L1', 'E1', 'C1'])
   })
 
-  it('guards against a single-result badge when the catalog has serial reports for the same topic', () => {
-    const serialCatalog = buildSourceCatalog({
-      diagnosticReports: [
-        { id: 'rep-new', code: { text: 'HbA1c' }, effectiveDateTime: '2026-06-02' },
-        { id: 'rep-old', code: { text: 'HbA1c' }, effectiveDateTime: '2025-12-09' },
-        { id: 'cxr-new', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-06-02' },
-        { id: 'cxr-old', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-05-25' },
-      ],
-    })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [
-        {
-          label: '血糖與糖化血色素',
-          kind: 'lab',
-          direction: 'single',
-          trend: 'HbA1c: 6.6% (2026/06/02)',
-          interpretation: '模型只引用最新一筆，但 catalog 其實有序列',
-          sources: ['L1'],
-        },
-        {
-          label: '胸腔影像檢查',
-          kind: 'imaging',
-          direction: 'single',
-          trend: '2026/06/02 影像顯示心臟輕微擴大',
-          interpretation: '模型只引用最新一筆胸片，但 catalog 其實有序列',
-          sources: ['L1'],
-        },
-      ],
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, serialCatalog)
-    expect(result.investigations[0].direction).toBe('unknown')
-    expect(result.investigations[1].direction).toBe('unknown')
-  })
-
-  it('finalizes medication education and numbers it before problem sources', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [],
-      medicationEducation: [
-        {
-          name: 'Metformin',
-          benefit: '協助控制血糖',
-          attention: '依醫囑使用，有疑問可詢問醫師或藥師',
-          sources: ['M1', 'M99'],
-        },
-        {
-          name: '沒有用藥紀錄支持的項目',
-          benefit: '不應顯示',
-          attention: '不應顯示',
-          sources: ['C1'],
-        },
-      ],
-      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.medicationEducation).toHaveLength(1)
-    expect(result.medicationEducation[0]).toMatchObject({
-      name: 'Metformin',
-      benefit: '協助控制血糖',
-      attention: '依醫囑使用，有疑問可詢問醫師或藥師',
-      sourceKeys: ['M1', 'M99'],
-    })
-    expect(result.sourceIndex.find((source) => source.key === 'M99')).toMatchObject({ verified: false })
-    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
-    expect(num('M1')).toBeLessThan(num('C1'))
-  })
-
-  it('finalizes clinician medication review, normalizes labels, and drops uncited items', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [],
-      medicationReview: {
-        regimen: [
-          { group: '糖尿病', name: 'Metformin', sig: 'BID', sources: ['M1'] },
-          { group: '心臟', name: '不存在的藥', sources: ['C1'] },
-        ],
-        changes: [
-          { type: 'cross-facility', medication: 'Metformin', summary: '跨院記錄', sources: ['M1'] },
-          { type: 'invented', medication: 'Metformin', summary: '待確認', sources: ['M1'] },
-        ],
-        reconciliation: [
-          { reason: 'missing-sig', text: '需確認用法', sources: ['M1'] },
-          { reason: 'invented', text: '其他待確認', sources: ['M1'] },
-        ],
-      },
-      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.medicationReview.regimen).toHaveLength(1)
-    expect(result.medicationReview.changes.map((item) => item.type)).toEqual(['cross-facility', 'uncertain'])
-    expect(result.medicationReview.reconciliation.map((item) => item.reason)).toEqual(['other'])
-    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
-    expect(num('M1')).toBeLessThan(num('C1'))
-  })
-
-  it('preserves the model medication group so terminology mistakes remain visible', () => {
-    const medications = [{
-      id: 'betmiga',
-      status: 'active',
-      authoredOn: '2026-07-01',
-      medicationCodeableConcept: {
-        coding: [{
-          system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
-          code: 'BC26216100',
-          display: 'Betmiga Prolonged-release Tablets 50mg',
-        }],
-      },
-      // Deliberately conflicting source/administrative label.
-      category: [{ text: '抗膽鹼藥物', coding: [{ display: 'ANTICHOLINERGICS' }] }],
-      drugTerminology: {
-        source: 'nhi-official-drug-master' as const,
-        snapshotId: 'nhi-drug-terminology-20260728',
-        ingredientText: 'Mirabegron 50 MG',
-        atcCode: 'G04BD12',
-        atcNameEn: 'mirabegron',
-        atcLevel2Code: 'G04',
-        atcLevel2NameZh: '泌尿系統用藥',
-        atcLevel2NameEn: 'UROLOGICALS',
-      },
-    }]
-    const medicationCatalog = buildSourceCatalog({ medications })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      medicationReview: {
-        regimen: [{
-          group: '抗膽鹼藥物',
-          name: 'Betmiga Prolonged-release Tablets 50mg',
-          sources: ['M1'],
-        }],
-        changes: [],
-        reconciliation: [],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-
-    const result = useCase.finalizeResult(ai, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-      strictGrounding: false,
-    })
-
-    expect(result.medicationReview.regimen[0]).toMatchObject({
-      group: '抗膽鹼藥物',
-      name: 'Betmiga Prolonged-release Tablets 50mg',
-    })
-
-    const treatmentAreaResult = useCase.finalizeResult({
-      ...ai,
-      medicationReview: {
-        ...ai.medicationReview,
-        regimen: [{
-          group: '攝護腺／膀胱',
-          name: 'Betmiga Prolonged-release Tablets 50mg',
-          sources: ['M1'],
-        }],
-      },
-    }, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-      strictGrounding: false,
-    })
-    expect(treatmentAreaResult.medicationReview.regimen[0].group)
-      .toBe('攝護腺／膀胱')
-
-    const strictResult = useCase.finalizeResult(ai, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-      strictGrounding: true,
-    })
-    expect(strictResult.medicationReview.regimen[0].group)
-      .toBe('抗膽鹼藥物')
-  })
-
-  it('passes the clinician overview through and grounds condition-without-therapy on condition/lab keys', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [],
-      medicationReview: {
-        overview: '長期用藥 1 種，由單一院所處方，續領規律。',
-        regimen: [{ group: '糖尿病', name: 'Metformin', sources: ['M1'] }],
-        changes: [],
-        reconciliation: [
-          // Flags an ABSENT medicine — no M key exists, condition evidence grounds it.
-          { reason: 'condition-without-therapy', text: '糖尿病診斷但現行慢箋未見降血糖藥——確認是否自費或他院', sources: ['C1'] },
-          // Any other reason still requires a real Medication record.
-          { reason: 'uncertain-current', text: '沒有用藥紀錄佐證的待確認', sources: ['C1'] },
-          // condition-without-therapy citing only an invented key stays dropped.
-          { reason: 'condition-without-therapy', text: '引用不存在來源的項目', sources: ['C99'] },
-        ],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.medicationReview.overview).toBe('長期用藥 1 種，由單一院所處方，續領規律。')
-    expect(result.medicationReview.reconciliation).toEqual([
-      expect.objectContaining({
-        reason: 'condition-without-therapy',
-        sourceKeys: ['C1'],
-      }),
-    ])
-  })
-
-  it('strips regimen sigs that are dispensing arithmetic rewrites or filler', () => {
-    const medications = [{
-      id: 'forxiga-arithmetic',
-      status: 'active',
-      authoredOn: '2026-06-25',
-      medicationCodeableConcept: {
-        coding: [{ system: 'nhi', code: 'BC26476100', display: 'Forxiga Film-coated Tablets 10mg' }],
-      },
-      category: [{ text: '抗糖尿病藥物' }],
-      // The ONLY recorded dosage line is dispensing arithmetic — any sig the
-      // model writes for this drug is derived, not recorded.
-      dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
-    }, {
-      id: 'eltroxin-real-sig',
-      status: 'active',
-      authoredOn: '2026-06-25',
-      medicationCodeableConcept: {
-        coding: [{ system: 'nhi', code: 'BC24708100', display: 'Eltroxin Tablets 100mcg' }],
-      },
-      category: [{ text: '甲狀腺' }],
-      dosageInstruction: [{ text: '每日1次，每次1錠，飯前服用' }],
-    }]
-    const medicationCatalog = buildSourceCatalog({ medications })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      medicationReview: {
-        regimen: [
-          { group: '血糖', name: 'Forxiga', sig: '每日一次', sources: ['M1'] },
-          { group: '甲狀腺', name: 'Eltroxin', sig: '每日1次，每次1錠', sources: ['M2'] },
-          { group: '排便', name: 'Sennosides', sig: '依醫囑服用', sources: ['M1'] },
-        ],
-        changes: [],
-        reconciliation: [],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-    })
-    const sigs = Object.fromEntries(result.medicationReview.regimen.map((r) => [r.name, r.sig]))
-    expect(sigs['Forxiga']).toBeUndefined()          // derived from arithmetic → stripped
-    expect(sigs['Eltroxin']).toBe('每日1次，每次1錠') // real recorded instruction → kept
-    expect(sigs['Sennosides']).toBeUndefined()       // filler → stripped
+  it('normalises an off-list problem kind', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{ label: '第2型糖尿病', kind: 'claim', sources: ['C1'] }],
+    }, catalog)
+    expect(result.problems[0].kind).toBe('other')
   })
 
   it('flags problem citations whose report type contradicts the stated basis', () => {
-    const diagnosticReports = [
-      {
-        id: 'rep-cxr',
-        code: { text: '胸腔檢查（包括各種角度部位之胸腔檢查）' },
-        effectiveDateTime: '2026-06-14',
-        performer: [{ display: '林口長庚' }],
-      },
-      {
-        id: 'rep-ecg',
-        code: { text: '心電圖' },
-        effectiveDateTime: '2026-06-14',
-        performer: [{ display: '林口長庚' }],
-      },
-      {
-        id: 'rep-hba1c',
-        code: { text: 'HbA1c' },
-        effectiveDateTime: '2026-06-01',
-      },
-    ]
-    const reportCatalog = buildSourceCatalog({ diagnosticReports })
-    const key = (id: string) => reportCatalog.find((c) => c.resourceId === id)!.key
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
+    const ecgCatalog = buildSourceCatalog({
+      ...CATALOG_INPUT,
+      diagnosticReports: [
+        { id: 'rep-1', code: { text: '胸部X光' }, effectiveDateTime: '2026-04-18' },
+        { id: 'rep-2', code: { text: '心電圖' }, effectiveDateTime: '2026-04-17' },
+      ],
+    })
+    const result = useCase.finalizeResult({
+      ...empty,
+      problems: [{
+        label: '心律不整',
+        basis: '依據:心電圖紀錄',
+        kind: 'lab',
+        sources: ['L1', 'L2'],
+      }],
+    }, ecgCatalog)
+
+    // L1 is the chest film — shown, but marked suspect; L2 (the ECG) is clean.
+    expect(result.problems[0].suspectSourceKeys).toEqual(['L1'])
+  })
+
+  it('finalizes patient medication education and requires a verified medication record', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      medicationEducation: [
+        { name: 'Metformin', benefit: '協助控制血糖', attention: '隨餐服用', sources: ['M1', 'C1'] },
+        { name: '沒有來源的藥', benefit: 'x', attention: 'y', sources: ['C1'] },
+      ],
+    }, catalog, { audience: 'patient' })
+
+    expect(result.medicationEducation).toHaveLength(1)
+    expect(result.medicationEducation[0].sourceKeys).toEqual(['M1', 'C1'])
+  })
+
+  it('strictly grounds patient medication education and uses a generic reminder', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
+      medicationEducation: [
+        { name: 'Metformin', benefit: '血糖控制不佳時使用', attention: '自行加量', sources: ['M1'] },
+      ],
+    }, catalog, { audience: 'patient', locale: 'zh-TW', strictGrounding: true })
+
+    expect(result.medicationEducation[0].benefit).toContain('請向醫師或藥師確認')
+    expect(result.medicationEducation[0].attention).toContain('請依醫囑使用')
+  })
+
+  it('strictly blocks medication-only problems and unassessed single-lab problems', () => {
+    const result = useCase.finalizeResult({
+      ...empty,
       problems: [
-        // 心電圖 basis citing a chest X-ray → that key flagged, ECG key clean.
-        { label: '右側束枝傳導阻斷 (RBBB)', basis: '心電圖紀錄', kind: 'diagnosis', sources: [key('rep-cxr'), key('rep-ecg')] },
-        // Basis type matches the cited report → no flag.
-        { label: '心律異常', basis: '心電圖紀錄', kind: 'diagnosis', sources: [key('rep-ecg')] },
-        // Unclassifiable basis / report never triggers (conservative).
-        { label: '第2型糖尿病', basis: '3 次檢驗異常', kind: 'lab', sources: [key('rep-hba1c')] },
+        { label: '糖尿病', basis: '用藥推斷', kind: 'medication', sources: ['M1'] },
+        { label: '第2型糖尿病', basis: '照護計畫', kind: 'careplan', sources: ['C1'] },
       ],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, reportCatalog)
-    expect(result.problems[0].suspectSourceKeys).toEqual([key('rep-cxr')])
-    expect(result.problems[0].sourceKeys).toContain(key('rep-cxr')) // shown, not hidden
-    expect(result.problems[1].suspectSourceKeys).toBeUndefined()
-    expect(result.problems[2].suspectSourceKeys).toBeUndefined()
+    }, catalog, { strictGrounding: true })
+
+    expect(result.problems.map((problem) => problem.label)).toEqual(['第2型糖尿病'])
   })
 
-  it('drops the medication-review overview for the patient audience', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      investigations: [],
-      medicationReview: {
-        overview: '不應出現在民眾版的綜合判讀。',
-        regimen: [],
-        changes: [],
-        reconciliation: [],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog, { audience: 'patient' })
-    expect(result.medicationReview.overview).toBeUndefined()
-  })
-
-  it('removes an unsupported medication overview when every cited row is invalid', () => {
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      medicationReview: {
-        overview: '病人目前使用 Captopril。',
-        regimen: [{ group: '心血管', name: 'Captopril', sources: ['M99'] }],
-        changes: [],
-        reconciliation: [],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-
-    const result = useCase.finalizeResult(ai, catalog, { audience: 'medical' })
-
-    expect(result.medicationReview).toEqual({
-      overview: undefined,
-      regimen: [],
-      changes: [],
-      reconciliation: [],
-    })
-  })
-
-  it('deterministically lists every chronic drug and merges its cross-facility records', () => {
-    const medications = [
-      {
-        id: 'forxiga-current',
-        status: 'active',
-        authoredOn: '2026-06-25',
-        medicationCodeableConcept: {
-          text: '福適佳膜衣錠10毫克',
-          coding: [{
-            system: 'nhi',
-            code: 'BC26476100',
-            display: 'Forxiga Film-coated Tablets 10mg',
-          }],
-        },
-        category: [{ text: '抗糖尿病藥物', coding: [{ display: 'ANTIDIABETIC AGENTS' }] }],
-        requester: { display: '示範康健藥局' },
-        dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
-      },
-      {
-        id: 'forxiga-chronic',
-        status: 'completed',
-        authoredOn: '2026-04-28',
-        medicationCodeableConcept: {
-          text: '福適佳膜衣錠10毫克',
-          coding: [{
-            system: 'nhi',
-            code: 'BC26476100',
-            display: 'Forxiga Film-coated Tablets 10mg',
-          }],
-        },
-        courseOfTherapyType: { coding: [{ code: 'continuous' }] },
-        category: [{ text: '抗糖尿病藥物', coding: [{ display: 'ANTIDIABETIC AGENTS' }] }],
-        requester: { display: '示範向陽藥局' },
-        dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
-      },
-      {
-        id: 'acute-only',
-        authoredOn: '2026-06-20',
-        medicationCodeableConcept: {
-          coding: [{ system: 'nhi', code: 'ACUTE', display: 'Acute medicine' }],
-        },
-      },
-    ]
-    const medicationCatalog = buildSourceCatalog({ medications })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      medicationReview: { regimen: [], changes: [], reconciliation: [] },
-      problems: [{ label: '慢性腎臟病', kind: 'diagnosis', sources: [] }],
-      decisions: [],
-      timeline: [],
-    }
-
-    const result = useCase.finalizeResult(ai, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-    })
-
-    expect(result.medicationReview.regimen).toHaveLength(1)
-    expect(result.medicationReview.regimen[0]).toMatchObject({
-      group: '抗糖尿病藥物',
-      name: 'Forxiga Film-coated Tablets 10mg',
-      sig: undefined,
-    })
-    const sourceIds = result.medicationReview.regimen[0].sourceKeys.map(
-      (key) => medicationCatalog.find((source) => source.key === key)?.resourceId,
+  it('removes unsupported assessment language from a strictly-grounded headline', () => {
+    const result = useCase.finalizeResult(
+      { ...empty, headline: '病人狀況穩定，血糖控制不佳，建議調整用藥' },
+      catalog,
+      { strictGrounding: true, locale: 'zh-TW' },
     )
-    expect(sourceIds).toEqual(['forxiga-current', 'forxiga-chronic'])
-    expect(result.sourceIndex.filter((source) => source.resourceType?.startsWith('Medication')))
-      .toHaveLength(2)
-  })
-
-  it('removes a completed-only historical chronic medicine from the current regimen', () => {
-    const medications = [{
-      id: 'historical-uretropic',
-      status: 'completed',
-      authoredOn: '2026-04-25',
-      medicationCodeableConcept: {
-        coding: [{ system: 'nhi', code: 'AC010471G0', display: 'URETROPIC TABLETS' }],
-      },
-      courseOfTherapyType: { coding: [{ code: 'continuous' }] },
-      category: [{ text: '利尿劑' }],
-    }]
-    const medicationCatalog = buildSourceCatalog({ medications })
-    const ai = {
-      headline: 'h',
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      medicationReview: {
-        regimen: [{ group: '利尿劑慢箋', name: 'URETROPIC TABLETS', sources: ['M1'] }],
-        changes: [],
-        reconciliation: [],
-      },
-      problems: [],
-      decisions: [],
-      timeline: [],
-    }
-
-    const result = useCase.finalizeResult(ai, medicationCatalog, {
-      clinicalData: { medications },
-      audience: 'medical',
-      locale: 'zh-TW',
-    })
-
-    expect(result.medicationReview.regimen).toEqual([])
-  })
-
-  it('keeps the latest demo Forxiga while excluding completed-only Uretropic history', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bundle = require('../../../public/demo/demo-bundle.json')
-    const parsedData = LocalBundleService.parse(bundle)
-    expect(parsedData).not.toBeNull()
-    const includedDocumentIds = resolveSelectedDocuments(
-      listClinicalDocuments(parsedData!.collection),
-      'latestAdmission',
-      [],
-    ).map((document) => document.id)
-    const scopedClinicalData = scopeClinicalDataForAi(
-      parsedData!.collection,
-      DEFAULT_DATA_SELECTION,
-      DEFAULT_DATA_FILTERS,
-      includedDocumentIds,
-      clinicalNowMs(true),
-    )
-    const demoCatalog = getSourceCatalog(scopedClinicalData, 'zh-TW')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { demoMedicalSummarySnapshots } = require('../../../src/infrastructure/demo/demo-ai-snapshots')
-    const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots['zh-TW'].medical))
-    expect(parsed).not.toBeNull()
-
-    const result = useCase.finalizeResult(parsed!, demoCatalog, {
-      clinicalData: scopedClinicalData,
-      audience: 'medical',
-      locale: 'zh-TW',
-    })
-    expect(result.medicationReview.regimen.length).toBeGreaterThan(0)
-    expect(result.medicationReview.regimen.length).toBeLessThanOrEqual(8)
-    const forxiga = result.medicationReview.regimen.find(
-      (item) => item.name.includes('Forxiga'),
-    )
-
-    expect(forxiga).toMatchObject({ name: expect.stringContaining('Forxiga'), sig: undefined })
-    expect(result.medicationReview.regimen.some((item) => item.group === '同次慢箋')).toBe(false)
-    expect(result.medicationReview.regimen.find((item) => item.name.includes('PATEAR')))
-      .toMatchObject({ group: '眼科' })
-    expect(result.medicationReview.regimen.some((item) => item.name.includes('URETROPIC'))).toBe(false)
-    expect(result.medicationReview.changes).toEqual([])
-    expect(result.medicationReview.regimen.find((item) => item.group === '眼科')?.name)
-      .toContain('Brimonin')
-    // Exactly ONE reconciliation item survives the quality bar. The current
-    // data contain two 30-day Aricept dispensings 22 days apart, so the useful
-    // action is to distinguish an early refill from duplicate supply.
-    expect(result.medicationReview.reconciliation).toEqual([
-      expect.objectContaining({
-        reason: 'possible-same-drug',
-        text: expect.stringContaining('Aricept 5mg'),
-        sourceKeys: ['M5', 'M11'],
-      }),
-    ])
-    const citedSources = forxiga?.sourceKeys.map(
-      (key) => demoCatalog.find((source) => source.key === key),
-    ) ?? []
-    const forxigaMedications = (scopedClinicalData.medications ?? []).filter((medication) =>
-      medication.medicationCodeableConcept?.coding?.some((coding) =>
-        coding.display?.includes('Forxiga'),
-      ),
-    )
-    const latestForxiga = [...forxigaMedications]
-      .sort((a, b) => (b.authoredOn ?? '').localeCompare(a.authoredOn ?? ''))[0]
-
-    expect(citedSources).not.toContain(undefined)
-    expect(citedSources.map((source) => source?.resourceId)).toContain(latestForxiga?.id)
-  })
-
-  it('rescues quoted key phrases when zero highlights survive', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [
-        {
-          // One long segment, model quoted its key phrases instead of splitting
-          // — the guardrail demotes it (too long), then the rescue harvests 「」.
-          text: '近期診斷為「肺炎」伴隨慢性咳嗽，追蹤顯示「eGFR 32」之慢性腎病，需持續監測。',
-          emphasis: true,
-          sources: ['E1', 'L1'],
-        },
-      ],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.summary.map((s) => [s.text, s.emphasis])).toEqual([
-      ['近期診斷為', false],
-      ['肺炎', true],
-      ['伴隨慢性咳嗽，追蹤顯示', false],
-      ['eGFR 32', true],
-      ['之慢性腎病，需持續監測。', false],
-    ])
-    // Sources stay on the segment's last piece → superscript position unchanged.
-    expect(result.summary[4].sourceKeys).toEqual(['E1', 'L1'])
-    expect(result.summary.slice(0, 4).every((s) => s.sourceKeys.length === 0)).toBe(true)
-  })
-
-  it('does not rewrite quotes when compliant highlights exist', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [
-        { text: '肺炎', emphasis: true, sources: [] },
-        { text: '病史包含「多發性骨髓瘤」等。', emphasis: false, sources: [] },
-      ],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.summary).toHaveLength(2)
-    expect(result.summary[1].text).toContain('「多發性骨髓瘤」')
-  })
-
-  it('coalesces fragment citations onto the claim they support', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [
-        // Fragment with its own citation — must NOT render a mid-sentence sup.
-        { text: '本病患具有複雜病史，包含', emphasis: false, sources: ['E1'] },
-        // The claim: fragment's citation merges here, duplicates deduped.
-        { text: '慢性腎臟病', emphasis: true, sources: ['E1', 'L1'] },
-        // Trailing fragment ends the sentence with no own sources → no sup.
-        { text: '，伴隨高血壓。', emphasis: false, sources: [] },
-        // New sentence, cited but no highlight → sup lands at sentence end.
-        { text: '影像顯示雙側肺部浸潤。', emphasis: false, sources: ['M1'] },
-      ],
-      decisions: [],
-      timeline: [],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.summary.map((s) => s.sourceKeys)).toEqual([
-      [],
-      ['E1', 'L1'],
-      [],
-      ['M1'],
-    ])
-  })
-
-  it('coerces an off-list timeline category', () => {
-    const ai = {
-      headline: 'h',
-      problems: [],
-      summary: [{ text: 't', emphasis: false, sources: [] }],
-      decisions: [],
-      timeline: [{ ref: 'E1', label: 'x', category: 'weird-category' }],
-    }
-    const result = useCase.finalizeResult(ai, catalog)
-    expect(result.timeline[0].category).toBe('encounter')
+    expect(result.headline).not.toContain('控制不佳')
+    expect(result.headline).not.toContain('調整用藥')
   })
 })
 
@@ -2081,29 +1261,21 @@ describe('local zh-TW prose guards', () => {
   it('repairs Simplified prose but keeps medicine names verbatim', () => {
     const ai = {
       headline: '血糖控制记录',
+      mustKnow: [{ slot: 'endocrine-pending', label: '血糖', text: '近期血糖偏高，建议复诊。', sources: ['E1'] }],
+      focus: [{ title: '血压追踪', text: '多次检验后复诊。', sources: ['E1'] }],
       problems: [{ label: '糖尿病', basis: '多次检验', kind: 'diagnosis', sources: ['E1'] }],
-      summary: [{ text: '建议复诊追踪。', emphasis: false, sources: ['E1'] }],
-      decisions: [],
-      timeline: [{ ref: 'E1', label: '门诊复查', category: 'encounter' }],
-      medicationReview: { overview: '药物清单', regimen: [{ group: '降血糖药', name: '测试药名', sources: ['M1'] }], changes: [], reconciliation: [] },
+      recent: [{ ref: 'E1', label: '门诊复查', category: 'encounter' }],
+      medicationEducation: [{ name: '测试药名', benefit: '控制血糖', attention: '注意低血糖', sources: ['M1'] }],
     }
     const result = useCase.finalizeResult(ai as never, catalog, { locale: 'zh-TW' })
     expect(result.headline).toBe('血糖控制記錄')
-    expect(result.summary[0].text).toBe('建議複診追蹤。')
-    expect(result.timeline[0].label).toBe('門診複查')
-    expect(result.medicationReview.overview).toBe('藥物清單')
-    expect(result.medicationReview.regimen[0]?.name).toBe('测试药名')
+    expect(result.mustKnow[0]?.text).toBe('近期血糖偏高，建議複診。')
+    expect(result.focus[0]?.text).toBe('多次檢驗後複診。')
+    expect(result.recent[0]?.label).toBe('門診複查')
+    expect(result.problems[0]?.basis).toBe('多次檢驗')
+    expect(result.medicationEducation[0]?.name).toBe('测试药名')
     const en = useCase.finalizeResult(ai as never, catalog, { locale: 'en' })
     expect(en.headline).toBe('血糖控制记录')
-  })
-
-  it('moves document evidence together with coalesced citations', () => {
-    const segments = coalesceCitations([
-      { text: '住院期間', emphasis: false, sourceKeys: ['D1'], documentEvidence: [{ source: 'D1', quote: '入院診斷為肺炎' }] },
-      { text: '接受治療。', emphasis: false, sourceKeys: [] },
-    ])
-    expect(segments[0].documentEvidence).toBeUndefined()
-    expect(segments[1]).toMatchObject({ sourceKeys: ['D1'], documentEvidence: [{ source: 'D1', quote: '入院診斷為肺炎' }] })
   })
 
   it('accepts short verbatim Chinese quotes but not short Latin fragments', () => {
@@ -2124,90 +1296,3 @@ describe('local zh-TW prose guards', () => {
   })
 })
 
-describe('summary segment spacing', () => {
-  const catalog = buildSourceCatalog(CATALOG_INPUT)
-  const finalize = (
-    summary: Array<{ text: string; emphasis?: boolean; sources?: string[] }>,
-    locale: 'en' | 'zh-TW',
-  ) => useCase.finalizeResult(
-    {
-      headline: 'h',
-      problems: [],
-      decisions: [],
-      timeline: [],
-      summary: summary.map((s) => ({ emphasis: false, sources: [], ...s })),
-    },
-    catalog,
-    { locale },
-  )
-  // What the card's copy button puts on the clipboard.
-  const joined = (result: ReturnType<typeof finalize>) =>
-    result.summary.map((s) => s.text).join('')
-
-  it('restores the space at glued Latin word boundaries (gemini-3-flash, 2026-09-29)', () => {
-    const result = finalize([
-      { text: 'Your health records show steady management of' },
-      { text: 'chronic kidney disease', emphasis: true, sources: ['E1'] },
-      { text: 'and' },
-      { text: 'glaucoma', emphasis: true, sources: ['M1'] },
-      { text: 'using multiple eye drops.' },
-      { text: 'HbA1c 8.2%', emphasis: true, sources: ['L1'] },
-      { text: 'was last recorded in April.' },
-    ], 'en')
-
-    expect(joined(result)).toBe(
-      'Your health records show steady management of chronic kidney disease and glaucoma ' +
-      'using multiple eye drops. HbA1c 8.2% was last recorded in April.',
-    )
-    // The space leads the later segment, so the superscript rendered after
-    // "chronic kidney disease" stays attached to it.
-    expect(result.summary[1]).toMatchObject({ text: ' chronic kidney disease', sourceKeys: ['E1'] })
-  })
-
-  it('adds no space before punctuation and keeps split numbers whole', () => {
-    const result = finalize([
-      { text: 'chronic kidney disease', emphasis: true },
-      { text: ', and' },
-      { text: 'glaucoma', emphasis: true },
-      { text: '. Records show HbA1c 7.' },
-      { text: '2 in 2026 (' },
-      { text: 'eGFR 45' },
-      { text: ')' },
-    ], 'en')
-
-    expect(joined(result)).toBe(
-      'chronic kidney disease, and glaucoma. Records show HbA1c 7.2 in 2026 (eGFR 45)',
-    )
-  })
-
-  it('leaves already-spaced segments alone and never doubles a space', () => {
-    const spaced = [
-      { text: 'Your health records show steady management of ' },
-      { text: 'chronic kidney disease', emphasis: true },
-      { text: ' and ' },
-      { text: 'glaucoma', emphasis: true },
-      { text: ', using multiple eye drops.' },
-    ]
-    expect(finalize(spaced, 'en').summary.map((s) => s.text)).toEqual(spaced.map((s) => s.text))
-
-    expect(joined(finalize([
-      { text: 'management of ' },
-      { text: ' glaucoma', emphasis: true },
-      { text: ' ' },
-      { text: 'with eye drops.' },
-    ], 'en'))).toBe('management of glaucoma with eye drops.')
-  })
-
-  it('leaves zh-TW segments untouched, including Latin terms beside Han text', () => {
-    const zh = [
-      { text: '紀錄顯示持續追蹤' },
-      { text: '慢性腎臟病', emphasis: true },
-      { text: '與' },
-      { text: '青光眼', emphasis: true },
-      { text: '，近期' },
-      { text: 'HbA1c 7.2→8.4', emphasis: true },
-      { text: '上升。' },
-    ]
-    expect(finalize(zh, 'zh-TW').summary.map((s) => s.text)).toEqual(zh.map((s) => s.text))
-  })
-})

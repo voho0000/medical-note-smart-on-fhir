@@ -1,15 +1,12 @@
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
 // Medical Summary (醫療摘要) — the FIXED, structured shape the AI must return so
-// the UI renders固定卡片 instead of free-text markdown (same philosophy as
+// the UI renders 初診快覽 instead of free-text markdown (same philosophy as
 // safety-alert.entity.ts). The AI may ONLY cite data via reference keys taken
 // from an app-built source catalog; dates / organizations / resource types are
 // never AI output — they are resolved app-side from the FHIR bundle, which is
-// what makes the timeline and source chips hallucination-proof.
+// what makes the recent-events list and source chips hallucination-proof.
 import { z } from 'zod'
 import type { SafetyScanResult } from './safety-alert.entity'
-
-export const SUMMARY_URGENCIES = ['high', 'medium', 'low'] as const
-export type SummaryUrgency = (typeof SUMMARY_URGENCIES)[number]
 
 export const TIMELINE_CATEGORIES = [
   'diagnosis',
@@ -35,67 +32,33 @@ export const PROBLEM_KINDS = [
 ] as const
 export type ProblemKind = (typeof PROBLEM_KINDS)[number]
 
-// Disease-oriented investigation overview. `kind` controls the icon/label;
-// `direction` describes the CLINICAL direction (better/worse), not merely
-// whether the raw number went up or down (e.g. falling eGFR = worsening).
-export const INVESTIGATION_KINDS = ['lab', 'imaging', 'pathology', 'other'] as const
-export type InvestigationKind = (typeof INVESTIGATION_KINDS)[number]
-
-export const INVESTIGATION_DIRECTIONS = [
-  'improving',
-  'stable',
-  'worsening',
-  'fluctuating',
-  'single',
-  'unknown',
-] as const
-export type InvestigationDirection = (typeof INVESTIGATION_DIRECTIONS)[number]
-
-// Clinician-facing medication reconciliation. These labels describe the
-// record state / workflow — deliberately not clinical risk severity, which
-// belongs to the separate safety card.
-export const MEDICATION_CHANGE_TYPES = [
-  'new',
-  'stopped',
-  'resumed',
-  'changed',
-  'cross-facility',
-  'uncertain',
-] as const
-export type MedicationChangeType = (typeof MEDICATION_CHANGE_TYPES)[number]
-
-export const MEDICATION_RECONCILIATION_REASONS = [
-  'status-conflict',
-  'missing-sig',
-  'multi-facility',
-  'uncertain-current',
-  'possible-same-drug',
-  // A chronic medicine with no supporting diagnosis/lab anywhere in the data,
-  // or an evidenced active condition with no corresponding therapy on the
-  // current regimen. The latter is the one reconciliation item allowed to
-  // cite non-Medication sources (there is no M key for an absent drug).
-  'no-documented-indication',
-  'condition-without-therapy',
-  'supply-gap',
-  'adherence-pattern',
+// 開藥前必看 slots. A fixed enum (rather than free text) is what lets the app
+// keep at most one row per prescribing concern and render them in a stable
+// order regardless of the order the model happened to emit.
+export const MUST_KNOW_SLOTS = [
+  'renal',
+  'anticoagulation',
+  'hematology',
+  'high-risk-meds',
+  'endocrine-pending',
   'other',
 ] as const
-export type MedicationReconciliationReason = (typeof MEDICATION_RECONCILIATION_REASONS)[number]
+export type MustKnowSlot = (typeof MUST_KNOW_SLOTS)[number]
 
 // ---------------------------------------------------------------------------
 // AI output schema (validated with Zod; malformed replies are rejected)
 //
 // Size caps CLAMP (slice/truncate), they never reject: verbose models (Claude
 // Haiku especially) routinely exceed them with perfectly good content — a
-// 27-segment narrative, 8 cited keys, an 85-char basis — and rejecting the
-// whole reply for that made Haiku's parse-failure rate near-total (2026-07).
+// long narrative, 8 cited keys, an 85-char basis — and rejecting the whole
+// reply for that made Haiku's parse-failure rate near-total (2026-07).
 // Wrong TYPES and missing required fields still reject; oversize just trims.
 // ---------------------------------------------------------------------------
 
 const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
-const clampedKeys = (max: number) =>
-  z.array(z.string()).optional().default([]).transform((a) => a.slice(0, max))
+const optionalClampedText = (max: number) =>
+  z.string().transform((s) => (s.length > max ? s.slice(0, max) : s)).optional()
 const clampedRequiredKeys = (max: number) =>
   z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
 
@@ -114,25 +77,35 @@ export type DocumentEvidence = z.infer<typeof DocumentEvidenceSchema> & {
 const optionalDocumentEvidence = () =>
   z.array(DocumentEvidenceSchema).max(4).optional()
 
-// One narrative segment. `emphasis` segments render as highlights; `sources`
-// hold catalog keys (e.g. "E1") — never free-text citations.
-export const SummarySegmentSchema = z.object({
-  text: clampedText(400),
-  emphasis: z.boolean().optional().default(false),
-  sources: clampedKeys(6),
+// One 開藥前必看 row: `label` is the number or the fact ("eGFR 32"), `text` is
+// the single sentence of consequence for prescribing today. Lenient on slot
+// (off-list → coerced) like safety-alert categories.
+//
+// EVERY row cites at least one key. The one exception this schema used to make
+// — the allergy row, which reported an ABSENT record and so had nothing to
+// cite — is gone: the allergy row is now rendered by the app from the bundle's
+// own AllergyIntolerance records, not asked of the model.
+export const SummaryMustKnowSchema = z.object({
+  slot: z.string().optional(),
+  label: clampedText(40),
+  text: clampedText(200),
+  critical: z.boolean().optional(),
+  sources: clampedRequiredKeys(6),
   documentEvidence: optionalDocumentEvidence(),
 })
 
-export const SummaryDecisionSchema = z.object({
+// One 最可能的就診主因 row. `flag` marks a concrete contradiction or gap the
+// clinician has to verify — never mere uncertainty.
+export const SummaryFocusSchema = z.object({
+  title: clampedText(120),
   text: clampedText(400),
-  urgency: z.enum(SUMMARY_URGENCIES),
-  rationale: z.string().transform((s) => (s.length > 400 ? s.slice(0, 400) : s)).optional(),
-  sources: clampedKeys(6),
+  flag: z.boolean().optional(),
+  sources: clampedRequiredKeys(6),
   documentEvidence: optionalDocumentEvidence(),
 })
 
-// Timeline pick: the model only CHOOSES an event (by catalog key) and labels
-// it. Lenient on category (off-list → coerced) like safety-alert categories.
+// Recent-event pick: the model only CHOOSES an event (by catalog key) and
+// labels it. Lenient on category (off-list → coerced).
 export const TimelinePickSchema = z.object({
   ref: z.string().min(1),
   label: clampedText(200),
@@ -149,28 +122,21 @@ export const TimelinePickSchema = z.object({
 export const SummaryProblemSchema = z.object({
   label: clampedText(120),
   /** Short human-readable basis, e.g. "5 次檢驗異常" / "藥局調劑". */
-  basis: z.string().transform((s) => (s.length > 80 ? s.slice(0, 80) : s)).optional(),
+  basis: optionalClampedText(80),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
+  /** Data-first key indicator, e.g. "eGFR 33 → 32 ▼". */
+  metric: optionalClampedText(120),
+  /** Dates/units belonging to `metric`, rendered as its meta line. */
+  metricMeta: optionalClampedText(120),
+  /** Organization + specialty as visible in the data (never invented). */
+  managedBy: optionalClampedText(80),
+  /** Catalog key of the latest encounter at that organization. The APP reads
+   *  its date — the model never writes a date for this row. */
+  managedByRef: z.string().optional(),
+  medications: optionalClampedText(160),
+  flag: z.boolean().optional(),
   sources: clampedRequiredKeys(6),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-// A compact, disease-relevant lab / imaging analysis. The model writes the
-// human-readable trend from values that exist in the supplied clinical data;
-// sources are resolved app-side so every row remains auditable/navigation-ready.
-export const SummaryInvestigationSchema = z.object({
-  label: clampedText(120),
-  kind: z.string().optional(),
-  direction: z.string().optional(),
-  /** Data-first display, e.g. "HbA1c 7.2% → 8.4%" or an imaging finding. */
-  trend: clampedText(240),
-  /** One short, patient-specific interpretation of why the result matters.
-   * Local models sometimes emit null when no assessment is supported; keep the
-   * dated values instead of failing the whole card (finalizer fills a neutral
-   * sentence for an empty interpretation). */
-  interpretation: z.string().nullish().transform((s) => (s ?? '').slice(0, 400)),
-  sources: clampedRequiredKeys(8),
   documentEvidence: optionalDocumentEvidence(),
 })
 
@@ -186,102 +152,52 @@ export const SummaryMedicationEducationSchema = z.object({
   documentEvidence: optionalDocumentEvidence(),
 })
 
-const SummaryMedicationRegimenSchema = z.object({
-  group: clampedText(80),
-  name: clampedText(160),
-  sig: z.string().transform((s) => (s.length > 240 ? s.slice(0, 240) : s)).optional(),
-  sources: clampedRequiredKeys(8),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-const SummaryMedicationChangeSchema = z.object({
-  type: z.string().optional(),
-  medication: clampedText(160),
-  summary: clampedText(320),
-  sources: clampedRequiredKeys(8),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-const SummaryMedicationReconciliationItemSchema = z.object({
-  reason: z.string().optional(),
-  text: clampedText(320),
-  sources: clampedRequiredKeys(8),
-  documentEvidence: optionalDocumentEvidence(),
-})
-
-export const SummaryMedicationReviewSchema = z.object({
-  /** 1–2 sentence clinician synthesis: burden (drug count / institutions),
-   *  dominant treatment areas and who manages them, and the single most
-   *  important pattern. Text-only — every fact must already be carried by a
-   *  cited item elsewhere in the review. */
-  overview: z.string().transform((s) => (s.length > 400 ? s.slice(0, 400) : s)).optional(),
-  regimen: z.array(SummaryMedicationRegimenSchema).default([]).transform((a) => a.slice(0, 8)),
-  changes: z.array(SummaryMedicationChangeSchema).default([]).transform((a) => a.slice(0, 5)),
-  reconciliation: z.array(SummaryMedicationReconciliationItemSchema).default([]).transform((a) => a.slice(0, 5)),
-})
-
 export const MedicalSummaryAiResultSchema = z.object({
   headline: clampedText(240),
-  // Segment clamp is deliberately roomy (32, prompt asks for far fewer): it is
-  // a runaway-output guard, not a style enforcer — trimming a narrative's tail
-  // loses its conclusion, so only truly degenerate outputs should hit it.
-  summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
-  investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
+  mustKnow: z.array(SummaryMustKnowSchema).default([]).transform((a) => a.slice(0, 8)),
+  // Patient audience only; clinicians get mustKnow instead.
   medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
-  medicationReview: SummaryMedicationReviewSchema.default({
-    regimen: [],
-    changes: [],
-    reconciliation: [],
-  }),
+  focus: z.array(SummaryFocusSchema).default([]).transform((a) => a.slice(0, 3)),
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
-  decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 16)),
   // Patient complexity varies too much for an editorial cap — the prompt asks
   // the model to scale its picks to the case and the UI folds/scrolls any
   // count, so 50 exists purely to stop a degenerate (looping) reply.
-  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
+  recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 
 // The fixed summary is generated as independently validated modules. Keeping
 // these ids in the domain layer lets generation, cache, orchestration, and UI
 // agree on exactly which card failed without coupling those layers together.
+// Order here is the streaming/presentation order of 初診快覽.
 export const MEDICAL_SUMMARY_MODULE_IDS = [
-  'priorities',
+  'overview',
+  'focus',
   'problems',
-  'timeline',
-  'investigations',
-  'medications',
+  'recent',
 ] as const
 export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
 
-export const MedicalSummaryPrioritiesModuleSchema = z.object({
+export const MedicalSummaryOverviewModuleSchema = z.object({
   headline: clampedText(240),
-  summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
+  mustKnow: z.array(SummaryMustKnowSchema).default([]).transform((a) => a.slice(0, 8)),
+  medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
+})
+export const MedicalSummaryFocusModuleSchema = z.object({
+  items: z.array(SummaryFocusSchema).default([]).transform((a) => a.slice(0, 3)),
 })
 export const MedicalSummaryProblemsModuleSchema = z.object({
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
 })
-export const MedicalSummaryTimelineModuleSchema = z.object({
-  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
-})
-export const MedicalSummaryInvestigationsModuleSchema = z.object({
-  investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
-})
-export const MedicalSummaryMedicationsModuleSchema = z.object({
-  medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
-  medicationReview: SummaryMedicationReviewSchema.default({
-    regimen: [],
-    changes: [],
-    reconciliation: [],
-  }),
+export const MedicalSummaryRecentModuleSchema = z.object({
+  recent: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
 })
 
 export interface MedicalSummaryModuleResultMap {
-  priorities: z.infer<typeof MedicalSummaryPrioritiesModuleSchema>
+  overview: z.infer<typeof MedicalSummaryOverviewModuleSchema>
+  focus: z.infer<typeof MedicalSummaryFocusModuleSchema>
   problems: z.infer<typeof MedicalSummaryProblemsModuleSchema>
-  timeline: z.infer<typeof MedicalSummaryTimelineModuleSchema>
-  investigations: z.infer<typeof MedicalSummaryInvestigationsModuleSchema>
-  medications: z.infer<typeof MedicalSummaryMedicationsModuleSchema>
+  recent: z.infer<typeof MedicalSummaryRecentModuleSchema>
 }
 
 export type MedicalSummaryModuleResult<T extends MedicalSummaryModuleId = MedicalSummaryModuleId> =
@@ -351,7 +267,24 @@ export interface ResolvedSourceRef {
   evidenceWarning?: 'missing' | 'mismatch' | 'unchecked'
 }
 
-export interface SummaryTimelineEvent {
+export interface SummaryMustKnowItem {
+  slot: MustKnowSlot
+  label: string
+  text: string
+  critical: boolean
+  sourceKeys: string[]
+  documentEvidence?: DocumentEvidence[]
+}
+
+export interface SummaryFocusItem {
+  title: string
+  text: string
+  flag: boolean
+  sourceKeys: string[]
+  documentEvidence?: DocumentEvidence[]
+}
+
+export interface SummaryRecentEvent {
   key: string
   date: string
   /** Deterministic Encounter.period.end; omitted for point-in-time events. */
@@ -360,8 +293,8 @@ export interface SummaryTimelineEvent {
   category: TimelineCategory
   organization?: string
   resourceType: string
-  /** Bundle id of the underlying resource — lets the timeline row navigate
-   *  the left panel to the raw resource (second evidence layer). */
+  /** Bundle id of the underlying resource — lets the row navigate the left
+   *  panel to the raw resource (second evidence layer). */
   resourceId: string
   /** For category 'encounter': 住院/急診/門診, derived from Encounter.class. */
   encounterClass?: EncounterClass
@@ -372,6 +305,13 @@ export interface SummaryProblem {
   label: string
   basis?: string
   kind: ProblemKind
+  metric?: string
+  metricMeta?: string
+  managedBy?: string
+  /** Resolved app-side from `managedByRef` — the model never writes a date. */
+  managedByDate?: string
+  medications?: string
+  flag?: boolean
   sourceKeys: string[]
   /** Cited keys whose report type contradicts the evidence type the basis
    *  names (e.g. 依據:心電圖紀錄 citing a chest X-ray). Detected app-side at
@@ -381,46 +321,12 @@ export interface SummaryProblem {
   documentEvidence?: DocumentEvidence[]
 }
 
-export interface SummaryInvestigation {
-  label: string
-  kind: InvestigationKind
-  direction: InvestigationDirection
-  trend: string
-  interpretation: string
-  sourceKeys: string[]
-  documentEvidence?: DocumentEvidence[]
-}
-
 export interface SummaryMedicationEducation {
   name: string
   benefit: string
   attention: string
   sourceKeys: string[]
   documentEvidence?: DocumentEvidence[]
-}
-
-export interface SummaryMedicationReview {
-  overview?: string
-  regimen: Array<{
-    group: string
-    name: string
-    sig?: string
-    sourceKeys: string[]
-    documentEvidence?: DocumentEvidence[]
-  }>
-  changes: Array<{
-    type: MedicationChangeType
-    medication: string
-    summary: string
-    sourceKeys: string[]
-    documentEvidence?: DocumentEvidence[]
-  }>
-  reconciliation: Array<{
-    reason: MedicationReconciliationReason
-    text: string
-    sourceKeys: string[]
-    documentEvidence?: DocumentEvidence[]
-  }>
 }
 
 export interface MedicalSummaryResult {
@@ -434,38 +340,42 @@ export interface MedicalSummaryResult {
    * successful result. */
   cardErrors?: MedicalSummaryCardErrors
   /** Cards that have completed validation in this artifact. Present on live
-   * v15 results so streaming UI can distinguish completed empty cards from
-   * cards that are still pending. Omitted legacy results are treated as
-   * complete for backward-compatible rendering. */
+   * results so streaming UI can distinguish completed empty cards from cards
+   * that are still pending. Omitted legacy results are treated as complete for
+   * backward-compatible rendering. */
   completedCardIds?: MedicalSummaryCardId[]
   /** Safety is a first-class generated card in the same briefing artifact,
-   * not a separately validated or cached pipeline. */
+   * not a separately validated or cached pipeline. High-severity alerts render
+   * inside 開藥前必看; the rest fold into a closed disclosure. */
   safety?: SafetyScanResult
   headline: string
-  summary: Array<{
-    text: string
-    emphasis: boolean
-    sourceKeys: string[]
-    documentEvidence?: DocumentEvidence[]
-  }>
-  investigations: SummaryInvestigation[]
-  medicationEducation: SummaryMedicationEducation[]
-  medicationReview: SummaryMedicationReview
+  mustKnow: SummaryMustKnowItem[]
+  focus: SummaryFocusItem[]
   problems: SummaryProblem[]
-  decisions: Array<{
-    text: string
-    urgency: SummaryUrgency
-    rationale?: string
-    sourceKeys: string[]
-    documentEvidence?: DocumentEvidence[]
-  }>
-  timeline: SummaryTimelineEvent[]
+  recent: SummaryRecentEvent[]
+  medicationEducation: SummaryMedicationEducation[]
   /** Unique cited sources in first-appearance order, matching the RENDER
-   *  order (summary → investigations → medication card → problems → decisions) so superscript numbers read
-   *  top-to-bottom on the page. */
+   *  order (mustKnow → medication education → focus → problems) so superscript
+   *  numbers read top-to-bottom on the page. */
   sourceIndex: ResolvedSourceRef[]
-  /** Timeline picks whose ref didn't resolve to the bundle (dropped, counted). */
-  droppedTimelineCount: number
+  /** Recent-event picks dropped at finalize (unresolvable ref, or older than
+   *  the 90-day window without being an admission/procedure). */
+  droppedRecentCount: number
+  /** Problems dropped at finalize because 最可能的就診主因 already covers them. */
+  droppedProblemCount: number
+  /** App-derived allergy row for 開藥前必看 — never the model's. An empty list
+   *  means the bundle carries no AllergyIntolerance resource, which the UI must
+   *  render as "the cloud record holds no allergy data", NOT as "no allergy".
+   *  Optional only so a cached pre-redesign result still parses. */
+  allergyRecords?: SummaryAllergyRecord[]
+}
+
+/** One AllergyIntolerance from the bundle, resolved to its catalog key so the
+ *  row is navigable exactly like a cited source. */
+export interface SummaryAllergyRecord {
+  sourceKey: string
+  label: string
+  date?: string
 }
 
 export type MedicalSummaryGeneration = {
@@ -480,6 +390,12 @@ export type MedicalSummaryGeneration = {
   /** When the structured summary itself finished. Also serves as the stable
    * identity used to attach app-authored batch metadata. */
   generatedAt: number
+  /** Milliseconds from the start of this generation to the moment its FIRST
+   * card became visible. This is the number the 初診快覽 redesign is measured
+   * on — a clinician has about thirty seconds — so it is recorded separately
+   * from the end-to-end duration. Absent on legacy caches and on runs whose
+   * cards all failed. */
+  firstCardMs?: number
   /** When the complete user-visible summary + safety batch settled. Optional
    * for legacy caches and unsuccessful/incomplete batches. */
   completedAt?: number
@@ -515,30 +431,7 @@ export function normaliseProblemKind(raw?: string): ProblemKind {
   return (PROBLEM_KINDS as readonly string[]).includes(c) ? (c as ProblemKind) : 'other'
 }
 
-export function normaliseInvestigationKind(raw?: string): InvestigationKind {
+export function normaliseMustKnowSlot(raw?: string): MustKnowSlot {
   const c = (raw ?? '').toLowerCase().trim()
-  return (INVESTIGATION_KINDS as readonly string[]).includes(c)
-    ? (c as InvestigationKind)
-    : 'other'
-}
-
-export function normaliseInvestigationDirection(raw?: string): InvestigationDirection {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (INVESTIGATION_DIRECTIONS as readonly string[]).includes(c)
-    ? (c as InvestigationDirection)
-    : 'unknown'
-}
-
-export function normaliseMedicationChangeType(raw?: string): MedicationChangeType {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (MEDICATION_CHANGE_TYPES as readonly string[]).includes(c)
-    ? (c as MedicationChangeType)
-    : 'uncertain'
-}
-
-export function normaliseMedicationReconciliationReason(raw?: string): MedicationReconciliationReason {
-  const c = (raw ?? '').toLowerCase().trim()
-  return (MEDICATION_RECONCILIATION_REASONS as readonly string[]).includes(c)
-    ? (c as MedicationReconciliationReason)
-    : 'other'
+  return (MUST_KNOW_SLOTS as readonly string[]).includes(c) ? (c as MustKnowSlot) : 'other'
 }

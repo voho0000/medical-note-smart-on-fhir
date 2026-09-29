@@ -95,14 +95,14 @@ export const MEDICAL_SUMMARY_CARD_REGISTRY: Readonly<
 }
 
 const LOCAL_CARD_ORDER: readonly MedicalSummaryCardId[] = [
-  'priorities',
-  // Put the compact, immediately useful card first so slower custom models
-  // can paint a result before generating the much larger medication payload.
-  // Keep medications second (rather than last) to limit tail-truncation risk.
-  'medications',
+  // Overview is always first: it is the smallest block and paints the hero
+  // card while a slow custom model is still writing. Problems (the largest
+  // block) then moves ahead of the rest so tail truncation costs the cheapest
+  // sections rather than the whole-patient list.
+  'overview',
   'problems',
-  'timeline',
-  'investigations',
+  'focus',
+  'recent',
   'safety',
 ]
 

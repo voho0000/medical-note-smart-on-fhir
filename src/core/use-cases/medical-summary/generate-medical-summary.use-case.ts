@@ -30,27 +30,24 @@ import type {
 import {
   MEDICAL_SUMMARY_MODULE_IDS,
   MedicalSummaryAiResultSchema,
-  MedicalSummaryInvestigationsModuleSchema,
-  MedicalSummaryMedicationsModuleSchema,
-  MedicalSummaryPrioritiesModuleSchema,
+  MedicalSummaryFocusModuleSchema,
+  MedicalSummaryOverviewModuleSchema,
   MedicalSummaryProblemsModuleSchema,
-  MedicalSummaryTimelineModuleSchema,
-  SummarySegmentSchema,
+  MedicalSummaryRecentModuleSchema,
+  normaliseMustKnowSlot,
   normaliseTimelineCategory,
   normaliseProblemKind,
-  normaliseInvestigationKind,
-  normaliseInvestigationDirection,
-  normaliseMedicationChangeType,
-  normaliseMedicationReconciliationReason,
-  type InvestigationDirection,
   type DocumentEvidence,
   type MedicalSummaryAiResult,
   type MedicalSummaryModuleId,
   type MedicalSummaryModuleResult,
   type MedicalSummaryModuleResultMap,
   type MedicalSummaryResult,
+  type MustKnowSlot,
   type ResolvedSourceRef,
   type SummaryCoverageStats,
+  type SummaryAllergyRecord,
+  type SummaryProblem,
   type SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
 import { referenceId } from '@/src/core/utils/observation-selectors'
@@ -64,12 +61,9 @@ import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { verifyDocumentQuote } from '@/src/core/utils/document-evidence.utils'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
-import { isChronicPrescription, pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
+import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
-import {
-  limitInvestigationTrendPoints,
-  MAX_INVESTIGATION_TREND_POINTS,
-} from '@/src/shared/utils/investigation-trend.utils'
+import { MAX_INVESTIGATION_TREND_POINTS } from '@/src/shared/utils/investigation-trend.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
@@ -91,11 +85,16 @@ const LONGITUDINAL_MAX_LAB_POINTS = MAX_INVESTIGATION_TREND_POINTS
 const LONGITUDINAL_MAX_IMAGING_SERIES = 8
 const LONGITUDINAL_MAX_IMAGING_POINTS = MAX_INVESTIGATION_TREND_POINTS
 
-// Highlight guardrail bounds (see finalizeResult). 24 chars fits a zh
-// diagnosis name or a value trend like "HbA1c 7.2→8.4"; a whole sentence
-// never does.
-export const EMPHASIS_MAX_CHARS = 24
-export const EMPHASIS_MAX_COUNT = 5
+/** Heading that opens the app-derived trend appendix. */
+const LONGITUDINAL_INVESTIGATION_HEADING =
+  '## Longitudinal Investigation Evidence (app-derived from selected results and reports)'
+
+/** Serial points inside one appendix line are joined by this arrow. */
+const LONGITUDINAL_POINT_SEPARATOR = ' → '
+
+// 最近 90 天 window. Older picks survive only as admissions/procedures — the
+// one deterministic filter the recent-events section applies (see finalizeResult).
+export const RECENT_WINDOW_DAYS = 90
 
 /** Repair presentation-only citation drift from instruction-sensitive models
  * without guessing a different source. `[l 1]`, `l1`, and `L1` all identify
@@ -111,117 +110,6 @@ export function normaliseSummarySourceKey(rawKey: string): string {
  * the established full clinical prompt, while instruction-sensitive local
  * endpoints receive a shorter, module-scoped contract. */
 export type MedicalSummaryHarnessProfile = 'frontier' | 'local-small'
-
-type SummarySegment = {
-  text: string
-  emphasis: boolean
-  sourceKeys: string[]
-  documentEvidence?: DocumentEvidence[]
-}
-
-/**
- * Citation coalescing: with the summary split into many small segments, each
- * fragment carrying its own superscript scatters numbers mid-sentence
- * ("包含¹ 慢性腎臟病¹ …"). A citation supports a CLAIM, so defer fragment
- * citations forward and render them only at natural boundaries — right after
- * a highlighted phrase, or at sentence end — deduped within each group.
- */
-const SENTENCE_END = /[。．！？!?；;]\s*$/
-export function coalesceCitations(segments: SummarySegment[]): SummarySegment[] {
-  let pending: string[] = []
-  // documentEvidence travels with its source keys; leaving it on a segment
-  // whose keys moved made the boundary render a false "missing quote" warning.
-  let pendingEvidence: DocumentEvidence[] = []
-  return segments.map((seg, i) => {
-    pending.push(...seg.sourceKeys)
-    pendingEvidence.push(...(seg.documentEvidence ?? []))
-    const isBoundary =
-      seg.emphasis || SENTENCE_END.test(seg.text.trim()) || i === segments.length - 1
-    const { documentEvidence: _moved, ...rest } = seg
-    if (!isBoundary) return { ...rest, sourceKeys: [] }
-    const keys = [...new Set(pending)]
-    const evidence = pendingEvidence.filter((entry, index) => pendingEvidence.findIndex((other) =>
-      other.source === entry.source && other.quote === entry.quote) === index)
-    pending = []
-    pendingEvidence = []
-    return { ...rest, sourceKeys: keys, ...(evidence.length > 0 ? { documentEvidence: evidence } : {}) }
-  })
-}
-
-/**
- * Rescue pass for a zero-highlight summary: Flash-Lite sometimes ignores the
- * split-into-segments instruction and instead wraps key phrases in 「」 inside
- * one long segment (which the length guardrail then rightly demotes). Those
- * quotes ARE the model signalling importance — harvest them deterministically:
- * split each segment on short 「…」 spans and promote the quoted text to a
- * highlight (quotes stripped; the highlight replaces them). Runs ONLY when no
- * emphasis survived the guardrail, so compliant outputs are never rewritten.
- */
-export function rescueEmphasisFromQuotes(segments: SummarySegment[]): SummarySegment[] {
-  let budget = EMPHASIS_MAX_COUNT
-  const out: SummarySegment[] = []
-  for (const seg of segments) {
-    // Odd indices of the split are the captured quoted spans.
-    const parts = seg.text.split(new RegExp(`「([^「」]{1,${EMPHASIS_MAX_CHARS}})」`))
-    if (parts.length === 1 || budget === 0) {
-      out.push(seg)
-      continue
-    }
-    const pieces: SummarySegment[] = []
-    parts.forEach((part, i) => {
-      const isQuoted = i % 2 === 1
-      if (!part) return
-      if (isQuoted && budget > 0) {
-        budget -= 1
-        pieces.push({ text: part, emphasis: true, sourceKeys: [] })
-      } else {
-        // Budget exhausted → keep the original quoting so no signal is lost.
-        pieces.push({ text: isQuoted ? `「${part}」` : part, emphasis: false, sourceKeys: [] })
-      }
-    })
-    if (pieces.length === 0) {
-      out.push(seg)
-      continue
-    }
-    // The citation superscript renders after a segment's last piece — keep
-    // the original segment's sources there so numbering stays identical.
-    pieces[pieces.length - 1].sourceKeys = seg.sourceKeys
-    pieces[pieces.length - 1].documentEvidence = seg.documentEvidence
-    out.push(...pieces)
-  }
-  return out
-}
-
-/**
- * Segment joins: segments render back-to-back and copy joins them with "", so
- * the space between two English words must live inside one of them. Models
- * that trim every segment ("management of" + "chronic kidney disease") glue
- * the words together. Restore one space at such a boundary, as a LEADING space
- * on the later segment so a citation superscript stays on the claim before it.
- * Han/kana text has no inter-word spaces and never gets one; a boundary that
- * already carries whitespace keeps exactly one.
- */
-const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}]/u
-const isSpacedWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch) && !UNSPACED_SCRIPT.test(ch)
-function needsJoinSpace(before: string, after: string): boolean {
-  const last = before.slice(-1)
-  const first = after.charAt(0)
-  if (!last || !isSpacedWordChar(first)) return false
-  if (isSpacedWordChar(last) || /[;:!?%)\]]/.test(last)) return true
-  // "drops." + "Kidney" needs its space too, but "7." + "2" and "1," + "000"
-  // are one number — after "." or "," only a letter starts a new word.
-  return /[.,]/.test(last) && /\p{L}/u.test(first)
-}
-function normaliseSegmentSpacing(segments: SummarySegment[]): SummarySegment[] {
-  let before = ''
-  return segments.map((seg) => {
-    let text = seg.text
-    if (/\s$/.test(before) && /^\s/.test(text)) text = text.trimStart()
-    else if (needsJoinSpace(before, text)) text = ` ${text}`
-    if (text) before = text
-    return text === seg.text ? seg : { ...seg, text }
-  })
-}
 
 export interface SummaryCatalogInput {
   encounters?: EncounterEntity[]
@@ -240,10 +128,13 @@ export interface SummaryCatalogInput {
   imagingStudies?: ImagingStudyEntity[]
 }
 
-const day = (iso?: string): string | undefined =>
+/** ISO day of a FHIR dateTime. Exported for the overview snapshot builder,
+ *  which has to date its rows exactly the way the catalog dates its entries. */
+export const isoDay = (iso?: string): string | undefined =>
   iso && iso.length >= 10 ? iso.slice(0, 10) : iso || undefined
+const day = isoDay
 
-type SummaryLocale = 'en' | 'zh-TW'
+export type SummaryLocale = 'en' | 'zh-TW'
 type CodedText = {
   text?: string
   coding?: Array<{ code?: string; display?: string; system?: string }>
@@ -251,7 +142,7 @@ type CodedText = {
 
 const HAN_SCRIPT = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 
-const codeText = (concept?: CodedText, locale: SummaryLocale = 'zh-TW') => {
+export const codeText = (concept?: CodedText, locale: SummaryLocale = 'zh-TW') => {
   const codedDisplays = (concept?.coding ?? [])
     .map((coding) => coding.display?.trim())
     .filter((display): display is string => Boolean(display))
@@ -269,7 +160,7 @@ const codeText = (concept?: CodedText, locale: SummaryLocale = 'zh-TW') => {
 /** ICD concepts carry a bilingual `text`/`coding.display` pair from the
  * bridge. In English citations retain the official dotted code and use its
  * English display instead of exposing the zh-TW convenience text. */
-function diagnosisCodeText(concept?: CodedText, locale: SummaryLocale = 'zh-TW') {
+export function diagnosisCodeText(concept?: CodedText, locale: SummaryLocale = 'zh-TW') {
   if (locale !== 'en') return codeText(concept, locale)
   const coding = concept?.coding?.find((item) => item.display?.trim() || item.code?.trim())
   const codedLabel = [coding?.code?.trim(), coding?.display?.trim()]
@@ -319,51 +210,6 @@ function diagnosticReportText(
     locale === 'en' ? 'medical' : 'patient',
     locale,
   )
-}
-
-/** Stable identity used to merge the same drug across prescribing and
- * dispensing records. Prefer the NHI/Rx code; fall back to normalized names
- * for bundles that only provide free text. */
-function medicationIdentity(medication: MedicationEntity): string {
-  const coding = medication.medicationCodeableConcept?.coding?.find((item) => item.code?.trim())
-  if (coding?.code) {
-    return `code:${(coding.system ?? '').trim().toLowerCase()}|${coding.code.trim().toLowerCase()}`
-  }
-  const name = (
-    medication.medicationCodeableConcept?.coding?.[0]?.display ??
-    medication.medicationCodeableConcept?.text ??
-    medication.id
-  )
-  return `name:${name.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '')}`
-}
-
-function terminologyMedicationGroup(
-  medication: MedicationEntity | undefined,
-  locale: SummaryLocale,
-): string | undefined {
-  const terminology = medication?.drugTerminology
-  if (!terminology) return undefined
-  if (locale === 'en') {
-    return terminology.atcLevel2NameEn?.trim()
-      || (terminology.atcLevel2Code ? `ATC ${terminology.atcLevel2Code}` : undefined)
-  }
-  return terminology.atcLevel2NameZh?.trim()
-    || terminology.atcLevel2NameEn?.trim()
-    || (terminology.atcLevel2Code ? `ATC ${terminology.atcLevel2Code}` : undefined)
-}
-
-function medicationGroupWithCategoryFallback(
-  medication: MedicationEntity | undefined,
-  locale: SummaryLocale,
-): string | undefined {
-  const terminologyGroup = terminologyMedicationGroup(medication, locale)
-  if (terminologyGroup) return terminologyGroup
-  const category = medication?.category?.[0]
-  return locale === 'en'
-    ? category?.coding?.find((coding) => coding.display?.trim())?.display?.trim()
-      || category?.text?.trim()
-    : category?.text?.trim()
-      || category?.coding?.find((coding) => coding.display?.trim())?.display?.trim()
 }
 
 function selectCatalogMedications(medications: MedicationEntity[]): MedicationEntity[] {
@@ -793,6 +639,22 @@ interface LongitudinalImagingPoint {
 
 const compactWhitespace = (s: string): string => s.replace(/\s+/g, ' ').trim()
 
+/** Case- and space-insensitive identity used only for de-duplication between
+ *  sections. Deliberately blunt: it must not decide what a label MEANS, only
+ *  whether two labels are the same string wearing different spacing. */
+const normalizeForComparison = (s: string): string =>
+  s.toLowerCase().replace(/\s+/g, '')
+
+/** Shift an ISO day by whole days without a timezone. Date arithmetic on
+ *  YYYY-MM-DD must not go through the local clock: the recent-events window is
+ *  measured against dates the bundle itself carries. */
+function isoDayOffset(isoDay: string, days: number): string {
+  const shifted = new Date(`${isoDay}T00:00:00Z`)
+  if (Number.isNaN(shifted.getTime())) return isoDay
+  shifted.setUTCDate(shifted.getUTCDate() + days)
+  return shifted.toISOString().slice(0, 10)
+}
+
 const truncateText = (s: string, max = 150): string => {
   const cleaned = compactWhitespace(s)
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
@@ -822,12 +684,12 @@ const investigationPriority = (key: string, label: string): number => {
 const conceptText = (c?: { text?: string; coding?: Array<{ code?: string; display?: string }> }): string | undefined =>
   c?.text?.trim() || c?.coding?.find((coding) => coding.display?.trim())?.display?.trim() || c?.coding?.find((coding) => coding.code?.trim())?.code?.trim()
 
-const obsDate = (o: ObservationEntity): string | undefined => {
+export const obsDate = (o: ObservationEntity): string | undefined => {
   const extra = o as ObservationEntity & { effectivePeriod?: { start?: string }; issued?: string }
   return day(o.effectiveDateTime ?? extra.effectivePeriod?.start ?? extra.issued)
 }
 
-const obsValue = (o: ObservationEntity): string | null => {
+export const obsValue = (o: ObservationEntity): string | null => {
   const value =
     o.valueQuantity?.value ??
     o.valueString ??
@@ -1013,7 +875,7 @@ function formatLongitudinalLabLines(points: LongitudinalLabPoint[]): string[] {
       const recent = sorted.slice(-LONGITUDINAL_MAX_LAB_POINTS)
       const seq = recent
         .map((p) => `${p.value}${p.abnormal ? `[${p.abnormal}]` : ''} (${p.date}; ${p.sourceKey})`)
-        .join(' → ')
+        .join(LONGITUDINAL_POINT_SEPARATOR)
       return `- ${sorted[0].label}: ${seq}`
     })
 }
@@ -1048,7 +910,7 @@ function formatLongitudinalImagingLines(points: LongitudinalImagingPoint[]): str
               }).join(' + ')
           return `${p.date}; ${sourceText}: ${p.finding}`
         })
-        .join(' → ')
+        .join(LONGITUDINAL_POINT_SEPARATOR)
       return `- ${sorted[0].label}: ${seq}`
     })
 }
@@ -1070,8 +932,8 @@ export function buildLongitudinalInvestigationContext(
   if (labLines.length === 0 && imagingLines.length === 0) return ''
 
   const sections = [
-    '## Longitudinal Investigation Evidence (app-derived from selected results and reports)',
-    `Use this section for the medical-summary "investigations" card. Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown O keys for laboratory values or L keys for report-level findings.`,
+    LONGITUDINAL_INVESTIGATION_HEADING,
+    `Use this section for the serial numbers inside "mustKnow", "focus" and each problem's "metric". Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown O keys for laboratory values or L keys for report-level findings.`,
   ]
   if (labLines.length > 0) {
     sections.push('### Serial lab values (oldest → newest)', ...labLines)
@@ -1080,42 +942,6 @@ export function buildLongitudinalInvestigationContext(
     sections.push('### Serial imaging reports (oldest → newest)', ...imagingLines)
   }
   return sections.join('\n')
-}
-
-function guardedInvestigationDirection(
-  rawDirection: string | undefined,
-  label: string,
-  rawSources: string[] | undefined,
-  catalogByKey: Map<string, SummarySourceCatalogEntry>,
-  catalog: SummarySourceCatalogEntry[],
-): InvestigationDirection {
-  const direction = normaliseInvestigationDirection(rawDirection)
-  const citedEvidenceDates = new Set(
-    (rawSources ?? [])
-      .map((rawKey) => catalogByKey.get(normaliseSummarySourceKey(rawKey)))
-      .filter((entry): entry is SummarySourceCatalogEntry =>
-        (entry?.resourceType === 'DiagnosticReport' || entry?.resourceType === 'Observation') &&
-        !!entry.date,
-      )
-      .map((entry) => entry.date),
-  )
-
-  const labelKey = canonicalKey(label)
-  const topicDates = new Set(
-    catalog
-      .filter((entry) =>
-        (entry.resourceType === 'DiagnosticReport' || entry.resourceType === 'Observation') &&
-        entry.date,
-      )
-      .filter((entry) => canonicalKey(entry.display) === labelKey)
-      .map((entry) => entry.date),
-  )
-  const evidencePointCount = Math.max(citedEvidenceDates.size, topicDates.size)
-  if (evidencePointCount === 0) return 'unknown'
-  if (evidencePointCount === 1) return 'single'
-  // A local model that says "single" despite serial evidence has not supplied
-  // a trustworthy direction. Preserve the serial nature without inventing one.
-  return direction === 'single' ? 'unknown' : direction
 }
 
 const UNSUPPORTED_ASSESSMENT_LANGUAGE =
@@ -1132,16 +958,6 @@ function catalogEntrySupportsNormalityAssessment(entry: SummarySourceCatalogEntr
     .test(entry.display)
 }
 
-function citedSourcesSupportNormalityAssessment(
-  rawSources: string[] | undefined,
-  catalogByKey: Map<string, SummarySourceCatalogEntry>,
-): boolean {
-  return (rawSources ?? []).some((rawKey) => {
-    const entry = catalogByKey.get(normaliseSummarySourceKey(rawKey))
-    return Boolean(entry && catalogEntrySupportsNormalityAssessment(entry))
-  })
-}
-
 function removeUnsupportedAssessmentClauses(text: string, fallback: string): string {
   const retained = text
     .split(/(?<=[，。；,;])/)
@@ -1153,12 +969,6 @@ function removeUnsupportedAssessmentClauses(text: string, fallback: string): str
     .replace(/[，,；;\s]+$/g, '')
     .trim()
   return retained || fallback
-}
-
-function neutralInvestigationInterpretation(locale: SummaryLocale): string {
-  return locale === 'en'
-    ? 'This is a recorded result; the supplied data does not provide a reference range or patient-specific target.'
-    : '這是紀錄中的檢驗結果；資料未提供參考範圍或個人目標。'
 }
 
 function genericMedicationReminder(locale: SummaryLocale): string {
@@ -1177,15 +987,36 @@ function undocumentedMedicationPurpose(locale: SummaryLocale): string {
 // Prompts
 // ---------------------------------------------------------------------------
 
+const MUST_KNOW_SLOT_ENUM =
+  'renal|anticoagulation|hematology|high-risk-meds|endocrine-pending|other'
+
+const OVERVIEW_SCHEMA_FIELDS =
+  '"headline": "<one line positioning this patient for today\'s visit>", ' +
+  `"mustKnow": [{"slot": "${MUST_KNOW_SLOT_ENUM}", "label": "<the number or the fact, e.g. eGFR 32 / 抗凝待確認>", "text": "<one sentence: what it means for prescribing today>", "critical": <true only when it changes today's prescription>, "sources": ["<catalog key like O7>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]`
+
+const PATIENT_OVERVIEW_SCHEMA_FIELDS =
+  '"headline": "<one plain-language line about this person\'s current health picture>", ' +
+  '"medicationEducation": [{"name": "<medicine or medicine group in the records>", "benefit": "<plain-language explanation of how it may help this patient>", "attention": "<one calm, practical use reminder>", "sources": ["<catalog key, including at least one M key>"]}]'
+
+const FOCUS_ITEM_SHAPE =
+  '[{"title": "<the problem most likely behind today\'s visit>", "text": "<one explanation carrying the actual serial values and dates>", "flag": <true only for a concrete contradiction or gap to verify>, "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
+
+// The module returns the list as "items"; the single-object legacy schema
+// (demo snapshots, one-shot validation) carries the same list as "focus".
+const FOCUS_SCHEMA_FIELDS = '"items": ' + FOCUS_ITEM_SHAPE
+
+const PROBLEMS_SCHEMA_FIELDS =
+  '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "metric": "<data-first key indicator, e.g. eGFR 33 → 32 ▼>", "metricMeta": "<dates or units for that indicator>", "managedBy": "<organization and specialty exactly as they appear in the data>", "managedByRef": "<catalog key of the latest encounter at that organization>", "medications": "<medicines for this problem, copied from their M sources>", "flag": <true only when something must be verified>, "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
+
+const RECENT_SCHEMA_FIELDS =
+  '"recent": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]'
+
 const SCHEMA_HINT =
-  '{"headline": "<one-line patient positioning>", ' +
-  '"summary": [{"text": "<narrative segment>", "emphasis": <true for pivotal segments>, "sources": ["<catalog key like E1>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], ' +
-  '"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or imaging change; say single result when only one>", "interpretation": "<why this matters for this patient>", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], ' +
-  '"medicationEducation": [{"name": "<medicine or medicine group in the records>", "benefit": "<plain-language explanation of how it may help this patient>", "attention": "<one calm, practical use reminder>", "sources": ["<catalog key, including at least one M key>"]}], ' +
-  '"medicationReview": {"overview": "<1-2 sentence clinician synthesis of the whole regimen>", "regimen": [{"group": "<treatment area>", "name": "<medicine or clinically coherent group>", "sig": "<dose/frequency only when recorded>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported recent change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify during medication reconciliation>", "sources": ["<M key>"]}]}, ' +
-  '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}], ' +
-  '"decisions": [], ' +
-  '"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}'
+  '{' + OVERVIEW_SCHEMA_FIELDS + ', ' +
+  '"medicationEducation": [], ' +
+  '"focus": ' + FOCUS_ITEM_SHAPE + ', ' +
+  PROBLEMS_SCHEMA_FIELDS + ', ' +
+  RECENT_SCHEMA_FIELDS + '}'
 
 const SHARED_RULES =
   '\n\nData-integrity rules (CRITICAL): ' +
@@ -1197,10 +1028,12 @@ const SHARED_RULES =
   'Cite sources ONLY with reference keys that appear in the SOURCE LIST (e.g. "E1", "M3"); never invent keys. ' +
   'Every key in a claim\'s "sources" must DIRECTLY support that specific claim — do not attach loosely-related keys. ' +
   'Do NOT fabricate values — use only values present in the data. ' +
+  'The app supplies every date, organization name and encounter type from the bundle. Never write a date the data does not carry, and never guess which hospital a record belongs to. ' +
   'Medication identity (CRITICAL): copy every medication product name exactly from its cited M source. Never translate, transliterate, expand, substitute, or guess it. If the source says "Exemestane (Aromasin)", keep exactly "Exemestane (Aromasin)"; never turn it into a Chinese-sounding or different medicine. ' +
   'A bracketed "NHI terminology matched to this exact medication record" block is governed enrichment linked by that row\'s exact NHI product code. Use it only for the SAME row\'s explicitly supplied ingredient/strength, official product names, dose form, ATC identity, and ATC therapeutic subgroup; never transfer terminology between medication rows. For medication identity or pharmacologic classification, these exact NHI terminology fields take precedence over MedicationRequest.category. MedicationRequest.category is source/administrative metadata, not proof of ingredient, mechanism, or pharmacologic class by itself. If the two conflict, use the NHI terminology and state neutral uncertainty about the source category instead of blending or guessing. NHI terminology still does NOT establish this patient\'s indication, actual use, adherence, response, or outcome. Never infer any ingredient, class, mechanism, or indication that is absent from both the medication row and its paired terminology. ' +
-  'If the SOURCE LIST has no M keys, medicationEducation and every medicationReview array MUST be empty, and no headline, narrative, problem, investigation, or overview may claim that a medicine exists. ' +
-  'Every problem, investigation, medication-education item, regimen row, change, and reconciliation item must cite at least one direct SOURCE LIST key; never emit an item with an empty sources array. A document title alone does not reveal findings: never invent a measurement, imaging conclusion, heart function, pathology result, or treatment detail that is absent from the document text supplied in the clinical data. ' +
+  'If the SOURCE LIST has no M keys, medicationEducation MUST be empty, no problem may carry a "medications" value, and no headline, mustKnow row, focus item or problem may claim that a medicine exists. ' +
+  'Every mustKnow row, focus item, problem, medication-education item and recent event must cite at least one direct SOURCE LIST key; never emit an item with an empty sources array. A document title alone does not reveal findings: never invent a measurement, imaging conclusion, heart function, pathology result, or treatment detail that is absent from the document text supplied in the clinical data. ' +
+  'Never write dispensing arithmetic (給藥總量, 給藥日數, 平均每日) as if it were a prescribed instruction, and never rewrite it into instruction form (平均每日 1 → 每日一次). ' +
   'Diagnosis-code caution (CRITICAL): the ICD / diagnosis codes on claims and on a visit\'s reason-for-encounter are BILLING codes, ' +
   'NOT confirmed diagnoses — they are routinely provisional, "rule-out", suspected, or carried forward across visits for reimbursement. ' +
   'Do NOT assert a coded condition as an established diagnosis on a claim code alone, and NEVER recommend workup, referral, or staging for it on that basis ' +
@@ -1213,7 +1046,7 @@ const SHARED_RULES =
   '(while it IS direct evidence for 脂肪肝/膽囊沉積物/腎結石 — report those findings instead of leaving them out). ' +
   'The same applies to documents: write 出院病摘 as a "basis" ONLY if the discharge summary text actually mentions that condition — do not attribute a condition to a document that never names it. ' +
   'Clinical-document evidence: when a claim is supported by a discharge summary or other clinical document, cite its matching D# source key. ' +
-  'For EVERY emitted item or narrative segment that cites a D# source, also return "documentEvidence": [{"source":"D#","quote":"..."}] with a short CONTIGUOUS excerpt copied verbatim from that document in its ORIGINAL language. Do not translate, summarize, repair spelling, or combine separate passages inside the quote. This field is verification metadata and is not shown in the summary. Omit documentEvidence when no D# source is cited. ' +
+  'For EVERY emitted item that cites a D# source, also return "documentEvidence": [{"source":"D#","quote":"..."}] with a short CONTIGUOUS excerpt copied verbatim from that document in its ORIGINAL language. Do not translate, summarize, repair spelling, or combine separate passages inside the quote. This field is verification metadata and is not shown in the summary. Omit documentEvidence when no D# source is cited. ' +
   'A diagnosis explicitly documented in a discharge summary remains valid documentary evidence even when there is no separate endoscopy/pathology/report resource; do NOT discard it merely because that standalone report is absent. ' +
   'However, a documented diagnosis does NOT prove that a specific procedure was performed: say the document records the diagnosis, and claim gastroscopy/endoscopy/biopsy only when the document text itself explicitly says it was performed. ' +
   'A test that does not measure or name the condition is NOT corroboration, and must not be cited in that claim\'s "sources". ' +
@@ -1225,12 +1058,44 @@ const SHARED_RULES =
   'Temporal honesty: call an event 近期/recent ONLY if it is within ~3 months of the newest record; otherwise state the actual date or timeframe. ' +
   'Trend honesty (ALL audiences, including the patient version): when serial values show a direction (e.g. eGFR 35→33→32), describe it faithfully — ' +
   'NEVER call a worsening value 穩定/stable; in patient language prefer calm-but-true phrasing (e.g. 數值逐漸下降，醫師正在追蹤) over false reassurance. ' +
-  'For "investigations", create a disease-oriented overview of the 3–6 MOST clinically relevant laboratory, pathology, and imaging topics for THIS patient, not a dump of every test. ' +
-  'Choose topics from the active clinical context: for a cancer patient prioritize documented tumor markers, pathology, and serial imaging; for diabetes prioritize HbA1c, renal function/eGFR, and urine albumin when present; adapt similarly for other conditions. ' +
-  `Each laboratory value must cite its matching Observation (O) source when available. Cite a DiagnosticReport (L) only for report-level findings or conclusions, not merely because it contains that Observation. Put at most the latest ${MAX_INVESTIGATION_TREND_POINTS} points/reports in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ` +
-  'Use "direction" for CLINICAL direction, not numeric direction (e.g. falling eGFR is "worsening"). Claim a trend only with at least 2 comparable time points; with one report use "single" and explicitly say it is a single result. ' +
-  'If the Longitudinal Investigation Evidence section lists 2+ dated points/reports for a topic, NEVER label that topic "single" and NEVER write "single result" for it; summarize the serial pattern instead. ' +
-  'Never infer stability from one value, never invent a test that is absent, never mix non-comparable units/methods into one sequence, and do not repeat routine normal tests unless they materially answer an active problem. ' +
+  'A numeric laboratory value with no interpretation flag, reference range, or patient-specific target in the data must not be called high, low, normal, controlled, uncontrolled, or at/not at target. ' +
+  '\n\nSection contracts: ' +
+  'For "headline": ONE line that positions this patient for the clinician about to see them — age/sex when recorded, the dominant problems, and how care is split across institutions. No recommendations. ' +
+  'For "mustKnow" (開藥前必看): this is ONLY for the medical audience; for the patient audience return an empty array. ' +
+  'Emit at most ONE item per "slot", up to six items, ordered by how much they change today\'s prescription. ' +
+  `Slots: "renal" = renal function that forces dose adjustment; "anticoagulation" = an anticoagulant/antiplatelet whose current status matters; "hematology" = cytopenias or bleeding risk from counts; "high-risk-meds" = an anticholinergic/sedative/QT/hypoglycaemia burden across institutions; "endocrine-pending" = a treated endocrine problem whose confirmatory test has not been repeated; "other" = anything else that changes prescribing. Off-list slot values are coerced to "other". ` +
+  '"label" is the NUMBER or the FACT in at most a few characters (e.g. "eGFR 32", "Plt 116K", "抗凝待確認") — never a sentence. ' +
+  '"text" is ONE sentence saying what it means for prescribing TODAY, carrying the real value and date. ' +
+  'Set "critical": true only when the row should change the prescription being written now. ' +
+  // Allergy is NOT a model slot. The app renders the allergy row itself from
+  // AllergyIntolerance records (or their absence), because "the cloud holds no
+  // allergy data" is a statement about the bundle that has no key to cite —
+  // and carving out one keyless row cost the whole schema its "every row cites
+  // a source" guarantee.
+  'Do NOT put a monitoring reminder, a guideline suggestion, or a dose recommendation here; state the fact and its consequence, and let the clinician decide. ' +
+  'For "focus" / "items" (最可能的就診主因): at most 3 problems, ranked by RECENT ACTIVITY (encounters, laboratory results and admissions in the last 90 days) combined with clinical risk — this is your judgement of why the patient is most likely in front of the clinician today. ' +
+  '"title" names the problem (a short clause, not a sentence). "text" carries the ACTUAL serial values and dates from the data (e.g. eGFR 36 → 33 → 32（2025-12 → 2026-06）), the latest relevant visit, and what is missing from the cloud record when that matters. ' +
+  'Set "flag": true ONLY for a concrete contradiction or gap the clinician must verify at this visit — for example an anticoagulant present during an admission but absent from every later outpatient record, or a treatment step-up whose follow-up test never happened. Uncertainty alone is NOT a flag. ' +
+  'For "problems" (其餘問題 · 誰在管): ' + PROBLEM_INFERENCE_SYNTHESIS_RULE + ' ' +
+  'Each problem is a plain condition NAME (e.g. 第二型糖尿病) — do NOT include ICD or any other codes. ' +
+  'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 次檢驗異常", "藥局調劑", "照護計畫", "6 次就診申報"), the matching "kind", and the catalog key(s) in "sources". ' +
+  'Do NOT repeat a problem that already appears in "focus" — that section is rendered above this one, and duplicates are dropped by the app. ' +
+  '"metric" is the data-first key indicator for that problem, written values-first (e.g. "eGFR 33 → 32 ▼", "HbA1c 6.6% 單次", "眼壓不在雲端"); "metricMeta" carries only its dates or units. Say plainly when the cloud record holds no relevant test instead of inventing one. ' +
+  '"managedBy" is the organization (plus specialty when the data shows one) that currently follows the problem, copied from the record — never guessed. "managedByRef" is the catalog key of the LATEST encounter at that organization; the app renders its date, so do NOT write a date yourself. ' +
+  '"medications" names the medicines treating that problem, copied exactly from their M sources. ' +
+  'Set "flag": true only when a specific gap or conflict on that row needs verification. ' +
+  'Merge duplicates; order by clinical importance; at most ~12 problems. ' +
+  'The report TYPE cited must match the evidence type the basis names: 依據:心電圖紀錄 must cite the ECG report key itself — a same-day chest X-ray (胸腔檢查) or any other modality is a citation ERROR, not a substitute. When you cannot tell which key is that report, omit the report key entirely rather than citing a wrong-type one. ' +
+  'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
+  '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
+  'a complex multi-morbid patient typically yields 8–12 problems across "focus" and "problems" together, not 5–6. ' +
+  'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
+  'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
+  'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
+  'For "recent" (最近 90 天): within 90 days of the NEWEST record in the data, pick every clinically significant event — visits, new or changed prescriptions, admissions, procedures, key reports. ' +
+  'Older than that window, pick ONLY inpatient/emergency admissions and procedures or operations; the app drops anything else that falls outside the window. ' +
+  'The app supplies date, hospital and 住院/急診/門診 for every pick — you supply only the one-line label, which must be supported by the cited record. ' +
+  'This is the OBJECTIVE care journey, so choose the SAME events REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language. ' +
   'For "medicationEducation": this is ONLY for the patient audience; for the medical audience return an empty array. ' +
   'For patients, select 3–5 of the most relevant recent or long-term medicines (or clinically coherent medicine groups) that actually appear in the records. ' +
   'Lead with BENEFIT: explain in plain language how each medicine may support a documented condition or care goal. Then give exactly one calm, practical "attention" reminder. ' +
@@ -1238,69 +1103,7 @@ const SHARED_RULES =
   'Do NOT use fear-provoking labels such as dangerous/high-risk medicine, do NOT dump rare or severe adverse effects, and do NOT imply that a medicine caused a past fall, confusion, admission, or other event. ' +
   'Never advise the patient to start, stop, skip, or change a dose. Prefer actionable wording such as taking it as directed, rising slowly if dizziness occurs, or asking the doctor/pharmacist when a symptom persists. ' +
   'Do not claim the medicine is currently being taken merely because it appears in NHI history; say the records include/show it. Only state a medicine purpose when you are confident from the drug identity and patient context; otherwise describe its recorded care area and invite confirmation. ' +
-  'Every item must cite at least one matching medication key (M#). Additional condition/report keys may be included only when they directly support the linked care goal. Merge refills and pharmacy duplicates into one item. ' +
-  'For "medicationReview": this is ONLY for the medical audience; for the patient audience return empty regimen, changes, and reconciliation arrays. ' +
-  'This is a medication-reconciliation workflow card, NOT another safety card: do not repeat interactions, renal-dose warnings, laboratory monitoring, disease problems, or patient education. ' +
-  'For "regimen", include every CURRENTLY EVIDENCED distinct medicine that has a [慢箋] / continuous long-term therapy record, merging refill and pharmacy duplicates of the same drug. Do NOT include a historical chronic medicine when its latest matching record is completed, stopped, or cancelled and there is no later active continuation. Then add other clinically important recent medicines only when useful. ' +
-  'Group STRICTLY by indication or treatment area: "group" is the clinician-facing treatment-area chip (e.g. 血糖／腎臟, 甲狀腺, 痛風／降尿酸, 排便, 青光眼, 眼表潤滑, 攝護腺). Use one row per medicine, or one row for multiple medicines only when they treat the SAME indication. When a same-indication group itself is clinically informative, make "name" state the treatment pattern (e.g. 三種降眼壓藥併用：Brimonidine、Latanoprost、Cosopt), not merely a bare medicine list. ' +
-  'Every medicine in a multi-drug row must be NAMED in "name" — an unnamed roll-up such as 多種抗生素及抗發炎藥物 or 抗憂鬱劑及鎮靜安眠藥 is forbidden, because the clinician cannot verify an unnamed drug. ' +
-  'NEVER group by prescription batch, date, or facility. Group labels such as 同次慢箋, 慢箋用藥, or 近期用藥 are forbidden; split unrelated medicines from one prescription into separate treatment-area rows. ' +
-  'Verify each medicine identity before grouping: the same route or prescription does NOT prove the same indication. Artificial tears / lubricants such as Patear are NOT pressure-lowering glaucoma therapy; when indication is uncertain, use a neutral pharmacologic/organ label instead of guessing a disease. ' +
-  'For "sig", copy only an explicitly recorded dose, route, and frequency. NEVER calculate or estimate a daily dose from dispensed quantity and supply days. Text containing 給藥總量, 給藥日數, or 平均每日 is dispensing arithmetic, not a verified SIG: omit "sig" unless a real instruction is separately recorded. ' +
-  'Rewriting that arithmetic into instruction form (平均每日 1 → 每日一次) is the SAME violation, and filler such as 依醫囑服用／遵醫囑使用 is not a sig — in both cases OMIT the field entirely. ' +
-  'For "changes", include ONLY clinically meaningful, date/status-supported regimen changes: an explicit stop or switch; a dose/frequency change that states both old and new; or a clinically significant drug class newly appearing with no earlier same-class record. Cross-facility overlap belongs in "reconciliation", not "changes". ' +
-  'A routine 慢箋 refill is NEVER "new", and a [藥局領藥 · dispensing, NOT a prescriber] row is NEVER cross-facility prescribing. An EMPTY "changes" array is the correct answer for a stable regimen: do not manufacture an item and do not add per-item hedges already covered by the card disclaimer. ' +
-  'For "reconciliation", every item must name the SPECIFIC medicine(s), the SPECIFIC record gap or conflict, and phrase ONE concrete question answerable at the visit. Generic text that could apply to any patient (e.g. 確認是否仍在使用 without a stated reason) is forbidden. ' +
-  'Reconciliation quality bar: every item must be anchored in concrete facts read from THIS patient\'s records — dates, institutions, supply periods, values, or drug names. If an item could be written without looking at the records (a guideline reminder, a textbook check), it is noise: drop it. Prefer 2-3 strong record-anchored items over a padded list. ' +
-  'A high-value cross-facility item is the same or same-class medicine prescribed by TWO different non-pharmacy institutions during overlapping supply periods. State the medicine, both institutions, relevant dates/supply overlap, and ask whether this represents a transfer/refill or simultaneous possession. A prescribing institution plus its dispensing pharmacy is one prescription and must never trigger this item. ' +
-  'Reason "possible-same-drug" is for REAL ambiguity only: two brand names of the same ingredient from DIFFERENT institutions, or with overlapping supply, where the patient may not realise both bottles are the same drug. A clean sequential brand/formulary switch at the SAME institution (old brand completed, new brand starts afterwards, no overlap) answers itself from the record: merge it into one regimen row and do NOT raise a reconciliation item for it. ' +
-  'Taiwan NHI 健康存摺 commonly omits a complete SIG / administration frequency. Missing dose, route, or frequency ALONE is a known source-data limitation, NOT a patient-specific reconciliation problem: do not create a reconciliation item merely to ask how often a medicine is taken or an eye drop is used. Only mention SIG when two explicit recorded instructions conflict or another concrete patient-specific inconsistency exists. ' +
-  'ACTIVELY scan for supply gaps — do not wait to notice one: for EVERY [慢箋] / repeatedly-refilled medicine, compare its latest supply end date (the "— until <date>" / "last ended <date>" annotation) against the newest record date in the data. A chronic medicine whose supply lapsed weeks-to-months before the newest records, with no later refill, is a TOP-priority reconciliation item. ' +
-  'Compute the gap per DRUG, not per row: first merge every row of the same medicine (all institutions, brand names, and dispensing pharmacies) and take the LATEST end date. One row ending is NOT a gap while another row of the same medicine still supplies — that situation is the multi-facility overlap item instead, which takes precedence over any gap framing. A supply that ended only days ago is normal refill cadence, not a gap. ' +
-  'A supply gap is actionable only when there is an established repeated chronic-refill pattern and the latest recorded supply end date has passed without a later refill. A single completed historical chronic prescription is NOT enough and must not be revived as a reconciliation item. Phrase a supported gap as 供藥中斷待確認, never as definitively stopped; use reason "supply-gap". ' +
-  'Reconciliation insight comes from cross-checking medicines against the REST of the record, not only against other medicines: ' +
-  '(a) reason "no-documented-indication" — a chronic medicine whose indication has no supporting diagnosis, abnormal lab, or document anywhere in the data: ask what it treats (紀錄中未見對應診斷——確認適應症). ' +
-  'Before raising it, check the PRESCRIBING VISIT context: the visit\'s reason code, its specialty, and the medicines co-prescribed at the same visit. A drug consistent with that context is NOT an orphan even when its textbook primary indication is absent — e.g. low-dose imipramine prescribed at a BPH/urology visit alongside tamsulosin is plausibly for urinary symptoms, not undocumented depression. ' +
-  'Multi-purpose drugs (TCAs, gabapentinoids, beta-blockers, SSRIs) especially: raise this item ONLY when NO plausible clinical context exists anywhere — not when the recorded context merely differs from the drug\'s best-known use. ' +
-  '(b) reason "condition-without-therapy" — an active condition with objective evidence but NO medicine serving that treatment goal ANYWHERE in the regimen: this flags a RECORD anomaly to verify (自費、他院、已停用或尚未上傳), NEVER a prescribing suggestion. ' +
-  'Before raising it, scan the WHOLE regimen for any medicine already serving the goal, including other classes with the same purpose — e.g. an SGLT2 inhibitor already provides renal protection in CKD, so 未見 ACEi/ARB is NOT a therapy gap. ' +
-  'Guideline-completeness reminders ("CKD 應考慮 ACEi/ARB", "應加 statin", "AF 應抗凝") are FORBIDDEN here: whether to START a drug is the treating physician\'s decision, not a reconciliation check, and such items read identically for every patient with that diagnosis. ' +
-  'Raise it ONLY when the record pattern itself is anomalous — the disease shows ongoing objective activity (abnormal trending labs, active care plan, repeated claims) yet the ENTIRE treatment goal has zero medicines — and phrase strictly as verification (e.g. 糖尿病診斷且 HbA1c 上升，現行紀錄未見任何降血糖藥——確認是否自費或他院治療). ' +
-  'This is the ONE item type that cites the condition/lab keys instead of an M key, because the missing medicine has no record to cite. ' +
-  '(c) reason "adherence-pattern" — refill regularity is a signal only NHI data can give: a long interruption inside an established refill rhythm, followed by resumption, is worth ONE neutral question about the interruption; never phrase it as non-adherence or blame. A stable regular rhythm is NOT a reconciliation item — mention it in "overview" instead. ' +
-  'Treatment-intensity reading: when a same-indication multi-drug pattern or a recent step-up/step-down itself carries clinical meaning, state that reading in ONE hedged clause inside the regimen "name" or a change "summary" (e.g. 三種不同機轉降眼壓藥併用，屬進階治療型態，暗示眼壓控制困難; 口服降血糖藥外新增胰島素，暗示血糖控制惡化). The pattern reading is the insight — a bare medicine list the clinician can already see elsewhere. ' +
-  'Care transitions: when the data contains an inpatient episode or discharge summary, explicitly compare the chronic regimen before and after it, and report medicines that newly appear or disappear after discharge in "changes" (cite the M keys, plus the D key when the document evidences the change). When present, this before/after comparison is the highest-value content of the whole card. ' +
-  'For "overview", write 1-2 sentences a clinician can absorb at a glance: total chronic-medicine burden and how many institutions prescribe it; which treatment areas dominate and, when care is split across institutions, who manages what (e.g. 青光眼用藥由A院、攝護腺用藥由B院處方); and the single most important pattern (treatment intensity, refill regularity or its interruption, or a supply gap). ' +
-  'The overview describes the CURRENT regimen: a therapy whose supply has lapsed may appear only AS lapsed (e.g. 青光眼藥供藥已中斷), never as an ongoing mainstay. Restate only facts already carried by cited items elsewhere in the review — no new claims, no recommendations. Omit "overview" for the patient audience. ' +
-  'A medicine may appear in at most ONE of "changes" or "reconciliation"; choose the more actionable framing. Empty arrays are preferred over low-information items. Do not assign severity or recommend clinical dose changes. ' +
-  'NHI dispensing does not prove adherence or current use. Every medicationReview item must cite at least one matching M key (sole exception: "condition-without-therapy" cites the condition/lab evidence); merge routine refills and prescribing-clinic/pharmacy representations of the same prescription. ' +
-  'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
-  '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
-  'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
-  'The summary is a flowing narrative split into segments: consecutive segments are concatenated into ONE paragraph, so include the connecting punctuation yourself. ' +
-  'Highlighting ("emphasis": true) renders as a marker-pen highlight — it only works when RARE and SHORT. ' +
-  'Split each sentence so the key phrase is its OWN tiny segment: mark at most 5 segments in the whole summary, ' +
-  'each under ~15 characters (a diagnosis name, a value trend like "HbA1c 7.2→8.4", a status word) — ' +
-  'NEVER a whole sentence. Everything else stays "emphasis": false. ' +
-  'Do NOT wrap key phrases in 「」 quotes as a substitute for highlighting — split them out instead. ' +
-  'Example: instead of ONE segment {"text": "近期診斷為「肺炎」伴隨咳嗽。"}, output THREE: ' +
-  '[{"text": "近期診斷為", "emphasis": false, "sources": []}, {"text": "肺炎", "emphasis": true, "sources": ["E3"]}, {"text": "伴隨咳嗽。", "emphasis": false, "sources": []}]. ' +
-  'For the timeline, surface only the clinically SIGNIFICANT events — milestones and turning points ' +
-  '(a hospital admission, an ER visit, a first/major new diagnosis, starting a care plan, a key imaging study or procedure) — ' +
-  'NOT every routine follow-up visit or repeat-prescription pickup. Aim for ~5–8 such events for a case like this (only a very complex multi-year, multi-hospital course justifies more). ' +
-  'The timeline is the OBJECTIVE care journey, so choose the SAME significant events REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language — it must NOT show more events, fewer events, or different events than the clinician version would. ' +
-  'Curate — the full record list is already visible elsewhere; the app supplies date and hospital, you supply only the label. ' +
-  // The synthesis rule itself is shared verbatim with the IPS-export problem
-  // inference (problem-inference-principles.ts) so both features infer
-  // problems from 健保 data with the same semantics.
-  'For "problems", ' + PROBLEM_INFERENCE_SYNTHESIS_RULE + ' ' +
-  'Each problem is a plain condition NAME (e.g. 第二型糖尿病) — do NOT include ICD or any other codes. ' +
-  'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 次檢驗異常", "藥局調劑", "照護計畫", "6 次就診申報"), ' +
-  'the matching "kind", and the catalog key(s) in "sources". Merge duplicates; order by clinical importance; at most ~12 problems. ' +
-  'The report TYPE cited must match the evidence type the basis names: 依據:心電圖紀錄 must cite the ECG report key itself — a same-day chest X-ray (胸腔檢查) or any other modality is a citation ERROR, not a substitute. When you cannot tell which key is that report, omit the report key entirely rather than citing a wrong-type one. ' +
-  'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
-  'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
-  'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
+  'Every education item must cite at least one matching medication key (M#). Additional condition/report keys may be included only when they directly support the linked care goal. Merge refills and pharmacy duplicates into one item. ' +
   'Do not output markdown, explanations, or text outside the requested JSON object.'
 
 // Qwen-derived and other instruction-sensitive local endpoints perform better
@@ -1314,34 +1117,36 @@ const LOCAL_CORE_RULES =
   'Claim and encounter diagnosis codes are billing evidence, not automatically confirmed diagnoses. ' +
   'Copy medication product names, dose text, and frequency exactly. A same-row NHI terminology block may supply that exact product\'s ingredient/strength, dose form, and ATC classification; it overrides a conflicting administrative MedicationRequest.category, but never proves indication, actual use, adherence, or outcome. Never transfer terminology across rows or infer any medication detail that is not explicitly supplied. Never use a medication alone to diagnose the patient. ' +
   'A numeric laboratory value without an explicit interpretation flag, reference range, or patient-specific target must not be called high, low, normal, controlled, uncontrolled, at target, or not at target. Do not recommend medication adjustment. ' +
+  'Dates, organizations and encounter types are supplied by the app; never write one yourself. ' +
   'Every emitted item must have at least one source that directly supports its whole claim. Prefer omission or neutral uncertainty over plausible inference. ' +
   'CERTAINTY: keep the source\'s certainty wording (疑似, R/O, rule out, impression, possible, 待排除). Never upgrade a suspected, provisional or ruled-out diagnosis to a confirmed one, and write 證實/確診 only when the cited source itself states it. ' +
   'QUOTES: each documentEvidence quote must be one contiguous passage copied character-for-character from the cited D document; never join separate passages or paraphrase inside a quote. ' +
   'Return only the requested structured blocks; no markdown or surrounding explanation. '
 
 const LOCAL_MODULE_RULES: Record<MedicalSummaryModuleId, string> = {
-  priorities:
-    'PRIORITIES: Summarize the most important documented facts only. Do not infer a disease from a medicine or infer control/stability from one value. ' +
-    'Keep the headline factual; remove unsupported assessment language. Narrative citations must support the exact adjacent claim. Use no treatment advice. ',
+  overview:
+    'OVERVIEW: The headline states only documented facts. Do not infer a disease from a medicine or infer control/stability from one value. ' +
+    'mustKnow is for clinicians only and holds at most one row per slot: label = the number or fact, text = one sentence of prescribing consequence, both grounded in a cited record. ' +
+    'Fill EVERY slot the evidence supports — a multimorbid patient typically yields 3–5 rows, one row is almost always incomplete. Slot checklist: ' +
+    'renal = eGFR < 60 or a flagged creatinine; anticoagulation = ANY anticoagulant or antiplatelet found in current medicines, an admission, a claim code (Z79.01 長期抗凝) or a document — state whether it is still on the current list; ' +
+    'hematology = any flagged Hb, platelet, WBC/ANC or INR; high-risk-meds = two or more anticholinergic, sedative, opioid, insulin/sulfonylurea or QT-prolonging medicines on the current list; endocrine-pending = a treated thyroid or diabetes problem whose latest test is flagged or older than 6 months. ' +
+    'A diagnosis known only from a claim code is written as 申報碼 in the headline, never as an established diagnosis. ' +
+    'medicationEducation is for patients only and must cite a real M key. Use no treatment advice in either. ' +
+    // The overview is the section the clinician is waiting on, and it is a
+    // read-off of the evidence above rather than a synthesis problem. Keep
+    // this soft: it must not read as an instruction to stop thinking.
+    'This block can be written directly from the listed evidence; it does not need extended deliberation. ',
+  focus:
+    'FOCUS: At most three problems, chosen by recent activity and risk from the supplied records. Each text repeats only values and dates that appear in the data. ' +
+    'Set flag only for a contradiction you can point at in two cited records; never for ordinary uncertainty. ',
   problems:
     'PROBLEMS: Include a condition only when it is explicitly documented by a Condition, care plan, or clinical document, or supported by repeated comparable abnormal results whose abnormality is supplied. ' +
-    'Never create an active problem from medication evidence alone. Never turn a single unassessed lab value into a disease or poor-control problem. Omit claim-only or medication-only candidates instead of presenting them as confirmed. ',
-  timeline:
-    'TIMELINE: Select significant objective events only. The app supplies dates, end dates, organizations, and encounter class; write only a concise label supported by the cited event. ' +
+    'Never create an active problem from medication evidence alone. Never turn a single unassessed lab value into a disease or poor-control problem. Omit claim-only or medication-only candidates instead of presenting them as confirmed. ' +
+    'metric copies real values; managedBy copies an organization exactly as written and managedByRef is that organization\'s latest encounter key — never write a date. Do not repeat a problem already returned in the focus module. ',
+  recent:
+    'RECENT: Select significant objective events only. The app supplies dates, end dates, organizations, and encounter class; write only a concise label supported by the cited event. ' +
     'For a D document the app shows the document/admission date. When the event inside the document (surgery, procedure, diagnosis, discharge) happened on a different date, put that date at the start of the label only if it appears verbatim in the document, and include it in documentEvidence. ' +
-    'Do not add a finding or procedure that is absent from the cited record. Prefer admissions, emergency visits, procedures, major reports, and explicit medication changes over routine refills. ',
-  investigations:
-    `INVESTIGATIONS: Cite only matching L/O evidence and show at most ${MAX_INVESTIGATION_TREND_POINTS} actual dated values/findings. ` +
-    'Use direction "single" for exactly one result. Use improving/stable/worsening/fluctuating only with at least two comparable dated points. ' +
-    'Without an explicit flag, reference range, or patient target, interpretation must stay neutral and must not say high/low, controlled/uncontrolled, at/not at target, or recommend treatment changes. ',
-  medications:
-    'MEDICATIONS: Medication identity and SIG must be copied exactly from M evidence. Merge a dispensing-pharmacy row with its prescribing row; do not call that duplicate therapy. ' +
-    'Use only the NHI terminology paired on the same medication row for ingredient, dose form, and ATC grouping. NHI terminology overrides a conflicting source/administrative category for pharmacologic classification, but does not prove the patient-specific indication. ' +
-    'A multi-medicine patient education item is allowed only when its benefit and reminder are true for every named medicine; otherwise split it so one medicine cannot inherit another medicine\'s mechanism or adverse effects. ' +
-    'For clinicians, include every currently evidenced distinct medicine, but use a neutral group when no diagnosis or governed category supports a treatment area. Changes require explicit old/new or stop/resume evidence; an empty changes/reconciliation list is valid. ' +
-    'Overview may summarize only validated rows and organizations; never claim no supply gap, no conflict, adherence, or disease control unless directly established. ' +
-    'For patients, medicationReview arrays must be empty. A benefit tied to a patient condition must cite both the M key and the supporting condition/document key. If purpose is not documented, say it needs confirmation. ' +
-    'Do not add side effects that are absent from the supplied evidence; use one generic reminder to follow the prescription and ask a clinician or pharmacist about symptoms. ',
+    'Do not add a finding or procedure that is absent from the cited record. Inside the last 90 days include visits, admissions, procedures, major reports and explicit medication changes; before that window include only admissions and procedures. ',
 }
 
 function localRulesForModules(
@@ -1354,42 +1159,34 @@ const FULL_OUTPUT_INSTRUCTION =
   '\n\nOutput ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
   SCHEMA_HINT
 
+const MEDICAL_OVERVIEW_SCHEMA_HINT =
+  '{' + OVERVIEW_SCHEMA_FIELDS + ', "medicationEducation": []}'
+
+const PATIENT_OVERVIEW_SCHEMA_HINT =
+  '{' + PATIENT_OVERVIEW_SCHEMA_FIELDS + ', "mustKnow": []}'
+
 const MODULE_SCHEMA_HINTS: Record<MedicalSummaryModuleId, string> = {
-  priorities:
-    '{"headline": "<one-line patient positioning>", "summary": [{"text": "<narrative segment>", "emphasis": <boolean>, "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
-  problems:
-    '{"problems": [{"label": "<condition name>", "basis": "<short evidence basis>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
-  timeline:
-    '{"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup", "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
-  investigations:
-    '{"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or finding>", "interpretation": "<why this matters>", "sources": ["<catalog key>"], "documentEvidence": [{"source": "<cited D key>", "quote": "<verbatim original-language excerpt>"}]}]}',
-  medications:
-    '{"medicationEducation": [{"name": "<medicine or group>", "benefit": "<benefit>", "attention": "<one practical reminder>", "sources": ["<catalog key>"]}], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}',
+  overview: MEDICAL_OVERVIEW_SCHEMA_HINT,
+  focus: '{' + FOCUS_SCHEMA_FIELDS + '}',
+  problems: '{' + PROBLEMS_SCHEMA_FIELDS + '}',
+  recent: '{' + RECENT_SCHEMA_FIELDS + '}',
 }
-
-const MEDICAL_MEDICATIONS_SCHEMA_HINT =
-  '{"medicationEducation": [], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}'
-
-const PATIENT_MEDICATIONS_SCHEMA_HINT =
-  '{"medicationEducation": [{"name": "<medicine or group>", "benefit": "<benefit>", "attention": "<one practical reminder>", "sources": ["<M key>"]}], "medicationReview": {"regimen": [], "changes": [], "reconciliation": []}}'
 
 const moduleSchemaHint = (
   moduleId: MedicalSummaryModuleId,
   audience: GenerateMedicalSummaryInput['audience'],
-) => moduleId === 'medications' && audience === 'medical'
-  ? MEDICAL_MEDICATIONS_SCHEMA_HINT
-  : moduleId === 'medications' && audience === 'patient'
-    ? PATIENT_MEDICATIONS_SCHEMA_HINT
+) => moduleId === 'overview' && audience === 'patient'
+  ? PATIENT_OVERVIEW_SCHEMA_HINT
   : MODULE_SCHEMA_HINTS[moduleId]
 
-const medicationAudienceOverride = (
+const overviewAudienceOverride = (
   moduleId: MedicalSummaryModuleId,
   audience: GenerateMedicalSummaryInput['audience'],
-) => moduleId === 'medications' && audience === 'medical'
-  ? 'For the medical audience, "medicationEducation" MUST be the literal empty array []; do not generate name, benefit, or attention fields. '
-  : moduleId === 'medications' && audience === 'patient'
-    ? 'For the patient audience, "medicationReview" MUST contain the literal empty arrays "regimen": [], "changes": [], and "reconciliation": []; do not generate overview or clinician review items. '
-  : ''
+) => moduleId !== 'overview'
+  ? ''
+  : audience === 'patient'
+    ? 'For the patient audience, "mustKnow" MUST be the literal empty array []; the prescribing checklist is clinician-facing. Populate "medicationEducation" instead. '
+    : 'For the medical audience, "medicationEducation" MUST be the literal empty array []; that benefit-first education list is patient-facing. Populate "mustKnow" instead. '
 
 const MODULE_OUTPUT_INSTRUCTION = (
   moduleId: MedicalSummaryModuleId,
@@ -1397,7 +1194,7 @@ const MODULE_OUTPUT_INSTRUCTION = (
 ) =>
   `\n\nMODULAR OUTPUT CONTRACT: Generate ONLY the "${moduleId}" module. ` +
   'Do not return fields belonging to another module. ' +
-  medicationAudienceOverride(moduleId, audience) +
+  overviewAudienceOverride(moduleId, audience) +
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
   moduleSchemaHint(moduleId, audience)
 
@@ -1407,17 +1204,17 @@ const moduleBlockStart = (moduleId: MedicalSummaryModuleId) =>
 const moduleBlockEnd = (moduleId: MedicalSummaryModuleId) =>
   `<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`
 
-// Put the medication card first. Smaller custom models commonly exhaust or
-// drift from the multi-block contract near the end of a long completion; the
-// medication-reconciliation card is the largest block and was therefore the
-// one most often omitted. Parsing remains marker-based, so presentation order
-// and merge order do not depend on this prompt order.
+// Smaller custom models commonly exhaust or drift from the multi-block
+// contract near the end of a long completion, so the biggest block must not sit
+// last. `overview` stays first either way — it is the smallest block and paints
+// the hero card immediately — and `problems` (the largest) moves ahead of the
+// remaining blocks. Parsing is marker-based, so presentation and merge order do
+// not depend on this prompt order.
 const LOCAL_BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
-  'medications',
-  'priorities',
+  'overview',
   'problems',
-  'timeline',
-  'investigations',
+  'focus',
+  'recent',
 ]
 
 const BATCH_OUTPUT_INSTRUCTION = (
@@ -1433,7 +1230,7 @@ const BATCH_OUTPUT_INSTRUCTION = (
   )
   const isCompleteBatch = orderedModuleIds.length === MEDICAL_SUMMARY_MODULE_IDS.length
   const scopeInstruction = isCompleteBatch
-    ? 'Generate all five modules in the exact order shown below. '
+    ? `Generate all ${MEDICAL_SUMMARY_MODULE_IDS.length} modules in the exact order shown below. `
     : `Generate only the ${orderedModuleIds.length} requested modules in the exact order shown below. `
   const omissionInstruction = isCompleteBatch
     ? 'do NOT use markdown fences, and do NOT omit later modules if an earlier module is uncertain. '
@@ -1441,24 +1238,24 @@ const BATCH_OUTPUT_INSTRUCTION = (
 
   return '\n\nBATCH MODULAR OUTPUT CONTRACT: ' + scopeInstruction +
   'Each module is an independent JSON object enclosed by its exact start and end markers. ' +
-  (localSmallModel && orderedModuleIds.includes('medications')
-    ? 'The medications block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
-      'Even when no medication is supported, emit the medications block with the required empty arrays; never skip it. '
+  (localSmallModel && orderedModuleIds.includes('overview')
+    ? 'The overview block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
+      'Even when little is supported, emit the overview block with a headline and the required arrays; never skip it. '
     : '') +
   'The markers are the only permitted non-JSON text. Do NOT wrap the requested modules in one outer JSON object or array, ' +
   omissionInstruction +
   'Use empty arrays or optional omissions allowed by that module schema instead of explanatory prose.\n\n' +
   orderedModuleIds.map((moduleId) =>
-      `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
+      `${moduleBlockStart(moduleId)}\n${overviewAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
     ).join('\n\n')
 }
 
 const SYSTEM_MEDICAL_PREFIX =
-  'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
+  'You are preparing 初診快覽 — a first-visit overview for a physician who is seeing this patient ' +
   'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
-  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the Safety module in this same batch. ' +
-  'Return "medicationEducation" as an empty array; this benefit-first education card is patient-facing. ' +
-  'Populate "medicationReview" as a concise clinician medication-reconciliation overview.'
+  'The reader has about thirty seconds before the consultation starts, so every line must be something they would otherwise miss. ' +
+  'Return "medicationEducation" as an empty array; that benefit-first education list is patient-facing. ' +
+  'Safety alerts are handled by the Safety module in this same batch — do not restate them as extra prose.'
 
 const SYSTEM_PATIENT_PREFIX =
   'You are helping a patient (a layperson, NOT a clinician) understand their own NHI 健康存摺 records. ' +
@@ -1469,10 +1266,10 @@ const SYSTEM_PATIENT_PREFIX =
   'stay calm, matter-of-fact and reassuring; avoid frightening or worst-case phrasing, and do NOT tie a past scary event ' +
   '(confusion, a fall, a hospital visit) to a current medicine as cause-and-effect — frame anything to review as a routine ' +
   'check with the doctor, not a danger. ' +
-  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the Safety module in this same batch. ' +
+  'Return "mustKnow" as an empty array; that prescribing checklist is clinician-facing. ' +
   'Populate "medicationEducation" as benefit-first, reassuring medication education ' +
   'grounded in the patient\'s medication records. ' +
-  'Return "medicationReview" with empty regimen, changes, and reconciliation arrays.'
+  'Safety reminders are handled by the Safety module in this same batch.'
 
 export interface GenerateMedicalSummaryInput {
   clinicalContext: string
@@ -1484,122 +1281,23 @@ export interface GenerateMedicalSummaryInput {
   /** Local endpoints receive compact, module-scoped instructions and compact
    * retry evidence. Omitted keeps the established frontier-provider prompt. */
   harnessProfile?: MedicalSummaryHarnessProfile
+  /** Fast lane only: state the output-language contract ONCE per message
+   *  (system head, user tail) instead of the three repetitions the full prompt
+   *  bookends itself with. Those repetitions exist to keep the requested
+   *  language salient across thousands of Chinese source lines; the overview
+   *  snapshot is short enough that they buy nothing and only cost prefill. */
+  singleLanguageContract?: boolean
 }
 
 export interface FinalizeMedicalSummaryOptions {
-  /** Required for the clinician completeness guarantee: every distinct FHIR
-   * continuous/long-term medicine is rendered even when the model omitted it. */
+  /** The same scoped FHIR input the catalog was built from. Kept for callers
+   * that need bundle-level context during verification. */
   clinicalData?: SummaryCatalogInput
   audience?: 'medical' | 'patient'
   locale?: 'en' | 'zh-TW'
   /** Enforce conservative semantic claims for clinical release candidates.
    * Custom-model generation enables this; callers may opt in explicitly. */
   strictGrounding?: boolean
-}
-
-type RawMedicationRegimenItem = {
-  group: string
-  name: string
-  sig?: string
-  sources: string[]
-  documentEvidence?: DocumentEvidence[]
-}
-
-function completeChronicMedicationRegimen(
-  aiRegimen: RawMedicationRegimenItem[],
-  input: SummaryCatalogInput,
-  catalog: SummarySourceCatalogEntry[],
-  locale: 'en' | 'zh-TW',
-): RawMedicationRegimenItem[] {
-  const medications = input.medications ?? []
-  const catalogByResourceId = new Map(
-    catalog
-      .filter((entry) => entry.resourceType.startsWith('Medication'))
-      .map((entry) => [entry.resourceId, entry]),
-  )
-  const medicationCatalogKeys = new Set(
-    [...catalogByResourceId.values()].map((entry) => entry.key),
-  )
-  const groups = new Map<string, MedicationEntity[]>()
-
-  for (const medication of medications) {
-    const identity = medicationIdentity(medication)
-    const group = groups.get(identity) ?? []
-    group.push(medication)
-    groups.set(identity, group)
-  }
-
-  const chronicGroups: Array<{
-    identity: string
-    representative: MedicationEntity
-    sourceKeys: string[]
-  }> = []
-  const historicalChronicSourceKeys = new Set<string>()
-
-  for (const [identity, group] of groups) {
-    if (!group.some(isChronicPrescription)) continue
-    const sorted = sortByDateDesc(group, (medication) => medication.authoredOn)
-    const catalogled = sorted.filter((medication) => catalogByResourceId.has(medication.id))
-    const entries = catalogled.flatMap((medication) => {
-      const entry = catalogByResourceId.get(medication.id)
-      return entry ? [entry] : []
-    })
-    const sourceKeys = [...new Set(entries.map((entry) => entry.key))]
-    if (sourceKeys.length === 0) continue
-    const latestStatus = sorted[0]?.status?.trim().toLowerCase()
-    // A historic continuous prescription is not the same as a current
-    // regimen. Keep it only when the latest same-drug record is not explicitly
-    // terminal; later active refills (e.g. Forxiga) therefore remain included,
-    // while completed-only history (e.g. demo Uretropic) does not.
-    if (['completed', 'stopped', 'cancelled', 'entered-in-error'].includes(latestStatus ?? '')) {
-      sourceKeys.forEach((key) => historicalChronicSourceKeys.add(key))
-      continue
-    }
-    const representative = catalogled[0] ?? sorted.find(isChronicPrescription) ?? sorted[0]
-    if (!representative) continue
-    chronicGroups.push({ identity, representative, sourceKeys })
-  }
-
-  const currentAiRegimen = aiRegimen.filter((item) => {
-    const citedMedicationKeys = item.sources
-      .map(normaliseSummarySourceKey)
-      .filter((key) => medicationCatalogKeys.has(key))
-    return citedMedicationKeys.length === 0 ||
-      !citedMedicationKeys.every((key) => historicalChronicSourceKeys.has(key))
-  })
-  const aiSourceKeys = new Set(currentAiRegimen.flatMap((item) =>
-    item.sources.map(normaliseSummarySourceKey),
-  ))
-  const missing = chronicGroups.filter(
-    (group) => !group.sourceKeys.some((key) => aiSourceKeys.has(key)),
-  )
-  if (missing.length === 0) return currentAiRegimen
-
-  // Preserve the AI's clinical organization. The deterministic fallback is
-  // only a completeness guard, so keep each omitted medicine explicit and use
-  // its recorded therapeutic category instead of inventing a clinically
-  // meaningless same-prescription group.
-  const fallbackRows = missing.map(({ representative, sourceKeys }) => {
-    const concept = representative.medicationCodeableConcept
-    const recordedSig = representative.dosageInstruction
-      ?.map((instruction) => instruction.text?.trim())
-      .filter((value): value is string =>
-        typeof value === 'string' && value.length > 0 &&
-        !/給藥總量|給藥日數|平均每日/.test(value),
-      )
-      .join('；') || undefined
-
-    return {
-      group: locale === 'en'
-        ? medicationGroupWithCategoryFallback(representative, locale) || 'Other'
-        : medicationGroupWithCategoryFallback(representative, locale) || '其他',
-      name: concept?.coding?.[0]?.display?.trim() || concept?.text?.trim() || 'Medication',
-      sig: recordedSig,
-      sources: sourceKeys,
-    }
-  })
-
-  return [...currentAiRegimen, ...fallbackRows]
 }
 
 // Evidence-modality lexicon for the problems citation cross-check. Most
@@ -1626,28 +1324,28 @@ function classifyEvidenceType(text?: string): string | null {
   return null
 }
 
-// Accept pre-v3 cached/test objects during the rollout; live parseResult always
-// materialises newer arrays via schema defaults.
-type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' | 'medicationEducation' | 'medicationReview'> & {
-  investigations?: MedicalSummaryAiResult['investigations']
+// A partially generated artifact is finalized on every stream chunk, so each
+// array must tolerate being absent while its module is still pending.
+type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'mustKnow' | 'medicationEducation' | 'focus' | 'problems' | 'recent'> & {
+  mustKnow?: MedicalSummaryAiResult['mustKnow']
   medicationEducation?: MedicalSummaryAiResult['medicationEducation']
-  medicationReview?: MedicalSummaryAiResult['medicationReview']
+  focus?: MedicalSummaryAiResult['focus']
+  problems?: MedicalSummaryAiResult['problems']
+  recent?: MedicalSummaryAiResult['recent']
 }
 
 const MODULE_RESULT_SCHEMAS = {
-  priorities: MedicalSummaryPrioritiesModuleSchema,
+  overview: MedicalSummaryOverviewModuleSchema,
+  focus: MedicalSummaryFocusModuleSchema,
   problems: MedicalSummaryProblemsModuleSchema,
-  timeline: MedicalSummaryTimelineModuleSchema,
-  investigations: MedicalSummaryInvestigationsModuleSchema,
-  medications: MedicalSummaryMedicationsModuleSchema,
+  recent: MedicalSummaryRecentModuleSchema,
 } as const
 
 const MODULE_REQUIRED_OUTPUT_FIELDS: Record<MedicalSummaryModuleId, readonly string[]> = {
-  priorities: ['headline', 'summary'],
+  overview: ['headline'],
+  focus: ['items'],
   problems: ['problems'],
-  timeline: ['timeline'],
-  investigations: ['investigations'],
-  medications: ['medicationEducation', 'medicationReview'],
+  recent: ['recent'],
 }
 
 function hasRequiredModuleFields(moduleId: MedicalSummaryModuleId, raw: unknown): boolean {
@@ -1710,105 +1408,11 @@ function collectClaimedSourceKeys(value: unknown): string[] {
   return sourceKeys.filter(Boolean)
 }
 
-function completeJsonObjectsInSummaryArray(text: string): unknown[] {
-  const summaryKey = text.search(/"summary"\s*:/)
-  if (summaryKey < 0) return []
-  const arrayStart = text.indexOf('[', summaryKey)
-  if (arrayStart < 0) return []
-
-  const objects: unknown[] = []
-  let objectStart = -1
-  let depth = 0
-  let inString = false
-  let escaped = false
-  for (let index = arrayStart + 1; index < text.length; index += 1) {
-    const char = text[index]
-    if (inString) {
-      if (escaped) escaped = false
-      else if (char === '\\') escaped = true
-      else if (char === '"') inString = false
-      continue
-    }
-    if (char === '"') {
-      inString = true
-      continue
-    }
-    if (char === '{') {
-      if (depth === 0) objectStart = index
-      depth += 1
-      continue
-    }
-    if (char === '}' && depth > 0) {
-      depth -= 1
-      if (depth === 0 && objectStart >= 0) {
-        try {
-          objects.push(JSON.parse(text.slice(objectStart, index + 1)))
-        } catch {
-          // A complete-looking but invalid object is not safe to reconstruct.
-        }
-        objectStart = -1
-      }
-      continue
-    }
-    if (char === ']' && depth === 0) break
-  }
-  return objects
-}
-
-function salvagePrioritiesModule(
-  raw: unknown,
-  text: string,
-): MedicalSummaryModuleResultMap['priorities'] | null {
-  const rawObject = raw && typeof raw === 'object' && !Array.isArray(raw)
-    ? raw as Record<string, unknown>
-    : null
-  let headline = typeof rawObject?.headline === 'string' ? rawObject.headline : ''
-  if (!headline) {
-    const match = text.match(/"headline"\s*:\s*("(?:\\.|[^"\\])*")/)
-    if (match) {
-      try {
-        headline = JSON.parse(match[1])
-      } catch {
-        headline = ''
-      }
-    }
-  }
-  if (!headline.trim()) return null
-
-  const candidates = Array.isArray(rawObject?.summary)
-    ? rawObject.summary
-    : completeJsonObjectsInSummaryArray(text)
-  const summary = candidates.flatMap((candidate) => {
-    const parsed = SummarySegmentSchema.safeParse(candidate)
-    return parsed.success ? [parsed.data] : []
-  })
-  // One isolated fragment is too little context to safely present as a
-  // narrative. Two or more independently valid segments retain useful meaning.
-  if (summary.length < 2) return null
-  const parsed = MedicalSummaryPrioritiesModuleSchema.safeParse({ headline, summary })
-  return parsed.success ? parsed.data : null
-}
-
+// A single-module retry on a small local endpoint only needs the evidence that
+// module can legitimately cite. `overview` and `problems` reason across every
+// resource type, so they are deliberately absent (no reduction).
 const LOCAL_RETRY_RESOURCE_TYPES: Partial<Record<MedicalSummaryModuleId, ReadonlySet<string>>> = {
-  medications: new Set([
-    'MedicationRequest',
-    'MedicationStatement',
-    'MedicationDispense',
-    'Encounter',
-    'Condition',
-    'CarePlan',
-    'Composition',
-    'DocumentReference',
-  ]),
-  investigations: new Set([
-    'DiagnosticReport',
-    'Observation',
-    'Condition',
-    'Composition',
-    'DocumentReference',
-    'ImagingStudy',
-  ]),
-  timeline: new Set([
+  recent: new Set([
     'Encounter',
     'Procedure',
     'Condition',
@@ -1820,6 +1424,24 @@ const LOCAL_RETRY_RESOURCE_TYPES: Partial<Record<MedicalSummaryModuleId, Readonl
     'MedicationRequest',
     'MedicationStatement',
   ]),
+}
+
+/** Drop the clinical-context lines that explicitly cite only catalog keys this
+ *  module cannot use. Unkeyed prose is always retained — the app's formatted
+ *  context carries most evidence without inline keys. */
+function keepLinesCitingAllowedKeys(
+  clinicalContext: string,
+  allowedKeys: ReadonlySet<string>,
+): string {
+  return clinicalContext
+    .split(/\r?\n/)
+    .filter((line) => {
+      const referencedKeys = [...line.matchAll(/\[([A-Z]\d+)\]/g)].map((match) => match[1])
+      return referencedKeys.length === 0 || referencedKeys.some((key) => allowedKeys.has(key))
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function compactLocalRetryEvidence(
@@ -1834,17 +1456,13 @@ function compactLocalRetryEvidence(
   if (catalog.length === 0 || catalog.length === input.catalog.length) {
     return { clinicalContext: input.clinicalContext, catalog: input.catalog }
   }
-  const allowedKeys = new Set(catalog.map((entry) => entry.key))
-  const clinicalContext = input.clinicalContext
-    .split(/\r?\n/)
-    .filter((line) => {
-      const referencedKeys = [...line.matchAll(/\[([A-Z]\d+)\]/g)].map((match) => match[1])
-      return referencedKeys.length === 0 || referencedKeys.some((key) => allowedKeys.has(key))
-    })
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-  return { clinicalContext, catalog }
+  return {
+    clinicalContext: keepLinesCitingAllowedKeys(
+      input.clinicalContext,
+      new Set(catalog.map((entry) => entry.key)),
+    ),
+    catalog,
+  }
 }
 
 export class GenerateMedicalSummaryUseCase {
@@ -1882,12 +1500,16 @@ export class GenerateMedicalSummaryUseCase {
         return `[${c.key}] ${parts.filter(Boolean).join(' | ')}`
       })
       .join('\n')
+    const once = input.singleLanguageContract === true
     return [
       {
         role: 'system',
         // Bookend the long clinical rules so the requested output language
-        // remains salient even when most source records are in Chinese.
-        content: `${languageContract}\n\n${system}${outputInstruction}\n\n${languageContract}`,
+        // remains salient even when most source records are in Chinese. The
+        // fast lane's prompt is short, so it states the contract once.
+        content: once
+          ? `${languageContract}\n\n${system}${outputInstruction}`
+          : `${languageContract}\n\n${system}${outputInstruction}\n\n${languageContract}`,
       },
       {
         role: 'user',
@@ -1896,7 +1518,7 @@ export class GenerateMedicalSummaryUseCase {
         // covers the longitudinal-investigation block appended after it
         // (imaging conclusions can carry patient identifiers).
         content: scrubFreeText(
-          `${languageContract}\n\n` +
+          (once ? '' : `${languageContract}\n\n`) +
           `Patient clinical data:\n${compactEvidence.clinicalContext}\n\n` +
           `SOURCE LIST (cite these keys in "sources" / "timeline.ref"):\n${catalogBlock}\n\n` +
           `FINAL OUTPUT CHECK: ${languageContract}`,
@@ -1950,7 +1572,7 @@ export class GenerateMedicalSummaryUseCase {
     input: GenerateMedicalSummaryInput,
     moduleId: MedicalSummaryModuleId,
   ): string {
-    return `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, input.audience)}${moduleSchemaHint(moduleId, input.audience)}\n${moduleBlockEnd(moduleId)}`
+    return `${moduleBlockStart(moduleId)}\n${overviewAudienceOverride(moduleId, input.audience)}${moduleSchemaHint(moduleId, input.audience)}\n${moduleBlockEnd(moduleId)}`
   }
 
   /** Build a transport-agnostic batch from the registered card definitions.
@@ -1959,6 +1581,10 @@ export class GenerateMedicalSummaryUseCase {
   buildRegisteredCardBatchMessages(
     input: GenerateMedicalSummaryInput,
     cardInstructions: readonly string[],
+    /** Summary modules actually in this batch. On the compact harness the
+     *  system rules are assembled per module, so a lane or a retry that asks
+     *  for a subset must not carry the rules of the cards it is not writing. */
+    moduleIds: readonly MedicalSummaryModuleId[] = MEDICAL_SUMMARY_MODULE_IDS,
   ): AiMessage[] {
     if (cardInstructions.length === 0) {
       throw new Error('At least one medical summary card is required')
@@ -1973,7 +1599,7 @@ export class GenerateMedicalSummaryUseCase {
     return this.buildMessagesForOutput(
       input,
       outputInstruction,
-      MEDICAL_SUMMARY_MODULE_IDS,
+      moduleIds,
     )
   }
 
@@ -2031,16 +1657,7 @@ export class GenerateMedicalSummaryUseCase {
       return null
     }
     const raw = tryExtractJsonValue(text, { closeMissingBrackets: options.complete === true })
-    if (raw === null) {
-      const salvaged = moduleId === 'priorities'
-        ? salvagePrioritiesModule(null, text)
-        : null
-      if (salvaged) {
-        console.warn('[medical-summary:priorities] salvaged complete segments from a malformed tail')
-        return salvaged as MedicalSummaryModuleResultMap[T]
-      }
-      return fail('no parseable JSON found')
-    }
+    if (raw === null) return fail('no parseable JSON found')
     // Several module schemas intentionally default arrays for cache/backward
     // compatibility. At the model boundary, however, `{}` or an unrelated
     // module must not become a false-success empty card.
@@ -2049,13 +1666,6 @@ export class GenerateMedicalSummaryUseCase {
     }
     const parsed = MODULE_RESULT_SCHEMAS[moduleId].safeParse(raw)
     if (parsed.success) return parsed.data as MedicalSummaryModuleResultMap[T]
-    const salvaged = moduleId === 'priorities'
-      ? salvagePrioritiesModule(raw, text)
-      : null
-    if (salvaged) {
-      console.warn('[medical-summary:priorities] dropped malformed trailing segments')
-      return salvaged as MedicalSummaryModuleResultMap[T]
-    }
     const issues = parsed.error.issues
       .slice(0, 8)
       .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
@@ -2133,17 +1743,11 @@ export class GenerateMedicalSummaryUseCase {
   createEmptyAiResult(): MedicalSummaryAiResult {
     return {
       headline: '',
-      summary: [],
-      investigations: [],
+      mustKnow: [],
       medicationEducation: [],
-      medicationReview: {
-        regimen: [],
-        changes: [],
-        reconciliation: [],
-      },
+      focus: [],
       problems: [],
-      decisions: [],
-      timeline: [],
+      recent: [],
     }
   }
 
@@ -2160,18 +1764,11 @@ export class GenerateMedicalSummaryUseCase {
         : {}
     return {
       headline: result.headline,
-      summary: result.summary.map((item) => ({
-        text: item.text,
-        emphasis: item.emphasis,
-        sources: item.sourceKeys,
-        ...evidenceFor(item),
-      })),
-      investigations: result.investigations.map((item) => ({
+      mustKnow: result.mustKnow.map((item) => ({
+        slot: item.slot,
         label: item.label,
-        kind: item.kind,
-        direction: item.direction,
-        trend: item.trend,
-        interpretation: item.interpretation,
+        text: item.text,
+        critical: item.critical,
         sources: item.sourceKeys,
         ...evidenceFor(item),
       })),
@@ -2182,44 +1779,26 @@ export class GenerateMedicalSummaryUseCase {
         sources: item.sourceKeys,
         ...evidenceFor(item),
       })),
-      medicationReview: {
-        overview: result.medicationReview.overview,
-        regimen: result.medicationReview.regimen.map((item) => ({
-          group: item.group,
-          name: item.name,
-          sig: item.sig,
-          sources: item.sourceKeys,
-          ...evidenceFor(item),
-        })),
-        changes: result.medicationReview.changes.map((item) => ({
-          type: item.type,
-          medication: item.medication,
-          summary: item.summary,
-          sources: item.sourceKeys,
-          ...evidenceFor(item),
-        })),
-        reconciliation: result.medicationReview.reconciliation.map((item) => ({
-          reason: item.reason,
-          text: item.text,
-          sources: item.sourceKeys,
-          ...evidenceFor(item),
-        })),
-      },
+      focus: result.focus.map((item) => ({
+        title: item.title,
+        text: item.text,
+        flag: item.flag,
+        sources: item.sourceKeys,
+        ...evidenceFor(item),
+      })),
       problems: result.problems.map((item) => ({
         label: item.label,
         basis: item.basis,
         kind: item.kind,
+        metric: item.metric,
+        metricMeta: item.metricMeta,
+        managedBy: item.managedBy,
+        medications: item.medications,
+        flag: item.flag,
         sources: item.sourceKeys,
         ...evidenceFor(item),
       })),
-      decisions: result.decisions.map((item) => ({
-        text: item.text,
-        urgency: item.urgency,
-        rationale: item.rationale,
-        sources: item.sourceKeys,
-        ...evidenceFor(item),
-      })),
-      timeline: result.timeline.map((item) => ({
+      recent: result.recent.map((item) => ({
         ref: item.key,
         label: item.label,
         category: item.category,
@@ -2234,37 +1813,34 @@ export class GenerateMedicalSummaryUseCase {
     moduleResult: MedicalSummaryModuleResult<T>,
   ): MedicalSummaryAiResult {
     switch (moduleId) {
-      case 'priorities': {
-        const value = moduleResult as MedicalSummaryModuleResultMap['priorities']
-        return { ...draft, headline: value.headline, summary: value.summary }
+      case 'overview': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['overview']
+        return {
+          ...draft,
+          headline: value.headline,
+          mustKnow: value.mustKnow,
+          medicationEducation: value.medicationEducation,
+        }
+      }
+      case 'focus': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['focus']
+        return { ...draft, focus: value.items }
       }
       case 'problems': {
         const value = moduleResult as MedicalSummaryModuleResultMap['problems']
         return { ...draft, problems: value.problems }
       }
-      case 'timeline': {
-        const value = moduleResult as MedicalSummaryModuleResultMap['timeline']
-        return { ...draft, timeline: value.timeline }
-      }
-      case 'investigations': {
-        const value = moduleResult as MedicalSummaryModuleResultMap['investigations']
-        return { ...draft, investigations: value.investigations }
-      }
-      case 'medications': {
-        const value = moduleResult as MedicalSummaryModuleResultMap['medications']
-        return {
-          ...draft,
-          medicationEducation: value.medicationEducation,
-          medicationReview: value.medicationReview,
-        }
+      case 'recent': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['recent']
+        return { ...draft, recent: value.recent }
       }
     }
   }
 
   /**
    * Resolve every AI citation against the app-built catalog.
-   * - narrative/decision sources: unknown keys stay visible but unverified.
-   * - timeline picks: unknown refs are dropped (no trustworthy date) and counted.
+   * - claim sources: unknown keys stay visible but unverified.
+   * - recent picks: unknown refs are dropped (no trustworthy date) and counted.
    */
   finalizeResult(
     ai: FinalizableMedicalSummary,
@@ -2284,7 +1860,8 @@ export class GenerateMedicalSummaryUseCase {
         )
       : ai.headline
 
-    // Number sources by first appearance: summary segments first, then decisions.
+    // Number sources by first appearance so superscripts read top-to-bottom on
+    // the page: 開藥前必看 → 用藥說明 → 主因 → 問題清單.
     const sourceIndex: ResolvedSourceRef[] = []
     const numByKey = new Map<string, number>()
     const registerKey = (rawKey: string): string => {
@@ -2323,70 +1900,41 @@ export class GenerateMedicalSummaryUseCase {
       return finalized ? { documentEvidence: finalized } : {}
     }
 
-    // Highlight guardrail: Flash-Lite tends to mark whole sentences (or every
-    // segment) as pivotal, turning the marker-pen highlight into wallpaper.
-    // The prompt asks for ≤5 short phrases; enforce it deterministically —
-    // over-long segments are demoted, and only the first
-    // EMPHASIS_MAX_COUNT survivors keep the highlight.
-    let emphasisBudget = EMPHASIS_MAX_COUNT
-    let summary = ai.summary.flatMap((seg) => {
-      if (
-        strictGrounding &&
-        (UNSUPPORTED_ASSESSMENT_LANGUAGE.test(seg.text) || TREATMENT_CHANGE_LANGUAGE.test(seg.text)) &&
-        !citedSourcesSupportNormalityAssessment(seg.sources, byKey)
-      ) {
-        return []
-      }
-      let emphasis = seg.emphasis ?? false
-      if (emphasis && (seg.text.trim().length > EMPHASIS_MAX_CHARS || emphasisBudget === 0)) {
-        emphasis = false
-      }
-      if (emphasis) emphasisBudget -= 1
+    // 開藥前必看 is a slot grid: at most one row per prescribing concern, so a
+    // model that emits two renal rows loses the second rather than pushing a
+    // different concern out of the six visible cells. The catch-all 'other'
+    // slot dedupes by label instead — two unrelated facts both land there.
+    const seenMustKnowSlots = new Set<string>()
+    const mustKnow = (ai.mustKnow ?? []).flatMap((item) => {
+      const slot: MustKnowSlot = normaliseMustKnowSlot(item.slot)
+      const identity = slot === 'other'
+        ? `other:${normalizeForComparison(item.label)}`
+        : slot
+      if (seenMustKnowSlots.has(identity)) return []
+      seenMustKnowSlots.add(identity)
       return [{
-        text: seg.text,
-        emphasis,
-        sourceKeys: (seg.sources ?? []).map(registerKey),
-        ...withDocumentEvidence(seg.documentEvidence),
-      }]
-    })
-    // Zero highlights after the guardrail = the model quoted its key phrases
-    // instead of splitting them — harvest those (see rescueEmphasisFromQuotes).
-    if (!summary.some((s) => s.emphasis)) {
-      summary = rescueEmphasisFromQuotes(summary)
-    }
-    // Citations belong to claims — move fragment citations to the highlight /
-    // sentence boundary they support instead of scattering them mid-sentence.
-    summary = coalesceCitations(summary)
-    // Last, once segments stop being dropped or split: render and copy both
-    // read these joins (see normaliseSegmentSpacing).
-    summary = normaliseSegmentSpacing(summary)
-    // Investigations render directly after the narrative, so register their
-    // evidence before problem/decision sources to keep citation numbers
-    // increasing top-to-bottom on the page.
-    const investigations = (ai.investigations ?? []).map((item) => {
-      const supportsAssessment = citedSourcesSupportNormalityAssessment(item.sources, byKey)
-      const unsupportedInterpretation =
-        UNSUPPORTED_ASSESSMENT_LANGUAGE.test(item.interpretation) ||
-        TREATMENT_CHANGE_LANGUAGE.test(item.interpretation)
-      return {
+        slot,
         label: item.label,
-        kind: normaliseInvestigationKind(item.kind),
-        direction: guardedInvestigationDirection(item.direction, item.label, item.sources, byKey, catalog),
-        trend: limitInvestigationTrendPoints(item.trend),
-        interpretation:
-          !item.interpretation.trim() ||
-          strictGrounding && (TREATMENT_CHANGE_LANGUAGE.test(item.interpretation) || (
-            unsupportedInterpretation && !supportsAssessment
-          ))
-            ? neutralInvestigationInterpretation(locale)
-            : item.interpretation,
+        text: item.text,
+        critical: item.critical ?? false,
         sourceKeys: (item.sources ?? []).map(registerKey),
         ...withDocumentEvidence(item.documentEvidence),
-      }
+      }]
     })
 
-    // Patient medication education renders after investigations and before
-    // problems, so register its medication records in that same order.
+    // The allergy row is APP-DERIVED, not a model slot. It renders as the last
+    // row of the 開藥前必看 grid, so its A keys register right after the model's
+    // rows and the superscript numbers still read top-to-bottom.
+    const allergyRecords: SummaryAllergyRecord[] = catalog
+      .filter((entry) => entry.resourceType === 'AllergyIntolerance')
+      .map((entry) => ({
+        sourceKey: registerKey(entry.key),
+        label: entry.display,
+        ...(entry.date ? { date: entry.date } : {}),
+      }))
+
+    // Patient medication education renders directly after the headline, so its
+    // medication records register before the focus/problem sources.
     const medicationEducation = (ai.medicationEducation ?? []).flatMap((item) => {
       const rawSources = item.sources ?? []
       // A patient-facing medicine explanation without a real medication record
@@ -2418,147 +1966,21 @@ export class GenerateMedicalSummaryUseCase {
       }]
     })
 
-    const hasVerifiedMedicationSource = (rawSources: string[]) =>
-      rawSources.some((rawKey) =>
-        byKey.get(normaliseSummarySourceKey(rawKey))?.resourceType.startsWith('Medication'),
-      )
+    const focus = (ai.focus ?? []).map((item) => ({
+      title: item.title,
+      text: item.text,
+      flag: item.flag ?? false,
+      sourceKeys: (item.sources ?? []).map(registerKey),
+      ...withDocumentEvidence(item.documentEvidence),
+    }))
 
-    // The clinician medication card follows the same evidence rule as patient
-    // education: an item without a real Medication* record is omitted. Dates
-    // and organizations remain app-resolved through sourceIndex.
-    const rawMedicationReview = ai.medicationReview ?? {
-      overview: undefined,
-      regimen: [],
-      changes: [],
-      reconciliation: [],
-    }
-    const completeRegimen =
-      options.audience !== 'patient' && options.clinicalData
-        ? completeChronicMedicationRegimen(
-            rawMedicationReview.regimen,
-            options.clinicalData,
-            catalog,
-            options.locale ?? 'zh-TW',
-          )
-        : rawMedicationReview.regimen
-    // Deterministic sig contract: the prompt forbids dispensing-arithmetic
-    // rewrites (平均每日 1 → 每日一次) and filler (依醫囑服用), but flash-tier
-    // models keep producing them. Enforce here: a sig survives only when at
-    // least one cited medication actually records a non-arithmetic instruction.
-    const SIG_ARITHMETIC = /給藥總量|給藥日數|平均每日/
-    const SIG_FILLER = /依醫囑|遵醫囑|as directed/i
-    const medicationsById = new Map(
-      (options.clinicalData?.medications ?? []).map((medication) => [medication.id, medication]),
-    )
-    const groundedSig = (rawSources: string[], sig?: string): string | undefined => {
-      const trimmed = sig?.trim()
-      if (!trimmed) return undefined
-      if (SIG_FILLER.test(trimmed) || SIG_ARITHMETIC.test(trimmed)) return undefined
-      if (medicationsById.size === 0) return trimmed
-      const recorded = rawSources
-        .map((key) => byKey.get(normaliseSummarySourceKey(key)))
-        .filter((entry) => entry?.resourceType.startsWith('Medication'))
-        .flatMap((entry) => {
-          const medication = medicationsById.get(entry!.resourceId)
-          return (medication?.dosageInstruction ?? [])
-            .map((instruction) => instruction.text?.trim())
-            .filter((value): value is string => Boolean(value))
-        })
-      if (recorded.length > 0 && recorded.every((text) => SIG_ARITHMETIC.test(text))) return undefined
-      return trimmed
-    }
+    // 最可能的就診主因 is rendered above 其餘問題, so a problem the focus section
+    // already carries is a visible duplicate, not extra information. Compare on
+    // normalized text and drop the problem — the focus item is the richer row.
+    const focusTitles = focus.map((item) => normalizeForComparison(item.title))
+    let droppedProblemCount = 0
 
-    const groundedRegimen = completeRegimen.flatMap((item) => {
-        const rawSources = item.sources ?? []
-        if (!hasVerifiedMedicationSource(rawSources)) return []
-        return [{
-          // Preserve the model's classification verbatim. NHI Terminology is
-          // supplied in the prompt as same-row evidence, but post-processing
-          // must not silently hide a model error or flatten a valid alternative
-          // clinical description into the ATC level-2 label.
-          group: item.group,
-          name: item.name,
-          sig: groundedSig(rawSources, item.sig),
-          sourceKeys: rawSources.map(registerKey),
-          ...withDocumentEvidence(item.documentEvidence),
-        }]
-      })
-    const groundedChanges = rawMedicationReview.changes.flatMap((item) => {
-        const rawSources = item.sources ?? []
-        if (!hasVerifiedMedicationSource(rawSources)) return []
-        return [{
-          type: normaliseMedicationChangeType(item.type),
-          medication: item.medication,
-          summary: item.summary,
-          sourceKeys: rawSources.map(registerKey),
-          ...withDocumentEvidence(item.documentEvidence),
-        }]
-      })
-    const groundedReconciliation = rawMedicationReview.reconciliation.flatMap((item) => {
-        const rawSources = item.sources ?? []
-        const reason = normaliseMedicationReconciliationReason(item.reason)
-        // condition-without-therapy flags an ABSENT medicine, so there is no
-        // M key to cite — it is grounded by the condition/lab evidence
-        // instead. Every other item still needs a real Medication record.
-        const grounded =
-          reason === 'condition-without-therapy'
-            ? rawSources.some((rawKey) => byKey.has(normaliseSummarySourceKey(rawKey)))
-            : hasVerifiedMedicationSource(rawSources)
-        if (!grounded) return []
-        // Health Bank commonly omits complete directions. Treat missing SIG as
-        // a source limitation rather than rendering the same low-value
-        // "how often do you take it?" question for nearly every patient.
-        if (reason === 'missing-sig') return []
-        return [{
-          reason,
-          text: item.text,
-          sourceKeys: rawSources.map(registerKey),
-          ...withDocumentEvidence(item.documentEvidence),
-        }]
-      })
-    const hasGroundedMedicationReview =
-      groundedRegimen.length > 0 ||
-      groundedChanges.length > 0 ||
-      groundedReconciliation.length > 0
-    const strictMedicationOverview = (() => {
-      if (!strictGrounding || groundedRegimen.length === 0) return undefined
-      const prescribingOrganizations = new Set(
-        groundedRegimen
-          .flatMap((item) => item.sourceKeys)
-          .map((key) => byKey.get(key))
-          .filter((entry) =>
-            entry?.resourceType === 'MedicationRequest' ||
-            entry?.resourceType === 'MedicationStatement',
-          )
-          .map((entry) => entry?.organization?.trim())
-          .filter((organization): organization is string => Boolean(organization)),
-      )
-      const organizationClause = prescribingOrganizations.size > 0
-        ? locale === 'en'
-          ? ` across ${prescribingOrganizations.size} prescribing organization(s)`
-          : `，涉及 ${prescribingOrganizations.size} 個處方院所`
-        : ''
-      return locale === 'en'
-        ? `This summary lists ${groundedRegimen.length} source-backed medication item(s)${organizationClause}; NHI records do not prove actual current use, so reconcile them at the visit.`
-        : `本次摘要列出 ${groundedRegimen.length} 項有來源紀錄的用藥${organizationClause}；健保存摺不代表目前實際服用情形，仍需於看診時核對。`
-    })()
-    const medicationReview = {
-      // Overview has no source field of its own. Keep it only when at least one
-      // cited review item survived verification; otherwise a hallucinated
-      // overview could remain after every invented item was safely removed.
-      overview:
-        options.audience !== 'patient' && hasGroundedMedicationReview
-          ? (strictMedicationOverview ?? rawMedicationReview.overview?.trim()) || undefined
-          : undefined,
-      regimen: groundedRegimen,
-      changes: groundedChanges,
-      reconciliation: groundedReconciliation,
-    }
-
-    // Problems register BEFORE decisions: registerKey numbers sources by first
-    // appearance, and the page renders investigations → problems → decisions, so
-    // this keeps superscript numbers increasing top-to-bottom.
-    const problems = (ai.problems ?? []).flatMap((p) => {
+    const problems = (ai.problems ?? []).flatMap((p): SummaryProblem[] => {
       const rawSources = p.sources ?? []
       const basis = p.basis?.trim() || undefined
       const kind = normaliseProblemKind(p.kind)
@@ -2580,6 +2002,14 @@ export class GenerateMedicalSummaryUseCase {
       )) {
         return []
       }
+      const normalizedLabel = normalizeForComparison(p.label)
+      if (
+        normalizedLabel.length > 0 &&
+        focusTitles.some((title) => title === normalizedLabel || title.includes(normalizedLabel))
+      ) {
+        droppedProblemCount += 1
+        return []
+      }
       // Evidence-type cross-check: a resolved key renders a green pill even
       // when the model cited the wrong report (依據:心電圖紀錄 citing a chest
       // X-ray). When the basis names an evidence modality and a cited
@@ -2596,44 +2026,67 @@ export class GenerateMedicalSummaryUseCase {
               return entryType !== null && entryType !== basisType
             })
         : []
+      // The row shows "誰在管 · <date>"; that date is the APP's, read from the
+      // cited encounter, so a model can name the organization but never the day.
+      const managedByDate = p.managedByRef
+        ? byKey.get(normaliseSummarySourceKey(p.managedByRef))?.date
+        : undefined
       return [{
         label: p.label,
         basis,
         kind,
+        metric: p.metric?.trim() || undefined,
+        metricMeta: p.metricMeta?.trim() || undefined,
+        managedBy: p.managedBy?.trim() || undefined,
+        ...(managedByDate ? { managedByDate } : {}),
+        medications: p.medications?.trim() || undefined,
+        flag: p.flag ?? false,
         sourceKeys: rawSources.map(registerKey),
         ...withDocumentEvidence(p.documentEvidence),
         ...(suspectSourceKeys.length > 0 ? { suspectSourceKeys } : {}),
       }]
     })
 
-    const decisions = ai.decisions.map((d) => ({
-      text: d.text,
-      urgency: d.urgency,
-      rationale: d.rationale,
-      sourceKeys: (d.sources ?? []).map(registerKey),
-      ...withDocumentEvidence(d.documentEvidence),
-    }))
+    // 最近 90 天: inside the window everything significant belongs; before it,
+    // only admissions and procedures are worth the row. The cutoff is measured
+    // from the newest date IN THE DATA (not the wall clock) so a bundle exported
+    // months ago still renders the window its own records describe.
+    const newestCatalogDate = catalog
+      .map((entry) => entry.date)
+      .filter((date): date is string => Boolean(date))
+      .sort()
+      .at(-1)
+    const windowStart = newestCatalogDate
+      ? isoDayOffset(newestCatalogDate, -RECENT_WINDOW_DAYS)
+      : undefined
 
-    let droppedTimelineCount = 0
-    const seenTimelineEvents = new Set<string>()
-    const timeline = ai.timeline
+    let droppedRecentCount = 0
+    const seenRecentEvents = new Set<string>()
+    const recent = (ai.recent ?? [])
       .flatMap((pick) => {
         const entry = byKey.get(normaliseSummarySourceKey(pick.ref))
         if (!entry || !entry.date) {
-          droppedTimelineCount += 1
+          droppedRecentCount += 1
+          return []
+        }
+        const isMilestone = entry.resourceType === 'Procedure' ||
+          (entry.resourceType === 'Encounter' &&
+            (entry.encounterClass === 'inpatient' || entry.encounterClass === 'emergency'))
+        if (windowStart && entry.date < windowStart && !isMilestone) {
+          droppedRecentCount += 1
           return []
         }
         const category = normaliseTimelineCategory(pick.category)
         // A single source (especially a discharge summary) may legitimately
-        // support more than one timeline event. Drop only an exact repeated
-        // event instead of deduplicating by source key and losing information.
+        // support more than one event. Drop only an exact repeated event
+        // instead of deduplicating by source key and losing information.
         const eventSignature = JSON.stringify([
           entry.key,
           category,
           compactWhitespace(pick.label),
         ])
-        if (seenTimelineEvents.has(eventSignature)) return []
-        seenTimelineEvents.add(eventSignature)
+        if (seenRecentEvents.has(eventSignature)) return []
+        seenRecentEvents.add(eventSignature)
         return [
           {
             key: entry.key,
@@ -2658,15 +2111,15 @@ export class GenerateMedicalSummaryUseCase {
 
     const finalized = {
       headline,
-      summary,
-      investigations,
-      medicationEducation,
-      medicationReview,
+      mustKnow,
+      focus,
       problems,
-      decisions,
-      timeline,
+      recent,
+      medicationEducation,
       sourceIndex,
-      droppedTimelineCount,
+      allergyRecords,
+      droppedRecentCount,
+      droppedProblemCount,
     }
     return locale === 'zh-TW' ? traditionalizeGeneratedProse(finalized) : finalized
   }
@@ -2684,23 +2137,15 @@ function traditionalizeGeneratedProse<T extends Omit<MedicalSummaryResult, 'safe
   return {
     ...result,
     headline: t(result.headline),
-    summary: result.summary.map((s) => ({ ...s, text: t(s.text) })),
-    investigations: result.investigations.map((i) => ({
-      ...i, label: t(i.label), trend: t(i.trend), interpretation: t(i.interpretation),
-    })),
+    mustKnow: result.mustKnow.map((m) => ({ ...m, label: t(m.label), text: t(m.text) })),
+    focus: result.focus.map((f) => ({ ...f, title: t(f.title), text: t(f.text) })),
+    // metric and managedBy are copied from the record (values, organization
+    // names) and stay byte-identical like medicine names.
+    problems: result.problems.map((p) => ({ ...p, label: t(p.label), basis: t(p.basis) })),
+    recent: result.recent.map((e) => ({ ...e, label: t(e.label) })),
     medicationEducation: result.medicationEducation.map((m) => ({
       ...m, benefit: t(m.benefit), attention: t(m.attention),
     })),
-    medicationReview: {
-      ...result.medicationReview,
-      overview: t(result.medicationReview.overview),
-      regimen: result.medicationReview.regimen.map((r) => ({ ...r, group: t(r.group) })),
-      changes: result.medicationReview.changes.map((c) => ({ ...c, summary: t(c.summary) })),
-      reconciliation: result.medicationReview.reconciliation.map((r) => ({ ...r, text: t(r.text) })),
-    },
-    problems: result.problems.map((p) => ({ ...p, label: t(p.label), basis: t(p.basis) })),
-    decisions: result.decisions.map((d) => ({ ...d, text: t(d.text), rationale: t(d.rationale) })),
-    timeline: result.timeline.map((e) => ({ ...e, label: t(e.label) })),
   }
 }
 

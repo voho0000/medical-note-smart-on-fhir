@@ -11,9 +11,10 @@ import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.e
 
 export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
-// v15: every registered card, including Safety, lives in one result artifact
-// and one cache entry. Older summary-only entries intentionally regenerate.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary15', scanKey)
+// v16: 初診快覽 — overview / focus / problems / recent replace the six-card
+// artifact. A v15 entry cannot render in the new layout, so it must not be
+// restored; older entries intentionally regenerate.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary16', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

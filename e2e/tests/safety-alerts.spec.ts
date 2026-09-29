@@ -35,17 +35,14 @@ const moduleBlock = (id: string, value: unknown) => [
 ].join('\n')
 
 const SUMMARY_BATCH_MARKDOWN = [
-  moduleBlock('priorities', {
+  moduleBlock('overview', {
     headline: '跨院病歷測試摘要',
-    summary: [{ text: '已完成測試資料彙整。', emphasis: false, sources: [] }],
-  }),
-  moduleBlock('problems', { problems: [] }),
-  moduleBlock('timeline', { timeline: [] }),
-  moduleBlock('investigations', { investigations: [] }),
-  moduleBlock('medications', {
+    mustKnow: [],
     medicationEducation: [],
-    medicationReview: { regimen: [], changes: [], reconciliation: [] },
   }),
+  moduleBlock('focus', { items: [] }),
+  moduleBlock('problems', { problems: [] }),
+  moduleBlock('recent', { recent: [] }),
   moduleBlock('safety', SAFETY_RESULT),
 ].join('\n')
 
@@ -66,7 +63,7 @@ async function mockUnifiedSummary(page: Page, autoGenerate = false) {
 }
 
 test.describe('safety alerts (mocked)', () => {
-  test('manual summary generation renders the integrated safety card', async ({ page }) => {
+  test('manual summary generation folds safety into 初診快覽', async ({ page }) => {
     await mockUnifiedSummary(page)
     await importBundle(page)
     await openFeaturePanel(page)
@@ -80,10 +77,16 @@ test.describe('safety alerts (mocked)', () => {
     // safety module is still streaming, and the default 5s that followed was not
     // always enough for the alerts themselves.
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
-    await expect(summaryPanel.getByRole('heading', { name: '安全提醒與待處置事項' })).toBeVisible()
+    await expect(summaryPanel.getByRole('heading', { name: '初診快覽' })).toBeVisible()
+
+    // High severity is a row of 開藥前必看, not a card of its own.
+    await expect(summaryPanel.getByText('開藥前必看')).toBeVisible()
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
+
+    // Medium/low fold into the closed disclosure at the very bottom.
+    await expect(summaryPanel.getByText('重複用藥')).toHaveCount(0)
+    await summaryPanel.getByRole('button', { name: /其他警示（1）/ }).click()
     await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
-    await expect(summaryPanel.getByText('高危', { exact: true })).toBeVisible()
     await expect(summaryPanel.getByText('中危', { exact: true })).toBeVisible()
     await expect(summaryPanel.getByText(/僅供臨床參考/)).toBeVisible()
   })
@@ -124,7 +127,7 @@ test.describe('safety alerts (mocked)', () => {
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
+    await expect(summaryPanel.getByRole('button', { name: /其他警示（1）/ })).toBeVisible()
   })
 
   test('the 自動產生 switch turns background generation on', async ({ page }) => {
@@ -160,7 +163,7 @@ test.describe('safety alerts (mocked)', () => {
     await openFeaturePanel(page)
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    await expect(summaryPanel.getByText('重複用藥')).toBeVisible()
+    await expect(summaryPanel.getByRole('button', { name: /其他警示（1）/ })).toBeVisible()
     expect(await getChatCallCount(page)).toBe(0)
   })
 })
