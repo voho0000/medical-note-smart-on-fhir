@@ -66,6 +66,25 @@ describe('visit decision placement', () => {
     expect(decisionFor(reduced, decided({ 'visit:af:DP-09': { actionId: 'apixaban-5' } }), NOW)?.action.label).toBe('apixaban 2.5 mg bid')
   })
 
+  // A start's button keeps ten characters; the note records the dose its
+  // question named (`recordLabel`, personalized-care after 2.9.0).
+  it('records the words the note keeps, and reads a decision back under them or the button’s own', () => {
+    const base = p5Model().points.find((item) => item.dp === 'DP-07')!
+    const action = { ...base.actions[0], label: '開始 β 阻斷劑', recordLabel: '開始 β 阻斷劑（bisoprolol 1.25 mg）' }
+    const point = { ...base, actions: [action, ...base.actions.slice(1)] }
+    expect(decisionInputFor(point, action, '2.10.0').actionLabel).toBe('開始 β 阻斷劑（bisoprolol 1.25 mg）')
+    const key = visitDecisionKey(point)
+    expect(decisionFor(point, decided({ [key]: { actionId: action.id, actionLabel: '開始 β 阻斷劑（bisoprolol 1.25 mg）' } }), NOW)?.record.actionLabel)
+      .toBe('開始 β 阻斷劑（bisoprolol 1.25 mg）')
+    // Recorded this morning under the button's words, before the pack gave the note's.
+    expect(decisionFor(point, decided({ [key]: { actionId: action.id, actionLabel: '開始 β 阻斷劑' } }), NOW)?.action.id).toBe(action.id)
+    // A new starting dose is a new question.
+    const moved = { ...point, actions: [{ ...action, recordLabel: '開始 β 阻斷劑（bisoprolol 2.5 mg）' }, ...base.actions.slice(1)] }
+    expect(decisionFor(moved, decided({ [key]: { actionId: action.id, actionLabel: '開始 β 阻斷劑（bisoprolol 1.25 mg）' } }), NOW)).toBeUndefined()
+    // An older pack sends none: the label is what is recorded.
+    expect(decisionInputFor(base, base.actions[0], '2.8.0').actionLabel).toBe(base.actions[0].label)
+  })
+
   // #166 re-review: switching the page to English is not a new decision.
   it('keeps a decision taken in one language when the page reads in the other, and still asks again on a new dose', () => {
     const base = p3Model()
