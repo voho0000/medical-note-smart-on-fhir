@@ -117,6 +117,15 @@ describe('visit answers', () => {
       'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString(), packId: 'heart-failure-cdss' },
     }, AT)
     expect(record['dyspnoea-trend']?.packId).toBe('heart-failure-cdss')
+    // A page id that is not a name is dropped; the answer stands without it.
+    const odd = toVisitAnswerRecord({
+      'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString(), packId: 42 },
+      bleeding: { value: 'no', answeredAt: AT.toISOString(), packId: '' },
+    }, AT)
+    expect(odd).toEqual({
+      'dyspnoea-trend': { value: 'worse', answeredAt: AT.toISOString() },
+      bleeding: { value: 'no', answeredAt: AT.toISOString() },
+    })
   })
 
   it('accepts every observation the pack catalogue defines, and only its answers', () => {

@@ -63,6 +63,22 @@ describe('an answer given on another page', () => {
     expect(document.querySelector('[data-visit-answer-source]')).toBeNull()
   })
 
+  it('says nothing for the record’s own reading, which no page answered', () => {
+    // A stale source left for an answer since withdrawn: the prefill shown in
+    // its place is the record's, not the other page's.
+    render(
+      <VisitAsks
+        asks={[{ ...DYSPNOEA, prefill: { value: 'stable', basis: '體重與上次相同' } }]}
+        answers={{}}
+        isEnglish={false}
+        pagePackId="copd-cdss"
+        sources={answeredOn('heart-failure-cdss', '心衰竭')}
+      />,
+    )
+    expect(document.querySelector('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')).toHaveAttribute('aria-pressed', 'true')
+    expect(document.querySelector('[data-visit-answer-source]')).toBeNull()
+  })
+
   it('names the page by its pack id when it has no name, in English too', () => {
     render(
       <VisitAsks
