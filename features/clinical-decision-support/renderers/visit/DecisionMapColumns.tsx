@@ -81,6 +81,40 @@ function useSideBySide(ref: RefObject<HTMLElement | null>): { sideBySide: boolea
   return state
 }
 
+/**
+ * How far below the top of what scrolls the steps, stuck at the head of the
+ * details, reach — as `--cdss-steps-clear` on the details, which every place
+ * the map moves the page to keeps as its scroll margin. Measured, not a fixed
+ * rem: the steps' text is set in pixels and the page's rem is not always 16,
+ * so a guess leaves a target's top — the summary's 複製 — under them.
+ */
+function useStepsClearance(
+  workingRef: RefObject<HTMLElement | null>,
+  stepsRef: RefObject<HTMLElement | null>,
+): void {
+  useLayoutEffect(() => {
+    const working = workingRef.current
+    const steps = stepsRef.current
+    if (!working || !steps || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const style = getComputedStyle(steps)
+      // Stacked on a very narrow panel the steps scroll away with the rest.
+      const stuck = style.position === 'sticky'
+      // A stuck offset counts from inside what scrolls' padding; a scroll
+      // margin from its edge.
+      const scroller = scrollParentOf(steps)
+      const padding = scroller ? Number.parseFloat(getComputedStyle(scroller).paddingTop) || 0 : 0
+      const clear = stuck ? padding + (Number.parseFloat(style.top) || 0) + steps.getBoundingClientRect().height + 6 : 8
+      working.style.setProperty('--cdss-steps-clear', `${Math.ceil(clear)}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(steps)
+    observer.observe(working)
+    return () => observer.disconnect()
+  }, [workingRef, stepsRef])
+}
+
 const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm']
 
 /**
@@ -451,6 +485,9 @@ export function DecisionMapColumns({
   const [query, setQuery] = useState('')
   const mapRef = useRef<HTMLElement | null>(null)
   const { sideBySide, columnHeight } = useSideBySide(mapRef)
+  const workingRef = useRef<HTMLDivElement | null>(null)
+  const stepsRef = useRef<HTMLDivElement | null>(null)
+  useStepsClearance(workingRef, stepsRef)
   // Beside the column the details are never empty: a section — or the
   // summary — is always shown.
   const summaryShown = openBlock === 'summary' && Boolean(summary)
@@ -721,10 +758,10 @@ export function DecisionMapColumns({
       {/* ---------------------------------------------------- working areas */}
       {/* Its own container: what it holds lays out for the width it has
           beside the column, not for the whole panel's. */}
-      <div className="@container min-w-0 space-y-2" data-testid="cdss-visit-working">
+      <div ref={workingRef} className="@container min-w-0 space-y-2" data-testid="cdss-visit-working">
         {/* Where the visit is, and what each step still needs: in view at the
             head of the details as they scroll. */}
-        <div className="z-10 bg-background/95 py-0.5 backdrop-blur-sm @min-[20rem]:sticky @min-[20rem]:top-2">
+        <div ref={stepsRef} className="z-10 bg-background/95 py-0.5 backdrop-blur-sm @min-[20rem]:sticky @min-[20rem]:top-2">
           <VisitSteps
             shown={shownStep}
             summaries={stepSummaries}
@@ -749,7 +786,7 @@ export function DecisionMapColumns({
               id={`cdss-visit-column-${block}`}
               aria-labelledby={`cdss-visit-section-toggle-${block}`}
               hidden={!isOpen}
-              className={cn(styles.tone, styles.mapPanel, 'min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2 @min-[20rem]:scroll-mt-16')}
+              className={cn(styles.tone, styles.mapPanel, 'min-w-0 space-y-2 rounded-lg border border-border p-2 scroll-mt-[var(--cdss-steps-clear,0.5rem)]')}
               data-section={SECTION_TONE[block]}
               data-testid={`cdss-visit-column-${block}`}
               data-block={block}
@@ -793,7 +830,7 @@ export function DecisionMapColumns({
               ) : null}
               {head ? (
                 // The module a tile opened, at the head of its section.
-                <div className="scroll-mt-2 space-y-1.5 @min-[20rem]:scroll-mt-16" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
+                <div className="space-y-1.5 scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5" data-map-heading="">
                     <span className="font-mono text-[11px] font-semibold text-muted-foreground">{head.dp}</span>
                     <span className="text-sm font-semibold text-foreground">{head.label}</span>
@@ -878,7 +915,7 @@ export function DecisionMapColumns({
             id="cdss-visit-column-summary"
             aria-label={isEnglish ? 'This visit’s summary' : '本次摘要'}
             hidden={!summaryShown}
-            className="min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2 @min-[20rem]:scroll-mt-16"
+            className="min-w-0 space-y-2 rounded-lg border border-border p-2 scroll-mt-[var(--cdss-steps-clear,0.5rem)]"
             data-testid="cdss-visit-column-summary"
             data-open={summaryShown ? 'true' : undefined}
           >

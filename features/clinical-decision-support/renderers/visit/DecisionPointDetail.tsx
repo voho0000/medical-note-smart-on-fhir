@@ -139,8 +139,9 @@ export function DecisionPointDetail({
       ref={sectionRef}
       id={VISIT_DETAIL_ID}
       aria-labelledby={`${VISIT_DETAIL_ID}-title`}
-      // Clear of the steps held at the top of the details as they scroll.
-      className={cn('relative scroll-mt-16 space-y-3 rounded-lg border border-border bg-card p-3', !showHeadline && !showWhy && 'pr-11')}
+      // Clear of the steps held at the top of the details as they scroll
+      // (measured on the details by DecisionMapColumns).
+      className={cn('relative scroll-mt-[var(--cdss-steps-clear,0.5rem)] space-y-3 rounded-lg border border-border bg-card p-3', !showHeadline && !showWhy && 'pr-11')}
       data-testid="cdss-visit-detail"
       data-dp={point.dp}
       data-state={point.state}
