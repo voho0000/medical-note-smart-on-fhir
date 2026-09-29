@@ -514,6 +514,11 @@ export function VisitDecisionScreen({
   const goToFollowUp = () => {
     setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
     document.querySelector('[data-testid="cdss-visit-status-view"]')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    // The button pressed goes with the 診斷 view: focus goes to 追蹤, where
+    // the clinician now is.
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-testid="cdss-visit-status-view-follow-up"]')?.focus({ preventScroll: true })
+    })
   }
   const followUpLead = (
     <>

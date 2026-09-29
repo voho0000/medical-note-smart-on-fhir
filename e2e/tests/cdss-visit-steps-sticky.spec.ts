@@ -24,6 +24,22 @@ async function scrollPanelOnePage(page: Page) {
   await page.getByTestId('sim-right-panel').evaluate((panel) => { panel.scrollTop += panel.clientHeight })
 }
 
+/**
+ * Waits for the panel to stop moving — a smooth scroll takes a moment — and
+ * gives the top of `target` once it has, so a check never reads the place a
+ * target started from.
+ */
+async function settledTop(page: Page, target: Locator): Promise<number> {
+  let last = Number.NaN
+  await expect.poll(async () => {
+    const now = await page.getByTestId('sim-right-panel').evaluate((panel) => panel.scrollTop)
+    const still = now === last
+    last = now
+    return still
+  }, { intervals: [200] }).toBe(true)
+  return (await target.boundingBox())!.y
+}
+
 async function bottomOfSteps(page: Page): Promise<number> {
   const box = await page.getByTestId('cdss-visit-steps').boundingBox()
   return box!.y + box!.height
@@ -50,7 +66,7 @@ test.describe('CDSS visit steps held at the head of the details', () => {
       const summary = page.getByTestId('cdss-visit-column-summary')
       await expect(summary).toBeVisible()
       const copy = page.getByTestId('cdss-visit-summary-copy')
-      await expect.poll(async () => (await summary.boundingBox())!.y).toBeGreaterThanOrEqual(await bottomOfSteps(page))
+      expect(await settledTop(page, summary)).toBeGreaterThanOrEqual(await bottomOfSteps(page))
       expect(await takesThePress(copy)).toBe(true)
       // Playwright's own check that nothing intercepts the click.
       await copy.click({ trial: true, timeout: 5_000 })
@@ -65,7 +81,17 @@ test.describe('CDSS visit steps held at the head of the details', () => {
 
     const slot = page.getByTestId('cdss-visit-detail-slot')
     await expect(slot).toBeVisible()
-    await expect.poll(async () => (await slot.boundingBox())!.y).toBeGreaterThanOrEqual(await bottomOfSteps(page))
+    expect(await settledTop(page, slot)).toBeGreaterThanOrEqual(await bottomOfSteps(page))
+  })
+
+  test('「下一步：追蹤」 lands the 診斷／追蹤 switch below the steps, and focus on 追蹤', async ({ page }) => {
+    await openScenario(page, 'p1-suspected-hfpef', 768)
+    await page.getByTestId('cdss-hf-suspicion-option-hfpef').click()
+    await page.getByTestId('cdss-visit-next-step-status').click()
+
+    const views = page.getByTestId('cdss-visit-status-view')
+    await expect(page.getByTestId('cdss-visit-status-view-follow-up')).toBeFocused()
+    expect(await settledTop(page, views)).toBeGreaterThanOrEqual(await bottomOfSteps(page))
   })
 
   test('下一區 lands the next section below the steps', async ({ page }) => {
@@ -75,6 +101,6 @@ test.describe('CDSS visit steps held at the head of the details', () => {
 
     const treatment = page.getByTestId('cdss-visit-column-treatment')
     await expect(treatment).toBeVisible()
-    await expect.poll(async () => (await treatment.boundingBox())!.y).toBeGreaterThanOrEqual(await bottomOfSteps(page))
+    expect(await settledTop(page, treatment)).toBeGreaterThanOrEqual(await bottomOfSteps(page))
   })
 })

@@ -758,7 +758,11 @@ export function DecisionMapColumns({
       {/* ---------------------------------------------------- working areas */}
       {/* Its own container: what it holds lays out for the width it has
           beside the column, not for the whole panel's. */}
-      <div ref={workingRef} className="@container min-w-0 space-y-2" data-testid="cdss-visit-working">
+      {/* Whatever in the details the page is moved to — by the map, or by
+          the page's own surfaces (「下一步：追蹤」, the fuller questions) —
+          lands below the steps: every element keeps their reach as its
+          scroll margin. */}
+      <div ref={workingRef} className="@container min-w-0 space-y-2 [&_*]:scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-working">
         {/* Where the visit is, and what each step still needs: in view at the
             head of the details as they scroll. */}
         <div ref={stepsRef} className="z-10 bg-background/95 py-0.5 backdrop-blur-sm @min-[20rem]:sticky @min-[20rem]:top-2">
