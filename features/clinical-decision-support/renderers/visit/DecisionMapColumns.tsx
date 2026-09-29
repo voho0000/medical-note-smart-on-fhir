@@ -449,6 +449,10 @@ export function DecisionMapColumns({
 }) {
   const [openBlock, setOpenBlock] = useState<VisitStep | null>(initialOpen ?? null)
   const [query, setQuery] = useState('')
+  // Narrow, the map's list folds under its title: the steps at the head of
+  // the details say what each section needs, and 37 rows above the details
+  // would put every step a long scroll away. A search unfolds it.
+  const [mapUnfolded, setMapUnfolded] = useState(false)
   const mapRef = useRef<HTMLElement | null>(null)
   const { sideBySide, columnHeight } = useSideBySide(mapRef)
   // Beside the column the details are never empty: a section — or the
@@ -513,6 +517,9 @@ export function DecisionMapColumns({
   const matchCount = needle ? model.points.filter((point) => searchText(point).includes(needle)).length : 0
 
   const open = (point: DecisionPointView) => {
+    // A point picked from the unfolded list: the list folds again, and the
+    // details come up to meet the clinician.
+    if (!sideBySide) setMapUnfolded(false)
     // The point's card shows in its own section, so that section is the open one.
     if (opensCard(point)) setReveal({ card: true })
     setOpenBlock(point.block)
@@ -605,6 +612,19 @@ export function DecisionMapColumns({
           <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
             {isEnglish ? `Decision map · all ${model.points.length} points` : `決策地圖 · 全部 ${model.points.length} 個決策點`}
           </h3>
+          {needle ? null : (
+            <button
+              type="button"
+              aria-expanded={mapUnfolded}
+              aria-controls="cdss-visit-sections"
+              onClick={() => setMapUnfolded(!mapUnfolded)}
+              className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 @min-[36rem]:hidden"
+              data-testid="cdss-visit-map-fold"
+            >
+              {mapUnfolded ? (isEnglish ? 'Fold' : '收起') : (isEnglish ? 'Show all' : '展開')}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', mapUnfolded && 'rotate-180')} aria-hidden="true" />
+            </button>
+          )}
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 @min-[36rem]:w-full @min-[36rem]:flex-none">
             {needle ? (
               <span className="shrink-0 text-xs text-muted-foreground" role="status" data-testid="cdss-visit-map-search-count">
@@ -633,7 +653,12 @@ export function DecisionMapColumns({
           </div>
         </div>
 
-        <div className="grid items-start gap-2" data-testid="cdss-visit-sections">
+        <div
+          id="cdss-visit-sections"
+          className={cn('grid items-start gap-2', !mapUnfolded && !needle && '@max-[36rem]:hidden')}
+          data-testid="cdss-visit-sections"
+          data-folded={!sideBySide && !mapUnfolded && !needle ? 'true' : undefined}
+        >
           {BLOCK_ORDER.map((block) => {
             const isOpen = shownBlock === block
             const note = closedNote(block)

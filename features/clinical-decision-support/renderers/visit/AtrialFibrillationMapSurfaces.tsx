@@ -15,6 +15,7 @@ import { ClinicVitalsForm } from '../ClinicVitalsForm'
 import type { DiseaseBoardModel } from '../disease-board'
 import type { VisitBlock, VisitDecisionModel } from '../../types'
 import { firstPresentPoint, isPagePoint, type VisitMapSurfaces } from './visit-surfaces'
+import { MapFold } from './MapFold'
 
 /**
  * Where each AF question group lives on the map: the decision point it feeds,
@@ -124,15 +125,10 @@ export function AtrialFibrillationMapSurfaces({
     const strategyHere = !strategyDp && block === 'treatment'
     if (ids.length === 0 && !strategyHere) return null
     return (
-      <details className="rounded-md border border-border bg-background" data-testid={`cdss-visit-other-questions-${block}`}>
-        <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-          {isEnglish ? 'Other questions' : '其他問答'}
-        </summary>
-        <div className="border-t border-border">
-          {strategyHere ? strategyContent : null}
-          {ids.length ? groups(ids) : null}
-        </div>
-      </details>
+      <MapFold label={isEnglish ? 'Other questions' : '其他問答'} testId={`cdss-visit-other-questions-${block}`}>
+        {strategyHere ? strategyContent : null}
+        {ids.length ? groups(ids) : null}
+      </MapFold>
     )
   }
 
@@ -174,14 +170,9 @@ export function AtrialFibrillationMapSurfaces({
     columnFooters: {
       status: (
         <>
-          <details className="rounded-md border border-border bg-background" data-testid="cdss-visit-af-record">
-            <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-              {isEnglish ? 'From the record and this visit' : '病歷與本次量測'}
-            </summary>
-            <div className="@container border-t border-border">
-              <AfRecordMetrics board={board} isEnglish={isEnglish} />
-            </div>
-          </details>
+          <MapFold label={isEnglish ? 'From the record and this visit' : '病歷與本次量測'} bodyClassName="@container" testId="cdss-visit-af-record">
+            <AfRecordMetrics board={board} isEnglish={isEnglish} />
+          </MapFold>
           {otherQuestions('status')}
         </>
       ),

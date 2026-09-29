@@ -41,6 +41,7 @@ import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksD
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { pageSourceOf } from './visit-model.source'
 import { revealTop } from './reveal'
+import { MapFold } from './MapFold'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
@@ -648,12 +649,9 @@ export function VisitDecisionScreen({
         outlookSlot={(
           <>
             {outlookModules.map((item) => (
-              <details key={item.id} className="rounded-md border border-border bg-background" data-testid={`cdss-visit-outlook-module-${item.id}`}>
-                <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                  {item.moduleName ?? item.title}
-                </summary>
-                <div className="border-t border-border px-2.5 pb-2.5 pt-2">{renderDetail(item)}</div>
-              </details>
+              <MapFold key={item.id} label={item.moduleName ?? item.title} size="sm" bodyClassName="px-2.5 pb-2.5 pt-2" testId={`cdss-visit-outlook-module-${item.id}`}>
+                {renderDetail(item)}
+              </MapFold>
             ))}
             <VisitPlan plan={plan} isEnglish={isEnglish} />
             {outlookContent}
