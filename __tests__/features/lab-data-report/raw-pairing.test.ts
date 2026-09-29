@@ -41,11 +41,88 @@ describe('pairRawRows', () => {
     expect(pairing.unmatchedRaw).toEqual([])
   })
 
-  it('reads the one number in a raw text value', () => {
+  it('does not count the unit written into a raw value as a difference', () => {
     const rows = [converted(1, 5, 'Testosterone', q(2.33), ['09121C'])]
-    const pairing = pairRawRows(rows, [raw(1, [5], { order_code: '09121C', assay_item_name: 'Testosterone' }, '2.33 ng/mL')])
+    const pairing = pairRawRows(rows, [raw(1, [5], { order_code: '09121C', assay_item_name: 'Testosterone', unit_data: 'ng/mL' }, '2.33 ng/mL')])
     expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
     expect(pairing.valueDiffers.size).toBe(0)
+  })
+
+  it.each([
+    ['a comparator', { kind: 'quantity', value: 0.5, magnitude: -1, decimals: 1 }, '<0.5'],
+    ['a comparator the other way', { kind: 'quantity', value: 0.5, comparator: '<', magnitude: -1, decimals: 1 }, '0.5'],
+    ['qualitative wording', { kind: 'string', value: 'Reactive(0.18)', length: 14 }, 'Nonreactive(0.18)'],
+    ['a sign', { kind: 'string', value: '(+)', length: 3 }, '(-)'],
+  ])('flags %s as a different result', (_label, value, rawValue) => {
+    const pairing = pairRawRows([converted(1, 0, 'HBsAg', value as LabDataReportRow['value'])], [raw(1, [0], { assay_item_name: 'HBsAg' }, rawValue)])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
+    expect([...pairing.valueDiffers]).toEqual([1])
+  })
+
+  it.each([
+    ['≦0.5', { kind: 'quantity', value: 0.5, comparator: '<=', magnitude: -1, decimals: 1 }],
+    ['Nonreactive(0.18)', { kind: 'string', value: 'Nonreactive (0.18)', length: 18 }],
+    ['1+', { kind: 'string', value: '1+', length: 2 }],
+  ])('treats %j as the same result', (rawValue, value) => {
+    const pairing = pairRawRows([converted(1, 0, 'X', value as LabDataReportRow['value'])], [raw(1, [0], { assay_item_name: 'X' }, rawValue)])
+    expect(pairing.valueDiffers.size).toBe(0)
+    expect(pairing.convertedByRaw.size).toBe(1)
+  })
+
+  it('pairs by test name before a shared order code, so swapped values show', () => {
+    // WBC and RBC share 08011C; the conversion swapped their values.
+    const rows = [converted(1, 0, 'WBC', q(4.5), ['08011C']), converted(2, 0, 'RBC', q(6.1), ['08011C'])]
+    const rawRows = [
+      raw(1, [0], { order_code: '08011C', assay_item_name: 'WBC' }, '6.1'),
+      raw(2, [0], { order_code: '08011C', assay_item_name: 'RBC' }, '4.5'),
+    ]
+    const pairing = pairRawRows(rows, rawRows)
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1], [2, 2]])
+    expect([...pairing.valueDiffers].sort()).toEqual([1, 2])
+  })
+
+  it('does not pair on an order code several tests share that day', () => {
+    const rows = [converted(1, 0, '白血球', q(6.1), ['08011C']), converted(2, 0, '紅血球', q(4.5), ['08011C'])]
+    const pairing = pairRawRows(rows, [raw(1, [0], { order_code: '08011C', assay_item_name: 'Leukocyte' }, '6.1')])
+    expect(pairing.convertedByRaw.size).toBe(0)
+    expect(pairing.unmatchedRaw).toEqual([1])
+  })
+
+  it('pairs on an order code only one test carries that day', () => {
+    const rows = [converted(1, 0, '肌酸酐', q(1.1), ['09015C'])]
+    const pairing = pairRawRows(rows, [raw(1, [0], { order_code: '09015C', assay_item_name: 'Creatinine' }, '1.1')])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
+  })
+
+  it('does not force a differing pair among several candidates', () => {
+    const rows = [converted(1, 0, 'K', q(4.1)), converted(2, 0, 'K', q(4.2))]
+    const pairing = pairRawRows(rows, [raw(1, [0], { assay_item_name: 'K' }, '5.0')])
+    expect(pairing.convertedByRaw.size).toBe(0)
+  })
+
+  it('matches source names to the converted column through the canonical key', () => {
+    const rows = [
+      { ...converted(1, 0, 'Hb', q(13.2), ['08011C']), app: { categoryId: 'cbc', decidedBy: 'loinc' as const, testKey: 'HB', column: 'Hb' } },
+      { ...converted(2, 0, 'Neutrophils %', q(61), ['08013C']), app: { categoryId: 'cbc', decidedBy: 'loinc' as const, testKey: 'NEU', column: 'NEU' } },
+      { ...converted(3, 0, 'Lymphocytes %', q(30), ['08013C']), app: { categoryId: 'cbc', decidedBy: 'loinc' as const, testKey: 'LYM', column: 'LYM' } },
+    ]
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { order_code: '08011C', assay_item_name: 'HGB' }, '13.2'),
+      raw(2, [0], { order_code: '08013C', assay_item_name: 'Neutrophil 嗜中性多核球' }, '61'),
+      raw(3, [0], { order_code: '08013C', assay_item_name: 'Lymphocyte 淋巴球' }, '30'),
+    ])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1], [2, 2], [3, 3]])
+    expect(pairing.valueDiffers.size).toBe(0)
+  })
+
+  it('matches a name written into a longer converted text as a whole word only', () => {
+    const rows = [converted(1, 0, '睪丸酯醇免疫分析 ;(Testosterone (EIA/LIA))', q(2.3), ['09121C']), converted(2, 0, 'HbA1c', q(6.1))]
+    const pairing = pairRawRows(rows, [
+      raw(1, [0], { assay_item_name: 'Testosterone' }, '2.3'),
+      raw(2, [0], { assay_item_name: 'Hb' }, '6.1'),
+    ])
+    expect([...pairing.convertedByRaw]).toEqual([[1, 1]])
+    expect(pairing.unmatchedRaw).toEqual([2])
   })
 
   it('keeps rows from another module out of "no raw row"', () => {

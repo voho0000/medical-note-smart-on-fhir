@@ -216,8 +216,13 @@ describe('extractRawLabRows + assembleRawLabSource', () => {
     expect(extractRawLabRows('not json')).toBeNull()
   })
 
-  it('accepts only a plain producer version', () => {
+  it.each(['A123456789', 'v0.12.19', '0.12.19-beta', '2026.07.04'])('leaves out producer version %j', (producerVersion) => {
     const extract = extractRawLabRows(capture([s02Row()]))!
-    expect(assembleRawLabSource(extract, { dayZero, includeValues: true, producerVersion: 'A123456789 x' }).producerVersion).toBeUndefined()
+    expect(assembleRawLabSource(extract, { dayZero, includeValues: true, producerVersion }).producerVersion).toBeUndefined()
+  })
+
+  it('keeps a manifest version', () => {
+    const extract = extractRawLabRows(capture([s02Row()]))!
+    expect(assembleRawLabSource(extract, { dayZero, includeValues: true, producerVersion: '0.12.19' }).producerVersion).toBe('0.12.19')
   })
 })

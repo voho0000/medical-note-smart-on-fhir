@@ -317,7 +317,14 @@ export interface AssembleRawLabSourceOptions {
   producerVersion?: string
 }
 
-const PRODUCER_VERSION = /^[A-Za-z0-9._-]{1,32}$/
+/** The extension's manifest version: 1–4 dot-separated integers
+ *  (chrome.runtime.getManifest().version, e.g. "0.12.19"). Like every other
+ *  sent string it must also pass the identifier scan ("2026.07.04"). */
+const PRODUCER_VERSION = /^\d{1,5}(?:\.\d{1,5}){0,3}$/
+
+function safeProducerVersion(version: string | undefined): string | undefined {
+  return version && PRODUCER_VERSION.test(version) && !findRowIdentifier(version) ? version : undefined
+}
 
 export function assembleRawLabSource(extract: RawLabExtract, options: AssembleRawLabSourceOptions): LabDataReportRawSource {
   const kept = extract.rows.slice(0, LAB_DATA_REPORT_MAX_RAW_ROWS)
@@ -354,7 +361,7 @@ export function assembleRawLabSource(extract: RawLabExtract, options: AssembleRa
 
   return {
     producer: 'medcloud2',
-    ...(options.producerVersion && PRODUCER_VERSION.test(options.producerVersion) && { producerVersion: options.producerVersion }),
+    ...(safeProducerVersion(options.producerVersion) && { producerVersion: options.producerVersion }),
     rows,
     s02Rows: extract.s02Rows,
     s03Rows: extract.s03Rows,
