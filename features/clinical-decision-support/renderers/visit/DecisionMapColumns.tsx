@@ -332,6 +332,47 @@ function VisitSteps({
 }
 
 /**
+ * A point its section still needs the clinician for, beyond what the section
+ * draws: its name, state and the pack's sentence, one press to its card.
+ */
+function StillOpenRow({
+  point,
+  isEnglish,
+  sourceOfPage,
+  onOpen,
+}: {
+  point: DecisionPointView
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-still-open={point.dp}
+      data-source={point.source}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">{point.label}</span>
+          {point.source !== sourceOfPage ? (
+            <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
+          ) : null}
+          <StatePill state={point.state} isEnglish={isEnglish} decided={false} inQueue={false} />
+        </span>
+        {point.headline ?? point.why ? (
+          <span className="mt-0.5 block text-xs text-muted-foreground">{point.headline ?? point.why}</span>
+        ) : null}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
+  )
+}
+
+/**
  * Under a card the overview opened: the previous and next point of the map in
  * reading order, and 收合. The last point of a section leads into the next
  * section, so the map reads 01 → 02 → 03 from the card itself.
@@ -820,6 +861,8 @@ export function DecisionMapColumns({
             // A pillar's row is its own (the pillar box draws it).
             && !leadCardKeys?.has(visitDecisionKey(point))
             && visitDecisionKey(point) !== openKey)
+          // A point with its checklist box above is opened from the box.
+          const stillOpenListed = stillOpen.filter((point) => !checklists.includes(point))
           return (
             <section
               key={block}
@@ -896,42 +939,27 @@ export function DecisionMapColumns({
               {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
               {checklists.map((point) => (
                 <div key={visitDecisionKey(point)} className="space-y-1 rounded-md border border-border bg-background px-2.5 py-2" data-testid={`cdss-visit-checklist-${point.dp}`}>
-                  <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
-                    <span className="font-mono">{point.dp}</span> {point.label}
-                  </p>
+                  {/* Still needing the clinician, its name is the press to its
+                      card, over what it has and lacks. */}
+                  {stillOpen.includes(point) ? (
+                    <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
+                  ) : (
+                    <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                      <span className="font-mono">{point.dp}</span> {point.label}
+                    </p>
+                  )}
                   <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
                 </div>
               ))}
-              {stillOpen.length ? (
+              {stillOpenListed.length ? (
                 <div className="space-y-1 rounded-md border border-border bg-background px-2 py-2" data-testid={`cdss-visit-still-open-${block}`}>
                   <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
                     {isEnglish ? 'Also for you in this section' : '這一區還需要你看'}
                   </p>
                   <ul className="space-y-1">
-                    {stillOpen.map((point) => (
+                    {stillOpenListed.map((point) => (
                       <li key={visitDecisionKey(point)}>
-                        <button
-                          type="button"
-                          onClick={() => open(point)}
-                          className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          data-still-open={point.dp}
-                          data-source={point.source}
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
-                              <span className="min-w-0 truncate text-sm font-medium text-foreground">{point.label}</span>
-                              {point.source !== sourceOfPage ? (
-                                <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
-                              ) : null}
-                              <StatePill state={point.state} isEnglish={isEnglish} decided={false} inQueue={false} />
-                            </span>
-                            {point.headline ?? point.why ? (
-                              <span className="mt-0.5 block text-xs text-muted-foreground">{point.headline ?? point.why}</span>
-                            ) : null}
-                          </span>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        </button>
+                        <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
                       </li>
                     ))}
                   </ul>

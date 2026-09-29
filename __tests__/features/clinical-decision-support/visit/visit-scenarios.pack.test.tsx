@@ -988,7 +988,11 @@ describe('real pack · what a step counts is in its section', () => {
     render(<ScenarioMap id="p1-suspected-hfpef" />)
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
     fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    // DP-31 opens from its own checklist box, over the comorbidities it lists; DP-32 from the list.
+    expect(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ })).toHaveTextContent('semaglutide')
     const list = screen.getByTestId('cdss-visit-still-open-treatment')
-    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-31', 'DP-32'])
+    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-32'])
+    fireEvent.click(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ }))
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-31')
   })
 })
