@@ -27,13 +27,15 @@ import { AuthDialog } from "@/features/auth"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
-import type { LabDataReportRow } from "../types"
+import type { LabDataReportRawRow, LabDataReportRow } from "../types"
 import { buildReportGrids, cellKey, formatReportValue, type ReportPanelGrid } from "./report-grid"
+import { pairRawRows, type RawPairing } from "./raw-pairing"
 import { isLabDataReportAdmin } from "./admin"
 import {
   deleteLabDataReport,
   getLabDataReport,
   getLabDataReportRows,
+  type StoredLabDataReportRows,
   listLabDataReports,
   type StoredLabDataReport,
 } from "./service"
@@ -293,7 +295,8 @@ function ReportDetail({
 }) {
   const { t } = useLanguage()
   const problemLabels = ((t as any).labDataReport?.problemTypes ?? {}) as Record<string, string>
-  const [rows, setRows] = useState<LabDataReportRow[] | null>(null)
+  const rawErrorLabels = ((t as any).labDataReport?.rawErrors ?? {}) as Record<string, string>
+  const [loaded, setLoaded] = useState<StoredLabDataReportRows | null>(null)
   const [rowsError, setRowsError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -302,10 +305,18 @@ function ReportDetail({
   useEffect(() => {
     let cancelled = false
     getLabDataReportRows(report.id)
-      .then((loaded) => { if (!cancelled) setRows(loaded) })
+      .then((result) => { if (!cancelled) setLoaded(result) })
       .catch((error) => { if (!cancelled) setRowsError(error instanceof Error ? error.message : String(error)) })
     return () => { cancelled = true }
   }, [report.id])
+
+  const rows = loaded?.rows ?? null
+  const rawRows = useMemo(() => loaded?.rawRows ?? [], [loaded])
+  const pairing = useMemo(
+    () => (rows && rawRows.length > 0 ? pairRawRows(rows, rawRows) : null),
+    [rawRows, rows],
+  )
+  const rawByRef = useMemo(() => new Map(rawRows.map((row) => [row.ref, row])), [rawRows])
 
   const grids = useMemo(
     () => rows
@@ -321,6 +332,7 @@ function ReportDetail({
       createdAt: report.createdAt?.toISOString() ?? null,
       expireAt: report.expireAt?.toISOString() ?? null,
       rows,
+      rawRows,
     }, null, 2)
     const url = URL.createObjectURL(new Blob([`${body}\n`], { type: 'application/json' }))
     const link = document.createElement('a')
@@ -356,6 +368,16 @@ function ReportDetail({
     [meta.dropped, `${report.droppedStrings} / ${report.serverDroppedStrings}`],
     [meta.excluded, String(report.excludedNonLabRows)],
     [meta.truncated, String(report.truncatedRows)],
+    [meta.raw, report.rawRowCount > 0
+      ? fill(strings.rawSummary, {
+        count: report.rawRowCount,
+        s02: report.rawSource?.s02Rows ?? '?',
+        s03: report.rawSource?.s03Rows ?? '?',
+        version: report.rawSource?.producerVersion ?? '?',
+      })
+      : report.rawSourceError
+        ? fill(strings.rawMissing, { reason: rawErrorLabels[report.rawSourceError] ?? report.rawSourceError })
+        : strings.rawNone],
   ]
 
   return (
@@ -429,11 +451,24 @@ function ReportDetail({
                 cellKey={selectedCell.key}
                 panelLabel={panelLabels[grid.categoryId] ?? grid.categoryId}
                 strings={strings}
+                pairing={pairing}
+                rawByRef={rawByRef}
                 onClose={() => setSelectedCell(null)}
               />
             )}
           </section>
         ))
+      )}
+
+      {rows && rawRows.length > 0 && pairing && report.rawSource && (
+        <RawRowsSection
+          rows={rows}
+          rawRows={rawRows}
+          pairing={pairing}
+          rawSource={report.rawSource}
+          panelLabels={panelLabels}
+          strings={strings}
+        />
       )}
 
       <AlertDialog open={confirmOpen} onOpenChange={(open) => { if (!deleting) setConfirmOpen(open) }}>
@@ -523,17 +558,32 @@ function PanelGrid({
   )
 }
 
+function describeRawRow(row: LabDataReportRawRow): string {
+  const value = row.results.assay_value ?? row.results.assaY_VALUE
+  return [
+    `#${row.ref}`,
+    row.fields.order_code,
+    row.fields.assay_item_name ?? row.fields.assaY_NAME,
+    value === undefined ? undefined : `${value}${row.fields.unit_data ? ` ${row.fields.unit_data}` : ''}`,
+    row.fields.hosp,
+  ].filter(Boolean).join(' · ')
+}
+
 function RowDetail({
   grid,
   cellKey: key,
   panelLabel,
   strings,
+  pairing,
+  rawByRef,
   onClose,
 }: {
   grid: ReportPanelGrid
   cellKey: string
   panelLabel: string
   strings: Strings
+  pairing: RawPairing | null
+  rawByRef: Map<number, LabDataReportRawRow>
   onClose: () => void
 }) {
   const { t } = useLanguage()
@@ -575,6 +625,14 @@ function RowDetail({
             [fields.testKey, row.app.testKey],
             [fields.category, row.category.join(', ') || '—'],
             [fields.sameValue, row.sameValueGroup !== undefined ? `#${row.sameValueGroup}` : '—'],
+            ...(pairing
+              ? [[fields.pairedRaw, (() => {
+                const rawRef = pairing.rawByConverted.get(row.ref)
+                const raw = rawRef === undefined ? undefined : rawByRef.get(rawRef)
+                if (raw) return `${describeRawRow(raw)}${pairing.valueDiffers.has(raw.ref) ? `（${strings.valueDiffers}）` : ''}`
+                return pairing.otherSource.includes(row.ref) ? strings.otherSource : strings.noRawPair
+              })()] as [string, string]]
+              : []),
           ]
           return (
             <dl key={row.ref} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 rounded border border-border bg-background p-2 text-xs">
@@ -590,5 +648,154 @@ function RowDetail({
         })}
       </div>
     </div>
+  )
+}
+
+function RawRowsSection({
+  rows,
+  rawRows,
+  pairing,
+  rawSource,
+  panelLabels,
+  strings,
+}: {
+  rows: LabDataReportRow[]
+  rawRows: LabDataReportRawRow[]
+  pairing: RawPairing
+  rawSource: NonNullable<StoredLabDataReport['rawSource']>
+  panelLabels: Record<string, string>
+  strings: Strings
+}) {
+  const [unmatchedOnly, setUnmatchedOnly] = useState(false)
+  const convertedByRef = useMemo(() => new Map(rows.map((row) => [row.ref, row])), [rows])
+  const notes = strings.rawNotes ?? {}
+  const columns = strings.rawColumns ?? {}
+  const sources = strings.rawSources ?? {}
+  const dateLabels = strings.rawDateFields ?? {}
+  const lines = [
+    rawSource.droppedStrings > 0 && fill(notes.dropped, { count: rawSource.droppedStrings }),
+    rawSource.unparsedDates > 0 && fill(notes.unparsed, { count: rawSource.unparsedDates }),
+    rawSource.truncatedRows > 0 && fill(notes.truncated, { count: rawSource.truncatedRows }),
+    rawSource.unknownFields.length > 0 && fill(notes.unknown, { fields: rawSource.unknownFields.join(', ') }),
+    fill(notes.status, { s02: rawSource.endpointStatus.s02 ?? '—', s03: rawSource.endpointStatus.s03 ?? '—' }),
+  ].filter((line): line is string => !!line)
+  const shown = unmatchedOnly
+    ? rawRows.filter((row) => !pairing.convertedByRaw.has(row.ref) || pairing.valueDiffers.has(row.ref))
+    : rawRows
+
+  return (
+    <section aria-labelledby="raw-rows-title" className="space-y-1.5">
+      <h3 id="raw-rows-title" className="text-sm font-semibold">{strings.rawTitle}</h3>
+      <p className="text-xs text-muted-foreground">{strings.rawIntro}</p>
+      <p className="text-xs tabular-nums">
+        {fill(strings.rawStats, {
+          raw: rawRows.length,
+          paired: pairing.convertedByRaw.size,
+          differs: pairing.valueDiffers.size,
+          unmatchedRaw: pairing.unmatchedRaw.length,
+          unmatchedConverted: pairing.unmatchedConverted.length,
+        })}
+        {pairing.otherSource.length > 0 && ` ${fill(strings.rawOtherSource, { count: pairing.otherSource.length })}`}
+      </p>
+      <ul className="space-y-0.5 text-xs text-muted-foreground">
+        {lines.map((line) => <li key={line}>{line}</li>)}
+      </ul>
+      <label className="inline-flex items-center gap-1.5 text-xs max-md:min-h-11">
+        <input type="checkbox" checked={unmatchedOnly} onChange={(event) => setUnmatchedOnly(event.target.checked)} />
+        {strings.rawUnmatchedOnly}
+      </label>
+      <div
+        role="region"
+        aria-label={strings.rawTableLabel}
+        tabIndex={0}
+        className="max-h-[32rem] overflow-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        <table className="w-max min-w-full border-collapse text-xs tabular-nums">
+          <thead className="sticky top-0 z-10 bg-muted text-left text-muted-foreground">
+            <tr>
+              <th scope="col" className="sticky left-0 z-20 bg-muted px-2 py-1.5 font-medium">{columns.ref}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.paired}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.source}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.day}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.hospital}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.order}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.item}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.value}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.range}</th>
+              <th scope="col" className="px-2 py-1.5 font-medium">{columns.marks}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row) => {
+              const pairedRef = pairing.convertedByRaw.get(row.ref)
+              const paired = pairedRef === undefined ? undefined : convertedByRef.get(pairedRef)
+              const value = row.results.assay_value ?? row.results.assaY_VALUE
+              const withheld = row.withheld.assay_value ?? row.withheld.assaY_VALUE
+              const extra = [
+                row.results.inspect_result !== undefined && `inspect_result: ${row.results.inspect_result}`,
+                row.withheld.inspect_result !== undefined && `inspect_result (${row.withheld.inspect_result})`,
+                row.results.memo_data !== undefined && `memo_data: ${row.results.memo_data}`,
+                row.withheld.memo_data !== undefined && `memo_data (${row.withheld.memo_data})`,
+              ].filter(Boolean)
+              const marks = [
+                row.fields.assay_mark && `mark ${row.fields.assay_mark}`,
+                row.fields.data_mark && `data_mark ${row.fields.data_mark}`,
+                row.fields.inspect_mode && `mode ${row.fields.inspect_mode}`,
+                row.fields.assay_tp_cname,
+                row.fields.assay_method,
+                row.fields.func_type && `dept ${row.fields.func_type}`,
+              ].filter(Boolean)
+              return (
+                <tr key={row.ref} className={cn('border-t border-border/70 align-top', (!paired || pairing.valueDiffers.has(row.ref)) && 'bg-amber-50 dark:bg-amber-950/30')}>
+                  <th scope="row" className="sticky left-0 bg-background px-2 py-1 text-left font-normal text-muted-foreground">
+                    {row.ref}
+                  </th>
+                  <td className="whitespace-nowrap px-2 py-1">
+                    {paired ? (
+                      <>
+                        {fill(strings.pairedWith, { ref: paired.ref })}
+                        {pairing.valueDiffers.has(row.ref) && (
+                          <span className="ml-1 font-medium text-amber-700 dark:text-amber-400">{strings.valueDiffers}</span>
+                        )}
+                        <span className="block text-muted-foreground">
+                          {(paired.app.categoryId ? panelLabels[paired.app.categoryId] ?? paired.app.categoryId : '—')} › {paired.app.column}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{strings.unpaired}</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1">
+                    {sources[row.source] ?? row.source}
+                    {row.ordinal !== undefined && <span className="ml-1 text-muted-foreground">#{row.ordinal}</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1">
+                    {Object.entries(row.dates).map(([field, date]) => (
+                      <span key={field} className="block">
+                        <span className="text-muted-foreground">{dateLabels[field] ?? field}</span>{' '}
+                        {fill(strings.dayValue, { day: date!.day })}{date!.time ? ` ${date!.time}` : ''}
+                      </span>
+                    ))}
+                  </td>
+                  <td className="max-w-40 px-2 py-1">{row.fields.hosp ?? '—'}</td>
+                  <td className="max-w-48 px-2 py-1">
+                    <span className="font-mono">{row.fields.order_code ?? '—'}</span>
+                    {row.fields.order_name && <span className="block text-muted-foreground">{row.fields.order_name}</span>}
+                  </td>
+                  <td className="max-w-48 px-2 py-1">{row.fields.assay_item_name ?? row.fields.assaY_NAME ?? '—'}</td>
+                  <td className="whitespace-nowrap px-2 py-1">
+                    {value !== undefined ? String(value) : withheld !== undefined ? `(${withheld})` : '—'}
+                    {row.fields.unit_data && <span className="ml-1 text-muted-foreground">{row.fields.unit_data}</span>}
+                    {extra.map((line) => <span key={String(line)} className="block text-muted-foreground">{line}</span>)}
+                  </td>
+                  <td className="max-w-40 px-2 py-1">{row.fields.consult_value ?? '—'}</td>
+                  <td className="max-w-48 px-2 py-1 text-muted-foreground">{marks.join(' · ') || '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }

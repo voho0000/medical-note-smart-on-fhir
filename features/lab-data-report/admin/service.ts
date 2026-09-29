@@ -20,6 +20,9 @@ import type {
   LabDataReportContext,
   LabDataReportPayload,
   LabDataReportProblemType,
+  LabDataReportRawError,
+  LabDataReportRawRow,
+  LabDataReportRawSource,
   LabDataReportRow,
 } from '../types'
 
@@ -42,6 +45,17 @@ export interface StoredLabDataReport {
   reporterIsAnonymous: boolean
   createdAt: Date | null
   expireAt: Date | null
+  /** MediCloud raw rows stored with the report (0 for older reports). */
+  rawRowCount: number
+  /** The raw block's header — its rows live in the row chunks. */
+  rawSource: Omit<LabDataReportRawSource, 'rows'> | null
+  /** The reporter asked for raw rows but they could not be read. */
+  rawSourceError: LabDataReportRawError | null
+}
+
+export interface StoredLabDataReportRows {
+  rows: LabDataReportRow[]
+  rawRows: LabDataReportRawRow[]
 }
 
 function requireDb(): Firestore {
@@ -79,6 +93,9 @@ function toReport(id: string, data: DocumentData): StoredLabDataReport {
     reporterIsAnonymous: data.reporterIsAnonymous === true,
     createdAt: toDate(data.createdAt),
     expireAt: toDate(data.expireAt),
+    rawRowCount: numberOr(data.rawRowCount),
+    rawSource: data.rawSource && typeof data.rawSource === 'object' ? data.rawSource : null,
+    rawSourceError: typeof data.rawSourceError === 'string' ? data.rawSourceError as LabDataReportRawError : null,
   }
 }
 
@@ -92,9 +109,15 @@ export async function getLabDataReport(id: string): Promise<StoredLabDataReport 
   return record.exists() ? toReport(record.id, record.data()) : null
 }
 
-export async function getLabDataReportRows(id: string): Promise<LabDataReportRow[]> {
+/** Converted rows and MediCloud raw rows, each in chunk order. Raw chunks
+ *  ("raw-000" …) share the subcollection and carry kind "raw". */
+export async function getLabDataReportRows(id: string): Promise<StoredLabDataReportRows> {
   const snapshot = await getDocs(query(collection(requireDb(), REPORTS, id, ROWS), orderBy('chunk')))
-  return snapshot.docs.flatMap((chunk) => (Array.isArray(chunk.get('rows')) ? chunk.get('rows') : []))
+  const rowsOf = (chunk: (typeof snapshot.docs)[number]) => (Array.isArray(chunk.get('rows')) ? chunk.get('rows') : [])
+  return {
+    rows: snapshot.docs.filter((chunk) => chunk.get('kind') !== 'raw').flatMap(rowsOf),
+    rawRows: snapshot.docs.filter((chunk) => chunk.get('kind') === 'raw').flatMap(rowsOf),
+  }
 }
 
 /** The problem is handled: delete the report and every row chunk, at once. */

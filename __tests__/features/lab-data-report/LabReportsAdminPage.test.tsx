@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { LabReportsAdminPage } from '@/features/lab-data-report/admin/LabReportsAdminPage'
 import * as service from '@/features/lab-data-report/admin/service'
-import type { LabDataReportRow } from '@/features/lab-data-report/types'
+import type { LabDataReportRawRow, LabDataReportRow } from '@/features/lab-data-report/types'
 
 let mockUser: any = null
 jest.mock('@/src/application/providers/auth.provider', () => ({
@@ -36,6 +36,9 @@ const report: service.StoredLabDataReport = {
   reporterIsAnonymous: true,
   createdAt: new Date('2026-09-27T16:04:00Z'),
   expireAt: new Date(Date.now() + 90 * 86_400_000),
+  rawRowCount: 0,
+  rawSource: null,
+  rawSourceError: null,
 }
 const rows: LabDataReportRow[] = [
   {
@@ -55,7 +58,7 @@ describe('LabReportsAdminPage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(service.listLabDataReports as jest.Mock).mockResolvedValue([report])
-    ;(service.getLabDataReportRows as jest.Mock).mockResolvedValue(rows)
+    ;(service.getLabDataReportRows as jest.Mock).mockResolvedValue({ rows, rawRows: [] })
     ;(service.deleteLabDataReport as jest.Mock).mockResolvedValue(undefined)
     window.history.replaceState(null, '', '/lab-reports')
   })
@@ -97,5 +100,43 @@ describe('LabReportsAdminPage', () => {
     window.history.replaceState(null, '', '/lab-reports?id=LDR-20260927-AAAAAAAA')
     render(<LabReportsAdminPage />)
     expect(await screen.findByText('「C3 在尿液」')).toBeInTheDocument()
+  })
+
+  it('lists the MediCloud raw rows, paired to the converted rows, and flags the unpaired ones', async () => {
+    mockUser = admin
+    const rawRows: LabDataReportRawRow[] = [
+      {
+        ref: 1, source: 's02', ordinal: 7, dates: { case_time: { day: 3, time: '09:30:00' } },
+        fields: { order_code: '12999C', assay_item_name: 'C3', unit_data: 'mg/dL', hosp: '合成醫院', data_mark: 'S' },
+        results: { assay_value: '98' }, withheld: {},
+      },
+      {
+        ref: 2, source: 's02', ordinal: 8, dates: { case_time: { day: 3 } },
+        fields: { order_code: '12034B', assay_item_name: 'Anti-ENA', hosp: '合成醫院' },
+        results: { assay_value: 'Negative' }, withheld: { memo_data: 60 },
+      },
+    ]
+    ;(service.listLabDataReports as jest.Mock).mockResolvedValue([{
+      ...report,
+      rawRowCount: 2,
+      rawSource: {
+        producer: 'medcloud2', producerVersion: '0.12.19', s02Rows: 2, s03Rows: 0, endpointStatus: { s02: 200 },
+        truncatedRows: 0, droppedStrings: 1, unparsedDates: 0, unknownFields: ['new_col'],
+      },
+    }])
+    ;(service.getLabDataReportRows as jest.Mock).mockResolvedValue({ rows, rawRows })
+    render(<LabReportsAdminPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /LDR-20260927-AAAAAAAA/ }))
+    expect(await screen.findByText('2 列（明細 2、歷史 0）· 擴充套件 0.12.19')).toBeInTheDocument()
+    const section = await screen.findByRole('region', { name: '原始列表格' })
+    expect(screen.getByText('原始列 2 列，配對 1 列（其中數值不同 0 列）；未配對原始列 1 列，找不到原始列的轉換後列 1 列。')).toBeInTheDocument()
+    expect(screen.getByText('來源多出的欄位（只有名稱）：new_col')).toBeInTheDocument()
+    expect(within(section).getByText('轉換後 #1')).toBeInTheDocument()
+    expect(within(section).getByText('未配對')).toBeInTheDocument()
+    expect(within(section).getByText('memo_data (60)')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '只看未配對或數值不同' }))
+    expect(within(section).queryByText('轉換後 #1')).not.toBeInTheDocument()
+    expect(within(section).getByText('Anti-ENA')).toBeInTheDocument()
   })
 })
