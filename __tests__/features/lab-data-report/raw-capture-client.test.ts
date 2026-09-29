@@ -14,15 +14,15 @@ function reply(data: Record<string, unknown>, init: Partial<MessageEventInit> = 
   window.dispatchEvent(new MessageEvent('message', { data, origin: ORIGIN, source: window, ...init }))
 }
 
-/** Answers the next request the page posts. */
+/** Stands in for the extension: takes the next request the page posts
+ *  (intercepting window.postMessage — the test registers no message
+ *  handler of its own) and answers it the way the extension's bridge does. */
 function answerNext(build: (request: { requestId: string; bundleId: string }) => Record<string, unknown> | null) {
-  const listener = (event: MessageEvent) => {
-    if (event.data?.type !== RAW_CAPTURE_REQUEST) return
-    window.removeEventListener('message', listener)
-    const answer = build(event.data)
+  jest.spyOn(window, 'postMessage').mockImplementationOnce((message: any) => {
+    if (message?.type !== RAW_CAPTURE_REQUEST) return
+    const answer = build(message)
     if (answer) setTimeout(() => reply(answer), 0)
-  }
-  window.addEventListener('message', listener)
+  })
 }
 
 const success = (request: { requestId: string; bundleId: string }, json = '{"endpoints":{}}', metadata: Record<string, unknown> = {}) => ({
@@ -58,6 +58,8 @@ describe('rawCaptureOrigin', () => {
 })
 
 describe('requestRawCapture', () => {
+  afterEach(() => jest.restoreAllMocks())
+
   it('returns the capture for a matching reply', async () => {
     let posted: any
     answerNext((request) => {

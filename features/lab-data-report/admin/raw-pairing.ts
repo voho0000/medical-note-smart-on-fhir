@@ -47,7 +47,14 @@ interface ResultKey {
   text: string
 }
 
-const COMPARATORS: Record<string, string> = { '<': '<', '<=': '<=', '≦': '<=', '>': '>', '>=': '>=', '≧': '>=', '=': '' }
+// Every way a source writes "at most" / "at least" (NFKC folds the full-
+// width forms ＜ ＞ ＝ into ASCII, but not ≤ ≥ ≦ ≧ ⩽ ⩾).
+const COMPARATORS: Record<string, string> = {
+  '<': '<', '>': '>', '=': '',
+  '<=': '<=', '=<': '<=', '≤': '<=', '≦': '<=', '⩽': '<=',
+  '>=': '>=', '=>': '>=', '≥': '>=', '≧': '>=', '⩾': '>=',
+}
+const LEADING_COMPARATOR = /^\s*(<=|=<|>=|=>|≤|≦|⩽|≥|≧|⩾|<|>|=)/
 const NUMBER = /(?<![\d.])-?\d+(?:\.\d+)?/g
 
 function resultKeyOfText(value: string, units: readonly (string | undefined)[]): ResultKey {
@@ -58,7 +65,7 @@ function resultKeyOfText(value: string, units: readonly (string | undefined)[]):
     if (plain) text = text.split(plain).join(' ')
   }
   let comparator = ''
-  const lead = text.match(/^\s*(<=|>=|≦|≧|<|>|=)/)
+  const lead = text.match(LEADING_COMPARATOR)
   if (lead) {
     comparator = COMPARATORS[lead[1]]
     text = text.slice(lead[0].length)

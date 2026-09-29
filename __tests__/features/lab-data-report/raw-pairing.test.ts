@@ -51,6 +51,10 @@ describe('pairRawRows', () => {
   it.each([
     ['a comparator', { kind: 'quantity', value: 0.5, magnitude: -1, decimals: 1 }, '<0.5'],
     ['a comparator the other way', { kind: 'quantity', value: 0.5, comparator: '<', magnitude: -1, decimals: 1 }, '0.5'],
+    ['a ≤ against a bare value', { kind: 'quantity', value: 0.5, magnitude: -1, decimals: 1 }, '≤0.5'],
+    ['a ≥ against a bare value', { kind: 'quantity', value: 10, magnitude: 1, decimals: 0 }, '≥10'],
+    ['≤ against <', { kind: 'quantity', value: 0.5, comparator: '<', magnitude: -1, decimals: 1 }, '≤0.5'],
+    ['≥ against >', { kind: 'quantity', value: 10, comparator: '>', magnitude: 1, decimals: 0 }, '≥10'],
     ['qualitative wording', { kind: 'string', value: 'Reactive(0.18)', length: 14 }, 'Nonreactive(0.18)'],
     ['a sign', { kind: 'string', value: '(+)', length: 3 }, '(-)'],
   ])('flags %s as a different result', (_label, value, rawValue) => {
@@ -60,6 +64,11 @@ describe('pairRawRows', () => {
   })
 
   it.each([
+    ['≤0.5', { kind: 'quantity', value: 0.5, comparator: '<=', magnitude: -1, decimals: 1 }],
+    ['≥10', { kind: 'quantity', value: 10, comparator: '>=', magnitude: 1, decimals: 0 }],
+    ['⩽0.5', { kind: 'quantity', value: 0.5, comparator: '<=', magnitude: -1, decimals: 1 }],
+    ['=>10', { kind: 'quantity', value: 10, comparator: '>=', magnitude: 1, decimals: 0 }],
+    ['＜0.5', { kind: 'quantity', value: 0.5, comparator: '<', magnitude: -1, decimals: 1 }],
     ['≦0.5', { kind: 'quantity', value: 0.5, comparator: '<=', magnitude: -1, decimals: 1 }],
     ['Nonreactive(0.18)', { kind: 'string', value: 'Nonreactive (0.18)', length: 18 }],
     ['1+', { kind: 'string', value: '1+', length: 2 }],
