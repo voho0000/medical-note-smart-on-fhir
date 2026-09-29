@@ -48,6 +48,9 @@ import {
   type LabDataReportLabelResolver,
 } from "../utils/build-lab-data-report"
 import { findDescriptionIdentifiers } from "../utils/identifier-scan"
+import { rawCaptureOrigin } from "../utils/raw-capture-client"
+import { assembleRawLabSource, type RawLabExtract } from "../utils/raw-lab-rows"
+import { importedBundleId, readRawLabRows } from "../utils/read-raw-lab-rows"
 import { submitLabDataReport, type LabDataReportSubmitResult } from "../utils/submit-lab-data-report"
 import {
   LAB_DATA_REPORT_MAX_DESCRIPTION,
@@ -56,6 +59,9 @@ import {
   type LabDataReportContext,
   type LabDataReportPayload,
   type LabDataReportProblemType,
+  type LabDataReportRawError,
+  type LabDataReportRawRow,
+  type LabDataReportRawSource,
   type LabDataReportRow,
 } from "../types"
 
@@ -74,6 +80,15 @@ export interface LabDataReportDialogProps {
 }
 
 type Strings = Record<string, any>
+
+/** The extension's same-run raw capture, as far as this dialog holds it:
+ *  only the narrowed lab rows, never the capture itself, and only until the
+ *  dialog closes or the capture's own expiry. */
+type RawState =
+  | { status: 'idle' }
+  | { status: 'reading' }
+  | { status: 'ready'; extract: RawLabExtract; expiresAt: number; producerVersion?: string }
+  | { status: 'failed'; code: LabDataReportRawError }
 
 const PRIVACY_POLICY_URL = "https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
 /** The preview table stops here; the JSON view always holds every row. */
@@ -142,7 +157,11 @@ export function LabDataReportDialog({
   const [reportId, setReportId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [launchSource, setLaunchSource] = useState<string | undefined>(undefined)
+  const [includeRaw, setIncludeRaw] = useState(true)
+  const [bundleId, setBundleId] = useState<string | null>(null)
+  const [raw, setRaw] = useState<RawState>({ status: 'idle' })
   const abortRef = useRef<AbortController | null>(null)
+  const rawAbortRef = useRef<AbortController | null>(null)
   const sendRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -153,6 +172,7 @@ export function LabDataReportDialog({
     return () => {
       cancelled = true
       abortRef.current?.abort()
+      rawAbortRef.current?.abort()
     }
   }, [])
 
@@ -163,6 +183,63 @@ export function LabDataReportDialog({
     language: locale,
     nameMode: nameMode === 'original' ? 'original' : 'standardized',
   }), [appVersion, collected, launchSource, locale, nameMode])
+
+  // Raw rows are offered only for a 雲端病歷 patient on a page the extension
+  // serves, with the imported Bundle.id to pair the capture with. Nothing is
+  // read until 送出 (or the raw preview) is pressed.
+  const rawCapable = useMemo(
+    () => context.dataSource === 'medcloud' && rawCaptureOrigin() !== null,
+    [context.dataSource],
+  )
+  useEffect(() => {
+    if (!open || !rawCapable) return
+    let cancelled = false
+    void importedBundleId().then((id) => {
+      if (!cancelled) setBundleId(id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, rawCapable])
+  const rawOffered = rawCapable && bundleId !== null
+  const wantsRaw = rawOffered && includeRaw
+
+  // Closing the dialog drops whatever was read (reset during render, the
+  // pattern for resetting state on a prop change); so does the capture's
+  // expiry, below.
+  const [openSeen, setOpenSeen] = useState(open)
+  if (openSeen !== open) {
+    setOpenSeen(open)
+    if (!open) setRaw({ status: 'idle' })
+  }
+  useEffect(() => {
+    if (!open) rawAbortRef.current?.abort()
+  }, [open])
+  useEffect(() => {
+    if (raw.status !== 'ready') return
+    const timer = window.setTimeout(
+      () => setRaw({ status: 'failed', code: 'EXPIRED' }),
+      Math.max(0, raw.expiresAt - Date.now()),
+    )
+    return () => window.clearTimeout(timer)
+  }, [raw])
+
+  /** Reads and narrows the raw capture; null when the read was abandoned. */
+  const readRaw = async (): Promise<RawState | null> => {
+    if (!bundleId) return null
+    rawAbortRef.current?.abort()
+    const controller = new AbortController()
+    rawAbortRef.current = controller
+    setRaw({ status: 'reading' })
+    const result = await readRawLabRows(bundleId, { signal: controller.signal })
+    if (rawAbortRef.current === controller) rawAbortRef.current = null
+    if (!result.ok && result.code === 'ABORTED') return null
+    const next: RawState = result.ok
+      ? { status: 'ready', extract: result.extract, expiresAt: result.expiresAt, producerVersion: result.producerVersion }
+      : { status: 'failed', code: result.code as LabDataReportRawError }
+    setRaw(next)
+    return next
+  }
 
   const categoryOrder = useMemo(() => panels.map((panel) => panel.id), [panels])
   // Rows do not depend on the note or problem type, so typing does not
@@ -176,24 +253,36 @@ export function LabDataReportDialog({
     flaggedCategories: flagged,
   }), [categoryOrder, collected, context, flagged, includeValues])
 
+  const rawSource = useMemo<LabDataReportRawSource | undefined>(() => (
+    wantsRaw && raw.status === 'ready'
+      ? assembleRawLabSource(raw.extract, { dayZero: built.dayZero, includeValues, producerVersion: raw.producerVersion })
+      : undefined
+  ), [built.dayZero, includeValues, raw, wantsRaw])
+
   const payload = useMemo<LabDataReportPayload>(() => ({
     ...built.payload,
     problemType: problemType ?? 'unspecified',
     description: description.trim(),
-  }), [built.payload, description, problemType])
+    ...(rawSource && { rawSource }),
+    ...(wantsRaw && raw.status === 'failed' && { rawSourceError: raw.code }),
+  }), [built.payload, description, problemType, raw, rawSource, wantsRaw])
 
   const rowCount = payload.rows.length
   const descriptionIssues = useMemo(() => findDescriptionIdentifiers(description), [description])
-  const canSend = rowCount > 0 && descriptionIssues.length === 0 && !sending
+  const readingRaw = raw.status === 'reading'
+  const canSend = rowCount > 0 && descriptionIssues.length === 0 && !sending && !readingRaw
 
   const handleOpenChange = (next: boolean) => {
     if (!next && sending) return
     onOpenChange(next)
   }
 
-  const requestSend = () => {
+  const requestSend = async () => {
     setError(null)
     if (!canSend) return
+    // The raw capture is read here, after the clinician chose to send, so the
+    // confirmation can say how many raw rows go with the report.
+    if (wantsRaw && raw.status === 'idle' && (await readRaw()) === null) return
     setConfirmOpen(true)
   }
 
@@ -337,7 +426,7 @@ export function LabDataReportDialog({
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                       event.preventDefault()
-                      requestSend()
+                      void requestSend()
                     }
                   }}
                   placeholder={strings.descriptionPlaceholder}
@@ -365,9 +454,21 @@ export function LabDataReportDialog({
                 <Label htmlFor={`${ids}-values`} className="text-sm max-md:min-h-11">{strings.includeValues}</Label>
               </div>
 
+              {rawOffered && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`${ids}-raw`}
+                    checked={includeRaw}
+                    onCheckedChange={(checked) => setIncludeRaw(checked === true)}
+                  />
+                  <Label htmlFor={`${ids}-raw`} className="text-sm max-md:min-h-11">{strings.includeRaw}</Label>
+                </div>
+              )}
+
               <div className="space-y-1 rounded-md bg-muted/40 px-3 py-2">
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {fill(includeValues ? strings.summaryWithValues : strings.summaryWithoutValues, { count: rowCount })}
+                  {wantsRaw && ` ${strings.summaryRaw}`}
                 </p>
                 <div className="flex flex-wrap gap-x-4">
                   <button type="button" onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen} aria-controls={detailsId} className={linkButton}>
@@ -383,6 +484,7 @@ export function LabDataReportDialog({
                   <div id={detailsId} className="space-y-1 pt-1 text-xs leading-relaxed text-muted-foreground">
                     <p>{strings.disclosure}</p>
                     <p>{strings.includeValuesHint}</p>
+                    {rawOffered && <p>{strings.includeRawHint}</p>}
                     <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer" className={linkButton}>
                       {strings.policyLink}
                     </a>
@@ -405,6 +507,16 @@ export function LabDataReportDialog({
                     <p className="text-xs text-muted-foreground">
                       {fill(strings.previewTableLimited ?? '{shown}/{count}', { shown: PREVIEW_TABLE_ROWS, count: rowCount })}
                     </p>
+                  )}
+                  {wantsRaw && (
+                    <RawPreview
+                      raw={raw}
+                      rawSource={payload.rawSource}
+                      includesValues={payload.includesValues}
+                      onLoad={() => { void readRaw() }}
+                      strings={strings}
+                      linkButton={linkButton}
+                    />
                   )}
                   <button type="button" onClick={() => setRawOpen((value) => !value)} aria-expanded={rawOpen} className={linkButton}>
                     {rawOpen ? <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -440,13 +552,17 @@ export function LabDataReportDialog({
                 <Button
                   ref={sendRef}
                   type="button"
-                  onClick={requestSend}
-                  disabled={sending || rowCount === 0}
+                  onClick={() => { void requestSend() }}
+                  disabled={sending || readingRaw || rowCount === 0}
                   aria-disabled={!canSend || undefined}
                   className="max-md:h-11 max-md:w-full"
                 >
-                  {sending && <Loader2 className="animate-spin" aria-hidden="true" />}
-                  {sending ? strings.sending : fill(strings.send ?? '{count}', { count: rowCount })}
+                  {(sending || readingRaw) && <Loader2 className="animate-spin" aria-hidden="true" />}
+                  {sending
+                    ? strings.sending
+                    : readingRaw
+                      ? strings.readingRaw
+                      : fill(strings.send ?? '{count}', { count: rowCount })}
                 </Button>
               </>
             )}
@@ -460,6 +576,18 @@ export function LabDataReportDialog({
             <AlertDialogTitle>{strings.confirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>
               {fill(includeValues ? strings.confirmWithValues : strings.confirmWithoutValues, { count: rowCount })}
+              {payload.rawSource && (
+                <span className="mt-1 block">
+                  {fill(strings.confirmRaw ?? '{count}', { count: payload.rawSource.rows.length })}
+                </span>
+              )}
+              {payload.rawSourceError && (
+                <span className="mt-1 block">
+                  {fill(strings.confirmRawMissing ?? '{reason}', {
+                    reason: strings.rawErrors?.[payload.rawSourceError] ?? payload.rawSourceError,
+                  })}
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="max-md:flex-col-reverse max-md:gap-2">
@@ -584,6 +712,134 @@ function PreviewTable({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function rawDay(row: LabDataReportRawRow): { day: number; time?: string } | undefined {
+  return row.dates.case_time ?? row.dates.real_inspect_date ?? row.dates.recipe_date ?? row.dates.assaY_DATE
+}
+
+function rawValue(row: LabDataReportRawRow, includesValues: boolean, strings: Strings): string {
+  const sent = row.results.assay_value ?? row.results.assaY_VALUE
+  if (sent !== undefined) return String(sent)
+  const withheld = row.withheld.assay_value ?? row.withheld.assaY_VALUE
+  if (withheld === undefined) return '—'
+  return includesValues ? `(${withheld})` : strings.valueNotAttached ?? '—'
+}
+
+function RawPreview({
+  raw,
+  rawSource,
+  includesValues,
+  onLoad,
+  strings,
+  linkButton,
+}: {
+  raw: RawState
+  rawSource?: LabDataReportRawSource
+  includesValues: boolean
+  onLoad: () => void
+  strings: Strings
+  linkButton: string
+}) {
+  if (raw.status === 'reading') {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        {strings.readingRaw}
+      </p>
+    )
+  }
+  if (raw.status === 'failed') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {fill(strings.confirmRawMissing ?? '{reason}', { reason: strings.rawErrors?.[raw.code] ?? raw.code })}
+      </p>
+    )
+  }
+  if (raw.status === 'idle' || !rawSource) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+        {strings.rawPreviewNotRead}
+        <button type="button" onClick={onLoad} className={linkButton}>{strings.rawPreviewLoad}</button>
+      </p>
+    )
+  }
+
+  const notes = strings.rawNotes ?? {}
+  const columns = strings.rawPreviewColumns ?? {}
+  const sources = strings.rawSources ?? {}
+  const lines = [
+    rawSource.droppedStrings > 0 && fill(notes.dropped ?? '{count}', { count: rawSource.droppedStrings }),
+    rawSource.unparsedDates > 0 && fill(notes.unparsed ?? '{count}', { count: rawSource.unparsedDates }),
+    rawSource.truncatedRows > 0 && fill(notes.truncated ?? '{count}', { count: rawSource.truncatedRows }),
+    rawSource.unknownFields.length > 0 && fill(notes.unknown ?? '{fields}', { fields: rawSource.unknownFields.join(', ') }),
+  ].filter((line): line is string => !!line)
+  const title = fill(strings.rawPreviewTitle ?? '{count}', { count: rawSource.rows.length })
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-foreground">{title}</p>
+      {lines.length > 0 && (
+        <ul className="space-y-0.5 text-xs text-muted-foreground">
+          {lines.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      )}
+      {rawSource.rows.length > 0 && (
+        <div
+          role="region"
+          aria-label={strings.rawPreviewLabel}
+          tabIndex={0}
+          className="overflow-auto rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:max-h-72"
+        >
+          <table className="w-max min-w-full border-collapse text-xs tabular-nums">
+            <thead className="sticky top-0 z-10 bg-muted text-left text-muted-foreground">
+              <tr>
+                <th scope="col" className="sticky left-0 z-20 bg-muted px-2 py-1.5 font-medium">{columns.ref}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.source}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.day}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.hospital}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.order}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.item}</th>
+                <th scope="col" className="px-2 py-1.5 font-medium">{columns.value}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rawSource.rows.slice(0, PREVIEW_TABLE_ROWS).map((row) => {
+                const date = rawDay(row)
+                return (
+                  <tr key={row.ref} className="border-t border-border/70 align-top">
+                    <th scope="row" className="sticky left-0 bg-background px-2 py-1 text-left font-normal text-muted-foreground">{row.ref}</th>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      {sources[row.source] ?? row.source}
+                      {row.ordinal !== undefined && <span className="ml-1 text-muted-foreground">#{row.ordinal}</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      {date ? fill(strings.dayValue ?? '{day}', { day: date.day }) : '—'}
+                      {date?.time && <span className="ml-1 text-muted-foreground">{date.time}</span>}
+                    </td>
+                    <td className="max-w-40 px-2 py-1">{row.fields.hosp ?? '—'}</td>
+                    <td className="max-w-48 px-2 py-1">
+                      <span className="font-mono">{row.fields.order_code ?? '—'}</span>
+                      {row.fields.order_name && <span className="block text-muted-foreground">{row.fields.order_name}</span>}
+                    </td>
+                    <td className="max-w-48 px-2 py-1">{row.fields.assay_item_name ?? row.fields.assaY_NAME ?? '—'}</td>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      <span className={cn(!includesValues && 'text-muted-foreground')}>{rawValue(row, includesValues, strings)}</span>
+                      {row.fields.unit_data && <span className="ml-1 text-muted-foreground">{row.fields.unit_data}</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {rawSource.rows.length > PREVIEW_TABLE_ROWS && (
+        <p className="text-xs text-muted-foreground">
+          {fill(strings.previewTableLimited ?? '{shown}/{count}', { shown: PREVIEW_TABLE_ROWS, count: rawSource.rows.length })}
+        </p>
+      )}
     </div>
   )
 }

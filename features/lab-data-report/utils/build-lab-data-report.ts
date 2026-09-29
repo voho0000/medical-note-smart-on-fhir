@@ -446,6 +446,9 @@ export interface BuiltLabDataReport {
   payload: LabDataReportPayload
   /** Laboratory rows before the cap. */
   totalRows: number
+  /** The report's day 0 as a UTC day ordinal (never sent): raw source rows
+   *  are placed on the same axis. Null when no row is dated. */
+  dayZero: number | null
 }
 
 export function buildLabDataReport(
@@ -558,6 +561,7 @@ export function buildLabDataReport(
 
   return {
     totalRows: collected.candidates.length,
+    dayZero,
     payload: {
       schemaVersion: LAB_DATA_REPORT_SCHEMA_VERSION,
       problemType: options.problemType,

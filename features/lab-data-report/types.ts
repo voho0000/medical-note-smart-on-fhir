@@ -107,6 +107,101 @@ export interface LabDataReportContext {
   nameMode: 'standardized' | 'original'
 }
 
+// ── MediCloud raw source rows (optional) ────────────────────────────────
+// When the patient came from the 雲端病歷 extension and its same-run raw
+// capture can still be read (1 hour, the extension decides), the report may
+// carry the raw IMUE0060 laboratory rows — S02 detail rows and the S03
+// history sidecar — so a mapping error can be traced to the source row that
+// produced it (or failed to). Allow-listed fields only, dates on the report's
+// day axis, every string scanned; see PRIVACY_POLICY.md §2.10.
+
+/** A capture carries at most a few hundred lab rows per patient (8 local
+ *  captures, 2026-09-29: ≤ 733 S02 + 92 S03). */
+export const LAB_DATA_REPORT_MAX_RAW_ROWS = 5000
+
+/** S02 source fields sent verbatim (after the identifier scan). Everything
+ *  else — the masked ID, log2time, fee_ym, ICD and pathology diagnoses,
+ *  hosp_id, any field the source adds later — never leaves the browser. */
+export const LAB_DATA_REPORT_RAW_S02_TEXT_FIELDS = [
+  'order_code',
+  'order_name',
+  'assay_item_name',
+  'unit_data',
+  'consult_value',
+  'assay_mark',
+  'assay_method',
+  'assay_tp_cname',
+  'inspect_mode',
+  'data_mark',
+  'hosp',
+  'func_type',
+] as const
+/** Result-bearing free text: sent only as a short result, and only with values. */
+export const LAB_DATA_REPORT_RAW_S02_RESULT_FIELDS = ['assay_value', 'inspect_result', 'memo_data'] as const
+export const LAB_DATA_REPORT_RAW_S02_DATE_FIELDS = ['case_time', 'real_inspect_date', 'recipe_date'] as const
+
+export type LabDataReportRawTextField = (typeof LAB_DATA_REPORT_RAW_S02_TEXT_FIELDS)[number] | 'assaY_NAME'
+export type LabDataReportRawResultField = (typeof LAB_DATA_REPORT_RAW_S02_RESULT_FIELDS)[number] | 'assaY_VALUE'
+export type LabDataReportRawDateField = (typeof LAB_DATA_REPORT_RAW_S02_DATE_FIELDS)[number] | 'assaY_DATE'
+
+/** A source date on the report's day axis (may be negative: a raw row can
+ *  predate every converted row), plus the time of day when it had one. */
+export interface LabDataReportRawDate {
+  day: number
+  time?: string
+}
+
+export interface LabDataReportRawRow {
+  /** Ordinal inside rawSource.rows (1-based). */
+  ref: number
+  /** IMUE0060 S02 detail row, or S03 history row. */
+  source: 's02' | 's03'
+  /** The source's own row number (`r` / `rn`). */
+  ordinal?: number
+  dates: Partial<Record<LabDataReportRawDateField, LabDataReportRawDate>>
+  /** Allow-listed text fields under their source names. */
+  fields: Partial<Record<LabDataReportRawTextField, string>>
+  /** Result fields, only when values are attached and the text is a short
+   *  result (a number stays a number). */
+  results: Partial<Record<LabDataReportRawResultField, string | number>>
+  /** Length of each result field that was present but not sent. */
+  withheld: Partial<Record<LabDataReportRawResultField, number>>
+}
+
+export interface LabDataReportRawSource {
+  producer: 'medcloud2'
+  /** Extension version that produced the capture (from its metadata). */
+  producerVersion?: string
+  rows: LabDataReportRawRow[]
+  /** Rows the capture held, before the cap. */
+  s02Rows: number
+  s03Rows: number
+  /** HTTP status the capture recorded for each source. */
+  endpointStatus: { s02?: number; s03?: number }
+  truncatedRows: number
+  droppedStrings: number
+  /** Dates in a format the report does not know; never sent. */
+  unparsedDates: number
+  /** Field NAMES outside the allowlist (schema drift), never their values. */
+  unknownFields: string[]
+}
+
+/** Why the raw rows the reporter asked for are not attached. */
+export const LAB_DATA_REPORT_RAW_ERRORS = [
+  'NOT_AVAILABLE',
+  'EXPIRED',
+  'BUNDLE_MISMATCH',
+  'PATIENT_MISMATCH',
+  'PATIENT_UNVERIFIED',
+  'CONTEXT_CHANGED',
+  'REQUEST_IN_PROGRESS',
+  'INVALID_REQUEST',
+  'READ_FAILED',
+  'EXTENSION_UNAVAILABLE',
+  'NO_LAB_SOURCE',
+] as const
+export type LabDataReportRawError = (typeof LAB_DATA_REPORT_RAW_ERRORS)[number]
+
 export interface LabDataReportPayload {
   schemaVersion: typeof LAB_DATA_REPORT_SCHEMA_VERSION
   problemType: LabDataReportProblemType
@@ -126,6 +221,10 @@ export interface LabDataReportPayload {
   excludedNonLabRows: number
   /** Row strings removed because they looked like an identifier or date. */
   droppedStrings: number
+  /** MediCloud raw laboratory rows, when attached. */
+  rawSource?: LabDataReportRawSource
+  /** The reporter asked for raw rows but they could not be read. */
+  rawSourceError?: LabDataReportRawError
 }
 
 export interface LabDataReportResponse {
