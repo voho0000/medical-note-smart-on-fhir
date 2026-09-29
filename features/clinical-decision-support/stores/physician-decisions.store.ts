@@ -124,6 +124,25 @@ function isDecisionKind(value: unknown): value is PhysicianDecisionKind {
 }
 
 /**
+ * care 2.8 renamed these prescriptions without changing their actions. Keep
+ * decisions from an open tab's older encrypted cache, including any next
+ * step, under the new keys. Dates, labels and rule versions stay untouched;
+ * the visit map still checks whether an action applies today.
+ */
+const LEGACY_VISIT_DECISIONS: Readonly<Record<string, string>> = {
+  'visit:hf-ras': 'visit:ras-inhibition',
+  'visit:hf-sglt2i': 'visit:sglt2i',
+  'visit:hf-lipid': 'visit:lipid-lowering',
+}
+
+function currentDecisionKey(key: string): string {
+  for (const [legacy, current] of Object.entries(LEGACY_VISIT_DECISIONS)) {
+    if (key === legacy || key.startsWith(`${legacy}:`)) return current + key.slice(legacy.length)
+  }
+  return key
+}
+
+/**
  * Storage is a best-effort cache, never a source of clinical truth: Safari
  * private mode throws on write, a quota can be full, a session that cannot
  * decrypt hands back nothing, and a hand-edited value can be anything at all.
@@ -137,7 +156,11 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
       if (!value || typeof value !== 'object') continue
       const record = value as Record<string, unknown>
       if (!isDecisionKind(record.decision)) continue
-      decisions[moduleId] = {
+      const key = currentDecisionKey(moduleId)
+      // A valid record already written under the current key wins over its
+      // legacy alias, regardless of the stored object's property order.
+      if (key !== moduleId && decisions[key]) continue
+      decisions[key] = {
         decision: record.decision,
         reasons: Array.isArray(record.reasons)
           ? record.reasons.filter((reason): reason is string => typeof reason === 'string')
