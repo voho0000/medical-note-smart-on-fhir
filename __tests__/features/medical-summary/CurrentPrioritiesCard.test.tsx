@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { CurrentPrioritiesCard } from '@/features/medical-summary/components/CurrentPrioritiesCard'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import { generateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { trackEvent } from '@/src/application/telemetry/usage-analytics'
 
 jest.mock('sonner', () => ({
@@ -80,6 +81,28 @@ describe('CurrentPrioritiesCard', () => {
     ].join('\n')))
     await waitFor(() => expect(screen.getByRole('button', { name: '已複製' })).toBeInTheDocument())
     expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('由 3 筆就醫生成'))
+  })
+
+  it('renders and copies finalized English segments with the same word spaces', async () => {
+    const finalized = generateMedicalSummaryUseCase.finalizeResult({
+      headline: 'Stable chronic care',
+      problems: [],
+      decisions: [],
+      timeline: [],
+      summary: [
+        { text: 'Steady management of', emphasis: false, sources: [] },
+        { text: 'chronic kidney disease', emphasis: true, sources: [] },
+        { text: 'and', emphasis: false, sources: [] },
+        { text: 'glaucoma', emphasis: true, sources: [] },
+        { text: 'using eye drops.', emphasis: false, sources: [] },
+      ],
+    }, [], { locale: 'en' })
+    const sentence = 'Steady management of chronic kidney disease and glaucoma using eye drops.'
+    renderCard(finalized)
+
+    expect(screen.getByText('chronic kidney disease').closest('p')).toHaveTextContent(sentence, { normalizeWhitespace: false })
+    fireEvent.click(screen.getByRole('button', { name: '複製' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`\n${sentence}`)))
   })
 
   it('surfaces clipboard permission failures', async () => {
