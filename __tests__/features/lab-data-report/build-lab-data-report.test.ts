@@ -5,6 +5,7 @@ import {
   stripInstitutionCodes,
 } from '@/features/lab-data-report/utils/build-lab-data-report'
 import { LAB_DATA_REPORT_MAX_ROWS, type LabDataReportContext } from '@/features/lab-data-report/types'
+import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 
 // Synthetic rows only — shaped like the two bridges' output, values invented.
 const LOINC = 'http://loinc.org'
@@ -256,6 +257,16 @@ describe('lab-data report builder', () => {
     const { payload } = build([vital, glucose])
     expect(payload.rows).toHaveLength(1)
     expect(payload.excludedNonLabRows).toBe(1)
+  })
+
+  it('reports the app\'s mapped observations (the cumulative report\'s own input)', () => {
+    // useClinicalData hands the table FhirMapper entities, which drop
+    // resourceType; the report must see the same rows the table shows.
+    const entities = [hbUnderUrine('2026-03-01', 13.2), potassiumCopy('11:46:00', '健保月檔;')]
+      .map((observation) => FhirMapper.toObservation(observation))
+    const { payload } = build(entities)
+    expect(payload.rows).toHaveLength(2)
+    expect(payload.excludedNonLabRows).toBe(0)
   })
 
   it('decides laboratory from the FHIR category, never from the name', () => {
