@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { CdssRecommendation } from '../../types'
 import type { QueueStep } from './visit-decisions'
-import { blockTitle, stateLabel } from './visit-decisions'
+import { blockTitle, sourceTag, stateLabel } from './visit-decisions'
 import type { ChainStep, DecisionPointChecklistItem, DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
 import { ChainStepName } from './visit-presentation'
@@ -160,7 +160,7 @@ export function DecisionPointDetail({
             {point.dp} {point.label}
             {' · '}
             {decision ? (isEnglish ? 'Recorded' : '已記錄') : stateLabel(point.state, isEnglish)}
-            {point.source !== sourceOfPage ? ` · ${point.source.toUpperCase()}` : ''}
+            {point.source !== sourceOfPage ? ` · ${sourceTag(point)}` : ''}
             {' · '}
             {blockTitle(point.block, isEnglish)}
           </h4>

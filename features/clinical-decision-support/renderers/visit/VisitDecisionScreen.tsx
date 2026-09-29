@@ -39,6 +39,7 @@ import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
 import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
+import { pageSourceOf } from './visit-model.source'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
@@ -179,7 +180,7 @@ export function VisitDecisionScreen({
   onPhysicianInput,
   surfaces,
 }: VisitDecisionScreenProps) {
-  const sourceOfPage: DecisionPointView['source'] = model.packId === 'atrial-fibrillation-cdss' ? 'af' : 'hf'
+  const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [statusViewOverride, setStatusViewOverride] = useState<{ reason: StatusView; view: StatusView } | null>(null)
   // A press that moves the visit on (quick confirmation → treatment) asks the map to open a section.
@@ -188,10 +189,10 @@ export function VisitDecisionScreen({
   // DP-03's fuller questions: open at a first assessment and whenever an ask
   // comes back worse. A clinician's own open/close holds until that reason
   // changes — a new 「變差」 reopens what was folded under 「穩定」.
-  // The whole checklist belongs to a heart-failure first assessment — and only
-  // once 懷疑 HF has been answered, since its questions stay locked until then.
-  // The AF page's fuller questions are about treatment already under way, so
-  // they open only when an ask comes back 有.
+  // The whole checklist belongs to a heart-failure first assessment (the HF
+  // surfaces say so) — and only once 懷疑 HF has been answered, since its
+  // questions stay locked until then. The AF page's fuller questions are about
+  // treatment already under way, so they open only when an ask comes back 有.
   const allRows = useMemo(() => buildQueueRows(model, decisions, now), [decisions, model, now])
   // A question the assessment block asks itself (懷疑 HF？ as its question 1
   // before a diagnosis) is answered there, once, in reasoning order — not
@@ -215,7 +216,7 @@ export function VisitDecisionScreen({
   const gatePending = allRows.some((row) => row.current?.point.actions[0]?.physicianInput?.request === answeredBy?.request)
   // Before a diagnosis there are no every-visit asks: the block is the
   // assessment itself, 懷疑 HF？ first, and it is open from the start.
-  const firstAssessment = model.packId === 'heart-failure-cdss'
+  const firstAssessment = Boolean(surfaces?.asksDetail?.opensAtFirstAssessment)
     && (model.asks.length === 0 || (isFirstAssessment(model.stage) && !gatePending))
   const asksOpenReason = `${firstAssessment ? 'first' : ''}|${openingAnswers(model.asks, answers).map((item) => item.ask.id).join(',')}`
   const asksAutoOpen = asksOpenReason !== '|'

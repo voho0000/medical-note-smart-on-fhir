@@ -1,6 +1,7 @@
 /**
  * How LiveFeature feeds the decision map: the default layout per pack, the
- * atrial-fibrillation companion on the heart-failure page, the every-visit
+ * companions a pack's map reads (atrial fibrillation's result on the
+ * heart-failure page), both read from the pack's own registry, the every-visit
  * answers entering the profile, and the fall-back to three sections whenever
  * there is no model. The model builder is the pack's; here it is a stand-in
  * that records what it was given.
@@ -18,6 +19,7 @@ import type {
   BuildVisitDecisionModelInput,
   VisitAnswers,
   VisitDecisionModel,
+  VisitMapDefinition,
 } from '@/features/clinical-decision-support/types'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
 
@@ -27,8 +29,14 @@ const mockApplyVisitAnswers = jest.fn((profile: CdssPatientProfile, answers: Vis
   return profile
 })
 
+// The pack's map registry, as the host reads it; a test can declare another.
+const mockVisitMapOf = jest.fn<VisitMapDefinition | undefined, [string]>()
+
 jest.mock('@/features/clinical-decision-support/renderers/visit/visit-model.source', () => ({
+  ...jest.requireActual('@/features/clinical-decision-support/renderers/visit/visit-model.source'),
   isVisitModelSupported: () => true,
+  visitMapOf: (packId: string) => mockVisitMapOf(packId),
+  hasVisitMap: (packId: string) => mockVisitMapOf(packId) !== undefined,
   buildVisitModel: (input: BuildVisitDecisionModelInput) => mockBuildVisitModel(input),
   applyVisitAnswers: (profile: CdssPatientProfile, answers: VisitAnswers) => mockApplyVisitAnswers(profile, answers),
   applyFmtIntolerance: (profile: CdssPatientProfile) => profile,
@@ -53,13 +61,13 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     result,
     layout,
     visitModel,
-    companionResult,
+    companionResults,
     onVisitAnswer,
   }: {
     result: { packId: string }
     layout?: string
     visitModel?: { packId: string }
-    companionResult?: { packId: string }
+    companionResults?: readonly { packId: string }[]
     onVisitAnswer?: (id: string, value: string | null) => void
   }) => (
     <div
@@ -67,7 +75,7 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
       data-pack={result.packId}
       data-layout={layout}
       data-model={visitModel?.packId ?? ''}
-      data-companion={companionResult?.packId ?? ''}
+      data-companion={(companionResults ?? []).map((companion) => companion.packId).join(',')}
     >
       <button type="button" onClick={() => onVisitAnswer?.('dyspnoea-trend', 'worse')}>answer</button>
     </div>
@@ -118,6 +126,9 @@ describe('decision map wiring', () => {
     mockBuildVisitModel.mockReset()
     mockApplyVisitAnswers.mockClear()
     mockBuildVisitModel.mockImplementation((input) => model(input.packId))
+    const { visitMapOf } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/visit-model.source')>('@/features/clinical-decision-support/renderers/visit/visit-model.source')
+    mockVisitMapOf.mockReset()
+    mockVisitMapOf.mockImplementation(visitMapOf)
     useCdssLayoutStore.setState({ layout: null })
     useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     useBetaFeaturesStore.setState({ enabledByUser: {} })
@@ -134,7 +145,7 @@ describe('decision map wiring', () => {
     expect(view()).toHaveAttribute('data-companion', 'atrial-fibrillation-cdss')
     const input = mockBuildVisitModel.mock.calls.at(-1)![0]
     expect(input.packId).toBe('heart-failure-cdss')
-    expect(input.companion?.packId).toBe('atrial-fibrillation-cdss')
+    expect(input.companions?.['atrial-fibrillation-cdss']?.packId).toBe('atrial-fibrillation-cdss')
     expect(input.locale).toBe('zh-TW')
 
     expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
@@ -176,7 +187,7 @@ describe('decision map wiring', () => {
       render(<LiveClinicalDecisionSupportFeature />)
       expect(view()).toHaveAttribute('data-layout', 'map')
       expect(view()).toHaveAttribute('data-companion', '')
-      expect(mockBuildVisitModel.mock.calls.at(-1)![0].companion).toBeUndefined()
+      expect(mockBuildVisitModel.mock.calls.at(-1)![0].companions).toEqual({})
     } finally {
       build.mockRestore()
       error.mockRestore()
@@ -209,6 +220,38 @@ describe('decision map wiring', () => {
     render(<LiveClinicalDecisionSupportFeature />)
     fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
     expect(view()).toHaveAttribute('data-layout', 'sections')
+    expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
+  })
+
+  // Which pages have a map, and which results a map reads beside the page's
+  // own, are the pack's to declare: the host lists no pack ids for either.
+  it('follows the pack’s registry for which pages have a map and what each map reads', () => {
+    const { visitMapOf } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/visit-model.source')>('@/features/clinical-decision-support/renderers/visit/visit-model.source')
+    const hf = visitMapOf('heart-failure-cdss')!
+    const af = visitMapOf('atrial-fibrillation-cdss')!
+    // Say AF's map read heart failure's result, and heart failure's read none.
+    mockVisitMapOf.mockImplementation((packId) => packId === hf.packId
+      ? { ...hf, companions: [] }
+      : packId === af.packId ? { ...af, companions: [hf.packId] } : undefined)
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(view()).toHaveAttribute('data-layout', 'map')
+    expect(view()).toHaveAttribute('data-companion', '')
+    expect(mockBuildVisitModel.mock.calls.at(-1)![0].companions).toEqual({})
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-atrial-fibrillation-cdss'))
+    expect(view()).toHaveAttribute('data-layout', 'map')
+    expect(view()).toHaveAttribute('data-companion', 'heart-failure-cdss')
+    expect(mockBuildVisitModel.mock.calls.at(-1)![0].companions?.['heart-failure-cdss']?.packId).toBe('heart-failure-cdss')
+  })
+
+  it('opens a pack whose map the registry no longer declares on three sections, and offers no map', () => {
+    const { visitMapOf } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/visit-model.source')>('@/features/clinical-decision-support/renderers/visit/visit-model.source')
+    mockVisitMapOf.mockImplementation((packId) => (packId === 'atrial-fibrillation-cdss' ? undefined : visitMapOf(packId)))
+    render(<LiveClinicalDecisionSupportFeature />)
+    // Heart failure reads AF's result only through its map, which is still declared.
+    expect(view()).toHaveAttribute('data-companion', 'atrial-fibrillation-cdss')
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-atrial-fibrillation-cdss'))
+    expect(view()).toHaveAttribute('data-layout', 'sections')
+    expect(view()).toHaveAttribute('data-model', '')
     expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
   })
 

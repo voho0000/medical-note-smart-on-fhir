@@ -116,7 +116,7 @@ export function scenarioRun(
       packId: 'heart-failure-cdss',
       result,
       profile,
-      ...(companion ? { companion } : {}),
+      companions: companion ? { [companion.packId]: companion } : {},
       locale: 'zh-TW',
     }),
   }

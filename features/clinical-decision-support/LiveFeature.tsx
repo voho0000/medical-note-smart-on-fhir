@@ -68,7 +68,7 @@ import {
   visitAnswerSourcesOf,
   visitAnswersOf,
 } from './stores/visit-answers.store'
-import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
+import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, hasVisitMap, visitMapOf } from './renderers/visit/visit-model.source'
 import { intolerantPillars } from './renderers/visit/visit-decisions'
 import type { VisitAnswerProvenance } from './renderers/visit/VisitAsks'
 import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
@@ -529,52 +529,61 @@ export default function LiveClinicalDecisionSupportFeature({
   }, [cdssLocale, profile, result, selectedPack])
 
   // The layout this browser chose, or — when it never chose — the pack's own
-  // default: the decision map for heart failure and atrial fibrillation.
+  // default: the decision map wherever the pack declares one (heart failure
+  // and atrial fibrillation today).
   // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
   const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
-  const wantsMap = preferredLayout === 'map'
-    && (selectedPack.id === HEART_FAILURE_PACK_ID || selectedPack.id === AF_PACK_ID)
+  const wantsMap = preferredLayout === 'map' && hasVisitMap(selectedPack.id)
 
-  // On the heart-failure page the map carries atrial fibrillation's
-  // anticoagulation and rate/rhythm points (DP-14, DP-28), read from the AF
-  // pack's own result. It is built only when that pack is visible here and
-  // applies to this record, and a failure there leaves heart failure as it is.
-  const afPack = useMemo(() => guidelinePacks.find((pack) => pack.id === AF_PACK_ID), [guidelinePacks])
-  const companionResult = useMemo((): CdssResult | undefined => {
-    if (!wantsMap || !profile || !result || result.packId !== HEART_FAILURE_PACK_ID || !afPack) return undefined
-    try {
-      return afPack.applies(profile) ? afPack.build({ profile, locale: cdssLocale }) : undefined
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('[cdss] atrial-fibrillation companion could not be built', error)
+  // A map can read other packs' results beside the page's own — the pack
+  // names them (`VisitMapDefinition.companions`): on the heart-failure page,
+  // atrial fibrillation's anticoagulation and rate/rhythm points (DP-14,
+  // DP-28). Each is built only when that pack is visible here and applies to
+  // this record, and a failure there leaves the page's own map as it is.
+  const companionPacks = useMemo((): readonly ClinicalGuidelinePack[] => {
+    if (!wantsMap) return []
+    return (visitMapOf(selectedPack.id)?.companions ?? [])
+      .flatMap((id) => guidelinePacks.filter((pack) => pack.id === id))
+  }, [guidelinePacks, selectedPack.id, wantsMap])
+  const companionResults = useMemo((): readonly CdssResult[] => {
+    if (!profile || !result || result.packId !== selectedPack.id) return []
+    return companionPacks.flatMap((pack) => {
+      try {
+        return pack.applies(profile) ? [pack.build({ profile, locale: cdssLocale })] : []
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(`[cdss] companion ${pack.id} could not be built`, error)
+        }
+        return []
       }
-      return undefined
-    }
-  }, [afPack, cdssLocale, profile, result, wantsMap])
+    })
+  }, [cdssLocale, companionPacks, profile, result, selectedPack.id])
 
-  // The same companion in English, beside the page's own English build, so an
-  // AF card opened on the heart-failure page copies its rationale in English.
-  const englishCompanionResult = useMemo((): CdssResult | undefined => {
-    if (!companionResult || !profile || !afPack) return undefined
-    if (cdssLocale === 'en') return companionResult
-    try {
-      return afPack.build({ profile, locale: 'en' })
-    } catch {
-      return undefined
-    }
-  }, [afPack, cdssLocale, companionResult, profile])
+  // The same companions in English, beside the page's own English build, so
+  // an AF card opened on the heart-failure page copies its rationale in English.
+  const englishCompanionResults = useMemo((): readonly CdssResult[] => {
+    if (!profile || companionResults.length === 0) return []
+    if (cdssLocale === 'en') return companionResults
+    return companionResults.flatMap((companion) => {
+      const pack = companionPacks.find((candidate) => candidate.id === companion.packId)
+      try {
+        return pack ? [pack.build({ profile, locale: 'en' })] : []
+      } catch {
+        return []
+      }
+    })
+  }, [cdssLocale, companionPacks, companionResults, profile])
 
   const visitModel = useMemo(() => {
-    if (!wantsMap || !profile || !result) return undefined
-    if (result.packId !== HEART_FAILURE_PACK_ID && result.packId !== AF_PACK_ID) return undefined
+    if (!wantsMap || !profile || !result || !hasVisitMap(result.packId)) return undefined
     return buildVisitModel({
       packId: result.packId,
       result,
       profile,
-      ...(companionResult ? { companion: companionResult } : {}),
+      companions: Object.fromEntries(companionResults.map((companion) => [companion.packId, companion])),
       locale: cdssLocale,
     })
-  }, [cdssLocale, companionResult, profile, result, wantsMap])
+  }, [cdssLocale, companionResults, profile, result, wantsMap])
 
   // Keep the AI scope watcher mounted for the whole clinical workspace. A
   // chart revision must retire AI-derived tiering even while another lipid
@@ -678,9 +687,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const mapAvailable = Boolean(visitModel)
   // The switch offers the map wherever the package can build one; only a map
   // that was asked for and could not be built is withdrawn from it.
-  const mapOffered = (result.packId === HEART_FAILURE_PACK_ID || result.packId === AF_PACK_ID)
-    && isVisitModelSupported()
-    && (!wantsMap || mapAvailable)
+  const mapOffered = hasVisitMap(result.packId) && (!wantsMap || mapAvailable)
   const effectiveLayout: CdssLayout = result.packId === LIPID_PACK_ID
     ? preferredLayout === 'flow' || preferredLayout === 'map' ? 'sections' : preferredLayout
     : preferredLayout === 'nhi' || (preferredLayout === 'map' && !mapAvailable) ? 'sections' : preferredLayout
@@ -692,7 +699,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : effectiveLayout
   const showLayoutSwitcher = result.packId === HEART_FAILURE_PACK_ID
     || result.packId === LIPID_PACK_ID
-    || (result.packId === AF_PACK_ID && mapOffered)
+    || mapOffered
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -821,8 +828,8 @@ export default function LiveClinicalDecisionSupportFeature({
           ? (patch) => setHfpefInputs(patientId, patch)
           : undefined}
         visitModel={isMap ? visitModel : undefined}
-        companionResult={isMap ? companionResult : undefined}
-        englishCompanionResult={isMap ? englishCompanionResult : undefined}
+        companionResults={isMap ? companionResults : undefined}
+        englishCompanionResults={isMap ? englishCompanionResults : undefined}
         visitAnswers={visitAnswers}
         visitAnswerSources={visitAnswerSources}
         onVisitAnswer={patientId

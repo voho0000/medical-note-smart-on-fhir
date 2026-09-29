@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
-import type { QueueRow, QueueStep } from './visit-decisions'
+import { sourceTag, type QueueRow, type QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
 import { StatePill } from './visit-presentation'
@@ -128,7 +128,7 @@ function RowLead({ point, sourceOfPage }: { point: DecisionPointView; sourceOfPa
       <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
       <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{point.label}</span>
       {point.source !== sourceOfPage ? (
-        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
       ) : null}
     </span>
   )

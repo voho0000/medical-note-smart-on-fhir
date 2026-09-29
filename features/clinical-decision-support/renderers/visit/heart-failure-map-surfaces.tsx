@@ -43,6 +43,8 @@ export function heartFailureVisitSurfaces(
       openCount: slots.followUpOpenCount,
       pendingLabels: slots.followUpPendingLabels,
       requests: slots.followUpRequests,
+      // The whole checklist belongs to a heart-failure first assessment.
+      opensAtFirstAssessment: true,
       content: (
         <div className="space-y-2" data-testid="cdss-visit-hf-follow-up-questions">
           {slots.followUpQuestions}

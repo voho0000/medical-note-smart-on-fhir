@@ -331,6 +331,11 @@ export function effectiveAnswer(
 
 export const BLOCK_ORDER: readonly VisitBlock[] = ['status', 'treatment', 'outlook']
 
+/** The tag a point from another pack's map wears here (「AF」 on the HF map), as the pack names it. */
+export function sourceTag(point: DecisionPointView): string {
+  return point.sourceLabel ?? point.source.toUpperCase()
+}
+
 export function blockTitle(block: VisitBlock, isEnglish: boolean): string {
   switch (block) {
     case 'status': return isEnglish ? '01 Status · diagnosis / follow-up' : '01 現況 · 診斷／追蹤'

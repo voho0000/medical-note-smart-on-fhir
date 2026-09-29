@@ -56,7 +56,7 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
       layout={layout}
       patientId={PATIENT}
       visitModel={run.model}
-      companionResult={run.companion}
+      companionResults={run.companion ? [run.companion] : undefined}
       profileFacts={run.profile.facts}
       physicianDecisions={decisions}
       onRecordDecision={(key, input) => usePhysicianDecisionsStore.getState().recordDecision(PATIENT, key, input)}

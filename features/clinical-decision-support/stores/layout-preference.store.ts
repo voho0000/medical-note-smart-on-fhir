@@ -16,6 +16,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { hasVisitMap } from '../renderers/visit/visit-model.source'
 
 /**
  * `map` is the visit decision map, `sections` the three sections and `nhi`
@@ -43,15 +44,14 @@ export const RETIRED_LAYOUTS: readonly CdssLayout[] = ['flow', 'board']
 /** Atrial fibrillation: the decision map, or its own three-section visit flow. */
 export const AF_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections']
 
-/** The packs whose pages open on the decision map when nothing was chosen. */
-export const VISIT_MAP_PACK_IDS: readonly string[] = ['heart-failure-cdss', 'atrial-fibrillation-cdss']
-
 /**
- * What a pack opens on for a browser that never chose a layout. A browser that
- * did choose keeps its choice: the stored layout wins over this.
+ * What a pack opens on for a browser that never chose a layout: the decision
+ * map where the pack declares one (`VISIT_MAPS` — heart failure and atrial
+ * fibrillation today), else the three sections. A browser that did choose
+ * keeps its choice: the stored layout wins over this.
  */
 export function defaultLayoutFor(packId: string): CdssLayout {
-  return VISIT_MAP_PACK_IDS.includes(packId) ? 'map' : 'sections'
+  return hasVisitMap(packId) ? 'map' : 'sections'
 }
 
 interface LayoutPreferenceState {
