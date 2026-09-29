@@ -674,6 +674,8 @@ export function DecisionMapColumns({
     const combined = combinedSummary(block)
     return [block, { ...combined, nothing: combined.text === nothingText }]
   })) as Record<VisitBlock, { text: string; attention: boolean; nothing: boolean }>
+  // The open sections still asking for something, for the summary's foot-note.
+  const summaryLeft = BLOCK_ORDER.filter((block) => !closedNote(block) && stepSummaries[block].attention)
 
   // One bucket per group, groups in the order they first appear and points in
   // the pack's order within each, under the group's heading when the section
@@ -1065,6 +1067,29 @@ export function DecisionMapColumns({
             data-open={summaryShown ? 'true' : undefined}
           >
             <h3 id="cdss-visit-column-summary-title" tabIndex={-1} className="sr-only">{isEnglish ? 'This visit’s summary' : '本次摘要'}</h3>
+            {/* The summary is where a visit ends, and what it copies is only
+                what was decided: a section still asking for something says
+                so here, one press from it, before the note leaves the page. */}
+            {summaryLeft.length ? (
+              <div className="space-y-1.5" data-testid="cdss-visit-summary-left">
+                <p className="text-xs font-semibold text-muted-foreground">{isEnglish ? 'Still open' : '還沒處理'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {summaryLeft.map((block) => (
+                    <button
+                      key={block}
+                      type="button"
+                      className={nextButtonClass}
+                      data-section={SECTION_TONE[block]}
+                      onClick={() => showStep(block, true)}
+                      data-testid={`cdss-visit-summary-left-${block}`}
+                    >
+                      {`${blockShortTitle(block, isEnglish)} · ${stepSummaries[block].text}`}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {summary.content}
           </section>
         ) : null}
