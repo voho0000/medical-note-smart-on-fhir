@@ -1,7 +1,8 @@
 /**
  * One backing for every store that keeps what the clinician said about a
  * patient. The default is today's encrypted tab-session cache, under the keys
- * each store has always used; replacing the backing moves every store's reads
+ * each store has always used — bar the evidence-row switches, whose old key
+ * held plaintext; replacing the backing moves every store's reads
  * and writes at once, which is the one change carrying answers across visits
  * will need.
  */
@@ -25,6 +26,10 @@ import {
   usePhysicianDecisionsStore,
 } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswersStore, visitAnswersStorageKey } from '@/features/clinical-decision-support/stores/visit-answers.store'
+import {
+  evidenceOverridesStorageKey,
+  useEvidenceOverridesStore,
+} from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import { expectSealedEnvelope, storedCiphertext, useRealWebCrypto } from './encrypted-answers.helper'
 
 const AT = new Date('2026-09-29T10:32:00+08:00')
@@ -46,6 +51,7 @@ const KINDS: readonly PatientAnswerKind[] = [
   'phenotype-answer',
   'hfpef-inputs',
   'physician-decisions',
+  'evidence-overrides',
 ]
 
 function resetStores() {
@@ -55,6 +61,7 @@ function resetStores() {
   usePhenotypeAnswerStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   useHfpefInputsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
   usePhysicianDecisionsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+  useEvidenceOverridesStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
 }
 
 /** One write through each store's own API. */
@@ -66,6 +73,8 @@ function answerEverywhere() {
   usePhenotypeAnswerStore.getState().setAnswer(PATIENT, PHENOTYPE, AT)
   useHfpefInputsStore.getState().setInputs(PATIENT, { lavi: { value: '42', measuredOn: DAY } }, AT)
   usePhysicianDecisionsStore.getState().recordDecision(PATIENT, 'heart-failure-mra', { decision: 'prescribed', packVersion: 'test' }, AT)
+  useEvidenceOverridesStore.getState().hydrate(PATIENT)
+  useEvidenceOverridesStore.getState().setOverride(PATIENT, 'congestion:cxr', false)
 }
 
 beforeEach(() => {
@@ -89,13 +98,15 @@ describe('the patient-answer backing', () => {
     expect(phenotypeAnswerStorageKey(PATIENT)).toBe('cdss-phenotype-answer:p1')
     expect(hfpefInputsStorageKey(PATIENT)).toBe('cdss-hfpef-inputs:p1')
     expect(physicianDecisionsStorageKey(PATIENT)).toBe('cdss-physician-decisions:p1')
+    // The one key that moved: the old prefix held plaintext, which the store sweeps.
+    expect(evidenceOverridesStorageKey(PATIENT)).toBe('cdss-evidence-row-overrides:p1')
   })
 
   it('writes every store through the encrypted tab-session cache by default', async () => {
     answerEverywhere()
     // Sealed in the background: ciphertext, never the answer itself.
     for (const kind of KINDS) {
-      expectSealedEnvelope(await storedCiphertext(patientAnswerStorageKey(kind, PATIENT)), ['worse', 'nyhaClass', 'symptomatic', 'lvef', 'lavi', 'prescribed'])
+      expectSealedEnvelope(await storedCiphertext(patientAnswerStorageKey(kind, PATIENT)), ['worse', 'nyhaClass', 'symptomatic', 'lvef', 'lavi', 'prescribed', 'congestion'])
     }
   })
 
@@ -129,6 +140,7 @@ describe('the patient-answer backing', () => {
     usePhenotypeAnswerStore.getState().hydrate(PATIENT)
     useHfpefInputsStore.getState().hydrate(PATIENT)
     usePhysicianDecisionsStore.getState().hydrate(PATIENT)
+    useEvidenceOverridesStore.getState().hydrate(PATIENT)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(useVisitAnswersStore.getState().byPatientId[PATIENT]?.['dyspnoea-trend']?.value).toBe('worse')
@@ -137,6 +149,7 @@ describe('the patient-answer backing', () => {
     expect(usePhenotypeAnswerStore.getState().byPatientId[PATIENT]?.lvef).toBe(30)
     expect(useHfpefInputsStore.getState().byPatientId[PATIENT]?.entries.lavi?.value).toBe('42')
     expect(usePhysicianDecisionsStore.getState().byPatientId[PATIENT]?.['heart-failure-mra']?.decision).toBe('prescribed')
+    expect(useEvidenceOverridesStore.getState().byPatientId[PATIENT]).toEqual({ 'congestion:cxr': false })
   })
 
   it('clears through the backing too', () => {
@@ -149,6 +162,7 @@ describe('the patient-answer backing', () => {
     usePhenotypeAnswerStore.getState().clearAnswer(PATIENT)
     useHfpefInputsStore.getState().clearInputs(PATIENT)
     usePhysicianDecisionsStore.getState().clearDecisions(PATIENT)
+    useEvidenceOverridesStore.getState().clearOverrides(PATIENT)
     expect([...memory.kept.keys()]).toEqual([])
   })
 })
