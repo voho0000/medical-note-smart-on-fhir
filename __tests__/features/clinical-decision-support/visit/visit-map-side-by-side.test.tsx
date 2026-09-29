@@ -103,6 +103,33 @@ describe('the map beside its details', () => {
     expect(screen.getByTestId('cdss-visit-column-status')).not.toBeVisible()
   })
 
+  it('moves to the shown section when its name is pressed again, and leaves no move for later', () => {
+    atWidth(700)
+    const moved: string[] = []
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) { moved.push(this.id) }
+    render(<Harness model={p4Model()} />)
+    const status = screen.getByTestId('cdss-visit-section-toggle-status')
+    fireEvent.click(status)
+    moved.length = 0
+    // Pressed again: nothing changes but the page, which comes back to 01.
+    fireEvent.click(status)
+    expect(moved).toEqual(['cdss-visit-column-status'])
+    moved.length = 0
+    // A later press elsewhere goes where it goes, never back to 01's top.
+    const tile = screen.getByTestId('cdss-visit-overview-status').querySelector<HTMLButtonElement>('button[data-dp]')
+    fireEvent.click(tile!)
+    expect(moved).not.toContain('cdss-visit-column-status')
+  })
+
+  it('gives the column its measured height only as a column', () => {
+    atWidth(700)
+    render(<Harness model={p4Model()} />)
+    const column = screen.getByTestId('cdss-visit-overview')
+    expect(column.style.getPropertyValue('--cdss-column-height')).toMatch(/px$/)
+    expect(column.style.maxHeight).toBe('')
+    expect(column).toHaveClass('@min-[36rem]:max-h-(--cdss-column-height)')
+  })
+
   it('stacks under 36rem, where a section’s name folds it closed as before', () => {
     atWidth(500)
     render(<Harness model={p4Model()} />)
@@ -115,17 +142,33 @@ describe('the map beside its details', () => {
 
 describe('moving the page only as far as it has to', () => {
   const scroll = jest.fn()
-  function target(top: number, height: number): Element {
+  const innerHeight = window.innerHeight
+  const made: Element[] = []
+  function target(top: number, height: number, parent: Element = document.body): HTMLElement {
     const element = document.createElement('div')
     element.getBoundingClientRect = () => box(top, height)
     element.scrollIntoView = scroll
-    document.body.appendChild(element)
+    parent.appendChild(element)
+    made.push(element)
+    return element
+  }
+  /** A panel that scrolls, at `top`, `height` tall, holding more than that. */
+  function panel(top: number, height: number): HTMLElement {
+    const element = target(top, height)
+    element.style.overflowY = 'auto'
+    Object.defineProperty(element, 'clientHeight', { value: height })
+    Object.defineProperty(element, 'scrollHeight', { value: height * 3 })
     return element
   }
 
   beforeEach(() => {
     scroll.mockClear()
     window.innerHeight = 800
+  })
+
+  afterEach(() => {
+    for (const element of made.splice(0)) element.remove()
+    window.innerHeight = innerHeight
   })
 
   it('leaves what is already in the upper part of the view where it is', () => {
@@ -143,5 +186,33 @@ describe('moving the page only as far as it has to', () => {
     expect(scroll).toHaveBeenLastCalledWith({ block: 'start' })
     revealTop(target(500, 1200))
     expect(scroll).toHaveBeenLastCalledWith({ block: 'start' })
+  })
+
+  it('measures against the panel that scrolls, not the window', () => {
+    const side = panel(100, 400)
+    // 50px into the panel: in view.
+    revealTop(target(150, 100, side))
+    expect(scroll).not.toHaveBeenCalled()
+    // In the window's upper part, but 350px into a 400px panel: not.
+    revealTop(target(450, 100, side))
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('passes over a layout that could scroll but holds nothing more than itself', () => {
+    const layout = target(0, 2000)
+    layout.style.overflowY = 'auto'
+    Object.defineProperty(layout, 'clientHeight', { value: 2000 })
+    Object.defineProperty(layout, 'scrollHeight', { value: 2000 })
+    const side = panel(100, 400)
+    layout.appendChild(side)
+    revealTop(target(450, 100, side))
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('does not count a top hidden under what is stuck above it as in view', () => {
+    const element = target(30, 200)
+    element.style.scrollMarginTop = '60px'
+    revealTop(element)
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' })
   })
 })
