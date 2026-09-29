@@ -72,7 +72,7 @@ type LocalizedAudienceSnapshots<T> =
 // A retained small-context model may legitimately prioritize the same FHIR
 // resources and renumber those keys. Resource ids are the stable bridge that
 // lets the bundled snapshot keep pointing at the same evidence in either view.
-const DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY: Readonly<Record<string, string>> = {
+export const DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY: Readonly<Record<string, string>> = {
   D1: 'demo-documentreference-1',
   E1: 'demo-encounter-40',
   E2: 'demo-encounter-41',
@@ -133,6 +133,7 @@ const DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY: Readonly<Record<string, string>> = {
   O19: 'demo-observation-27',
   O20: 'demo-observation-28',
   O23: 'demo-observation-37',
+  P1: 'demo-procedure-1',
 }
 
 /** Re-key only citation fields; narrative/evidence text remains untouched. */
@@ -143,9 +144,13 @@ export function remapDemoSnapshotSourceKeys<T>(
   const currentKeyByResourceId = new Map(
     catalog.map((source) => [source.resourceId, source.key]),
   )
+  // A pinned resource missing from this catalog must not fall back to its
+  // old key: after records are added, that key names a different resource.
+  // An unresolvable key surfaces as an unverified citation instead.
   const remapKey = (key: string) => {
     const resourceId = DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]
-    return resourceId ? currentKeyByResourceId.get(resourceId) ?? key : key
+    if (!resourceId) return key
+    return currentKeyByResourceId.get(resourceId) ?? `stale:${key}`
   }
   const visit = (value: unknown, field?: string): unknown => {
     if (Array.isArray(value)) {
