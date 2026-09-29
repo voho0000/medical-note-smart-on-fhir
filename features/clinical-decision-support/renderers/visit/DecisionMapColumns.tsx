@@ -637,11 +637,16 @@ export function DecisionMapColumns({
     setReveal({ block: step, focus })
     setOpenBlock(step)
   }
-  // A step or a section's name pressed shows the section itself: a card
-  // standing for it closes (the card is the section while it is open).
-  const showStep = (step: VisitStep) => {
-    if (cardAtHead && cardAtHead.block === step) onOpen(cardAtHead)
-    openNext(step)
+  // A step, a section's name, 下一區／完成 or the way back to 01 shows the
+  // section itself: a card standing for it closes (the card is the section
+  // while it is open) — shown now or left open there before the clinician
+  // moved on, which would come back as the section and hide what the press
+  // was for (#194 review: DP-24 → 02 → 01 showed only DP-24). A tile pressed
+  // for a card still opens it.
+  const showStep = (step: VisitStep, focus = false) => {
+    const left = openPoint && detail && opensCard(openPoint) && !leadCardKeys?.has(visitDecisionKey(openPoint)) ? openPoint : undefined
+    if (left && left.block === step) onOpen(left)
+    openNext(step, focus)
   }
   const nothingText = isEnglish ? 'Nothing pending' : '沒有待辦'
   const stepSummaries = Object.fromEntries(BLOCK_ORDER.map((block) => {
@@ -935,7 +940,7 @@ export function DecisionMapColumns({
                       <button
                         type="button"
                         className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() => openNext('status', true)}
+                        onClick={() => showStep('status', true)}
                         data-testid={`cdss-visit-pending-asks-to-status-${block}`}
                       >
                         {`${blockTitle('status', isEnglish)}${isEnglish ? ': ' : '：'}${stepSummaries.status.text}`}
@@ -999,7 +1004,7 @@ export function DecisionMapColumns({
                       type="button"
                       className={nextButtonClass}
                       data-section="summary"
-                      onClick={() => openNext('summary', true)}
+                      onClick={() => showStep('summary', true)}
                       data-testid={`cdss-visit-next-${block}`}
                     >
                       {isEnglish ? 'Finish: this visit’s summary' : '完成：本次摘要'}
@@ -1013,7 +1018,7 @@ export function DecisionMapColumns({
                       className={cn(nextButtonClass, closedNote(nextBlock) && 'opacity-70')}
                       data-section={SECTION_TONE[nextBlock]}
                       disabled={Boolean(closedNote(nextBlock))}
-                      onClick={() => openNext(nextBlock, true)}
+                      onClick={() => showStep(nextBlock, true)}
                       data-testid={`cdss-visit-next-${block}`}
                     >
                       {closedNote(nextBlock)
