@@ -116,7 +116,9 @@ export function DecisionPointDetail({
   /** The page's own inputs this point reads — questions, confirmation, calculator. */
   extras?: ReactNode
 }) {
-  const decision = [...steps].reverse().find((step) => step.decision)?.decision
+  // 「已記錄」 once every step shown is: a chain whose next step is still open
+  // (the DOAC after 「開始抗凝」) says its state instead.
+  const decision = steps.every((step) => step.decision) ? steps[steps.length - 1]?.decision : undefined
   // What the record lacks, said once: the checklist's 「缺」 line already names
   // the items it lists (clinician feedback 2026-09-28: 「不然等於兩個地方都有」).
   const listedMissing = new Set((point.checklist ?? []).filter((item) => !item.present).map((item) => item.label))

@@ -709,6 +709,36 @@ describe('real pack · the other scenarios', () => {
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
 
+  // DP-34 reads 「HFpEF：醫師已確認 · 診斷依據可在 01 打開」 once HFpEF is the
+  // answer: what it rests on stays under the answer, folded, and a press on
+  // DP-34 opens it there.
+  it('P1 after 「HFpEF」: the criteria and scores stay one press away under the answer, and DP-34 opens them', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
+    const fold = screen.getByTestId('cdss-hf-hfpef-evidence-fold') as HTMLDetailsElement
+    expect(fold.open).toBe(false)
+    expect(fold.querySelector('summary')).toHaveTextContent('DP-34HFpEF 診斷依據2/3 成立')
+    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-lvef')).toHaveTextContent('62%，2026-09-20')
+    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-objective-abnormality')).toHaveTextContent('NT-proBNP 680 pg/mL')
+    // The symptoms questions are gone from 診斷 once it is answered: 追蹤 takes them.
+    expect(within(fold).getByTestId('cdss-hf-hfpef-criterion-line-symptoms-signs')).toHaveTextContent('可在「追蹤」補記')
+    expect(within(fold).getByTestId('cdss-hf-hfpef-scores')).toBeInTheDocument()
+    let frame: FrameRequestCallback | undefined
+    const raf = jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frame = callback; return 0 })
+    fireEvent.click(cell('DP-34'))
+    act(() => frame?.(0))
+    raf.mockRestore()
+    // (Focus follows onto its summary in a browser; jsdom lays nothing out.)
+    expect(fold.open).toBe(true)
+  })
+
+  it('P1 after 「HFrEF」 or before an answer: no HFpEF fold', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    expect(screen.queryByTestId('cdss-hf-hfpef-evidence-fold')).toBeNull()
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfref'))
+    expect(screen.queryByTestId('cdss-hf-hfpef-evidence-fold')).toBeNull()
+  })
+
   it('P2 new HFrEF: baseline, four starts in the pack order, baseline labs named', () => {
     const { model } = scenarioRun('p2-new-hfref')
     expect(model.stage).toBe('baseline')
