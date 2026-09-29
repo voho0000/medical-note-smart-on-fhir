@@ -65,10 +65,12 @@ import {
   useVisitAnswerRecord,
   useVisitAnswersHydrated,
   useVisitAnswersStore,
+  visitAnswerSourcesOf,
   visitAnswersOf,
 } from './stores/visit-answers.store'
 import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, isVisitModelSupported } from './renderers/visit/visit-model.source'
 import { intolerantPillars } from './renderers/visit/visit-decisions'
+import type { VisitAnswerProvenance } from './renderers/visit/VisitAsks'
 import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
 import { useLocalDay } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
@@ -338,6 +340,15 @@ export default function LiveClinicalDecisionSupportFeature({
   // Today's answers only, and 「today」 turns at midnight on an open page too.
   const today = useLocalDay()
   const visitAnswers = useMemo(() => visitAnswersOf(visitAnswerRecord, today), [today, visitAnswerRecord])
+  // Where each of today's answers was given, named as the disease switcher
+  // names that page.
+  const visitAnswerSources = useMemo((): VisitAnswerProvenance => {
+    const sources = visitAnswerSourcesOf(visitAnswerRecord, today)
+    return Object.fromEntries(Object.entries(sources).map(([id, source]) => {
+      const pack = source?.packId ? guidelinePacks.find((candidate) => candidate.id === source.packId) : undefined
+      return [id, { ...source, ...(pack ? { pageLabel: pack.label[cdssLocale === 'en' ? 'en' : 'zh'] } : {}) }]
+    }))
+  }, [cdssLocale, guidelinePacks, today, visitAnswerRecord])
   const hydrateVisitAnswers = useVisitAnswersStore((state) => state.hydrate)
   const answerVisitAsk = useVisitAnswersStore((state) => state.answer)
   const clearVisitAnswers = useVisitAnswersStore((state) => state.clearAnswers)
@@ -813,8 +824,11 @@ export default function LiveClinicalDecisionSupportFeature({
         companionResult={isMap ? companionResult : undefined}
         englishCompanionResult={isMap ? englishCompanionResult : undefined}
         visitAnswers={visitAnswers}
+        visitAnswerSources={visitAnswerSources}
         onVisitAnswer={patientId
-          ? (id, value) => answerVisitAsk(patientId, id, value)
+          // Kept per observation, with the page it was given on: another
+          // disease's page that asks the same thing shows it, and says where.
+          ? (id, value) => answerVisitAsk(patientId, id, value, undefined, { packId: result.packId })
           : undefined}
       />
       </PreventReadingContext.Provider>

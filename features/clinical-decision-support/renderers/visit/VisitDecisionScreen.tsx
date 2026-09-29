@@ -36,7 +36,7 @@ import type {
 import { DecisionMapColumns } from './DecisionMapColumns'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
-import { VisitAsks } from './VisitAsks'
+import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { VisitPlan } from './VisitPlan'
@@ -128,6 +128,8 @@ export interface VisitDecisionScreenProps {
   onRecordDecision?: (key: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (key: string) => void
   answers: VisitAnswers
+  /** Where each of today's answers was given, so an answer from another page says so. */
+  answerSources?: VisitAnswerProvenance
   onAnswer?: (id: VisitAsk['id'], value: string | null) => void
   /** Every card a point can open, by module id — this pack's and the companion's. */
   modules: ReadonlyMap<string, CdssRecommendation>
@@ -168,6 +170,7 @@ export function VisitDecisionScreen({
   onRecordDecision,
   onClearDecision,
   answers,
+  answerSources,
   onAnswer,
   modules,
   renderDetail,
@@ -510,7 +513,14 @@ export function VisitDecisionScreen({
   }
   const followUpLead = (
     <>
-      <VisitAsks asks={model.asks} answers={answers} isEnglish={isEnglish} onAnswer={onAnswer} />
+      <VisitAsks
+        asks={model.asks}
+        answers={answers}
+        isEnglish={isEnglish}
+        onAnswer={onAnswer}
+        pagePackId={model.packId}
+        {...(answerSources ? { sources: answerSources } : {})}
+      />
       {surfaces?.asksDetail ? (
         <VisitAsksDetail
           id={ASKS_DETAIL_ID}
