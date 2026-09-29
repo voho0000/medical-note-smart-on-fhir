@@ -307,9 +307,13 @@ function DecisionBasis({ items, isEnglish }: { items: readonly DecisionBasisItem
       data-visit-basis=""
     >
       {items.map((item) => (
-        <div key={`${item.label}|${item.value}`} className="inline-flex min-w-0 items-baseline gap-1">
-          <dt className="shrink-0 text-muted-foreground">{item.label}</dt>
-          <dd className="min-w-0 font-medium tabular-nums text-foreground">{item.value}</dd>
+        // A label as long as 「ARNI (ACE inhibitor/ARB when ARNI is not
+        // feasible)」 wraps in a narrow column, and its value follows onto the
+        // next line whole rather than being squeezed to a letter a line or
+        // pushed out of the row (#201 review, 320 px).
+        <div key={`${item.label}|${item.value}`} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1">
+          <dt className="min-w-0 break-words text-muted-foreground">{item.label}</dt>
+          <dd className="min-w-0 max-w-full break-words font-medium tabular-nums text-foreground">{item.value}</dd>
           {item.date ? <dd className="shrink-0 tabular-nums text-muted-foreground">{item.date}</dd> : null}
         </div>
       ))}
