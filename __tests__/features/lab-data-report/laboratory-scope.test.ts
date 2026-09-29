@@ -1,4 +1,5 @@
 import { isLaboratoryObservation } from '@/features/lab-data-report/utils/laboratory-scope'
+import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 
 const OBS_CATEGORY = 'http://terminology.hl7.org/CodeSystem/observation-category'
 const observation = (category: unknown, resourceType = 'Observation') => ({ resourceType, category })
@@ -25,5 +26,18 @@ describe('isLaboratoryObservation', () => {
   it('is false for anything that is not an Observation', () => {
     expect(isLaboratoryObservation(observation([coding('laboratory')], 'DiagnosticReport'))).toBe(false)
     expect(isLaboratoryObservation(null)).toBe(false)
+  })
+
+  it('accepts the app\'s mapped ObservationEntity, which has no resourceType', () => {
+    const entity = FhirMapper.toObservation({
+      resourceType: 'Observation',
+      id: 'x',
+      status: 'final',
+      code: { text: 'WBC' },
+      category: [coding('laboratory')],
+    } as any)
+    expect('resourceType' in entity).toBe(false)
+    expect(isLaboratoryObservation(entity)).toBe(true)
+    expect(isLaboratoryObservation({ ...entity, category: [coding('survey')] })).toBe(false)
   })
 })
