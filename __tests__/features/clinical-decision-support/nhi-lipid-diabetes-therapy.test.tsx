@@ -165,11 +165,15 @@ describe('a clinician\'s 「否」 in PREVENT reaches every lipid card', () => {
     expect(therapy(answered)).not.toContain('糖尿病／CKD')
     expect(riskCard(answered).coverageSummary!.diseaseChecks.find((check) => check.id === 'diabetes')).toMatchObject({
       state: 'no',
+      origin: 'physician',
       value: expect.stringContaining('醫師於 PREVENT 回答否'),
     })
 
     render(<NhiLipidCoverageSummary recommendation={riskCard(answered)} locale="zh-TW" patientId="dm-by-drug" presentation="diagnosis" />)
     const section = screen.getByTestId('lipid-diagnosis-confirmation')
-    expect(within(section).getAllByText('糖尿病', { selector: 'summary > span' })[0].closest('summary')).toHaveTextContent('× 不符合')
+    const row = within(section).getAllByText('糖尿病', { selector: 'summary > span' })[0].closest('details')!
+    expect(row.querySelector('summary')).toHaveTextContent('× 不符合')
+    expect(row).toHaveTextContent('醫師修正')
+    expect(row).not.toHaveTextContent('依資料預選')
   })
 })
