@@ -10,6 +10,7 @@ import type {
   PhysicianDecisionMap,
 } from '../../stores/physician-decisions.store'
 import type {
+  CdssRecommendation,
   DecisionPointState,
   DecisionPointView,
   VisitAction,
@@ -265,6 +266,49 @@ export function decidingStep(
     if (step) return { owner, step }
   }
   return undefined
+}
+
+/** One record value a decision reads, as its row prints it. */
+export interface DecisionBasisItem {
+  label: string
+  value: string
+  /** The value's date, as the page prints dates (「09-20」). */
+  date?: string
+}
+
+const TRAILING_DATE = /\s*[（(](\d{4}-\d{2}-\d{2})[）)]$/
+
+/**
+ * What a decision reads from this patient's record, for its row: the
+ * 「本病人依據」 of the modules behind the point — 年齡 80 歲, 體重 58 kg,
+ * Cr 1.3 mg/dL — each with its date, in the pack's own words and order.
+ * The same values sit folded inside the module's card; a decision row shows
+ * them so the choice is made with them in view (owner feedback 2026-09-29:
+ * 「空白空間還那麼多…而不是 user 要自己點開」). Values whose fact the page
+ * already heads with (`skip`: LVEF) are left out; one value named by two
+ * modules is shown once.
+ */
+export function decisionBasis(
+  point: Pick<DecisionPointView, 'moduleIds'>,
+  modules: ReadonlyMap<string, CdssRecommendation>,
+  skip: ReadonlySet<string>,
+  formatDate: (date: string) => string | undefined,
+): DecisionBasisItem[] {
+  const items: DecisionBasisItem[] = []
+  const seen = new Set<string>()
+  for (const id of point.moduleIds) {
+    for (const evidence of modules.get(id)?.patientEvidence ?? []) {
+      if (evidence.factKeys.length > 0 && evidence.factKeys.every((key) => skip.has(key))) continue
+      const match = TRAILING_DATE.exec(evidence.value)
+      const value = match ? evidence.value.slice(0, match.index) : evidence.value
+      const seenKey = `${evidence.label}|${value}`
+      if (!value.trim() || seen.has(seenKey)) continue
+      seen.add(seenKey)
+      const date = match ? formatDate(match[1]) : undefined
+      items.push({ label: evidence.label, value, ...(date ? { date } : {}) })
+    }
+  }
+  return items
 }
 
 export interface QueueRow {
