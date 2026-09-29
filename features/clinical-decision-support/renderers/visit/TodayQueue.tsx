@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
-import { sourceTag, type QueueRow, type QueueStep } from './visit-decisions'
+import { sourceTag, type DecisionBasisItem, type QueueRow, type QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
 import { StatePill } from './visit-presentation'
@@ -29,6 +29,7 @@ export function TodayQueue({
   hideWhenEmpty = false,
   detailFor,
   onOpenDetail,
+  basis,
 }: {
   rows: readonly QueueRow[]
   isEnglish: boolean
@@ -45,6 +46,8 @@ export function TodayQueue({
   detailFor?: (point: DecisionPointView) => ReactNode
   /** Opens (or closes) a row's card — its reasons, chain and guideline. */
   onOpenDetail?: (point: DecisionPointView) => void
+  /** What a row's open decision reads from the record, printed under it (see `decisionBasis`). */
+  basis?: (point: DecisionPointView) => readonly DecisionBasisItem[]
 }) {
   const listRef = useRef<HTMLOListElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -111,6 +114,7 @@ export function TodayQueue({
               {...(onClear ? { onClear: (step) => { focusFrom.current = row.key; onClear(step) } } : {})}
               {...(detailFor ? { detailFor } : {})}
               {...(onOpenDetail ? { onOpenDetail } : {})}
+              {...(basis ? { basis } : {})}
             />
           ))}
         </ol>
@@ -198,6 +202,7 @@ export function QueueRowBox({
   detailOpen,
   queued = true,
   as: Element = 'li',
+  basis,
 }: {
   row: QueueRow
   isEnglish: boolean
@@ -214,6 +219,8 @@ export function QueueRowBox({
    */
   queued?: boolean
   as?: 'li' | 'div'
+  /** What the open decision reads from the record, printed under its reason. */
+  basis?: (point: DecisionPointView) => readonly DecisionBasisItem[]
 }) {
   const current = row.current
   const decidedSteps = row.steps.filter((step) => step.decision)
@@ -262,6 +269,8 @@ export function QueueRowBox({
                   onDecide={onDecide ? (action) => onDecide(current, action) : undefined}
                 />
               </div>
+              {/* The row's whole width, under the words and the buttons alike. */}
+              <DecisionBasis items={basis?.(point) ?? []} isEnglish={isEnglish} />
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -281,6 +290,34 @@ export function QueueRowBox({
       </div>
       {detail ? <div className={rowStyles.detail}>{detail}</div> : null}
     </Element>
+  )
+}
+
+/**
+ * The record values an open decision reads — 年齡 80 歲 · 體重 58 kg 09-27 ·
+ * Cr 1.3 mg/dL 09-20 — in view under its reason rather than folded in its
+ * card, so the row holds what the choice is made with.
+ */
+function DecisionBasis({ items, isEnglish }: { items: readonly DecisionBasisItem[]; isEnglish: boolean }) {
+  if (items.length === 0) return null
+  return (
+    <dl
+      className="flex basis-full flex-wrap gap-x-3 gap-y-0.5 text-xs leading-5"
+      aria-label={isEnglish ? 'What this decision reads' : '本病人依據'}
+      data-visit-basis=""
+    >
+      {items.map((item) => (
+        // A label as long as 「ARNI (ACE inhibitor/ARB when ARNI is not
+        // feasible)」 wraps in a narrow column, and its value follows onto the
+        // next line whole rather than being squeezed to a letter a line or
+        // pushed out of the row (#201 review, 320 px).
+        <div key={`${item.label}|${item.value}`} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1">
+          <dt className="min-w-0 break-words text-muted-foreground">{item.label}</dt>
+          <dd className="min-w-0 max-w-full break-words font-medium tabular-nums text-foreground">{item.value}</dd>
+          {item.date ? <dd className="shrink-0 tabular-nums text-muted-foreground">{item.date}</dd> : null}
+        </div>
+      ))}
+    </dl>
   )
 }
 

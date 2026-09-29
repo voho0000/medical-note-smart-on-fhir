@@ -17,6 +17,7 @@ import {
   checkIntervalSuffix,
   decidedOnAnotherRow,
   decidingStep,
+  decisionBasis,
   decisionInputFor,
   dependentDecisionKeys,
   effectiveAnswer,
@@ -45,7 +46,7 @@ import { pageSourceOf } from './visit-model.source'
 import { focusBackTo, focusInto, revealTop } from './reveal'
 import { MapFold } from './MapFold'
 import { VisitPlan } from './VisitPlan'
-import { VisitStatusHeader } from './VisitStatusHeader'
+import { displayDate, VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
 import rowStyles from './point-rows.module.css'
 
@@ -431,6 +432,10 @@ export function VisitDecisionScreen({
     />
   ) : null
   const detailFor = (point: DecisionPointView) => (openPoint && openPoint.dp === point.dp && openPoint.source === point.source ? detailNode : undefined)
+  // What an open decision reads from the record, under its row. LVEF heads the
+  // page's values line, so it is not repeated on every pillar.
+  const headedKeys = useMemo(() => new Set(model.keyValues.filter((item) => item.key === 'LVEF').map((item) => item.key)), [model.keyValues])
+  const basisOf = (point: DecisionPointView) => decisionBasis(point, modules, headedKeys, (date) => displayDate(date, now))
   const decideRow = onRecordDecision ? (step: QueueStep, action: VisitAction) => record(step.key, step.point, action, 'queue') : undefined
   const clearRow = onClearDecision ? (step: QueueStep) => clear(step.key) : undefined
   // A pillar box decides in place: today's row where the pack queued it, else
@@ -454,6 +459,7 @@ export function VisitDecisionScreen({
         onOpenDetail={toggleOpen}
         detailOpen={Boolean(detailFor(point))}
         queued={Boolean(queued)}
+        basis={basisOf}
       />
     ) : (
       <PointBox key={point.dp} point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpenDetail={toggleOpen} detailOpen={Boolean(detailFor(point))} />
@@ -499,6 +505,7 @@ export function VisitDecisionScreen({
       onClear={clearRow}
       onOpenDetail={toggleOpen}
       detailFor={detailFor}
+      basis={basisOf}
     />
   )
   const undiagnosed = model.asks.length === 0

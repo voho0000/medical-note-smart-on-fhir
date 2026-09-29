@@ -2,6 +2,7 @@ import {
   buildQueueRows,
   buildVisitPlan,
   checkIntervalSuffix,
+  decisionBasis,
   decisionFor,
   decisionInputFor,
   dependentDecisionKeys,
@@ -64,6 +65,28 @@ describe('visit decision placement', () => {
     expect(decisionFor(reduced, recorded, NOW)).toBeUndefined()
     // A record from before labels were kept stands on its id.
     expect(decisionFor(reduced, decided({ 'visit:af:DP-09': { actionId: 'apixaban-5' } }), NOW)?.action.label).toBe('apixaban 2.5 mg bid')
+  })
+
+  // Owner feedback 2026-09-29: what the decision reads, in view on its row.
+  it('lists what a decision reads from its modules, dated, once each, without what the page heads with', () => {
+    const recommendation = (id: string, evidence: { label: string; value: string; factKeys: string[] }[]) => [id, { id, patientEvidence: evidence }] as const
+    const modules = new Map([
+      recommendation('dose', [
+        { label: '年齡', value: '80 歲', factKeys: ['age'] },
+        { label: '體重', value: '58 kg（2026-09-27）', factKeys: ['weight'] },
+        { label: 'LVEF', value: '28%（2026-09-12）', factKeys: ['LVEF'] },
+      ]),
+      recommendation('other', [
+        { label: '體重', value: '58 kg（2026-09-27）', factKeys: ['weight'] },
+        { label: 'Cr', value: '1.3 mg/dL (2025-12-01)', factKeys: ['creatinine'] },
+      ]),
+    ]) as unknown as Map<string, import('@/features/clinical-decision-support/types').CdssRecommendation>
+    const short = (date: string) => date.slice(5)
+    expect(decisionBasis({ moduleIds: ['dose', 'other', 'absent'] }, modules, new Set(['LVEF']), short)).toEqual([
+      { label: '年齡', value: '80 歲' },
+      { label: '體重', value: '58 kg', date: '09-27' },
+      { label: 'Cr', value: '1.3 mg/dL', date: '12-01' },
+    ])
   })
 
   // A start's button keeps ten characters; the note records the dose its

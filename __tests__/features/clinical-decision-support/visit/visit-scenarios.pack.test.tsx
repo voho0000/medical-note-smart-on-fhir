@@ -577,6 +577,22 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     // The drug and its prescribed daily dose lead the question (「利尿劑加量沒顯示原本用什麼利尿劑跟原本劑量」).
     expect(diureticBox('DP-06')).toHaveTextContent('furosemide 每日 20 mg：體重減少，是否減量？')
   })
+
+  // Owner feedback 2026-09-29: with room on the page, what a decision reads is
+  // in view on its row — not three folds down in the module's card.
+  it('prints on each open decision the record values it reads, dated, with the page’s LVEF left to the page', () => {
+    render(<ScenarioMap id="p9-hfpef-af-dose" />)
+    const basis = row('DP-14').querySelector<HTMLElement>('[data-visit-basis]')!
+    expect(basis).toHaveTextContent('年齡80 歲')
+    expect(basis).toHaveTextContent('體重58 kg')
+    expect(basis).toHaveTextContent('Cr1.3 mg/dL')
+    const mra = pillar('DP-09').querySelector<HTMLElement>('[data-visit-basis]')!
+    expect(mra).toHaveTextContent('K')
+    expect(mra).not.toHaveTextContent('LVEF')
+    // Once decided, the row is its record line.
+    fireEvent.click(primaryOf('DP-14'))
+    expect(row('DP-14').querySelector('[data-visit-basis]')).toBeNull()
+  })
 })
 
 describe('real pack · P11 dabigatran with CrCl under 30 (AF page)', () => {
