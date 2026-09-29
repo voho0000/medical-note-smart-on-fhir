@@ -2123,3 +2123,91 @@ describe('local zh-TW prose guards', () => {
     expect(messages[0].content).toContain('不得使用簡體字')
   })
 })
+
+describe('summary segment spacing', () => {
+  const catalog = buildSourceCatalog(CATALOG_INPUT)
+  const finalize = (
+    summary: Array<{ text: string; emphasis?: boolean; sources?: string[] }>,
+    locale: 'en' | 'zh-TW',
+  ) => useCase.finalizeResult(
+    {
+      headline: 'h',
+      problems: [],
+      decisions: [],
+      timeline: [],
+      summary: summary.map((s) => ({ emphasis: false, sources: [], ...s })),
+    },
+    catalog,
+    { locale },
+  )
+  // What the card's copy button puts on the clipboard.
+  const joined = (result: ReturnType<typeof finalize>) =>
+    result.summary.map((s) => s.text).join('')
+
+  it('restores the space at glued Latin word boundaries (gemini-3-flash, 2026-09-29)', () => {
+    const result = finalize([
+      { text: 'Your health records show steady management of' },
+      { text: 'chronic kidney disease', emphasis: true, sources: ['E1'] },
+      { text: 'and' },
+      { text: 'glaucoma', emphasis: true, sources: ['M1'] },
+      { text: 'using multiple eye drops.' },
+      { text: 'HbA1c 8.2%', emphasis: true, sources: ['L1'] },
+      { text: 'was last recorded in April.' },
+    ], 'en')
+
+    expect(joined(result)).toBe(
+      'Your health records show steady management of chronic kidney disease and glaucoma ' +
+      'using multiple eye drops. HbA1c 8.2% was last recorded in April.',
+    )
+    // The space leads the later segment, so the superscript rendered after
+    // "chronic kidney disease" stays attached to it.
+    expect(result.summary[1]).toMatchObject({ text: ' chronic kidney disease', sourceKeys: ['E1'] })
+  })
+
+  it('adds no space before punctuation and keeps split numbers whole', () => {
+    const result = finalize([
+      { text: 'chronic kidney disease', emphasis: true },
+      { text: ', and' },
+      { text: 'glaucoma', emphasis: true },
+      { text: '. Records show HbA1c 7.' },
+      { text: '2 in 2026 (' },
+      { text: 'eGFR 45' },
+      { text: ')' },
+    ], 'en')
+
+    expect(joined(result)).toBe(
+      'chronic kidney disease, and glaucoma. Records show HbA1c 7.2 in 2026 (eGFR 45)',
+    )
+  })
+
+  it('leaves already-spaced segments alone and never doubles a space', () => {
+    const spaced = [
+      { text: 'Your health records show steady management of ' },
+      { text: 'chronic kidney disease', emphasis: true },
+      { text: ' and ' },
+      { text: 'glaucoma', emphasis: true },
+      { text: ', using multiple eye drops.' },
+    ]
+    expect(finalize(spaced, 'en').summary.map((s) => s.text)).toEqual(spaced.map((s) => s.text))
+
+    expect(joined(finalize([
+      { text: 'management of ' },
+      { text: ' glaucoma', emphasis: true },
+      { text: ' ' },
+      { text: 'with eye drops.' },
+    ], 'en'))).toBe('management of glaucoma with eye drops.')
+  })
+
+  it('leaves zh-TW segments untouched, including Latin terms beside Han text', () => {
+    const zh = [
+      { text: '紀錄顯示持續追蹤' },
+      { text: '慢性腎臟病', emphasis: true },
+      { text: '與' },
+      { text: '青光眼', emphasis: true },
+      { text: '，近期' },
+      { text: 'HbA1c 7.2→8.4', emphasis: true },
+      { text: '上升。' },
+    ]
+    expect(finalize(zh, 'zh-TW').summary.map((s) => s.text)).toEqual(zh.map((s) => s.text))
+  })
+})

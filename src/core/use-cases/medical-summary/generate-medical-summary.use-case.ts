@@ -192,6 +192,37 @@ export function rescueEmphasisFromQuotes(segments: SummarySegment[]): SummarySeg
   return out
 }
 
+/**
+ * Segment joins: segments render back-to-back and copy joins them with "", so
+ * the space between two English words must live inside one of them. Models
+ * that trim every segment ("management of" + "chronic kidney disease") glue
+ * the words together. Restore one space at such a boundary, as a LEADING space
+ * on the later segment so a citation superscript stays on the claim before it.
+ * Han/kana text has no inter-word spaces and never gets one; a boundary that
+ * already carries whitespace keeps exactly one.
+ */
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}]/u
+const isSpacedWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch) && !UNSPACED_SCRIPT.test(ch)
+function needsJoinSpace(before: string, after: string): boolean {
+  const last = before.slice(-1)
+  const first = after.charAt(0)
+  if (!last || !isSpacedWordChar(first)) return false
+  if (isSpacedWordChar(last) || /[;:!?%)\]]/.test(last)) return true
+  // "drops." + "Kidney" needs its space too, but "7." + "2" and "1," + "000"
+  // are one number — after "." or "," only a letter starts a new word.
+  return /[.,]/.test(last) && /\p{L}/u.test(first)
+}
+function normaliseSegmentSpacing(segments: SummarySegment[]): SummarySegment[] {
+  let before = ''
+  return segments.map((seg) => {
+    let text = seg.text
+    if (/\s$/.test(before) && /^\s/.test(text)) text = text.trimStart()
+    else if (needsJoinSpace(before, text)) text = ` ${text}`
+    if (text) before = text
+    return text === seg.text ? seg : { ...seg, text }
+  })
+}
+
 export interface SummaryCatalogInput {
   encounters?: EncounterEntity[]
   medications?: MedicationEntity[]
@@ -2326,6 +2357,9 @@ export class GenerateMedicalSummaryUseCase {
     // Citations belong to claims — move fragment citations to the highlight /
     // sentence boundary they support instead of scattering them mid-sentence.
     summary = coalesceCitations(summary)
+    // Last, once segments stop being dropped or split: render and copy both
+    // read these joins (see normaliseSegmentSpacing).
+    summary = normaliseSegmentSpacing(summary)
     // Investigations render directly after the narrative, so register their
     // evidence before problem/decision sources to keep citation numbers
     // increasing top-to-bottom on the page.

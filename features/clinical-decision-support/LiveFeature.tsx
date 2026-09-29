@@ -30,6 +30,7 @@ import { selectNhiLipidAiCriteria } from './ai/nhi-lipid-ai-assist'
 import { useNhiLipidAiAssist } from './hooks/use-nhi-lipid-ai-assist.hook'
 import {
   useEvidenceOverrides,
+  useEvidenceOverridesHydrated,
   useEvidenceOverridesStore,
 } from './stores/evidence-overrides.store'
 import {
@@ -365,10 +366,11 @@ export default function LiveClinicalDecisionSupportFeature({
     usePhenotypeAnswerHydrated(patientId),
     useVisitAnswersHydrated(patientId),
     useAfAnswersHydrated(patientId),
+    useEvidenceOverridesHydrated(patientId),
   ].every(Boolean)
 
-  // The switches this physician set on this chart survive a reload, so they are
-  // read back before the pack runs rather than after.
+  // The switches this physician set on this chart survive a reload of the tab,
+  // so they are read back before the cards are shown rather than after.
   useEffect(() => {
     if (patientId) hydrateEvidenceOverrides(patientId)
   }, [hydrateEvidenceOverrides, patientId])
