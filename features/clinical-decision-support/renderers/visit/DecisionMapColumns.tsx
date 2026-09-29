@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardCopy, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -47,23 +47,31 @@ const SIDE_BY_SIDE_REM = 36
  */
 function useSideBySide(ref: RefObject<HTMLElement | null>): { sideBySide: boolean; columnHeight?: number } {
   const [state, setState] = useState<{ sideBySide: boolean; columnHeight?: number }>({ sideBySide: false })
-  useEffect(() => {
+  // Before paint, so the first frame is already laid out as it will stay.
+  useLayoutEffect(() => {
     const element = ref.current
     if (!element || typeof ResizeObserver === 'undefined') return
-    const scroller = scrollParentOf(element)
+    const observer = new ResizeObserver(() => measure())
+    let scroller: HTMLElement | undefined
     const measure = () => {
+      // Found again each time: what scrolls can change once the panel's own
+      // effects have run.
+      const found = scrollParentOf(element)
+      if (found !== scroller) {
+        if (scroller) observer.unobserve(scroller)
+        if (found) observer.observe(found)
+        scroller = found
+      }
       const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
       const sideBySide = element.getBoundingClientRect().width >= SIDE_BY_SIDE_REM * rem
       // The column sits 0.5rem from the top of what scrolls and keeps 0.5rem below.
-      const columnHeight = sideBySide ? Math.max(0, (scroller?.clientHeight ?? window.innerHeight) - rem) : undefined
+      const columnHeight = sideBySide ? Math.max(0, Math.floor((scroller?.clientHeight ?? window.innerHeight) - rem)) : undefined
       setState((current) => (current.sideBySide === sideBySide && current.columnHeight === columnHeight
         ? current
         : { sideBySide, ...(columnHeight === undefined ? {} : { columnHeight }) }))
     }
-    measure()
-    const observer = new ResizeObserver(measure)
     observer.observe(element)
-    if (scroller) observer.observe(scroller)
+    measure()
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
@@ -449,8 +457,11 @@ export function DecisionMapColumns({
   const shownStep: VisitStep | null = summaryShown ? 'summary' : shownBlock
   const searchId = useId()
   // Where to bring the page after a move: the section just opened from 下一區,
-  // or the card just opened from a tile or the stepper.
-  const scrollTo = useRef<{ block: VisitStep } | { card: true } | null>(null)
+  // or the card just opened from a tile or the stepper. State, not a ref: each
+  // press is a new request, so one that changes nothing else (the step
+  // already shown) still moves the page, and none is left behind for a later,
+  // unrelated render.
+  const [reveal, setReveal] = useState<{ block: VisitStep } | { card: true } | null>(null)
   const openPoint = openKey
     ? model.points.find((point) => visitDecisionKey(point) === openKey)
     : undefined
@@ -461,17 +472,15 @@ export function DecisionMapColumns({
   const cardAtHead = cardOpen && openPoint && !leadCardKeys?.has(visitDecisionKey(openPoint)) ? openPoint : undefined
 
   useEffect(() => {
-    const target = scrollTo.current
-    if (!target) return
-    scrollTo.current = null
-    if ('block' in target) {
-      revealTop(document.getElementById(`cdss-visit-column-${target.block}`))
+    if (!reveal) return
+    if ('block' in reveal) {
+      revealTop(document.getElementById(`cdss-visit-column-${reveal.block}`))
       return
     }
     // The card has focused its own heading; bring its top into view — under
     // the overview the tile was pressed on, or beside the column.
     revealTop(document.getElementById(VISIT_DETAIL_ID))
-  }, [openBlock, openKey])
+  }, [reveal])
 
   // A block the pack closed with a note (「確診後開啟」) — or, without one,
   // 02 and 03 before a diagnosis.
@@ -492,7 +501,7 @@ export function DecisionMapColumns({
 
   const open = (point: DecisionPointView) => {
     // The point's card shows in its own section, so that section is the open one.
-    if (opensCard(point)) scrollTo.current = { card: true }
+    if (opensCard(point)) setReveal({ card: true })
     setOpenBlock(point.block)
     // A card left open in a section since closed is out of sight: pressing its
     // point shows it again rather than closing it (#179 review). Only a card
@@ -524,7 +533,7 @@ export function DecisionMapColumns({
     }
   }
   const openNext = (step: VisitStep) => {
-    scrollTo.current = { block: step }
+    setReveal({ block: step })
     setOpenBlock(step)
   }
   const nothingText = isEnglish ? 'Nothing pending' : '沒有待辦'
@@ -571,8 +580,10 @@ export function DecisionMapColumns({
       <div className="space-y-3 @min-[36rem]:grid @min-[36rem]:grid-cols-[13.5rem_minmax(0,1fr)] @min-[36rem]:items-start @min-[36rem]:gap-3 @min-[36rem]:space-y-0 @min-[48rem]:grid-cols-[15rem_minmax(0,1fr)] @min-[64rem]:grid-cols-[17rem_minmax(0,1fr)] @min-[80rem]:grid-cols-[20rem_minmax(0,1fr)]">
       {/* ---------------------------------------------------------- overview */}
       <div
-        className="space-y-2 @min-[36rem]:sticky @min-[36rem]:top-2 @min-[36rem]:overflow-y-auto @min-[36rem]:overscroll-contain @min-[36rem]:pr-1"
-        style={columnHeight ? { maxHeight: columnHeight } : undefined}
+        // The height is measured; whether it applies is the container query's
+        // to say, so the stacked map never takes a column's height.
+        className="space-y-2 @min-[36rem]:sticky @min-[36rem]:top-2 @min-[36rem]:max-h-(--cdss-column-height) @min-[36rem]:overflow-y-auto @min-[36rem]:overscroll-contain @min-[36rem]:pr-1"
+        style={columnHeight ? { '--cdss-column-height': `${columnHeight}px` } as CSSProperties : undefined}
         data-testid="cdss-visit-overview"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -630,8 +641,8 @@ export function DecisionMapColumns({
                   aria-expanded={isOpen}
                   aria-controls={`cdss-visit-column-${block}`}
                   onClick={() => {
-                    if (sideBySide || !isOpen) scrollTo.current = { block }
-                    setOpenBlock(sideBySide || !isOpen ? block : null)
+                    if (sideBySide || !isOpen) openNext(block)
+                    else setOpenBlock(null)
                   }}
                   className={cn(
                     styles.mapToggle,
@@ -702,10 +713,7 @@ export function DecisionMapColumns({
             closedNote={closedNote}
             {...(summary ? { summaryStatus: summary.status } : {})}
             isEnglish={isEnglish}
-            onGo={(step) => {
-              scrollTo.current = { block: step }
-              setOpenBlock(step)
-            }}
+            onGo={openNext}
           />
         </div>
         {BLOCK_ORDER.map((block) => {
