@@ -202,6 +202,59 @@ describe('a chained step the pack says decides other points, among equals', () =
     expect(screen.getByTestId('cdss-visit-detail-slot')).not.toHaveTextContent('等上一步')
   })
 
+  // 「開始抗凝」 recorded is not DP-07 decided: the DOAC is still to choose,
+  // and its tile says so rather than 「已記錄」.
+  it('keeps DP-07 today’s while its DOAC is still to choose, and records it once chosen', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    expect(tile('DP-07')).not.toHaveAttribute('data-decided')
+    expect(tile('DP-07')).not.toHaveTextContent('已記錄')
+    expect(tile('DP-07')).toHaveTextContent('開始抗凝 → 選 DOAC（劑量已依腎功能、年齡、體重算好）')
+    fireEvent.click(tile('DP-07'))
+    expect(within(screen.getByTestId('cdss-visit-detail')).getByRole('heading', { level: 4 })).not.toHaveTextContent('已記錄')
+    fireEvent.click(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' }))
+    expect(tile('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(tile('DP-07')).toHaveTextContent('rivaroxaban 15 mg qd')
+    expect(within(screen.getByTestId('cdss-visit-detail')).getByRole('heading', { level: 4 })).toHaveTextContent('已記錄')
+  })
+
+  // P11: dabigatran under CrCl 30 → 「改用其他 DOAC」 opens the switch, which
+  // chooses DP-08's agent anew — settled until then.
+  it('reads a settled DP-08 as today’s while the switch that decides it is open', () => {
+    const model: VisitDecisionModel = {
+      ...afModel({}),
+      queue: ['DP-09'],
+      points: [
+        point({ dp: 'DP-08', label: '抗凝選藥', state: 'done', source: 'af', group: 'anticoagulation', headline: 'DOAC：無機械瓣／MS 紀錄' }),
+        point({
+          dp: 'DP-09', label: 'DOAC 劑量', state: 'safety', source: 'af', group: 'anticoagulation',
+          headline: 'dabigatran：CrCl <30 禁忌 → 換藥',
+          actions: [action('af-dp09-switch', '改用其他 DOAC', 'dose-adjusted', { primary: true, responseCheck: hbCr })],
+          next: {
+            afterActionId: 'af-dp09-switch',
+            headline: '換哪一種 DOAC：部分劑量需個別評估',
+            why: 'CrCl 25',
+            actions: [
+              action('af-dp09-switch-rivaroxaban', 'rivaroxaban 15 mg qd', 'prescribed', { responseCheck: hbCr }),
+              action('af-dp09-switch-edoxaban', 'edoxaban 30 mg qd', 'prescribed', { responseCheck: hbCr }),
+            ],
+            decides: ['DP-08'],
+            unranked: true,
+          } as DecisionPointView['next'],
+        }),
+      ],
+    }
+    renderAt02(model)
+    expect(tile('DP-08')).toHaveTextContent('已定')
+    fireEvent.click(within(row()).getByRole('button', { name: '改用其他 DOAC' }))
+    expect(tile('DP-08')).toHaveTextContent('今天要決定')
+    expect(tile('DP-08')).toHaveTextContent('換哪一種 DOAC：部分劑量需個別評估')
+    expect(tile('DP-09')).not.toHaveAttribute('data-decided')
+    expect(tile('DP-09')).toHaveTextContent('改用其他 DOAC → 換哪一種 DOAC：部分劑量需個別評估')
+    fireEvent.click(within(row()).getByRole('button', { name: 'edoxaban 30 mg qd' }))
+    for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).toHaveTextContent('edoxaban 30 mg qd')
+  })
+
   // HF DP-14 folds AF DP-07, `next` and all: the DP-08 and DP-09 its step
   // decides are AF's, not the HF page's own points of the same codes.
   it('leaves another pack’s points of the same codes alone', () => {

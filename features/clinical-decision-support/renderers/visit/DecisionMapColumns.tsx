@@ -166,6 +166,7 @@ function MapTile({
   decision,
   inQueue,
   pending,
+  chain = point.chain,
   open,
   opensCard,
   matches,
@@ -176,8 +177,14 @@ function MapTile({
   point: DecisionPointView
   decision?: PointDecision
   inQueue: boolean
-  /** The question another row's step now asks for it (DP-09's 「選 DOAC」), over its own 「等 DP-07」. */
+  /**
+   * The question still open for it, over its own sentence: another row's step
+   * (DP-09's 「選 DOAC」, not 「等 DP-07」), or its own chain's next one
+   * (「開始抗凝 → 選 DOAC…」).
+   */
   pending?: string
+  /** Its chain as it stands today, where that differs from the pack's (see `chainOf`). */
+  chain?: DecisionPointView['chain']
   open: boolean
   /** False for a point the page asks elsewhere (01's 診斷 view): the tile goes there instead. */
   opensCard: boolean
@@ -196,7 +203,7 @@ function MapTile({
   const sentence = pending ?? point.headline ?? point.why
   const sub = decision
     ? [decision.record.actionLabel ?? decision.action.label, check?.text].filter(Boolean).join(' · ')
-    : SENTENCE_STATES.has(point.state) || (inQueue && point.state === 'waiting')
+    : SENTENCE_STATES.has(point.state) || (inQueue && (point.state === 'waiting' || point.state === 'done'))
       ? sentence
       : undefined
   const title = [point.dp, point.label, pending ?? point.headline, point.why].filter(Boolean).join(' · ')
@@ -244,7 +251,7 @@ function MapTile({
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-xs text-foreground/80">{sub}</span>
           <span className="shrink-0">
-            <ChainDots chain={point.chain} isEnglish={isEnglish} />
+            <ChainDots chain={chain} isEnglish={isEnglish} />
           </span>
         </span>
       ) : null}
@@ -466,6 +473,7 @@ export function DecisionMapColumns({
   initialOpen,
   stepsBeforeNext,
   pendingLine,
+  chainOf,
   summary,
   asks,
 }: {
@@ -519,6 +527,8 @@ export function DecisionMapColumns({
    * 「等上一步」.
    */
   pendingLine?: (point: DecisionPointView) => string | undefined
+  /** The chain a tile's dots show: the open step's, where a chain has moved on to one. */
+  chainOf?: (point: DecisionPointView) => DecisionPointView['chain']
   /**
    * The visit's summary — its text and 複製 — as the last step after 03, with
    * a line of what it holds so far for the step's name.
@@ -825,6 +835,7 @@ export function DecisionMapColumns({
                                 decision={decisionOf(point)}
                                 inQueue={queuedDps.has(point.dp)}
                                 {...(pendingLine?.(point) ? { pending: pendingLine(point) } : {})}
+                                {...(chainOf ? { chain: chainOf(point) } : {})}
                                 open={openKey === key && cardOpen}
                                 opensCard={opensCard(point)}
                                 matches={!needle || searchText(point).includes(needle)}

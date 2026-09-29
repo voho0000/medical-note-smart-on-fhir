@@ -243,10 +243,18 @@ export function VisitDecisionScreen({
     () => buildVisitSummaryText({ model, answers, decisions, now, isEnglish }),
     [answers, decisions, isEnglish, model, now],
   )
+  // A chain with a step still open — 「開始抗凝」 recorded, the DOAC not yet
+  // chosen; 「改用其他 DOAC」, not yet which — is today's decision, not
+  // 「已記錄」: its tile says what was recorded and what is left.
+  const openStepOf = useCallback((point: DecisionPointView) => {
+    const steps = pointSteps(point, decisions, now)
+    const last = steps[steps.length - 1]
+    return steps.length > 1 && !last.decision && steps[0].decision ? { recorded: steps[0].decision, step: last } : undefined
+  }, [decisions, now])
   const decisionOf = useCallback(
-    (point: DecisionPointView) => latestDecisionFor(point, decisions, now)
-      ?? decidedOnAnotherRow(point, model.points, decisions, now),
-    [decisions, model.points, now],
+    (point: DecisionPointView) => (openStepOf(point) ? undefined : latestDecisionFor(point, decisions, now)
+      ?? decidedOnAnotherRow(point, model.points, decisions, now)),
+    [decisions, model.points, now, openStepOf],
   )
   // What the summary holds so far, for its step's name.
   // Counted on the rows they were recorded on: one DOAC chosen on DP-07's row
@@ -679,7 +687,15 @@ export function VisitDecisionScreen({
         leadSummaries={leadSummaries}
         rowDps={rowDps}
         leadCardKeys={leadCardKeys}
-        pendingLine={(point) => decidedElsewhere(point)?.step.point.headline}
+        pendingLine={(point) => {
+          const open = openStepOf(point)
+          if (open) {
+            const recorded = open.recorded.record.actionLabel ?? open.recorded.action.label
+            return open.step.point.headline ? `${recorded} → ${open.step.point.headline}` : recorded
+          }
+          return decidedElsewhere(point)?.step.point.headline
+        }}
+        chainOf={(point) => openStepOf(point)?.step.point.chain ?? point.chain}
         initialOpen={initialOpen}
         {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
           ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
