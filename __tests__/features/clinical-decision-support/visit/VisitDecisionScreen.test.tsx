@@ -243,7 +243,8 @@ describe('visit decision screen · P4 stable and optimised', () => {
     expect(slot).toHaveAttribute('data-dp', 'DP-07')
     expect(slot).toContainElement(screen.getByTestId('cdss-visit-detail'))
     expect(pressed).toHaveAttribute('aria-expanded', 'true')
-    // On a wide panel the overview becomes the column beside the card.
+    // Stacked (the map measured narrow here), the layout names the open card;
+    // from 36rem the overview is the column beside it (visit-map-side-by-side).
     expect(screen.getByTestId('cdss-visit-map')).toHaveAttribute('data-layout', 'module')
 
     // The stepper walks the map in reading order.
