@@ -163,6 +163,9 @@ export interface VisitDecisionScreenProps {
  * records what the clinician chose. One decision per point, one control, one
  * store key: the queue row and the opened cell are the same decision.
  */
+/** States a step counts as still needing the clinician. */
+const ATTENTION_STATES: ReadonlySet<DecisionPointView['state']> = new Set(['safety', 'act', 'confirm'])
+
 export function VisitDecisionScreen({
   model,
   isEnglish,
@@ -624,6 +627,11 @@ export function VisitDecisionScreen({
     })
   }
   const openFromMap = (point: DecisionPointView) => (askedHere(point) ? goToWhereAsked(point) : toggleOpen(point))
+  // What the steps count as 需你確認／需處理 beyond the queue, for the header
+  // once the queue is recorded.
+  const stillToConfirm = model.points.filter((point) => (
+    ATTENTION_STATES.has(point.state) && !decisionOf(point) && !queuedDps.has(point.dp)
+  )).length
 
   return (
     <div
@@ -635,6 +643,7 @@ export function VisitDecisionScreen({
       <VisitStatusHeader
         model={model}
         rows={rows}
+        stillToConfirm={stillToConfirm}
         isEnglish={isEnglish}
         now={now}
         onEditValues={surfaces?.editValues}

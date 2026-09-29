@@ -142,6 +142,17 @@ describe('optional additions', () => {
   it('shows the pack’s decided headline once the queue is done', () => {
     render(<Harness model={{ ...p5Model(), queue: ['DP-10'], headlineWhenDecided: '今天的決定都記下了（pack）' }} />)
     fireEvent.click(primaryOf(row('DP-10')))
+    // The pack's words, then what still needs the clinician outside the queue.
+    expect(screen.getByRole('heading', { level: 3, name: /^今天的決定都記下了（pack）( · 還有 \d+ 項需你確認)?$/ })).toBeInTheDocument()
+  })
+
+  it('says the day is decided in the pack’s words alone once nothing else needs the clinician', () => {
+    const model = p5Model()
+    const quiet = { ...model, queue: ['DP-10'], headlineWhenDecided: '今天的決定都記下了（pack）', points: model.points.map((point) => (
+      point.dp === 'DP-10' || !['safety', 'act', 'confirm'].includes(point.state) ? point : { ...point, state: 'done' as const }
+    )) }
+    render(<Harness model={quiet} />)
+    fireEvent.click(primaryOf(row('DP-10')))
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了（pack）' })).toBeInTheDocument()
   })
 

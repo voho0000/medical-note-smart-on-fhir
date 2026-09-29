@@ -352,7 +352,11 @@ describe('real pack · P5 titrating with AF', () => {
     expect(plan).toHaveTextContent('K、Cr、血壓，1–2 週內')
     expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
-    expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
+    // Recorded — and, as the steps count them (02 需你確認 2, 03 需你確認 1),
+    // what still needs the clinician beyond the queue: the day is not done.
+    expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了 · 還有 3 項需你確認' })).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 2')
+    expect(screen.getByTestId('cdss-visit-step-outlook')).toHaveTextContent('需你確認 1')
   })
 })
 

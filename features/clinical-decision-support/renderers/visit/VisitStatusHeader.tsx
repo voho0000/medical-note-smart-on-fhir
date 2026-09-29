@@ -48,9 +48,16 @@ export function VisitStatusHeader({
   valueAddons,
   extras,
   actions,
+  stillToConfirm = 0,
 }: {
   model: VisitDecisionModel
   rows: readonly QueueRow[]
+  /**
+   * Points still needing the clinician outside the queue (DP-05's baseline,
+   * DP-13's blood pressure): once the queue is recorded, the pack's 「今天的
+   * 決定都記下了」 says so too, rather than reading as nothing left.
+   */
+  stillToConfirm?: number
   isEnglish: boolean
   now: Date
   /** Opens the page's clinical-values editor. */
@@ -73,7 +80,9 @@ export function VisitStatusHeader({
   // Once everything queued is recorded the pack may say so in its own words;
   // otherwise its sentence stands. How many are left is said once, on the
   // queue itself (已決定 x/y), not repeated here.
-  const headline = allDecided && model.headlineWhenDecided ? model.headlineWhenDecided : model.headline
+  const headline = allDecided && model.headlineWhenDecided
+    ? `${model.headlineWhenDecided}${stillToConfirm ? (isEnglish ? ` · ${stillToConfirm} still to confirm` : ` · 還有 ${stillToConfirm} 項需你確認`) : ''}`
+    : model.headline
   // The values fold behind 「臨床數值」, as the three sections' do: clinicians
   // read the labs before they open the CDSS (MediPrisma shows the record on
   // the left), and each decision box prints the values it read. Folded, the
