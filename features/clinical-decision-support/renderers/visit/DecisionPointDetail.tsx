@@ -85,6 +85,7 @@ export function DecisionPointDetail({
   renderDetail,
   onDecide,
   onClear,
+  decidedWith,
   onClose,
 }: {
   point: DecisionPointView
@@ -106,6 +107,11 @@ export function DecisionPointDetail({
   renderDetail: (recommendation: CdssRecommendation) => ReactNode
   onDecide?: (step: QueueStep, action: VisitAction) => void
   onClear?: (step: QueueStep) => void
+  /**
+   * The point whose row decides this one (DP-07 for DP-08／DP-09): `steps` is
+   * that row's step, and the card says where its decision lives.
+   */
+  decidedWith?: DecisionPointView
   onClose: () => void
   /** The page's own inputs this point reads — questions, confirmation, calculator. */
   extras?: ReactNode
@@ -161,7 +167,7 @@ export function DecisionPointDetail({
           >
             {point.dp} {point.label}
             {' · '}
-            {decision ? (isEnglish ? 'Recorded' : '已記錄') : stateLabel(point.state, isEnglish)}
+            {decision ? (isEnglish ? 'Recorded' : '已記錄') : decidedWith ? (isEnglish ? 'To decide' : '待決定') : stateLabel(point.state, isEnglish)}
             {point.source !== sourceOfPage ? ` · ${sourceTag(point)}` : ''}
             {' · '}
             {blockTitle(point.block, isEnglish)}
@@ -186,7 +192,26 @@ export function DecisionPointDetail({
         </Button>
       </div>
 
-      {point.chain?.length ? (
+      {decidedWith ? (
+        <div className="space-y-0.5">
+          <p className="text-xs text-muted-foreground" data-testid="cdss-visit-detail-decided-with" data-dp={decidedWith.dp}>
+            {isEnglish
+              ? `Decided with ${decidedWith.dp} ${decidedWith.label}`
+              : `與 ${decidedWith.dp} ${decidedWith.label} 一起決定`}
+          </p>
+          {/* What the choice rests on — the valve premise, CrCl, the dose
+              criteria, what is left to an individual assessment — as DP-07's
+              row gives it: the choice made here is the same one (#196 review). */}
+          {steps[0]?.point.why ? (
+            <p className="text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-detail-decided-with-why">
+              {steps[0].point.why}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Its own chain waits on the step decided here: not drawn over it. */}
+      {point.chain?.length && !decidedWith ? (
         <ol className="grid gap-2 @min-[40rem]:grid-cols-3" aria-label={isEnglish ? 'Decision chain' : '決策鏈'}>
           {point.chain.map((step, index) => (
             <li
@@ -300,7 +325,7 @@ export function DecisionPointDetail({
             </details>
           ))}
         </div>
-      ) : point.guideline ? null : (
+      ) : point.guideline || decidedWith ? null : (
         <p className="text-xs text-muted-foreground">
           {point.state === 'not-included'
             ? (isEnglish ? 'No module computes this decision point yet.' : '這個決策點還沒有對應的模組。')
