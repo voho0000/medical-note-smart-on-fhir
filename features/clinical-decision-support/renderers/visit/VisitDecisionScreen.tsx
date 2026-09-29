@@ -40,7 +40,8 @@ import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { pageSourceOf } from './visit-model.source'
-import { revealTop } from './reveal'
+import { focusBackTo, focusInto, revealTop } from './reveal'
+import { MapFold } from './MapFold'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
@@ -162,6 +163,9 @@ export interface VisitDecisionScreenProps {
  * records what the clinician chose. One decision per point, one control, one
  * store key: the queue row and the opened cell are the same decision.
  */
+/** States a step counts as still needing the clinician. */
+const ATTENTION_STATES: ReadonlySet<DecisionPointView['state']> = new Set(['safety', 'act', 'confirm'])
+
 export function VisitDecisionScreen({
   model,
   isEnglish,
@@ -290,6 +294,9 @@ export function VisitDecisionScreen({
               setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
             }
             setAsksDetailOpen(true)
+            // An open card stands for its section: closing it shows the
+            // section, and the questions in it.
+            setOpenKey(null)
             requestAnimationFrame(() => {
               const target = document.getElementById(ASKS_DETAIL_ID)
               target?.scrollIntoView?.({ block: 'start' })
@@ -394,13 +401,10 @@ export function VisitDecisionScreen({
         const underRow = leadCardKeys.has(visitDecisionKey(openPoint))
         setOpenKey(null)
         // Back to what opened it: the row's 依據與細節 for a card drawn under
-        // its row, else the point's tile on the overview.
+        // its row, else the point's tile — or, with the list folded away on a
+        // narrow panel, somewhere still on the page.
         requestAnimationFrame(() => {
-          const target = underRow
-            ? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
-            : [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
-              .find((candidate) => candidate.dataset.dp === dp && candidate.dataset.source === source)
-          target?.focus()
+          focusBackTo({ dp, source }, underRow ? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`) : undefined)
         })
       }}
     />
@@ -514,6 +518,11 @@ export function VisitDecisionScreen({
   const goToFollowUp = () => {
     setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
     document.querySelector('[data-testid="cdss-visit-status-view"]')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    // The button pressed goes with the 診斷 view: focus goes to 追蹤, where
+    // the clinician now is.
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-testid="cdss-visit-status-view-follow-up"]')?.focus({ preventScroll: true })
+    })
   }
   const followUpLead = (
     <>
@@ -570,13 +579,16 @@ export function VisitDecisionScreen({
   const unanswered = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value).length
   const pendingIn = (block: VisitBlock) => rowsIn(block).filter((row) => row.current).length
   const decidedIn = (block: VisitBlock) => rowsIn(block).filter((row) => !row.current).length
+  // The fuller questions an answer (喘變差) or a first assessment opened in
+  // 01, still to fill in.
+  const fillInOpened = !undiagnosed && asksDetailOpen && asksAutoOpen ? surfaces?.asksDetail?.openCount ?? 0 : 0
   const leadSummary = (block: VisitBlock): { text: string; attention: boolean } | undefined => {
     const parts: string[] = []
     const toAnswer = block === 'status' ? (undiagnosed ? surfaces?.asksDetail?.openCount ?? 0 : unanswered) : 0
     if (toAnswer) parts.push(isEnglish ? `${toAnswer} to answer` : `待答 ${toAnswer}`)
     // An answer that opened the fuller questions (喘變差) left them to fill
     // in 01, wherever it was given.
-    const toFillIn = block === 'status' && !undiagnosed && asksDetailOpen && asksAutoOpen ? surfaces?.asksDetail?.openCount ?? 0 : 0
+    const toFillIn = block === 'status' ? fillInOpened : 0
     if (toFillIn) parts.push(isEnglish ? `${toFillIn} to fill in` : `待補 ${toFillIn}`)
     if (pendingIn(block)) parts.push(isEnglish ? `${pendingIn(block)} to decide` : `待決定 ${pendingIn(block)}`)
     else if (decidedIn(block)) parts.push(isEnglish ? `${decidedIn(block)} decided` : `已決定 ${decidedIn(block)}`)
@@ -602,11 +614,24 @@ export function VisitDecisionScreen({
       if (diagnosisView && !undiagnosed) setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
       setAsksDetailOpen(true)
     }
+    // Where it is asked comes into view, and focus goes into it: the press
+    // was on a tile the narrow list folds away (#194 review). On 診斷 that is
+    // the question itself — DP-01's, which answers DP-00 and DP-34 too.
     requestAnimationFrame(() => {
-      revealTop(toDiagnosis ? document.querySelector('[data-testid="cdss-visit-lead-status"]') : document.getElementById(ASKS_DETAIL_ID))
+      const lead = document.querySelector<HTMLElement>('[data-testid="cdss-visit-lead-status"]')
+      const target = toDiagnosis
+        ? lead?.querySelector<HTMLElement>(`[data-dp="${point.dp}"]`) ?? lead?.querySelector<HTMLElement>('[data-dp]') ?? lead
+        : document.getElementById(ASKS_DETAIL_ID)
+      revealTop(target)
+      focusInto(target)
     })
   }
   const openFromMap = (point: DecisionPointView) => (askedHere(point) ? goToWhereAsked(point) : toggleOpen(point))
+  // What the steps count as 需你確認／需處理 beyond the queue, for the header
+  // once the queue is recorded.
+  const stillToConfirm = model.points.filter((point) => (
+    ATTENTION_STATES.has(point.state) && !decisionOf(point) && !queuedDps.has(point.dp)
+  )).length
 
   return (
     <div
@@ -618,6 +643,7 @@ export function VisitDecisionScreen({
       <VisitStatusHeader
         model={model}
         rows={rows}
+        stillToConfirm={stillToConfirm}
         isEnglish={isEnglish}
         now={now}
         onEditValues={surfaces?.editValues}
@@ -648,12 +674,9 @@ export function VisitDecisionScreen({
         outlookSlot={(
           <>
             {outlookModules.map((item) => (
-              <details key={item.id} className="rounded-md border border-border bg-background" data-testid={`cdss-visit-outlook-module-${item.id}`}>
-                <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                  {item.moduleName ?? item.title}
-                </summary>
-                <div className="border-t border-border px-2.5 pb-2.5 pt-2">{renderDetail(item)}</div>
-              </details>
+              <MapFold key={item.id} label={item.moduleName ?? item.title} size="sm" bodyClassName="px-2.5 pb-2.5 pt-2" testId={`cdss-visit-outlook-module-${item.id}`}>
+                {renderDetail(item)}
+              </MapFold>
             ))}
             <VisitPlan plan={plan} isEnglish={isEnglish} />
             {outlookContent}
@@ -670,6 +693,7 @@ export function VisitDecisionScreen({
         {...(model.asks.length > 0 ? {
           asks: {
             pending: unansweredAsks.length > 0,
+            opensMore: fillInOpened > 0,
             content: (
               <VisitAsks
                 asks={model.asks}

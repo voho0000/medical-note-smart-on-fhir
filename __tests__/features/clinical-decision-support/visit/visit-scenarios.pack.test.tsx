@@ -352,7 +352,11 @@ describe('real pack · P5 titrating with AF', () => {
     expect(plan).toHaveTextContent('K、Cr、血壓，1–2 週內')
     expect(screen.queryByTestId('cdss-visit-plan-return')).toBeNull()
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveTextContent('已決定 3')
-    expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了' })).toBeInTheDocument()
+    // Recorded — and, as the steps count them (02 需你確認 2, 03 需你確認 1),
+    // what still needs the clinician beyond the queue: the day is not done.
+    expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了 · 還有 3 項需你確認' })).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 2')
+    expect(screen.getByTestId('cdss-visit-step-outlook')).toHaveTextContent('需你確認 1')
   })
 })
 
@@ -965,5 +969,49 @@ describe('real pack · returning to a card from the overview', () => {
     const detail = screen.getByTestId('cdss-visit-asks-detail') as HTMLDetailsElement
     expect(detail.open).toBe(true)
     expect(detail).toBeVisible()
+  })
+})
+
+// Walking P1 and P7 (2026-09-29): 02's step said 「需你確認 2」 and 「需你確認
+// 4」, but what it counted beyond the decision rows and the pillars (DP-12,
+// DP-31, DP-32) was only on the map's column — folded away on a phone.
+describe('real pack · what a step counts is in its section', () => {
+  it('lists P7’s 02 points beyond the pillar box, one press each, the pillars not twice', () => {
+    render(<ScenarioMap id="p7-worsening-congestion" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 4')
+    const list = screen.getByTestId('cdss-visit-still-open-treatment')
+    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-12'])
+    expect(list).toHaveTextContent('篩檢缺鐵')
+    fireEvent.click(within(list).getByRole('button', { name: /DP-12/ }))
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-12')
+    expect(screen.queryByTestId('cdss-visit-still-open-treatment')).toBeNull()
+  })
+
+  it('puts P1’s comorbidity and self-care questions in 02 once HFpEF is the diagnosis', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    // DP-31 opens from its own checklist box, over the comorbidities it lists; DP-32 from the list.
+    expect(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ })).toHaveTextContent('semaglutide')
+    const list = screen.getByTestId('cdss-visit-still-open-treatment')
+    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-32'])
+    fireEvent.click(within(screen.getByTestId('cdss-visit-checklist-DP-31')).getByRole('button', { name: /DP-31/ }))
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-31')
+  })
+})
+
+describe('real pack · AF P3, the every-visit questions answered in 02', () => {
+  it('marks them done where they were answered, and sends no one back to 01 for what the answers did not open', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    const carried = screen.getByTestId('cdss-visit-pending-asks-treatment')
+    for (const row of carried.querySelectorAll('[data-visit-ask-row]')) {
+      fireEvent.click(within(row as HTMLElement).getByRole('button', { name: '無' }))
+    }
+    expect(carried).toHaveAttribute('data-done', 'true')
+    // 01 still needs DP-05's baseline, but that is 01's own, not something an answer opened.
+    expect(screen.getByTestId('cdss-visit-step-status')).toHaveTextContent('需你確認 1')
+    expect(screen.queryByTestId('cdss-visit-pending-asks-to-status-treatment')).toBeNull()
   })
 })

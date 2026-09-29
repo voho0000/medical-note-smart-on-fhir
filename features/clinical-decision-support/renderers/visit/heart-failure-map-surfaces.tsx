@@ -3,6 +3,7 @@
 import type { HeartFailureMapSurfaceSlots } from '../HeartFailureVisitFlow'
 import type { VisitDecisionModel } from '../../types'
 import type { VisitMapSurfaces } from './visit-surfaces'
+import { MapFold } from './MapFold'
 
 /** 01's cells under 診斷: suspicion, diagnosis and phenotype, HFpEF, baseline work-up, reassessment, aetiology. */
 const DIAGNOSIS_VIEW_DPS = ['DP-00', 'DP-01', 'DP-34', 'DP-02', 'DP-04', 'DP-29', 'DP-30'] as const
@@ -95,12 +96,9 @@ export function heartFailureVisitSurfaces(
     ...(slots.careTimeline ? {
       columnFooters: {
         status: (
-          <details className="rounded-md border border-border bg-background" data-testid="cdss-visit-hf-record-foot">
-            <summary className="flex min-h-11 cursor-pointer items-center px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-              {isEnglish ? 'Course timeline' : '病程時間軸'}
-            </summary>
-            <div className="@container border-t border-border p-2">{slots.careTimeline}</div>
-          </details>
+          <MapFold label={isEnglish ? 'Course timeline' : '病程時間軸'} bodyClassName="@container p-2" testId="cdss-visit-hf-record-foot">
+            {slots.careTimeline}
+          </MapFold>
         ),
       },
     } : {}),

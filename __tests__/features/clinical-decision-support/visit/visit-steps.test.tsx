@@ -116,6 +116,56 @@ describe('the visit, step by step', () => {
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
   })
 
+  // Clinician feedback 2026-09-29 (a screenshot of DP-24's card over 01's
+  // DP-01 question): 「為什麼 DP-01 跟 24 同時出現」. The right side shows
+  // what was pressed on the left.
+  it('lets an open card stand for its section, and gives the section back from its step', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(step('treatment'))
+    const body = screen.getByTestId('cdss-visit-column-treatment-body')
+    expect(body).toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-visit-overview-treatment').querySelector<HTMLButtonElement>('button[data-dp="DP-11"]')!)
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-11')
+    expect(body).not.toBeVisible()
+    // The step it stands in brings the section back.
+    fireEvent.click(step('treatment'))
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    expect(body).toBeVisible()
+  })
+
+  // #194 review: a card left open in a section the clinician then left came
+  // back as the section — DP-24 → 02 → 01 showed only DP-24's card, and the
+  // questions 喘變差 opened in 01 behind it.
+  it('closes a card left open in a section when the clinician comes back to it by its step', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(screen.getByTestId('cdss-visit-overview-status').querySelector<HTMLButtonElement>('button[data-dp="DP-24"]')!)
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-24')
+    fireEvent.click(step('treatment'))
+    fireEvent.click(step('status'))
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-column-status-body')).toBeVisible()
+  })
+
+  it('closes it too for the way back to 01 an answer in 02 opened, so the questions it points to are shown', () => {
+    render(<Harness model={p4Model()} surfaces={{ asksDetail: { label: '其他症狀、徵象與 NYHA', content: <p>fuller</p>, openCount: 3 } }} />)
+    fireEvent.click(screen.getByTestId('cdss-visit-overview-status').querySelector<HTMLButtonElement>('button[data-dp="DP-24"]')!)
+    fireEvent.click(step('treatment'))
+    fireEvent.click(within(screen.getByTestId('cdss-visit-pending-asks-treatment')).getByRole('button', { name: '變差' }))
+    fireEvent.click(screen.getByTestId('cdss-visit-pending-asks-to-status-treatment'))
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    expect(screen.getByTestId('cdss-visit-column-status-body')).toBeVisible()
+    expect(step('status')).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('still opens a card left open in another section when its tile is pressed', () => {
+    render(<Harness model={p4Model()} />)
+    const tile = () => screen.getByTestId('cdss-visit-overview-status').querySelector<HTMLButtonElement>('button[data-dp="DP-24"]')!
+    fireEvent.click(tile())
+    fireEvent.click(step('treatment'))
+    fireEvent.click(tile())
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-24')
+  })
+
   it('wears no section’s colours on the summary step or the button into it', () => {
     render(<Harness model={p4Model()} />)
     expect(step('summary')).toHaveAttribute('data-section', 'summary')

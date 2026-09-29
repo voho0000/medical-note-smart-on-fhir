@@ -9,7 +9,7 @@
 import { useMemo } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { VisitDecisionScreen } from '@/features/clinical-decision-support/renderers/visit/VisitDecisionScreen'
-import { revealTop } from '@/features/clinical-decision-support/renderers/visit/reveal'
+import { focusBackTo, focusInto, revealTop } from '@/features/clinical-decision-support/renderers/visit/reveal'
 import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
 import {
   usePhysicianDecisions,
@@ -242,5 +242,67 @@ describe('moving the page only as far as it has to', () => {
     element.style.scrollMarginTop = '60px'
     revealTop(element)
     expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+  })
+})
+
+describe('where focus goes when what had it is folded away', () => {
+  const made: HTMLElement[] = []
+  /** An element that is laid out (`on`) or inside something folded away. */
+  function el(html: string, on: boolean): HTMLElement {
+    const holder = document.createElement('div')
+    holder.innerHTML = html
+    const element = holder.firstElementChild as HTMLElement
+    element.getClientRects = () => (on ? [box(0, 20)] : []) as unknown as DOMRectList
+    element.scrollIntoView = jest.fn()
+    document.body.appendChild(element)
+    made.push(element)
+    return element
+  }
+  afterEach(() => { for (const element of made.splice(0)) element.remove() })
+
+  const point = { dp: 'DP-12', source: 'hf' }
+  const map = () => el('<section data-testid="cdss-visit-map"></section>', true)
+  function tile(on: boolean): HTMLElement {
+    const section = map()
+    const button = el('<button data-dp="DP-12" data-source="hf">DP-12</button>', on)
+    section.appendChild(button)
+    return button
+  }
+
+  it('goes back to the point’s tile while it is on the page', () => {
+    const shownTile = tile(true)
+    el('<button data-testid="cdss-visit-map-fold">展開</button>', true)
+    focusBackTo(point)
+    expect(document.activeElement).toBe(shownTile)
+  })
+
+  it('goes to the point’s row in its section when the list is folded, else to 「展開」, else the step', () => {
+    tile(false)
+    const row = el('<button data-still-open="DP-12" data-source="hf">DP-12</button>', true)
+    const fold = el('<button data-testid="cdss-visit-map-fold">展開</button>', true)
+    focusBackTo(point)
+    expect(document.activeElement).toBe(row)
+    row.getClientRects = () => [] as unknown as DOMRectList
+    focusBackTo(point)
+    expect(document.activeElement).toBe(fold)
+    fold.getClientRects = () => [] as unknown as DOMRectList
+    const steps = el('<nav data-testid="cdss-visit-steps"><button aria-current="step">01</button></nav>', true)
+    const current = steps.querySelector('button')!
+    current.getClientRects = () => [box(0, 20)] as unknown as DOMRectList
+    focusBackTo(point)
+    expect(document.activeElement).toBe(current)
+  })
+
+  it('takes focus into a question: its first control on the page, else the question itself', () => {
+    const question = el('<div data-dp="DP-01"><input type="radio" /><button>HFrEF</button></div>', true)
+    const [radio, button] = [question.querySelector('input')!, question.querySelector('button')!]
+    radio.getClientRects = () => [] as unknown as DOMRectList
+    button.getClientRects = () => [box(0, 20)] as unknown as DOMRectList
+    expect(focusInto(question)).toBe(true)
+    expect(document.activeElement).toBe(button)
+    const bare = el('<div data-dp="DP-01">紀錄：HFrEF</div>', true)
+    expect(focusInto(bare)).toBe(true)
+    expect(bare).toHaveAttribute('tabindex', '-1')
+    expect(focusInto(el('<div>folded</div>', false))).toBe(false)
   })
 })
