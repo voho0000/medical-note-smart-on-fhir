@@ -46,3 +46,45 @@ export function revealTop(element: Element | null | undefined): void {
   const fitsBelow = box.height > 0 && offset > 0 && box.height <= view.height * 0.8
   element.scrollIntoView?.({ block: fitsBelow ? 'nearest' : 'start' })
 }
+
+/** Whether an element takes up room on the page — not inside something folded away (`display: none`). */
+function shown(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element.getClientRects().length > 0
+}
+
+const FOCUSABLE = 'summary, button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Where focus goes when a point's card closes: back to what opened it while
+ * that is on the page — `preferred` (the row a card was drawn under), the
+ * point's tile, its row in its section — else the map's 「展開」 (the list
+ * folded away on a narrow panel), else the step the clinician is on. Never to
+ * something folded out of sight, where focus is lost to the page (#194 review).
+ */
+export function focusBackTo(point: { dp: string; source: string }, preferred?: HTMLElement | null): void {
+  const target = [
+    preferred,
+    ...document.querySelectorAll<HTMLElement>(`[data-testid="cdss-visit-map"] button[data-dp="${point.dp}"][data-source="${point.source}"]`),
+    ...document.querySelectorAll<HTMLElement>(`[data-still-open="${point.dp}"][data-source="${point.source}"]`),
+    document.querySelector<HTMLElement>('[data-testid="cdss-visit-map-fold"]'),
+    document.querySelector<HTMLElement>('[data-testid="cdss-visit-steps"] [aria-current="step"]'),
+  ].find(shown)
+  if (!target) return
+  target.focus({ preventScroll: true })
+  target.scrollIntoView?.({ block: 'nearest' })
+}
+
+/**
+ * Focus into what a press moved the page to — the first control of the
+ * question it asks (DP-01's choices, or 修改 once answered), or the summary of
+ * a fold — so the press that brought the clinician there is not the last
+ * place focus was. Returns whether anything took it.
+ */
+export function focusInto(region: Element | null | undefined): boolean {
+  if (!shown(region)) return false
+  const control = [...region.querySelectorAll<HTMLElement>(FOCUSABLE)].find(shown)
+  const target = control ?? region
+  if (!control && !target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+  target.focus({ preventScroll: true })
+  return document.activeElement === target
+}

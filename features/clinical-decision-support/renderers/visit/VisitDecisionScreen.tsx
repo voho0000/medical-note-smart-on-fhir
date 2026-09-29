@@ -40,7 +40,7 @@ import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { pageSourceOf } from './visit-model.source'
-import { revealTop } from './reveal'
+import { focusBackTo, focusInto, revealTop } from './reveal'
 import { MapFold } from './MapFold'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
@@ -395,13 +395,10 @@ export function VisitDecisionScreen({
         const underRow = leadCardKeys.has(visitDecisionKey(openPoint))
         setOpenKey(null)
         // Back to what opened it: the row's 依據與細節 for a card drawn under
-        // its row, else the point's tile on the overview.
+        // its row, else the point's tile — or, with the list folded away on a
+        // narrow panel, somewhere still on the page.
         requestAnimationFrame(() => {
-          const target = underRow
-            ? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
-            : [...document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')]
-              .find((candidate) => candidate.dataset.dp === dp && candidate.dataset.source === source)
-          target?.focus()
+          focusBackTo({ dp, source }, underRow ? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`) : undefined)
         })
       }}
     />
@@ -611,8 +608,16 @@ export function VisitDecisionScreen({
       if (diagnosisView && !undiagnosed) setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
       setAsksDetailOpen(true)
     }
+    // Where it is asked comes into view, and focus goes into it: the press
+    // was on a tile the narrow list folds away (#194 review). On 診斷 that is
+    // the question itself — DP-01's, which answers DP-00 and DP-34 too.
     requestAnimationFrame(() => {
-      revealTop(toDiagnosis ? document.querySelector('[data-testid="cdss-visit-lead-status"]') : document.getElementById(ASKS_DETAIL_ID))
+      const lead = document.querySelector<HTMLElement>('[data-testid="cdss-visit-lead-status"]')
+      const target = toDiagnosis
+        ? lead?.querySelector<HTMLElement>(`[data-dp="${point.dp}"]`) ?? lead?.querySelector<HTMLElement>('[data-dp]') ?? lead
+        : document.getElementById(ASKS_DETAIL_ID)
+      revealTop(target)
+      focusInto(target)
     })
   }
   const openFromMap = (point: DecisionPointView) => (askedHere(point) ? goToWhereAsked(point) : toggleOpen(point))

@@ -18,7 +18,7 @@ import type { DecisionPointState, DecisionPointView, VisitBlock, VisitDecisionMo
 import { ChainDots, StatePill } from './visit-presentation'
 import { DecisionPointChecklist, VISIT_DETAIL_ID } from './DecisionPointDetail'
 import styles from '../cdss-poster.module.css'
-import { revealTop, scrollParentOf } from './reveal'
+import { focusBackTo, revealTop, scrollParentOf } from './reveal'
 
 /** The three-section layout's section each map block is, for its colours. */
 const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
@@ -614,13 +614,9 @@ export function DecisionMapColumns({
   }
   const collapse = (point: DecisionPointView) => {
     onOpen(point)
-    // Back to the tile that opened it, as the card's own close does.
-    requestAnimationFrame(() => {
-      const tiles = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')
-      const tile = [...tiles].find((candidate) => candidate.dataset.dp === point.dp && candidate.dataset.source === point.source)
-      tile?.focus({ preventScroll: true })
-      tile?.scrollIntoView?.({ block: 'nearest' })
-    })
+    // Back to what opened it, as the card's own close does — or, with the
+    // list folded away, somewhere still on the page.
+    requestAnimationFrame(() => focusBackTo(point))
   }
 
   // A section says what its lead still waits for (answers, today's
