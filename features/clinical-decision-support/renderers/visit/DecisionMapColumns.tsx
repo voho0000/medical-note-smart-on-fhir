@@ -9,6 +9,7 @@ import {
   ABSENT_STATES,
   BLOCK_ORDER,
   blockTitle,
+  sourceTag,
   stateLabel,
   visitDecisionKey,
 } from './visit-decisions'
@@ -161,7 +162,7 @@ function MapTile({
         <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
         <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', absent ? 'text-muted-foreground' : 'text-foreground')}>{point.label}</span>
         {point.source !== sourceOfPage ? (
-          <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+          <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
         ) : null}
         <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} inQueue={inQueue} />
         {/* Out of sight, the pack's sentence is still read out. */}
@@ -401,11 +402,11 @@ export function DecisionMapColumns({
 
   // One bucket per group, groups in the order they first appear and points in
   // the pack's order within each, under the group's heading when the section
-  // has more than one. Headings print the pack's group label; without labels
-  // only the AF page — whose group ids are those letters — shows them.
+  // has more than one. Headings print the pack's group label, which every
+  // point carries; points without one (a hand-built model) draw no headings.
   const bucketsOf = (points: readonly DecisionPointView[]) => {
     const labelled = points.some((point) => point.groupLabel)
-    const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
+    const groups = labelled
       ? new Set(points.map((point) => point.group))
       : new Set<string>()
     const buckets: { key: string; label?: string; points: DecisionPointView[] }[] = []
@@ -605,7 +606,7 @@ export function DecisionMapColumns({
                     <span className="font-mono text-[11px] font-semibold text-muted-foreground">{head.dp}</span>
                     <span className="text-sm font-semibold text-foreground">{head.label}</span>
                     {head.source !== sourceOfPage ? (
-                      <Badge variant="outline" className="h-5 px-1 text-[10px]">{head.source.toUpperCase()}</Badge>
+                      <Badge variant="outline" className="h-5 px-1 text-[10px]">{sourceTag(head)}</Badge>
                     ) : null}
                     <StatePill state={head.state} isEnglish={isEnglish} decided={Boolean(decisionOf(head))} inQueue={queuedDps.has(head.dp)} />
                     {!decisionOf(head) && (head.headline ?? head.why) ? (

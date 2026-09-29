@@ -40,6 +40,12 @@ export interface VisitMapSurfaces {
      * them is not listed again in 今天要決定.
      */
     requests?: readonly string[]
+    /**
+     * Whether a first assessment asks these questions in full, opening them by
+     * itself (the HF page's checklist, once 懷疑 HF？ is answered). Without it
+     * they open only when an ask comes back worse.
+     */
+    opensAtFirstAssessment?: boolean
   }
   /**
    * 01's 診斷 view, beside its 追蹤 view (the asks): the diagnostic assessment
