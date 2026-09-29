@@ -520,7 +520,12 @@ export function DecisionMapColumns({
    * to 01. Answered there, they stay — marked done — until the clinician
    * leaves the step, so the button just pressed is not pulled from under them.
    */
-  asks?: { content: ReactNode; pending: boolean }
+  asks?: {
+    content: ReactNode
+    pending: boolean
+    /** An answer opened more to ask in 01 (喘變差 opens the fuller questions there). */
+    opensMore?: boolean
+  }
 }) {
   const [openBlock, setOpenBlock] = useState<VisitStep | null>(initialOpen ?? null)
   const [query, setQuery] = useState('')
@@ -893,7 +898,7 @@ export function DecisionMapColumns({
                   {asks.content}
                   {/* An answer can open more to ask in 01 (喘變差 opens the
                       fuller assessment there): say so, one press away. */}
-                  {!asks.pending && stepSummaries.status.attention ? (
+                  {!asks.pending && asks.opensMore ? (
                     <button
                       type="button"
                       className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -576,13 +576,16 @@ export function VisitDecisionScreen({
   const unanswered = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value).length
   const pendingIn = (block: VisitBlock) => rowsIn(block).filter((row) => row.current).length
   const decidedIn = (block: VisitBlock) => rowsIn(block).filter((row) => !row.current).length
+  // The fuller questions an answer (喘變差) or a first assessment opened in
+  // 01, still to fill in.
+  const fillInOpened = !undiagnosed && asksDetailOpen && asksAutoOpen ? surfaces?.asksDetail?.openCount ?? 0 : 0
   const leadSummary = (block: VisitBlock): { text: string; attention: boolean } | undefined => {
     const parts: string[] = []
     const toAnswer = block === 'status' ? (undiagnosed ? surfaces?.asksDetail?.openCount ?? 0 : unanswered) : 0
     if (toAnswer) parts.push(isEnglish ? `${toAnswer} to answer` : `待答 ${toAnswer}`)
     // An answer that opened the fuller questions (喘變差) left them to fill
     // in 01, wherever it was given.
-    const toFillIn = block === 'status' && !undiagnosed && asksDetailOpen && asksAutoOpen ? surfaces?.asksDetail?.openCount ?? 0 : 0
+    const toFillIn = block === 'status' ? fillInOpened : 0
     if (toFillIn) parts.push(isEnglish ? `${toFillIn} to fill in` : `待補 ${toFillIn}`)
     if (pendingIn(block)) parts.push(isEnglish ? `${pendingIn(block)} to decide` : `待決定 ${pendingIn(block)}`)
     else if (decidedIn(block)) parts.push(isEnglish ? `${decidedIn(block)} decided` : `已決定 ${decidedIn(block)}`)
@@ -673,6 +676,7 @@ export function VisitDecisionScreen({
         {...(model.asks.length > 0 ? {
           asks: {
             pending: unansweredAsks.length > 0,
+            opensMore: fillInOpened > 0,
             content: (
               <VisitAsks
                 asks={model.asks}

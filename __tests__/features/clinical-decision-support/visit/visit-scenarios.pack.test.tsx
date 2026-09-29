@@ -996,3 +996,18 @@ describe('real pack · what a step counts is in its section', () => {
     expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-31')
   })
 })
+
+describe('real pack · AF P3, the every-visit questions answered in 02', () => {
+  it('marks them done where they were answered, and sends no one back to 01 for what the answers did not open', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    const carried = screen.getByTestId('cdss-visit-pending-asks-treatment')
+    for (const row of carried.querySelectorAll('[data-visit-ask-row]')) {
+      fireEvent.click(within(row as HTMLElement).getByRole('button', { name: '無' }))
+    }
+    expect(carried).toHaveAttribute('data-done', 'true')
+    // 01 still needs DP-05's baseline, but that is 01's own, not something an answer opened.
+    expect(screen.getByTestId('cdss-visit-step-status')).toHaveTextContent('需你確認 1')
+    expect(screen.queryByTestId('cdss-visit-pending-asks-to-status-treatment')).toBeNull()
+  })
+})
