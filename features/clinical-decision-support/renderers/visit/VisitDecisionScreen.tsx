@@ -291,6 +291,9 @@ export function VisitDecisionScreen({
               setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
             }
             setAsksDetailOpen(true)
+            // An open card stands for its section: closing it shows the
+            // section, and the questions in it.
+            setOpenKey(null)
             requestAnimationFrame(() => {
               const target = document.getElementById(ASKS_DETAIL_ID)
               target?.scrollIntoView?.({ block: 'start' })

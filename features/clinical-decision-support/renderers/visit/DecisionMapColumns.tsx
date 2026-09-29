@@ -637,6 +637,12 @@ export function DecisionMapColumns({
     setReveal({ block: step, focus })
     setOpenBlock(step)
   }
+  // A step or a section's name pressed shows the section itself: a card
+  // standing for it closes (the card is the section while it is open).
+  const showStep = (step: VisitStep) => {
+    if (cardAtHead && cardAtHead.block === step) onOpen(cardAtHead)
+    openNext(step)
+  }
   const nothingText = isEnglish ? 'Nothing pending' : '沒有待辦'
   const stepSummaries = Object.fromEntries(BLOCK_ORDER.map((block) => {
     const combined = combinedSummary(block)
@@ -763,7 +769,7 @@ export function DecisionMapColumns({
                   aria-current={sideBySide && isOpen ? 'true' : undefined}
                   aria-controls={`cdss-visit-column-${block}`}
                   onClick={() => {
-                    if (sideBySide || !isOpen) openNext(block)
+                    if (sideBySide || !isOpen || cardAtHead?.block === block) showStep(block)
                     else setOpenBlock(null)
                   }}
                   className={cn(
@@ -839,7 +845,7 @@ export function DecisionMapColumns({
             closedNote={closedNote}
             {...(summary ? { summaryStatus: summary.status } : {})}
             isEnglish={isEnglish}
-            onGo={(step) => openNext(step)}
+            onGo={showStep}
           />
         </div>
         {BLOCK_ORDER.map((block) => {
@@ -879,39 +885,6 @@ export function DecisionMapColumns({
               {/* The steps above name the section; its full name is read out,
                   and a move from a foot button lands here. */}
               <h3 id={`cdss-visit-column-${block}-title`} tabIndex={-1} className="sr-only">{blockTitle(block, isEnglish)}</h3>
-              {asks && asksIn === block ? (
-                <div
-                  className={cn('space-y-1.5 rounded-md border bg-background px-2.5 py-2', asks.pending ? 'border-dashed border-border' : 'border-border')}
-                  data-testid={`cdss-visit-pending-asks-${block}`}
-                  data-done={asks.pending ? undefined : 'true'}
-                >
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground" role="status">
-                    {asks.pending ? null : <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
-                    {asks.pending
-                      ? (isEnglish ? 'Every-visit questions still open — answer here' : '每次必問還沒答完，可直接在這裡答')
-                      : (isEnglish ? 'Every-visit questions answered' : '每次必問已答完')}
-                  </p>
-                  {asks.content}
-                  {/* An answer can open more to ask in 01 (喘變差 opens the
-                      fuller assessment there): say so, one press away. */}
-                  {!asks.pending && asks.opensMore ? (
-                    <button
-                      type="button"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => openNext('status', true)}
-                      data-testid={`cdss-visit-pending-asks-to-status-${block}`}
-                    >
-                      {`${blockTitle('status', isEnglish)}${isEnglish ? ': ' : '：'}${stepSummaries.status.text}`}
-                      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {note ? (
-                <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
-                  {note}
-                </p>
-              ) : null}
               {head ? (
                 // The module a tile opened, at the head of its section.
                 <div className="space-y-1.5 scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
@@ -937,80 +910,120 @@ export function DecisionMapColumns({
                   />
                 </div>
               ) : null}
-              {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
-              {checklists.map((point) => (
-                <div key={visitDecisionKey(point)} className="space-y-1 rounded-md border border-border bg-background px-2.5 py-2" data-testid={`cdss-visit-checklist-${point.dp}`}>
-                  {/* Still needing the clinician, its name is the press to its
-                      card, over what it has and lacks. */}
-                  {stillOpen.includes(point) ? (
-                    <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
-                  ) : (
-                    <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
-                      <span className="font-mono">{point.dp}</span> {point.label}
+              {/* An open card is the section while it is open — the right side
+                  shows what was pressed on the left, not the card stacked
+                  over the section's own questions (clinician feedback: 「為什麼
+                  DP-01 跟 24 同時出現」). The rest stays mounted, hidden, and
+                  comes back on 收合. */}
+              <div hidden={Boolean(head)} className="space-y-2" data-testid={`cdss-visit-column-${block}-body`}>
+                {asks && asksIn === block ? (
+                  <div
+                    className={cn('space-y-1.5 rounded-md border bg-background px-2.5 py-2', asks.pending ? 'border-dashed border-border' : 'border-border')}
+                    data-testid={`cdss-visit-pending-asks-${block}`}
+                    data-done={asks.pending ? undefined : 'true'}
+                  >
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground" role="status">
+                      {asks.pending ? null : <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+                      {asks.pending
+                        ? (isEnglish ? 'Every-visit questions still open — answer here' : '每次必問還沒答完，可直接在這裡答')
+                        : (isEnglish ? 'Every-visit questions answered' : '每次必問已答完')}
                     </p>
-                  )}
-                  <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
-                </div>
-              ))}
-              {stillOpenListed.length ? (
-                <div className="space-y-1 rounded-md border border-border bg-background px-2 py-2" data-testid={`cdss-visit-still-open-${block}`}>
-                  <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
-                    {isEnglish ? 'Also for you in this section' : '這一區還需要你看'}
+                    {asks.content}
+                    {/* An answer can open more to ask in 01 (喘變差 opens the
+                        fuller assessment there): say so, one press away. */}
+                    {!asks.pending && asks.opensMore ? (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => openNext('status', true)}
+                        data-testid={`cdss-visit-pending-asks-to-status-${block}`}
+                      >
+                        {`${blockTitle('status', isEnglish)}${isEnglish ? ': ' : '：'}${stepSummaries.status.text}`}
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {note ? (
+                  <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
+                    {note}
                   </p>
-                  <ul className="space-y-1">
-                    {stillOpenListed.map((point) => (
-                      <li key={visitDecisionKey(point)}>
-                        <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {columnFooters?.[block]}
-              {block === 'outlook' ? outlookSlot : null}
-              {stepsBeforeNext?.[block] ? (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    className={nextButtonClass}
-                    data-section={SECTION_TONE[block]}
-                    onClick={stepsBeforeNext[block]!.onGo}
-                    data-testid={`cdss-visit-next-step-${block}`}
-                  >
-                    {stepsBeforeNext[block]!.label}
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : !nextBlock && summary ? (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    className={nextButtonClass}
-                    data-section="summary"
-                    onClick={() => openNext('summary', true)}
-                    data-testid={`cdss-visit-next-${block}`}
-                  >
-                    {isEnglish ? 'Finish: this visit’s summary' : '完成：本次摘要'}
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : nextBlock ? (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    className={cn(nextButtonClass, closedNote(nextBlock) && 'opacity-70')}
-                    data-section={SECTION_TONE[nextBlock]}
-                    disabled={Boolean(closedNote(nextBlock))}
-                    onClick={() => openNext(nextBlock, true)}
-                    data-testid={`cdss-visit-next-${block}`}
-                  >
-                    {closedNote(nextBlock)
-                      ? `${blockTitle(nextBlock, isEnglish)}${isEnglish ? ': ' : '：'}${closedNote(nextBlock)}`
-                      : `${isEnglish ? 'Next: ' : '下一區：'}${blockTitle(nextBlock, isEnglish)} · ${combinedSummary(nextBlock).text}`}
-                    {closedNote(nextBlock) ? null : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
-                  </button>
-                </div>
-              ) : null}
+                ) : null}
+                {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
+                {checklists.map((point) => (
+                  <div key={visitDecisionKey(point)} className="space-y-1 rounded-md border border-border bg-background px-2.5 py-2" data-testid={`cdss-visit-checklist-${point.dp}`}>
+                    {/* Still needing the clinician, its name is the press to its
+                        card, over what it has and lacks. */}
+                    {stillOpen.includes(point) ? (
+                      <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
+                    ) : (
+                      <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                        <span className="font-mono">{point.dp}</span> {point.label}
+                      </p>
+                    )}
+                    <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
+                  </div>
+                ))}
+                {stillOpenListed.length ? (
+                  <div className="space-y-1 rounded-md border border-border bg-background px-2 py-2" data-testid={`cdss-visit-still-open-${block}`}>
+                    <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                      {isEnglish ? 'Also for you in this section' : '這一區還需要你看'}
+                    </p>
+                    <ul className="space-y-1">
+                      {stillOpenListed.map((point) => (
+                        <li key={visitDecisionKey(point)}>
+                          <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {columnFooters?.[block]}
+                {block === 'outlook' ? outlookSlot : null}
+                {stepsBeforeNext?.[block] ? (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      className={nextButtonClass}
+                      data-section={SECTION_TONE[block]}
+                      onClick={stepsBeforeNext[block]!.onGo}
+                      data-testid={`cdss-visit-next-step-${block}`}
+                    >
+                      {stepsBeforeNext[block]!.label}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : !nextBlock && summary ? (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      className={nextButtonClass}
+                      data-section="summary"
+                      onClick={() => openNext('summary', true)}
+                      data-testid={`cdss-visit-next-${block}`}
+                    >
+                      {isEnglish ? 'Finish: this visit’s summary' : '完成：本次摘要'}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : nextBlock ? (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      className={cn(nextButtonClass, closedNote(nextBlock) && 'opacity-70')}
+                      data-section={SECTION_TONE[nextBlock]}
+                      disabled={Boolean(closedNote(nextBlock))}
+                      onClick={() => openNext(nextBlock, true)}
+                      data-testid={`cdss-visit-next-${block}`}
+                    >
+                      {closedNote(nextBlock)
+                        ? `${blockTitle(nextBlock, isEnglish)}${isEnglish ? ': ' : '：'}${closedNote(nextBlock)}`
+                        : `${isEnglish ? 'Next: ' : '下一區：'}${blockTitle(nextBlock, isEnglish)} · ${combinedSummary(nextBlock).text}`}
+                      {closedNote(nextBlock) ? null : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </section>
           )
         })}

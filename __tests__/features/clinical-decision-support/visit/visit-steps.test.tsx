@@ -116,6 +116,23 @@ describe('the visit, step by step', () => {
     expect(screen.getByTestId('cdss-visit-column-treatment')).toBeVisible()
   })
 
+  // Clinician feedback 2026-09-29 (a screenshot of DP-24's card over 01's
+  // DP-01 question): 「為什麼 DP-01 跟 24 同時出現」. The right side shows
+  // what was pressed on the left.
+  it('lets an open card stand for its section, and gives the section back from its step', () => {
+    render(<Harness model={p4Model()} />)
+    fireEvent.click(step('treatment'))
+    const body = screen.getByTestId('cdss-visit-column-treatment-body')
+    expect(body).toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-visit-overview-treatment').querySelector<HTMLButtonElement>('button[data-dp="DP-11"]')!)
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-11')
+    expect(body).not.toBeVisible()
+    // The step it stands in brings the section back.
+    fireEvent.click(step('treatment'))
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
+    expect(body).toBeVisible()
+  })
+
   it('wears no section’s colours on the summary step or the button into it', () => {
     render(<Harness model={p4Model()} />)
     expect(step('summary')).toHaveAttribute('data-section', 'summary')
