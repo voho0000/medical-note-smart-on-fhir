@@ -38,6 +38,7 @@ const observations = [{
   effectiveDateTime: '2026-03-02T09:30:00+08:00',
   valueQuantity: { value: 11.2, unit: 'g/dL' },
   extension: [{ url: `${SD}medcloud-source-data-mark`, valueString: 'S' }],
+  meta: { tag: [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/adapter-version', code: '0.12.19' }] },
 }]
 
 // Synthetic capture: two raw rows, one of them never converted.
@@ -56,13 +57,13 @@ const extract = extractRawLabRows(JSON.stringify({
   },
 }))!
 
-async function renderDialog(open = true) {
+async function renderDialog(open = true, rows: any[] = observations) {
   const view = render(
     <LabDataReportDialog
       open={open}
       onOpenChange={() => {}}
       panels={[{ id: 'cbc', label: '血液' }]}
-      observations={observations}
+      observations={rows}
       nameMode="standardized"
     />,
   )
@@ -139,6 +140,23 @@ describe('LabDataReportDialog — MediCloud raw rows', () => {
     const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
     expect(payload.rawSource.rows[0].results).toEqual({})
     expect(payload.rawSource.rows[0].withheld).toEqual({ assay_value: 4 })
+  })
+
+  it('offers nothing — and waits for nothing — when the data came from an older extension', async () => {
+    const older = observations.map((row) => ({
+      ...row,
+      meta: { tag: [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/adapter-version', code: '0.12.13' }] },
+    }))
+    await renderDialog(true, older)
+    expect(screen.queryByRole('checkbox', { name: '附上雲端病歷原始檢驗列' })).not.toBeInTheDocument()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '送出 1 筆' })) })
+    const confirm = await screen.findByRole('alertdialog')
+    fireEvent.click(within(confirm).getByRole('button', { name: '確定送出' }))
+    await screen.findByText('LDR-20260929-ABCDEF12')
+    expect(readRawLabRows).not.toHaveBeenCalled()
+    const payload = (submitLabDataReport as jest.Mock).mock.calls[0][0]
+    expect(payload.rawSource).toBeUndefined()
+    expect(payload.rawSourceError).toBeUndefined()
   })
 
   it('previews the raw rows on request, before anything is sent', async () => {
