@@ -238,11 +238,26 @@ export function decidedOnAnotherRow(
   decisions: PhysicianDecisionMap | undefined,
   now: Date,
 ): PointDecision | undefined {
+  return decidingStep(point, points, decisions, now)?.step.decision
+}
+
+/**
+ * The step on another point's row that decides this point, once that row has
+ * revealed it — decided or not: DP-07's DOAC choice, after 「開始抗凝」, is
+ * DP-08's and DP-09's decision. Its key is the owner's `next` key, so a
+ * change or a clear goes back to the one record, never to a copy.
+ */
+export function decidingStep(
+  point: DecisionPointView,
+  points: readonly DecisionPointView[],
+  decisions: PhysicianDecisionMap | undefined,
+  now: Date,
+): { owner: DecisionPointView; step: QueueStep } | undefined {
   for (const owner of points) {
     if (owner === point || owner.source !== point.source) continue
     if (!nextStepExtras(owner).decides?.includes(point.dp)) continue
-    const decided = pointSteps(owner, decisions, now)[1]?.decision
-    if (decided) return decided
+    const step = pointSteps(owner, decisions, now)[1]
+    if (step) return { owner, step }
   }
   return undefined
 }

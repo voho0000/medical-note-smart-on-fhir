@@ -127,6 +127,41 @@ describe('a chained step the pack says decides other points, among equals', () =
     expect(screen.getByTestId('cdss-visit-step-summary')).toHaveTextContent('已記錄 1')
   })
 
+  // #196 review: the tiles showed the choice, but DP-09's card still said
+  // 「等上一步」.
+  it('opens a point the choice decided on the choice, with where it was decided', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    fireEvent.click(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' }))
+    fireEvent.click(tile('DP-09'))
+    const detail = screen.getByTestId('cdss-visit-detail')
+    expect(detail).toHaveAttribute('data-dp', 'DP-09')
+    expect(within(detail).getByRole('heading', { level: 4 })).toHaveTextContent('已記錄')
+    expect(within(detail).getByTestId('cdss-visit-decided')).toHaveTextContent('rivaroxaban 15 mg qd')
+    expect(within(detail).getByTestId('cdss-visit-detail-decided-with')).toHaveTextContent('與 DP-07 需要抗凝嗎 一起決定')
+    expect(detail).not.toHaveTextContent('等上一步')
+    expect(screen.getByTestId('cdss-visit-detail-slot')).not.toHaveTextContent('等上一步DOAC')
+  })
+
+  it('changes the choice from that card on the one record — DP-07’s — and DP-08／DP-09 are pending again until chosen', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    fireEvent.click(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' }))
+    fireEvent.click(tile('DP-09'))
+    const detail = () => screen.getByTestId('cdss-visit-detail')
+    fireEvent.click(within(detail()).getByRole('button', { name: '改 DP-07 的決定' }))
+    // The record DP-07's row keeps is the one cleared; none was ever written for DP-08 or DP-09.
+    const keys = Object.keys(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})
+    expect(keys.some((key) => key.endsWith(':next'))).toBe(false)
+    expect(keys.some((key) => /DP-0[89]/.test(key))).toBe(false)
+    for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).not.toHaveAttribute('data-decided')
+    // Still on DP-09's card: its choices, to decide again here, and the line over it asks them.
+    expect(within(detail()).getByRole('heading', { level: 4 })).toHaveTextContent('待決定')
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveTextContent('選 DOAC（劑量已依腎功能、年齡、體重算好）')
+    fireEvent.click(within(detail()).getByRole('button', { name: 'edoxaban 30 mg qd' }))
+    for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).toHaveTextContent('edoxaban 30 mg qd')
+  })
+
   it('changes nothing for a pack that sends neither (2.8.x)', () => {
     renderAt02(afModel({}))
     fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))

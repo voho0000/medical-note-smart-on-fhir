@@ -461,6 +461,7 @@ export function DecisionMapColumns({
   leadCardKeys,
   initialOpen,
   stepsBeforeNext,
+  pendingLine,
   summary,
   asks,
 }: {
@@ -508,6 +509,12 @@ export function DecisionMapColumns({
    * 「下一區」, and the clinician presses it — nothing moves on its own.
    */
   stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
+  /**
+   * The line over a card at a section's head, where another row's step now
+   * asks it (DP-09's 「選 DOAC」 on DP-07's row) rather than the point's own
+   * 「等上一步」.
+   */
+  pendingLine?: (point: DecisionPointView) => string | undefined
   /**
    * The visit's summary — its text and 複製 — as the last step after 03, with
    * a line of what it holds so far for the step's name.
@@ -900,8 +907,8 @@ export function DecisionMapColumns({
                       <Badge variant="outline" className="h-5 px-1 text-[10px]">{sourceTag(head)}</Badge>
                     ) : null}
                     <StatePill state={head.state} isEnglish={isEnglish} decided={Boolean(decisionOf(head))} inQueue={queuedDps.has(head.dp)} />
-                    {!decisionOf(head) && (head.headline ?? head.why) ? (
-                      <span className="basis-full text-sm text-foreground">{head.headline ?? head.why}</span>
+                    {!decisionOf(head) && (pendingLine?.(head) ?? head.headline ?? head.why) ? (
+                      <span className="basis-full text-sm text-foreground">{pendingLine?.(head) ?? head.headline ?? head.why}</span>
                     ) : null}
                   </div>
                   {detail}

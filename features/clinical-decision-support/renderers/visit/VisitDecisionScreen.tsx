@@ -16,6 +16,7 @@ import {
   buildVisitSummaryText,
   checkIntervalSuffix,
   decidedOnAnotherRow,
+  decidingStep,
   decisionInputFor,
   dependentDecisionKeys,
   effectiveAnswer,
@@ -387,13 +388,21 @@ export function VisitDecisionScreen({
     if (decisionOf(point)) return { headline: false, why: false }
     return point.headline ? { headline: true, why: false } : { headline: false, why: true }
   }
+  // A point another row decides (DP-08／DP-09 by DP-07's DOAC choice) opens
+  // on that step — its record, or its choices once 改 has cleared it — and
+  // not on its own 「等上一步」, which the step has overtaken (#196 review).
+  const decidedElsewhere = (point: DecisionPointView) => (
+    latestDecisionFor(point, decisions, now) ? undefined : decidingStep(point, model.points, decisions, now)
+  )
+  const openDeciding = openPoint ? decidedElsewhere(openPoint) : undefined
   const detailNode = openPoint ? (
     <DecisionPointDetail
       key={visitDecisionKey(openPoint)}
       extras={detailExtras}
       point={openPoint}
-      shownAbove={shownAbove(openPoint)}
-      steps={pointSteps(openPoint, decisions, now)}
+      shownAbove={openDeciding ? { headline: true, why: true } : shownAbove(openPoint)}
+      steps={openDeciding ? [openDeciding.step] : pointSteps(openPoint, decisions, now)}
+      {...(openDeciding ? { decidedWith: openDeciding.owner } : {})}
       isEnglish={isEnglish}
       sourceOfPage={sourceOfPage}
       modules={modules}
@@ -667,6 +676,7 @@ export function VisitDecisionScreen({
         leadSummaries={leadSummaries}
         rowDps={rowDps}
         leadCardKeys={leadCardKeys}
+        pendingLine={(point) => decidedElsewhere(point)?.step.point.headline}
         initialOpen={initialOpen}
         {...(diagnosisView && statusView === 'diagnosis' && !undiagnosed && unansweredAsks.length > 0
           ? { stepsBeforeNext: { status: { label: isEnglish ? `Next: Follow-up (${unansweredAsks.map((ask) => ask.label).join(', ')})` : `下一步：追蹤（${unansweredAsks.map((ask) => ask.label).join('、')}）`, onGo: goToFollowUp } } }
