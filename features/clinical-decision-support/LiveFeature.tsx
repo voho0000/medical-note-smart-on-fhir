@@ -440,8 +440,12 @@ export default function LiveClinicalDecisionSupportFeature({
   // follows what the physician left standing. Nothing patches a rendered card.
   // The vitals measured in the room travel the same way: as facts on the
   // profile, so every module that reads them recomputes.
+  // Nothing answer-dependent is built until every answer has been read back:
+  // the loading state hides it anyway, and a pack run on the record's defaults
+  // while the answers decrypt would be thrown away when they land. The record
+  // half above does not wait; it needs no answer, and is ready when they are.
   const answeredProfile = useMemo(() => (
-    recordProfile
+    recordProfile && answersHydrated
       ? { ...applyPhenotypeAnswer(
           applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
           phenotypeAnswer,
@@ -461,7 +465,7 @@ export default function LiveClinicalDecisionSupportFeature({
         ),
       }
       : null
-  ), [afAnswers, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
+  ), [afAnswers, answersHydrated, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed

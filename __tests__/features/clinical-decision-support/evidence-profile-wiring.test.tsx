@@ -218,6 +218,21 @@ describe('LiveFeature profile wiring', () => {
     expect(lastProfile().evidenceOverrides).toEqual({ 'congestion:cxr': false })
   })
 
+  it('runs the pack only once the stored answers are back, never on the defaults first', async () => {
+    await sealAnswers(evidenceOverridesStorageKey(PATIENT_ID), { 'congestion:cxr': false })
+
+    const { queryByTestId } = render(<LiveClinicalDecisionSupportFeature />)
+    // The record half needs no answer and does not wait; the pack does.
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+    expect(packBuildSpy).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(queryByTestId('mock-cdss-result')).not.toBeNull())
+    const overridesSeen = packBuildSpy.mock.calls.map(([profile]) => (profile as CdssPatientProfile).evidenceOverrides)
+    expect(overridesSeen.length).toBeGreaterThan(0)
+    expect(overridesSeen).toEqual(overridesSeen.map(() => ({ 'congestion:cxr': false })))
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('neither reads nor keeps a plaintext switch an earlier build left', async () => {
     window.localStorage.setItem(
       `cdss-evidence-overrides:${PATIENT_ID}`,
