@@ -182,9 +182,7 @@ describe('real pack · P3 new AF (AF page)', () => {
     expect(useAfAnswersStore.getState().answers).toMatchObject({ diagnosisConfirmed: true, atrialFibrillation: false, atrialFlutter: true })
     expect(document.getElementById('cdss-visit-headline')).toHaveTextContent(/^AFL 首次評估/)
     expect(queue('treatment')).toEqual([{ dp: 'DP-07', primary: '開始抗凝' }])
-    // Not drawn until 顯示全部, and then said for what it is.
-    expect(queryCell('DP-18', 'af')).toBeUndefined()
-    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
+    // On the overview, muted, and said for what it is.
     expect(cell('DP-18', 'af')).toHaveTextContent('AFL：本 pack 未納入')
   })
 
@@ -245,7 +243,7 @@ describe('real pack · P4 stable and optimised', () => {
   })
 
   // Clinician feedback 2026-09-28: 「治療隨時 HFrEF 的四大支柱呢…都要出現」.
-  it('keeps the four pillars together at the head of 02, settled ones too, and not again as cells', () => {
+  it('keeps the four pillars together at the head of 02, settled ones too, each with its tile on the overview', () => {
     render(<ScenarioMap id="p4-stable-optimised" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
     const treatment = screen.getByTestId('cdss-visit-column-treatment')
@@ -254,11 +252,17 @@ describe('real pack · P4 stable and optimised', () => {
     for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-10']) {
       expect(pillars).toContainElement(pillar(dp))
       expect(pillar(dp)).toHaveTextContent('已定')
-      expect(queryCell(dp)).toBeUndefined()
+      expect(treatment).not.toContainElement(cell(dp))
     }
-    // DP-26 joins them only while a pillar is paused; there is none here.
-    expect(queryCell('DP-26')).toBeUndefined()
+    // DP-26 joins them only while a pillar is paused; there is none here, so
+    // it is on the overview alone.
     expect(within(pillars).queryByText('暫停與重啟')).toBeNull()
+    expect(cell('DP-26')).toBeInTheDocument()
+
+    // A pillar's tile opens its card under its box.
+    fireEvent.click(cell('DP-09'))
+    expect(pillars).toContainElement(screen.getByTestId('cdss-visit-detail'))
+    expect(screen.queryByTestId('cdss-visit-detail-slot')).toBeNull()
   })
 
   // Clinician feedback 2026-09-28: 「HFpEF 不用出現不適用的吧」 — the four
@@ -271,9 +275,10 @@ describe('real pack · P4 stable and optimised', () => {
     expect(pillars).not.toHaveTextContent('四支柱')
     expect(pillars).not.toHaveTextContent('不適用')
     for (const dp of ['DP-09', 'DP-10']) expect(pillars).toContainElement(pillar(dp))
+    // The overview still lists them, muted, as the pack grades them.
     for (const dp of ['DP-07', 'DP-08']) {
       expect(() => pillar(dp)).toThrow()
-      expect(queryCell(dp)).toBeUndefined()
+      expect(cell(dp)).toHaveAttribute('data-state', 'not-applicable')
     }
   })
 
@@ -310,11 +315,11 @@ describe('real pack · P5 titrating with AF', () => {
     ])
     expect(row('DP-07')).toHaveTextContent('ramipril → 換 ARNI？')
     // All three decide in their pillar boxes at the head of 02 — not as a
-    // separate list, and not repeated as cells.
+    // separate list; their tiles on the overview mark them as today's.
     const pillars = screen.getByTestId('cdss-visit-pillars')
     for (const dp of ['DP-07', 'DP-09', 'DP-10']) {
       expect(pillars).toContainElement(row(dp))
-      expect(queryCell(dp)).toBeUndefined()
+      expect(cell(dp)).toHaveAttribute('data-in-queue', 'true')
     }
     expect(queue('treatment')).toEqual([])
     // The map opens section by section: with no safety row the visit starts
@@ -371,8 +376,8 @@ describe('real pack · P6 hyperkalaemia', () => {
     render(<ScenarioMap id="p6-hyperkalaemia" />)
     // The flow layout's re-grade reads K ≥5.0 and would call both of these
     // 「需臨床確認」; on the map the card says what the pack said. DP-09 is the
-    // safety row (no cell), so its card opens under the row; DP-07 is a cell.
-    expect(queryCell('DP-09')).toBeUndefined()
+    // safety row, so its card opens under the row.
+    expect(cell('DP-09')).toHaveAttribute('data-in-queue', 'true')
     fireEvent.click(rowDetail('DP-09'))
     // In 四支柱 the card opens right under the pair of boxes, full width.
     expect(screen.getByTestId('cdss-visit-pillars')).toContainElement(screen.getByTestId('cdss-visit-detail'))
@@ -475,8 +480,11 @@ describe('real pack · P4 on 01’s 診斷 view', () => {
     expect(within(dp01).getByTestId('cdss-hf-question-answer-hf-suspicion')).toHaveTextContent('HFrEF（紀錄）')
     expect(dp01).toHaveTextContent('I50.22')
     expect(dp01).toHaveTextContent('已定')
-    // The map's own card for DP-01 is not drawn a second time beside it.
-    expect(queryCell('DP-01')).toBeUndefined()
+    // The map's own card for DP-01 is not drawn a second time beside it: its
+    // tile on the overview leads here.
+    expect(cell('DP-01')).not.toHaveAttribute('aria-expanded')
+    fireEvent.click(cell('DP-01'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
     // 修改 opens the choices in place, the record's answer chosen; no HFpEF for an LVEF below 50%.
     fireEvent.click(within(dp01).getByTestId('cdss-hf-question-edit-hf-suspicion'))
     expect(within(dp01).getByTestId('cdss-hf-suspicion-option-hfref')).toBeChecked()
@@ -503,11 +511,12 @@ describe('real pack · P7 worsening congestion', () => {
     })
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
     // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
-    // stands, so 01 opens on 追蹤 and DP-04's cell is under 診斷.
+    // stands, so 01 opens on 追蹤 — and DP-04 is on the overview all the same,
+    // its own card one press away.
     expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
-    expect(queryCell('DP-04')).toBeUndefined()
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
     expect(cell('DP-04')).toHaveAttribute('data-state', 'confirm')
+    fireEvent.click(cell('DP-04'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-04')
     fireEvent.click(primaryOf('DP-06'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
   })
@@ -554,8 +563,9 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(row('DP-14')).toHaveTextContent('AF')
     // Weight is the clinician's answer now; until it is given DP-06 waits,
     // and 「減少」 on a loop diuretic asks whether it can come down.
-    // DP-06 prescribes, so it sits under the drugs (「利尿劑」), not among 02's cells.
-    expect(queryCell('DP-06')).toBeUndefined()
+    // DP-06 prescribes, so it decides under the drugs (「利尿劑」); the
+    // overview lists it with 02's other points.
+    expect(screen.getByTestId('cdss-visit-overview-treatment')).toContainElement(cell('DP-06'))
     expect(boxState(diureticBox('DP-06'))).toBe('ask')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
@@ -607,14 +617,18 @@ describe('real pack · the other scenarios', () => {
     expect(queue()).toEqual([])
     expect(screen.queryByTestId('cdss-visit-queue-status')).toBeNull()
     // Question 1 is DP-01 (DP-00 folded into it), and DP-34 only waits on it:
-    // none of them is drawn again beside the card.
-    expect(queryCell('DP-00')).toBeUndefined()
-    expect(queryCell('DP-01')).toBeUndefined()
-    expect(queryCell('DP-34')).toBeUndefined()
+    // their tiles on the overview lead to it and never open a card that asks
+    // it again.
+    for (const dp of ['DP-01', 'DP-34']) {
+      expect(cell(dp)).not.toHaveAttribute('aria-expanded')
+      fireEvent.click(cell(dp))
+      expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+    }
     // Question 1 is the only confirmation on the page.
     expect(within(assessment).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
-    // It comes before the other diagnosis points' cells on the page.
-    expect(assessment.compareDocumentPosition(cell('DP-02')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // It opens 01's working area; the other diagnosis points are on the overview.
+    expect(screen.getByTestId('cdss-visit-column-status')).toContainElement(assessment)
+    expect(screen.getByTestId('cdss-visit-overview-status')).toContainElement(cell('DP-02'))
   })
 
   it('P1 「還不確定」: question 1 stays open, the HFpEF criteria come up under it, then symptoms and signs — no NYHA, no separate confirmation', () => {
@@ -840,27 +854,28 @@ describe('real pack · reading the map without scrolling back up', () => {
   it('steps from card to card in the pack order and on into the next section (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-treatment'))
-    // The stepper walks the cells in pack order. The four pillars are boxes
-    // at the head of 02, not cells, so it walks what follows them: DP-11 →
-    // DP-25 (medication reconciliation) → …
+    // The stepper walks the cards that open at a section's head, in pack
+    // order. The four pillars decide in their own boxes, so it walks what
+    // follows them: DP-11 → DP-25 (medication reconciliation) → …
     fireEvent.click(cell('DP-11'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
     fireEvent.click(screen.getByTestId('cdss-visit-detail-next'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-25')
-    // The card follows its cell: it sits in the slot right after DP-25.
-    expect(screen.getByTestId('cdss-visit-detail-slot').previousElementSibling).toContainElement(cell('DP-25'))
+    // The card sits at the head of 02; its tile on the overview is marked open.
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-25')
+    expect(cell('DP-25')).toHaveAttribute('aria-expanded', 'true')
     fireEvent.click(screen.getByTestId('cdss-visit-detail-previous'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-11')
 
     // The last card of 02 leads into 03, which opens in its place.
-    const treatmentCells = [...screen.getByTestId('cdss-visit-column-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]
-    fireEvent.click(treatmentCells.at(-1)!)
+    const treatmentTiles = [...screen.getByTestId('cdss-visit-overview-treatment').querySelectorAll<HTMLElement>('button[data-dp]')]
+    fireEvent.click(treatmentTiles.at(-1)!)
     const next = screen.getByTestId('cdss-visit-detail-next')
     expect(next).toHaveTextContent('03 預後與計畫')
     fireEvent.click(next)
     expect(screen.getByTestId('cdss-visit-column-outlook')).toBeVisible()
     expect(screen.getByTestId('cdss-visit-column-treatment')).not.toBeVisible()
-    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', next.dataset.dp!)
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', next.dataset.stepDp!)
 
     fireEvent.click(screen.getByTestId('cdss-visit-detail-collapse'))
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
@@ -902,14 +917,50 @@ describe('real pack · follow-up questions open once the pack says follow-up', (
 })
 
 describe('real pack · one heading per group', () => {
-  it('draws 用藥安全 once even though its points are apart in the pack order (P5, 顯示全部)', () => {
+  it('draws 用藥安全 once even though its points are apart in the pack order (P5)', () => {
     const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
     render(<ScenarioMap id="p5-titrating-af" />)
-    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
-    const treatment = screen.getByTestId('cdss-visit-column-treatment')
+    const treatment = screen.getByTestId('cdss-visit-overview-treatment')
     expect(treatment.querySelectorAll('[data-map-group="medication-safety"]')).toHaveLength(1)
     expect(errors.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
     errors.mockRestore()
   })
 })
 
+
+// Review of #179 (2026-09-29): two ways back into a card from the overview.
+describe('real pack · returning to a card from the overview', () => {
+  it('reopens a card left open in another section in one press (P5 DP-08)', () => {
+    render(<ScenarioMap id="p5-titrating-af" />)
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    // Over to 01: 02 closes, and DP-08's card with it.
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'false')
+    // One press on DP-08 brings its card back, rather than closing what the
+    // clinician could no longer see.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
+    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'true')
+    // A second press closes it, as before.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+  })
+
+  it('takes DP-03’s link to the fuller questions under 追蹤 on a first visit, where 01 opens on 診斷 (P5)', () => {
+    render(<ScenarioMap id="p5-titrating-af" firstVisit />)
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('cdss-visit-asks-detail')).toBeNull()
+    fireEvent.click(cell('DP-03'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-03')
+    fireEvent.click(screen.getByTestId('cdss-visit-go-to-asks-detail'))
+    // The questions live under 追蹤: the switch moves there, and they are open.
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    const detail = screen.getByTestId('cdss-visit-asks-detail') as HTMLDetailsElement
+    expect(detail.open).toBe(true)
+    expect(detail).toBeVisible()
+  })
+})

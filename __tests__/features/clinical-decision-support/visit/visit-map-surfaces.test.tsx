@@ -330,7 +330,7 @@ describe('HF surfaces on the decision map', () => {
     // …and 02 opens with its four pillars, deciding in their boxes, their
     // primary buttons first.
     const treatment = screen.getByTestId('cdss-visit-column-treatment')
-    expect(treatment.firstElementChild).toBe(screen.getByTestId('cdss-visit-lead-treatment'))
+    expect(treatment).toContainElement(screen.getByTestId('cdss-visit-lead-treatment'))
     expect(screen.getByTestId('cdss-visit-lead-treatment').firstElementChild).toContainElement(screen.getByTestId('cdss-visit-pillars'))
     const firstPrimary = screen.getByTestId('cdss-visit-pillars').querySelector('[data-visit-primary]')
     expect(firstPrimary).not.toBeNull()
@@ -380,17 +380,19 @@ describe('HF surfaces on the decision map', () => {
     // press on 01's 診斷／追蹤 switch away (it used to sit in DP-01's card).
     expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
-    expect(queryCell('DP-01')).toBeUndefined()
-    fireEvent.click(statusView('diagnosis'))
+    // DP-01 keeps its tile on the overview. Question 1 asks it on this page,
+    // so the tile goes there — 01's 診斷 view — rather than opening a card
+    // that would ask it a second time.
+    expect(cell('DP-01')).not.toHaveAttribute('aria-expanded')
+    fireEvent.click(cell('DP-01'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
     expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(view)
     expect(view).toBeVisible()
     // The asks belong to 追蹤 only; 診斷 shows the diagnosis points instead.
     expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
-    // Question 1 is DP-01 on this page, so DP-01 is not drawn beside it.
     expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
-    expect(queryCell('DP-01')).toBeUndefined()
     // Evidence before the verdict: the confirmation waits for 懷疑 HF？ 「是」.
     expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
     fireEvent.click(within(view).getByTestId('cdss-hf-suspicion-option-suspected'))
@@ -415,21 +417,28 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
     expect(view).toContainElement(screen.getByTestId('cdss-visit-hf-diagnostic-assessment'))
 
-    // DP-00 is 01's decision row (so not a cell); its card opens under the row.
-    expect(queryCell('DP-00')).toBeUndefined()
+    // DP-00 is 01's decision row; its tile (and the row's 依據與細節) opens
+    // its card under the row.
+    expect(cell('DP-00')).toHaveAttribute('data-in-queue', 'true')
     fireEvent.click(opener('DP-00'))
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-00')
+    expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(screen.getByTestId('cdss-visit-detail'))
     expect(within(screen.getByTestId('cdss-visit-detail')).queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
 
     // DP-34 only waits on question 1 here, which asks it in the same card:
-    // it is not drawn a second time as a cell.
-    expect(queryCell('DP-34')).toBeUndefined()
+    // its tile leads to question 1 and never opens a second copy.
+    expect(cell('DP-34')).not.toHaveAttribute('aria-expanded')
+    fireEvent.click(cell('DP-34'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
 
-    // Under 追蹤 the diagnosis points' cells are not drawn at all.
+    // Under 追蹤 the assessment is out of view, but the tile brings 診斷 back.
     fireEvent.click(statusView('follow-up'))
-    expect(queryCell('DP-34')).toBeUndefined()
     expect(screen.queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
+    fireEvent.click(cell('DP-34'))
+    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
   })
 
   // Clinician feedback 2026-09-28: the second grid of values at 01's foot
@@ -482,8 +491,8 @@ describe('AF surfaces on the decision map', () => {
   it('places every question group on the point it feeds', () => {
     render(<AfHarness model={afModel()} />)
     // DP-07 is the page's decision row, so its card opens under the row; the
-    // others open from their cells.
-    expect(queryCell('DP-07', 'af')).toBeUndefined()
+    // others open at the head of their sections. Every one opens from its tile.
+    expect(cell('DP-07', 'af')).toHaveAttribute('data-in-queue', 'true')
     const groupsIn = (dp: string) => {
       fireEvent.click(opener(dp, 'af'))
       const detail = screen.getByTestId('cdss-visit-detail')
@@ -494,7 +503,6 @@ describe('AF surfaces on the decision map', () => {
     expect(groupsIn('DP-13')).toEqual(['bleedingRisk'])
     expect(groupsIn('DP-21')).toEqual(['comorbidity'])
     expect(groupsIn('DP-04')).toEqual(['screening'])
-    fireEvent.click(screen.getByTestId('cdss-visit-map-show-all'))
     // DP-01 asks the diagnosis with its own buttons (AF／AFL／還不確定): the
     // card's 「AF／flutter 診斷」 row is not drawn a second time, anywhere.
     expect(groupsIn('DP-01')).toEqual([])

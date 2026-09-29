@@ -95,9 +95,9 @@ describe('decision map in the view', () => {
     expect(screen.queryByLabelText('個案決策總覽')).not.toBeInTheDocument()
 
     // A point opens the existing card detail for its module. DP-07 is one of
-    // 02's four pillars (a box, not a cell): its card opens right under its
-    // pair of boxes, from 「依據與細節」.
-    expect(document.querySelector('button[data-dp="DP-07"]')).toBeNull()
+    // 02's four pillars: it has a tile on the overview like every point, and
+    // its card opens right under its box, from 「依據與細節」.
+    expect(document.querySelector('button[data-dp="DP-07"]')).toHaveAttribute('data-map-tile')
     const ras = document.querySelector<HTMLElement>('[data-visit-row-detail="DP-07"]')!
     fireEvent.click(ras)
     const detail = screen.getByTestId('cdss-visit-detail')
