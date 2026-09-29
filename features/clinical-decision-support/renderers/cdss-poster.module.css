@@ -44,6 +44,15 @@
   --section-accent: #a78bfa;
 }
 
+/* The visit's summary belongs to no section: its step and the button into it
+   wear the page's own colours. */
+.tone[data-section='summary'] {
+  --section-surface: var(--background);
+  --section-heading: var(--background);
+  --section-ink: var(--foreground);
+  --section-accent: var(--border);
+}
+
 .heading {
   display: flex;
   align-items: flex-start;
@@ -120,6 +129,7 @@
 }
 
 .mapToggle[aria-expanded='true'],
+.mapToggle[aria-current='true'],
 .mapToggle[aria-current='step'] {
   border-color: var(--section-ink);
   box-shadow: inset 0 0 0 1px var(--section-ink);
@@ -184,6 +194,13 @@
   --section-heading: #3b3153;
   --section-ink: #e7dbff;
   --section-accent: #8b5cf6;
+}
+
+:global(.dark) .tone[data-section='summary'] {
+  --section-surface: var(--background);
+  --section-heading: var(--background);
+  --section-ink: var(--foreground);
+  --section-accent: var(--border);
 }
 
 :global(.dark) .poster :global([data-cdss-action]) {

@@ -7,7 +7,7 @@
  * beside the column, and nothing jumps to show what is already in view.
  */
 import { useMemo } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { VisitDecisionScreen } from '@/features/clinical-decision-support/renderers/visit/VisitDecisionScreen'
 import { revealTop } from '@/features/clinical-decision-support/renderers/visit/reveal'
 import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
@@ -91,14 +91,18 @@ describe('the map beside its details', () => {
   it('keeps a section open when its name is pressed again, so the details are never empty', () => {
     atWidth(700)
     render(<Harness model={p4Model()} />)
+    // Beside the details a name shows its section and never folds it: the
+    // one shown is current, not expanded.
     const status = screen.getByTestId('cdss-visit-section-toggle-status')
-    expect(status).toHaveAttribute('aria-expanded', 'true')
+    expect(status).toHaveAttribute('aria-current', 'true')
+    expect(status).not.toHaveAttribute('aria-expanded')
     fireEvent.click(status)
-    expect(status).toHaveAttribute('aria-expanded', 'true')
+    expect(status).toHaveAttribute('aria-current', 'true')
     const outlook = screen.getByTestId('cdss-visit-section-toggle-outlook')
     fireEvent.click(outlook)
     fireEvent.click(outlook)
-    expect(outlook).toHaveAttribute('aria-expanded', 'true')
+    expect(outlook).toHaveAttribute('aria-current', 'true')
+    expect(status).not.toHaveAttribute('aria-current')
     expect(screen.getByTestId('cdss-visit-column-outlook')).toBeVisible()
     expect(screen.getByTestId('cdss-visit-column-status')).not.toBeVisible()
   })
@@ -128,6 +132,30 @@ describe('the map beside its details', () => {
     expect(column.style.getPropertyValue('--cdss-column-height')).toMatch(/px$/)
     expect(column.style.maxHeight).toBe('')
     expect(column).toHaveClass('@min-[36rem]:max-h-(--cdss-column-height)')
+  })
+
+  it('stacks when the panel is narrowed, and stands beside again when widened', () => {
+    let width = 700
+    const observed: (() => void)[] = []
+    Element.prototype.getBoundingClientRect = function rect(this: Element) {
+      return this.getAttribute('data-testid') === 'cdss-visit-map' ? box(0, 800, width) : box(0, 0, 0)
+    }
+    window.ResizeObserver = class {
+      constructor(callback: () => void) { observed.push(callback) }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+    render(<Harness model={p4Model()} />)
+    const map = screen.getByTestId('cdss-visit-map')
+    expect(map).toHaveAttribute('data-layout', 'side-by-side')
+    width = 500
+    act(() => { for (const callback of observed) callback() })
+    expect(map).toHaveAttribute('data-layout', 'overview')
+    expect(screen.getByTestId('cdss-visit-overview').style.getPropertyValue('--cdss-column-height')).toBe('')
+    width = 900
+    act(() => { for (const callback of observed) callback() })
+    expect(map).toHaveAttribute('data-layout', 'side-by-side')
   })
 
   it('stacks under 36rem, where a section’s name folds it closed as before', () => {
