@@ -277,6 +277,11 @@ export function VisitDecisionScreen({
           type="button"
           className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => {
+            // The fuller questions live under 01's 追蹤; a first visit opens 01
+            // on 診斷, where they are not drawn (#179 review).
+            if (diagnosisView && !undiagnosed && statusView !== 'follow-up') {
+              setStatusViewOverride({ reason: defaultStatusView, view: 'follow-up' })
+            }
             setAsksDetailOpen(true)
             requestAnimationFrame(() => {
               const target = document.getElementById(ASKS_DETAIL_ID)

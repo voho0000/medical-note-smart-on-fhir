@@ -365,7 +365,11 @@ export function DecisionMapColumns({
     // The point's card shows in its own section, so that section is the open one.
     if (opensCard(point)) scrollTo.current = { card: true }
     setOpenBlock(point.block)
-    onOpen(point)
+    // A card left open in a section since closed is out of sight: pressing its
+    // point shows it again rather than closing it (#179 review). Only a card
+    // in view closes on a second press.
+    const hiddenButOpen = openKey === visitDecisionKey(point) && openBlock !== point.block
+    if (!hiddenButOpen) onOpen(point)
   }
   const collapse = (point: DecisionPointView) => {
     onOpen(point)

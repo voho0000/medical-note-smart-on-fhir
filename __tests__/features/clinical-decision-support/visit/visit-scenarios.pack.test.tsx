@@ -927,3 +927,40 @@ describe('real pack · one heading per group', () => {
   })
 })
 
+
+// Review of #179 (2026-09-29): two ways back into a card from the overview.
+describe('real pack · returning to a card from the overview', () => {
+  it('reopens a card left open in another section in one press (P5 DP-08)', () => {
+    render(<ScenarioMap id="p5-titrating-af" />)
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    // Over to 01: 02 closes, and DP-08's card with it.
+    fireEvent.click(screen.getByTestId('cdss-visit-section-toggle-status'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'false')
+    // One press on DP-08 brings its card back, rather than closing what the
+    // clinician could no longer see.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-08')
+    expect(screen.getByTestId('cdss-visit-detail')).toBeVisible()
+    expect(cell('DP-08')).toHaveAttribute('aria-expanded', 'true')
+    // A second press closes it, as before.
+    fireEvent.click(cell('DP-08'))
+    expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
+  })
+
+  it('takes DP-03’s link to the fuller questions under 追蹤 on a first visit, where 01 opens on 診斷 (P5)', () => {
+    render(<ScenarioMap id="p5-titrating-af" firstVisit />)
+    expect(screen.getByTestId('cdss-visit-status-view-diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('cdss-visit-asks-detail')).toBeNull()
+    fireEvent.click(cell('DP-03'))
+    expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-03')
+    fireEvent.click(screen.getByTestId('cdss-visit-go-to-asks-detail'))
+    // The questions live under 追蹤: the switch moves there, and they are open.
+    expect(screen.getByTestId('cdss-visit-status-view-follow-up')).toHaveAttribute('aria-pressed', 'true')
+    const detail = screen.getByTestId('cdss-visit-asks-detail') as HTMLDetailsElement
+    expect(detail.open).toBe(true)
+    expect(detail).toBeVisible()
+  })
+})
