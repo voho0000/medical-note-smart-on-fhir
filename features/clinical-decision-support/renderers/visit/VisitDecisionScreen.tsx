@@ -635,6 +635,9 @@ export function VisitDecisionScreen({
       const target = toDiagnosis
         ? lead?.querySelector<HTMLElement>(`[data-dp="${point.dp}"]`) ?? lead?.querySelector<HTMLElement>('[data-dp]') ?? lead
         : document.getElementById(ASKS_DETAIL_ID)
+      // A point kept in a fold there (DP-34's criteria under an answered
+      // HFpEF) opens with the press that asked for it.
+      if (target instanceof HTMLDetailsElement) target.open = true
       revealTop(target)
       focusInto(target)
     })
