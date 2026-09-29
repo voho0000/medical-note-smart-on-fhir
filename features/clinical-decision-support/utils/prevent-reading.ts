@@ -55,11 +55,18 @@ export function buildPreventReading(profile: CdssPatientProfile, autofill: Autof
 export type PreventReading = ReturnType<typeof buildPreventReading>
 export function applyPreventReading(profile: CdssPatientProfile, reading?: PreventReading): CdssPatientProfile {
   const facts = { ...profile.facts }
-  for (const key of ['preventAscvd10YearRisk','preventAscvd30YearRisk','preventAssessment','preventDiabetes','preventAge']) delete facts[key]
+  for (const key of ['preventAscvd10YearRisk','preventAscvd30YearRisk','preventAssessment','preventDiabetes','preventDiabetesDenied','preventAge']) delete facts[key]
   if (!reading) return { ...profile, facts }
   const { result, values } = reading
   facts.preventAssessment = { zh: result.status, en: result.status, textEvidence: { direction: 'supports', matchedTerms: [result.status, ...result.issues] } }
   if (values.dm === 'yes') facts.preventDiabetes = { zh: '糖尿病：已核對', en: 'Diabetes confirmed' }
+  // Only the clinician's own 「否」 is an answer. A blank input is not, and the
+  // pack must be able to tell them apart: without a code, this answer outranks
+  // a glucose-lowering drug or an HbA1c on every card (pack `hasDiabetes`).
+  const dmField = reading.fields.find(field => field.input.key === 'dm')
+  if (values.dm === 'no' && dmField?.source === 'physician') {
+    facts.preventDiabetesDenied = { zh: '糖尿病：醫師於 PREVENT 回答否', en: 'Diabetes: clinician answered no in PREVENT', date: dmField.date }
+  }
   if (result.status === 'ready') {
     facts.preventAge = { zh: values.age, en: values.age, numericValue: Number(values.age) }
     for (const [key, value] of [['preventAscvd10YearRisk', result.risk10], ['preventAscvd30YearRisk', result.risk30]] as const) {

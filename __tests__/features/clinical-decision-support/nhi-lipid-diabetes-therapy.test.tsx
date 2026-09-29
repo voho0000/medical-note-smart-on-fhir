@@ -11,6 +11,7 @@ import { NhiLipidCoverageSummary } from '@/features/clinical-decision-support/re
 import { buildNhiRecordSources } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { useNhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+import { applyPreventReading, buildPreventReading } from '@/features/clinical-decision-support/utils/prevent-reading'
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: jest.fn(),
@@ -149,5 +150,26 @@ describe('三區塊: diabetes from glucose-lowering drugs', () => {
   it('leaves 糖尿病 to confirm for an SGLT2 inhibitor alone', () => {
     const section = diagnosisSection(ON_SGLT2I_ALONE())
     expect(summaryOf(section, '糖尿病')).toHaveTextContent('? 待確認')
+  })
+})
+
+describe('a clinician\'s 「否」 in PREVENT reaches every lipid card', () => {
+  it('takes the treatment card off the diabetes pathway and answers 表一\'s 糖尿病 row', () => {
+    const noAutofill = { resolve: () => undefined }
+    const onDrugs = ON_DRUGS()
+    const answered = applyPreventReading(onDrugs, buildPreventReading(onDrugs, noAutofill, { dm: 'no' }))
+    const therapy = (profile: CdssPatientProfile) => JSON.stringify(HYPERLIPIDEMIA_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+      .recommendations.find((item) => item.id === 'dyslipidemia-lipid-lowering-therapy'))
+
+    expect(therapy(onDrugs)).toContain('糖尿病／CKD 高風險路徑')
+    expect(therapy(answered)).not.toContain('糖尿病／CKD')
+    expect(riskCard(answered).coverageSummary!.diseaseChecks.find((check) => check.id === 'diabetes')).toMatchObject({
+      state: 'no',
+      value: expect.stringContaining('醫師於 PREVENT 回答否'),
+    })
+
+    render(<NhiLipidCoverageSummary recommendation={riskCard(answered)} locale="zh-TW" patientId="dm-by-drug" presentation="diagnosis" />)
+    const section = screen.getByTestId('lipid-diagnosis-confirmation')
+    expect(within(section).getAllByText('糖尿病', { selector: 'summary > span' })[0].closest('summary')).toHaveTextContent('× 不符合')
   })
 })

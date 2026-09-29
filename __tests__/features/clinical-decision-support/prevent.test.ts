@@ -68,3 +68,20 @@ test('diabetes: a code locks 糖尿病; current glucose-lowering therapy prefill
   // The clinician's answer wins over the prescription.
   expect(dmField(therapy, { dm: 'no' })).toMatchObject({ value: 'no', source: 'physician', locked: false })
 })
+test('diabetes: only the clinician\'s own 「否」 is written as a denial', () => {
+  const noAutofill = { resolve: () => undefined }
+  const therapy = { diabetesGlucoseLoweringTherapy: { zh: '降血糖藥使用中：ACARBOSE 100 MG', en: 'Acarbose' } }
+  const apply = (inputs: CalcValues) => {
+    const profile = { id: 'test', evaluatedAt: '2026-09-29T08:00:00+08:00', facts: therapy }
+    return applyPreventReading(profile, buildPreventReading(profile, noAutofill, inputs)).facts
+  }
+  expect(apply({ dm: 'no' }).preventDiabetesDenied).toMatchObject({ zh: '糖尿病：醫師於 PREVENT 回答否', date: '2026-09-29' })
+  expect(apply({ dm: 'no' }).preventDiabetes).toBeUndefined()
+  // Prefilled from the prescription, and a blank answer: neither is a denial.
+  expect(apply({}).preventDiabetesDenied).toBeUndefined()
+  expect(apply({}).preventDiabetes).toBeDefined()
+  expect(apply({ dm: '' }).preventDiabetesDenied).toBeUndefined()
+  // A new reading clears the old answer.
+  const denied = { id: 'test', facts: { ...therapy, preventDiabetesDenied: { zh: 'old', en: 'old' } } }
+  expect(applyPreventReading(denied, buildPreventReading(denied, noAutofill, { dm: 'yes' })).facts.preventDiabetesDenied).toBeUndefined()
+})
