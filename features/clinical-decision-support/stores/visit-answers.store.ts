@@ -18,11 +18,8 @@ import { create } from 'zustand'
 import { isVisitAnswer, VISIT_OBSERVATIONS } from '@voho0000/personalized-care'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 import type { VisitAnswers, VisitObservationId } from '../types'
 
 /**
@@ -70,11 +67,9 @@ const EMPTY_RECORD: VisitAnswerRecord = Object.freeze({})
 const EMPTY_ANSWERS: VisitAnswers = Object.freeze({})
 const EMPTY_SOURCES: Readonly<Partial<Record<VisitAskId, VisitAnswerSource>>> = Object.freeze({})
 
-const STORAGE_PREFIX = 'cdss-visit-answers:'
-
 /** The key one patient's encrypted visit answers are kept under. */
 export function visitAnswersStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('visit-answers', patientId)
 }
 
 function localDay(value: Date): string {
@@ -154,12 +149,11 @@ export function visitAnswerSourcesOf(
 }
 
 function writeStored(patientId: string, record: VisitAnswerRecord): void {
-  const key = visitAnswersStorageKey(patientId)
   if (Object.keys(record).length === 0) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('visit-answers', patientId)
     return
   }
-  persistEncryptedAnswers(key, record)
+  patientAnswerBacking().save('visit-answers', patientId, record)
 }
 
 const hydration = createHydrationGuard()
@@ -200,7 +194,7 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
       return
     }
 
-    if (state.byPatientId[patientId] || !hasEncryptedAnswers(visitAnswersStorageKey(patientId))) {
+    if (state.byPatientId[patientId] || !patientAnswerBacking().has('visit-answers', patientId)) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
           ? current.byPatientId
@@ -222,7 +216,7 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(visitAnswersStorageKey(patientId))
+    void patientAnswerBacking().load('visit-answers', patientId)
       .then((stored) => apply(toVisitAnswerRecord(stored, now)))
       .catch(() => apply(EMPTY_RECORD))
   },
@@ -252,7 +246,7 @@ export const useVisitAnswersStore = create<VisitAnswersState>()((set, get) => ({
 
   clearAnswers: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(visitAnswersStorageKey(patientId))
+    patientAnswerBacking().discard('visit-answers', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_RECORD },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

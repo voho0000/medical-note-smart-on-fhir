@@ -34,11 +34,8 @@
 import { create } from 'zustand'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 
 export type PhysicianDecisionKind =
   | 'prescribed'
@@ -100,11 +97,9 @@ export interface PhysicianDecision extends VisitDecisionContext {
 
 export type PhysicianDecisionMap = Readonly<Record<string, PhysicianDecision>>
 
-const STORAGE_PREFIX = 'cdss-physician-decisions:'
-
 /** The key one patient's encrypted decisions are kept under. */
 export function physicianDecisionsStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('physician-decisions', patientId)
 }
 
 const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
@@ -182,12 +177,11 @@ function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
 }
 
 function writeStoredDecisions(patientId: string, decisions: PhysicianDecisionMap): void {
-  const key = physicianDecisionsStorageKey(patientId)
   if (Object.keys(decisions).length === 0) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('physician-decisions', patientId)
     return
   }
-  persistEncryptedAnswers(key, decisions)
+  patientAnswerBacking().save('physician-decisions', patientId, decisions)
 }
 
 const hydration = createHydrationGuard()
@@ -233,7 +227,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
     // writes anything.
     if (
       state.byPatientId[patientId]
-      || !hasEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+      || !patientAnswerBacking().has('physician-decisions', patientId)
     ) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
@@ -256,7 +250,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(physicianDecisionsStorageKey(patientId))
+    void patientAnswerBacking().load('physician-decisions', patientId)
       .then((stored) => apply(toDecisions(stored)))
       // A record that cannot be read leaves every row undecided, which is the
       // same state as a chart nobody has decided on.
@@ -299,7 +293,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
 
   clearDecisions: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+    patientAnswerBacking().discard('physician-decisions', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_DECISIONS },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

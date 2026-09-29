@@ -11,21 +11,16 @@
 import { create } from 'zustand'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 import type { CdssPatientProfile } from '../types'
 
 export type AfAnswers = NonNullable<CdssPatientProfile['afClinicalAnswers']>
 const EMPTY: AfAnswers = Object.freeze({})
 
-const STORAGE_PREFIX = 'cdss-af-answers:'
-
 /** The key one patient's encrypted answers are kept under. */
 export function afAnswersStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('af-answers', patientId)
 }
 
 /** Only true and false survive a read; anything else is 「沒答」. */
@@ -39,9 +34,8 @@ function toAfAnswers(parsed: unknown): AfAnswers {
 }
 
 function writeStored(patientId: string, answers: AfAnswers): void {
-  const key = afAnswersStorageKey(patientId)
-  if (Object.keys(answers).length === 0) discardEncryptedAnswers(key)
-  else persistEncryptedAnswers(key, answers)
+  if (Object.keys(answers).length === 0) patientAnswerBacking().discard('af-answers', patientId)
+  else patientAnswerBacking().save('af-answers', patientId, answers)
 }
 
 const hydration = createHydrationGuard()
@@ -70,7 +64,7 @@ export const useAfAnswersStore = create<State>((set, get) => ({
     const kept = current.patientId === patientId ? current.answers : EMPTY
     // A chart with nothing stored is read in the same tick: a first visit
     // never waits on a decryption with nothing to decrypt.
-    if (!patientId || !hasEncryptedAnswers(afAnswersStorageKey(patientId))) {
+    if (!patientId || !patientAnswerBacking().has('af-answers', patientId)) {
       set({ patientId, answers: kept, hydratedPatientId: patientId })
       return
     }
@@ -86,7 +80,7 @@ export const useAfAnswersStore = create<State>((set, get) => ({
         return { answers: merged, hydratedPatientId: patientId }
       })
     }
-    void loadEncryptedAnswers<unknown>(afAnswersStorageKey(patientId))
+    void patientAnswerBacking().load('af-answers', patientId)
       .then((stored) => apply(toAfAnswers(stored)))
       // What cannot be read is a first visit's reading.
       .catch(() => apply(EMPTY))
@@ -103,7 +97,7 @@ export const useAfAnswersStore = create<State>((set, get) => ({
     }),
   clear: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(afAnswersStorageKey(patientId))
+    patientAnswerBacking().discard('af-answers', patientId)
     // A read still in flight would bring the discarded answers back.
     if (hydration.isPending(patientId)) hydration.invalidate()
     set((state) => (state.patientId === patientId ? { answers: EMPTY, hydratedPatientId: patientId } : state))
