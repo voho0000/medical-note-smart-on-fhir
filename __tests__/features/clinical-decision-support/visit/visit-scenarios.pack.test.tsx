@@ -967,3 +967,28 @@ describe('real pack · returning to a card from the overview', () => {
     expect(detail).toBeVisible()
   })
 })
+
+// Walking P1 and P7 (2026-09-29): 02's step said 「需你確認 2」 and 「需你確認
+// 4」, but what it counted beyond the decision rows and the pillars (DP-12,
+// DP-31, DP-32) was only on the map's column — folded away on a phone.
+describe('real pack · what a step counts is in its section', () => {
+  it('lists P7’s 02 points beyond the pillar box, one press each, the pillars not twice', () => {
+    render(<ScenarioMap id="p7-worsening-congestion" />)
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    expect(screen.getByTestId('cdss-visit-step-treatment')).toHaveTextContent('需你確認 4')
+    const list = screen.getByTestId('cdss-visit-still-open-treatment')
+    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-12'])
+    expect(list).toHaveTextContent('篩檢缺鐵')
+    fireEvent.click(within(list).getByRole('button', { name: /DP-12/ }))
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveAttribute('data-dp', 'DP-12')
+    expect(screen.queryByTestId('cdss-visit-still-open-treatment')).toBeNull()
+  })
+
+  it('puts P1’s comorbidity and self-care questions in 02 once HFpEF is the diagnosis', () => {
+    render(<ScenarioMap id="p1-suspected-hfpef" />)
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfpef'))
+    fireEvent.click(screen.getByTestId('cdss-visit-step-treatment'))
+    const list = screen.getByTestId('cdss-visit-still-open-treatment')
+    expect([...list.querySelectorAll('[data-still-open]')].map((row) => row.getAttribute('data-still-open'))).toEqual(['DP-31', 'DP-32'])
+  })
+})

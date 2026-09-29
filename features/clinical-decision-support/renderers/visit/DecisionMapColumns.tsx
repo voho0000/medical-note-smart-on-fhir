@@ -809,6 +809,17 @@ export function DecisionMapColumns({
           // A checklist the pack gives a point (DP-02's baseline) stays in
           // view in its section while the point's card is closed.
           const checklists = pointsOf(block).filter((point) => point.checklist?.length && visitDecisionKey(point) !== openKey)
+          // What the step counts for this section beyond its decision rows
+          // (DP-31's 「BMI 32.8：semaglutide／tirzepatide？」, DP-32's 衛教), one
+          // press each: the section holds all it asks for, with the map
+          // folded away on a phone as beside it.
+          const stillOpen = pointsOf(block).filter((point) => ATTENTION_ORDER.includes(point.state)
+            && !decisionOf(point)
+            && !queuedDps.has(point.dp)
+            && !rowDps?.has(point.dp)
+            // A pillar's row is its own (the pillar box draws it).
+            && !leadCardKeys?.has(visitDecisionKey(point))
+            && visitDecisionKey(point) !== openKey)
           return (
             <section
               key={block}
@@ -891,6 +902,41 @@ export function DecisionMapColumns({
                   <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
                 </div>
               ))}
+              {stillOpen.length ? (
+                <div className="space-y-1 rounded-md border border-border bg-background px-2 py-2" data-testid={`cdss-visit-still-open-${block}`}>
+                  <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                    {isEnglish ? 'Also for you in this section' : '這一區還需要你看'}
+                  </p>
+                  <ul className="space-y-1">
+                    {stillOpen.map((point) => (
+                      <li key={visitDecisionKey(point)}>
+                        <button
+                          type="button"
+                          onClick={() => open(point)}
+                          className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          data-still-open={point.dp}
+                          data-source={point.source}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+                              <span className="min-w-0 truncate text-sm font-medium text-foreground">{point.label}</span>
+                              {point.source !== sourceOfPage ? (
+                                <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
+                              ) : null}
+                              <StatePill state={point.state} isEnglish={isEnglish} decided={false} inQueue={false} />
+                            </span>
+                            {point.headline ?? point.why ? (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">{point.headline ?? point.why}</span>
+                            ) : null}
+                          </span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {columnFooters?.[block]}
               {block === 'outlook' ? outlookSlot : null}
               {stepsBeforeNext?.[block] ? (
