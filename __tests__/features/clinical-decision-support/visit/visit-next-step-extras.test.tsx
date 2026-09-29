@@ -20,7 +20,7 @@ import { action, point } from './visit-model.fixtures'
 const PATIENT = 'next-extras-patient'
 const hbCr = { text: 'Hb、Cr' }
 
-function afModel(extras: { decides?: string[]; unranked?: boolean }): VisitDecisionModel {
+function afModel(extras: { decides?: string[]; unranked?: boolean; criteria?: unknown }): VisitDecisionModel {
   const next = {
     afterActionId: 'af-dp07-start',
     headline: '選 DOAC（劑量已依腎功能、年齡、體重算好）',
@@ -253,6 +253,44 @@ describe('a chained step the pack says decides other points, among equals', () =
     expect(tile('DP-09')).toHaveTextContent('改用其他 DOAC → 換哪一種 DOAC：部分劑量需個別評估')
     fireEvent.click(within(row()).getByRole('button', { name: 'edoxaban 30 mg qd' }))
     for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).toHaveTextContent('edoxaban 30 mg qd')
+  })
+
+  // Owner feedback 2026-09-29: 「那你要寫出來對應的」 — each Table 11
+  // criterion, marked, with the patient's value, under the open choice.
+  it('writes out the choice’s criteria, marked, and a criterion the record cannot settle as ？', () => {
+    const criteria = [
+      {
+        title: 'apixaban 5 → 2.5 mg bid：3 項中 2 項（符合 0）',
+        items: [
+          { label: '年齡 ≥80', value: '78 歲', met: false },
+          { label: '體重 ≤60 kg', value: '68 kg', met: false },
+        ],
+      },
+      {
+        title: 'dabigatran 110 mg 個別考慮：任一項',
+        items: [
+          { label: 'CrCl 30–50 mL/min', value: '41 mL/min', met: true },
+          { label: '胃炎／食道炎／GERD、其他出血風險' },
+          { value: 'a criterion without a label is dropped' },
+        ],
+      },
+    ]
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true, criteria } as never))
+    // Before 「開始抗凝」 the choice is not the row's, and neither are its criteria.
+    expect(row().closest('[data-visit-queue-row]')!.querySelector('[data-visit-criteria]')).toBeNull()
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    const box = row().closest('[data-visit-queue-row]')!.querySelector<HTMLElement>('[data-visit-criteria]')!
+    expect(box).toHaveTextContent('apixaban 5 → 2.5 mg bid：3 項中 2 項（符合 0）')
+    const items = [...box.querySelectorAll('li')].map((item) => [item.getAttribute('data-met'), item.textContent])
+    expect(items).toEqual([
+      ['false', '✗不符合：年齡 ≥8078 歲'],
+      ['false', '✗不符合：體重 ≤60 kg68 kg'],
+      ['true', '✓符合：CrCl 30–50 mL/min41 mL/min'],
+      ['unknown', '？未知：胃炎／食道炎／GERD、其他出血風險'],
+    ])
+    // Once chosen, the row is its record line again.
+    fireEvent.click(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' }))
+    expect(screen.getByTestId('cdss-visit-column-treatment').querySelector('[data-visit-criteria]')).toBeNull()
   })
 
   // HF DP-14 folds AF DP-07, `next` and all: the DP-08 and DP-09 its step

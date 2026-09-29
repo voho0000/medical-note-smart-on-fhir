@@ -582,16 +582,19 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
   // in view on its row — not three folds down in the module's card.
   it('prints on each open decision the record values it reads, dated, with the page’s LVEF left to the page', () => {
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
-    const basis = row('DP-14').querySelector<HTMLElement>('[data-visit-basis]')!
-    expect(basis).toHaveTextContent('年齡80 歲')
-    expect(basis).toHaveTextContent('體重58 kg')
-    expect(basis).toHaveTextContent('Cr1.3 mg/dL')
+    // The values are in the record line or, where the pack gives Table 11's
+    // criteria (after 2.10.0), beside the criterion that reads them — once.
+    const evidence = [...row('DP-14').querySelectorAll<HTMLElement>('[data-visit-basis], [data-visit-criteria]')].map((element) => element.textContent).join(' ')
+    for (const value of ['80 歲', '58 kg', '1.3 mg/dL']) {
+      expect(evidence).toContain(value)
+      expect(evidence.split(value).length - 1).toBe(1)
+    }
     const mra = pillar('DP-09').querySelector<HTMLElement>('[data-visit-basis]')!
     expect(mra).toHaveTextContent('K')
     expect(mra).not.toHaveTextContent('LVEF')
     // Once decided, the row is its record line.
     fireEvent.click(primaryOf('DP-14'))
-    expect(row('DP-14').querySelector('[data-visit-basis]')).toBeNull()
+    expect(row('DP-14').querySelector('[data-visit-basis], [data-visit-criteria]')).toBeNull()
   })
 })
 
