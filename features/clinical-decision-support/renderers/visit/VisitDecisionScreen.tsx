@@ -241,6 +241,8 @@ export function VisitDecisionScreen({
     (point: DecisionPointView) => latestDecisionFor(point, decisions, now),
     [decisions, now],
   )
+  // What the summary holds so far, for its step's name.
+  const recordedToday = model.points.filter((point) => decisionOf(point)).length
 
   // A step decided anew, or taken back, leaves the steps that followed from it
   // without the decision they answered: they go too (#166 review), so the
@@ -655,8 +657,25 @@ export function VisitDecisionScreen({
         )}
         {...(surfaces?.columnFooters ? { columnFooters: surfaces.columnFooters } : {})}
         detail={detailNode}
+        summary={{
+          content: <VisitSummary text={summaryText} isEnglish={isEnglish} />,
+          status: recordedToday
+            ? (isEnglish ? `${recordedToday} recorded` : `已記錄 ${recordedToday}`)
+            : (isEnglish ? 'Nothing recorded yet' : '尚未記錄'),
+        }}
+        {...(unansweredAsks.length > 0 ? {
+          pendingAsks: (
+            <VisitAsks
+              asks={model.asks}
+              answers={answers}
+              isEnglish={isEnglish}
+              onAnswer={onAnswer}
+              pagePackId={model.packId}
+              {...(answerSources ? { sources: answerSources } : {})}
+            />
+          ),
+        } : {})}
       />
-      <VisitSummary text={summaryText} isEnglish={isEnglish} />
       {footer}
     </div>
   )

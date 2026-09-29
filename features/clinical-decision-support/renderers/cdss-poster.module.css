@@ -119,7 +119,8 @@
   background: color-mix(in srgb, var(--section-heading) 90%, var(--section-ink));
 }
 
-.mapToggle[aria-expanded='true'] {
+.mapToggle[aria-expanded='true'],
+.mapToggle[aria-current='step'] {
   border-color: var(--section-ink);
   box-shadow: inset 0 0 0 1px var(--section-ink);
 }

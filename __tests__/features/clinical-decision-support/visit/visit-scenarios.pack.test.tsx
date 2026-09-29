@@ -760,12 +760,15 @@ describe('real pack · what a clinician reads without opening anything', () => {
     expect(screen.getByTestId('cdss-visit-asks-detail')).toHaveAttribute('open')
   })
 
-  it('puts cards no point names inside 02, and folds the summary preview under the copy button (P5)', () => {
+  it('puts cards no point names inside 02, and gives the summary its own step after 03 (P5)', () => {
     render(<ScenarioMap id="p5-titrating-af" />)
     const other = screen.queryByTestId('cdss-visit-other-modules')
     if (other) expect(screen.getByTestId('cdss-visit-column-treatment')).toContainElement(other)
+    // The summary is the visit's last step: out of the way until asked for, then read in full.
+    expect(screen.getByTestId('cdss-visit-summary-copy')).not.toBeVisible()
+    fireEvent.click(screen.getByTestId('cdss-visit-step-summary'))
     expect(screen.getByTestId('cdss-visit-summary-copy')).toBeVisible()
-    expect(screen.getByTestId('cdss-visit-summary-preview')).not.toHaveAttribute('open')
+    expect(screen.getByTestId('cdss-visit-summary-text')).toBeVisible()
     expect(screen.queryByTestId('cdss-visit-map-legend')).toBeNull()
   })
 })
