@@ -40,6 +40,7 @@ import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
 import { VisitAsksDetail, isFirstAssessment, openingAnswers } from './VisitAsksDetail'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { pageSourceOf } from './visit-model.source'
+import { revealTop } from './reveal'
 import { VisitPlan } from './VisitPlan'
 import { VisitStatusHeader } from './VisitStatusHeader'
 import { VisitSummary } from './VisitSummary'
@@ -596,8 +597,7 @@ export function VisitDecisionScreen({
       setAsksDetailOpen(true)
     }
     requestAnimationFrame(() => {
-      const target = toDiagnosis ? document.querySelector('[data-testid="cdss-visit-lead-status"]') : document.getElementById(ASKS_DETAIL_ID)
-      target?.scrollIntoView?.({ block: 'start' })
+      revealTop(toDiagnosis ? document.querySelector('[data-testid="cdss-visit-lead-status"]') : document.getElementById(ASKS_DETAIL_ID))
     })
   }
   const openFromMap = (point: DecisionPointView) => (askedHere(point) ? goToWhereAsked(point) : toggleOpen(point))

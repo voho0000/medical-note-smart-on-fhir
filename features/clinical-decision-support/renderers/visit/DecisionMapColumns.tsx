@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -17,6 +17,7 @@ import type { DecisionPointState, DecisionPointView, VisitBlock, VisitDecisionMo
 import { ChainDots, StatePill } from './visit-presentation'
 import { DecisionPointChecklist, VISIT_DETAIL_ID } from './DecisionPointDetail'
 import styles from '../cdss-poster.module.css'
+import { revealTop, scrollParentOf } from './reveal'
 
 /** The three-section layout's section each map block is, for its colours. */
 const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
@@ -26,22 +27,49 @@ const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
 }
 
 /**
- * Where each block sits in the overview. Narrow, the blocks stack. From 40rem
- * 01 and 03 share the first row and 02 — the longest — takes the full width
- * under them in two columns; from 56rem the three sit side by side, 02 two
- * tracks wide. With a card open on a panel 64rem or wider the overview becomes
- * one column on the left, beside the section, so any other point is one press
- * away without scrolling back (the design the clinician chose on 2026-09-29).
+ * From this width (in rem, the map's own) every decision point is a column on
+ * the left and what a press opens is on the right, beside it (clinician
+ * feedback 2026-09-29: 「左邊是一整排 DP，右邊是細項，細項不用太寬」) — so an
+ * even split of a 1280 screen already has it. The column is 13.5rem, 15rem
+ * from 48rem, 17rem from 64rem and 20rem from 80rem, where names no longer
+ * need cutting; the details are never much narrower than a phone's screen,
+ * which they are laid out for. Narrower, the map stacks over the details.
  */
-const BLOCK_PLACEMENT: Readonly<Record<VisitBlock, { block: string; rail: string; points: string; railPoints: string }>> = {
-  status: { block: '', rail: '', points: '', railPoints: '' },
-  treatment: {
-    block: '@min-[40rem]:col-span-2 @min-[40rem]:order-last @min-[56rem]:order-none',
-    rail: '@min-[64rem]:col-span-1',
-    points: '@min-[40rem]:columns-2 @min-[40rem]:gap-2',
-    railPoints: '@min-[64rem]:columns-1',
-  },
-  outlook: { block: '', rail: '', points: '', railPoints: '' },
+const SIDE_BY_SIDE_REM = 36
+
+/**
+ * Whether the map is wide enough to stand beside its details, and how tall the
+ * column may be to stay whole in view as the details scroll. The layout itself
+ * is container queries; this is for what the layout cannot say — a section
+ * name pressed beside the details keeps them, rather than leaving the right
+ * side empty.
+ */
+function useSideBySide(ref: RefObject<HTMLElement | null>): { sideBySide: boolean; columnHeight?: number } {
+  const [state, setState] = useState<{ sideBySide: boolean; columnHeight?: number }>({ sideBySide: false })
+  useEffect(() => {
+    const element = ref.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const scroller = scrollParentOf(element)
+    const measure = () => {
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+      const sideBySide = element.getBoundingClientRect().width >= SIDE_BY_SIDE_REM * rem
+      // The column sits 0.5rem from the top of what scrolls and keeps 0.5rem below.
+      const columnHeight = sideBySide ? Math.max(0, (scroller?.clientHeight ?? window.innerHeight) - rem) : undefined
+      setState((current) => (current.sideBySide === sideBySide && current.columnHeight === columnHeight
+        ? current
+        : { sideBySide, ...(columnHeight === undefined ? {} : { columnHeight }) }))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    if (scroller) observer.observe(scroller)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [ref])
+  return state
 }
 
 const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm']
@@ -97,7 +125,6 @@ function MapTile({
   open,
   opensCard,
   matches,
-  rail,
   isEnglish,
   sourceOfPage,
   onOpen,
@@ -110,8 +137,6 @@ function MapTile({
   opensCard: boolean
   /** False while a search is typed that this point does not match. */
   matches: boolean
-  /** The overview is the column beside an open card: one line per point on a wide panel. */
-  rail: boolean
   isEnglish: boolean
   sourceOfPage: DecisionPointView['source']
   onOpen: () => void
@@ -169,9 +194,7 @@ function MapTile({
         {!sub && (point.headline ?? point.why) ? <span className="sr-only">{point.headline ?? point.why}</span> : null}
       </span>
       {sub ? (
-        // Beside an open card the overview is a list of names: the sentence
-        // is in the card.
-        <span className={cn('flex w-full min-w-0 items-center gap-1.5', rail && '@min-[64rem]:hidden')}>
+        <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-xs text-foreground/80">{sub}</span>
           <span className="shrink-0">
             <ChainDots chain={point.chain} isEnglish={isEnglish} />
@@ -235,10 +258,11 @@ function DetailStepper({
 
 /**
  * 決策地圖: an overview of every decision point the pack lists, in its three
- * sections — 01 現況, 02 治療, 03 預後與計畫 — side by side, then the open
- * section's working area under it: its questions and today's decision rows
- * (the section's lead), its folded surfaces, and the card of a point opened
- * from the overview.
+ * sections — 01 現況, 02 治療, 03 預後與計畫 — and the open section's working
+ * area: its questions and today's decision rows (the section's lead), its
+ * folded surfaces, and the card of a point opened from the overview. From
+ * 36rem the overview is a column on the left that stays in view and the
+ * working area is beside it; narrower, the overview stacks over it.
  *
  * Nothing on the overview folds: a point that does not apply or is not yet
  * computed keeps its place, muted, so a clinician finds a module where it was
@@ -318,6 +342,10 @@ export function DecisionMapColumns({
 }) {
   const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
   const [query, setQuery] = useState('')
+  const mapRef = useRef<HTMLElement | null>(null)
+  const { sideBySide, columnHeight } = useSideBySide(mapRef)
+  // Beside the column the details are never empty: a section is always open.
+  const shownBlock: VisitBlock | null = openBlock ?? (sideBySide ? 'status' : null)
   const searchId = useId()
   // Where to bring the page after a move: the section just opened from 下一區,
   // or the card just opened from a tile or the stepper.
@@ -325,9 +353,8 @@ export function DecisionMapColumns({
   const openPoint = openKey
     ? model.points.find((point) => visitDecisionKey(point) === openKey)
     : undefined
-  // A card is open in its section: on a wide panel the overview becomes the
-  // column beside it.
-  const cardOpen = Boolean(openPoint && detail && openBlock === openPoint.block)
+  // A card is open in its section.
+  const cardOpen = Boolean(openPoint && detail && shownBlock === openPoint.block)
   // The card's place: under its row where the lead draws one, else at the
   // head of its section.
   const cardAtHead = cardOpen && openPoint && !leadCardKeys?.has(visitDecisionKey(openPoint)) ? openPoint : undefined
@@ -337,12 +364,12 @@ export function DecisionMapColumns({
     if (!target) return
     scrollTo.current = null
     if ('block' in target) {
-      document.getElementById(`cdss-visit-column-${target.block}`)?.scrollIntoView?.({ block: 'start' })
+      revealTop(document.getElementById(`cdss-visit-column-${target.block}`))
       return
     }
-    // The card has focused its own heading; bring its top into view, under
-    // the overview the tile was pressed on.
-    document.getElementById(VISIT_DETAIL_ID)?.scrollIntoView?.({ block: 'start' })
+    // The card has focused its own heading; bring its top into view — under
+    // the overview the tile was pressed on, or beside the column.
+    revealTop(document.getElementById(VISIT_DETAIL_ID))
   }, [openBlock, openKey])
 
   // A block the pack closed with a note (「確診後開啟」) — or, without one,
@@ -369,7 +396,7 @@ export function DecisionMapColumns({
     // A card left open in a section since closed is out of sight: pressing its
     // point shows it again rather than closing it (#179 review). Only a card
     // in view closes on a second press.
-    const hiddenButOpen = openKey === visitDecisionKey(point) && openBlock !== point.block
+    const hiddenButOpen = openKey === visitDecisionKey(point) && shownBlock !== point.block
     if (!hiddenButOpen) onOpen(point)
   }
   const collapse = (point: DecisionPointView) => {
@@ -427,27 +454,26 @@ export function DecisionMapColumns({
 
   return (
     <section
+      ref={mapRef}
       aria-labelledby="cdss-visit-map-title"
-      className={cn(
-        'space-y-3',
-        cardOpen && '@min-[64rem]:grid @min-[64rem]:grid-cols-[17rem_minmax(0,1fr)] @min-[64rem]:items-start @min-[64rem]:gap-3 @min-[64rem]:space-y-0',
-      )}
+      className="@container"
       data-testid="cdss-visit-map"
-      data-layout={cardOpen ? 'module' : 'overview'}
+      data-layout={sideBySide ? 'side-by-side' : cardOpen ? 'module' : 'overview'}
     >
+      {/* Narrow, the map stacks over the details; from 36rem it is the
+          column on the left, and the details are beside it. */}
+      <div className="space-y-3 @min-[36rem]:grid @min-[36rem]:grid-cols-[13.5rem_minmax(0,1fr)] @min-[36rem]:items-start @min-[36rem]:gap-3 @min-[36rem]:space-y-0 @min-[48rem]:grid-cols-[15rem_minmax(0,1fr)] @min-[64rem]:grid-cols-[17rem_minmax(0,1fr)] @min-[80rem]:grid-cols-[20rem_minmax(0,1fr)]">
       {/* ---------------------------------------------------------- overview */}
       <div
-        className={cn(
-          'space-y-2',
-          cardOpen && '@min-[64rem]:sticky @min-[64rem]:top-2 @min-[64rem]:max-h-[calc(100dvh-1rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:pr-1',
-        )}
+        className="space-y-2 @min-[36rem]:sticky @min-[36rem]:top-2 @min-[36rem]:overflow-y-auto @min-[36rem]:overscroll-contain @min-[36rem]:pr-1"
+        style={columnHeight ? { maxHeight: columnHeight } : undefined}
         data-testid="cdss-visit-overview"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
             {isEnglish ? `Decision map · all ${model.points.length} points` : `決策地圖 · 全部 ${model.points.length} 個決策點`}
           </h3>
-          <div className={cn('flex min-w-0 flex-1 items-center justify-end gap-2', cardOpen && '@min-[64rem]:w-full @min-[64rem]:flex-none')}>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 @min-[36rem]:w-full @min-[36rem]:flex-none">
             {needle ? (
               <span className="shrink-0 text-xs text-muted-foreground" role="status" data-testid="cdss-visit-map-search-count">
                 {isEnglish ? `${matchCount} found` : `找到 ${matchCount} 個`}
@@ -456,9 +482,8 @@ export function DecisionMapColumns({
             <label
               htmlFor={searchId}
               className={cn(
-                'flex h-8 w-full max-w-60 items-center gap-1.5 rounded-md border border-input bg-background px-2 pointer-coarse:h-11',
+                'flex h-8 w-full max-w-60 items-center gap-1.5 rounded-md border border-input bg-background px-2 pointer-coarse:h-11 @min-[36rem]:max-w-none',
                 'focus-within:ring-2 focus-within:ring-ring',
-                cardOpen && '@min-[64rem]:max-w-none',
               )}
             >
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -476,48 +501,36 @@ export function DecisionMapColumns({
           </div>
         </div>
 
-        <div
-          className={cn(
-            'grid items-start gap-2 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-4',
-            cardOpen && '@min-[64rem]:grid-cols-1',
-          )}
-          data-testid="cdss-visit-sections"
-        >
+        <div className="grid items-start gap-2" data-testid="cdss-visit-sections">
           {BLOCK_ORDER.map((block) => {
-            const isOpen = openBlock === block
+            const isOpen = shownBlock === block
             const note = closedNote(block)
             const summary = combinedSummary(block)
             const extra = block === 'status' ? answersLine : block === 'outlook' ? outlookSummary : undefined
-            const placement = BLOCK_PLACEMENT[block]
             const buckets = bucketsOf(pointsOf(block))
             return (
               <div
                 key={block}
-                className={cn(
-                  styles.tone,
-                  styles.mapPanel,
-                  'min-w-0 overflow-hidden rounded-lg border',
-                  placement.block,
-                  cardOpen && placement.rail,
-                )}
+                className={cn(styles.tone, styles.mapPanel, 'min-w-0 overflow-hidden rounded-lg border')}
                 data-section={SECTION_TONE[block]}
                 data-testid={`cdss-visit-overview-${block}`}
               >
-                {/* The section's name opens its working area under the overview. */}
+                {/* The section's name opens its working area — under the
+                    overview, or beside it, where it stays open: there the
+                    details are never left empty. */}
                 <button
                   type="button"
                   id={`cdss-visit-section-toggle-${block}`}
                   aria-expanded={isOpen}
                   aria-controls={`cdss-visit-column-${block}`}
                   onClick={() => {
-                    if (openBlock !== block) scrollTo.current = { block }
-                    setOpenBlock((current) => (current === block ? null : block))
+                    if (sideBySide || !isOpen) scrollTo.current = { block }
+                    setOpenBlock(sideBySide || !isOpen ? block : null)
                   }}
                   className={cn(
                     styles.mapToggle,
-                    'flex w-full min-w-0 items-start gap-2 border-b px-3 py-2 text-left transition-colors',
+                    'flex w-full min-w-0 items-start gap-2 border-b px-3 py-2 text-left transition-colors @min-[36rem]:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    cardOpen && '@min-[64rem]:py-1.5',
                   )}
                   data-section={SECTION_TONE[block]}
                   data-testid={`cdss-visit-section-toggle-${block}`}
@@ -528,11 +541,12 @@ export function DecisionMapColumns({
                     <span className={cn('block text-xs', summary.attention ? 'font-semibold' : 'opacity-85')}>
                       {note ?? summary.text}
                     </span>
-                    {extra ? <span className={cn('block truncate text-xs opacity-85', cardOpen && '@min-[64rem]:hidden')}>{extra}</span> : null}
+                    {/* Beside the details the column is a list of points; the answers are in 01 itself. */}
+                    {extra ? <span className="block truncate text-xs opacity-85 @min-[36rem]:hidden">{extra}</span> : null}
                   </span>
-                  <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none', isOpen && 'rotate-180')} aria-hidden="true" />
+                  <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none @min-[36rem]:-rotate-90', isOpen && 'rotate-180 @min-[36rem]:rotate-0')} aria-hidden="true" />
                 </button>
-                <div className={cn('p-1.5', placement.points, cardOpen && placement.railPoints)}>
+                <div className="p-1.5">
                   {buckets.map((bucket) => (
                     <div key={bucket.key} className="mb-2 break-inside-avoid space-y-1 last:mb-0">
                       {bucket.label ? (
@@ -552,7 +566,6 @@ export function DecisionMapColumns({
                                 open={openKey === key && cardOpen}
                                 opensCard={opensCard(point)}
                                 matches={!needle || searchText(point).includes(needle)}
-                                rail={cardOpen}
                                 isEnglish={isEnglish}
                                 sourceOfPage={sourceOfPage}
                                 onOpen={() => open(point)}
@@ -571,11 +584,13 @@ export function DecisionMapColumns({
       </div>
 
       {/* ---------------------------------------------------- working areas */}
-      <div className="min-w-0" data-testid="cdss-visit-working">
+      {/* Its own container: what it holds lays out for the width it has
+          beside the column, not for the whole panel's. */}
+      <div className="@container min-w-0" data-testid="cdss-visit-working">
         {BLOCK_ORDER.map((block) => {
           const nextBlock = BLOCK_ORDER[BLOCK_ORDER.indexOf(block) + 1]
           const note = closedNote(block)
-          const isOpen = openBlock === block
+          const isOpen = shownBlock === block
           const head = cardAtHead && cardAtHead.block === block ? cardAtHead : undefined
           const headIndex = head ? openIndex : -1
           // A checklist the pack gives a point (DP-02's baseline) stays in
@@ -587,7 +602,7 @@ export function DecisionMapColumns({
               id={`cdss-visit-column-${block}`}
               aria-labelledby={`cdss-visit-section-toggle-${block}`}
               hidden={!isOpen}
-              className={cn(styles.tone, styles.mapPanel, 'min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2 @min-[40rem]:scroll-mt-24')}
+              className={cn(styles.tone, styles.mapPanel, 'min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2')}
               data-section={SECTION_TONE[block]}
               data-testid={`cdss-visit-column-${block}`}
               data-block={block}
@@ -668,6 +683,7 @@ export function DecisionMapColumns({
             </section>
           )
         })}
+      </div>
       </div>
     </section>
   )

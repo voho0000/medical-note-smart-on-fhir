@@ -14,6 +14,7 @@ import { installSimulate } from './simulate'
 import { getCdssDecisionTimings } from '@/features/clinical-decision-support/stores/cdss-decision-timing.store'
 import index from '../bundles/index.json'
 import { DataSelectionProvider } from '@/src/application/providers/data-selection.provider'
+import { cn } from '@/src/shared/utils/cn.utils'
 
 // StrictMode runs effects twice in development; measure once per page load.
 let measuring = false
@@ -34,10 +35,19 @@ const subscribePreviousVisit = (callback: () => void) => {
 }
 const subscribeNothing = () => () => {}
 
+/** The panel's width and scrolling, from the query string (dev only). */
+function readPanel(): { width?: number; scroll: boolean } {
+  if (typeof window === 'undefined') return { scroll: false }
+  const params = new URLSearchParams(window.location.search)
+  const width = Number(params.get('w'))
+  return { ...(Number.isFinite(width) && width > 0 ? { width } : {}), scroll: params.get('scroll') === 'panel' }
+}
+
 export default function View() {
   // sessionStorage is not there during the server render: LiveFeature mounts
   // once the browser's value is known, so it mounts once.
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false)
+  const panel: { width?: number; scroll: boolean } = hydrated ? readPanel() : { scroll: false }
   const previousVisit = useSyncExternalStore(subscribePreviousVisit, readPreviousVisit, () => undefined)
   // Either standing for the same patient: the system's first visit, or a
   // return with a stored visit three months back.
@@ -89,7 +99,13 @@ export default function View() {
               <TooltipProvider>
               <DataSelectionProvider>
                 <div className="flex min-h-screen justify-end bg-muted/30">
-                  <aside data-testid="sim-right-panel" className="@container w-[880px] max-w-full border-l border-border bg-background p-3">
+                  {/* `?w=700` sets the panel's width, and `?scroll=panel` makes it scroll on its own
+                      under the viewport, as the app's right panel does. */}
+                  <aside
+                    data-testid="sim-right-panel"
+                    className={cn('@container w-[880px] max-w-full border-l border-border bg-background p-3', panel.scroll && 'h-screen overflow-y-auto overscroll-y-contain')}
+                    style={panel.width ? { width: `${panel.width}px` } : undefined}
+                  >
                     <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <a href="/dev/cdss-scenarios" className="underline">← 換病人</a>
                       <span data-testid="sim-previous-visit">{previousVisit ? `模擬：有上次 CDSS 紀錄（${previousVisit}）` : '模擬：CDSS 首次接觸這位病人'}</span>
