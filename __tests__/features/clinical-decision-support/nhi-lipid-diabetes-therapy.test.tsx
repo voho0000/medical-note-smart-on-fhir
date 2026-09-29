@@ -175,5 +175,8 @@ describe('a clinician\'s 「否」 in PREVENT reaches every lipid card', () => {
     expect(row.querySelector('summary')).toHaveTextContent('× 不符合')
     expect(row).toHaveTextContent('醫師修正')
     expect(row).not.toHaveTextContent('依資料預選')
+    const glucose = within(section).getAllByText('空腹血糖偏高', { selector: 'summary > span' })[0].closest('details')!
+    expect(glucose.querySelector('summary')).toHaveTextContent('? 待確認')
+    expect(glucose).toHaveTextContent('用藥不計入本項')
   })
 })
