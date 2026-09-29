@@ -162,6 +162,30 @@ describe('a chained step the pack says decides other points, among equals', () =
     for (const dp of ['DP-08', 'DP-09']) expect(tile(dp)).toHaveTextContent('edoxaban 30 mg qd')
   })
 
+  // #196 review: from DP-08／DP-09 the same choice is made — with what it rests on.
+  it('shows what the choice rests on when DP-09 is opened before a drug is chosen', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    fireEvent.click(tile('DP-09'))
+    const detail = screen.getByTestId('cdss-visit-detail')
+    expect(screen.getByTestId('cdss-visit-detail-slot')).toHaveTextContent('選 DOAC（劑量已依腎功能、年齡、體重算好）')
+    expect(within(detail).getByTestId('cdss-visit-detail-decided-with-why')).toHaveTextContent('ESC 未指定優先 DOAC；CrCl 41')
+    expect(within(detail).getByTestId('cdss-visit-detail-decided-with-why')).toBeVisible()
+    expect(within(detail).getByRole('button', { name: 'rivaroxaban 15 mg qd' })).toBeInTheDocument()
+  })
+
+  it('keeps it in view after 改 on DP-09, and with the choice recorded', () => {
+    renderAt02(afModel({ decides: ['DP-08', 'DP-09'], unranked: true }))
+    fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))
+    fireEvent.click(within(row()).getByRole('button', { name: 'rivaroxaban 15 mg qd' }))
+    fireEvent.click(tile('DP-09'))
+    const why = () => within(screen.getByTestId('cdss-visit-detail')).getByTestId('cdss-visit-detail-decided-with-why')
+    expect(why()).toHaveTextContent('ESC 未指定優先 DOAC；CrCl 41')
+    fireEvent.click(within(screen.getByTestId('cdss-visit-detail')).getByRole('button', { name: '改 DP-07 的決定' }))
+    expect(why()).toHaveTextContent('ESC 未指定優先 DOAC；CrCl 41')
+    expect(why()).toBeVisible()
+  })
+
   it('changes nothing for a pack that sends neither (2.8.x)', () => {
     renderAt02(afModel({}))
     fireEvent.click(within(row()).getByRole('button', { name: '開始抗凝' }))

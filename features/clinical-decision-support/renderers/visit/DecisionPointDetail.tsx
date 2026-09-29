@@ -193,11 +193,21 @@ export function DecisionPointDetail({
       </div>
 
       {decidedWith ? (
-        <p className="text-xs text-muted-foreground" data-testid="cdss-visit-detail-decided-with" data-dp={decidedWith.dp}>
-          {isEnglish
-            ? `Decided with ${decidedWith.dp} ${decidedWith.label}`
-            : `與 ${decidedWith.dp} ${decidedWith.label} 一起決定`}
-        </p>
+        <div className="space-y-0.5">
+          <p className="text-xs text-muted-foreground" data-testid="cdss-visit-detail-decided-with" data-dp={decidedWith.dp}>
+            {isEnglish
+              ? `Decided with ${decidedWith.dp} ${decidedWith.label}`
+              : `與 ${decidedWith.dp} ${decidedWith.label} 一起決定`}
+          </p>
+          {/* What the choice rests on — the valve premise, CrCl, the dose
+              criteria, what is left to an individual assessment — as DP-07's
+              row gives it: the choice made here is the same one (#196 review). */}
+          {steps[0]?.point.why ? (
+            <p className="text-xs leading-relaxed text-muted-foreground" data-testid="cdss-visit-detail-decided-with-why">
+              {steps[0].point.why}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Its own chain waits on the step decided here: not drawn over it. */}
