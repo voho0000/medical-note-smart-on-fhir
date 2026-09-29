@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import { clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
+import { DIABETES_FACT_KEYS, clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -186,6 +186,7 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   age: ['age'],
   'low-hdl': ['HDL'],
   'met-bp': ['bloodPressure'],
+  'met-glucose': ['diabetesGlucoseLoweringTherapy'],
   'met-tg': ['triglycerides'],
   cad: ['coronaryArteryDiagnosis'],
   'recent-mi': ['myocardialInfarctionEventDate'],
@@ -193,12 +194,14 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   carotid: ['carotidStenosisDiagnosis'],
   acs: ['acuteCoronarySyndromeDiagnosis', 'myocardialInfarctionDiagnosis'],
   'stroke-atherosclerosis': ['ischemicStrokeDiagnosis'],
-  diabetes: ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis'],
+  // The pack's own list: E10, E11, E08/E09/E13, then current glucose-lowering
+  // therapy, which is often the only trace when a visit was billed as I10.
+  diabetes: DIABETES_FACT_KEYS,
   'predialysis-ckd': ['ckdChronicity', 'ckdDiagnosis'],
   'severe-ldl': ['LDL'],
 }
 
-function buildNhiRecordSources(
+export function buildNhiRecordSources(
   facts: CdssPatientProfile['facts'] | undefined,
 ): Readonly<Record<string, readonly CdssFactSource[]>> | undefined {
   if (!facts) return undefined

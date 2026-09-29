@@ -6,6 +6,12 @@ import type { CdssPatientProfile } from '../types'
 import type { ClinicVitals } from '../stores/clinic-vitals.store'
 import { convertToBase } from '@/features/medical-calculator/units'
 
+// A diabetes diagnosis code locks PREVENT's 糖尿病 input, as E11 always did.
+// Current glucose-lowering therapy alone (the pack excludes an SGLT2 inhibitor
+// on its own) prefills it from the record but stays editable, the way 表一
+// marks the same evidence ◐ 須臨床確認.
+const DIABETES_CODE_FACT_KEYS = ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis', 'otherDiabetesDiagnosis'] as const
+
 export function buildPreventReading(profile: CdssPatientProfile, autofill: Autofill, inputs: CalcValues, vitals?: ClinicVitals) {
   const values: CalcValues = {}
   const fields = PREVENT_INPUTS.map(input => {
@@ -17,11 +23,15 @@ export function buildPreventReading(profile: CdssPatientProfile, autofill: Autof
     let source = manual ? 'physician' : resolved.filled ? 'record' : 'none'
     const key = input.key
     const positive = key === 'cvd' ? !!(profile.facts.ascvdDiagnosis || profile.facts.heartFailureDiagnosis)
-      : key === 'dm' ? !!profile.facts.type2DiabetesDiagnosis
+      : key === 'dm' ? DIABETES_CODE_FACT_KEYS.some(factKey => profile.facts[factKey])
       : key === 'eskd' ? profile.kidneyReplacementTherapy?.state === 'confirmed'
       : key === 'subclinical' ? (profile.facts.LVEF?.numericValue ?? 100) < 40 : false
     // Known positive exclusions cannot be accidentally cleared in this form.
     if (positive) { value = 'yes'; source = 'record' }
+    const diabetesTherapy = profile.facts.diabetesGlucoseLoweringTherapy
+    if (!manual && !positive && key === 'dm' && diabetesTherapy) {
+      value = 'yes'; source = 'record'; date = diabetesTherapy.date
+    }
     if (!manual && key === 'statin' && profile.medicationClassContexts?.statin) {
       value = profile.medicationClassContexts.statin.state === 'confirmed-current' ? 'yes' : profile.medicationClassContexts.statin.state === 'not-found' ? 'no' : ''
       source = 'record'

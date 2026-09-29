@@ -55,3 +55,16 @@ test('indexed eGFR spelling variants are equivalent; absolute clearance is not',
   for (const unit of ['mL/min/1.73m²','mL/min/1.73m2','mL/min/{1.73_m2}']) expect(convertToBase(60,unit,'egfr')?.value).toBe(60)
   expect(convertToBase(60,'mL/min','egfr')).toBeNull()
 })
+test('diabetes: a code locks 糖尿病; current glucose-lowering therapy prefills it but stays editable', () => {
+  const noAutofill = { resolve: () => undefined }
+  const dmField = (facts: Record<string, { zh: string; en: string; date?: string }>, inputs: CalcValues = {}) =>
+    buildPreventReading({ id: 'test', facts }, noAutofill, inputs).fields.find(field => field.input.key === 'dm')!
+
+  const coded = dmField({ otherDiabetesDiagnosis: { zh: '其他類型糖尿病：E13.8', en: 'E13.8' } }, { dm: 'no' })
+  expect(coded).toMatchObject({ value: 'yes', source: 'record', locked: true })
+
+  const therapy = { diabetesGlucoseLoweringTherapy: { zh: '降血糖藥使用中：ACARBOSE 100 MG', en: 'Acarbose', date: '2026-09-23' } }
+  expect(dmField(therapy)).toMatchObject({ value: 'yes', source: 'record', locked: false, date: '2026-09-23' })
+  // The clinician's answer wins over the prescription.
+  expect(dmField(therapy, { dm: 'no' })).toMatchObject({ value: 'no', source: 'physician', locked: false })
+})
