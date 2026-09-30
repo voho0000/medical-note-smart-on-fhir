@@ -1,9 +1,29 @@
 /**
- * Placement arithmetic for the visit decision map: which decision a point
- * holds today, how the queue rows advance along a chain, what the plan lists
- * and what the summary copies. Every clinical word comes from the model; the
- * only words written here are the host's own chrome.
+ * Placement arithmetic for the visit decision map: how the queue rows advance
+ * along a chain, what the plan lists and what the summary copies. Every
+ * clinical word comes from the model; the only words written here are the
+ * host's own chrome.
+ *
+ * What today's recorded decisions settle — which record still answers a
+ * point, which step it reveals, which point another row's step decides, which
+ * chain is still open — is the pack's (`settleVisitDecisions` and its parts,
+ * personalized-care 2.12.0; owner decision 2026-09-30: 決策狀態邏輯移到 pack,
+ * step 1). The host keeps its names for them so its callers and tests stand
+ * unchanged, and reads the pack's rules through them.
  */
+import {
+  decisionPointSteps,
+  isSameLocalDay,
+  nextStepDecisionKey,
+  nextStepView,
+  pointsDecidedBy,
+  recordLabelOf,
+  settledDecisionFor,
+  settleVisitDecisions,
+  visitDecisionKey,
+  type SettledDecisionPoint,
+  type VisitDecisionSettlement,
+} from '@voho0000/personalized-care'
 import type {
   PhysicianDecision,
   PhysicianDecisionInput,
@@ -20,25 +40,12 @@ import type {
 } from '../../types'
 
 /**
- * The store key a decision point's decision lives under. The queue row and the
- * map cell for one point compute the same key, which is what makes them one
- * decision rather than two.
- *
- * The key is the pack's `decisionId` — the clinical question, named by the
- * pack that owns it — so a question two pages show (AF anticoagulation on the
- * HF page's DP-14 and on the AF page's DP-07) is one decision wherever it was
- * taken. The host holds no table of which DP matches which; a pack that folds
- * another's question says so. A point without one (an older pack) keeps its
- * page-local key.
+ * The store key a decision point's decision lives under — the pack's
+ * `decisionId`, so a question two pages show is one decision — and the key of
+ * the step its decision reveals. The pack's own keys, unchanged from the ones
+ * the host has always stored under.
  */
-export function visitDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp' | 'decisionId'>): string {
-  return point.decisionId ? `visit:${point.decisionId}` : `visit:${point.source}:${point.dp}`
-}
-
-/** The key of the step a point reveals once its first action is recorded. */
-export function nextStepDecisionKey(point: Pick<DecisionPointView, 'source' | 'dp' | 'decisionId'>): string {
-  return `${visitDecisionKey(point)}:next`
-}
+export { nextStepDecisionKey, visitDecisionKey }
 
 /**
  * What a pack's `next` may add (personalized-care after 2.8.1, #47): the
@@ -106,22 +113,11 @@ export function isUnranked(point: DecisionPointView): boolean {
 
 /**
  * The step a point's `next` describes, as a point of its own: same decision
- * point, the pack's next question, reason and actions.
+ * point, the pack's next question, reason, actions and criteria (the pack's
+ * `nextStepView`).
  */
 export function nextStepPoint(point: DecisionPointView): VisitStepPoint | undefined {
-  if (!point.next) return undefined
-  const { next } = point
-  return {
-    ...point,
-    headline: next.headline,
-    why: next.why,
-    chain: next.chain,
-    actions: next.actions,
-    next: undefined,
-    // The step's own criteria (each DOAC the choice offers), not the row's.
-    criteria: (next as { criteria?: unknown }).criteria,
-    ...(nextStepExtras(point).unranked ? { unranked: true } : {}),
-  } as VisitStepPoint
+  return nextStepView(point)
 }
 
 /** The states that carry decision buttons. */
@@ -140,14 +136,7 @@ const PROCEEDING_KINDS: ReadonlySet<PhysicianDecision['decision']> = new Set([
   'ordered',
 ])
 
-function localDay(value: Date): string {
-  return `${value.getFullYear()}-${value.getMonth() + 1}-${value.getDate()}`
-}
-
-export function isSameLocalDay(iso: string, now: Date): boolean {
-  const at = new Date(iso)
-  return !Number.isNaN(at.getTime()) && localDay(at) === localDay(now)
-}
+export { isSameLocalDay, recordLabelOf }
 
 /** What was decided today about one point, and which of its actions it was. */
 export interface PointDecision {
@@ -158,18 +147,10 @@ export interface PointDecision {
 
 /**
  * Today's decision on a point, when it still answers one of the point's
- * actions. A record from another day is last visit's, and a record whose
- * action the pack no longer offers answered a recommendation that has since
- * changed — neither is today's decision on today's question.
- *
- * Nor is one whose action kept its id but changed what it says: 「apixaban 5 mg
- * bid」 recorded, then a weight of 58 kg and a Cr of 1.6 turn the same action
- * into 「apixaban 2.5 mg bid」 (#166 review). What changes there is a number —
- * a dose, a strength, a ratio — so the numbers the recorded label states are
- * compared with the action's, and a different set asks again. The words around
- * them are not compared: they change with the language, and 「開始抗凝」 read
- * back as 「Start anticoagulation」 is the same decision (#166 re-review). A
- * record from before labels were kept has none, and stands on its id.
+ * actions — the pack's `settledDecisionFor`: a record from another day is
+ * last visit's; one whose action the pack no longer offers, or whose action
+ * now names another dose (its numbers differ from the words kept), answered a
+ * question that has since changed. A language switch is not a new decision.
  */
 export function decisionFor(
   point: DecisionPointView,
@@ -177,31 +158,7 @@ export function decisionFor(
   now: Date,
   key: string = visitDecisionKey(point),
 ): PointDecision | undefined {
-  const record = decisions?.[key]
-  if (!record || !record.actionId || !isSameLocalDay(record.recordedAt, now)) return undefined
-  const action = point.actions.find((candidate) => candidate.id === record.actionId)
-  if (!action) return undefined
-  // Stored under the words the note records (`recordLabel`) — or, from before
-  // the pack gave them, under the button's own.
-  const numbers = record.actionLabel === undefined ? undefined : labelNumbers(record.actionLabel)
-  if (numbers !== undefined && numbers !== labelNumbers(recordLabelOf(action)) && numbers !== labelNumbers(action.label)) return undefined
-  return { key, record, action }
-}
-
-/**
- * What the note records for an action: the pack's `recordLabel` where the
- * button's ten characters leave the agent or dose out (「開始 β 阻斷劑」 →
- * 「開始 β 阻斷劑（bisoprolol 1.25 mg）」, personalized-care after 2.9.0),
- * else the label. Read defensively: an older pack sends none.
- */
-export function recordLabelOf(action: VisitAction): string {
-  const recordLabel = (action as VisitAction & { recordLabel?: unknown }).recordLabel
-  return typeof recordLabel === 'string' && recordLabel ? recordLabel : action.label
-}
-
-/** The numbers a label states, in order — 「sacubitril/valsartan 49/51 mg」 → `49/51`. */
-function labelNumbers(label: string): string {
-  return (label.match(/\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)*/g) ?? []).join(' ')
+  return settledDecisionFor(point, decisions, now, key)
 }
 
 /**
@@ -261,63 +218,35 @@ export interface QueueStep {
 /**
  * A point's steps as far as today's decisions reach: the point itself, then —
  * when the pack described one and the action that reveals it was recorded —
- * its next step.
+ * its next step (the pack's `decisionPointSteps`).
  */
 export function pointSteps(
   point: DecisionPointView,
   decisions: PhysicianDecisionMap | undefined,
   now: Date,
 ): QueueStep[] {
-  const first: QueueStep = { key: visitDecisionKey(point), point, decision: decisionFor(point, decisions, now) }
-  const next = nextStepPoint(point)
-  if (!next || first.decision?.action.id !== point.next?.afterActionId) return [first]
-  const key = nextStepDecisionKey(point)
-  return [first, { key, point: next, decision: decisionFor(next, decisions, now, key) }]
+  return decisionPointSteps(point, decisions, now)
 }
 
-/** The decision a map cell shows: the furthest step decided today. */
-export function latestDecisionFor(
-  point: DecisionPointView,
-  decisions: PhysicianDecisionMap | undefined,
-  now: Date,
-): PointDecision | undefined {
-  const steps = pointSteps(point, decisions, now)
-  return [...steps].reverse().find((step) => step.decision)?.decision
-}
+/** Everything today's decisions settle on the map, point by point, from the pack. */
+export type VisitSettlement = VisitDecisionSettlement<PhysicianDecision>
+export type SettledPoint = SettledDecisionPoint<PhysicianDecision>
 
-/**
- * The decision recorded for a point on another point's row: a `next` step
- * that `decides` it (the DOAC chosen on DP-07's row answers DP-08 and DP-09),
- * so the point shows what was chosen rather than 「等上一步」.
- */
-export function decidedOnAnotherRow(
-  point: DecisionPointView,
-  points: readonly DecisionPointView[],
+export function settleDecisions(
+  model: Pick<VisitDecisionModel, 'points'>,
   decisions: PhysicianDecisionMap | undefined,
   now: Date,
-): PointDecision | undefined {
-  return decidingStep(point, points, decisions, now)?.step.decision
+): VisitSettlement {
+  return settleVisitDecisions(model, decisions, now)
 }
 
 /**
- * The step on another point's row that decides this point, once that row has
- * revealed it — decided or not: DP-07's DOAC choice, after 「開始抗凝」, is
- * DP-08's and DP-09's decision. Its key is the owner's `next` key, so a
- * change or a clear goes back to the one record, never to a copy.
+ * A point's entry in a settlement: by the point itself, or — for a copy the
+ * page drew from it — by its map and number.
  */
-export function decidingStep(
-  point: DecisionPointView,
-  points: readonly DecisionPointView[],
-  decisions: PhysicianDecisionMap | undefined,
-  now: Date,
-): { owner: DecisionPointView; step: QueueStep } | undefined {
-  for (const owner of points) {
-    if (owner === point || owner.source !== point.source) continue
-    if (!nextStepExtras(owner).decides?.includes(point.dp)) continue
-    const step = pointSteps(owner, decisions, now)[1]
-    if (step) return { owner, step }
-  }
-  return undefined
+export function settledPointOf(settlement: VisitSettlement, point: Pick<DecisionPointView, 'source' | 'dp'>): SettledPoint | undefined {
+  return settlement.points.find((item) => item.point === point)
+    ?? settlement.points.find((item) => item.point.dp === point.dp && item.point.source === point.source)
 }
 
 /** One record value a decision reads, as its row prints it. */
@@ -417,9 +346,7 @@ export function buildQueueRows(
     // A revealed step that answers other points covers them too — only the
     // page's own points from the same pack: HF DP-14 folds AF DP-07's step,
     // and HF's DP-08／DP-09 are not the ones it decides.
-    const decides = steps.length > 1
-      ? (nextStepExtras(head).decides ?? []).filter((dp) => model.points.some((point) => point.dp === dp && point.source === head.source))
-      : []
+    const decides = steps.length > 1 ? pointsDecidedBy(head, model.points).map((point) => point.dp) : []
     if (decides.length) steps[1] = { ...steps[1], decides }
     let last = steps[steps.length - 1]
     while (!head.next && last.decision && PROCEEDING_KINDS.has(last.decision.record.decision)) {
@@ -590,9 +517,7 @@ export function buildVisitSummaryText(input: {
     const check = decision.record.responseCheck
     // A step that answers other points is named by them (「DP-08／DP-09 抗凝
     // 選藥／DOAC 劑量」), not by the row it was recorded on.
-    const answered = index > 0 ? (nextStepExtras(point).decides ?? [])
-      .map((dp) => model.points.find((candidate) => candidate.dp === dp && candidate.source === point.source))
-      .filter((candidate): candidate is DecisionPointView => Boolean(candidate)) : []
+    const answered = index > 0 ? pointsDecidedBy(point, model.points) : []
     const name = answered.length
       ? `${answered.map((item) => item.dp).join('／')} ${answered.map((item) => item.label).join('／')}`
       : `${point.dp} ${point.label}`

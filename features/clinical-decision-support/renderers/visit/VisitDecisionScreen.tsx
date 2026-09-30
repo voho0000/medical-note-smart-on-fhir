@@ -15,15 +15,14 @@ import {
   buildVisitPlan,
   buildVisitSummaryText,
   checkIntervalSuffix,
-  decidedOnAnotherRow,
-  decidingStep,
   decisionBasis,
   decisionInputFor,
   dependentDecisionKeys,
   effectiveAnswer,
-  latestDecisionFor,
   pointSteps,
   queuedPointDps,
+  settleDecisions,
+  settledPointOf,
   visitDecisionKey,
   type QueueRow,
   type QueueStep,
@@ -244,23 +243,19 @@ export function VisitDecisionScreen({
     () => buildVisitSummaryText({ model, answers, decisions, now, isEnglish }),
     [answers, decisions, isEnglish, model, now],
   )
+  // What today's decisions settle, point by point, as the pack reads them.
+  const settlement = useMemo(() => settleDecisions(model, decisions, now), [decisions, model, now])
   // A chain with a step still open — 「開始抗凝」 recorded, the DOAC not yet
   // chosen; 「改用其他 DOAC」, not yet which — is today's decision, not
   // 「已記錄」: its tile says what was recorded and what is left.
-  const openStepOf = useCallback((point: DecisionPointView) => {
-    const steps = pointSteps(point, decisions, now)
-    const last = steps[steps.length - 1]
-    return steps.length > 1 && !last.decision && steps[0].decision ? { recorded: steps[0].decision, step: last } : undefined
-  }, [decisions, now])
-  const decisionOf = useCallback(
-    (point: DecisionPointView) => (openStepOf(point) ? undefined : latestDecisionFor(point, decisions, now)
-      ?? decidedOnAnotherRow(point, model.points, decisions, now)),
-    [decisions, model.points, now, openStepOf],
-  )
+  const openStepOf = useCallback((point: DecisionPointView) => settledPointOf(settlement, point)?.open, [settlement])
+  // What a point stands settled by: its own row's furthest step, else the
+  // step on another row that decides it (DP-07's DOAC for DP-08／DP-09).
+  const decisionOf = useCallback((point: DecisionPointView) => settledPointOf(settlement, point)?.settled, [settlement])
   // What the summary holds so far, for its step's name.
   // Counted on the rows they were recorded on: one DOAC chosen on DP-07's row
   // is one decision, not three for the points it also answers.
-  const recordedToday = model.points.filter((point) => latestDecisionFor(point, decisions, now)).length
+  const recordedToday = settlement.recordedToday
 
   // A step decided anew, or taken back, leaves the steps that followed from it
   // without the decision they answered: they go too (#166 review), so the
@@ -400,9 +395,10 @@ export function VisitDecisionScreen({
   // A point another row decides (DP-08／DP-09 by DP-07's DOAC choice) opens
   // on that step — its record, or its choices once 改 has cleared it — and
   // not on its own 「等上一步」, which the step has overtaken (#196 review).
-  const decidedElsewhere = (point: DecisionPointView) => (
-    latestDecisionFor(point, decisions, now) ? undefined : decidingStep(point, model.points, decisions, now)
-  )
+  const decidedElsewhere = (point: DecisionPointView) => {
+    const settled = settledPointOf(settlement, point)
+    return settled?.latest ? undefined : settled?.decidedBy
+  }
   const openDeciding = openPoint ? decidedElsewhere(openPoint) : undefined
   const detailNode = openPoint ? (
     <DecisionPointDetail
