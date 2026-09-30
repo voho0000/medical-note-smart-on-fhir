@@ -40,7 +40,7 @@
   --red: #B42318;
   --panel: #FAF8F3;
   --panel-line: #E8E3D6;
-  --serif: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+  --serif: var(--book-serif), 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
   --sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
 

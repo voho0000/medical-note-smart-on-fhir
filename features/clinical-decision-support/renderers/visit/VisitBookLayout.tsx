@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useContext, useState, type ReactNode } from 'react'
+import { Noto_Serif_TC } from 'next/font/google'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import {
@@ -34,6 +35,22 @@ import styles from './VisitBookLayout.module.css'
  * with the values, what would change the answer, the guideline's points and
  * where they come from. At the foot, today's plan.
  */
+
+/**
+ * The prototype's heading face, served by the app itself — the page's
+ * font-src is 'self', so a stylesheet from Google would never load (owner
+ * decision 2026-09-30, option A). Bold only, not preloaded: the browser
+ * fetches only the slices the headings use (about 0.5 MB, once, then cached);
+ * until then the headings read in the system serif.
+ */
+const bookSerif = Noto_Serif_TC({
+  weight: '700',
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--book-serif',
+  fallback: ['Songti TC', 'PMingLiU', 'serif'],
+})
 
 export type BookMark = 'safety' | 'act' | 'ask' | 'done' | 'info' | 'absent'
 
@@ -852,7 +869,7 @@ export function VisitBookLayout({
   const footers = chapters?.length ? BLOCK_ORDER.flatMap((block) => (blockFooters?.[block] ? [blockFooters[block]] : [])) : []
 
   return (
-    <div className={styles.book} data-testid="cdss-visit-book">
+    <div className={`${styles.book} ${bookSerif.variable}`} data-testid="cdss-visit-book">
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
