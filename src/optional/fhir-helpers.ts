@@ -130,12 +130,34 @@ export function reportNarrative(report: DiagnosticReportEntity & { text?: { div?
   ].filter(Boolean).join('\n')
 }
 export function classifyReport(report: DiagnosticReportEntity, narrative = reportNarrative(report)): 'ecg' | 'echocardiography' | 'other' {
+  // LOINC document identity takes precedence over bridge-specific order names.
+  // The same digits under another coding system do not identify a LOINC study.
+  for (const coding of report.code?.coding ?? []) {
+    if (coding.system !== 'http://loinc.org') continue
+    if (coding.code === '11524-6') return 'ecg'
+    if (coding.code === '59281-6' || coding.code === '80859-2') return 'echocardiography'
+  }
+  // Keep legacy NHI orders: the two bridges use different coding-system URLs,
+  // and older converted bundles may have no system or LOINC coding at all.
+  const codes = new Set((report.code?.coding ?? []).map(coding => coding.code?.trim().toUpperCase()))
+  if (codes.has('18005C') || codes.has('18007C')) return 'echocardiography'
+  if (codes.has('18001C')) return 'ecg'
   const label = [report.code?.text, ...report.code?.coding?.map(coding => coding.display ?? coding.code) ?? []].join(' ')
   if (/echocardiogra|cardiac\s*(?:echo|ultrasound)|心臟超音波|心超|\b(?:echo|TTE|TEE)\b/i.test(label)) return 'echocardiography'
   if (/electrocardiogra|心電圖|\b(?:ECG|EKG)\b/i.test(label)) return 'ecg'
   // Explicit labels in the narrative are accepted; generic findings are not.
   if (/echocardiogra|心臟超音波|心超/i.test(narrative)) return 'echocardiography'
   if (/electrocardiogra|心電圖|\b(?:ECG|EKG)\b/i.test(narrative)) return 'ecg'
+  // FHIR permits a category concept or an array. EC/CUS are service-section
+  // identifiers; legacy concepts omit the system. Unrelated named catalogues
+  // containing the same tokens are ignored.
+  const categories: Array<{ coding?: Array<{ system?: string; code?: string }> }> = Array.isArray(report.category)
+    ? report.category : report.category ? [report.category] : []
+  const sections = categories.flatMap(category => category.coding ?? [])
+    .filter(coding => !coding.system || ['http://terminology.hl7.org/CodeSystem/v2-0074', 'http://hl7.org/fhir/v2/0074'].includes(coding.system))
+    .map(coding => coding.code?.toUpperCase())
+  if (sections.includes('EC')) return 'ecg'
+  if (sections.includes('CUS')) return 'echocardiography'
   return 'other'
 }
 export function extractEcgFindings(text: string): { rhythm?: 'sinus' } {

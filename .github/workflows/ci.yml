@@ -53,6 +53,10 @@ jobs:
         run: |
           npm run test:optional
           node --input-type=module -e "import assert from 'node:assert/strict'; import { detectOptionalPackages } from './scripts/optional-package-state.mjs'; assert.deepEqual(detectOptionalPackages(process.cwd()), { labs: false, care: false, education: false, fhir: false })"
+      - name: Public calculator and education regressions
+        env:
+          TEST_OPTIONAL_EDUCATION: "missing"
+        run: npm test -- --ci --runInBand --runTestsByPath __tests__/features/medical-calculator/coded-report-autofill.test.ts __tests__/features/medical-calculator/hfpef-clinical-autofill.test.ts __tests__/features/medical-calculator/echo-paired-velocity.test.ts __tests__/shared/optional-education-content.test.tsx
       - name: Build without private packages or SDK artifact
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
