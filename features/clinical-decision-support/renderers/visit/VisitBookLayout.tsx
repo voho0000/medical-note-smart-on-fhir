@@ -51,7 +51,12 @@ const bookSerif = Noto_Serif_TC({
   fallback: ['Songti TC', 'PMingLiU', 'serif'],
 })
 
-export type BookMark = 'safety' | 'act' | 'ask' | 'done' | 'info' | 'absent'
+/**
+ * `wait`: the diagnosis left open in its table (還不確定) — not today's decision
+ * any more, and not settled either, so the page never reads as complete while
+ * it stands (#219 review).
+ */
+export type BookMark = 'safety' | 'act' | 'ask' | 'wait' | 'done' | 'info' | 'absent'
 
 /** What a point is on this page: a decision row, a line, or covered by another. */
 export type BookEntry =
@@ -163,6 +168,7 @@ function Mark({ mark }: { mark: BookMark }) {
       ) : mark === 'act' ? <span className={styles.markAct} />
         : mark === 'safety' ? <span className={styles.markSafety} />
           : mark === 'ask' ? <span className={styles.markAsk} />
+            : mark === 'wait' ? <span className={styles.markWait} />
             : mark === 'info' ? <span className={styles.markInfo} />
               : null}
     </span>
@@ -173,6 +179,7 @@ const MARK_WORDS: Record<BookMark, { zh: string; en: string }> = {
   safety: { zh: '安全', en: 'Safety' },
   act: { zh: '待決定', en: 'To decide' },
   ask: { zh: '待答', en: 'To answer' },
+  wait: { zh: '尚待確診', en: 'Diagnosis open' },
   done: { zh: '已定', en: 'Settled' },
   info: { zh: '資訊', en: 'Info' },
   absent: { zh: '不適用', en: 'Not applicable' },
@@ -772,6 +779,7 @@ export function VisitBookLayout({
   const marks = new Map(points.map((point) => [point, markOf(point)] as const))
   const pending = points.filter((point) => ['act', 'safety'].includes(marks.get(point)!))
   const asking = points.filter((point) => marks.get(point) === 'ask')
+  const waiting = points.filter((point) => marks.get(point) === 'wait')
   const counted = points.filter((point) => marks.get(point) !== 'absent')
 
   const reasoningButton = (point: DecisionPointView) => {
@@ -1367,7 +1375,7 @@ export function VisitBookLayout({
       {/* What does not apply goes last, as the page lists it. */}
       {[...section.points.filter((point) => !ABSENT_STATES.has(point.state)), ...section.points.filter((point) => ABSENT_STATES.has(point.state))].map((point) => {
         const mark = marks.get(point)!
-        const note = mark === 'act' || mark === 'safety'
+        const note = mark === 'act' || mark === 'safety' || mark === 'wait'
           ? MARK_WORDS[mark]
           : mark === 'ask'
             ? MARK_WORDS.ask
@@ -1461,12 +1469,16 @@ export function VisitBookLayout({
               ))}
             </span>
           </div>
-          <button type="button" className={pending.length ? styles.pending : styles.pendingDone} onClick={() => scrollTo(PLAN_ANCHOR)} data-testid="cdss-book-pending">
+          <button type="button" className={pending.length || asking.length || waiting.length ? styles.pending : styles.pendingDone} onClick={() => scrollTo(PLAN_ANCHOR)} data-testid="cdss-book-pending">
             {pending.length
               ? (isEnglish ? `${pending.length} to decide today` : `今天待決定 ${pending.length}`)
               : asking.length
                 ? (isEnglish ? `${asking.length} to answer` : `待答 ${asking.length}`)
-                : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
+                // Nothing to press today is not everything settled: an open
+                // diagnosis says so until it is answered (#219 review).
+                : waiting.length
+                  ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
+                  : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
           {exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
         </div>
@@ -1479,7 +1491,7 @@ export function VisitBookLayout({
               <span className={styles.mapTitle}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
               <span className={styles.mapCount}>
                 {/* Non-breaking inside each half, so a narrow rail breaks only at the dot. */}
-                {isEnglish ? `${counted.length}\u00a0DPs · ${pending.length + asking.length}\u00a0open` : `${counted.length}\u00a0個\u00a0DP · ${pending.length + asking.length}\u00a0待處理`}
+                {isEnglish ? `${counted.length}\u00a0DPs · ${pending.length + asking.length + waiting.length}\u00a0open` : `${counted.length}\u00a0個\u00a0DP · ${pending.length + asking.length + waiting.length}\u00a0待處理`}
               </span>
               <button
                 type="button"
@@ -1496,12 +1508,13 @@ export function VisitBookLayout({
               {pending.some((point) => marks.get(point) === 'safety') ? <span><span className={styles.markSafety} />{isEnglish ? 'Safety' : '安全'}</span> : null}
               <span><span className={styles.markAct} />{isEnglish ? 'To decide' : '待決定'}</span>
               <span><span className={styles.markAsk} />{isEnglish ? 'To answer' : '待答'}</span>
+              {waiting.length ? <span><span className={styles.markWait} />{isEnglish ? MARK_WORDS.wait.en : MARK_WORDS.wait.zh}</span> : null}
               <span><svg className={styles.markDone} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>{isEnglish ? 'Settled' : '已定'}</span>
               <span><span className={styles.markInfo} />{isEnglish ? 'Info' : '資訊'}</span>
               <span className={styles.legendMuted}>{isEnglish ? 'Grey: not applicable' : '灰字 不適用'}</span>
             </div>
             {numbered.map(({ section, num }) => {
-              const open = section.points.filter((point) => ['act', 'safety', 'ask'].includes(marks.get(point)!)).length
+              const open = section.points.filter((point) => ['act', 'safety', 'ask', 'wait'].includes(marks.get(point)!)).length
               return (
                 <div key={section.key} className={styles.mapSection}>
                   <button type="button" className={styles.mapSectionHead} onClick={() => scrollTo(section.plan ? PLAN_ANCHOR : sectionAnchor(section.key))}>
@@ -1578,6 +1591,12 @@ export function VisitBookLayout({
               <p className={styles.planPending}>
                 <b>{isEnglish ? 'Not yet decided　' : '尚未決定　'}</b>
                 {pending.map((point) => `${point.dp} ${point.label}`).join(' · ')}
+              </p>
+            ) : null}
+            {waiting.length ? (
+              <p className={styles.planPending} data-testid="cdss-book-plan-waiting">
+                <b>{isEnglish ? `${MARK_WORDS.wait.en}　` : `${MARK_WORDS.wait.zh}　`}</b>
+                {waiting.map((point) => `${point.dp} ${point.label}`).join(' · ')}
               </p>
             ) : null}
             {decidedLine ? <p className={styles.question} data-testid="cdss-visit-decided-line">{decidedLine}</p> : null}

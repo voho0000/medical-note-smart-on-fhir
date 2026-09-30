@@ -254,8 +254,19 @@ describe.each([
       render(<BookPage id="p1-suspected-hfpef" page="hf" />)
       fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '還不確定' }))
       expect(within(entry('DP-01')).getByTestId('cdss-book-class-unsure')).toHaveAttribute('aria-pressed', 'true')
-      expect(mapLine('DP-01')).not.toHaveAttribute('data-book-mark', 'done')
+      // Left open, not settled (#219 review): the pack waits on the diagnosis,
+      // nothing is pressable today, and the page still does not say it is done.
+      expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'wait')
+      expect(mapLine('DP-01')).toHaveTextContent('尚待確診')
+      expect(screen.getByTestId('cdss-book-pending')).toHaveTextContent('尚待確診')
+      expect(screen.getByTestId('cdss-book-pending')).not.toHaveTextContent('今天的決定都記下了')
+      expect(screen.getByTestId('cdss-book-map')).toHaveTextContent(/35\s個\sDP · 1\s待處理/)
+      expect(screen.getByTestId('cdss-book-plan-waiting')).toHaveTextContent(/尚待確診\s*DP-01 確診與分型/)
+      expect(within(entry('DP-01')).getByTestId('cdss-book-class-hfpEF')).toBeInTheDocument()
       fireEvent.click(within(entry('DP-01')).getByRole('button', { name: 'HFrEF' }))
+      expect(mapLine('DP-01')).toHaveAttribute('data-book-mark', 'done')
+      expect(screen.getByTestId('cdss-book-pending')).not.toHaveTextContent('尚待確診')
+      expect(screen.queryByTestId('cdss-book-plan-waiting')).toBeNull()
       expect(within(entry('DP-01')).getByTestId('cdss-book-class-hfrEF')).toHaveAttribute('aria-pressed', 'true')
       // With a diagnosis the pack's question no longer offers 還不確定; the
       // other phenotype stays, so a mistaken choice can be taken back.

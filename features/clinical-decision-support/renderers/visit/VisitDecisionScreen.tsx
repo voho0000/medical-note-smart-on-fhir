@@ -707,6 +707,10 @@ export function VisitDecisionScreen({
       if (entry.kind === 'slot' && point.dp === 'DP-03') return unansweredAsks.length ? 'ask' : 'done'
       // The diagnosis still to answer in its table.
       if (entry.kind === 'slot' && DECISION_STATES.has(point.state)) return 'act'
+      // Left open there (還不確定): the pack waits, and the table still offers
+      // the diagnosis — open, never info, so the page does not read as
+      // complete (#219 review).
+      if (entry.kind === 'slot' && entry.content === null && point.state === 'waiting') return 'wait'
       if (point.state === 'safety') return 'safety'
       if (point.state === 'ask') return 'ask'
       if (point.state === 'done') return 'done'

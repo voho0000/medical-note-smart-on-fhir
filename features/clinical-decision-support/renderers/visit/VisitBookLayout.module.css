@@ -306,6 +306,7 @@
 .markAct { width: 8px; height: 8px; border-radius: 999px; background: var(--amber); }
 .markSafety { width: 9px; height: 9px; border-radius: 2px; background: var(--red); }
 .markAsk { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--blue); box-sizing: border-box; }
+.markWait { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--amber); box-sizing: border-box; }
 .markInfo { width: 6px; height: 6px; border-radius: 999px; background: var(--ink-6); }
 .markDone { color: var(--green); }
 
