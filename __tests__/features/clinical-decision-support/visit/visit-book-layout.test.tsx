@@ -88,6 +88,16 @@ describe('the pocket-handbook layout', () => {
     expect(within(panel).getByTestId('cdss-book-guideline-points')).toBeVisible()
     // What would change the answer, as the pack computes it from the dose rule.
     expect(within(panel).getByTestId('cdss-book-changes-if')).toHaveTextContent('體重 >60 kg → apixaban 5 mg bid（3 項中 1 項）')
+    // Every DOAC side by side at this patient's dose, the prescribed one marked.
+    const table = within(panel).getByTestId('cdss-book-option-table')
+    expect(table).toHaveTextContent('各 DOAC 在這位病人（CrCl 32）')
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'apixaban ← 現用5 mg bid2.5 mg bid年齡 ≥80（80 歲）、體重 ≤60 kg（58 kg）',
+      'rivaroxaban20 mg qd15 mg qdCrCl 15–49 mL/min（32 mL/min）',
+      'edoxaban60 mg qd30 mg qdCrCl 15–50 mL/min（32 mL/min）、體重 ≤60 kg（58 kg）',
+      'dabigatran150 mg bid110 mg bid年齡 ≥80（80 歲）',
+    ])
     expect(within(row).getAllByRole('button', { name: /改 2\.5 mg bid/ })).toHaveLength(1)
     // 收起依據 in the panel closes it.
     fireEvent.click(within(panel).getByRole('button', { name: '收起依據' }))

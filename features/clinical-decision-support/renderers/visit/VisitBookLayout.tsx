@@ -143,6 +143,30 @@ function changesOf(point: DecisionPointView): { when: string; then: string }[] {
   })
 }
 
+interface OptionRowView { name: string; standard?: string; patient: string; basis?: string; status?: string; current?: boolean }
+
+/** Every option side by side (the DOACs at this patient's dose), read defensively like `changesOf`. */
+function optionTableOf(point: object | undefined): { title: string; rows: OptionRowView[] } | undefined {
+  const raw = (point as { optionTable?: unknown } | undefined)?.optionTable
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, rows } = raw as { title?: unknown; rows?: unknown }
+  if (typeof title !== 'string' || !Array.isArray(rows)) return undefined
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
+  const parsed = rows.flatMap((row): OptionRowView[] => {
+    const { name, standard, patient, basis, status, current } = (row ?? {}) as Record<string, unknown>
+    if (typeof name !== 'string' || typeof patient !== 'string') return []
+    return [{
+      name,
+      patient,
+      ...(text(standard) ? { standard: text(standard) } : {}),
+      ...(text(basis) ? { basis: text(basis) } : {}),
+      ...(text(status) ? { status: text(status) } : {}),
+      ...(current === true ? { current: true } : {}),
+    }]
+  })
+  return parsed.length ? { title, rows: parsed } : undefined
+}
+
 /** The criteria, each with its value and the date the record line gave it. */
 function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean; dated?: boolean }) {
   const groups = criteriaOf(point)
@@ -237,6 +261,9 @@ export function VisitBookLayout({
     const guideline = head.guideline
     const basis = basisOf(shown)
     const nextOptions = shown === head && head.next ? criteriaOf(head.next) : []
+    // The options side by side: the step's own, else the step the row walks
+    // on to (an older pack copies no table onto the step), else the row's.
+    const table = optionTableOf(shown) ?? optionTableOf(head.next) ?? optionTableOf(head)
     return (
       <div className={styles.panel} data-testid="cdss-book-reasoning" data-dp={head.dp}>
         <div className={styles.panelHead}>
@@ -258,6 +285,33 @@ export function VisitBookLayout({
           <div>
             <span className={styles.panelLabel}>{isEnglish ? `Next: ${head.next!.headline}` : `下一步：${head.next!.headline}`}</span>
             <Criteria point={head.next as unknown as DecisionPointView} basis={basis} isEnglish={isEnglish} dated />
+          </div>
+        ) : null}
+        {table ? (
+          <div data-testid="cdss-book-option-table">
+            <span className={styles.panelLabel}>{table.title}</span>
+            <div className={styles.optScroll}>
+              <table className={styles.optTable}>
+                <thead>
+                  <tr>
+                    <th scope="col">{isEnglish ? 'Agent' : '藥'}</th>
+                    <th scope="col">{isEnglish ? 'Usual' : '標準'}</th>
+                    <th scope="col">{isEnglish ? 'This patient' : '本病人'}</th>
+                    <th scope="col">{isEnglish ? 'Why' : '依據'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {table.rows.map((row) => (
+                    <tr key={row.name} data-current={row.current || undefined} data-status={row.status}>
+                      <td><b>{row.name}</b>{row.current ? (isEnglish ? ' ← prescribed' : ' ← 現用') : ''}</td>
+                      <td>{row.standard ?? '—'}</td>
+                      <td className={styles.optPatient}>{row.patient}</td>
+                      <td>{row.basis ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
         {changes.length ? (

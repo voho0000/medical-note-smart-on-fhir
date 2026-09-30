@@ -392,6 +392,18 @@
 .fold[open] summary { margin-bottom: 8px; }
 .quote { font-size: 12px; color: var(--ink-4); }
 
+/* Every option side by side (其他 DOAC 劑量對照表). */
+.optScroll { overflow-x: auto; }
+.optTable { width: 100%; min-width: 34rem; border-collapse: collapse; margin-top: 4px; font-size: 14px; }
+.optTable th { background: var(--thead); text-align: left; padding: 6px 10px; font-weight: 700; }
+.optTable td { padding: 6px 10px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.optTable tbody tr:last-child td { border-bottom: 1px solid var(--line-soft); }
+.optTable tr[data-current] td { background: var(--blue-soft); }
+.optTable tr[data-current] .optPatient { color: var(--blue-ink); font-weight: 700; }
+.optTable tr[data-status='excluded'] .optPatient { color: var(--red); font-weight: 700; }
+.optTable tr[data-status='individual'] .optPatient,
+.optTable tr[data-status='missing'] .optPatient { color: var(--warn-ink); }
+
 /* --------------------------------- plan -------------------------------- */
 
 .plan {
