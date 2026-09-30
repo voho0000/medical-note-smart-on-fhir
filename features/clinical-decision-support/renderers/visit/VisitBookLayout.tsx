@@ -1053,7 +1053,7 @@ export function VisitBookLayout({
         </div>
         {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.rowExtras)}
-        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
+        {!questionsOf(point) && extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
     )
@@ -1191,7 +1191,7 @@ export function VisitBookLayout({
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.lineWide)}
-        {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
+        {!questionsOf(point) && extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
     )
@@ -1206,17 +1206,15 @@ export function VisitBookLayout({
       data-book-dp={point.dp}
       data-book-mark={marks.get(point)}
     >
-      <div className={styles.slotHead}>
-        <span className={styles.dpTag}>{point.dp}</span>
-        <b>{point.label}</b>
-        {/* Answered in its table, the point says where it stands beside its name. */}
-        {classificationOf(point) && point.headline && marks.get(point) !== 'done' ? (
-          <span className={styles.slotLine}>
-            {point.headline}
-            {point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}
-          </span>
-        ) : null}
-      </div>
+      {/* A point answered in its table has no heading of its own, as the
+          Artifact prototype: the table's tag names it (「DP-01 · DP-34」) and
+          the chapter's heading says where it stands. */}
+      {classificationOf(point) ? null : (
+        <div className={styles.slotHead}>
+          <span className={styles.dpTag}>{point.dp}</span>
+          <b>{point.label}</b>
+        </div>
+      )}
       {classTable(point, merged ? `${point.dp} · ${merged.dp}` : undefined)}
       {content || extrasOf(point) ? (
         <div className={styles.inner}>
@@ -1271,10 +1269,6 @@ export function VisitBookLayout({
         {score ? <ScoreTable table={score} isEnglish={isEnglish} /> : null}
         {questions ? <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} /> : null}
         {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
-        {/* The page's own inputs for this point that its questions do not ask
-            (AF DP-07's stroke history and antithrombotic indications, DP-08's
-            bleeding and instability): folded under it, never dropped. */}
-        {extrasOf(point) ? <div className={`${styles.blockExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {withDecision ? blockDecision(point, entry) : null}
       </div>
     )

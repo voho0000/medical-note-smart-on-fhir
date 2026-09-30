@@ -89,10 +89,9 @@ export function AtrialFibrillationMapSurfaces({
   const strategyName = useId()
   const [vitalsOpen, setVitalsOpen] = useState(false)
   const [strategy, setStrategy] = useState<AfControlStrategy | null>(null)
-  const groups = (groupIds: readonly string[], excludeIds?: readonly string[]) => (
+  const groups = (groupIds: readonly string[]) => (
     <AfQuestionGroups
       groupIds={groupIds}
-      {...(excludeIds?.length ? { excludeIds } : {})}
       board={board}
       result={result}
       isEnglish={isEnglish}
@@ -106,20 +105,12 @@ export function AtrialFibrillationMapSurfaces({
   const placed = new Set<string>([...ASKS_GROUPS, ...ASKED_BY_POINTS, ...homes.filter((home) => home.dp).map((home) => home.group)])
   if (strategyDp) Object.values(STRATEGY_GROUPS).forEach((group) => placed.add(group))
 
-  const strategyContentOf = (excludeIds?: readonly string[]) => (
+  const strategyContent = (
     <div data-testid="cdss-visit-af-strategy">
       <AfControlStrategyPicker value={strategy} onChange={setStrategy} isEnglish={isEnglish} name={strategyName} />
-      {strategy ? groups([STRATEGY_GROUPS[strategy]], excludeIds) : null}
+      {strategy ? groups([STRATEGY_GROUPS[strategy]]) : null}
     </div>
   )
-  const strategyContent = strategyContentOf()
-  // The questions the pocket-handbook page asks on the points' own rows (the
-  // pack's `questions`: DP-07's HCM, DP-08's valves, DP-13's NSAID and
-  // alcohol…): its groups there leave them out, so none is asked twice.
-  const askedOnRows = model.points.flatMap((point) => {
-    const rows = (point as { questions?: { rows?: { id?: unknown }[] } }).questions?.rows
-    return point.source === 'af' && Array.isArray(rows) ? rows.flatMap((row) => (typeof row.id === 'string' ? [row.id] : [])) : []
-  })
 
   // What found no point: by column, under 「其他問答」. Groups the model does
   // not place are still the AF flow's groups, and a question nobody can reach
@@ -172,11 +163,10 @@ export function AtrialFibrillationMapSurfaces({
       // under the first of them only.
       const strategyHere = strategyDp !== undefined && isPagePoint(point, 'af', options?.once ? [strategyDp] : STRATEGY_DPS)
       if (here.length === 0 && !strategyHere) return undefined
-      const excluded = options?.once ? askedOnRows : undefined
       return (
         <>
-          {here.length ? groups(here, excluded) : null}
-          {strategyHere ? strategyContentOf(excluded) : null}
+          {here.length ? groups(here) : null}
+          {strategyHere ? strategyContent : null}
         </>
       )
     },

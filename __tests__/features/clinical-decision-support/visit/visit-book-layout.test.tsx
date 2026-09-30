@@ -88,7 +88,9 @@ describe('the pocket-handbook layout', () => {
     for (const dp of ['DP-00', 'DP-01', 'DP-07', 'DP-09', 'DP-14', 'DP-16']) expect(within(map).getByText(dp)).toBeInTheDocument()
     expect(mapLine('DP-09')).toHaveAttribute('data-book-mark', 'act')
     expect(mapLine('DP-07')).toHaveAttribute('data-book-mark', 'absent')
-    expect(entry('DP-01')).toHaveTextContent('確診與分型')
+    // DP-01 has no heading of its own, as the Artifact: its table's tag names it and DP-34.
+    expect(within(entry('DP-01')).getByTestId('cdss-book-classification').querySelector('th')).toHaveTextContent('DP-01 · DP-34')
+    expect(entry('DP-01')).not.toHaveTextContent('確診與分型')
     // Each point once: one entry per present point.
     expect(document.querySelectorAll('[data-book-dp="DP-09"]')).toHaveLength(1)
     // The pack's chapters, in reading order, with the settled diagnosis beside the first.
@@ -176,7 +178,7 @@ describe('the pocket-handbook layout', () => {
     it('before a diagnosis: the table offers HFrEF, HFpEF and 還不確定; the old question is gone (P1)', () => {
       render(<BookPage id="p1-suspected-hfpef" page="hf" />)
       const dp01 = entry('DP-01')
-      expect(dp01).toHaveTextContent('HFrEF 還是 HFpEF？')
+      expect(within(dp01).getByTestId('cdss-book-classification').querySelector('th')).toHaveTextContent('DP-01 · DP-34')
       // No second DP-01: neither the old question nor the diagnosis view.
       expect(screen.queryByTestId('cdss-hf-question-hf-suspicion')).toBeNull()
       expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
@@ -235,19 +237,15 @@ describe('the pocket-handbook layout', () => {
     })
   })
 
-  it('DP-03 asks the pack\'s every-visit questions, the fuller ones one fold away (P9, #219 review)', () => {
+  it('DP-03 asks the pack\'s every-visit questions and nothing of the old cards (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     const asks = within(entry('DP-03')).getByTestId('cdss-book-asks')
     expect(within(asks).getAllByRole('group').map((group) => group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent))
       .toEqual(['喘比上次', '體重比上次'])
-    // Not the map's asks card; its fuller questions (symptoms, signs, NYHA,
-    // compensation) folded under the asks, as the map keeps them.
+    // As the Artifact: no asks card, and no fold of fuller questions (owner decision 2026-09-30).
     expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
-    const more = within(entry('DP-03')).getByTestId('cdss-book-asks-detail')
-    expect(more).toHaveTextContent('其他症狀、徵象與 NYHA')
-    expect(more).not.toHaveAttribute('open')
-    expect(within(more).getByTestId('cdss-hf-question-nyha')).toBeInTheDocument()
-    expect(within(more).getByTestId('cdss-hf-question-signs')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-book-asks-detail')).toBeNull()
+    expect(screen.queryByText('其他症狀、徵象與 NYHA')).toBeNull()
     fireEvent.click(within(asks).getByRole('button', { name: '穩定' }))
     expect(within(asks).getByRole('button', { name: '穩定' })).toHaveAttribute('aria-pressed', 'true')
     expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)['dyspnoea-trend']).toBe('stable')
@@ -314,22 +312,13 @@ describe('the pocket-handbook layout', () => {
       expect(document.querySelector('[data-book-box="DP-08"]')).toHaveTextContent('改 warfarin')
     })
 
-    it('what the pack does not ask on its rows stays under them, folded, and none twice (#219 review)', () => {
+    it('asks only what the Artifact asks there: no question groups under DP-07, DP-08 or DP-13 (owner decision 2026-09-30)', () => {
       render(<BookPage id="p9-hfpef-af-dose" page="af" />)
-      const questionsIn = (dp: string, group: string) => [...entry(dp).querySelectorAll<HTMLElement>(`[data-af-question-group="${group}"] .divide-y > div`)]
-        .map((row) => row.querySelector('span')?.firstChild?.textContent)
-      // DP-07: the CHA₂DS₂-VA history and the antithrombotic indications.
-      expect(questionsIn('DP-07', 'stroke')).toEqual(['心衰竭病史', '高血壓病史', '糖尿病病史（含 type 1／type 2）', '中風／TIA／動脈栓塞病史', '冠狀動脈／周邊血管疾病病史'])
-      expect(questionsIn('DP-07', 'antithrombotic')).toContain('長期抗凝有不可逆禁忌')
-      // DP-08: bleeding and instability; not the valves (its own rows) nor HCM (DP-07's).
-      expect(questionsIn('DP-08', 'safety')).toEqual(['目前活動性出血', 'AF 相關血流動力學不穩定'])
-      // Answered there, the answer is the page's AF answer, and the score reads it.
-      const stroke = entry('DP-07').querySelector<HTMLElement>('[data-af-question-group="stroke"]')!
-      const row = [...stroke.querySelectorAll<HTMLElement>('.divide-y > div')].find((item) => item.textContent?.startsWith('中風'))!
-      fireEvent.click(within(row).getByRole('button', { name: '有' }))
-      expect(useAfAnswersStore.getState().answers.stroke).toBe(true)
-      const scoreRow = within(within(entry('DP-07')).getByTestId('cdss-book-score')).getAllByRole('row').find((item) => item.textContent?.includes('S₂'))
-      expect(scoreRow).toHaveTextContent('門診確認：有')
+      for (const dp of ['DP-07', 'DP-08', 'DP-09', 'DP-13', 'DP-17', 'DP-21']) {
+        expect({ dp, groups: entry(dp).querySelectorAll('[data-af-question-group]').length }).toEqual({ dp, groups: 0 })
+      }
+      expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
+      expect(screen.queryByTestId('cdss-book-asks-detail')).toBeNull()
     })
   })
 
@@ -364,30 +353,21 @@ describe('the pocket-handbook layout', () => {
     })
   })
 
-  it('AF chapters 4–6 ask the pack\'s questions in place, the rest of each group folded under them (P9)', () => {
+  it('AF chapters 4–6 ask the pack\'s questions in place, not the old folds (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="af" />)
     const dp13 = entry('DP-13')
     expect(within(dp13).getByText('其他可修正因子')).toBeInTheDocument()
     expect(within(dp13).getByText('併用 NSAID、抗血小板')).toBeInTheDocument()
-    fireEvent.click(dp13.querySelector<HTMLButtonElement>('[data-book-bulk-none]')!)
+    expect(dp13).not.toHaveTextContent('HAS-BLED 因子')
+    fireEvent.click(within(dp13).getByRole('button', { name: '全部皆無' }))
     expect(useAfAnswersStore.getState().answers.bleedingDrugs).toBe(false)
-    // The HAS-BLED items the pack does not ask here stay in their fold; the two it asks are not asked again.
-    const hasBled = dp13.querySelector<HTMLElement>('[data-af-question-group="bleedingRisk"]')!
-    expect(hasBled).not.toHaveAttribute('open')
-    expect(hasBled).toHaveTextContent('HAS-BLED 腎異常')
-    expect(hasBled).not.toHaveTextContent('併用抗血小板／NSAID')
-    expect(hasBled).not.toHaveTextContent('HAS-BLED 酒精')
-    // DP-17: the agents by LVEF, whether the rate was at rest, and the rate-or-rhythm choice with its questions.
+    // DP-17: the agents by LVEF, and whether the rate was at rest; no strategy radios.
     const dp17 = entry('DP-17')
     expect(within(dp17).getByRole('columnheader', { name: 'LVEF >40% ← 本病人' })).toBeInTheDocument()
     expect(within(dp17).getByRole('rowheader', { name: '可用' })).toBeInTheDocument()
     fireEvent.click(within(dp17).getByRole('button', { name: '靜息量測' }))
     expect(useAfAnswersStore.getState().answers.restingRate).toBe(true)
-    expect(within(dp17).getByTestId('cdss-visit-af-strategy')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
     expect(within(entry('DP-21')).getByText('門診確認')).toBeInTheDocument()
-    // DP-03: other symptoms, bleeding and adverse effects, one fold under the asks.
-    const more = within(entry('DP-03')).getByTestId('cdss-book-asks-detail')
-    expect(more).toHaveTextContent('其他症狀、出血與副作用')
-    expect(more.querySelector('[data-af-question-group="bleeding"]')).not.toBeNull()
   })
 })

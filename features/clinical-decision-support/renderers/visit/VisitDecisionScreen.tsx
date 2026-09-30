@@ -635,10 +635,10 @@ export function VisitDecisionScreen({
     // The pocket-handbook page draws the pack's model in place of the page's
     // older question cards (owner request 2026-09-30: 「原本的 UI 跟問題那些都
     // 廢棄了，包含 DP03」): DP-01's phenotype table asks the diagnosis, DP-03
-    // the pack's every-visit asks, and every other point — DP-34's HFpEF
-    // confirmation among them — decides on its own row. What those do not ask
-    // stays reachable under the same point, folded (#219 review; the list is
-    // in docs/LAUNCH-ROUTE-GATES.md). So no point is left out as asked
+    // the pack's every-visit asks, and every other point decides on its own
+    // row, asking only what the Artifact prototype asks there (owner decision
+    // 2026-09-30; what the other layouts keep is listed in
+    // docs/LAUNCH-ROUTE-GATES.md). So no point is left out as asked
     // elsewhere: the rows are all of them.
     const samePoint = (a: DecisionPointView, b: DecisionPointView) => a.dp === b.dp && a.source === b.source
     const headRowOf = (point: DecisionPointView) => allRows.find((row) => samePoint(row.steps[0].point, point))
@@ -647,34 +647,15 @@ export function VisitDecisionScreen({
     const coveringRowOf = (point: DecisionPointView) => allRows.find((row) => row.steps.some((step, index) => (
       index > 0 && samePoint(step.point, point) && !samePoint(step.point, row.steps[0].point)
     )))
-    // The fuller questions beside the asks (HF: symptoms, signs, NYHA,
-    // compensation; AF: other symptoms, bleeding, adverse effects) stay one
-    // fold away, as on the map (#219 review: a layout change is not leave to
-    // drop an input a decision reads). Before a diagnosis there are no asks,
-    // and those questions are the diagnosis's, asked in DP-01's table and
-    // under DP-34.
-    const asksDetail = surfaces?.asksDetail
     const bookAsks = (
-      <>
-        <BookAsks
-          asks={model.asks}
-          answers={answers}
-          isEnglish={isEnglish}
-          onAnswer={onAnswer}
-          pagePackId={model.packId}
-          {...(answerSources ? { sources: answerSources } : {})}
-        />
-        {asksDetail && model.asks.length > 0 ? (
-          <MapFold
-            label={asksDetail.label}
-            {...(asksDetail.pendingLabels?.length ? { hint: asksDetail.pendingLabels.join(isEnglish ? ', ' : '、') } : {})}
-            bodyClassName="@container p-2"
-            testId="cdss-book-asks-detail"
-          >
-            {asksDetail.content}
-          </MapFold>
-        ) : null}
-      </>
+      <BookAsks
+        asks={model.asks}
+        answers={answers}
+        isEnglish={isEnglish}
+        onAnswer={onAnswer}
+        pagePackId={model.packId}
+        {...(answerSources ? { sources: answerSources } : {})}
+      />
     )
     const ownEntryOf = (point: DecisionPointView): BookEntry => {
       if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }

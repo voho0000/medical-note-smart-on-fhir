@@ -178,11 +178,8 @@ export function AfQuestionGroups({
   answers = {},
   onAnswer,
   onDiagnosisAnswer,
-  excludeIds,
 }: {
   groupIds: readonly string[]
-  /** Questions asked elsewhere on the page (the pocket-handbook page's own rows), left out here. */
-  excludeIds?: readonly string[]
   board: DiseaseBoardModel
   result: CdssResult
   isEnglish: boolean
@@ -220,7 +217,7 @@ export function AfQuestionGroups({
       .map((r) => r.id.replace('af-clinic:', '')) ?? [],
   )
   const availableQuestions = AF_CLINICAL_QUESTIONS.filter(
-    (q) => (q.group !== 'adverse' || currentAdverseIds.has(q.id)) && !excludeIds?.includes(q.id),
+    (q) => q.group !== 'adverse' || currentAdverseIds.has(q.id),
   )
   const groups = QUESTION_GROUPS.filter(
     (group) => groupIds.includes(group.id) && availableQuestions.some((q) => q.group === group.id),
