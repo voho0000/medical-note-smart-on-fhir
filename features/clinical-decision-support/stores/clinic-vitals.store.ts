@@ -28,11 +28,8 @@ import { create } from 'zustand'
 import { parseHfHistory, type HfFollowUpHistory } from '../utils/hf-follow-up'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 
 /** The three one-tap groups the congestion question is asked in. */
 export type CongestionSignsAnswer = 'edema' | 'orthopnea-pnd' | 'jvp-rales'
@@ -288,11 +285,9 @@ export function entryValue(
   return vitals?.entries?.[key]?.value
 }
 
-const STORAGE_PREFIX = 'cdss-clinic-vitals:'
-
 /** The key one patient's encrypted visit record is kept under. */
 export function clinicVitalsStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('clinic-vitals', patientId)
 }
 
 function toAnsweredField<T extends string>(
@@ -367,12 +362,11 @@ function isEmptyVitals(vitals: ClinicVitals): boolean {
 }
 
 function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
-  const key = clinicVitalsStorageKey(patientId)
   if (isEmptyVitals(vitals)) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('clinic-vitals', patientId)
     return
   }
-  persistEncryptedAnswers(key, vitals)
+  patientAnswerBacking().save('clinic-vitals', patientId, vitals)
 }
 
 const hydration = createHydrationGuard()
@@ -406,7 +400,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
     // Two cases need no decryption: an answer already in memory is this
     // session's own and more recent than anything storage holds, and a chart
     // with no stored record is a first visit. Neither writes anything.
-    if (state.byPatientId[patientId] || !hasEncryptedAnswers(clinicVitalsStorageKey(patientId))) {
+    if (state.byPatientId[patientId] || !patientAnswerBacking().has('clinic-vitals', patientId)) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
           ? current.byPatientId
@@ -431,7 +425,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(clinicVitalsStorageKey(patientId))
+    void patientAnswerBacking().load('clinic-vitals', patientId)
       .then((stored) => apply(toClinicVitals(stored)))
       // A record that cannot be read leaves the chart asking, which is the
       // same state as a patient who has never been answered for.
@@ -460,7 +454,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
 
   clearVitals: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(clinicVitalsStorageKey(patientId))
+    patientAnswerBacking().discard('clinic-vitals', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_CLINIC_VITALS },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

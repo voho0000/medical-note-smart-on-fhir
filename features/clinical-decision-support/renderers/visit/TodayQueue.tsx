@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
-import type { QueueRow, QueueStep } from './visit-decisions'
+import { criteriaOf, sourceTag, type DecisionBasisItem, type DecisionCriteriaGroupView, type QueueRow, type QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import { VisitDecisionControls } from './VisitDecisionControls'
 import { StatePill } from './visit-presentation'
@@ -29,6 +29,7 @@ export function TodayQueue({
   hideWhenEmpty = false,
   detailFor,
   onOpenDetail,
+  basis,
 }: {
   rows: readonly QueueRow[]
   isEnglish: boolean
@@ -45,6 +46,8 @@ export function TodayQueue({
   detailFor?: (point: DecisionPointView) => ReactNode
   /** Opens (or closes) a row's card — its reasons, chain and guideline. */
   onOpenDetail?: (point: DecisionPointView) => void
+  /** What a row's open decision reads from the record, printed under it (see `decisionBasis`). */
+  basis?: (point: DecisionPointView) => readonly DecisionBasisItem[]
 }) {
   const listRef = useRef<HTMLOListElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -111,6 +114,7 @@ export function TodayQueue({
               {...(onClear ? { onClear: (step) => { focusFrom.current = row.key; onClear(step) } } : {})}
               {...(detailFor ? { detailFor } : {})}
               {...(onOpenDetail ? { onOpenDetail } : {})}
+              {...(basis ? { basis } : {})}
             />
           ))}
         </ol>
@@ -128,7 +132,7 @@ function RowLead({ point, sourceOfPage }: { point: DecisionPointView; sourceOfPa
       <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
       <span className="min-w-0 text-sm font-medium leading-snug text-foreground">{point.label}</span>
       {point.source !== sourceOfPage ? (
-        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
       ) : null}
     </span>
   )
@@ -165,7 +169,7 @@ function RowLink({ point, isEnglish, detailOpen, onOpenDetail }: {
   )
 }
 
-function ChainDone({ steps }: { steps: readonly QueueStep[] }) {
+export function ChainDone({ steps }: { steps: readonly QueueStep[] }) {
   return (
     <>
       {steps.map((step) => (
@@ -198,6 +202,7 @@ export function QueueRowBox({
   detailOpen,
   queued = true,
   as: Element = 'li',
+  basis,
 }: {
   row: QueueRow
   isEnglish: boolean
@@ -214,6 +219,8 @@ export function QueueRowBox({
    */
   queued?: boolean
   as?: 'li' | 'div'
+  /** What the open decision reads from the record, printed under its reason. */
+  basis?: (point: DecisionPointView) => readonly DecisionBasisItem[]
 }) {
   const current = row.current
   const decidedSteps = row.steps.filter((step) => step.decision)
@@ -262,6 +269,8 @@ export function QueueRowBox({
                   onDecide={onDecide ? (action) => onDecide(current, action) : undefined}
                 />
               </div>
+              {/* The row's whole width, under the words and the buttons alike. */}
+              <DecisionEvidence point={point} basis={basis?.(point) ?? []} isEnglish={isEnglish} />
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -281,6 +290,100 @@ export function QueueRowBox({
       </div>
       {detail ? <div className={rowStyles.detail}>{detail}</div> : null}
     </Element>
+  )
+}
+
+/**
+ * What an open decision turns on: the pack's criteria, each marked and with
+ * the patient's value (「✓ 年齡 ≥80 80 歲」), then the record values it reads
+ * that no criterion already shows. A criterion's value that the record line
+ * also carries takes its date from there, and is said once.
+ */
+export function DecisionEvidence({ point, basis, isEnglish }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean }) {
+  const groups = criteriaOf(point)
+  const shown = new Set<DecisionBasisItem>()
+  const dated = groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const from = item.value ? basis.find((value) => value.value === item.value) : undefined
+      if (from) shown.add(from)
+      return { ...item, ...(from?.date ? { date: from.date } : {}) }
+    }),
+  }))
+  return (
+    <>
+      <DecisionCriteria groups={dated} isEnglish={isEnglish} />
+      <DecisionBasis items={basis.filter((item) => !shown.has(item))} isEnglish={isEnglish} />
+    </>
+  )
+}
+
+/** A criteria group whose values carry the date the record line gave them. */
+type DatedCriteriaGroup = { title: string; items: readonly (DecisionCriteriaGroupView['items'][number] & { date?: string })[] }
+
+const MARK: Record<'met' | 'unmet' | 'unknown', { symbol: string; zh: string; en: string; tone: string }> = {
+  met: { symbol: '✓', zh: '符合', en: 'met', tone: 'text-emerald-700 dark:text-emerald-300' },
+  unmet: { symbol: '✗', zh: '不符合', en: 'not met', tone: 'text-muted-foreground' },
+  unknown: { symbol: '？', zh: '未知', en: 'unknown', tone: 'text-amber-700 dark:text-amber-300' },
+}
+
+/**
+ * The criteria, one group a line (「apixaban 5 → 2.5 mg bid：3 項中 2 項」
+ * then ✓ 年齡 ≥80 80 歲 · ✓ 體重 ≤60 kg 58 kg · ✗ Cr ≥1.5 mg/dL 1.3 mg/dL).
+ * A criterion the record cannot settle reads ？, never ✗.
+ */
+function DecisionCriteria({ groups, isEnglish }: { groups: readonly DatedCriteriaGroup[]; isEnglish: boolean }) {
+  if (groups.length === 0) return null
+  return (
+    <div className="basis-full space-y-1 text-xs leading-5" data-visit-criteria="">
+      {groups.map((group) => (
+        <div key={group.title} className="min-w-0" data-visit-criteria-group={group.title}>
+          <p className="font-medium text-foreground">{group.title}</p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-0.5">
+            {group.items.map((item) => {
+              const mark = MARK[item.met === true ? 'met' : item.met === false ? 'unmet' : 'unknown']
+              return (
+                <li key={item.label} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1" data-met={item.met === undefined ? 'unknown' : String(item.met)}>
+                  <span className={cn('shrink-0 font-semibold', mark.tone)} aria-hidden="true">{mark.symbol}</span>
+                  <span className="sr-only">{isEnglish ? `${mark.en}: ` : `${mark.zh}：`}</span>
+                  <span className={cn('min-w-0 break-words', item.met === false ? 'text-muted-foreground' : 'text-foreground')}>{item.label}</span>
+                  {item.value ? <span className="min-w-0 max-w-full break-words font-medium tabular-nums text-foreground">{item.value}</span> : null}
+                  {item.date ? <span className="shrink-0 tabular-nums text-muted-foreground">{item.date}</span> : null}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The record values an open decision reads — 年齡 80 歲 · 體重 58 kg 09-27 ·
+ * Cr 1.3 mg/dL 09-20 — in view under its reason rather than folded in its
+ * card, so the row holds what the choice is made with.
+ */
+function DecisionBasis({ items, isEnglish }: { items: readonly DecisionBasisItem[]; isEnglish: boolean }) {
+  if (items.length === 0) return null
+  return (
+    <dl
+      className="flex basis-full flex-wrap gap-x-3 gap-y-0.5 text-xs leading-5"
+      aria-label={isEnglish ? 'What this decision reads' : '本病人依據'}
+      data-visit-basis=""
+    >
+      {items.map((item) => (
+        // A label as long as 「ARNI (ACE inhibitor/ARB when ARNI is not
+        // feasible)」 wraps in a narrow column, and its value follows onto the
+        // next line whole rather than being squeezed to a letter a line or
+        // pushed out of the row (#201 review, 320 px).
+        <div key={`${item.label}|${item.value}`} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1">
+          <dt className="min-w-0 break-words text-muted-foreground">{item.label}</dt>
+          <dd className="min-w-0 max-w-full break-words font-medium tabular-nums text-foreground">{item.value}</dd>
+          {item.date ? <dd className="shrink-0 tabular-nums text-muted-foreground">{item.date}</dd> : null}
+        </div>
+      ))}
+    </dl>
   )
 }
 

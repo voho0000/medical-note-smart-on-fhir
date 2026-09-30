@@ -9,13 +9,15 @@
  * the record-and-follow-up card. `board` is the status board that shipped
  * first (the strip, the pillars, action-first rows), which pilot users call
  * 原版. `sections` groups independent modules into diagnosis, treatment and
- * prognosis. The switch exists so pilot users can compare layouts on the same
+ * prognosis. `book` (決策地圖 v2) is the same decision map drawn as the
+ * pocket-handbook page, over the whole window. The switch exists so pilot users can compare layouts on the same
  * patient and tell us which one they read; it is a per-browser preference, not
  * a clinical fact, so it persists in localStorage under its own key and never
  * touches patient data.
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { hasVisitMap } from '../renderers/visit/visit-model.source'
 
 /**
  * `map` is the visit decision map, `sections` the three sections and `nhi`
@@ -27,12 +29,12 @@ import { persist } from 'zustand/middleware'
  * offered in the switch. A browser that stored `c` reads as `sections`, one
  * that stored `flow` or `board` as no choice — the pack's default.
  */
-export type CdssLayout = 'map' | 'sections' | 'flow' | 'nhi' | 'c' | 'board' | 'classic'
+export type CdssLayout = 'map' | 'book' | 'sections' | 'flow' | 'nhi' | 'c' | 'board' | 'classic'
 
 export const CDSS_LAYOUT_STORAGE_KEY = 'cdss-layout-preference'
 
 /** The layouts the heart-failure switch offers. */
-export const CDSS_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections']
+export const CDSS_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'book', 'sections']
 
 /** Dyslipidemia has a dedicated Table 1 review instead of a second generic flow. */
 export const LIPID_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'nhi']
@@ -41,17 +43,16 @@ export const LIPID_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['sections', 'nhi
 export const RETIRED_LAYOUTS: readonly CdssLayout[] = ['flow', 'board']
 
 /** Atrial fibrillation: the decision map, or its own three-section visit flow. */
-export const AF_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'sections']
-
-/** The packs whose pages open on the decision map when nothing was chosen. */
-export const VISIT_MAP_PACK_IDS: readonly string[] = ['heart-failure-cdss', 'atrial-fibrillation-cdss']
+export const AF_SWITCHABLE_LAYOUTS: readonly CdssLayout[] = ['map', 'book', 'sections']
 
 /**
- * What a pack opens on for a browser that never chose a layout. A browser that
- * did choose keeps its choice: the stored layout wins over this.
+ * What a pack opens on for a browser that never chose a layout: the decision
+ * map where the pack declares one (`VISIT_MAPS` — heart failure and atrial
+ * fibrillation today), else the three sections. A browser that did choose
+ * keeps its choice: the stored layout wins over this.
  */
 export function defaultLayoutFor(packId: string): CdssLayout {
-  return VISIT_MAP_PACK_IDS.includes(packId) ? 'map' : 'sections'
+  return hasVisitMap(packId) ? 'map' : 'sections'
 }
 
 interface LayoutPreferenceState {

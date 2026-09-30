@@ -1670,6 +1670,13 @@ function QuestionsCard({
   const pointQuestion = compact && diagnosisPoint
     ? flow.questions.find((question) => question.id === 'hf-suspicion')
     : undefined
+  // Once HFpEF is the answer, what it rests on stays one press away under it:
+  // DP-34 「HFpEF 證實」 says its criteria open in 01, and a diagnosis nobody
+  // can re-read is one nobody can audit. Folded — the question is settled.
+  const hfpEfAnswered = phenotypeAnswer?.diagnosis
+    ? phenotypeAnswer.diagnosis === 'hfpEF'
+    : pointQuestion?.request?.recordedOptionId === 'hfpef'
+  const evidenceUnderAnswer = Boolean(pointQuestion && !shows(pointQuestion) && hfpEfAnswered && diagnosisSummary && diagnosisCard)
   // Drawn as DP-01, the diagnosis leaves the card; what stays numbers from 1.
   const listed = pointQuestion
     ? flow.questions.filter((question) => question !== pointQuestion).map((question, index) => ({ ...question, number: String(index + 1) }))
@@ -1702,6 +1709,22 @@ function QuestionsCard({
               {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
             />
           </div>
+        ) : undefined}
+        record={evidenceUnderAnswer && diagnosisSummary && diagnosisCard ? (
+          <HfpEfEvidenceFold summary={diagnosisSummary} isEnglish={isEnglish}>
+            <HfpEfCriteriaList
+              summary={diagnosisSummary}
+              card={diagnosisCard}
+              isEnglish={isEnglish}
+              symptomsHint={isEnglish ? 'record them under Follow-up' : '可在「追蹤」補記'}
+            />
+            <HfpEfScoreLine
+              compact
+              reading={hfpefReading}
+              isEnglish={isEnglish}
+              {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+            />
+          </HfpEfEvidenceFold>
         ) : undefined}
       />
     ) : null}
@@ -2007,6 +2030,7 @@ function MapDiagnosisPoint({
   onEdit,
   onCollapse,
   evidence,
+  record,
 }: {
   question: VisitQuestion
   point: { dp: string; label: string }
@@ -2019,6 +2043,8 @@ function MapDiagnosisPoint({
   /** Closes an answer reopened by 修改 without changing it. */
   onCollapse?: () => void
   evidence?: ReactNode
+  /** What the answer rests on, folded under it once it is given. */
+  record?: ReactNode
 }) {
   const ask = question.label.replace(/^診斷：|^Diagnosis:\s*/, '')
   const state: DecisionPointState = !open ? 'done' : question.state === 'answered' ? 'confirm' : 'act'
@@ -2078,7 +2104,34 @@ function MapDiagnosisPoint({
         </div>
       ) : null}
       {open && evidence ? <div className="mt-2 border-t border-border/60 pt-2">{evidence}</div> : null}
+      {!open && record ? <div className="mt-1.5">{record}</div> : null}
     </div>
+  )
+}
+
+/**
+ * The HFpEF criteria and scores under an answered 「HFpEF」, folded: its line
+ * says how many criteria hold, and DP-34 — the confirmation it answers — is
+ * where a press on that point lands and opens it.
+ */
+function HfpEfEvidenceFold({ summary, isEnglish, children }: {
+  summary: DiagnosticSummary
+  isEnglish: boolean
+  children: ReactNode
+}) {
+  const met = summary.criteria.filter((criterion) => criterion.state === 'met').length
+  return (
+    <details className="group rounded-md border border-border/60" data-dp="DP-34" data-testid="cdss-hf-hfpef-evidence-fold">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2 text-xs font-medium text-foreground pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground">DP-34</span>
+        <span>{isEnglish ? 'HFpEF criteria' : 'HFpEF 診斷依據'}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {isEnglish ? `${met}/${summary.criteria.length} met` : `${met}/${summary.criteria.length} 成立`}
+        </span>
+        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="space-y-1.5 border-t border-border/60 px-2 pb-2 pt-1.5">{children}</div>
+    </details>
   )
 }
 

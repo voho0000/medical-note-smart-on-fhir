@@ -243,7 +243,8 @@ describe('visit decision screen · P4 stable and optimised', () => {
     expect(slot).toHaveAttribute('data-dp', 'DP-07')
     expect(slot).toContainElement(screen.getByTestId('cdss-visit-detail'))
     expect(pressed).toHaveAttribute('aria-expanded', 'true')
-    // On a wide panel the overview becomes the column beside the card.
+    // Stacked (the map measured narrow here), the layout names the open card;
+    // from 36rem the overview is the column beside it (visit-map-side-by-side).
     expect(screen.getByTestId('cdss-visit-map')).toHaveAttribute('data-layout', 'module')
 
     // The stepper walks the map in reading order.
@@ -338,12 +339,10 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(screen.getByTestId('cdss-visit-summary-text')).toHaveTextContent('DP-10 SGLT2i：開始 SGLT2i')
   })
 
-  it('records one decision per point: the row and the card opened under it share it', () => {
+  it('records one decision per point: the card under a row leaves the buttons to the row', () => {
     render(<Harness model={p5Model()} modules={[card('heart-failure-ras')]} />)
     openSection('treatment')
     // A queued point's card opens under its own row, from 「依據與細節」.
-    // (A decided row offers no 「依據與細節」, so the card is opened first
-    // and stays open through the decision.)
     fireEvent.click(rowDetail('DP-07'))
     expect(rowDetail('DP-07')).toHaveAttribute('aria-expanded', 'true')
     const detail = screen.getByTestId('cdss-visit-detail')
@@ -352,6 +351,9 @@ describe('visit decision screen · P5 titrating with AF', () => {
     expect(within(detail).getByRole('heading', { level: 4 })).toHaveFocus()
     expect(within(detail).getByTestId('detail-body-heart-failure-ras')).toHaveTextContent('證據表 heart-failure-ras')
     expect(within(detail).getAllByText(/要不要|哪一種|劑量/).length).toBeGreaterThanOrEqual(3)
+    // One 「換 ARNI」, on the row (clinician feedback 2026-09-30: 「光開始MRA按鈕就出現兩次」).
+    expect(within(detail).queryByRole('button', { name: '換 ARNI' })).toBeNull()
+    expect(within(row('DP-07')).getAllByRole('button', { name: '換 ARNI' })).toHaveLength(1)
 
     fireEvent.click(primaryOf(row('DP-07')))
     const decisions = getPhysicianDecisions(PATIENT)
@@ -364,24 +366,22 @@ describe('visit decision screen · P5 titrating with AF', () => {
       responseCheck: { text: 'K、Cr、血壓', interval: '1–2 週' },
       packVersion: 'test-1',
     })
-    // The card reads the decision the row recorded.
+    // The row reads the decision; the card, still open, does not repeat it.
     expect(screen.getByTestId('cdss-visit-detail')).toBe(detail)
-    expect(within(detail).getByTestId('cdss-visit-decided')).toHaveTextContent('換 ARNI')
+    expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
+    expect(within(row('DP-07')).getAllByTestId('cdss-visit-decided')).toHaveLength(1)
+    expect(within(detail).queryByTestId('cdss-visit-decided')).toBeNull()
 
-    // Taking it back on the card takes it back on the row.
-    fireEvent.click(within(detail).getByRole('button', { name: '改 DP-07 的決定' }))
+    // Taken back on the row, and an alternative decided there.
+    fireEvent.click(within(row('DP-07')).getByRole('button', { name: '改 DP-07 的決定' }))
     expect(getPhysicianDecisions(PATIENT)['visit:hf:DP-07']).toBeUndefined()
     expect(row('DP-07')).toHaveAttribute('data-decided', 'false')
-
-    // Deciding an alternative on the card collapses the row to it. (A
-    // browser focuses the button it clicks; jsdom has to be told.)
-    const keep = within(detail).getByRole('button', { name: '維持 ACEi' })
-    keep.focus()
-    fireEvent.click(keep)
+    const other = within(row('DP-07')).queryByRole('button', { name: /其他/ })
+    if (other) fireEvent.click(other)
+    fireEvent.click(within(row('DP-07')).getByRole('button', { name: '維持 ACEi' }))
     expect(row('DP-07')).toHaveAttribute('data-decided', 'true')
     expect(row('DP-07')).toHaveTextContent('維持 ACEi')
     expect(Object.keys(getPhysicianDecisions(PATIENT))).toEqual(['visit:hf:DP-07'])
-    expect(within(detail).getByTestId('cdss-visit-decided').querySelector('[tabindex="-1"]')).toHaveFocus()
   })
 
   it('opens a queued point’s card under its row from its tile, and closes back to the row', () => {

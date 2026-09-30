@@ -113,13 +113,14 @@ describe('optional additions', () => {
     // The waiting points are the pack's to settle; the host did not walk into them.
     expect(decisions['visit:af:DP-09']).toBeUndefined()
 
-    // The opened card shows both steps, from the same records.
+    // The opened card keeps the first step, where it can be changed; the
+    // second is the row's, and is not drawn twice.
     const detail = screen.getByTestId('cdss-visit-detail')
     expect(row('DP-07')).toContainElement(detail)
     expect(within(detail).getAllByTestId('cdss-visit-decided').map((element) => element.textContent)).toEqual([
       expect.stringContaining('開始抗凝'),
-      expect.stringContaining('apixaban 5 mg bid'),
     ])
+    expect(row('DP-07').querySelector('[data-visit-decided-about]')?.parentElement).toHaveTextContent('apixaban 5 mg bid')
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('apixaban 5 mg bid：Hb、Cr，30 天內')
   })
 
@@ -141,6 +142,20 @@ describe('optional additions', () => {
 
   it('shows the pack’s decided headline once the queue is done', () => {
     render(<Harness model={{ ...p5Model(), queue: ['DP-10'], headlineWhenDecided: '今天的決定都記下了（pack）' }} />)
+    fireEvent.click(primaryOf(row('DP-10')))
+    // The pack's words, then what still needs the clinician outside the queue.
+    expect(screen.getByRole('heading', { level: 3, name: /^今天的決定都記下了（pack）( · 還有 \d+ 項需你確認)?$/ })).toBeInTheDocument()
+    // Read on screen where the visit ends: at the head of the summary.
+    expect(screen.getByTestId('cdss-visit-column-summary')).toContainElement(screen.getByTestId('cdss-visit-decided-line'))
+    expect(screen.getByTestId('cdss-visit-decided-line')).toHaveTextContent(/^今天的決定都記下了（pack）/)
+  })
+
+  it('says the day is decided in the pack’s words alone once nothing else needs the clinician', () => {
+    const model = p5Model()
+    const quiet = { ...model, queue: ['DP-10'], headlineWhenDecided: '今天的決定都記下了（pack）', points: model.points.map((point) => (
+      point.dp === 'DP-10' || !['safety', 'act', 'confirm'].includes(point.state) ? point : { ...point, state: 'done' as const }
+    )) }
+    render(<Harness model={quiet} />)
     fireEvent.click(primaryOf(row('DP-10')))
     expect(screen.getByRole('heading', { level: 3, name: '今天的決定都記下了（pack）' })).toBeInTheDocument()
   })
@@ -239,8 +254,9 @@ describe('optional additions', () => {
     // DP-00 is not listed again as a row; the answer still routes to the
     // phenotype store.
     expect(document.querySelector('[data-visit-queue-dp="DP-00"]')).toBeNull()
-    // This fixture carries every-visit asks, so 01 opens on 追蹤; the question is under 診斷.
-    fireEvent.click(screen.getByTestId('cdss-visit-status-view-diagnosis'))
+    // This fixture carries every-visit asks, so 01 leads with them; the
+    // question is in the diagnostic assessment after them, on the same page.
+    expect(within(screen.getByTestId('cdss-visit-lead-status')).getByTestId('cdss-hf-suspicion-option-suspected')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-suspected'))
     expect(onAnswerPhenotype).toHaveBeenCalledWith(expect.objectContaining({ hfSuspicion: 'suspected' }))
     expect(within(screen.getByTestId('cdss-visit-column-outlook')).getByTestId('cdss-visit-outlook-module-hf-prognosis-shell')).toBeInTheDocument()

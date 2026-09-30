@@ -172,16 +172,17 @@ interface ClinicalDecisionSupportViewProps {
    */
   visitModel?: VisitDecisionModel
   /**
-   * On the heart-failure page, the atrial-fibrillation result the model's AF
-   * decision points were read from, so their cards open from the map.
+   * The other packs' results the map reads (the pack's
+   * `VisitMapDefinition.companions` — on the heart-failure page, atrial
+   * fibrillation's), so the cards behind their decision points open from the map.
    */
-  companionResult?: CdssResult
+  companionResults?: readonly CdssResult[]
   visitAnswers?: VisitAnswers
   /** Where each of today's answers was given, so another page can say so. */
   visitAnswerSources?: VisitAnswerProvenance
   onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
-  /** The companion's English build, so its cards' rationale copies in English too. */
-  englishCompanionResult?: CdssResult
+  /** The companions' English builds, so their cards' rationale copies in English too. */
+  englishCompanionResults?: readonly CdssResult[]
 }
 
 const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -2162,18 +2163,20 @@ export function ClinicalDecisionSupportView({
   onSaveHfpefInputs,
   nhiPageResetKey = 0,
   visitModel,
-  companionResult,
+  companionResults,
   visitAnswers,
   visitAnswerSources,
   onVisitAnswer,
-  englishCompanionResult,
+  englishCompanionResults,
 }: ClinicalDecisionSupportViewProps) {
   // The decision map exists only with a model; asked for without one, the page
   // is the three sections it always was.
   const layout: CdssLayout = requestedLayout === 'map' && !visitModel ? 'sections' : requestedLayout
   const englishRecommendations = new Map([
-    ...(englishCompanionResult?.recommendations ?? []),
-    ...(englishCompanionResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
+    ...(englishCompanionResults ?? []).flatMap(companion => [
+      ...companion.recommendations,
+      ...(companion.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
+    ]),
     ...(englishResult?.recommendations ?? []),
     ...(englishResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
   ].map(item => [item.id, item]))
@@ -2397,10 +2400,10 @@ export function ClinicalDecisionSupportView({
   )
 
   // Every card a decision point can open: this pack's (completed checks
-  // restored, as the sections show them) and, on the heart-failure page, the
-  // atrial-fibrillation cards behind DP-14 and DP-28.
+  // restored, as the sections show them) and its companions' — on the
+  // heart-failure page, the atrial-fibrillation cards behind DP-14 and DP-28.
   if (isMap && visitModel) {
-    const companionModules = companionResult ? restoreCompletedModules(companionResult).recommendations : []
+    const companionModules = (companionResults ?? []).flatMap((companion) => restoreCompletedModules(companion).recommendations)
     const visitModules = new Map<string, CdssRecommendation>([
       ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
       ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
@@ -2443,6 +2446,8 @@ export function ClinicalDecisionSupportView({
             const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
             if (next) onAnswerPhenotype?.(next)
           } : undefined}
+          // A point's own questions (AF DP-08's valves) are AF answers.
+          {...(onAfAnswer ? { onPointAnswer: (answers: string, id: string, value: boolean | undefined) => { if (answers === 'af-clinical') onAfAnswer(id, value) } } : {})}
           modules={visitModules}
           unmappedModules={unmappedVisitModules}
           renderDetail={(recommendation) => (

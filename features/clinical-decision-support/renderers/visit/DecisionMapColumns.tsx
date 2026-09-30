@@ -1,14 +1,16 @@
 "use client"
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardCopy, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PointDecision } from './visit-decisions'
 import {
   ABSENT_STATES,
   BLOCK_ORDER,
+  blockShortTitle,
   blockTitle,
+  sourceTag,
   stateLabel,
   visitDecisionKey,
 } from './visit-decisions'
@@ -16,6 +18,7 @@ import type { DecisionPointState, DecisionPointView, VisitBlock, VisitDecisionMo
 import { ChainDots, StatePill } from './visit-presentation'
 import { DecisionPointChecklist, VISIT_DETAIL_ID } from './DecisionPointDetail'
 import styles from '../cdss-poster.module.css'
+import { focusBackTo, revealTop, scrollParentOf } from './reveal'
 
 /** The three-section layout's section each map block is, for its colours. */
 const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
@@ -25,22 +28,91 @@ const SECTION_TONE: Readonly<Record<VisitBlock, string>> = {
 }
 
 /**
- * Where each block sits in the overview. Narrow, the blocks stack. From 40rem
- * 01 and 03 share the first row and 02 — the longest — takes the full width
- * under them in two columns; from 56rem the three sit side by side, 02 two
- * tracks wide. With a card open on a panel 64rem or wider the overview becomes
- * one column on the left, beside the section, so any other point is one press
- * away without scrolling back (the design the clinician chose on 2026-09-29).
+ * From this width (in rem, the map's own) every decision point is a column on
+ * the left and what a press opens is on the right, beside it (clinician
+ * feedback 2026-09-29: 「左邊是一整排 DP，右邊是細項，細項不用太寬」) — so an
+ * even split of a 1280 screen already has it. The column is 13.5rem, 15rem
+ * from 48rem, 17rem from 64rem and 20rem from 80rem, where names no longer
+ * need cutting; the details are never much narrower than a phone's screen,
+ * which they are laid out for. Narrower, the map stacks over the details.
  */
-const BLOCK_PLACEMENT: Readonly<Record<VisitBlock, { block: string; rail: string; points: string; railPoints: string }>> = {
-  status: { block: '', rail: '', points: '', railPoints: '' },
-  treatment: {
-    block: '@min-[40rem]:col-span-2 @min-[40rem]:order-last @min-[56rem]:order-none',
-    rail: '@min-[64rem]:col-span-1',
-    points: '@min-[40rem]:columns-2 @min-[40rem]:gap-2',
-    railPoints: '@min-[64rem]:columns-1',
-  },
-  outlook: { block: '', rail: '', points: '', railPoints: '' },
+const SIDE_BY_SIDE_REM = 36
+
+/**
+ * Whether the map is wide enough to stand beside its details, and how tall the
+ * column may be to stay whole in view as the details scroll. The layout itself
+ * is container queries; this is for what the layout cannot say — a section
+ * name pressed beside the details keeps them, rather than leaving the right
+ * side empty.
+ */
+function useSideBySide(ref: RefObject<HTMLElement | null>): { sideBySide: boolean; columnHeight?: number } {
+  const [state, setState] = useState<{ sideBySide: boolean; columnHeight?: number }>({ sideBySide: false })
+  // Before paint, so the first frame is already laid out as it will stay.
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure())
+    let scroller: HTMLElement | undefined
+    const measure = () => {
+      // Found again each time: what scrolls can change once the panel's own
+      // effects have run.
+      const found = scrollParentOf(element)
+      if (found !== scroller) {
+        if (scroller) observer.unobserve(scroller)
+        if (found) observer.observe(found)
+        scroller = found
+      }
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+      const sideBySide = element.getBoundingClientRect().width >= SIDE_BY_SIDE_REM * rem
+      // The column sits 0.5rem from the top of what scrolls and keeps 0.5rem below.
+      const columnHeight = sideBySide ? Math.max(0, Math.floor((scroller?.clientHeight ?? window.innerHeight) - rem)) : undefined
+      setState((current) => (current.sideBySide === sideBySide && current.columnHeight === columnHeight
+        ? current
+        : { sideBySide, ...(columnHeight === undefined ? {} : { columnHeight }) }))
+    }
+    observer.observe(element)
+    measure()
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [ref])
+  return state
+}
+
+/**
+ * How far below the top of what scrolls the steps, stuck at the head of the
+ * details, reach — as `--cdss-steps-clear` on the details, which every place
+ * the map moves the page to keeps as its scroll margin. Measured, not a fixed
+ * rem: the steps' text is set in pixels and the page's rem is not always 16,
+ * so a guess leaves a target's top — the summary's 複製 — under them.
+ */
+function useStepsClearance(
+  workingRef: RefObject<HTMLElement | null>,
+  stepsRef: RefObject<HTMLElement | null>,
+): void {
+  useLayoutEffect(() => {
+    const working = workingRef.current
+    const steps = stepsRef.current
+    if (!working || !steps || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const style = getComputedStyle(steps)
+      // Stacked on a very narrow panel the steps scroll away with the rest.
+      const stuck = style.position === 'sticky'
+      // A stuck offset counts from inside what scrolls' padding; a scroll
+      // margin from its edge.
+      const scroller = scrollParentOf(steps)
+      const padding = scroller ? Number.parseFloat(getComputedStyle(scroller).paddingTop) || 0 : 0
+      const clear = stuck ? padding + (Number.parseFloat(style.top) || 0) + steps.getBoundingClientRect().height + 6 : 8
+      working.style.setProperty('--cdss-steps-clear', `${Math.ceil(clear)}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(steps)
+    observer.observe(working)
+    return () => observer.disconnect()
+  }, [workingRef, stepsRef])
 }
 
 const ATTENTION_ORDER: readonly DecisionPointState[] = ['safety', 'act', 'confirm']
@@ -93,10 +165,11 @@ function MapTile({
   point,
   decision,
   inQueue,
+  pending,
+  chain = point.chain,
   open,
   opensCard,
   matches,
-  rail,
   isEnglish,
   sourceOfPage,
   onOpen,
@@ -104,13 +177,19 @@ function MapTile({
   point: DecisionPointView
   decision?: PointDecision
   inQueue: boolean
+  /**
+   * The question still open for it, over its own sentence: another row's step
+   * (DP-09's 「選 DOAC」, not 「等 DP-07」), or its own chain's next one
+   * (「開始抗凝 → 選 DOAC…」).
+   */
+  pending?: string
+  /** Its chain as it stands today, where that differs from the pack's (see `chainOf`). */
+  chain?: DecisionPointView['chain']
   open: boolean
   /** False for a point the page asks elsewhere (01's 診斷 view): the tile goes there instead. */
   opensCard: boolean
   /** False while a search is typed that this point does not match. */
   matches: boolean
-  /** The overview is the column beside an open card: one line per point on a wide panel. */
-  rail: boolean
   isEnglish: boolean
   sourceOfPage: DecisionPointView['source']
   onOpen: () => void
@@ -121,12 +200,13 @@ function MapTile({
   // the pack's one sentence for it (a waiting step the queue has moved on to
   // counts). The rest of the pack's words are in the card, and in the tile's
   // title for a pointer.
+  const sentence = pending ?? point.headline ?? point.why
   const sub = decision
     ? [decision.record.actionLabel ?? decision.action.label, check?.text].filter(Boolean).join(' · ')
-    : SENTENCE_STATES.has(point.state) || (inQueue && point.state === 'waiting')
-      ? point.headline ?? point.why
+    : SENTENCE_STATES.has(point.state) || (inQueue && (point.state === 'waiting' || point.state === 'done'))
+      ? sentence
       : undefined
-  const title = [point.dp, point.label, point.headline, point.why].filter(Boolean).join(' · ')
+  const title = [point.dp, point.label, pending ?? point.headline, point.why].filter(Boolean).join(' · ')
   return (
     <button
       type="button"
@@ -161,22 +241,144 @@ function MapTile({
         <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
         <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', absent ? 'text-muted-foreground' : 'text-foreground')}>{point.label}</span>
         {point.source !== sourceOfPage ? (
-          <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{point.source.toUpperCase()}</Badge>
+          <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
         ) : null}
         <StatePill state={point.state} isEnglish={isEnglish} decided={Boolean(decision)} inQueue={inQueue} />
         {/* Out of sight, the pack's sentence is still read out. */}
-        {!sub && (point.headline ?? point.why) ? <span className="sr-only">{point.headline ?? point.why}</span> : null}
+        {!sub && sentence ? <span className="sr-only">{sentence}</span> : null}
       </span>
       {sub ? (
-        // Beside an open card the overview is a list of names: the sentence
-        // is in the card.
-        <span className={cn('flex w-full min-w-0 items-center gap-1.5', rail && '@min-[64rem]:hidden')}>
+        <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-xs text-foreground/80">{sub}</span>
           <span className="shrink-0">
-            <ChainDots chain={point.chain} isEnglish={isEnglish} />
+            <ChainDots chain={chain} isEnglish={isEnglish} />
           </span>
         </span>
       ) : null}
+    </button>
+  )
+}
+
+/** Where the working area is: one of the three sections, or the visit's summary. */
+type VisitStep = VisitBlock | 'summary'
+
+/**
+ * The visit's steps at the head of the working area — 01 現況, 02 治療, 03
+ * 預後與計畫, then 本次摘要 — each saying what it still needs, so where the
+ * clinician is and what is left are always in view, and any step is one press
+ * away. A section the pack has closed (「確診後開啟」) says so and does not open.
+ */
+function VisitSteps({
+  shown,
+  summaries,
+  closedNote,
+  summaryStatus,
+  isEnglish,
+  onGo,
+}: {
+  shown: VisitStep | null
+  summaries: Readonly<Record<VisitBlock, { text: string; attention: boolean; nothing: boolean }>>
+  closedNote: (block: VisitBlock) => string | undefined
+  /** What the summary holds so far (「已記錄 2」); absent when the screen has no summary. */
+  summaryStatus?: string
+  isEnglish: boolean
+  onGo: (step: VisitStep) => void
+}) {
+  const stepClass = cn(
+    styles.tone,
+    styles.mapToggle,
+    'flex h-full min-h-11 w-full min-w-0 flex-col items-start justify-center gap-0.5 rounded-md border px-2 py-1 text-left transition-colors',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
+  )
+  return (
+    <nav aria-label={isEnglish ? 'This visit, step by step' : '本次看診的步驟'} data-testid="cdss-visit-steps">
+      <ol className={cn('grid gap-1', summaryStatus === undefined ? 'grid-cols-3' : 'grid-cols-4')}>
+        {BLOCK_ORDER.map((block) => {
+          const note = closedNote(block)
+          const summary = summaries[block]
+          return (
+            <li key={block} className="min-w-0">
+              <button
+                type="button"
+                className={stepClass}
+                data-section={SECTION_TONE[block]}
+                aria-current={shown === block ? 'step' : undefined}
+                // Closed, it still takes focus and reads its reason (「確診後開啟」).
+                aria-disabled={note ? true : undefined}
+                title={`${blockTitle(block, isEnglish)} · ${note ?? summary.text}`}
+                onClick={() => { if (!note) onGo(block) }}
+                data-testid={`cdss-visit-step-${block}`}
+                data-attention={summary.attention && !note ? 'true' : undefined}
+              >
+                <span className="block max-w-full truncate text-[13px] font-semibold">{blockShortTitle(block, isEnglish)}</span>
+                <span className={cn('flex max-w-full items-center gap-1 text-[11px] leading-4', summary.attention && !note ? 'font-semibold' : 'opacity-85')}>
+                  {!note && summary.nothing ? <Check className="h-3 w-3 shrink-0" aria-hidden="true" /> : null}
+                  <span className="truncate">{note ?? summary.text}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+        {summaryStatus !== undefined ? (
+          <li className="min-w-0">
+            <button
+              type="button"
+              className={stepClass}
+              data-section="summary"
+              aria-current={shown === 'summary' ? 'step' : undefined}
+              onClick={() => onGo('summary')}
+              data-testid="cdss-visit-step-summary"
+            >
+              <span className="flex max-w-full items-center gap-1 text-[13px] font-semibold">
+                <ClipboardCopy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{isEnglish ? 'Summary' : '本次摘要'}</span>
+              </span>
+              <span className="block max-w-full truncate text-[11px] leading-4 text-muted-foreground">{summaryStatus}</span>
+            </button>
+          </li>
+        ) : null}
+      </ol>
+    </nav>
+  )
+}
+
+/**
+ * A point its section still needs the clinician for, beyond what the section
+ * draws: its name, state and the pack's sentence, one press to its card.
+ */
+function StillOpenRow({
+  point,
+  isEnglish,
+  sourceOfPage,
+  onOpen,
+}: {
+  point: DecisionPointView
+  isEnglish: boolean
+  sourceOfPage: DecisionPointView['source']
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-still-open={point.dp}
+      data-source={point.source}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">{point.label}</span>
+          {point.source !== sourceOfPage ? (
+            <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
+          ) : null}
+          <StatePill state={point.state} isEnglish={isEnglish} decided={false} inQueue={false} />
+        </span>
+        {point.headline ?? point.why ? (
+          <span className="mt-0.5 block text-xs text-muted-foreground">{point.headline ?? point.why}</span>
+        ) : null}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   )
 }
@@ -234,10 +436,11 @@ function DetailStepper({
 
 /**
  * 決策地圖: an overview of every decision point the pack lists, in its three
- * sections — 01 現況, 02 治療, 03 預後與計畫 — side by side, then the open
- * section's working area under it: its questions and today's decision rows
- * (the section's lead), its folded surfaces, and the card of a point opened
- * from the overview.
+ * sections — 01 現況, 02 治療, 03 預後與計畫 — and the open section's working
+ * area: its questions and today's decision rows (the section's lead), its
+ * folded surfaces, and the card of a point opened from the overview. From
+ * 36rem the overview is a column on the left that stays in view and the
+ * working area is beside it; narrower, the overview stacks over it.
  *
  * Nothing on the overview folds: a point that does not apply or is not yet
  * computed keeps its place, muted, so a clinician finds a module where it was
@@ -268,7 +471,12 @@ export function DecisionMapColumns({
   rowDps,
   leadCardKeys,
   initialOpen,
-  stepsBeforeNext,
+  overviewTop,
+  workingTop,
+  pendingLine,
+  chainOf,
+  summary,
+  asks,
 }: {
   model: VisitDecisionModel
   decisionOf: (point: DecisionPointView) => PointDecision | undefined
@@ -308,41 +516,91 @@ export function DecisionMapColumns({
   leadCardKeys?: ReadonlySet<string>
   /** The section open at first paint. */
   initialOpen?: VisitBlock | null
+  /** At the head of the column (the clinical values), over the sections. */
+  overviewTop?: ReactNode
+  /** At the head of the working area, over whatever step it shows (an inline editor opened from the values). */
+  workingTop?: ReactNode
   /**
-   * A step still inside a section that comes before the next one (01's 追蹤
-   * after a diagnosis made on 診斷): its foot button offers it instead of
-   * 「下一區」, and the clinician presses it — nothing moves on its own.
+   * The line over a card at a section's head, where another row's step now
+   * asks it (DP-09's 「選 DOAC」 on DP-07's row) rather than the point's own
+   * 「等上一步」.
    */
-  stepsBeforeNext?: Partial<Record<VisitBlock, { label: string; onGo: () => void }>>
+  pendingLine?: (point: DecisionPointView) => string | undefined
+  /** The chain a tile's dots show: the open step's, where a chain has moved on to one. */
+  chainOf?: (point: DecisionPointView) => DecisionPointView['chain']
+  /**
+   * The visit's summary — its text and 複製 — as the last step after 03, with
+   * a line of what it holds so far for the step's name.
+   */
+  summary?: { content: ReactNode; status: string }
+  /**
+   * The every-visit questions, carried to the head of 02 and 03 while any is
+   * unanswered: their answers decide points there (DP-06's diuretic waits on
+   * 喘／體重), and the clinician answers where they are rather than going back
+   * to 01. Answered there, they stay — marked done — until the clinician
+   * leaves the step, so the button just pressed is not pulled from under them.
+   */
+  asks?: {
+    content: ReactNode
+    pending: boolean
+    /** An answer opened more to ask in 01 (喘變差 opens the fuller questions there). */
+    opensMore?: boolean
+  }
 }) {
-  const [openBlock, setOpenBlock] = useState<VisitBlock | null>(initialOpen ?? null)
+  const [openBlock, setOpenBlock] = useState<VisitStep | null>(initialOpen ?? null)
   const [query, setQuery] = useState('')
+  // Narrow, the map's list folds under its title: the steps at the head of
+  // the details say what each section needs, and 37 rows above the details
+  // would put every step a long scroll away. A search unfolds it.
+  const [mapUnfolded, setMapUnfolded] = useState(false)
+  const mapRef = useRef<HTMLElement | null>(null)
+  const { sideBySide, columnHeight } = useSideBySide(mapRef)
+  const workingRef = useRef<HTMLDivElement | null>(null)
+  const stepsRef = useRef<HTMLDivElement | null>(null)
+  useStepsClearance(workingRef, stepsRef)
+  // Beside the column the details are never empty: a section — or the
+  // summary — is always shown.
+  const summaryShown = openBlock === 'summary' && Boolean(summary)
+  const shownBlock: VisitBlock | null = openBlock === 'summary' && summary
+    ? null
+    : (openBlock === 'summary' ? null : openBlock) ?? (sideBySide ? 'status' : null)
+  const shownStep: VisitStep | null = summaryShown ? 'summary' : shownBlock
+  // The step the every-visit questions were carried into, held while the
+  // clinician stays there (state adjusted during render, as React advises for
+  // state that follows props).
+  const asksStep = shownBlock && shownBlock !== 'status' ? shownBlock : null
+  const [asksHeldIn, setAsksHeldIn] = useState<VisitBlock | null>(null)
+  if (asks?.pending && asksStep && asksHeldIn !== asksStep) setAsksHeldIn(asksStep)
+  if (!asks?.pending && asksHeldIn && asksHeldIn !== asksStep) setAsksHeldIn(null)
+  const asksIn = asks?.pending ? asksStep : asksHeldIn && asksHeldIn === asksStep ? asksStep : null
   const searchId = useId()
   // Where to bring the page after a move: the section just opened from 下一區,
-  // or the card just opened from a tile or the stepper.
-  const scrollTo = useRef<{ block: VisitBlock } | { card: true } | null>(null)
+  // or the card just opened from a tile or the stepper. State, not a ref: each
+  // press is a new request, so one that changes nothing else (the step
+  // already shown) still moves the page, and none is left behind for a later,
+  // unrelated render.
+  const [reveal, setReveal] = useState<{ block: VisitStep; focus: boolean } | { card: true } | null>(null)
   const openPoint = openKey
     ? model.points.find((point) => visitDecisionKey(point) === openKey)
     : undefined
-  // A card is open in its section: on a wide panel the overview becomes the
-  // column beside it.
-  const cardOpen = Boolean(openPoint && detail && openBlock === openPoint.block)
+  // A card is open in its section.
+  const cardOpen = Boolean(openPoint && detail && shownBlock === openPoint.block)
   // The card's place: under its row where the lead draws one, else at the
   // head of its section.
   const cardAtHead = cardOpen && openPoint && !leadCardKeys?.has(visitDecisionKey(openPoint)) ? openPoint : undefined
 
   useEffect(() => {
-    const target = scrollTo.current
-    if (!target) return
-    scrollTo.current = null
-    if ('block' in target) {
-      document.getElementById(`cdss-visit-column-${target.block}`)?.scrollIntoView?.({ block: 'start' })
+    if (!reveal) return
+    if ('block' in reveal) {
+      if (reveal.focus) document.getElementById(`cdss-visit-column-${reveal.block}-title`)?.focus({ preventScroll: true })
+      revealTop(document.getElementById(`cdss-visit-column-${reveal.block}`))
       return
     }
-    // The card has focused its own heading; bring its top into view, under
-    // the overview the tile was pressed on.
-    document.getElementById(VISIT_DETAIL_ID)?.scrollIntoView?.({ block: 'start' })
-  }, [openBlock, openKey])
+    // The card has focused its own heading; bring its top into view — under
+    // the overview the tile was pressed on, or beside the column — with the
+    // point's line above it where it opened at its section's head.
+    revealTop(document.querySelector('[data-testid="cdss-visit-detail-slot"]') ?? document.getElementById(VISIT_DETAIL_ID))
+  }, [reveal])
 
   // A block the pack closed with a note (「確診後開啟」) — or, without one,
   // 02 and 03 before a diagnosis.
@@ -362,24 +620,23 @@ export function DecisionMapColumns({
   const matchCount = needle ? model.points.filter((point) => searchText(point).includes(needle)).length : 0
 
   const open = (point: DecisionPointView) => {
+    // A point picked from the unfolded list: the list folds again, and the
+    // details come up to meet the clinician.
+    if (!sideBySide) setMapUnfolded(false)
     // The point's card shows in its own section, so that section is the open one.
-    if (opensCard(point)) scrollTo.current = { card: true }
+    if (opensCard(point)) setReveal({ card: true })
     setOpenBlock(point.block)
     // A card left open in a section since closed is out of sight: pressing its
     // point shows it again rather than closing it (#179 review). Only a card
     // in view closes on a second press.
-    const hiddenButOpen = openKey === visitDecisionKey(point) && openBlock !== point.block
+    const hiddenButOpen = openKey === visitDecisionKey(point) && shownBlock !== point.block
     if (!hiddenButOpen) onOpen(point)
   }
   const collapse = (point: DecisionPointView) => {
     onOpen(point)
-    // Back to the tile that opened it, as the card's own close does.
-    requestAnimationFrame(() => {
-      const tiles = document.querySelectorAll<HTMLElement>('[data-testid="cdss-visit-map"] button[data-dp]')
-      const tile = [...tiles].find((candidate) => candidate.dataset.dp === point.dp && candidate.dataset.source === point.source)
-      tile?.focus({ preventScroll: true })
-      tile?.scrollIntoView?.({ block: 'nearest' })
-    })
+    // Back to what opened it, as the card's own close does — or, with the
+    // list folded away, somewhere still on the page.
+    requestAnimationFrame(() => focusBackTo(point))
   }
 
   // A section says what its lead still waits for (answers, today's
@@ -394,18 +651,38 @@ export function DecisionMapColumns({
       attention: Boolean(lead?.attention) || cells.attention,
     }
   }
-  const openNext = (block: VisitBlock) => {
-    scrollTo.current = { block }
-    setOpenBlock(block)
+  // `focus`: the press came from inside what it hides (a foot button, the
+  // carried questions), so focus follows to the heading of what it shows.
+  const openNext = (step: VisitStep, focus = false) => {
+    setReveal({ block: step, focus })
+    setOpenBlock(step)
   }
+  // A step, a section's name, 下一區／完成 or the way back to 01 shows the
+  // section itself: a card standing for it closes (the card is the section
+  // while it is open) — shown now or left open there before the clinician
+  // moved on, which would come back as the section and hide what the press
+  // was for (#194 review: DP-24 → 02 → 01 showed only DP-24). A tile pressed
+  // for a card still opens it.
+  const showStep = (step: VisitStep, focus = false) => {
+    const left = openPoint && detail && opensCard(openPoint) && !leadCardKeys?.has(visitDecisionKey(openPoint)) ? openPoint : undefined
+    if (left && left.block === step) onOpen(left)
+    openNext(step, focus)
+  }
+  const nothingText = isEnglish ? 'Nothing pending' : '沒有待辦'
+  const stepSummaries = Object.fromEntries(BLOCK_ORDER.map((block) => {
+    const combined = combinedSummary(block)
+    return [block, { ...combined, nothing: combined.text === nothingText }]
+  })) as Record<VisitBlock, { text: string; attention: boolean; nothing: boolean }>
+  // The open sections still asking for something, for the summary's foot-note.
+  const summaryLeft = BLOCK_ORDER.filter((block) => !closedNote(block) && stepSummaries[block].attention)
 
   // One bucket per group, groups in the order they first appear and points in
   // the pack's order within each, under the group's heading when the section
-  // has more than one. Headings print the pack's group label; without labels
-  // only the AF page — whose group ids are those letters — shows them.
+  // has more than one. Headings print the pack's group label, which every
+  // point carries; points without one (a hand-built model) draw no headings.
   const bucketsOf = (points: readonly DecisionPointView[]) => {
     const labelled = points.some((point) => point.groupLabel)
-    const groups = labelled || model.packId === 'atrial-fibrillation-cdss'
+    const groups = labelled
       ? new Set(points.map((point) => point.group))
       : new Set<string>()
     const buckets: { key: string; label?: string; points: DecisionPointView[] }[] = []
@@ -426,27 +703,44 @@ export function DecisionMapColumns({
 
   return (
     <section
+      ref={mapRef}
       aria-labelledby="cdss-visit-map-title"
-      className={cn(
-        'space-y-3',
-        cardOpen && '@min-[64rem]:grid @min-[64rem]:grid-cols-[17rem_minmax(0,1fr)] @min-[64rem]:items-start @min-[64rem]:gap-3 @min-[64rem]:space-y-0',
-      )}
+      className="@container"
       data-testid="cdss-visit-map"
-      data-layout={cardOpen ? 'module' : 'overview'}
+      data-layout={sideBySide ? 'side-by-side' : cardOpen ? 'module' : 'overview'}
     >
+      {/* Narrow, the map stacks over the details; from 36rem it is the
+          column on the left, and the details are beside it. */}
+      <div className="space-y-3 @min-[36rem]:grid @min-[36rem]:grid-cols-[13.5rem_minmax(0,1fr)] @min-[36rem]:items-start @min-[36rem]:gap-3 @min-[36rem]:space-y-0 @min-[48rem]:grid-cols-[15rem_minmax(0,1fr)] @min-[64rem]:grid-cols-[17rem_minmax(0,1fr)] @min-[80rem]:grid-cols-[20rem_minmax(0,1fr)]">
       {/* ---------------------------------------------------------- overview */}
       <div
-        className={cn(
-          'space-y-2',
-          cardOpen && '@min-[64rem]:sticky @min-[64rem]:top-2 @min-[64rem]:max-h-[calc(100dvh-1rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:pr-1',
-        )}
+        // The height is measured; whether it applies is the container query's
+        // to say, so the stacked map never takes a column's height.
+        className="space-y-2 @min-[36rem]:sticky @min-[36rem]:top-2 @min-[36rem]:max-h-(--cdss-column-height) @min-[36rem]:overflow-y-auto @min-[36rem]:overscroll-contain @min-[36rem]:pr-1"
+        style={columnHeight ? { '--cdss-column-height': `${columnHeight}px` } as CSSProperties : undefined}
         data-testid="cdss-visit-overview"
       >
+        {overviewTop}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h3 id="cdss-visit-map-title" className="text-sm font-semibold text-foreground">
+          {/* Beside the details the column needs no name: its sections are
+              the visit's steps. Stacked, the name heads the folded list. */}
+          <h3 id="cdss-visit-map-title" className={cn('text-sm font-semibold text-foreground', sideBySide && 'sr-only')}>
             {isEnglish ? `Decision map · all ${model.points.length} points` : `決策地圖 · 全部 ${model.points.length} 個決策點`}
           </h3>
-          <div className={cn('flex min-w-0 flex-1 items-center justify-end gap-2', cardOpen && '@min-[64rem]:w-full @min-[64rem]:flex-none')}>
+          {needle ? null : (
+            <button
+              type="button"
+              aria-expanded={mapUnfolded}
+              aria-controls="cdss-visit-sections"
+              onClick={() => setMapUnfolded(!mapUnfolded)}
+              className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 @min-[36rem]:hidden"
+              data-testid="cdss-visit-map-fold"
+            >
+              {mapUnfolded ? (isEnglish ? 'Fold' : '收起') : (isEnglish ? 'Show all' : '展開')}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', mapUnfolded && 'rotate-180')} aria-hidden="true" />
+            </button>
+          )}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 @min-[36rem]:w-full @min-[36rem]:flex-none">
             {needle ? (
               <span className="shrink-0 text-xs text-muted-foreground" role="status" data-testid="cdss-visit-map-search-count">
                 {isEnglish ? `${matchCount} found` : `找到 ${matchCount} 個`}
@@ -455,9 +749,8 @@ export function DecisionMapColumns({
             <label
               htmlFor={searchId}
               className={cn(
-                'flex h-8 w-full max-w-60 items-center gap-1.5 rounded-md border border-input bg-background px-2 pointer-coarse:h-11',
+                'flex h-8 w-full max-w-60 items-center gap-1.5 rounded-md border border-input bg-background px-2 pointer-coarse:h-11 @min-[36rem]:max-w-none',
                 'focus-within:ring-2 focus-within:ring-ring',
-                cardOpen && '@min-[64rem]:max-w-none',
               )}
             >
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -476,47 +769,43 @@ export function DecisionMapColumns({
         </div>
 
         <div
-          className={cn(
-            'grid items-start gap-2 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-4',
-            cardOpen && '@min-[64rem]:grid-cols-1',
-          )}
+          id="cdss-visit-sections"
+          className={cn('grid items-start gap-2', !mapUnfolded && !needle && '@max-[36rem]:hidden')}
           data-testid="cdss-visit-sections"
+          data-folded={!sideBySide && !mapUnfolded && !needle ? 'true' : undefined}
         >
           {BLOCK_ORDER.map((block) => {
-            const isOpen = openBlock === block
+            const isOpen = shownBlock === block
             const note = closedNote(block)
             const summary = combinedSummary(block)
             const extra = block === 'status' ? answersLine : block === 'outlook' ? outlookSummary : undefined
-            const placement = BLOCK_PLACEMENT[block]
             const buckets = bucketsOf(pointsOf(block))
             return (
               <div
                 key={block}
-                className={cn(
-                  styles.tone,
-                  styles.mapPanel,
-                  'min-w-0 overflow-hidden rounded-lg border',
-                  placement.block,
-                  cardOpen && placement.rail,
-                )}
+                className={cn(styles.tone, styles.mapPanel, 'min-w-0 overflow-hidden rounded-lg border')}
                 data-section={SECTION_TONE[block]}
                 data-testid={`cdss-visit-overview-${block}`}
               >
-                {/* The section's name opens its working area under the overview. */}
+                {/* The section's name opens its working area — under the
+                    overview, or beside it, where it stays open: there the
+                    details are never left empty. */}
                 <button
                   type="button"
                   id={`cdss-visit-section-toggle-${block}`}
-                  aria-expanded={isOpen}
+                  // Beside the details a name shows its section and never
+                  // folds it: the one shown is current, not expanded.
+                  aria-expanded={sideBySide ? undefined : isOpen}
+                  aria-current={sideBySide && isOpen ? 'true' : undefined}
                   aria-controls={`cdss-visit-column-${block}`}
                   onClick={() => {
-                    if (openBlock !== block) scrollTo.current = { block }
-                    setOpenBlock((current) => (current === block ? null : block))
+                    if (sideBySide || !isOpen || cardAtHead?.block === block) showStep(block)
+                    else setOpenBlock(null)
                   }}
                   className={cn(
                     styles.mapToggle,
-                    'flex w-full min-w-0 items-start gap-2 border-b px-3 py-2 text-left transition-colors',
+                    'flex w-full min-w-0 items-start gap-2 border-b px-3 py-2 text-left transition-colors @min-[36rem]:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    cardOpen && '@min-[64rem]:py-1.5',
                   )}
                   data-section={SECTION_TONE[block]}
                   data-testid={`cdss-visit-section-toggle-${block}`}
@@ -527,11 +816,12 @@ export function DecisionMapColumns({
                     <span className={cn('block text-xs', summary.attention ? 'font-semibold' : 'opacity-85')}>
                       {note ?? summary.text}
                     </span>
-                    {extra ? <span className={cn('block truncate text-xs opacity-85', cardOpen && '@min-[64rem]:hidden')}>{extra}</span> : null}
+                    {/* Beside the details the column is a list of points; the answers are in 01 itself. */}
+                    {extra ? <span className="block truncate text-xs opacity-85 @min-[36rem]:hidden">{extra}</span> : null}
                   </span>
-                  <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none', isOpen && 'rotate-180')} aria-hidden="true" />
+                  <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none @min-[36rem]:-rotate-90', isOpen && 'rotate-180 @min-[36rem]:rotate-0')} aria-hidden="true" />
                 </button>
-                <div className={cn('p-1.5', placement.points, cardOpen && placement.railPoints)}>
+                <div className="p-1.5">
                   {buckets.map((bucket) => (
                     <div key={bucket.key} className="mb-2 break-inside-avoid space-y-1 last:mb-0">
                       {bucket.label ? (
@@ -548,10 +838,11 @@ export function DecisionMapColumns({
                                 point={point}
                                 decision={decisionOf(point)}
                                 inQueue={queuedDps.has(point.dp)}
+                                {...(pendingLine?.(point) ? { pending: pendingLine(point) } : {})}
+                                {...(chainOf ? { chain: chainOf(point) } : {})}
                                 open={openKey === key && cardOpen}
                                 opensCard={opensCard(point)}
                                 matches={!needle || searchText(point).includes(needle)}
-                                rail={cardOpen}
                                 isEnglish={isEnglish}
                                 sourceOfPage={sourceOfPage}
                                 onOpen={() => open(point)}
@@ -566,50 +857,124 @@ export function DecisionMapColumns({
               </div>
             )
           })}
+          {/* Beside the details the column is the visit's steps: 01, 02, 03,
+              then the summary (owner feedback 2026-09-30: the four boxes over
+              the details repeated it). */}
+          {sideBySide && summary ? (
+            <button
+              type="button"
+              className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:border-primary aria-[current=true]:ring-1 aria-[current=true]:ring-primary"
+              aria-current={summaryShown ? 'true' : undefined}
+              aria-controls="cdss-visit-column-summary"
+              onClick={() => showStep('summary')}
+              data-testid="cdss-visit-section-toggle-summary"
+            >
+              <ClipboardCopy className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-foreground">{isEnglish ? 'This visit’s summary' : '本次摘要'}</span>
+                <span className="block text-xs text-muted-foreground">{summary.status}</span>
+              </span>
+            </button>
+          ) : null}
         </div>
       </div>
 
       {/* ---------------------------------------------------- working areas */}
-      <div className="min-w-0" data-testid="cdss-visit-working">
+      {/* Its own container: what it holds lays out for the width it has
+          beside the column, not for the whole panel's. */}
+      {/* Whatever in the details the page is moved to — by the map, or by
+          the page's own surfaces (「下一步：追蹤」, the fuller questions) —
+          lands below the steps: every element keeps their reach as its
+          scroll margin. */}
+      <div ref={workingRef} className="@container min-w-0 space-y-2 [&_*]:scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-working">
+        {/* Where the visit is, and what each step still needs: in view at the
+            head of the details as they scroll. */}
+        {/* Stacked, the steps head the details and stay in view as they
+            scroll; beside the column its section names are the steps, and
+            the details start with the work itself. */}
+        <div ref={stepsRef} className={cn(!sideBySide && 'z-10 bg-background/95 py-0.5 @min-[20rem]:sticky @min-[20rem]:top-2')}>
+          {sideBySide ? null : (
+            <VisitSteps
+              shown={shownStep}
+              summaries={stepSummaries}
+              closedNote={closedNote}
+              {...(summary ? { summaryStatus: summary.status } : {})}
+              isEnglish={isEnglish}
+              onGo={showStep}
+            />
+          )}
+        </div>
+        {workingTop}
         {BLOCK_ORDER.map((block) => {
           const nextBlock = BLOCK_ORDER[BLOCK_ORDER.indexOf(block) + 1]
           const note = closedNote(block)
-          const isOpen = openBlock === block
+          const isOpen = shownBlock === block
           const head = cardAtHead && cardAtHead.block === block ? cardAtHead : undefined
           const headIndex = head ? openIndex : -1
           // A checklist the pack gives a point (DP-02's baseline) stays in
           // view in its section while the point's card is closed.
           const checklists = pointsOf(block).filter((point) => point.checklist?.length && visitDecisionKey(point) !== openKey)
+          // What the step counts for this section beyond its decision rows
+          // (DP-31's 「BMI 32.8：semaglutide／tirzepatide？」, DP-32's 衛教), one
+          // press each: the section holds all it asks for, with the map
+          // folded away on a phone as beside it.
+          const stillOpen = pointsOf(block).filter((point) => ATTENTION_ORDER.includes(point.state)
+            && !decisionOf(point)
+            && !queuedDps.has(point.dp)
+            && !rowDps?.has(point.dp)
+            // A pillar's row is its own (the pillar box draws it).
+            && !leadCardKeys?.has(visitDecisionKey(point))
+            && visitDecisionKey(point) !== openKey)
+          // A point with its checklist box above is opened from the box.
+          const stillOpenListed = stillOpen.filter((point) => !checklists.includes(point))
           return (
             <section
               key={block}
               id={`cdss-visit-column-${block}`}
               aria-labelledby={`cdss-visit-section-toggle-${block}`}
               hidden={!isOpen}
-              className={cn(styles.tone, styles.mapPanel, 'min-w-0 scroll-mt-2 space-y-2 rounded-lg border border-border p-2 @min-[40rem]:scroll-mt-24')}
+              className={cn(styles.tone, styles.mapPanel, 'min-w-0 space-y-2 rounded-lg border border-border p-2 scroll-mt-[var(--cdss-steps-clear,0.5rem)]')}
               data-section={SECTION_TONE[block]}
               data-testid={`cdss-visit-column-${block}`}
               data-block={block}
               data-open={isOpen ? 'true' : undefined}
             >
-              <p className="px-0.5 text-sm font-semibold text-[color:var(--section-ink)]">{blockTitle(block, isEnglish)}</p>
-              {note ? (
-                <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
-                  {note}
-                </p>
-              ) : null}
+              {/* Stacked, the steps above name the section and its name is read
+                  out; beside the column it heads the section, with the way to
+                  the summary. A move from a foot button lands here. */}
+              <div className={cn(sideBySide && 'flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5')}>
+                <h3
+                  id={`cdss-visit-column-${block}-title`}
+                  tabIndex={-1}
+                  className={cn(sideBySide ? 'min-w-0 flex-1 text-sm font-semibold text-[color:var(--section-ink)] focus-visible:outline-none' : 'sr-only')}
+                >
+                  {blockTitle(block, isEnglish)}
+                </h3>
+                {sideBySide && summary ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted/50 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => showStep('summary', true)}
+                    data-testid={`cdss-visit-to-summary-${block}`}
+                  >
+                    <ClipboardCopy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {isEnglish ? 'Summary' : '本次摘要'}
+                    <span className="text-muted-foreground">· {summary.status}</span>
+                  </button>
+                ) : null}
+              </div>
               {head ? (
                 // The module a tile opened, at the head of its section.
-                <div className="space-y-1.5" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
+                <div className="space-y-1.5 scroll-mt-[var(--cdss-steps-clear,0.5rem)]" data-testid="cdss-visit-detail-slot" data-dp={head.dp}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5" data-map-heading="">
                     <span className="font-mono text-[11px] font-semibold text-muted-foreground">{head.dp}</span>
                     <span className="text-sm font-semibold text-foreground">{head.label}</span>
                     {head.source !== sourceOfPage ? (
-                      <Badge variant="outline" className="h-5 px-1 text-[10px]">{head.source.toUpperCase()}</Badge>
+                      <Badge variant="outline" className="h-5 px-1 text-[10px]">{sourceTag(head)}</Badge>
                     ) : null}
                     <StatePill state={head.state} isEnglish={isEnglish} decided={Boolean(decisionOf(head))} inQueue={queuedDps.has(head.dp)} />
-                    {!decisionOf(head) && (head.headline ?? head.why) ? (
-                      <span className="basis-full text-sm text-foreground">{head.headline ?? head.why}</span>
+                    {!decisionOf(head) && (pendingLine?.(head) ?? head.headline ?? head.why) ? (
+                      <span className="basis-full text-sm text-foreground">{pendingLine?.(head) ?? head.headline ?? head.why}</span>
                     ) : null}
                   </div>
                   {detail}
@@ -623,50 +988,153 @@ export function DecisionMapColumns({
                   />
                 </div>
               ) : null}
-              {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
-              {checklists.map((point) => (
-                <div key={visitDecisionKey(point)} className="space-y-1 rounded-md border border-border bg-background px-2.5 py-2" data-testid={`cdss-visit-checklist-${point.dp}`}>
-                  <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
-                    <span className="font-mono">{point.dp}</span> {point.label}
+              {/* An open card is the section while it is open — the right side
+                  shows what was pressed on the left, not the card stacked
+                  over the section's own questions (clinician feedback: 「為什麼
+                  DP-01 跟 24 同時出現」). The rest stays mounted, hidden, and
+                  comes back on 收合. */}
+              <div hidden={Boolean(head)} className="space-y-2" data-testid={`cdss-visit-column-${block}-body`}>
+                {asks && asksIn === block ? (
+                  <div
+                    className={cn('space-y-1.5 rounded-md border bg-background px-2.5 py-2', asks.pending ? 'border-dashed border-border' : 'border-border')}
+                    data-testid={`cdss-visit-pending-asks-${block}`}
+                    data-done={asks.pending ? undefined : 'true'}
+                  >
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground" role="status">
+                      {asks.pending ? null : <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+                      {asks.pending
+                        ? (isEnglish ? 'Every-visit questions still open — answer here' : '每次必問還沒答完，可直接在這裡答')
+                        : (isEnglish ? 'Every-visit questions answered' : '每次必問已答完')}
+                    </p>
+                    {asks.content}
+                    {/* An answer can open more to ask in 01 (喘變差 opens the
+                        fuller assessment there): say so, one press away. */}
+                    {!asks.pending && asks.opensMore ? (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => showStep('status', true)}
+                        data-testid={`cdss-visit-pending-asks-to-status-${block}`}
+                      >
+                        {`${blockTitle('status', isEnglish)}${isEnglish ? ': ' : '：'}${stepSummaries.status.text}`}
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {note ? (
+                  <p className="px-0.5 text-xs text-muted-foreground" data-testid={`cdss-visit-column-${block}-closed`}>
+                    {note}
                   </p>
-                  <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
-                </div>
-              ))}
-              {columnFooters?.[block]}
-              {block === 'outlook' ? outlookSlot : null}
-              {stepsBeforeNext?.[block] ? (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    className={nextButtonClass}
-                    data-section={SECTION_TONE[block]}
-                    onClick={stepsBeforeNext[block]!.onGo}
-                    data-testid={`cdss-visit-next-step-${block}`}
-                  >
-                    {stepsBeforeNext[block]!.label}
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : nextBlock ? (
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    className={cn(nextButtonClass, closedNote(nextBlock) && 'opacity-70')}
-                    data-section={SECTION_TONE[nextBlock]}
-                    disabled={Boolean(closedNote(nextBlock))}
-                    onClick={() => openNext(nextBlock)}
-                    data-testid={`cdss-visit-next-${block}`}
-                  >
-                    {closedNote(nextBlock)
-                      ? `${blockTitle(nextBlock, isEnglish)}${isEnglish ? ': ' : '：'}${closedNote(nextBlock)}`
-                      : `${isEnglish ? 'Next: ' : '下一區：'}${blockTitle(nextBlock, isEnglish)} · ${combinedSummary(nextBlock).text}`}
-                    {closedNote(nextBlock) ? null : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
-                  </button>
-                </div>
-              ) : null}
+                ) : null}
+                {leads?.[block] ? <div className="space-y-3" data-testid={`cdss-visit-lead-${block}`}>{leads[block]}</div> : null}
+                {checklists.map((point) => (
+                  <div key={visitDecisionKey(point)} className="space-y-1 rounded-md border border-border bg-background px-2.5 py-2" data-testid={`cdss-visit-checklist-${point.dp}`}>
+                    {/* Still needing the clinician, its name is the press to its
+                        card, over what it has and lacks. */}
+                    {stillOpen.includes(point) ? (
+                      <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
+                    ) : (
+                      <p className="text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                        <span className="font-mono">{point.dp}</span> {point.label}
+                      </p>
+                    )}
+                    <DecisionPointChecklist items={point.checklist!} isEnglish={isEnglish} compact />
+                  </div>
+                ))}
+                {stillOpenListed.length ? (
+                  <div className="space-y-1 rounded-md border border-border bg-background px-2 py-2" data-testid={`cdss-visit-still-open-${block}`}>
+                    <p className="px-0.5 text-[11px] font-semibold text-muted-foreground" data-map-heading="">
+                      {isEnglish ? 'Also for you in this section' : '這一區還需要你看'}
+                    </p>
+                    <ul className="space-y-1">
+                      {stillOpenListed.map((point) => (
+                        <li key={visitDecisionKey(point)}>
+                          <StillOpenRow point={point} isEnglish={isEnglish} sourceOfPage={sourceOfPage} onOpen={() => open(point)} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {columnFooters?.[block]}
+                {block === 'outlook' ? outlookSlot : null}
+                {!nextBlock && summary ? (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      className={nextButtonClass}
+                      data-section="summary"
+                      onClick={() => showStep('summary', true)}
+                      data-testid={`cdss-visit-next-${block}`}
+                    >
+                      {isEnglish ? 'Finish: this visit’s summary' : '完成：本次摘要'}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : nextBlock ? (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      className={cn(nextButtonClass, closedNote(nextBlock) && 'opacity-70')}
+                      data-section={SECTION_TONE[nextBlock]}
+                      disabled={Boolean(closedNote(nextBlock))}
+                      onClick={() => showStep(nextBlock, true)}
+                      data-testid={`cdss-visit-next-${block}`}
+                    >
+                      {closedNote(nextBlock)
+                        ? `${blockTitle(nextBlock, isEnglish)}${isEnglish ? ': ' : '：'}${closedNote(nextBlock)}`
+                        : `${isEnglish ? 'Next: ' : '下一區：'}${blockTitle(nextBlock, isEnglish)} · ${combinedSummary(nextBlock).text}`}
+                      {closedNote(nextBlock) ? null : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </section>
           )
         })}
+        {summary ? (
+          <section
+            id="cdss-visit-column-summary"
+            aria-label={isEnglish ? 'This visit’s summary' : '本次摘要'}
+            hidden={!summaryShown}
+            className="min-w-0 space-y-2 rounded-lg border border-border p-2 scroll-mt-[var(--cdss-steps-clear,0.5rem)]"
+            data-testid="cdss-visit-column-summary"
+            data-open={summaryShown ? 'true' : undefined}
+          >
+            <h3
+              id="cdss-visit-column-summary-title"
+              tabIndex={-1}
+              className={cn(sideBySide ? 'px-0.5 text-sm font-semibold text-foreground focus-visible:outline-none' : 'sr-only')}
+            >
+              {isEnglish ? 'This visit’s summary' : '本次摘要'}
+            </h3>
+            {/* The summary is where a visit ends, and what it copies is only
+                what was decided: a section still asking for something says
+                so here, one press from it, before the note leaves the page. */}
+            {summaryLeft.length ? (
+              <div className="space-y-1.5" data-testid="cdss-visit-summary-left">
+                <p className="text-xs font-semibold text-muted-foreground">{isEnglish ? 'Still open' : '還沒處理'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {summaryLeft.map((block) => (
+                    <button
+                      key={block}
+                      type="button"
+                      className={nextButtonClass}
+                      data-section={SECTION_TONE[block]}
+                      onClick={() => showStep(block, true)}
+                      data-testid={`cdss-visit-summary-left-${block}`}
+                    >
+                      {`${blockShortTitle(block, isEnglish)} · ${stepSummaries[block].text}`}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {summary.content}
+          </section>
+        ) : null}
+      </div>
       </div>
     </section>
   )

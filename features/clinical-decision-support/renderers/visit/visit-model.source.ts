@@ -1,8 +1,9 @@
 /**
  * Where the visit decision model comes from.
  *
- * The pack owns it: `buildVisitDecisionModel` reads the pack's own result (and,
- * on the heart-failure page, the atrial-fibrillation result as a companion) and
+ * The pack owns it: `buildVisitDecisionModel` reads the pack's own result (and
+ * the results of the other packs its map reads — on the heart-failure page,
+ * atrial fibrillation's — as `companions`) and
  * says which decision points exist, which of them are today's, and in what
  * words; `applyVisitAnswers` turns the every-visit answers into facts the
  * modules read. This file is the one seam between that and the host, so the
@@ -14,12 +15,14 @@ import {
   applyPreviousVisit as packApplyPreviousVisit,
   applyVisitAnswers as packApplyVisitAnswers,
   buildVisitDecisionModel,
+  VISIT_MAPS,
 } from '@voho0000/personalized-care'
 import type {
   BuildVisitDecisionModelInput,
   CdssPatientProfile,
   VisitAnswers,
   VisitDecisionModel,
+  VisitMapDefinition,
 } from '../../types'
 
 type VisitModelBuilder = (input: BuildVisitDecisionModelInput) => VisitDecisionModel
@@ -40,6 +43,29 @@ const packBuilder = (typeof buildVisitDecisionModel === 'function'
  */
 export function isVisitModelSupported(): boolean {
   return packBuilder !== undefined
+}
+
+/**
+ * The decision map a pack declares, or undefined when it has none. Which pages
+ * have a map, and which other packs' results a map reads, are the pack's to
+ * say (`VISIT_MAPS`); the host lists no pack ids of its own for either.
+ */
+export function visitMapOf(packId: string): VisitMapDefinition | undefined {
+  return (Array.isArray(VISIT_MAPS) ? VISIT_MAPS : []).find((map) => map.packId === packId)
+}
+
+/** Whether this pack's page can open on the decision map at all. */
+export function hasVisitMap(packId: string): boolean {
+  return isVisitModelSupported() && visitMapOf(packId) !== undefined
+}
+
+/**
+ * The `source` the page's own points carry: the model says so; a model built
+ * without it is read from the pack's map, else from its first point, which is
+ * always the page's own.
+ */
+export function pageSourceOf(model: VisitDecisionModel): string {
+  return model.source ?? visitMapOf(model.packId)?.source ?? model.points[0]?.source ?? ''
 }
 
 /** The pack's answer-to-fact step: each every-visit answer becomes a fact the modules read. */

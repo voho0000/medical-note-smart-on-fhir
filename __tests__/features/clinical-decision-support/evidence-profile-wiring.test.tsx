@@ -10,8 +10,12 @@
  */
 import { act, render, waitFor } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
-import { useEvidenceOverridesStore } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
+import {
+  evidenceOverridesStorageKey,
+  useEvidenceOverridesStore,
+} from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
+import { sealAnswers, useRealWebCrypto } from './encrypted-answers.helper'
 
 const mockUsePatient = jest.fn()
 const mockUseClinicalData = jest.fn()
@@ -149,10 +153,12 @@ function lastProfile(): CdssPatientProfile {
 }
 
 describe('LiveFeature profile wiring', () => {
+  useRealWebCrypto()
+
   beforeEach(() => {
     createProfileSpy.mockClear()
     packBuildSpy.mockClear()
-    useEvidenceOverridesStore.setState({ byPatientId: {} })
+    useEvidenceOverridesStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     window.localStorage.clear()
     mockUsePatient.mockReturnValue({
       patient: { id: PATIENT_ID, resourceType: 'Patient', age: 78 },
@@ -200,17 +206,48 @@ describe('LiveFeature profile wiring', () => {
     })
   })
 
-  it('reads a stored switch back before the pack runs', async () => {
-    useEvidenceOverridesStore.setState({ byPatientId: {} })
+  it('reads a sealed switch back before the cards are shown', async () => {
+    await sealAnswers(evidenceOverridesStorageKey(PATIENT_ID), { 'congestion:cxr': false })
+
+    const { queryByTestId } = render(<LiveClinicalDecisionSupportFeature />)
+    // Decrypting takes a moment; the cards wait rather than showing the
+    // record's default and flipping when the physician's switch lands.
+    expect(queryByTestId('mock-cdss-result')).toBeNull()
+
+    await waitFor(() => expect(queryByTestId('mock-cdss-result')).not.toBeNull())
+    expect(lastProfile().evidenceOverrides).toEqual({ 'congestion:cxr': false })
+  })
+
+  it('runs the pack only once the stored answers are back, never on the defaults first', async () => {
+    await sealAnswers(evidenceOverridesStorageKey(PATIENT_ID), { 'congestion:cxr': false })
+
+    const { queryByTestId } = render(<LiveClinicalDecisionSupportFeature />)
+    // The record half needs no answer and does not wait; the pack does.
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+    expect(packBuildSpy).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(queryByTestId('mock-cdss-result')).not.toBeNull())
+    const overridesSeen = packBuildSpy.mock.calls.map(([profile]) => (profile as CdssPatientProfile).evidenceOverrides)
+    expect(overridesSeen.length).toBeGreaterThan(0)
+    expect(overridesSeen).toEqual(overridesSeen.map(() => ({ 'congestion:cxr': false })))
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('neither reads nor keeps a plaintext switch an earlier build left', async () => {
     window.localStorage.setItem(
       `cdss-evidence-overrides:${PATIENT_ID}`,
       JSON.stringify({ 'congestion:cxr': false }),
     )
+    window.localStorage.setItem(
+      'cdss-evidence-overrides:another-patient',
+      JSON.stringify({ 'congestion:jvp': true }),
+    )
 
-    render(<LiveClinicalDecisionSupportFeature />)
+    const { getByTestId } = render(<LiveClinicalDecisionSupportFeature />)
 
-    await waitFor(() => {
-      expect(lastProfile().evidenceOverrides).toEqual({ 'congestion:cxr': false })
-    })
+    expect(getByTestId('mock-cdss-result')).toBeInTheDocument()
+    expect(lastProfile().evidenceOverrides).toEqual({})
+    expect(window.localStorage.getItem(`cdss-evidence-overrides:${PATIENT_ID}`)).toBeNull()
+    expect(window.localStorage.getItem('cdss-evidence-overrides:another-patient')).toBeNull()
   })
 })
