@@ -247,6 +247,18 @@ describe('the pocket-handbook layout', () => {
       expect(within(howMuch).queryByTestId('cdss-book-option-table')).toBeNull()
     })
 
+    it('a verdict still waiting (the bleed first) is marked so, not drawn as a conclusion', () => {
+      const verdict = () => within(entry('DP-07')).getByTestId('cdss-book-score').querySelector<HTMLElement>('tr:last-child td:last-child')!
+      const { unmount } = render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      expect(verdict()).toHaveTextContent('≥2 建議抗凝 · 已在用')
+      expect(verdict()).not.toHaveAttribute('data-pending')
+      unmount()
+      useAfAnswersStore.getState().answer(PATIENT, 'activeBleeding', true)
+      render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      expect(verdict()).toHaveTextContent('出血處理後再決定抗凝 · 已在用')
+      expect(verdict()).toHaveAttribute('data-pending', 'true')
+    })
+
     it('the valves are answered in place, 全部皆無 at once, and pressed again taken back', () => {
       render(<BookPage id="p9-hfpef-af-dose" page="af" />)
       const which = () => entry('DP-08')

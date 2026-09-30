@@ -305,13 +305,15 @@ interface ScoreTableView {
   rows: { id: string; label: string; points: number; met?: boolean; evidence: string }[]
   total?: number
   verdict?: string
+  /** The verdict waits on something (a missing item, HCM, a bleed): not a conclusion yet. */
+  pending?: boolean
 }
 
 /** A point's score, item by item (AF DP-07's CHA₂DS₂-VA), read defensively like `changesOf`. */
 function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
   const raw = (point as { scoreTable?: unknown } | undefined)?.scoreTable
   if (!raw || typeof raw !== 'object') return undefined
-  const { title, rows, total, verdict } = raw as Record<string, unknown>
+  const { title, rows, total, verdict, pending } = raw as Record<string, unknown>
   if (typeof title !== 'string' || !Array.isArray(rows)) return undefined
   const parsed = rows.flatMap((row): ScoreTableView['rows'] => {
     const { id, label, points, met, evidence } = (row ?? {}) as Record<string, unknown>
@@ -319,7 +321,14 @@ function scoreTableOf(point: object | undefined): ScoreTableView | undefined {
     return [{ id, label, points, evidence: typeof evidence === 'string' ? evidence : '', ...(typeof met === 'boolean' ? { met } : {}) }]
   })
   if (!parsed.length) return undefined
-  return { title, rows: parsed, ...(typeof total === 'number' ? { total } : {}), ...(typeof verdict === 'string' ? { verdict } : {}) }
+  return {
+    title,
+    rows: parsed,
+    ...(typeof total === 'number' ? { total } : {}),
+    ...(typeof verdict === 'string' ? { verdict } : {}),
+    // A pack from before `pending` marks only a missing total.
+    ...(pending === true || typeof total !== 'number' ? { pending: true } : {}),
+  }
 }
 
 interface QuestionsView {
@@ -548,7 +557,7 @@ function ScoreTable({ table, isEnglish }: { table: ScoreTableView; isEnglish: bo
           <td />
           <td>{isEnglish ? 'Total' : '合計'}</td>
           <td className={styles.scorePoints}>{table.total ?? '—'}</td>
-          <td className={table.total === undefined ? styles.scorePending : styles.scoreVerdict}>{table.verdict}</td>
+          <td className={table.pending ? styles.scorePending : styles.scoreVerdict} data-pending={table.pending || undefined}>{table.verdict}</td>
         </tr>
       </tbody>
     </table>
