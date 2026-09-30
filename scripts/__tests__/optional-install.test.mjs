@@ -92,8 +92,8 @@ test('generated type config replaces a symlink without modifying its target', { 
     })
     assert.equal(writeOptionalBuildTsconfig(root, config), 'tsconfig.optional.generated.json')
     assert.equal(readFileSync(protectedFile, 'utf8'), 'keep this content')
-    assert.equal(lstatSync(target).isSymbolicLink(), false)
     const generated = JSON.parse(readFileSync(target, 'utf8'))
+    assert.equal(lstatSync(target).isSymbolicLink(), false)
     assert.deepEqual(generated.compilerOptions.paths['@/vendor/nhi-fhir-bridge-sdk-json/browser.js'], ['./src/optional/sdk-json.ts'])
     assert.equal(readdirSync(root).some(name => name.endsWith('.tmp')), false)
   } finally {
