@@ -262,9 +262,9 @@ function opener(dp: string, source = 'hf'): HTMLElement {
   return found
 }
 
-/** 01's 診斷／追蹤 switch. */
-function statusView(view: 'diagnosis' | 'follow-up'): HTMLButtonElement {
-  return screen.getByTestId(`cdss-visit-status-view-${view}`) as HTMLButtonElement
+/** The settled diagnosis folded at a follow-up's 01, under the asks. */
+function diagnosisFold(): HTMLDetailsElement {
+  return screen.getByTestId('cdss-visit-diagnosis-fold') as HTMLDetailsElement
 }
 
 function asksDetail(): HTMLDetailsElement {
@@ -309,9 +309,10 @@ describe('HF surfaces on the decision map', () => {
 
   it('folds 「其他症狀、徵象與 NYHA」 at follow-up, with the symptom, sign, NYHA and compensation questions inside', () => {
     render(<HfHarness model={p5Model()} />)
-    // A diagnosis stands (the model asks 喘／體重), so 01 opens on 追蹤, where
-    // the asks and their fuller questions are.
-    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
+    // A diagnosis stands (the model asks 喘／體重), so 01 leads with the asks
+    // and their fuller questions; the settled diagnosis folds after them.
+    expect(screen.getByTestId('cdss-visit-lead-status').firstElementChild).toBe(screen.getByTestId('cdss-visit-follow-up'))
+    expect(diagnosisFold().open).toBe(false)
     const detail = asksDetail()
     expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(detail)
     expect(detail.open).toBe(false)
@@ -376,22 +377,23 @@ describe('HF surfaces on the decision map', () => {
 
   it('carries the diagnosis confirmation, the diagnostic questions and the HFpEF calculator in 01’s 診斷 view', () => {
     render(<HfHarness model={p5Model()} />)
-    // A diagnosis stands, so 01 opens on 追蹤; the diagnostic step is one
-    // press on 01's 診斷／追蹤 switch away (it used to sit in DP-01's card).
-    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByTestId('cdss-visit-hf-diagnosis-view')).toBeNull()
+    // A diagnosis stands, so 01 leads with the asks and the diagnostic step is
+    // folded after them, on the same page (it used to sit in DP-01's card,
+    // then behind a 診斷／追蹤 switch).
+    expect(diagnosisFold().open).toBe(false)
+    expect(diagnosisFold()).toContainElement(screen.getByTestId('cdss-visit-hf-diagnosis-view'))
     // DP-01 keeps its tile on the overview. Question 1 asks it on this page,
-    // so the tile goes there — 01's 診斷 view — rather than opening a card
+    // so the tile goes there — opening the fold — rather than opening a card
     // that would ask it a second time.
     expect(cell('DP-01')).not.toHaveAttribute('aria-expanded')
     fireEvent.click(cell('DP-01'))
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
-    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    expect(diagnosisFold().open).toBe(true)
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(view)
     expect(view).toBeVisible()
-    // The asks belong to 追蹤 only; 診斷 shows the diagnosis points instead.
-    expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
+    // The asks and the diagnosis are one page now.
+    expect(screen.getByTestId('cdss-visit-lead-status')).toContainElement(screen.getByTestId('cdss-visit-asks'))
     expect(within(view).getByTestId('cdss-hf-question-hf-suspicion')).toBeInTheDocument()
     // Evidence before the verdict: the confirmation waits for 懷疑 HF？ 「是」.
     expect(within(view).queryByTestId('cdss-diagnosis-confirmation')).toBeNull()
@@ -407,12 +409,25 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  // Owner feedback 2026-09-30: no 診斷／追蹤 switch; a follow-up folds the
+  // settled diagnosis after the asks, and opens it while it asks something.
+  it('opens the folded diagnosis by itself while a diagnosis question is still open, and not once it is answered', () => {
+    const open = p5Model()
+    open.points = open.points.map((item) => (item.dp === 'DP-01' ? { ...item, state: 'act' as const } : item))
+    const view = render(<HfHarness model={open} />)
+    expect(diagnosisFold().open).toBe(true)
+    view.rerender(<HfHarness model={p5Model()} />)
+    expect(diagnosisFold().open).toBe(false)
+    // The clinician's own open holds.
+    fireEvent.click(within(diagnosisFold()).getByText('診斷與分型'))
+    expect(diagnosisFold().open).toBe(true)
+  })
+
   it('draws the diagnostic assessment once, in 01’s 診斷 view, and in neither DP-00’s nor DP-34’s card', () => {
     // Was: the same assessment offered inside DP-00's and DP-34's cards, one
     // card at a time. Now it has one home beside those points, so opening
     // either card never draws it a second time.
     render(<HfHarness model={p1Model()} />)
-    fireEvent.click(statusView('diagnosis'))
     const view = screen.getByTestId('cdss-visit-hf-diagnosis-view')
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
     expect(view).toContainElement(screen.getByTestId('cdss-visit-hf-diagnostic-assessment'))
@@ -433,12 +448,13 @@ describe('HF surfaces on the decision map', () => {
     expect(screen.queryByTestId('cdss-visit-detail')).toBeNull()
     expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
 
-    // Under 追蹤 the assessment is out of view, but the tile brings 診斷 back.
-    fireEvent.click(statusView('follow-up'))
-    expect(screen.queryByTestId('cdss-visit-hf-diagnostic-assessment')).toBeNull()
-    fireEvent.click(cell('DP-34'))
-    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
+    // Folded at a follow-up, the tile opens the fold to the one copy.
+    const followUp = render(<HfHarness model={p5Model()} />)
+    const fold = within(followUp.container).getByTestId('cdss-visit-diagnosis-fold') as HTMLDetailsElement
+    expect(fold.open).toBe(false)
+    fireEvent.click(followUp.container.querySelector<HTMLElement>('[data-map-tile][data-dp="DP-34"]')!)
+    expect(fold.open).toBe(true)
+    expect(within(followUp.container).getAllByTestId('cdss-visit-hf-diagnostic-assessment')).toHaveLength(1)
   })
 
   // Clinician feedback 2026-09-28: the second grid of values at 01's foot
@@ -479,9 +495,10 @@ describe('AF surfaces on the decision map', () => {
 
   it('asks symptoms, bleeding and adverse effects under the asks', () => {
     render(<AfHarness model={afModel()} />)
-    // A first visit opens 01 on 診斷, as on the HF page; the asks are 追蹤's.
-    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(statusView('follow-up'))
+    // A first visit leads 01 with the diagnosis, as on the HF page; the asks
+    // follow it on the same page.
+    const lead = screen.getByTestId('cdss-visit-lead-status')
+    expect(lead).toContainElement(screen.getByTestId('cdss-visit-follow-up'))
     const detail = asksDetail()
     expect(within(detail).getByTestId('cdss-visit-asks-detail-toggle')).toHaveTextContent('其他症狀、出血與副作用')
     const groups = within(detail).getByTestId('cdss-af-question-groups').dataset.groups!.split(' ')
@@ -558,19 +575,20 @@ describe('the busy clinician’s path', () => {
 
   // Clinician feedback 2026-09-27: 「為什麼我點 HFpEF 就自動幫我跳到治療去？
   // 應該要 user 自己點」.
-  it('stays put when the diagnosis comes to stand on the page: 01 on 診斷, 02 closed until 下一區 is pressed', () => {
+  it('stays put when the diagnosis comes to stand on the page: the diagnosis still heads 01, 02 closed until 下一區 is pressed', () => {
     const view = render(<HfHarness model={{ ...p1Model(), asks: [] }} />)
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByTestId('cdss-visit-next-status')).toBeDisabled()
     // The pack recomputes from the answer: the model now follows a diagnosis.
     view.rerender(<HfHarness model={p5Model()} />)
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
-    expect(statusView('diagnosis')).toHaveAttribute('aria-pressed', 'true')
+    // The answer stays where it was given — not folded under the asks that
+    // now appear after it.
+    expect(screen.queryByTestId('cdss-visit-diagnosis-fold')).toBeNull()
     expect(screen.getByTestId('cdss-visit-hf-diagnosis-view')).toBeVisible()
-    // 01's foot leads to 追蹤 first while its asks are unanswered, then to 02.
-    fireEvent.click(screen.getByTestId('cdss-visit-next-step-status'))
-    expect(statusView('follow-up')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'false')
+    const lead = screen.getByTestId('cdss-visit-lead-status')
+    expect(lead.compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy()
+    expect(screen.getByTestId('cdss-visit-hf-diagnosis-view').compareDocumentPosition(screen.getByTestId('cdss-visit-follow-up')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(screen.getByTestId('cdss-visit-next-status'))
     expect(screen.getByTestId('cdss-visit-section-toggle-treatment')).toHaveAttribute('aria-expanded', 'true')
   })
