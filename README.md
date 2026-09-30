@@ -97,11 +97,14 @@ AI 功能需要可用的服務設定與網路連線。內建代理提供每日�
 git clone https://github.com/voho0000/medical-note-smart-on-fhir.git
 cd medical-note-smart-on-fhir
 
-gh auth login -h github.com
-npm run packages:ci
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
+
+不需要 clone 私有 repo 或登入 GitHub 就能安裝、開發與建置。私有 CDSS 套件未安裝時，照護指引入口不顯示；FHIR 匯入、示範資料、報告、AI 摘要與計算機仍可使用。SDK JSON 轉換器已附於 `vendor/`，不需要 SDK repo 權限；若部署未包含這份 artifact，僅接受 FHIR Bundle。個人化衛教內容也由私有套件提供，缺少時保留入口並顯示尚未安裝，不會產生替代建議。
+
+需要完整私有功能的開發者可先 `gh auth login -h github.com`，再執行 `npm run packages:ci`。參見 [套件與權限說明](docs/personalization-private-packages.md)。
 
 開啟 [localhost:3001](http://localhost:3001)。依 [`.env.example`](.env.example) 填入 Firebase、AI 代理與 SMART 設定；登入、雲端同步、免費代理等功能需要對應後端。
 
@@ -116,7 +119,7 @@ npm run dev
 | `npm run build:gh` | GitHub Pages 靜態匯出，base path `/medical-note-smart-on-fhir` |
 | `npm run build:mediprisma` | 官網靜態匯出，base path `/app` |
 | `npm run lint` | 程式檢查 |
-| `npx tsc --noEmit` | 型別檢查 |
+| `npm run typecheck` | 依已安裝套件檢查型別；完整環境仍涵蓋測試 |
 | `npm test` | Jest 單元與元件測試 |
 | `npm run test:e2e` | Playwright 瀏覽器測試，準備方式見 [E2E 文件](e2e/README.md) |
 | `npm run check:lockfile` | 檢查跨平台 lockfile 完整性 |

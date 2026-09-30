@@ -851,11 +851,84 @@ describe('real pack · AF 全部皆無', () => {
     expect(answer('本次仍有心悸', '無')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('offers no bulk 無 on groups read from the history', () => {
+  /** The groups a point's card opens with, from its tile or its queued row. */
+  const openPointGroups = (dp: string): HTMLDetailsElement[] => {
+    const opener = queryCell(dp, 'af') ?? document.querySelector<HTMLElement>(`[data-visit-row-detail="${dp}"]`)
+    if (!opener) throw new Error(`no cell or row for af:${dp}`)
+    fireEvent.click(opener)
+    return [...screen.getByTestId('cdss-visit-detail').querySelectorAll<HTMLDetailsElement>('[data-af-question-group]')]
+  }
+  const openGroup = (dp: string, id: string): HTMLDetailsElement => {
+    const group = openPointGroups(dp).find((element) => element.dataset.afQuestionGroup === id)
+    if (!group) throw new Error(`no ${id} group on af:${dp}`)
+    fireEvent.click(group.querySelector('summary')!)
+    return group
+  }
+  const answerIn = (group: HTMLElement) => (question: string, label: '有' | '無' | '依病歷／待確定') =>
+    within(within(group).getByRole('group', { name: question })).getByRole('button', { name: label })
+
+  it('offers it on every checklist of problems, not on the NHI criteria, rate or antithrombotic groups (P11)', () => {
     render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
-    for (const id of ['diagnosis', 'stroke', 'safety', 'bleedingRisk', 'comorbidity']) {
-      expect(document.querySelector(`[data-testid="cdss-af-none-${id}"]`)).toBeNull()
+    const offered = new Set(['screening', 'followup', 'adverse', 'bleeding', 'bleedingRisk', 'stroke', 'safety', 'comorbidity'])
+    const seen = new Set<string>()
+    for (const dp of ['DP-07', 'DP-08', 'DP-13', 'DP-21']) {
+      for (const group of openPointGroups(dp)) {
+        const id = group.dataset.afQuestionGroup!
+        seen.add(id)
+        const button = group.querySelector(`[data-testid="cdss-af-none-${id}"]`)
+        if (offered.has(id)) expect(button).not.toBeNull()
+        else expect(button).toBeNull()
+      }
     }
+    // Not vacuous: the history, safety, HAS-BLED and comorbidity groups were
+    // drawn, and so was one that keeps no such button.
+    expect([...seen]).toEqual(expect.arrayContaining(['stroke', 'safety', 'bleedingRisk', 'comorbidity', 'antithrombotic']))
+  })
+
+  it('answers 瓣膜與當下安全 無 in one press and puts the rows back on a second (P11)', () => {
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    const group = openGroup('DP-08', 'safety')
+    const answer = answerIn(group)
+    const rows = ['機械瓣膜', '中重度 mitral stenosis', '已確認 HCM／心臟類澱粉沉積', '目前活動性出血', 'AF 相關血流動力學不穩定']
+    const button = within(group).getByTestId('cdss-af-none-safety')
+    expect(button).toHaveTextContent('全部皆無')
+    expect(button).toHaveAttribute('title', '把 5 項記為「無」')
+    fireEvent.click(button)
+    for (const question of rows) expect(answer(question, '無')).toHaveAttribute('aria-pressed', 'true')
+    expect(group.querySelector('summary')).toHaveTextContent('0 項待確定')
+    fireEvent.click(within(group).getByTestId('cdss-af-none-safety'))
+    for (const question of rows) expect(answer(question, '依病歷／待確定')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('never writes 無 over the record: a HAS-BLED factor the record scores stays 有 (P11, Cr >2.26)', () => {
+    render(<ScenarioMap id="p11-af-dabigatran-renal" page="af" />)
+    const group = openGroup('DP-13', 'bleedingRisk')
+    const answer = answerIn(group)
+    const renal = 'HAS-BLED 腎異常：透析／腎移植／Cr >2.26 mg/dL'
+    // The pack scores it from the record; the question says so rather than 待確定.
+    expect(answer(renal, '有')).toHaveAttribute('aria-pressed', 'true')
+    expect(within(group).getByText(/病歷預填：/)).toBeInTheDocument()
+    const button = within(group).getByTestId('cdss-af-none-bleedingRisk')
+    expect(button).toHaveTextContent('其餘皆無')
+    fireEvent.click(button)
+    expect(answer(renal, '有')).toHaveAttribute('aria-pressed', 'true')
+    expect(answer('重大出血病史／出血傾向', '無')).toHaveAttribute('aria-pressed', 'true')
+    expect(useAfAnswersStore.getState().answers.abnormalRenal).toBeUndefined()
+  })
+
+  it('leaves a row the record holds but cannot settle for the clinician, and says why (P3, ECG LVH)', () => {
+    render(<ScenarioMap id="p3-new-af" page="af" />)
+    const group = openGroup('DP-04', 'screening')
+    const answer = answerIn(group)
+    const lvh = '左心室肥厚'
+    // The ECG report is there and does not mention LVH: not a 無 to write in bulk.
+    expect(group.querySelector('[data-af-record-held="screening_lvh"]')).toHaveTextContent('病歷有紀錄、未能判定：心電圖 LVH：報告未提及 LVH')
+    expect(within(group).getByTestId('cdss-af-none-held-screening')).toHaveTextContent('病歷有紀錄的 1 項請逐項確認')
+    fireEvent.click(within(group).getByTestId('cdss-af-none-screening'))
+    expect(answer(lvh, '依病歷／待確定')).toHaveAttribute('aria-pressed', 'true')
+    expect(answer('慢性阻塞性肺病', '無')).toHaveAttribute('aria-pressed', 'true')
+    expect(useAfAnswersStore.getState().answers.screening_lvh).toBeUndefined()
+    expect(within(group).getByTestId('cdss-af-none-screening')).toHaveAttribute('aria-pressed', 'true')
   })
 })
 

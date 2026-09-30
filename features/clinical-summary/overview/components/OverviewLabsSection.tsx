@@ -515,7 +515,12 @@ export function OverviewLabsSection({
       {audience === 'medical' && (
         <button
           type="button"
-          onClick={() => revealTab('ips-export')}
+          onClick={() => {
+            // From the clinician's own lab list, straight to their own
+            // formats: 複製 → 帶回紀錄 → 我的格式, whatever was open before.
+            prefs.setHandoffMode('custom')
+            revealTab('ips-export', { exportTab: 'emr' })
+          }}
           className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/50 px-2 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <ClipboardCopy aria-hidden="true" className="h-3 w-3" />

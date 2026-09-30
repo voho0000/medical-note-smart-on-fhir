@@ -182,11 +182,12 @@ describe('OverviewLabsSection — 自訂', () => {
     expect(card().getByRole('button', { name: zhTW.overview.expandList })).toBeInTheDocument()
   })
 
-  it('opens the handoff tab from the card', () => {
-    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA'], labMode: 'mine' })
+  it('opens 複製 → 帶回紀錄 → 我的格式 from the card, even after 內建格式 was chosen', () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA'], labMode: 'mine', handoffMode: 'builtin' })
     renderSection()
     fireEvent.click(screen.getByRole('button', { name: zhTW.overview.labs.handoff }))
-    expect(mockRevealTab).toHaveBeenCalledWith('ips-export')
+    expect(mockRevealTab).toHaveBeenCalledWith('ips-export', { exportTab: 'emr' })
+    expect(useOutpatientPrefsStore.getState().byUser['doc-1'].handoffMode).toBe('custom')
   })
 
   it('saves pins picked one by one in the editor', () => {
