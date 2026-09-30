@@ -8,21 +8,29 @@
  * point, which step it reveals, which point another row's step decides, which
  * chain is still open — is the pack's (`settleVisitDecisions` and its parts,
  * personalized-care 2.12.0; owner decision 2026-09-30: 決策狀態邏輯移到 pack,
- * step 1). The host keeps its names for them so its callers and tests stand
- * unchanged, and reads the pack's rules through them.
+ * step 1). So are the summary the note copies and the plan's rechecks
+ * (`visitSummaryText`, `visitPlan`; step 2). The host keeps its names for
+ * them so its callers and tests stand unchanged, and reads the pack's rules
+ * through them.
  */
 import {
   decisionPointSteps,
+  effectiveVisitAnswer,
   isSameLocalDay,
   nextStepDecisionKey,
   nextStepView,
   pointsDecidedBy,
+  recheckIntervalText,
   recordLabelOf,
   settledDecisionFor,
   settleVisitDecisions,
   visitDecisionKey,
+  visitPlan,
+  visitSummaryText,
   type SettledDecisionPoint,
   type VisitDecisionSettlement,
+  type VisitPlan,
+  type VisitPlanItem,
 } from '@voho0000/personalized-care'
 import type {
   PhysicianDecision,
@@ -375,61 +383,29 @@ export function queuedPointDps(rows: readonly QueueRow[]): ReadonlySet<string> {
   return new Set(rows.flatMap((row) => row.steps.flatMap((step) => [step.point.dp, ...(step.decides ?? [])])))
 }
 
-export interface PlanItem {
-  key: string
-  point: DecisionPointView
-  actionLabel: string
-  check: { text: string; interval?: string; withinDays?: number }
-  reopenWhen?: string
-}
-
-export interface VisitPlanModel {
-  items: PlanItem[]
-  /** Plan lines the pack gives without a decision (「6 週內密集回診」). */
-  notes: { text: string }[]
-}
+/** One recheck a decision recorded today asked for (the pack's). */
+export type PlanItem = VisitPlanItem
+export type VisitPlanModel = VisitPlan
 
 /**
- * Every decision recorded today that asked for a response check, those with
- * an interval first. The text is the pack's; the host only orders and counts.
- * A recheck is not a return visit, so no return date is derived from one
- * (clinician decision 2026-09-28: 「只說複驗，沒有說要回診」).
+ * Every decision recorded today that asked for a recheck, those with an
+ * interval first, and the model's plan lines — the pack's `visitPlan`. A
+ * recheck is not a return visit, so no return date is derived from one.
  */
 export function buildVisitPlan(
   model: VisitDecisionModel,
   decisions: PhysicianDecisionMap | undefined,
   now: Date,
 ): VisitPlanModel {
-  const items: PlanItem[] = []
-  for (const point of model.points) {
-    for (const step of pointSteps(point, decisions, now)) {
-      const decision = step.decision
-      const check = decision?.record.responseCheck
-      if (!decision || !check) continue
-      items.push({
-        key: decision.key,
-        point: step.point,
-        actionLabel: decision.record.actionLabel ?? decision.action.label,
-        check,
-        ...(decision.record.reopenWhen ? { reopenWhen: decision.record.reopenWhen } : {}),
-      })
-    }
-  }
-  // A check with no interval (ESC gives none) sorts after those with one.
-  const timed = (item: PlanItem) => (item.check.interval || typeof item.check.withinDays === 'number' ? 0 : 1)
-  items.sort((a, b) => timed(a) - timed(b))
-  return { items, notes: (model.planNotes ?? []).map((note) => ({ text: note.text })) }
+  return visitPlan(model, decisions, now)
 }
 
-/** The answer each ask shows, and whether the record, not the clinician, gave it. */
+/** The answer each ask shows, and whether the record, not the clinician, gave it (the pack's). */
 export function effectiveAnswer(
   ask: VisitDecisionModel['asks'][number],
   answers: VisitAnswers,
 ): { value?: string; prefilled: boolean } {
-  const given = answers[ask.id]
-  if (given) return { value: given, prefilled: false }
-  if (ask.prefill) return { value: ask.prefill.value, prefilled: true }
-  return { prefilled: false }
+  return effectiveVisitAnswer(ask, answers)
 }
 
 export const BLOCK_ORDER: readonly VisitBlock[] = ['status', 'treatment', 'outlook']
@@ -471,22 +447,15 @@ export function stateLabel(state: DecisionPointState, isEnglish: boolean): strin
   }
 }
 
-/**
- * 「，1–2 週內」 after a check's text, in the guideline's words, or nothing
- * where the check has no interval. A decision stored before the pack gave its
- * interval in words reads back its day count.
- */
+/** 「，1–2 週內」 after a check's text, in the guideline's words, or nothing (the pack's). */
 export function checkIntervalSuffix(check: { interval?: string; withinDays?: number } | undefined, isEnglish: boolean): string {
-  const sep = isEnglish ? ', ' : '，'
-  if (check?.interval) return isEnglish ? `${sep}within ${check.interval}` : `${sep}${check.interval}內`
-  if (typeof check?.withinDays === 'number') return isEnglish ? `${sep}within ${check.withinDays} days` : `${sep}${check.withinDays} 天內`
-  return ''
+  return recheckIntervalText(check, isEnglish ? 'en' : 'zh-TW')
 }
 
 /**
- * The text 「複製本次摘要」 puts on the clipboard: the pack's status line and
- * values, the answers as the pack worded the options, today's decisions with
- * their checks, and the pack's plan lines. Host words are labels only.
+ * The text 「複製本次摘要」 puts on the clipboard — the pack's
+ * `visitSummaryText`: the status and values, the answers in the options'
+ * words, today's decisions with their rechecks, and the plan lines.
  */
 export function buildVisitSummaryText(input: {
   model: VisitDecisionModel
@@ -496,40 +465,7 @@ export function buildVisitSummaryText(input: {
   isEnglish: boolean
 }): string {
   const { model, answers, decisions, now, isEnglish } = input
-  const lines: string[] = [model.headline]
-  const values = model.keyValues.map((item) => (
-    `${item.label} ${item.value}${item.date ? `（${item.date}）` : ''}`
-  ))
-  if (values.length) lines.push(values.join(isEnglish ? '; ' : '；'))
-  if (model.triggers.length) {
-    lines.push(`${isEnglish ? 'Reassessment' : '重新評估'}：${model.triggers.map((trigger) => trigger.text).join(isEnglish ? '; ' : '；')}`)
-  }
-  const answered = model.asks.flatMap((ask) => {
-    const { value, prefilled } = effectiveAnswer(ask, answers)
-    const option = ask.options.find((candidate) => candidate.value === value)
-    if (!option) return []
-    return [`${ask.label}${isEnglish ? ': ' : '：'}${option.label}${prefilled && ask.prefill ? `（${ask.prefill.basis}）` : ''}`]
-  })
-  if (answered.length) lines.push(answered.join(isEnglish ? '; ' : '；'))
-  const decided = model.points.flatMap((point) => pointSteps(point, decisions, now).flatMap((step, index) => {
-    const decision = step.decision
-    if (!decision) return []
-    const check = decision.record.responseCheck
-    // A step that answers other points is named by them (「DP-08／DP-09 抗凝
-    // 選藥／DOAC 劑量」), not by the row it was recorded on.
-    const answered = index > 0 ? pointsDecidedBy(point, model.points) : []
-    const name = answered.length
-      ? `${answered.map((item) => item.dp).join('／')} ${answered.map((item) => item.label).join('／')}`
-      : `${point.dp} ${point.label}`
-    return [`- ${name}${isEnglish ? ': ' : '：'}${decision.record.actionLabel ?? decision.action.label}${
-      check ? `（${isEnglish ? 'check' : '回應檢查'}：${check.text}${checkIntervalSuffix(check, isEnglish)}）` : ''
-    }`]
-  }))
-  lines.push(isEnglish ? "Today's decisions:" : '今天的決定：')
-  lines.push(...(decided.length ? decided : [isEnglish ? '- none recorded' : '- 尚未記錄']))
-  const plan = buildVisitPlan(model, decisions, now)
-  lines.push(...plan.notes.map((note) => note.text))
-  return lines.join('\n')
+  return visitSummaryText({ model, answers, recorded: decisions, now, locale: isEnglish ? 'en' : 'zh-TW' })
 }
 
 /**
