@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -20,6 +20,7 @@ import {
   SUBTAB_TRIGGER_CLASSES,
 } from '@/src/shared/config/ui-theme.config'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { isExportSubTab, useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
@@ -39,6 +40,22 @@ export default function IpsExportFeature() {
   // destination in the 民眾 experience, so the tab only exists for clinicians.
   const showEmrTab = audience === 'medical'
   const x = t.ipsExport
+  // The open sub-tab lives in the right-panel provider so 總覽's 「帶回病歷」
+  // can open 帶回紀錄 itself. 民眾 have no 帶回紀錄 and land on 貼給 AI.
+  const { exportTab, setExportTab, activeTab, revealSeq } = useRightPanel()
+  const subTab = !showEmrTab && exportTab === 'emr' ? 'ai' : exportTab
+  // The three sub-tabs share one scroll position; a reader sent here from
+  // elsewhere starts at the top of the sub-tab, not wherever 貼給 AI was left.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const seenReveal = useRef(revealSeq)
+  useEffect(() => {
+    if (revealSeq === seenReveal.current) return
+    seenReveal.current = revealSeq
+    if (activeTab !== 'ips-export') return
+    // Next frame: on a phone the panel it sits in is only being shown now.
+    const frame = requestAnimationFrame(() => rootRef.current?.scrollIntoView?.({ block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [revealSeq, activeTab])
   const [includePatientIdentifiers, setIncludePatientIdentifiers] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const {
@@ -123,16 +140,20 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-3">
+    <div ref={rootRef} className="mx-auto max-w-5xl space-y-3">
       {/* The right-panel tab already names this page; a visible title here
           only pushed the clinician's content down. */}
       <h1 className="sr-only">{x.hubTitle}</h1>
-      <Tabs defaultValue={showEmrTab ? "emr" : "ai"} className="space-y-3">
+      <Tabs
+        value={subTab}
+        onValueChange={(value) => { if (isExportSubTab(value)) setExportTab(value) }}
+        className="space-y-3"
+      >
         <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
           {/* Clinicians open this hub to get data back into the chart far more
               often than to hand it to an AI or download a file, so 帶回紀錄
-              leads and opens by default. 民眾 have no such tab and still land
-              on 貼給 AI. */}
+              leads and opens by default (the provider starts there). 民眾
+              have no such tab and still land on 貼給 AI. */}
           {showEmrTab && (
             <TabsTrigger value="emr" className={SUBTAB_TRIGGER_CLASSES}>{x.emrTab}</TabsTrigger>
           )}
