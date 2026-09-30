@@ -10,6 +10,7 @@ import {
   criteriaOf,
   sourceTag,
   type DecisionBasisItem,
+  type DecisionCriteriaGroupView,
   type QueueRow,
   type QueueStep,
   type VisitPlanModel,
@@ -277,6 +278,17 @@ function criterionOf(raw: unknown): CriterionView | undefined {
   const { label, value, met } = (raw ?? {}) as Record<string, unknown>
   if (typeof label !== 'string') return undefined
   return { label, ...(typeof value === 'string' ? { value } : {}), ...(typeof met === 'boolean' ? { met } : {}) }
+}
+
+/**
+ * The criteria a row draws in its 指引怎麼說 cell: a dose rule beside the
+ * options it chooses between — DP-14's apixaban reduction, as the prototype
+ * draws it. Any other point's criteria (DP-04's triggers, a pillar's start
+ * conditions, I NEED HELP) are its 看依據, and the cell keeps the guideline's
+ * line, so the table reads as the handbook's.
+ */
+function inlineCriteriaOf(point: object | undefined): DecisionCriteriaGroupView[] {
+  return optionTableOf(point) ? criteriaOf(point) : []
 }
 
 /** Every option side by side (the DOACs at this patient's dose), read defensively like `changesOf`. */
@@ -1086,7 +1098,7 @@ export function VisitBookLayout({
     const current = row.current
     const shown = (current ?? row.steps[row.steps.length - 1]).point
     const decided = row.steps.filter((step) => step.decision)
-    const criteria = criteriaOf(shown)
+    const criteria = inlineCriteriaOf(shown)
     const basis = basisOf(shown)
     const guide = point.guideline?.points[0]
     const cite = citationOf(point)
@@ -1178,7 +1190,7 @@ export function VisitBookLayout({
     const mark = marks.get(point)!
     const absentHere = ABSENT_STATES.has(point.state)
     const basis = basisOf(point)
-    const criteria = criteriaOf(point)
+    const criteria = inlineCriteriaOf(point)
     const guide = point.guideline?.points[0]
     const cite = citationOf(point)
     const line = <>{point.headline ?? point.label}{point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}</>

@@ -211,6 +211,18 @@ describe.each([
     expect(within(entry('DP-15')).getByRole('button', { name: /看依據/ })).toBeInTheDocument()
   })
 
+  it('keeps the guideline\'s line in 指引怎麼說 and a point\'s own criteria under 看依據; only a dose rule beside its options stays in the cell (P7 DP-04)', () => {
+    useVisitAnswersStore.getState().answer(PATIENT, 'dyspnoea-trend', 'worse')
+    render(<BookPage id="p7-worsening-congestion" page="hf" />)
+    const row = entry('DP-04')
+    expect(row).toHaveTextContent('喘變差：找誘因？安排心超？')
+    expect(row).toHaveTextContent('臨床惡化或另有需要時才重做心超')
+    // The five triggers are the point's reasoning, not its guideline cell.
+    expect(row).not.toHaveTextContent('近 6 週內 HF 住院')
+    fireEvent.click(within(row).getByRole('button', { name: /看依據/ }))
+    expect(within(row).getByTestId('cdss-book-reasoning')).toHaveTextContent('近 6 週內 HF 住院')
+  })
+
   it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))
