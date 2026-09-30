@@ -23,7 +23,7 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 import { applyAfCalculatorResults } from '@/features/clinical-decision-support/utils/af-calculators'
 import { applyPhenotypeAnswer } from '@/features/clinical-decision-support/utils/apply-phenotype-answer'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
-import type { ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { todayIsoDate, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type {
   CdssPatientProfile,
@@ -44,9 +44,10 @@ export const DP06_EXAM_TERMS = ['orthopnea', 'paroxysmal-nocturnal-dyspnea', 'jv
  */
 export function examToday(found: readonly string[] = []): ClinicVitals {
   const modifiedAt = SCENARIO_NOW.toISOString()
+  const examinedOn = todayIsoDate(SCENARIO_NOW)
   return {
     entries: {},
-    signAnswers: Object.fromEntries(DP06_EXAM_TERMS.map((term) => [term, { value: found.includes(term) ? 'present' : 'absent', modifiedAt }])),
+    signAnswers: Object.fromEntries(DP06_EXAM_TERMS.map((term) => [term, { value: found.includes(term) ? 'present' : 'absent', modifiedAt, examinedOn }])),
   }
 }
 
@@ -78,8 +79,8 @@ export interface ScenarioRun {
   model: VisitDecisionModel
 }
 
-/** The profile LiveFeature would hand the packs for this bundle, before the answers. */
-export function scenarioProfile(id: ScenarioId): CdssPatientProfile {
+/** The profile LiveFeature would hand the packs for this bundle, before the answers — on the scenario's day, or `now`. */
+export function scenarioProfile(id: ScenarioId, now: Date = SCENARIO_NOW): CdssPatientProfile {
   const bundle = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, `${id}.json`), 'utf8'))
   const parsed = LocalBundleService.parse(bundle)
   if (!parsed) throw new Error(`${id}: the bundle did not parse`)
@@ -96,7 +97,7 @@ export function scenarioProfile(id: ScenarioId): CdssPatientProfile {
     immunizations: collection.immunizations,
     diagnosticReports: collection.diagnosticReports,
     documentReferences: collection.documentReferences,
-    now: SCENARIO_NOW,
+    now,
   })
   return applyAfCalculatorResults(record)
 }
@@ -117,13 +118,13 @@ export function scenarioPreviousVisit(id: ScenarioId): string | undefined {
  */
 export function scenarioRun(
   id: ScenarioId,
-  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false, afAnswers, clinicVitals }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean; afAnswers?: CdssPatientProfile['afClinicalAnswers']; clinicVitals?: ClinicVitals } = {},
+  { page = 'hf', answers = {}, phenotype, intolerant = [], firstVisit = false, afAnswers, clinicVitals, now }: { page?: 'hf' | 'af'; answers?: VisitAnswers; phenotype?: PhenotypeAnswer; intolerant?: readonly string[]; firstVisit?: boolean; afAnswers?: CdssPatientProfile['afClinicalAnswers']; clinicVitals?: ClinicVitals; now?: Date } = {},
 ): ScenarioRun {
   // The DP-00/DP-01 answer reaches the pack as the app hands it: facts on the
   // profile; so does a pillar marked 「不耐受」, the stored previous visit, and
   // the AF page's answers (AF DP-01 among them).
   const previous = firstVisit ? undefined : scenarioPreviousVisit(id)
-  const loaded = scenarioProfile(id)
+  const loaded = scenarioProfile(id, now)
   const withAf = afAnswers ? { ...loaded, afClinicalAnswers: afAnswers } : loaded
   // The vitals and signs measured in the room, as LiveFeature applies them: before the phenotype answer.
   const answered = applyFmtIntolerance(applyPhenotypeAnswer(applyClinicVitals(applyVisitAnswers(withAf, answers), clinicVitals), phenotype), intolerant)

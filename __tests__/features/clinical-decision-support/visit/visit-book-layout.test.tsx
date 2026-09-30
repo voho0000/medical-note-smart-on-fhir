@@ -12,7 +12,7 @@ import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-su
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
-import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
+import { VisitBookChromeContext, type VisitBookChrome } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
 import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
@@ -38,7 +38,7 @@ const PATIENT = 'book-patient'
  */
 let mode: 'window' | 'inline' = 'window'
 
-function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
+function BookPage({ id, page, chrome }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -48,7 +48,7 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype, clinicVitals }), [afAnswers, answers, clinicVitals, id, page, phenotype])
   const hfpefReading = useMemo(() => buildHfpefReading({ profile: run.profile, autofill: { resolve: () => undefined } }), [run.profile])
   return (
-    <VisitBookChromeContext.Provider value={mode === 'inline' ? { inline: true } : null}>
+    <VisitBookChromeContext.Provider value={chrome !== undefined ? chrome : mode === 'inline' ? { inline: true } : null}>
     <ClinicalDecisionSupportView
       result={run.result}
       locale="zh-TW"
@@ -474,5 +474,62 @@ describe.each([
     expect(useAfAnswersStore.getState().answers.restingRate).toBe(true)
     expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
     expect(within(entry('DP-21')).getByText('門診確認')).toBeInTheDocument()
+  })
+})
+
+/**
+ * 全螢幕 from the panel (PR #224 review, 2026-10-01): the page moves over the
+ * window and back on one button, and while it covers the window nothing under
+ * it can be reached from the keyboard or read out.
+ */
+describe('the handbook page over the whole window', () => {
+  function PanelBook() {
+    const [full, setFull] = useState(false)
+    return (
+      <>
+        <button type="button">panel header</button>
+        <BookPage
+          id="p9-hfpef-af-dose"
+          page="hf"
+          chrome={full ? { onCollapse: () => setFull(false) } : { inline: true, onExpand: () => setFull(true) }}
+        />
+      </>
+    )
+  }
+
+  it('opened from the panel keeps focus on its one button, takes the panel out of reach, and Esc brings it back', () => {
+    render(<PanelBook />)
+    const covered = screen.getByRole('button', { name: 'panel header' })
+    expect(covered.closest('[inert]')).toBeNull()
+
+    const expand = screen.getByTestId('cdss-book-expand')
+    expand.focus()
+    fireEvent.click(expand)
+    expect(screen.getByTestId('cdss-visit-book')).not.toHaveAttribute('data-inline')
+    expect(document.activeElement).toBe(screen.getByTestId('cdss-book-collapse'))
+    expect(covered.closest('[inert]')).not.toBeNull()
+    // The page itself stays live.
+    expect(screen.getByTestId('cdss-visit-book').closest('[inert]')).toBeNull()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByTestId('cdss-visit-book')).toHaveAttribute('data-inline', 'true')
+    expect(document.activeElement).toBe(screen.getByTestId('cdss-book-expand'))
+    expect(covered.closest('[inert]')).toBeNull()
+  })
+
+  it('opened by ?visit=book does the same, and gives the page back when it closes', () => {
+    window.history.pushState({}, '', '/?visit=book')
+    const { unmount } = render(
+      <>
+        <button type="button">app header</button>
+        <BookPage id="p9-hfpef-af-dose" page="hf" chrome={null} />
+      </>,
+    )
+    const covered = screen.getByRole('button', { name: 'app header' })
+    expect(screen.getByTestId('cdss-visit-book')).not.toHaveAttribute('data-inline')
+    expect(covered.closest('[inert]')).not.toBeNull()
+    unmount()
+    expect(covered.closest('[inert]')).toBeNull()
+    window.history.pushState({}, '', '/')
   })
 })

@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useContext, useEffect, useId, useState, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Noto_Serif_TC } from 'next/font/google'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
@@ -832,6 +832,25 @@ export function VisitBookLayout({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onCollapse])
+  // Over the whole window the page is all there is: what it covers is out of
+  // reach — Tab no longer walks into the panel and the header underneath, and
+  // a screen reader no longer reads them — until it is back in the panel.
+  const bookRef = useRef<HTMLDivElement>(null)
+  const overWindow = !chrome?.inline
+  useEffect(() => {
+    const book = bookRef.current
+    if (!overWindow || !book) return
+    const covered: Element[] = []
+    for (let node: Element = book; node.parentElement && node !== document.body; node = node.parentElement) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        // A live region (the toasts, the route announcer) still has to be heard.
+        if (sibling === node || sibling.hasAttribute('inert') || sibling.matches('script, style, template, [aria-live], next-route-announcer')) continue
+        sibling.setAttribute('inert', '')
+        covered.push(sibling)
+      }
+    }
+    return () => covered.forEach((element) => element.removeAttribute('inert'))
+  }, [overWindow])
   // A point's own questions under its row or line — in place of the page's older question folds there.
   const pointQuestions = (point: DecisionPointView, className: string) => {
     const questions = questionsOf(point)
@@ -1598,7 +1617,7 @@ export function VisitBookLayout({
   const chaptersShown = numbered.filter(({ section }) => !section.plan)
 
   return (
-    <div className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
+    <div ref={bookRef} className={`${styles.book} ${chrome?.inline ? styles.inline : ''} ${bookSerif.variable}`} data-testid="cdss-visit-book" data-inline={chrome?.inline ? 'true' : undefined}>
       <header className={styles.head}>
         <div className={styles.headInner}>
           {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
@@ -1632,12 +1651,14 @@ export function VisitBookLayout({
                   ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
                   : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
+          {/* One button either way (the shared key): pressed from the keyboard,
+              focus stays on it as the page moves between panel and window. */}
           {chrome?.onExpand ? (
-            <button type="button" className={styles.windowToggle} onClick={chrome.onExpand} data-testid="cdss-book-expand">
+            <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onExpand} data-testid="cdss-book-expand">
               {isEnglish ? 'Full window' : '全螢幕'}
             </button>
           ) : chrome?.onCollapse ? (
-            <button type="button" className={styles.windowToggle} onClick={chrome.onCollapse} data-testid="cdss-book-collapse">
+            <button key="window-toggle" type="button" className={styles.windowToggle} onClick={chrome.onCollapse} data-testid="cdss-book-collapse">
               {isEnglish ? 'Back to the panel' : '回到面板'}
             </button>
           ) : exitHref && !chrome?.inline ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}

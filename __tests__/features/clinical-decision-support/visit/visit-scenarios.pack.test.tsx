@@ -20,11 +20,11 @@ import { ClinicalDecisionSupportView } from '@/features/clinical-decision-suppor
 import type { VisitAnswers } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
-import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { buildClinicVitals, mergeClinicVitals, useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 import { useVisitValuesStore } from '@/features/clinical-decision-support/stores/visit-values.store'
-import { atScenarioDay, examToday, scenarioRun, type ScenarioId } from './scenario-models'
+import { atScenarioDay, DP06_EXAM_TERMS, examToday, scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),
@@ -130,7 +130,7 @@ function rowDetail(dp: string): HTMLElement {
   return found
 }
 
-function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answers?: VisitAnswers; source?: 'hf' | 'af'; clinicVitals?: ReturnType<typeof examToday> } = {}) {
+function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answers?: VisitAnswers; source?: 'hf' | 'af'; clinicVitals?: ReturnType<typeof examToday>; now?: Date } = {}) {
   const { model } = scenarioRun(id, options)
   const found = model.points.find((item) => item.dp === dp && (!options.source || item.source === options.source))
   if (!found) throw new Error(`${id}: no ${dp}`)
@@ -539,6 +539,33 @@ describe('real pack · P7 worsening congestion', () => {
     fireEvent.click(primaryOf('DP-06'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
   }))
+})
+
+/**
+ * PR #224 review (2026-10-01): DP-06 takes today's examination only, so the
+ * examination the host hands it must be one day's. The patient examined on
+ * 09-27 and seen again on 09-28, in a tab left open.
+ */
+describe('real pack · DP-06 reads the examination of the visit day, sign by sign', () => {
+  const SEPT_27 = new Date('2026-09-27T10:00:00+08:00')
+  const SEPT_28 = new Date('2026-09-28T10:00:00+08:00')
+  const allAbsent = Object.fromEntries(DP06_EXAM_TERMS.map((term) => [term, 'absent' as const]))
+  const yesterday = buildClinicVitals({ signAnswers: allAbsent }, SEPT_27)
+  const examRows = (clinicVitals: ReturnType<typeof examToday>) => {
+    const dp06 = point('p9-hfpef-af-dose', 'DP-06', { clinicVitals, now: new Date('2026-09-28T09:00:00+08:00') })
+    return Object.fromEntries((dp06.questions?.rows ?? []).map((row) => [row.id, row.answer]))
+  }
+
+  it('a sign found the next day leaves perfusion and the other signs unanswered, not the day before\'s 無', () => {
+    const today = mergeClinicVitals(yesterday, { signAnswers: { rales: 'present' } }, SEPT_28)
+    expect(examRows(today)).toEqual({ 'orthopnea-pnd': undefined, jvp: undefined, rales: true, edema: undefined, hypoperfusion: undefined })
+  })
+
+  it('全部皆無 pressed again the next day is that day\'s examination', () => {
+    expect(examRows(yesterday)).toEqual({ 'orthopnea-pnd': undefined, jvp: undefined, rales: undefined, edema: undefined, hypoperfusion: undefined })
+    const today = mergeClinicVitals(yesterday, { signAnswers: allAbsent }, SEPT_28)
+    expect(examRows(today)).toEqual({ 'orthopnea-pnd': false, jvp: false, rales: false, edema: false, hypoperfusion: false })
+  })
 })
 
 describe('real pack · P8 first visit after an HF admission', () => {
