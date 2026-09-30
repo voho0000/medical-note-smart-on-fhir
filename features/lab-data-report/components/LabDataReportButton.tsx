@@ -1,9 +1,9 @@
 "use client"
 
 // The one entry to 回報檢驗資料問題, in the cumulative report's toolbar. A
-// plain, clinician-clicked action: it never prompts, toasts or announces
-// itself, so it is safe on the question-free MediCloud launch route
-// (isMedcloudLaunchRoute) too.
+// plain, clinician-clicked action: it never prompts or announces itself — the
+// only toast is the result of a report the clinician sent — so it is safe on
+// the question-free MediCloud launch route (isMedcloudLaunchRoute) too.
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { Flag } from "lucide-react"
