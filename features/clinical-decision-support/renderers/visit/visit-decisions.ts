@@ -63,6 +63,42 @@ export function nextStepExtras(point: Pick<DecisionPointView, 'next'>): NextStep
 /** A step drawn from a point's `next`, carrying whether its actions are unranked. */
 export type VisitStepPoint = DecisionPointView & { unranked?: boolean }
 
+/** One criterion a decision turns on, with this patient's value; `met` absent is unknown. */
+export interface DecisionCriterionView {
+  label: string
+  value?: string
+  met?: boolean
+}
+
+/** The criteria for one option (ESC 2024 Table 11's for one DOAC). */
+export interface DecisionCriteriaGroupView {
+  title: string
+  items: DecisionCriterionView[]
+}
+
+/**
+ * The criteria a point's decision turns on, as the pack wrote them
+ * (personalized-care after 2.10.0: each DOAC's Table 11 dose-reduction
+ * criteria with the patient's value). Read defensively: an older pack sends
+ * none, and anything malformed is dropped rather than drawn.
+ */
+export function criteriaOf(point: object | undefined): DecisionCriteriaGroupView[] {
+  const raw = (point as { criteria?: unknown } | undefined)?.criteria
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((group): DecisionCriteriaGroupView[] => {
+    if (!group || typeof group !== 'object') return []
+    const { title, items } = group as { title?: unknown; items?: unknown }
+    if (typeof title !== 'string' || !Array.isArray(items)) return []
+    const criteria = items.flatMap((item): DecisionCriterionView[] => {
+      if (!item || typeof item !== 'object') return []
+      const { label, value, met } = item as { label?: unknown; value?: unknown; met?: unknown }
+      if (typeof label !== 'string') return []
+      return [{ label, ...(typeof value === 'string' ? { value } : {}), ...(typeof met === 'boolean' ? { met } : {}) }]
+    })
+    return criteria.length ? [{ title, items: criteria }] : []
+  })
+}
+
 /** Whether a point's actions are equals, none of them the recommendation. */
 export function isUnranked(point: DecisionPointView): boolean {
   return Boolean((point as VisitStepPoint).unranked)
@@ -82,8 +118,10 @@ export function nextStepPoint(point: DecisionPointView): VisitStepPoint | undefi
     chain: next.chain,
     actions: next.actions,
     next: undefined,
+    // The step's own criteria (each DOAC the choice offers), not the row's.
+    criteria: (next as { criteria?: unknown }).criteria,
     ...(nextStepExtras(point).unranked ? { unranked: true } : {}),
-  }
+  } as VisitStepPoint
 }
 
 /** The states that carry decision buttons. */
