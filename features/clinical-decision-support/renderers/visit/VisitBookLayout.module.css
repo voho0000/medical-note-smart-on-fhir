@@ -489,6 +489,21 @@
 .optTable tr[data-status='individual'] .optPatient,
 .optTable tr[data-status='missing'] .optPatient { color: var(--warn-ink); }
 
+/* A classification side by side (HF DP-01's phenotype). */
+.classWrap { display: flex; flex-direction: column; gap: 6px; }
+.classTable { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: 14px; }
+.classTable thead tr { background: var(--thead); text-align: left; }
+.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; }
+.classTable thead th { font-weight: 700; }
+.classTable thead th:first-child { width: 18%; }
+.classTable tbody th { font-weight: 500; color: var(--ink-3); }
+.classTable tbody tr { border-bottom: 1px solid var(--line-soft); }
+.classTable tbody tr:last-child { border-bottom: 0; }
+.classTable thead th[data-current] { background: var(--blue-bg); color: var(--blue-ink); }
+.classTable td[data-current] { background: var(--blue-soft); }
+.classPatient { font-weight: 500; }
+.classNote { margin: 0; font-size: 12px; color: var(--ink-4); }
+
 /* --------------------------------- plan -------------------------------- */
 
 .plan {

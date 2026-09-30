@@ -81,6 +81,11 @@ describe('the pocket-handbook layout', () => {
       '是哪一型？', '現在是乾是濕？', '藥物：HFpEF 該用什麼？', '共病：HFpEF 的另一半治療', '裝置與進階', '今天的計畫',
     ])
     expect(screen.getByText('HFpEF · 已確立')).toBeInTheDocument()
+    // DP-01 draws the pack's phenotype table, HFpEF marked as this patient's.
+    const phenotype = within(entry('DP-01')).getByTestId('cdss-book-classification')
+    expect(within(phenotype).getByRole('columnheader', { name: 'HFpEF ← 本病人' })).toBeInTheDocument()
+    expect(phenotype).toHaveTextContent('LVEF 60%（04-01） · NT-proBNP 1100（09-20） · I50.32')
+    expect(phenotype).toHaveTextContent('ESC 2026 取消 HFmrEF')
     // Today's triage is the red-flag strip at the head of its chapter.
     expect(entry('DP-24').tagName).toBe('P')
   })

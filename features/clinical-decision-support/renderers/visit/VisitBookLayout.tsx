@@ -249,6 +249,63 @@ function startDosesOf(point: object | undefined): { title: string; values?: stri
   return parsed.length ? { title, ...(typeof values === 'string' ? { values } : {}), rows: parsed } : undefined
 }
 
+interface ClassificationView { title: string; classes: { id: string; label: string; definition: string; current?: boolean }[]; patient?: string; note?: string }
+
+/** A point's classification table (HF DP-01's phenotype), read defensively like `changesOf`. */
+function classificationOf(point: object | undefined): ClassificationView | undefined {
+  const raw = (point as { classification?: unknown } | undefined)?.classification
+  if (!raw || typeof raw !== 'object') return undefined
+  const { title, classes, patient, note } = raw as Record<string, unknown>
+  if (typeof title !== 'string' || !Array.isArray(classes)) return undefined
+  const parsed = classes.flatMap((item): ClassificationView['classes'] => {
+    const { id, label, definition, current } = (item ?? {}) as Record<string, unknown>
+    if (typeof id !== 'string' || typeof label !== 'string' || typeof definition !== 'string') return []
+    return [{ id, label, definition, ...(current === true ? { current: true } : {}) }]
+  })
+  if (!parsed.length) return undefined
+  return { title, classes: parsed, ...(typeof patient === 'string' ? { patient } : {}), ...(typeof note === 'string' ? { note } : {}) }
+}
+
+/** The classes side by side, the patient's column marked, as the prototype's DP-01 table. */
+function ClassificationTable({ point, isEnglish }: { point: DecisionPointView; isEnglish: boolean }) {
+  const table = classificationOf(point)
+  if (!table) return null
+  const current = table.classes.find((item) => item.current)
+  return (
+    <div className={styles.classWrap} data-testid="cdss-book-classification">
+      <div className={styles.optScroll}>
+        <table className={styles.classTable} aria-label={table.title}>
+          <thead>
+            <tr>
+              <th scope="col"><span className={styles.dpTag}>{point.dp}</span></th>
+              {table.classes.map((item) => (
+                <th key={item.id} scope="col" data-current={item.current || undefined}>
+                  {item.label}{item.current ? (isEnglish ? ' ← this patient' : ' ← 本病人') : ''}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">{isEnglish ? 'Definition' : '定義'}</th>
+              {table.classes.map((item) => <td key={item.id} data-current={item.current || undefined}>{item.definition}</td>)}
+            </tr>
+            {table.patient ? (
+              <tr>
+                <th scope="row">{isEnglish ? 'This patient' : '本病人'}</th>
+                {current
+                  ? table.classes.map((item) => <td key={item.id} data-current={item.current || undefined} className={item.current ? styles.classPatient : undefined}>{item.current ? table.patient : ''}</td>)
+                  : <td colSpan={table.classes.length}>{table.patient}</td>}
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <p className={styles.classNote}>{table.title}{table.note ? `　${table.note}` : ''}</p>
+    </div>
+  )
+}
+
 /** The criteria, each with its value and the date the record line gave it. */
 function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean; dated?: boolean }) {
   const groups = criteriaOf(point)
@@ -579,6 +636,7 @@ export function VisitBookLayout({
             )}
           </div>
         </div>
+        {classificationOf(point) ? <div className={styles.rowExtras}><ClassificationTable point={point} isEnglish={isEnglish} /></div> : null}
         {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
@@ -629,6 +687,7 @@ export function VisitBookLayout({
           {!by && point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
           {reasoningButton(point)}
         </span>
+        {classificationOf(point) ? <div className={styles.lineWide}><ClassificationTable point={point} isEnglish={isEnglish} /></div> : null}
         {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
@@ -648,6 +707,7 @@ export function VisitBookLayout({
         <span className={styles.dpTag}>{point.dp}</span>
         <b>{point.label}</b>
       </div>
+      <ClassificationTable point={point} isEnglish={isEnglish} />
       <div className={styles.inner}>
         {content}
         {extrasOf(point)}
