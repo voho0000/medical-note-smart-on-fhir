@@ -1,11 +1,11 @@
 "use client"
 
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useContext, useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import {
   ABSENT_STATES,
   BLOCK_ORDER,
-  blockShortTitle,
-  checkIntervalSuffix,
   criteriaOf,
   sourceTag,
   type DecisionBasisItem,
@@ -17,6 +17,7 @@ import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
 import { ChainDone } from './TodayQueue'
 import { VisitDecisionControls } from './VisitDecisionControls'
+import { VisitBookChromeContext } from './visit-book-chrome'
 import styles from './VisitBookLayout.module.css'
 
 /**
@@ -74,8 +75,43 @@ export interface VisitBookLayoutProps {
   plan: VisitPlanModel
   /** The sentence once everything queued is recorded. */
   decidedLine?: string
-  /** The copyable note. */
-  summary: ReactNode
+  /** The pack's chapters (`VisitDecisionModel.book`); without them, the map's groups. */
+  chapters?: readonly BookChapterView[]
+  /** Today's decisions, each with its point and what to recheck, for 今天的計畫. */
+  decided: readonly { key: string; dp: string; source: string; label: string; check?: string }[]
+  /** The note 複製到病歷 copies. */
+  summaryText: string
+}
+
+/** A chapter as the model carries it (`VisitBookChapter`), read defensively. */
+export interface BookChapterView {
+  id: string
+  title: string
+  short: string
+  aside?: string
+  settled?: boolean
+  plan?: boolean
+  dps: readonly string[]
+}
+
+/** The model's chapters, where the pack gives them; undefined for an older pack. */
+export function bookChaptersOf(model: object): BookChapterView[] | undefined {
+  const raw = (model as { book?: unknown }).book
+  if (!Array.isArray(raw)) return undefined
+  const chapters = raw.flatMap((item): BookChapterView[] => {
+    const { id, title, short, aside, settled, plan, dps } = (item ?? {}) as Record<string, unknown>
+    if (typeof id !== 'string' || typeof title !== 'string' || !Array.isArray(dps)) return []
+    return [{
+      id,
+      title,
+      short: typeof short === 'string' ? short : title,
+      ...(typeof aside === 'string' ? { aside } : {}),
+      ...(settled === true ? { settled: true } : {}),
+      ...(plan === true ? { plan: true } : {}),
+      dps: dps.filter((dp): dp is string => typeof dp === 'string'),
+    }]
+  })
+  return chapters.length ? chapters : undefined
 }
 
 export function bookAnchor(point: Pick<DecisionPointView, 'source' | 'dp'>): string {
@@ -109,20 +145,50 @@ const MARK_WORDS: Record<BookMark, { zh: string; en: string }> = {
 
 interface Section {
   key: string
-  block: VisitBlock
   title: string
+  short: string
+  aside?: string
+  settled?: boolean
+  plan?: boolean
+  /** The map group's block, where the section is one (no chapters from the pack). */
+  block?: VisitBlock
   points: DecisionPointView[]
 }
 
-/** The page's groups in the map's order: by column, then as the pack lists them. */
-function sectionsOf(points: readonly DecisionPointView[]): Section[] {
+/**
+ * The page's chapters: the pack's, each point of the page in the one that
+ * names it and any the pack placed nowhere at the end; without them, the
+ * map's groups by column, as the pack lists them.
+ */
+function sectionsOf(points: readonly DecisionPointView[], chapters: readonly BookChapterView[] | undefined, isEnglish: boolean): Section[] {
+  if (chapters?.length) {
+    const placed = new Set<DecisionPointView>()
+    const sections: Section[] = chapters.map((chapter) => {
+      const mine = chapter.dps.flatMap((dp) => points.filter((point) => point.dp === dp && !placed.has(point)))
+      mine.forEach((point) => placed.add(point))
+      return {
+        key: chapter.id,
+        title: chapter.title,
+        short: chapter.short,
+        ...(chapter.aside ? { aside: chapter.aside } : {}),
+        ...(chapter.settled ? { settled: true } : {}),
+        ...(chapter.plan ? { plan: true } : {}),
+        points: mine,
+      }
+    })
+    const rest = points.filter((point) => !placed.has(point))
+    if (rest.length) sections.push({ key: 'other', title: isEnglish ? 'Other points' : '其他決策點', short: isEnglish ? 'Other' : '其他', points: rest })
+    // The plan's points close the page, after every chapter.
+    return [...sections.filter((section) => !section.plan), ...sections.filter((section) => section.plan)]
+  }
   const sections: Section[] = []
   for (const block of BLOCK_ORDER) {
     for (const point of points.filter((candidate) => candidate.block === block)) {
       const key = `${block}|${point.group}`
       let section = sections.find((candidate) => candidate.key === key)
       if (!section) {
-        section = { key, block, title: point.groupLabel ?? point.group, points: [] }
+        const title = point.groupLabel ?? point.group
+        section = { key, block, title, short: title, points: [] }
         sections.push(section)
       }
       section.points.push(point)
@@ -237,9 +303,35 @@ export function VisitBookLayout({
   blockFooters,
   plan,
   decidedLine,
-  summary,
+  chapters,
+  decided,
+  summaryText,
 }: VisitBookLayoutProps) {
-  const sections = sectionsOf(points)
+  const chrome = useContext(VisitBookChromeContext)
+  const [mapOpen, setMapOpen] = useState(true)
+  const { copied, copy } = useCopyToClipboard()
+  const sections = sectionsOf(points, chapters, isEnglish)
+  // The guideline sources the page cites, numbered as they first appear; the
+  // 指引怎麼說 cell carries its point's number, the foot of the page the list.
+  const citations: string[] = []
+  const citationOf = (point: DecisionPointView) => {
+    const reference = point.guideline?.references[0]
+    if (!reference || ABSENT_STATES.has(point.state)) return undefined
+    const cite = `${reference.source} §${reference.section}（p.${reference.page}）`
+    if (!citations.includes(cite)) citations.push(cite)
+    return citations.indexOf(cite) + 1
+  }
+  const onCopy = async () => {
+    const ok = await copy(summaryText)
+    if (!ok) toast.error(isEnglish ? 'Could not copy — the clipboard is unavailable in this context.' : '無法複製，此環境無法使用剪貼簿。')
+  }
+  // Back to the page's own layout: the same address without the experiment.
+  const exitHref = (() => {
+    if (typeof window === 'undefined') return undefined
+    const url = new URL(window.location.href)
+    url.searchParams.delete('visit')
+    return `${url.pathname}${url.search}${url.hash}`
+  })()
   const scrollTo = (id: string) => {
     const target = document.getElementById(id)
     target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
@@ -422,6 +514,7 @@ export function VisitBookLayout({
     const criteria = criteriaOf(shown)
     const basis = basisOf(shown)
     const guide = point.guideline?.points[0]
+    const cite = citationOf(point)
     // 本病人現在: the values the row reads; beside criteria, the reason line.
     const nowCell = criteria.length || !basis.length
       ? (shown.why ? <span>{shown.why}</span> : <span className={styles.cellMuted}>—</span>)
@@ -457,6 +550,7 @@ export function VisitBookLayout({
                 {isComplex(point) ? <span className={styles.small}>{isEnglish ? 'Each criterion under Reasoning' : '逐項條件見看依據'}</span> : null}
               </>
             ) : criteria.length ? <Criteria point={shown} basis={basis} isEnglish={isEnglish} /> : guide ?? <span className={styles.cellMuted}>—</span>}
+            {cite ? <sup className={styles.cite}>{cite}</sup> : null}
           </div>
           <div className={styles.inner}>
             {current ? (
@@ -496,6 +590,23 @@ export function VisitBookLayout({
     const mark = marks.get(point)!
     const extras = extrasOf(point)
     const panel = reasoning(point, point)
+    // Today's triage (HF DP-24, AF DP-00) is the red-flag strip at the head of its chapter.
+    if (!by && /-triage$/.test(point.semanticId) && !extras && !panel) {
+      return (
+        <p
+          key={`${point.source}:${point.dp}`}
+          id={bookAnchor(point)}
+          tabIndex={-1}
+          className={styles.redFlag}
+          data-book-dp={point.dp}
+          data-book-mark={mark}
+        >
+          <span className={styles.dpTag}>{point.dp}</span>　<b>{point.label}</b>　
+          <span className={mark === 'ask' ? styles.lineAsk : undefined}>{point.headline ?? point.label}</span>
+          {point.why ? <span className={styles.redFlagWhy}>{point.why}</span> : null}
+        </p>
+      )
+    }
     return (
       <div
         key={`${point.source}:${point.dp}`}
@@ -571,7 +682,7 @@ export function VisitBookLayout({
       return (
         <div key={`table-${index}`} className={styles.table} role="group" aria-label={section.title}>
           <div className={styles.thead} aria-hidden="true">
-            <span>{isEnglish ? 'Decision' : '決策點'}</span>
+            <span>{['drugs', 'comorbidity'].includes(section.key) ? section.short : (isEnglish ? 'Decision' : '決策點')}</span>
             <span>{isEnglish ? 'This patient now' : '本病人現在'}</span>
             <span>{isEnglish ? 'The guideline says' : '指引怎麼說'}</span>
             <span>{isEnglish ? 'Today' : '今天'}</span>
@@ -582,14 +693,19 @@ export function VisitBookLayout({
     })
   }
 
-  // Sections numbered down the page, as the map numbers them — or by the
-  // pack's own marker where its label carries one (AF's ⓪ ① and A／R／C).
-  const numbered = sections.map((section, index) => {
-    const marked = /^([⓪①-⑳]|[A-Z])\s+(.+)$/u.exec(section.title)
+  // Chapters numbered down the page as the map numbers them; today's plan
+  // closes the page unnumbered. Without the pack's chapters, a group label's
+  // own marker (AF's ⓪ ① and A／R／C) stands for the number.
+  const chaptersOnly = sections.filter((section) => !section.plan)
+  const numbered = sections.map((section) => {
+    if (section.plan) return { section, num: '' }
+    const count = chaptersOnly.indexOf(section) + 1
+    const marked = chapters?.length ? null : /^([⓪①-⑳]|[A-Z])\s+(.+)$/u.exec(section.title)
     return marked
-      ? { section: { ...section, title: marked[2] }, num: marked[1] }
-      : { section, num: String(index + 1) }
+      ? { section: { ...section, title: marked[2]!, short: marked[2]! }, num: marked[1]! }
+      : { section, num: String(count) }
   })
+  const planSection = numbered.find(({ section }) => section.plan)?.section
   const major = (section: Section) => section.points.some((point) => {
     if (ABSENT_STATES.has(point.state)) return false
     const kind = entryOf(point).kind
@@ -604,10 +720,82 @@ export function VisitBookLayout({
     byDate.set(date, [...(byDate.get(date) ?? []), item])
   }
 
+  const mapLines = (section: Section) => (
+    <ul className={styles.mapLines}>
+      {section.points.map((point) => {
+        const mark = marks.get(point)!
+        const note = mark === 'act' || mark === 'safety'
+          ? MARK_WORDS[mark]
+          : mark === 'ask'
+            ? MARK_WORDS.ask
+            : mark === 'absent'
+              ? (point.state === 'not-included' ? { zh: '未納入', en: 'Not covered' } : MARK_WORDS.absent)
+              : undefined
+        return (
+          <li key={`${point.source}:${point.dp}`}>
+            <button
+              type="button"
+              className={styles.mapLine}
+              onClick={() => goTo(point)}
+              data-book-map-dp={point.dp}
+              data-book-mark={mark}
+            >
+              <Mark mark={mark} />
+              <span className={styles.mapDp}>{point.dp}</span>
+              <span className={styles.mapLabel}>{point.label}</span>
+              {note ? <span className={styles.mapNote}>{isEnglish ? note.en : note.zh}</span> : <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+
+  const renderChapter = ({ section, num }: { section: Section; num: string }) => {
+    const absent = section.points.filter((point) => ABSENT_STATES.has(point.state))
+    return (
+      <section
+        key={section.key}
+        id={sectionAnchor(section.key)}
+        tabIndex={-1}
+        className={`${styles.section} ${major(section) ? '' : styles.minor}`}
+        aria-labelledby={`${sectionAnchor(section.key)}-title`}
+        data-book-section={section.key}
+      >
+        <div className={styles.sectionHead}>
+          <span className={styles.sectionNum}>{num}</span>
+          <h2 id={`${sectionAnchor(section.key)}-title`} className={styles.sectionTitle}>{section.title}</h2>
+          {section.aside ? <span className={section.settled ? styles.sectionSettled : styles.sectionAside}>{section.aside}</span> : null}
+        </div>
+        {renderSection(section)}
+        {absent.length ? (
+          <p className={styles.absent} data-book-absent={section.key}>
+            {isEnglish ? 'Not applicable　' : '不適用　'}
+            {absent.map((point, pointIndex) => (
+              <span key={`${point.source}:${point.dp}`} id={bookAnchor(point)} tabIndex={-1}>
+                {pointIndex ? ' · ' : ''}
+                <span className={styles.dpInline}>{point.dp}</span> {point.label}
+              </span>
+            ))}
+          </p>
+        ) : null}
+        {section.block && blockFooters?.[section.block] && numbered.filter((item) => item.section.block === section.block).at(-1)?.section === section
+          ? <div className={styles.inner}>{blockFooters[section.block]}</div>
+          : null}
+      </section>
+    )
+  }
+
+  const chaptersShown = numbered.filter(({ section }) => !section.plan)
+  // With the pack's chapters, the columns' footers (the outlook models, the
+  // timeline) follow the chapters, before the plan.
+  const footers = chapters?.length ? BLOCK_ORDER.flatMap((block) => (blockFooters?.[block] ? [blockFooters[block]] : [])) : []
+
   return (
     <div className={styles.book} data-testid="cdss-visit-book">
       <header className={styles.head}>
         <div className={styles.headInner}>
+          {chrome?.tabs ? <div className={styles.tabs}>{chrome.tabs}</div> : null}
           <div className={styles.headText}>
             <span className={styles.headLine}>{headline}</span>
             <span className={styles.headValues} data-testid="cdss-book-values">
@@ -637,69 +825,66 @@ export function VisitBookLayout({
                 ? (isEnglish ? `${asking.length} to answer` : `待答 ${asking.length}`)
                 : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
+          {exitHref ? <a className={styles.exit} href={exitHref}>{isEnglish ? 'Original layout' : '回原版面'}</a> : null}
         </div>
       </header>
 
-      <div className={styles.body}>
-        <nav aria-label={isEnglish ? 'Decision map' : '決策地圖'} className={styles.map} data-testid="cdss-book-map">
-          <div className={styles.mapHead}>
-            <span className={styles.mapTitle}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
-            <span className={styles.mapCount}>
-              {isEnglish ? `${counted.length} DPs · ${pending.length + asking.length} open` : `${counted.length} 個 DP · ${pending.length + asking.length} 待處理`}
-            </span>
-          </div>
-          <div className={styles.legend} aria-hidden="true">
-            {pending.some((point) => marks.get(point) === 'safety') ? <span><span className={styles.markSafety} />{isEnglish ? 'Safety' : '安全'}</span> : null}
-            <span><span className={styles.markAct} />{isEnglish ? 'To decide' : '待決定'}</span>
-            <span><span className={styles.markAsk} />{isEnglish ? 'To answer' : '待答'}</span>
-            <span><svg className={styles.markDone} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>{isEnglish ? 'Settled' : '已定'}</span>
-            <span><span className={styles.markInfo} />{isEnglish ? 'Info' : '資訊'}</span>
-            <span className={styles.legendMuted}>{isEnglish ? 'Grey: not applicable' : '灰字 不適用'}</span>
-          </div>
-          {numbered.map(({ section, num }, index) => {
-            const open = section.points.filter((point) => ['act', 'safety', 'ask'].includes(marks.get(point)!)).length
-            return (
-              <div key={section.key} className={styles.mapSection}>
-                {index === 0 || numbered[index - 1].section.block !== section.block ? (
-                  <p className={styles.mapBlock}>{blockShortTitle(section.block, isEnglish)}</p>
-                ) : null}
-                <button type="button" className={styles.mapSectionHead} onClick={() => scrollTo(sectionAnchor(section.key))}>
-                  <span className={styles.mapNum}>{num}</span>
-                  <span className={styles.mapName}>{section.title}</span>
-                  {open ? <span className={styles.mapPending}>{isEnglish ? `${open} open` : `${open} 待`}</span> : null}
-                </button>
-                <ul className={styles.mapLines}>
-                  {section.points.map((point) => {
-                    const mark = marks.get(point)!
-                    const note = mark === 'act' || mark === 'safety'
-                      ? MARK_WORDS[mark]
-                      : mark === 'ask'
-                        ? MARK_WORDS.ask
-                        : mark === 'absent'
-                          ? (point.state === 'not-included' ? { zh: '未納入', en: 'Not covered' } : MARK_WORDS.absent)
-                          : undefined
-                    return (
-                      <li key={`${point.source}:${point.dp}`}>
-                        <button
-                          type="button"
-                          className={styles.mapLine}
-                          onClick={() => goTo(point)}
-                          data-book-map-dp={point.dp}
-                          data-book-mark={mark}
-                        >
-                          <Mark mark={mark} />
-                          <span className={styles.mapDp}>{point.dp}</span>
-                          <span className={styles.mapLabel}>{point.label}</span>
-                          {note ? <span className={styles.mapNote}>{isEnglish ? note.en : note.zh}</span> : <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            )
-          })}
-        </nav>
+      <div className={`${styles.body} ${mapOpen ? '' : styles.bodyMapClosed}`}>
+        {mapOpen ? (
+          <nav aria-label={isEnglish ? 'Decision map' : '決策地圖'} className={styles.map} data-testid="cdss-book-map">
+            <div className={styles.mapHead}>
+              <span className={styles.mapTitle}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
+              <span className={styles.mapCount}>
+                {isEnglish ? `${counted.length} DPs · ${pending.length + asking.length} open` : `${counted.length} 個 DP · ${pending.length + asking.length} 待處理`}
+              </span>
+              <button
+                type="button"
+                className={styles.mapToggle}
+                onClick={() => setMapOpen(false)}
+                aria-label={isEnglish ? 'Collapse the decision map' : '收合決策地圖'}
+                title={isEnglish ? 'Collapse' : '收合'}
+                data-testid="cdss-book-map-collapse"
+              >
+                ‹
+              </button>
+            </div>
+            <div className={styles.legend} aria-hidden="true">
+              {pending.some((point) => marks.get(point) === 'safety') ? <span><span className={styles.markSafety} />{isEnglish ? 'Safety' : '安全'}</span> : null}
+              <span><span className={styles.markAct} />{isEnglish ? 'To decide' : '待決定'}</span>
+              <span><span className={styles.markAsk} />{isEnglish ? 'To answer' : '待答'}</span>
+              <span><svg className={styles.markDone} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>{isEnglish ? 'Settled' : '已定'}</span>
+              <span><span className={styles.markInfo} />{isEnglish ? 'Info' : '資訊'}</span>
+              <span className={styles.legendMuted}>{isEnglish ? 'Grey: not applicable' : '灰字 不適用'}</span>
+            </div>
+            {numbered.map(({ section, num }) => {
+              const open = section.points.filter((point) => ['act', 'safety', 'ask'].includes(marks.get(point)!)).length
+              return (
+                <div key={section.key} className={styles.mapSection}>
+                  <button type="button" className={styles.mapSectionHead} onClick={() => scrollTo(section.plan ? PLAN_ANCHOR : sectionAnchor(section.key))}>
+                    {num ? <span className={styles.mapNum}>{num}</span> : null}
+                    <span className={styles.mapName}>{section.short}</span>
+                    {open ? <span className={styles.mapPending}>{isEnglish ? `${open} open` : `${open} 待`}</span> : null}
+                  </button>
+                  {mapLines(section)}
+                </div>
+              )
+            })}
+          </nav>
+        ) : (
+          <nav aria-label={isEnglish ? 'Decision map' : '決策地圖'} className={styles.mapRail} data-testid="cdss-book-map">
+            <button
+              type="button"
+              className={styles.mapExpand}
+              onClick={() => setMapOpen(true)}
+              aria-label={isEnglish ? 'Open the decision map' : '展開決策地圖'}
+              data-testid="cdss-book-map-expand"
+            >
+              <span className={styles.mapExpandArrow} aria-hidden="true">›</span>
+              <span className={styles.mapExpandText}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
+              {pending.length + asking.length ? <span className={styles.mapPending}>{pending.length + asking.length}</span> : null}
+            </button>
+          </nav>
+        )}
 
         <main className={styles.sheet} aria-label={isEnglish ? 'The visit' : '本次門診'}>
           {top ? <div className={styles.inner}>{top}</div> : null}
@@ -711,66 +896,39 @@ export function VisitBookLayout({
               ))}
             </p>
           ) : null}
-          {BLOCK_ORDER.map((block) => (
-            <Fragment key={block}>
-              {numbered.filter(({ section }) => section.block === block).map(({ section, num }, index) => {
-                const absent = section.points.filter((point) => ABSENT_STATES.has(point.state))
-                return (
-                  <section
-                    key={section.key}
-                    id={sectionAnchor(section.key)}
-                    tabIndex={-1}
-                    className={`${styles.section} ${major(section) ? '' : styles.minor}`}
-                    aria-labelledby={`${sectionAnchor(section.key)}-title`}
-                    data-book-section={section.key}
-                    data-book-block={block}
-                  >
-                    <div className={styles.sectionHead}>
-                      <span className={styles.sectionNum}>{num}</span>
-                      <h2 id={`${sectionAnchor(section.key)}-title`} className={styles.sectionTitle}>{section.title}</h2>
-                      {index === 0 ? <span className={styles.sectionAside}>{blockShortTitle(block, isEnglish)}</span> : null}
-                    </div>
-                    {renderSection(section)}
-                    {absent.length ? (
-                      <p className={styles.absent} data-book-absent={section.key}>
-                        {isEnglish ? 'Not applicable　' : '不適用　'}
-                        {absent.map((point, pointIndex) => (
-                          <span key={`${point.source}:${point.dp}`} id={bookAnchor(point)} tabIndex={-1}>
-                            {pointIndex ? ' · ' : ''}
-                            <span className={styles.dpInline}>{point.dp}</span> {point.label}
-                          </span>
-                        ))}
-                      </p>
-                    ) : null}
-                  </section>
-                )
-              })}
-              {blockFooters?.[block] ? <div className={styles.inner}>{blockFooters[block]}</div> : null}
-            </Fragment>
-          ))}
+          {chaptersShown.map(renderChapter)}
+          {footers.length ? <div className={`${styles.footers} ${styles.inner}`}>{footers.map((footer, index) => <Fragment key={index}>{footer}</Fragment>)}</div> : null}
 
           <section id={PLAN_ANCHOR} tabIndex={-1} className={styles.plan} aria-labelledby={`${PLAN_ANCHOR}-title`} data-testid="cdss-book-end">
             <div className={styles.planHead}>
               <h2 id={`${PLAN_ANCHOR}-title`} className={styles.planTitle}>{isEnglish ? "Today's plan" : '今天的計畫'}</h2>
+              {planSection?.points.length ? (
+                <span className={styles.planSub}>
+                  {planSection.points.map((point) => `${point.dp} ${point.label}`).join(' · ')}
+                </span>
+              ) : null}
+              <button type="button" className={styles.copy} onClick={onCopy} data-testid="cdss-visit-summary-copy">
+                {copied ? (isEnglish ? 'Copied' : '已複製') : (isEnglish ? 'Copy to the note' : '複製到病歷')}
+              </button>
             </div>
+            {planSection ? renderSection(planSection) : null}
             {plan.notes.length ? (
               <ul className={styles.planList} data-testid="cdss-visit-plan-notes">
                 {plan.notes.map((note) => <li key={note.text}><b>{note.text}</b></li>)}
               </ul>
             ) : null}
-            {plan.items.length ? (
+            {decided.length ? (
               <ol className={styles.planList} data-testid="cdss-visit-plan">
-                {plan.items.map((item) => (
-                  <li key={item.key} data-dp={item.point.dp} data-plan-item="">
-                    <span className={styles.dpTag}>{item.point.dp}</span>　<b>{item.actionLabel}</b>
-                    <span className={styles.small}>{isEnglish ? ' — ' : '：'}{item.check.text}{checkIntervalSuffix(item.check, isEnglish)}</span>
-                    {item.reopenWhen ? <span className={styles.small}>{isEnglish ? ' Reopen when: ' : '　重新評估：'}{item.reopenWhen}</span> : null}
+                {decided.map((item) => (
+                  <li key={item.key} data-dp={item.dp} data-plan-item="">
+                    <span className={styles.dpTag}>{item.source !== sourceOfPage ? `${item.source.toUpperCase()} ` : ''}{item.dp}</span>　<b>{item.label}</b>
+                    {item.check ? <span className={styles.small}>　{item.check}</span> : null}
                   </li>
                 ))}
               </ol>
             ) : (
               <p className={styles.planEmpty} data-testid="cdss-visit-plan-empty">
-                {isEnglish ? 'No decision recorded today asks for a follow-up check yet.' : '今天還沒有需要回應檢查的決定。'}
+                {isEnglish ? 'No decision recorded yet.' : '還沒有記錄任何決定。'}
               </p>
             )}
             {pending.length ? (
@@ -780,8 +938,17 @@ export function VisitBookLayout({
               </p>
             ) : null}
             {decidedLine ? <p className={styles.question} data-testid="cdss-visit-decided-line">{decidedLine}</p> : null}
-            <div className={styles.inner}>{summary}</div>
+            <details className={styles.fold} data-testid="cdss-visit-summary">
+              <summary>{isEnglish ? 'The text it copies' : '複製的病歷文字'}</summary>
+              <p className={styles.summaryText} data-testid="cdss-visit-summary-text">{summaryText}</p>
+            </details>
           </section>
+
+          {citations.length ? (
+            <footer className={styles.foot} data-testid="cdss-book-citations">
+              <span>{citations.map((cite, index) => `${index + 1} ${cite}`).join('　')}</span>
+            </footer>
+          ) : null}
         </main>
       </div>
     </div>

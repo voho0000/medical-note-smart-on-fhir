@@ -21,6 +21,7 @@ import {
 } from './guideline-packs/registry'
 import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
+import { VisitBookChromeContext, isVisitBookMode } from './renderers/visit/visit-book-chrome'
 import {
   useNhiLipidReview,
   useNhiLipidReviewProvenance,
@@ -309,6 +310,7 @@ export default function LiveClinicalDecisionSupportFeature({
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
   const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
   const [requestedPackId, setRequestedPackId] = useState<string | null>(null)
+  const [bookMode] = useState(isVisitBookMode)
   const [nhiPageResetKey, setNhiPageResetKey] = useState(0)
 
   const patientId = patient?.id
@@ -804,6 +806,19 @@ export default function LiveClinicalDecisionSupportFeature({
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
+      {/* The pocket-handbook experiment (?visit=book) draws its own header
+          over the page: the disease tabs go into it. */}
+      <VisitBookChromeContext.Provider value={bookMode ? {
+        tabs: (
+          <DiseaseSwitcher
+            locale={cdssLocale}
+            packs={guidelinePacks}
+            applicablePackIds={applicablePackIds}
+            selectedPackId={selectedPack.id}
+            onSelect={setRequestedPackId}
+          />
+        ),
+      } : null}>
       <ClinicalDecisionSupportView
         calculatorAutofill={autofill}
         afAnswers={afAnswers}
@@ -847,6 +862,7 @@ export default function LiveClinicalDecisionSupportFeature({
           ? (id, value) => answerVisitAsk(patientId, id, value, undefined, { packId: result.packId })
           : undefined}
       />
+      </VisitBookChromeContext.Provider>
       </PreventReadingContext.Provider>
       {/* On the map, the reset sits at the foot, after the summary: it clears
           every answer and decision on the page, and has no business beside

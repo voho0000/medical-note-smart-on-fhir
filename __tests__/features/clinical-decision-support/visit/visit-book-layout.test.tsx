@@ -76,6 +76,21 @@ describe('the pocket-handbook layout', () => {
     expect(entry('DP-01')).toHaveTextContent('確診與分型')
     // Each point once: one entry per present point.
     expect(document.querySelectorAll('[data-book-dp="DP-09"]')).toHaveLength(1)
+    // The pack's chapters, in reading order, with the settled diagnosis beside the first.
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      '是哪一型？', '現在是乾是濕？', '藥物：HFpEF 該用什麼？', '共病：HFpEF 的另一半治療', '裝置與進階', '今天的計畫',
+    ])
+    expect(screen.getByText('HFpEF · 已確立')).toBeInTheDocument()
+    // Today's triage is the red-flag strip at the head of its chapter.
+    expect(entry('DP-24').tagName).toBe('P')
+  })
+
+  it('folds the decision map to a rail and opens it again', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+    fireEvent.click(screen.getByRole('button', { name: '收合決策地圖' }))
+    expect(document.querySelector('[data-book-map-dp]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '展開決策地圖' }))
+    expect(mapLine('DP-09')).toHaveAttribute('data-book-mark', 'act')
   })
 
   it('keeps the criteria in view and opens 看依據 without a second set of buttons (P9 DP-14)', () => {

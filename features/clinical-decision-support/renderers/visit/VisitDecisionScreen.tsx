@@ -37,7 +37,7 @@ import type {
   VisitDecisionModel,
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
-import { VisitBookLayout, type BookEntry, type BookMark } from './VisitBookLayout'
+import { VisitBookLayout, bookChaptersOf, type BookEntry, type BookMark } from './VisitBookLayout'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
 import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
@@ -703,6 +703,20 @@ export function VisitDecisionScreen({
         point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
       )
     }
+    // Today's decisions for 今天的計畫, once each: the point, what was chosen,
+    // and what to recheck when.
+    const bookDecided = model.points.flatMap((point) => {
+      const decision = decisionOf(point)
+      if (!decision) return []
+      const check = decision.record.responseCheck
+      return [{
+        key: decision.key,
+        dp: point.dp,
+        source: point.source,
+        label: decision.record.actionLabel ?? decision.action.label,
+        ...(check ? { check: `${check.text}${checkIntervalSuffix(check, isEnglish)}` } : {}),
+      }]
+    }).filter((item, index, all) => all.findIndex((other) => other.key === item.key) === index)
     // The cards behind a point, at the foot of its 看依據.
     const moduleCardsOf = (point: DecisionPointView) => point.moduleIds.flatMap((id) => {
       const recommendation = modules.get(id)
@@ -758,7 +772,9 @@ export function VisitDecisionScreen({
           }}
           plan={plan}
           {...(status.decided ? { decidedLine: status.text } : {})}
-          summary={<VisitSummary text={summaryText} isEnglish={isEnglish} />}
+          {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
+          decided={bookDecided}
+          summaryText={summaryText}
         />
         {footer}
       </div>
