@@ -573,6 +573,8 @@
 .block { display: flex; flex-direction: column; gap: 6px; min-width: 0; scroll-margin-top: 80px; outline: none; }
 .block:focus-visible { box-shadow: 0 0 0 2px var(--blue); border-radius: 4px; }
 .blockHead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-bottom: 2px; }
+/* The page's own inputs under a block (AF question groups), folded as they come. */
+.blockExtras { min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .blockTitle { font-weight: 700; }
 .blockNote { margin: 0; font-size: 13px; color: var(--ink-3); }
 @container (max-width: 640px) {

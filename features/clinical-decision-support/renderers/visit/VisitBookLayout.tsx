@@ -1048,7 +1048,7 @@ export function VisitBookLayout({
         </div>
         {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.rowExtras)}
-        {!questionsOf(point) && extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
+        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {reasoning(point, shown)}
       </div>
     )
@@ -1186,7 +1186,7 @@ export function VisitBookLayout({
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.lineWide)}
-        {!questionsOf(point) && extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
+        {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
     )
@@ -1266,6 +1266,10 @@ export function VisitBookLayout({
         {score ? <ScoreTable table={score} isEnglish={isEnglish} /> : null}
         {questions ? <PointQuestions questions={questions} isEnglish={isEnglish} titled={!questionsLead} {...(answer ? { onAnswer: answer } : {})} /> : null}
         {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
+        {/* The page's own inputs for this point that its questions do not ask
+            (AF DP-07's stroke history and antithrombotic indications, DP-08's
+            bleeding and instability): folded under it, never dropped. */}
+        {extrasOf(point) ? <div className={`${styles.blockExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
         {withDecision ? blockDecision(point, entry) : null}
       </div>
     )

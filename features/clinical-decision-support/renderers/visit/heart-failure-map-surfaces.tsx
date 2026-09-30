@@ -1,12 +1,23 @@
 "use client"
 
 import type { HeartFailureMapSurfaceSlots } from '../HeartFailureVisitFlow'
-import type { VisitDecisionModel } from '../../types'
+import type { DecisionPointView, VisitDecisionModel } from '../../types'
 import type { VisitMapSurfaces } from './visit-surfaces'
 import { MapFold } from './MapFold'
 
 /** 01's cells under 診斷: suspicion, diagnosis and phenotype, HFpEF, baseline work-up, reassessment, aetiology. */
 const DIAGNOSIS_VIEW_DPS = ['DP-00', 'DP-01', 'DP-34', 'DP-02', 'DP-04', 'DP-29', 'DP-30'] as const
+
+/**
+ * Whether DP-34 still reads the symptoms and signs: its HFpEF criteria carry
+ * the symptoms-signs row and the confirmation is still open (waiting on them,
+ * or asking to confirm with them in, where an answer may still change).
+ */
+function dp34ReadsSymptoms(point: DecisionPointView): boolean {
+  return point.source === 'hf' && point.dp === 'DP-34'
+    && ['waiting', 'confirm', 'act'].includes(point.state)
+    && Boolean(point.checklist?.some((item) => item.key === 'symptoms-signs'))
+}
 
 /** Whether the pack set RAS and β-blocker aside as not FMT here — HFpEF's pillars. */
 function hfpefPillars(model: VisitDecisionModel): boolean {
@@ -87,6 +98,34 @@ export function heartFailureVisitSurfaces(
       // Decongestion prescribes too: right under the pillars, not among 02's other cells.
       followedBy: { title: isEnglish ? 'Diuretics' : '利尿劑', dps: ['DP-06'] },
     },
+    // The pocket-handbook page (`once`) draws DP-34 on its own row, without
+    // 01's 診斷 view: the symptom and sign questions it waits on go under it,
+    // writing the same answers (#219 review — the layout change is not leave
+    // to drop an input a decision needs). The map keeps them in 01.
+    // The HFA-PEFF／H₂FPEF calculator, where 01 opens it from its score names,
+    // opens here from a button under the same point.
+    pointExtras: (point, options) => (options?.once && dp34ReadsSymptoms(point) && (slots.symptomsAndSigns || slots.openHfpefCalculator) ? (
+      <div className="space-y-1.5">
+        {slots.symptomsAndSigns ? (
+          <div className="space-y-1.5" data-testid="cdss-book-hfpef-symptoms">
+            <p className="text-xs text-muted-foreground">
+              {isEnglish ? 'HFpEF criterion 1: HF symptoms and signs' : 'HFpEF 條件 1：HF 症狀／徵象'}
+            </p>
+            {slots.symptomsAndSigns}
+          </div>
+        ) : null}
+        {slots.openHfpefCalculator ? (
+          <button
+            type="button"
+            onClick={slots.openHfpefCalculator}
+            className="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid="cdss-book-hfpef-calculator"
+          >
+            {isEnglish ? 'HFA-PEFF／H₂FPEF calculator (echo values)' : 'HFA-PEFF／H₂FPEF 計算機（補填心超數值）'}
+          </button>
+        ) : null}
+      </div>
+    ) : null),
     // The values the decisions read live in the status line, with the rhythm
     // and the reports; 01's foot keeps only the course, where there is one.
     statusLine: {

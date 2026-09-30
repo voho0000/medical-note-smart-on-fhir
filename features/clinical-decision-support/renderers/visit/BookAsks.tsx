@@ -9,9 +9,10 @@ import styles from './VisitBookLayout.module.css'
 /**
  * The pocket-handbook page's every-visit questions (`?visit=book`): the pack's
  * asks and nothing else, drawn as the prototype draws them — one row each, its
- * answers one segmented control. The page's older questions beside them (「其他
- * 症狀、徵象與 NYHA」) are not on this page (owner request 2026-09-30: 「原本的
- * UI 跟問題那些都廢棄了，包含 DP03」).
+ * answers one segmented control, in place of the map's asks card (owner request
+ * 2026-09-30: 「原本的 UI 跟問題那些都廢棄了，包含 DP03」). The page's fuller
+ * questions beside them (「其他症狀、徵象與 NYHA」) stay one fold below, drawn
+ * by the screen: a layout change does not drop an input (#219 review).
  *
  * The answers mean what they mean everywhere else: the record's reading (the
  * pack's prefill) stands selected with its basis, and one press makes it the

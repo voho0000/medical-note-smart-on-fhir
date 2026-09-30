@@ -95,6 +95,30 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 |---|---|---|
 | 高血脂畫面切換 at `/` and launch-query variants | Hide「新版流程」for dyslipidemia because it rendered the same generic module list as「原版看板」. Keep「三區塊」and「原版看板」, and add the distinct「健保表一」review for NHI tier criteria, supporting evidence and treatment response. Heart-failure layout choices are unchanged. | Explicit owner request in chat, 2026-09-20 |
 
+## 決策地圖 v2 — the pocket-handbook page (all launch routes)
+
+Only when the clinician picks 「決策地圖 v2」 in the HF or AF layout switch (the
+page stays in the CDSS panel) or opens `?visit=book` (full window); the default
+layout and the other choices (決策地圖、三區塊) are unchanged, and nothing
+depends on site, role or sign-in state. The book draws the pack's model in the
+prototype's layout; where it redraws an input, the new entry writes the same
+store, and no input a decision reads is left unreachable (#219 review).
+
+| Surface on the other layouts | On 決策地圖 v2 | Where the original stays | Owner decision | Tests |
+|---|---|---|---|---|
+| HF 01 「診斷」 view: 懷疑 HF？／HFrEF 還是 HFpEF？ question card and the diagnosis confirmation | DP-01's phenotype table: 選 HFrEF／選 HFpEF／還不確定 (確認 HFrEF where the LVEF decides), written as the same phenotype answer; one DP-01, no question card | 決策地圖 01 診斷 view, 三區塊 | Chat 2026-09-30: 「這樣兩個DP01耶，留新的…但新的可能要讓醫師可以點」「原本的UI跟問題那些都廢棄了，包含DP03」 | `visit-book-layout` DP-01 cases; `visit-map-surfaces` 「carries the diagnosis confirmation…」 |
+| HF DP-34 HFpEF criteria in 01's 診斷 view: symptom and sign questions, HFA-PEFF／H₂FPEF calculator, 確認 HFpEF | Under DP-34's own row while its confirmation is open: the symptom and sign questions (same `signAnswers`), a button opening the same HFA-PEFF／H₂FPEF dialog, and 確認 HFpEF／尚不確定 once the symptoms are in | 決策地圖 01 診斷 view, 三區塊 | Same layout decision; the input kept at the #219 review (「保留 DP-34 完成症狀／徵象的新版入口」) | `visit-book-layout` 「還不確定 leads to DP-34…」 (P1 suspected HFpEF: fill, recompute, confirm) |
+| HF DP-03 asks card and 「其他症狀、徵象與 NYHA」 (symptoms, signs, NYHA, compensation, chief-complaint and weight follow-up) | The pack's asks as segmented rows; the fuller questions in a fold 「其他症狀、徵象與 NYHA」 right under them, same components and store. Before a diagnosis there are no asks: DP-01's table and DP-34 ask what the diagnosis needs | 決策地圖 01 追蹤 view, 三區塊 | Same layout decision (DP-03 in the prototype's style); fold kept at the #219 review | `visit-book-layout` 「DP-03 asks…one fold away」; `visit-map-surfaces` 「folds 其他症狀、徵象與 NYHA…」 |
+| AF DP-03 「其他症狀、出血與副作用」 | The same fold under the pack's asks | 決策地圖, 三區塊 | As above | `visit-book-layout` 「AF chapters 4–6…」 (the fold under DP-03); `visit-map-surfaces` 「asks symptoms, bleeding and adverse effects under the asks」 |
+| AF question groups under DP-07, DP-08, DP-13, DP-17, DP-21 (血栓風險病史, 抗栓適應症, 瓣膜與當下安全, HAS-BLED 因子, 心率與節律, 共病與生活型態) and the rate-or-rhythm choice | The pack's own questions on the point's row, in the prototype's style (DP-07 HCM; DP-08 valves; DP-13 NSAID／抗血小板, 飲酒; DP-17 靜息量測; DP-21 打鼾, 飲酒, 吸菸); the rest of each group folded under the same point with those questions left out, so none is asked twice; the rate-or-rhythm choice under DP-17 | 決策地圖 (each group in its point's card), 三區塊 | Chat 2026-09-30: 「抗凝畫面設計要長得跟prototype一樣」 and the DP-by-DP alignment; the remaining groups kept at the #219 review | `visit-book-layout` 「what the pack does not ask on its rows stays under them…」, 「AF chapters 4–6…」; `visit-map-surfaces` 「places every question group on the point it feeds」, 「puts the rate-or-rhythm choice in DP-17's card」 |
+| HF status line: rhythm and the record's other values (Na, Hb, SpO₂, BMI) with per-value edit, and the LVEF echo-report link | The pack's key values in the header, 「補填／修改」 opening the same clinical-values editor (rhythm included); no per-value links and no echo-report link in the header | 決策地圖 status line; the report in the 報告 tab | Prototype header (chat 2026-09-30, 「請你逐dp檢查有沒有樣式長得跟prototype一樣」) | `visit-map-surfaces` 「carries the record's other values on the status line」 |
+| 決策地圖's 「今天要決定」 queue and 01's 診斷／追蹤 switch | Each point decides on its own row or box; the decision-map rail marks what is open; 「今天的計畫」 lists what was decided | 決策地圖 | Layout only; owner added 決策地圖 v2 to the switch in 8273f5cb, 2026-09-30 | `visit-book-layout` 「records a chain in its box and marks it settled in the map」 |
+
+The same PR changes the original 決策地圖 in two ways (clinician feedback
+2026-09-30): an opened card shows the guideline points at once, and a card
+opened under its row no longer repeats the buttons and questions of the row
+just above it — they stay on that row.
+
 ## Adding or changing a gate
 
 HF new-flow clinical information card: owner requested replacing the height tile with calculated BMI on 2026-09-12. Height remains editable in the shared clinical-values dialog; BMI is only displayed when positive height and weight are available, and its tooltip includes both measurement dates. Other values use two rows beside LVEF on desktop.

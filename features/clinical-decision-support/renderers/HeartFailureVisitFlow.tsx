@@ -477,6 +477,14 @@ export interface HeartFailureMapSurfaceSlots {
   /** Diagnosis confirmation and the diagnostic questions — suspicion, phenotype, HFpEF with its scores. */
   diagnosticAssessment: ReactNode
   /**
+   * The symptom and sign questions alone — HFpEF's first criterion, the one
+   * DP-34 waits on (「先完成症狀／徵象」) — over the same answers
+   * (`signAnswers`) as 本次評估, for a page that draws DP-34 on its own.
+   */
+  symptomsAndSigns: ReactNode
+  /** Opens the HFA-PEFF／H₂FPEF calculator, where the echo values behind HFpEF's criterion 2 are entered. */
+  openHfpefCalculator?: () => void
+  /**
    * What the map's status line adds beside the pack's values: the rhythm, the
    * record's other values (Na, Hb, SpO₂, BMI) and what it lacks, given the
    * keys the line already shows so none is printed twice.
@@ -564,6 +572,7 @@ export function HeartFailureMapSurfaces({
     ? subset(flow.questions.filter(inDiagnosisCard), true)
     : subset(flow.questions.filter((question) => !diagnosticIds.includes(question.id)), true)
   const diagnosticFlow = subset(assessmentAsksSuspicion ? [] : flow.questions.filter((question) => diagnosticIds.includes(question.id)))
+  const symptomsAndSignsFlow = subset(flow.questions.filter((question) => (question.id === 'symptoms' || question.id === 'signs') && question.state !== 'locked'), true)
   const openCalculator = onSaveHfpefInputs ? (id: HfpefScoreId = 'hfa-peff') => { setCalculatorTab(id); setCalculatorOpen(true) } : undefined
   const questionsCard = (questionFlow: VisitFlowModel) => (
     <QuestionsCard
@@ -615,6 +624,8 @@ export function HeartFailureMapSurfaces({
         trendAsksElsewhere
       />
     ) : undefined,
+    symptomsAndSigns: symptomsAndSignsFlow.questions.length ? questionsCard(symptomsAndSignsFlow) : null,
+    ...(openCalculator ? { openHfpefCalculator: () => openCalculator('hfa-peff') } : {}),
     diagnosticAssessment: (
       <div className="space-y-2" data-testid="cdss-visit-hf-diagnostic-assessment">
         {/* One confirmation: where question 1 asks the diagnosis, or the HFpEF

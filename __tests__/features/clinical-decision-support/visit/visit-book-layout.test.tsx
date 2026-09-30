@@ -10,6 +10,9 @@ import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/cl
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
+import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
+import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -32,7 +35,9 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const answers = useMemo(() => visitAnswersOf(record), [record])
   const afAnswers = useAfAnswers(PATIENT)
   const [phenotype, setPhenotype] = useState<PhenotypeAnswer>()
-  const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype }), [afAnswers, answers, id, page, phenotype])
+  const clinicVitals = useClinicVitals(PATIENT)
+  const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype, clinicVitals }), [afAnswers, answers, clinicVitals, id, page, phenotype])
+  const hfpefReading = useMemo(() => buildHfpefReading({ profile: run.profile, autofill: { resolve: () => undefined } }), [run.profile])
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -51,6 +56,10 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
       onAfAnswer={(questionId, value) => useAfAnswersStore.getState().answer(PATIENT, questionId, value)}
       phenotypeAnswer={phenotype}
       onAnswerPhenotype={setPhenotype}
+      clinicVitals={clinicVitals}
+      onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(PATIENT, patch)}
+      hfpefReading={hfpefReading}
+      onSaveHfpefInputs={(patch) => useHfpefInputsStore.getState().setInputs(PATIENT, patch)}
     />
   )
 }
@@ -67,6 +76,7 @@ beforeEach(() => {
   usePhysicianDecisionsStore.getState().clearDecisions(PATIENT)
   useAfAnswersStore.getState().clear(PATIENT)
   useVisitAnswersStore.getState().clearAnswers(PATIENT)
+  useClinicVitalsStore.getState().clearVitals(PATIENT)
 })
 
 describe('the pocket-handbook layout', () => {
@@ -196,6 +206,31 @@ describe('the pocket-handbook layout', () => {
       expect(within(entry('DP-01')).getByRole('button', { name: '選 HFpEF' })).toBeInTheDocument()
     })
 
+    it('還不確定 leads to DP-34, which asks the symptoms and signs it waits on, and then to 確認 HFpEF (P1, #219 review)', () => {
+      render(<BookPage id="p1-suspected-hfpef" page="hf" />)
+      fireEvent.click(within(entry('DP-01')).getByRole('button', { name: '還不確定' }))
+      // Nothing on record says symptoms or signs: DP-34 waits on them, and asks them in place.
+      expect(entry('DP-34')).toHaveTextContent('先完成症狀／徵象')
+      const asked = () => within(entry('DP-34')).getByTestId('cdss-book-hfpef-symptoms')
+      expect(asked()).toHaveTextContent('HFpEF 條件 1：HF 症狀／徵象')
+      expect(within(asked()).getByTestId('cdss-hf-question-symptoms')).toBeInTheDocument()
+      expect(within(asked()).getByTestId('cdss-hf-question-signs')).toBeInTheDocument()
+      expect(within(entry('DP-34')).queryByRole('button', { name: '確認 HFpEF' })).toBeNull()
+      // The echo values behind criterion 2: the same HFA-PEFF／H₂FPEF calculator 01 opens.
+      fireEvent.click(within(entry('DP-34')).getByTestId('cdss-book-hfpef-calculator'))
+      expect(screen.getByRole('dialog')).toHaveTextContent('HFA-PEFF')
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+      // Answered here, the answer is the page's (signAnswers), and the pack re-reads it.
+      fireEvent.click(within(asked()).getByTestId('cdss-hf-flow-sign-exertional-dyspnea-present'))
+      expect(useClinicVitalsStore.getState().byPatientId[PATIENT]?.signAnswers['exertional-dyspnea']?.value).toBe('present')
+      expect(entry('DP-34')).not.toHaveTextContent('先完成症狀／徵象')
+      // The confirmation is now the clinician's to make, and settles DP-34.
+      fireEvent.click(within(entry('DP-34')).getByRole('button', { name: '確認 HFpEF' }))
+      expect(mapLine('DP-34')).toHaveAttribute('data-book-mark', 'done')
+      expect(entry('DP-34')).toHaveTextContent('HFpEF：醫師已確認')
+      expect(screen.queryByTestId('cdss-book-hfpef-symptoms')).toBeNull()
+    })
+
     it('at a first visit with an LVEF of 28%: 確認 HFrEF, and HFpEF not on offer (P2)', () => {
       render(<BookPage id="p2-new-hfref" page="hf" />)
       const table = within(entry('DP-01')).getByTestId('cdss-book-classification')
@@ -205,13 +240,19 @@ describe('the pocket-handbook layout', () => {
     })
   })
 
-  it('DP-03 asks the pack\'s every-visit questions and nothing of the old cards (P9)', () => {
+  it('DP-03 asks the pack\'s every-visit questions, the fuller ones one fold away (P9, #219 review)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     const asks = within(entry('DP-03')).getByTestId('cdss-book-asks')
     expect(within(asks).getAllByRole('group').map((group) => group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent))
       .toEqual(['喘比上次', '體重比上次'])
+    // Not the map's asks card; its fuller questions (symptoms, signs, NYHA,
+    // compensation) folded under the asks, as the map keeps them.
     expect(screen.queryByTestId('cdss-visit-asks')).toBeNull()
-    expect(screen.queryByText('其他症狀、徵象與 NYHA')).toBeNull()
+    const more = within(entry('DP-03')).getByTestId('cdss-book-asks-detail')
+    expect(more).toHaveTextContent('其他症狀、徵象與 NYHA')
+    expect(more).not.toHaveAttribute('open')
+    expect(within(more).getByTestId('cdss-hf-question-nyha')).toBeInTheDocument()
+    expect(within(more).getByTestId('cdss-hf-question-signs')).toBeInTheDocument()
     fireEvent.click(within(asks).getByRole('button', { name: '穩定' }))
     expect(within(asks).getByRole('button', { name: '穩定' })).toHaveAttribute('aria-pressed', 'true')
     expect(visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT]!)['dyspnoea-trend']).toBe('stable')
@@ -263,7 +304,7 @@ describe('the pocket-handbook layout', () => {
       render(<BookPage id="p9-hfpef-af-dose" page="af" />)
       const which = () => entry('DP-08')
       const answer = (id: string) => useAfAnswersStore.getState().answers[id]
-      fireEvent.click(within(which()).getByRole('button', { name: '全部皆無' }))
+      fireEvent.click(which().querySelector<HTMLButtonElement>('[data-book-bulk-none]')!)
       expect(answer('mechanicalValve')).toBe(false)
       expect(answer('significantMitralStenosis')).toBe(false)
       expect(within(which()).getByRole('button', { name: /全部皆無 · 再按復原/ })).toHaveAttribute('aria-pressed', 'true')
@@ -276,6 +317,24 @@ describe('the pocket-handbook layout', () => {
       fireEvent.click(within(valve).getByRole('button', { name: '有' }))
       expect(answer('mechanicalValve')).toBe(true)
       expect(document.querySelector('[data-book-box="DP-08"]')).toHaveTextContent('改 warfarin')
+    })
+
+    it('what the pack does not ask on its rows stays under them, folded, and none twice (#219 review)', () => {
+      render(<BookPage id="p9-hfpef-af-dose" page="af" />)
+      const questionsIn = (dp: string, group: string) => [...entry(dp).querySelectorAll<HTMLElement>(`[data-af-question-group="${group}"] .divide-y > div`)]
+        .map((row) => row.querySelector('span')?.firstChild?.textContent)
+      // DP-07: the CHA₂DS₂-VA history and the antithrombotic indications.
+      expect(questionsIn('DP-07', 'stroke')).toEqual(['心衰竭病史', '高血壓病史', '糖尿病病史（含 type 1／type 2）', '中風／TIA／動脈栓塞病史', '冠狀動脈／周邊血管疾病病史'])
+      expect(questionsIn('DP-07', 'antithrombotic')).toContain('長期抗凝有不可逆禁忌')
+      // DP-08: bleeding and instability; not the valves (its own rows) nor HCM (DP-07's).
+      expect(questionsIn('DP-08', 'safety')).toEqual(['目前活動性出血', 'AF 相關血流動力學不穩定'])
+      // Answered there, the answer is the page's AF answer, and the score reads it.
+      const stroke = entry('DP-07').querySelector<HTMLElement>('[data-af-question-group="stroke"]')!
+      const row = [...stroke.querySelectorAll<HTMLElement>('.divide-y > div')].find((item) => item.textContent?.startsWith('中風'))!
+      fireEvent.click(within(row).getByRole('button', { name: '有' }))
+      expect(useAfAnswersStore.getState().answers.stroke).toBe(true)
+      const scoreRow = within(within(entry('DP-07')).getByTestId('cdss-book-score')).getAllByRole('row').find((item) => item.textContent?.includes('S₂'))
+      expect(scoreRow).toHaveTextContent('門診確認：有')
     })
   })
 
@@ -310,21 +369,30 @@ describe('the pocket-handbook layout', () => {
     })
   })
 
-  it('AF chapters 4–6 ask the pack\'s questions in place, not the old folds (P9)', () => {
+  it('AF chapters 4–6 ask the pack\'s questions in place, the rest of each group folded under them (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="af" />)
     const dp13 = entry('DP-13')
     expect(within(dp13).getByText('其他可修正因子')).toBeInTheDocument()
     expect(within(dp13).getByText('併用 NSAID、抗血小板')).toBeInTheDocument()
-    expect(dp13).not.toHaveTextContent('HAS-BLED 因子')
-    fireEvent.click(within(dp13).getByRole('button', { name: '全部皆無' }))
+    fireEvent.click(dp13.querySelector<HTMLButtonElement>('[data-book-bulk-none]')!)
     expect(useAfAnswersStore.getState().answers.bleedingDrugs).toBe(false)
-    // DP-17: the agents by LVEF, and whether the rate was at rest; no strategy radios.
+    // The HAS-BLED items the pack does not ask here stay in their fold; the two it asks are not asked again.
+    const hasBled = dp13.querySelector<HTMLElement>('[data-af-question-group="bleedingRisk"]')!
+    expect(hasBled).not.toHaveAttribute('open')
+    expect(hasBled).toHaveTextContent('HAS-BLED 腎異常')
+    expect(hasBled).not.toHaveTextContent('併用抗血小板／NSAID')
+    expect(hasBled).not.toHaveTextContent('HAS-BLED 酒精')
+    // DP-17: the agents by LVEF, whether the rate was at rest, and the rate-or-rhythm choice with its questions.
     const dp17 = entry('DP-17')
     expect(within(dp17).getByRole('columnheader', { name: 'LVEF >40% ← 本病人' })).toBeInTheDocument()
     expect(within(dp17).getByRole('rowheader', { name: '可用' })).toBeInTheDocument()
     fireEvent.click(within(dp17).getByRole('button', { name: '靜息量測' }))
     expect(useAfAnswersStore.getState().answers.restingRate).toBe(true)
-    expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
+    expect(within(dp17).getByTestId('cdss-visit-af-strategy')).toBeInTheDocument()
     expect(within(entry('DP-21')).getByText('門診確認')).toBeInTheDocument()
+    // DP-03: other symptoms, bleeding and adverse effects, one fold under the asks.
+    const more = within(entry('DP-03')).getByTestId('cdss-book-asks-detail')
+    expect(more).toHaveTextContent('其他症狀、出血與副作用')
+    expect(more.querySelector('[data-af-question-group="bleeding"]')).not.toBeNull()
   })
 })
