@@ -558,6 +558,7 @@ export interface DiagnosticReportEntity {
     coding?: Array<{
       code?: string
       display?: string
+      system?: string
     }>
   }
   result?: Array<{
