@@ -20,11 +20,11 @@ import { ClinicalDecisionSupportView } from '@/features/clinical-decision-suppor
 import type { VisitAnswers } from '@/features/clinical-decision-support/types'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
-import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { buildClinicVitals, mergeClinicVitals, useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 import { useVisitValuesStore } from '@/features/clinical-decision-support/stores/visit-values.store'
-import { scenarioRun, type ScenarioId } from './scenario-models'
+import { atScenarioDay, DP06_EXAM_TERMS, examToday, scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),
@@ -48,7 +48,9 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
   const phenotype = usePhenotypeAnswer(PATIENT)
   const intolerant = useMemo(() => intolerantPillars(decisions), [decisions])
   const afAnswers = useAfAnswers(PATIENT)
-  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit, afAnswers }), [afAnswers, answers, firstVisit, id, intolerant, page, phenotype])
+  // The signs examined in the room reach the pack as LiveFeature hands them.
+  const clinicVitals = useClinicVitals(PATIENT)
+  const run = useMemo(() => scenarioRun(id, { page, answers, phenotype, intolerant, firstVisit, afAnswers, clinicVitals }), [afAnswers, answers, clinicVitals, firstVisit, id, intolerant, page, phenotype])
   return (
     <ClinicalDecisionSupportView
       result={run.result}
@@ -63,6 +65,7 @@ function ScenarioMap({ id, page = 'hf', layout = 'map', firstVisit = false }: { 
       onClearDecision={(key) => usePhysicianDecisionsStore.getState().clearDecision(PATIENT, key)}
       visitAnswers={answers}
       onVisitAnswer={(ask, value) => useVisitAnswersStore.getState().answer(PATIENT, ask, value)}
+      clinicVitals={clinicVitals}
       onSaveClinicVitals={(patch) => useClinicVitalsStore.getState().setVitals(PATIENT, patch)}
       phenotypeAnswer={phenotype}
       onAnswerPhenotype={(answer) => usePhenotypeAnswerStore.getState().setAnswer(PATIENT, answer)}
@@ -127,7 +130,7 @@ function rowDetail(dp: string): HTMLElement {
   return found
 }
 
-function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answers?: VisitAnswers; source?: 'hf' | 'af' } = {}) {
+function point(id: ScenarioId, dp: string, options: { page?: 'hf' | 'af'; answers?: VisitAnswers; source?: 'hf' | 'af'; clinicVitals?: ReturnType<typeof examToday>; now?: Date } = {}) {
   const { model } = scenarioRun(id, options)
   const found = model.points.find((item) => item.dp === dp && (!options.source || item.source === options.source))
   if (!found) throw new Error(`${id}: no ${dp}`)
@@ -511,7 +514,7 @@ describe('real pack · P4 on 01’s 診斷 view', () => {
 describe('real pack · P7 worsening congestion', () => {
   // ESC 2026 p.73: an NT-proBNP rise reopens nothing; the worsening is the
   // clinician's 喘變差, which DP-04 reads as clinical deterioration.
-  it('stays a follow-up on the NT-proBNP rise and queues the diuretic once 喘變差 is answered, the weight asked rather than prefilled', () => {
+  it('stays a follow-up on the NT-proBNP rise and queues the diuretic once the patient is examined wet, the weight asked rather than prefilled', () => atScenarioDay(() => {
     render(<ScenarioMap id="p7-worsening-congestion" />)
     expect(screen.getByTestId('cdss-visit-screen')).toHaveAttribute('data-stage', 'follow-up')
     expect(document.querySelector('[data-prefilled="true"]')).toBeNull()
@@ -519,6 +522,11 @@ describe('real pack · P7 worsening congestion', () => {
     act(() => {
       useVisitAnswersStore.getState().answer(PATIENT, 'dyspnoea-trend', 'worse')
       useVisitAnswersStore.getState().answer(PATIENT, 'weight-trend', 'up')
+    })
+    // 濕 by the weight, but 冷暖 unexamined: DP-06 waits for the examination.
+    expect(queue()).toEqual([])
+    act(() => {
+      useClinicVitalsStore.getState().setVitals(PATIENT, { signAnswers: Object.fromEntries(Object.entries(examToday(['pitting-edema']).signAnswers).map(([term, answer]) => [term, answer.value])) })
     })
     expect(queue()).toEqual([{ dp: 'DP-06', primary: '利尿劑加量' }])
     // DP-04 (reassessment) is one of 01's diagnosis points: a diagnosis
@@ -530,6 +538,33 @@ describe('real pack · P7 worsening congestion', () => {
     expect(screen.getByTestId('cdss-visit-detail')).toHaveAttribute('data-dp', 'DP-04')
     fireEvent.click(primaryOf('DP-06'))
     expect(screen.getByTestId('cdss-visit-plan')).toHaveTextContent('體重、K、Cr，1–2 週內')
+  }))
+})
+
+/**
+ * PR #224 review (2026-10-01): DP-06 takes today's examination only, so the
+ * examination the host hands it must be one day's. The patient examined on
+ * 09-27 and seen again on 09-28, in a tab left open.
+ */
+describe('real pack · DP-06 reads the examination of the visit day, sign by sign', () => {
+  const SEPT_27 = new Date('2026-09-27T10:00:00+08:00')
+  const SEPT_28 = new Date('2026-09-28T10:00:00+08:00')
+  const allAbsent = Object.fromEntries(DP06_EXAM_TERMS.map((term) => [term, 'absent' as const]))
+  const yesterday = buildClinicVitals({ signAnswers: allAbsent }, SEPT_27)
+  const examRows = (clinicVitals: ReturnType<typeof examToday>) => {
+    const dp06 = point('p9-hfpef-af-dose', 'DP-06', { clinicVitals, now: new Date('2026-09-28T09:00:00+08:00') })
+    return Object.fromEntries((dp06.questions?.rows ?? []).map((row) => [row.id, row.answer]))
+  }
+
+  it('a sign found the next day leaves perfusion and the other signs unanswered, not the day before\'s 無', () => {
+    const today = mergeClinicVitals(yesterday, { signAnswers: { rales: 'present' } }, SEPT_28)
+    expect(examRows(today)).toEqual({ 'orthopnea-pnd': undefined, jvp: undefined, rales: true, edema: undefined, hypoperfusion: undefined })
+  })
+
+  it('全部皆無 pressed again the next day is that day\'s examination', () => {
+    expect(examRows(yesterday)).toEqual({ 'orthopnea-pnd': undefined, jvp: undefined, rales: undefined, edema: undefined, hypoperfusion: undefined })
+    const today = mergeClinicVitals(yesterday, { signAnswers: allAbsent }, SEPT_28)
+    expect(examRows(today)).toEqual({ 'orthopnea-pnd': false, jvp: false, rales: false, edema: false, hypoperfusion: false })
   })
 })
 
@@ -552,14 +587,16 @@ describe('real pack · P8 first visit after an HF admission', () => {
   })
 
   it('settles or asks about the diuretic once breathlessness is better and weight unchanged', () => {
-    expect(point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better' } }).state).toBe('ask')
-    const state = point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better', 'weight-trend': 'same' } }).state
+    expect(point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better' }, clinicVitals: examToday() }).state).toBe('ask')
+    // 喘、體重 alone no longer settle it: the signs and perfusion are examined too.
+    expect(point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better', 'weight-trend': 'same' } }).state).toBe('ask')
+    const state = point('p8-post-discharge', 'DP-06', { answers: { 'dyspnoea-trend': 'better', 'weight-trend': 'same' }, clinicVitals: examToday() }).state
     expect(['done', 'confirm']).toContain(state)
   })
 })
 
 describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
-  it('stays in follow-up and queues the apixaban reduction and the MRA start', () => {
+  it('stays in follow-up and queues the apixaban reduction and the MRA start', () => atScenarioDay(() => {
     const { model } = scenarioRun('p9-hfpef-af-dose')
     expect(model.stage).toBe('follow-up')
     render(<ScenarioMap id="p9-hfpef-af-dose" />)
@@ -580,10 +617,15 @@ describe('real pack · P9 HFpEF with AF, apixaban due for reduction', () => {
     expect(boxState(diureticBox('DP-06'))).toBe('ask')
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="dyspnoea-trend"][data-value="stable"]')!)
     fireEvent.click(document.querySelector<HTMLElement>('[data-visit-ask="weight-trend"][data-value="down"]')!)
+    // The signs and perfusion still to examine.
+    expect(boxState(diureticBox('DP-06'))).toBe('ask')
+    act(() => {
+      useClinicVitalsStore.getState().setVitals(PATIENT, { signAnswers: Object.fromEntries(Object.entries(examToday().signAnswers).map(([term, answer]) => [term, answer.value])) })
+    })
     expect(boxState(diureticBox('DP-06'))).toBe('confirm')
     // The drug and its prescribed daily dose lead the question (「利尿劑加量沒顯示原本用什麼利尿劑跟原本劑量」).
     expect(diureticBox('DP-06')).toHaveTextContent('furosemide 每日 20 mg：體重減少，是否減量？')
-  })
+  }))
 
   // Owner feedback 2026-09-29: with room on the page, what a decision reads is
   // in view on its row — not three folds down in the module's card.

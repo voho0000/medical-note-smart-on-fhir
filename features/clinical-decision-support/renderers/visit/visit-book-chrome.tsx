@@ -15,6 +15,10 @@ export interface VisitBookChrome {
    * and layout switches — not over the whole window.
    */
   inline?: boolean
+  /** Inline: open the same page over the whole window (owner request 2026-10-01). */
+  onExpand?: () => void
+  /** Over the whole window, opened from the panel: back to the panel. */
+  onCollapse?: () => void
 }
 
 export const VisitBookChromeContext = createContext<VisitBookChrome | null>(null)

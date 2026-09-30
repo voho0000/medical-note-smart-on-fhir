@@ -12,7 +12,7 @@ import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-su
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
-import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
+import { VisitBookChromeContext, type VisitBookChrome } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
 import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
@@ -38,7 +38,7 @@ const PATIENT = 'book-patient'
  */
 let mode: 'window' | 'inline' = 'window'
 
-function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
+function BookPage({ id, page, chrome, patch }: { id: ScenarioId; page: 'hf' | 'af'; chrome?: VisitBookChrome | null; patch?: (model: ReturnType<typeof scenarioRun>['model']) => ReturnType<typeof scenarioRun>['model'] }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -48,13 +48,13 @@ function BookPage({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
   const run = useMemo(() => scenarioRun(id, { page, answers, afAnswers, phenotype, clinicVitals }), [afAnswers, answers, clinicVitals, id, page, phenotype])
   const hfpefReading = useMemo(() => buildHfpefReading({ profile: run.profile, autofill: { resolve: () => undefined } }), [run.profile])
   return (
-    <VisitBookChromeContext.Provider value={mode === 'inline' ? { inline: true } : null}>
+    <VisitBookChromeContext.Provider value={chrome !== undefined ? chrome : mode === 'inline' ? { inline: true } : null}>
     <ClinicalDecisionSupportView
       result={run.result}
       locale="zh-TW"
       layout="map"
       patientId={PATIENT}
-      visitModel={run.model}
+      visitModel={patch ? patch(run.model) : run.model}
       companionResults={run.companion ? [run.companion] : undefined}
       profileFacts={run.profile.facts}
       physicianDecisions={decisions}
@@ -205,11 +205,32 @@ describe.each([
       'eplerenone25 mg o.d.起始（Table 11）',
       '50 mg o.d.目標（Table 11）',
     ])
-    // A settled point carries 看依據 when the pack says what would reopen it:
-    // P9's DP-10 empagliflozin is fixed-dose, with no line, so none.
-    expect(within(entry('DP-10')).queryByRole('button', { name: /看依據/ })).toBeNull()
-    // A reminder has no 看依據.
-    expect(within(entry('DP-15')).queryByRole('button', { name: /看依據/ })).toBeNull()
+    // Every point the page shows opens its reasoning, a settled one and a
+    // reminder too (owner correction 2026-10-01: 「沒有這個規則吧」).
+    expect(within(entry('DP-10')).getByRole('button', { name: /看依據/ })).toBeInTheDocument()
+    expect(within(entry('DP-15')).getByRole('button', { name: /看依據/ })).toBeInTheDocument()
+  })
+
+  it('keeps the guideline\'s line in 指引怎麼說 and a point\'s own criteria under 看依據; only a dose rule beside its options stays in the cell (P7 DP-04)', () => {
+    useVisitAnswersStore.getState().answer(PATIENT, 'dyspnoea-trend', 'worse')
+    render(<BookPage id="p7-worsening-congestion" page="hf" />)
+    const row = entry('DP-04')
+    expect(row).toHaveTextContent('喘變差：找誘因？安排心超？')
+    expect(row).toHaveTextContent('臨床惡化或另有需要時才重做心超')
+    // The five triggers are the point's reasoning, not its guideline cell.
+    expect(row).not.toHaveTextContent('近 6 週內 HF 住院')
+    fireEvent.click(within(row).getByRole('button', { name: /看依據/ }))
+    expect(within(row).getByTestId('cdss-book-reasoning')).toHaveTextContent('近 6 週內 HF 住院')
+  })
+
+  it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+    fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))
+    const panel = document.querySelector<HTMLElement>('[data-testid="cdss-book-reasoning"][data-dp="DP-05"]')!
+    expect(panel).toHaveTextContent('ESC 點名的有害藥物：逐類')
+    expect(panel).toHaveTextContent('NSAID／COX-2 抑制劑')
+    expect(panel).toHaveTextContent('ibuprofen')
+    expect(panel).toHaveTextContent('（僅 HFrEF）')
   })
 
   it('records a chain in its box and marks it settled in the map (P3 DP-07)', () => {
@@ -393,21 +414,89 @@ describe.each([
       const drugs = document.querySelector<HTMLElement>('[data-book-section="drugs"]')!
       const tables = drugs.querySelectorAll('[role="group"]')
       expect(tables).toHaveLength(1)
-      const rows = [...tables[0]!.querySelectorAll<HTMLElement>('[data-book-dp]')]
-      expect(rows.map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-09', 'DP-07', 'DP-08'])
-      expect(rows.filter((row) => row.hasAttribute('data-quiet')).map((row) => row.dataset.bookDp)).toEqual(['DP-10', 'DP-07', 'DP-08'])
+      // The prototype's rows: SGLT2i, MRA, the diuretic (DP-06, asked in 2), then
+      // RAS inhibition and beta-blocker as one row — neither a foundation in HFpEF.
+      const rows = [...tables[0]!.children].filter((row): row is HTMLElement => row instanceof HTMLElement && !row.hasAttribute('aria-hidden'))
+      expect(rows.map((row) => row.dataset.bookDp ?? (row.dataset.bookRef ? `ref ${row.dataset.bookRef}` : `merged ${row.dataset.bookMerged}`))).toEqual([
+        'DP-10', 'DP-09', 'ref DP-06', 'merged DP-07 DP-08',
+      ])
+      expect(rows.filter((row) => row.hasAttribute('data-quiet')).map((row) => row.dataset.bookDp ?? row.dataset.bookRef ?? row.dataset.bookMerged)).toEqual(['DP-10', 'DP-06', 'DP-07 DP-08'])
+      const diuretic = rows[2]!
+      expect(diuretic).toHaveTextContent('利尿劑')
+      expect(diuretic).toHaveTextContent('furosemide 每日 20 mg')
+      expect(diuretic).toHaveTextContent('有鬱血：依容積狀態動態調整 loop 利尿劑（I A）')
+      const merged = rows[3]!
+      expect(merged).toHaveTextContent('RAS 抑制、β 阻斷劑')
+      expect(merged).toHaveTextContent('HFpEF 非基礎用藥；因高血壓或 AF 心率需要時，照共病使用（見 4）')
+      // The map's lines still land on the merged row.
+      expect(entry('DP-07').closest('[data-book-merged]')).toBe(merged)
+      expect(entry('DP-08').closest('[data-book-merged]')).toBe(merged)
+      // A map line for a merged point lands on the row, focused, not on its empty mark.
+      fireEvent.click(mapLine('DP-08'))
+      expect(document.activeElement).toBe(merged)
+      // 見 2 goes to DP-06 where it is asked.
+      const scroll = Element.prototype.scrollIntoView as jest.Mock
+      scroll.mockClear()
+      fireEvent.click(within(diuretic).getByRole('button', { name: /見 2/ }))
+      expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById(entry('DP-06').id))
       // Not applicable here, they are rows of the table, not the 不適用 line.
       expect(drugs.querySelector('[data-book-absent="drugs"][data-state="not-applicable"]')).not.toHaveTextContent('DP-07')
       const comorbidity = document.querySelector<HTMLElement>('[data-book-section="comorbidity"]')!
       expect(comorbidity.querySelectorAll('[role="group"]')).toHaveLength(1)
     })
 
-    it('the red-flag strip is 紅旗; a point waiting on the every-visit answers links to them', () => {
+    it('merges only points that do not apply: one settled beside one not applicable keeps its own row', () => {
+      render(<BookPage id="p2-new-hfref" page="hf" patch={(model) => ({
+        ...model,
+        points: model.points.map((point) => (point.dp === 'DP-07' ? { ...point, state: 'done' as const, actions: [] } : point.dp === 'DP-08' ? { ...point, state: 'not-applicable' as const, actions: [] } : point)),
+        queue: model.queue.filter((dp) => dp !== 'DP-07' && dp !== 'DP-08'),
+        book: model.book?.map((chapter) => (chapter.id === 'drugs' ? { ...chapter, tableMerged: [{ dps: ['DP-07', 'DP-08'], label: 'RAS·β', note: 'x' }] } : chapter)),
+      })} />)
+      expect(document.querySelector('[data-book-merged]')).toBeNull()
+      expect(entry('DP-07').closest('[data-book-merged]')).toBeNull()
+    })
+
+    it('the red-flag strip is 紅旗; DP-06 asks its signs in place, beside the 2×2 they place the patient in', () => {
       render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
       expect(entry('DP-24')).toHaveTextContent(/^DP-24\s紅旗\s今日分流：胸痛/)
-      const link = within(entry('DP-06')).getByRole('button', { name: '等本次喘／體重的回答' })
-      fireEvent.click(link)
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+      const dp06 = entry('DP-06')
+      expect(dp06).toHaveTextContent('乾濕：鬱血與灌流徵候')
+      for (const sign of ['端坐呼吸、夜間陣發性呼吸困難', '頸靜脈怒張', '肺部囉音', '下肢水腫']) {
+        expect(within(dp06).getByText(sign)).toBeInTheDocument()
+      }
+      expect(within(dp06).getByTestId('cdss-book-profile-grid')).toHaveTextContent('暖乾')
+      expect(within(dp06).getByTestId('cdss-book-profile-reading')).toHaveTextContent('先答體重與鬱血、灌流徵候')
+    })
+
+    it('DP-06: 全部皆無 writes the clinic examination; 喘變差 without congestion asks for the trigger first', () => {
+      // DP-06 reads today's examination only: the day the scenario was written.
+      jest.useFakeTimers({ doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame'] })
+      jest.setSystemTime(new Date('2026-09-27T10:00:00+08:00'))
+      try {
+        render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
+        fireEvent.click(within(entry('DP-06')).getByRole('button', { name: '全部皆無' }))
+        const signs = useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.signAnswers ?? {}
+        for (const term of ['orthopnea', 'paroxysmal-nocturnal-dyspnea', 'jvp', 'rales', 'pitting-edema', 'hypoperfusion']) {
+          expect(signs[term]?.value).toBe('absent')
+        }
+        fireEvent.click(within(screen.getByRole('group', { name: '喘比上次' })).getByRole('button', { name: '變差' }))
+        fireEvent.click(within(screen.getByRole('group', { name: '體重比上次' })).getByRole('button', { name: '不變' }))
+        const dp06 = entry('DP-06')
+        expect(dp06.querySelector('[data-book-profile-cell="dry-warm"]')).toHaveAttribute('data-current')
+        expect(within(dp06).getByTestId('cdss-book-profile-reading')).toHaveTextContent('暖乾，但喘變差 → 先查誘因')
+        expect(dp06.querySelector('[data-book-box="DP-06"]')).toHaveTextContent('先查誘因')
+        expect(dp06.querySelector('[data-book-question-group="為什麼現在？誘因"]')).toBeInTheDocument()
+        fireEvent.click(within(dp06.querySelector<HTMLElement>('[data-book-question-group="為什麼現在？誘因"]')!).getAllByRole('button', { name: '有' })[3]!)
+        // Read as a plain record: the trigger ids are the pack's, newer than some consumers' types.
+        const stored = visitAnswersOf(useVisitAnswersStore.getState().byPatientId[PATIENT] ?? {}) as Readonly<Record<string, string | undefined>>
+        expect(stored['trigger-infection']).toBe('yes')
+        // Decided in 2, the medicines table's diuretic row says what was recorded.
+        fireEvent.click(within(dp06.querySelector<HTMLElement>('[data-book-box="DP-06"]')!).getByRole('button', { name: '先查誘因' }))
+        const diuretic = document.querySelector<HTMLElement>('[data-book-section="drugs"] [data-book-ref="DP-06"]')!
+        expect(diuretic.querySelector('[data-visit-chain-done="DP-06"]')).toHaveTextContent('先查誘因')
+      } finally {
+        jest.useRealTimers()
+      }
     })
 
     it('says why a point does not apply, where it fits in a few words', () => {
@@ -434,5 +523,62 @@ describe.each([
     expect(useAfAnswersStore.getState().answers.restingRate).toBe(true)
     expect(screen.queryByTestId('cdss-visit-af-strategy')).toBeNull()
     expect(within(entry('DP-21')).getByText('門診確認')).toBeInTheDocument()
+  })
+})
+
+/**
+ * 全螢幕 from the panel (PR #224 review, 2026-10-01): the page moves over the
+ * window and back on one button, and while it covers the window nothing under
+ * it can be reached from the keyboard or read out.
+ */
+describe('the handbook page over the whole window', () => {
+  function PanelBook() {
+    const [full, setFull] = useState(false)
+    return (
+      <>
+        <button type="button">panel header</button>
+        <BookPage
+          id="p9-hfpef-af-dose"
+          page="hf"
+          chrome={full ? { onCollapse: () => setFull(false) } : { inline: true, onExpand: () => setFull(true) }}
+        />
+      </>
+    )
+  }
+
+  it('opened from the panel keeps focus on its one button, takes the panel out of reach, and Esc brings it back', () => {
+    render(<PanelBook />)
+    const covered = screen.getByRole('button', { name: 'panel header' })
+    expect(covered.closest('[inert]')).toBeNull()
+
+    const expand = screen.getByTestId('cdss-book-expand')
+    expand.focus()
+    fireEvent.click(expand)
+    expect(screen.getByTestId('cdss-visit-book')).not.toHaveAttribute('data-inline')
+    expect(document.activeElement).toBe(screen.getByTestId('cdss-book-collapse'))
+    expect(covered.closest('[inert]')).not.toBeNull()
+    // The page itself stays live.
+    expect(screen.getByTestId('cdss-visit-book').closest('[inert]')).toBeNull()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByTestId('cdss-visit-book')).toHaveAttribute('data-inline', 'true')
+    expect(document.activeElement).toBe(screen.getByTestId('cdss-book-expand'))
+    expect(covered.closest('[inert]')).toBeNull()
+  })
+
+  it('opened by ?visit=book does the same, and gives the page back when it closes', () => {
+    window.history.pushState({}, '', '/?visit=book')
+    const { unmount } = render(
+      <>
+        <button type="button">app header</button>
+        <BookPage id="p9-hfpef-af-dose" page="hf" chrome={null} />
+      </>,
+    )
+    const covered = screen.getByRole('button', { name: 'app header' })
+    expect(screen.getByTestId('cdss-visit-book')).not.toHaveAttribute('data-inline')
+    expect(covered.closest('[inert]')).not.toBeNull()
+    unmount()
+    expect(covered.closest('[inert]')).toBeNull()
+    window.history.pushState({}, '', '/')
   })
 })

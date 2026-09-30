@@ -84,6 +84,8 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
         data-companion={(companionResults ?? []).map((companion) => companion.packId).join(',')}
       >
         <button type="button" onClick={() => onVisitAnswer?.('dyspnoea-trend', 'worse')}>answer</button>
+        {bookChrome?.onExpand ? <button type="button" onClick={bookChrome.onExpand}>expand book</button> : null}
+        {bookChrome?.onCollapse ? <button type="button" onClick={bookChrome.onCollapse}>collapse book</button> : null}
       </div>
     )
   },
@@ -194,6 +196,18 @@ describe('decision map wiring', () => {
     fireEvent.click(screen.getByTestId('cdss-layout-switch-map'))
     expect(useCdssLayoutStore.getState().layout).toBe('map')
     expect(view()).toHaveAttribute('data-book', 'no')
+  })
+
+  it('opens 決策地圖 v2 over the whole window from the panel, and returns to the panel', () => {
+    useCdssLayoutStore.setState({ layout: 'book' })
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(view()).toHaveAttribute('data-book', 'inline')
+    fireEvent.click(screen.getByRole('button', { name: 'expand book' }))
+    // The same page, over the window with its own disease tabs; the stored layout stays v2.
+    expect(view()).toHaveAttribute('data-book', 'window')
+    expect(useCdssLayoutStore.getState().layout).toBe('book')
+    fireEvent.click(screen.getByRole('button', { name: 'collapse book' }))
+    expect(view()).toHaveAttribute('data-book', 'inline')
   })
 
   it('opens three sections, not the handbook, when 決策地圖 v2 has no map to draw', () => {

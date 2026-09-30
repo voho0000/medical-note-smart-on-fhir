@@ -38,7 +38,8 @@ import type {
 } from '../../types'
 import { DecisionMapColumns } from './DecisionMapColumns'
 import { BookAsks } from './BookAsks'
-import { VisitBookLayout, bookChaptersOf, type BookEntry, type BookMark } from './VisitBookLayout'
+import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookMark } from './VisitBookLayout'
+import { PointAsksPanel, hasPointAsks } from './PointAsksPanel'
 import { DecisionPointDetail } from './DecisionPointDetail'
 import { PointBox, QueueRowBox, TodayQueue } from './TodayQueue'
 import { VisitAsks, type VisitAnswerProvenance } from './VisitAsks'
@@ -88,10 +89,12 @@ export interface VisitDecisionScreenProps {
    */
   onPhysicianInput?: (input: NonNullable<VisitAction['physicianInput']>) => void
   /**
-   * Writes an answer to a point's own questions (AF DP-08's valves) into the
-   * answer set the pack names (`af-clinical`); `undefined` withdraws it.
+   * Writes an answer to a point's own questions into the answer set the pack
+   * names — AF DP-08's valves (`af-clinical`), HF DP-06's triggers (`visit`),
+   * its signs (`clinic-exam`, each of the row's `terms`); `undefined`
+   * withdraws it.
    */
-  onPointAnswer?: (answers: string, id: string, value: boolean | undefined) => void
+  onPointAnswer?: (answers: string, id: string, value: boolean | undefined, terms?: readonly string[]) => void
   /** The page's own input surfaces, placed on the map (see `visit-surfaces`). */
   surfaces?: VisitMapSurfaces
 }
@@ -238,7 +241,11 @@ export function VisitDecisionScreen({
   // page's inputs for it, and — on DP-03 — the way to its fuller questions.
   const openPointExtras = openPoint ? surfaces?.pointExtras?.(openPoint) : undefined
   const asksDetailLabel = surfaces?.asksDetail?.label
-  const detailExtras = openPoint && (openPointExtras || (openPoint.dp === 'DP-03' && asksDetailLabel)) ? (
+  // What the point asks in place (HF DP-06's signs and triggers), answerable here as in the handbook.
+  const openPointAsks = openPoint && hasPointAsks(openPoint)
+    ? <PointAsksPanel point={openPoint} isEnglish={isEnglish} {...(onPointAnswer ? { onAnswer: onPointAnswer } : {})} />
+    : undefined
+  const detailExtras = openPoint && (openPointExtras || openPointAsks || (openPoint.dp === 'DP-03' && asksDetailLabel)) ? (
     <>
       {openPoint.dp === 'DP-03' && asksDetailLabel ? (
         <button
@@ -260,6 +267,7 @@ export function VisitDecisionScreen({
           {isEnglish ? `Go to: ${asksDetailLabel}` : `前往「${asksDetailLabel}」`}
         </button>
       ) : null}
+      {openPointAsks}
       {openPointExtras}
     </>
   ) : undefined
@@ -716,17 +724,11 @@ export function VisitDecisionScreen({
       if (point.state === 'done') return 'done'
       return 'info'
     }
-    // Worth opening: what the decision turns on (criteria), a chain of steps,
-    // or several options to weigh — or, on any point, what would change its
-    // answer (the pack's `changesIf`). A reminder without them is read where
-    // it stands.
-    const isComplex = (point: DecisionPointView) => {
-      const changes = (point as { changesIf?: unknown }).changesIf
-      if (!ABSENT_STATES.has(point.state) && Array.isArray(changes) && changes.length > 0) return true
-      return (DECISION_STATES.has(point.state) || Boolean(openStepOf(point))) && Boolean(
-        point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
-      )
-    }
+    // Every point the page shows opens its reasoning (owner correction
+    // 2026-10-01: 「沒有這個規則吧」): a reminder line has its record and its
+    // guideline behind it as much as a decision does — DP-05 names which
+    // medicines ESC calls harmful, not only that none is prescribed.
+    const isComplex = (point: DecisionPointView) => point.state !== 'not-applicable' && point.state !== 'not-included'
     // Today's decisions for 今天的計畫, once each: the point, what was chosen,
     // and what to recheck when.
     const bookDecided = model.points.flatMap((point) => {
@@ -773,7 +775,7 @@ export function VisitDecisionScreen({
           // A class chosen in DP-01's table is the answer the diagnosis
           // question's own control wrote, handed back the same way.
           {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-          {...(onPointAnswer ? { onAnswerQuestion: (_point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value) } : {})}
+          {...(onPointAnswer ? { onAnswerQuestion: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value, questionRowOf(point, id)?.terms) } : {})}
         />
       </div>
     )
