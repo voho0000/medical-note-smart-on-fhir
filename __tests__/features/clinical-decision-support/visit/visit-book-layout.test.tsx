@@ -84,9 +84,14 @@ describe('the pocket-handbook layout', () => {
     expect(row).toHaveTextContent('年齡 ≥80')
     expect(within(row).getAllByRole('button', { name: /改 2\.5 mg bid/ })).toHaveLength(1)
     fireEvent.click(within(row).getByRole('button', { name: /看依據/ }))
-    const detail = within(row).getByTestId('cdss-visit-detail')
-    expect(within(detail).getByTestId('cdss-visit-detail-guideline-points')).toBeVisible()
+    const panel = within(row).getByTestId('cdss-book-reasoning')
+    expect(within(panel).getByTestId('cdss-book-guideline-points')).toBeVisible()
+    // What would change the answer, as the pack computes it from the dose rule.
+    expect(within(panel).getByTestId('cdss-book-changes-if')).toHaveTextContent('體重 >60 kg → apixaban 5 mg bid（3 項中 1 項）')
     expect(within(row).getAllByRole('button', { name: /改 2\.5 mg bid/ })).toHaveLength(1)
+    // 收起依據 in the panel closes it.
+    fireEvent.click(within(panel).getByRole('button', { name: '收起依據' }))
+    expect(within(row).queryByTestId('cdss-book-reasoning')).toBeNull()
     // A reminder has no 看依據.
     expect(within(entry('DP-15')).queryByRole('button', { name: /看依據/ })).toBeNull()
   })

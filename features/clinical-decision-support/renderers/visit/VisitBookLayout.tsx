@@ -1,35 +1,37 @@
 "use client"
 
 import { Fragment, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/src/shared/utils/cn.utils'
 import {
   ABSENT_STATES,
   BLOCK_ORDER,
-  blockTitle,
+  blockShortTitle,
+  checkIntervalSuffix,
+  criteriaOf,
   sourceTag,
   type DecisionBasisItem,
   type QueueRow,
   type QueueStep,
+  type VisitPlanModel,
 } from './visit-decisions'
-import type { DecisionPointView, VisitAction, VisitBlock } from '../../types'
-import { ChainDone, DecisionEvidence } from './TodayQueue'
+import { displayDate } from './VisitStatusHeader'
+import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
+import { ChainDone } from './TodayQueue'
 import { VisitDecisionControls } from './VisitDecisionControls'
+import styles from './VisitBookLayout.module.css'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
  * after the Pocket Medicine-style prototype: 「把這個版面套到 localhost 上的
- * 真實 CDSS 試試看」). An experiment beside the decision map, opened with
- * `?visit=book`; the map stays the page's layout.
+ * 真實 CDSS 試試看」, then 「我想要看到跟 prototype 一模一樣的畫面」). An
+ * experiment beside the decision map, opened with `?visit=book`.
  *
- * Left, the decision map: every point of the page under its group, with a
- * mark for where it stands today — the map says where the decisions are.
- * Right, the page itself in the map's order, each point once: its code and
- * name, what the pack says, the patient's values and criteria, and the
- * buttons, all in view. A point the clinician has to weigh (criteria, a
- * chain, several options) carries 看依據, which opens its card under it; a
- * simple one is a reminder and needs none.
+ * Left, the decision map: every point of the page under its numbered section,
+ * with a mark for where it stands today — the map says where the decisions
+ * are. Right, one sheet in the map's order, each point once. A decision is a
+ * table row — 本病人現在, 指引怎麼說, 今天 — with its buttons; a reminder is
+ * one line. A point the clinician has to weigh carries 看依據: its criteria
+ * with the values, what would change the answer, the guideline's points and
+ * where they come from. At the foot, today's plan.
  */
 
 export type BookMark = 'safety' | 'act' | 'ask' | 'done' | 'info' | 'absent'
@@ -53,36 +55,45 @@ export interface VisitBookLayoutProps {
   openKeyOf: (point: DecisionPointView) => string
   openKey: string | null
   onToggle: (point: DecisionPointView) => void
-  /** The opened point's card, drawn under its row. */
-  detail: ReactNode
+  /** The module cards behind a point, for the fold at the foot of 看依據. */
+  moduleCardsOf: (point: DecisionPointView) => ReactNode
   onDecide?: (step: QueueStep, action: VisitAction, queued: boolean) => void
   onClear?: (step: QueueStep) => void
   basisOf: (point: DecisionPointView) => readonly DecisionBasisItem[]
   /** The page's inputs a point reads, drawn in view under it. */
   extrasOf: (point: DecisionPointView) => ReactNode
-  top: ReactNode
+  /** The sentence for where the patient stands, and the values the decisions read. */
+  headline: string
+  keyValues: VisitDecisionModel['keyValues']
+  triggers: VisitDecisionModel['triggers']
+  now: Date
+  onEditValues?: () => void
+  /** Drawn at the head of the sheet: the values editor when open, the screen-reader status. */
+  top?: ReactNode
   blockFooters?: Partial<Record<VisitBlock, ReactNode>>
-  end: ReactNode
+  plan: VisitPlanModel
+  /** The sentence once everything queued is recorded. */
+  decidedLine?: string
+  /** The copyable note. */
+  summary: ReactNode
 }
 
 export function bookAnchor(point: Pick<DecisionPointView, 'source' | 'dp'>): string {
   return `cdss-book-${point.source}-${point.dp}`
 }
 
-const MARK_CLASS: Record<Exclude<BookMark, 'done'>, string> = {
-  safety: 'h-2.5 w-2.5 rounded-sm bg-destructive',
-  act: 'h-2.5 w-2.5 rounded-full bg-amber-500',
-  ask: 'h-2.5 w-2.5 rounded-full border-2 border-primary',
-  info: 'h-1.5 w-1.5 rounded-full bg-muted-foreground/60',
-  absent: 'h-1.5 w-1.5 rounded-full bg-transparent',
-}
+const PLAN_ANCHOR = 'cdss-book-plan'
 
 function Mark({ mark }: { mark: BookMark }) {
   return (
-    <span className="inline-flex h-5 w-3 shrink-0 items-center justify-center" aria-hidden="true">
-      {mark === 'done'
-        ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-300" />
-        : <span className={MARK_CLASS[mark]} />}
+    <span className={styles.markSlot} aria-hidden="true">
+      {mark === 'done' ? (
+        <svg className={styles.markDone} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+      ) : mark === 'act' ? <span className={styles.markAct} />
+        : mark === 'safety' ? <span className={styles.markSafety} />
+          : mark === 'ask' ? <span className={styles.markAsk} />
+            : mark === 'info' ? <span className={styles.markInfo} />
+              : null}
     </span>
   )
 }
@@ -120,7 +131,47 @@ function sectionsOf(points: readonly DecisionPointView[]): Section[] {
   return sections
 }
 
-const CODE = 'shrink-0 font-mono text-[11px] font-semibold text-muted-foreground'
+const sectionAnchor = (key: string) => `cdss-book-section-${key.replace(/[^a-z0-9-]/gi, '-')}`
+
+/** 「什麼會改變答案」, read defensively: a pack older than the field has none. */
+function changesOf(point: DecisionPointView): { when: string; then: string }[] {
+  const raw = (point as { changesIf?: unknown }).changesIf
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    const { when, then } = (item ?? {}) as { when?: unknown; then?: unknown }
+    return typeof when === 'string' && typeof then === 'string' ? [{ when, then }] : []
+  })
+}
+
+/** The criteria, each with its value and the date the record line gave it. */
+function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView; basis: readonly DecisionBasisItem[]; isEnglish: boolean; dated?: boolean }) {
+  const groups = criteriaOf(point)
+  if (!groups.length) return null
+  return (
+    <div data-visit-criteria="">
+      {groups.map((group) => (
+        <div key={group.title} data-visit-criteria-group={group.title}>
+          <p className={dated ? styles.panelLabel : styles.critTitle}>{group.title}</p>
+          <ul className={dated ? styles.panelPlain : styles.critList}>
+            {group.items.map((item) => {
+              const state = item.met === true ? 'met' : item.met === false ? 'unmet' : 'unknown'
+              const date = dated && item.value ? basis.find((value) => value.value === item.value)?.date : undefined
+              return (
+                <li key={item.label} className={state === 'unmet' ? styles.unmet : state === 'unknown' ? styles.unknown : undefined}>
+                  <span className={`${styles.critSymbol} ${styles[state]}`} aria-hidden="true">{state === 'met' ? '✓' : state === 'unmet' ? '✗' : '？'}</span>
+                  <span className="sr-only">{state === 'met' ? (isEnglish ? 'met: ' : '符合：') : state === 'unmet' ? (isEnglish ? 'not met: ' : '不符合：') : (isEnglish ? 'unknown: ' : '未知：')}</span>
+                  {item.label}
+                  {item.value ? <>　<b>{item.value}</b></> : state === 'unknown' ? <>　{isEnglish ? 'not in the record, please confirm' : '紀錄未見，請確認'}</> : null}
+                  {date ? <> <span className={styles.date}>{date}</span></> : null}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function VisitBookLayout({
   points,
@@ -132,28 +183,36 @@ export function VisitBookLayout({
   openKeyOf,
   openKey,
   onToggle,
-  detail,
+  moduleCardsOf,
   onDecide,
   onClear,
   basisOf,
   extrasOf,
+  headline,
+  keyValues,
+  triggers,
+  now,
+  onEditValues,
   top,
   blockFooters,
-  end,
+  plan,
+  decidedLine,
+  summary,
 }: VisitBookLayoutProps) {
   const sections = sectionsOf(points)
-  const goTo = (point: DecisionPointView) => {
-    const entry = entryOf(point)
-    const target = document.getElementById(bookAnchor(entry.kind === 'skip' ? entry.anchorOf : point))
+  const scrollTo = (id: string) => {
+    const target = document.getElementById(id)
     target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
     target?.focus?.({ preventScroll: true })
   }
-  const counts = { act: 0, ask: 0 }
-  for (const point of points) {
-    const mark = markOf(point)
-    if (mark === 'act' || mark === 'safety') counts.act += 1
-    if (mark === 'ask') counts.ask += 1
+  const goTo = (point: DecisionPointView) => {
+    const entry = entryOf(point)
+    scrollTo(bookAnchor(entry.kind === 'skip' ? entry.anchorOf : point))
   }
+  const marks = new Map(points.map((point) => [point, markOf(point)] as const))
+  const pending = points.filter((point) => ['act', 'safety'].includes(marks.get(point)!))
+  const asking = points.filter((point) => marks.get(point) === 'ask')
+  const counted = points.filter((point) => marks.get(point) !== 'absent')
 
   const reasoningButton = (point: DecisionPointView) => {
     if (!isComplex(point)) return null
@@ -161,10 +220,7 @@ export function VisitBookLayout({
     return (
       <button
         type="button"
-        className={cn(
-          'inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          open ? 'border-primary bg-primary/10 text-primary' : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10',
-        )}
+        className={styles.whyPill}
         aria-expanded={open}
         onClick={() => onToggle(point)}
         data-book-reasoning={point.dp}
@@ -174,198 +230,415 @@ export function VisitBookLayout({
     )
   }
 
-  const lead = (point: DecisionPointView, mark: BookMark) => (
-    <div className="flex min-w-0 items-start gap-1.5">
-      <Mark mark={mark} />
-      <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>
-      <span className={cn(CODE, 'pt-px')}>{point.dp}</span>
-      <span className="min-w-0 text-sm font-semibold leading-snug text-foreground">{point.label}</span>
-      {point.source !== sourceOfPage ? (
-        <Badge variant="outline" className="h-5 shrink-0 px-1 text-[10px]">{sourceTag(point)}</Badge>
-      ) : null}
+  /** 看依據: what the decision turns on, what would change it, the guideline, the sources. */
+  const reasoning = (head: DecisionPointView, shown: DecisionPointView) => {
+    if (openKey !== openKeyOf(head)) return null
+    const changes = changesOf(shown).length ? changesOf(shown) : changesOf(head)
+    const guideline = head.guideline
+    const basis = basisOf(shown)
+    const nextOptions = shown === head && head.next ? criteriaOf(head.next) : []
+    return (
+      <div className={styles.panel} data-testid="cdss-book-reasoning" data-dp={head.dp}>
+        <div className={styles.panelHead}>
+          <span className={styles.dpTag}>{head.dp}</span>
+          <b>{isEnglish ? `${head.label}: reasoning` : `${head.label}：依據`}</b>
+          <button type="button" className={styles.whyEnd} onClick={() => onToggle(head)}>{isEnglish ? 'Hide reasoning' : '收起依據'}</button>
+        </div>
+        {criteriaOf(shown).length ? <Criteria point={shown} basis={basis} isEnglish={isEnglish} dated /> : basis.length ? (
+          <div>
+            <span className={styles.panelLabel}>{isEnglish ? 'This patient (record)' : '本病人（紀錄）'}</span>
+            <ul className={styles.panelPlain}>
+              {basis.map((item) => (
+                <li key={`${item.label}|${item.value}`}>{item.label}　<b>{item.value}</b>{item.date ? <> <span className={styles.date}>{item.date}</span></> : null}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {nextOptions.length ? (
+          <div>
+            <span className={styles.panelLabel}>{isEnglish ? `Next: ${head.next!.headline}` : `下一步：${head.next!.headline}`}</span>
+            <Criteria point={head.next as unknown as DecisionPointView} basis={basis} isEnglish={isEnglish} dated />
+          </div>
+        ) : null}
+        {changes.length ? (
+          <div data-testid="cdss-book-changes-if">
+            <span className={styles.panelLabel}>{isEnglish ? 'What would change the answer' : '什麼會改變答案'}</span>
+            <ul className={styles.panelList}>
+              {changes.map((change) => <li key={change.when}>{change.when} → {change.then}</li>)}
+            </ul>
+          </div>
+        ) : null}
+        {guideline?.points.length ? (
+          <div data-testid="cdss-book-guideline-points">
+            <span className={styles.panelLabel}>{isEnglish ? 'Guideline points' : '指引重點'}</span>
+            <ul className={styles.panelList}>
+              {guideline.points.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
+        ) : null}
+        {guideline?.references.length ? (
+          <p className={styles.sources}>
+            {isEnglish ? 'Sources: ' : '出處：'}
+            {guideline.references
+              .map((reference) => `${reference.source} §${reference.section}（p.${reference.page}${reference.recommendation ? `，${reference.recommendation.class} ${reference.recommendation.level}` : ''}）`)
+              .filter((text, index, all) => all.indexOf(text) === index)
+              .join(' · ')}
+          </p>
+        ) : null}
+        <details className={styles.fold}>
+          <summary>{isEnglish ? 'Quotes and the full cards' : '原文與完整卡片'}</summary>
+          {guideline?.references.length ? (
+            <ol className={styles.panelPlain}>
+              {guideline.references.map((reference) => (
+                <li key={`${reference.source}|${reference.section}|${reference.page}|${reference.quote}`} className={styles.quote}>
+                  {reference.source} §{reference.section} · p.{reference.page}：<span lang="en">“{reference.quote}”</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          <div className={styles.inner}>{moduleCardsOf(head)}</div>
+        </details>
+      </div>
+    )
+  }
+
+  const nameCell = (point: DecisionPointView) => (
+    <div>
+      <span className={styles.dpTag}>{point.dp}</span>
+      {point.source !== sourceOfPage ? <span className={styles.fromTag}>{sourceTag(point)}</span> : null}
+      <br />
+      <b>{point.label}</b>
+      <span className="sr-only">{isEnglish ? MARK_WORDS[marks.get(point)!].en : MARK_WORDS[marks.get(point)!].zh}</span>
+      <br />
+      {reasoningButton(point)}
     </div>
   )
 
-  const opened = (point: DecisionPointView) => (openKey === openKeyOf(point) ? detail : null)
-
-  const renderEntry = (point: DecisionPointView) => {
-    const entry = entryOf(point)
-    if (entry.kind === 'skip') return null
-    const mark = markOf(point)
-    const extras = extrasOf(point)
-    const frame = (children: ReactNode, tone?: 'act' | 'safety' | 'muted') => (
+  /** A decision: 決策點 | 本病人現在 | 指引怎麼說 | 今天, and under it what the row reads and 看依據. */
+  const renderRow = (point: DecisionPointView, row: QueueRow, queued: boolean) => {
+    const mark = marks.get(point)!
+    const current = row.current
+    const shown = (current ?? row.steps[row.steps.length - 1]).point
+    const decided = row.steps.filter((step) => step.decision)
+    const criteria = criteriaOf(shown)
+    const basis = basisOf(shown)
+    const guide = point.guideline?.points[0]
+    // 本病人現在: the values the row reads; beside criteria, the reason line.
+    const nowCell = criteria.length || !basis.length
+      ? (shown.why ? <span>{shown.why}</span> : <span className={styles.cellMuted}>—</span>)
+      : (
+        <ul className={styles.basisList}>
+          {basis.map((item) => (
+            <li key={`${item.label}|${item.value}`}>{item.label} <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
+          ))}
+        </ul>
+      )
+    const tone = current && (mark === 'act' || mark === 'safety') ? (row.safety ? 'safety' : 'act') : undefined
+    return (
       <div
         key={`${point.source}:${point.dp}`}
         id={bookAnchor(point)}
         tabIndex={-1}
-        className={cn(
-          'grid scroll-mt-3 gap-x-4 gap-y-1.5 px-3 py-2.5 focus-visible:outline-none @min-[40rem]:grid-cols-[12rem_minmax(0,1fr)]',
-          tone === 'act' && 'bg-amber-50/60 dark:bg-amber-500/5',
-          tone === 'safety' && 'bg-destructive/5',
-        )}
+        className={styles.entry}
+        data-tone={tone}
         data-book-dp={point.dp}
         data-book-mark={mark}
       >
-        {lead(point, mark)}
-        <div className="min-w-0 space-y-1.5">{children}</div>
-      </div>
-    )
-
-    if (entry.kind === 'slot') {
-      return frame(
-        <>
-          {entry.content}
-          {extras}
-        </>,
-      )
-    }
-    if (entry.kind === 'covered') {
-      return frame(
-        <p className="text-sm text-muted-foreground">
-          {isEnglish ? `Decided with ${entry.by.dp} ${entry.by.label}` : `與 ${entry.by.dp} ${entry.by.label} 一起決定`}
-          {point.headline ? ` · ${point.headline}` : ''}
-        </p>,
-      )
-    }
-    if (entry.kind === 'line') {
-      return frame(
-        <>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <p className={cn('text-sm leading-snug', mark === 'ask' ? 'text-foreground' : 'text-muted-foreground')}>{point.headline ?? point.label}</p>
-            {reasoningButton(point)}
+        <div className={styles.rowCells}>
+          {nameCell(point)}
+          <div>{nowCell}</div>
+          <div className={styles.cellGuide}>
+            {criteria.length > 1 ? (
+              // Several options (the four DOACs): one line each here, each
+              // criterion under 看依據.
+              <>
+                <ul className={styles.critList}>
+                  {criteria.map((group) => <li key={group.title}>{group.title}</li>)}
+                </ul>
+                {isComplex(point) ? <span className={styles.small}>{isEnglish ? 'Each criterion under Reasoning' : '逐項條件見看依據'}</span> : null}
+              </>
+            ) : criteria.length ? <Criteria point={shown} basis={basis} isEnglish={isEnglish} /> : guide ?? <span className={styles.cellMuted}>—</span>}
           </div>
-          {point.why ? <p className="text-xs leading-relaxed text-muted-foreground">{point.why}</p> : null}
-          {extras}
-          {opened(point)}
-        </>,
-      )
-    }
-
-    // A decision: today's step with its buttons, or the decision recorded.
-    const { row, queued } = entry
-    const current = row.current
-    const shown = current ?? row.steps[row.steps.length - 1]
-    const decided = row.steps.filter((step) => step.decision)
-    return frame(
-      <>
-        {current ? (
-          <>
-            <ChainDone steps={decided} />
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <p className="text-sm font-semibold leading-snug text-foreground" data-visit-headline="">{shown.point.headline ?? shown.point.label}</p>
-              {reasoningButton(point)}
-            </div>
-            {shown.point.why ? <p className="text-xs leading-relaxed text-muted-foreground" data-visit-why="">{shown.point.why}</p> : null}
-            <VisitDecisionControls
-              point={shown.point}
-              surface="queue"
-              isEnglish={isEnglish}
-              onDecide={onDecide ? (action) => onDecide(current, action, queued) : undefined}
-            />
-            {/* The criteria carry the values the decision turns on; the record
-                line beneath them, when there are criteria, is the module's
-                whole evidence and stays in its card. */}
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <DecisionEvidence point={shown.point} basis={shown.point.criteria?.length ? [] : basisOf(shown.point)} isEnglish={isEnglish} />
-            </div>
-          </>
-        ) : (
-          <>
-            <ChainDone steps={decided.slice(0, -1)} />
-            <div className="flex flex-wrap items-center gap-2">
-              <VisitDecisionControls
-                point={shown.point}
-                decision={shown.decision}
-                surface="queue"
-                isEnglish={isEnglish}
-                onClear={onClear ? () => onClear(shown) : undefined}
-              />
-              {reasoningButton(point)}
-            </div>
-          </>
-        )}
-        {extras}
-        {opened(point)}
-      </>,
-      current && (mark === 'act' || mark === 'safety') ? (row.safety ? 'safety' : 'act') : undefined,
+          <div className={styles.inner}>
+            {current ? (
+              <>
+                <ChainDone steps={decided} />
+                <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
+                {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
+                <VisitDecisionControls
+                  point={shown}
+                  surface="queue"
+                  isEnglish={isEnglish}
+                  onDecide={onDecide ? (action) => onDecide(current, action, queued) : undefined}
+                />
+              </>
+            ) : (
+              <>
+                <ChainDone steps={decided.slice(0, -1)} />
+                <VisitDecisionControls
+                  point={shown}
+                  decision={row.steps[row.steps.length - 1].decision}
+                  surface="queue"
+                  isEnglish={isEnglish}
+                  onClear={onClear ? () => onClear(row.steps[row.steps.length - 1]) : undefined}
+                />
+              </>
+            )}
+          </div>
+        </div>
+        {extrasOf(point) ? <div className={`${styles.rowExtras} ${styles.inner}`}>{extrasOf(point)}</div> : null}
+        {reasoning(point, shown)}
+      </div>
     )
   }
 
-  const byBlock = (block: VisitBlock) => sections.filter((section) => section.block === block)
+  /** A reminder: DP | name | one line; covered points say by which. */
+  const renderLine = (point: DecisionPointView, by?: DecisionPointView) => {
+    const mark = marks.get(point)!
+    const extras = extrasOf(point)
+    const panel = reasoning(point, point)
+    return (
+      <div
+        key={`${point.source}:${point.dp}`}
+        id={bookAnchor(point)}
+        tabIndex={-1}
+        className={styles.line}
+        data-book-dp={point.dp}
+        data-book-mark={mark}
+      >
+        <span className={styles.dpTag}>{point.dp}</span>
+        <b>
+          {point.label}
+          {point.source !== sourceOfPage ? <span className={styles.fromTag}>{sourceTag(point)}</span> : null}
+        </b>
+        <span className={`${styles.lineText} ${mark === 'ask' ? styles.lineAsk : ''}`}>
+          <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}：</span>
+          {by
+            ? <>{isEnglish ? `Decided with ${by.dp} ${by.label}` : `與 ${by.dp} ${by.label} 一起決定`}{point.headline ? ` · ${point.headline}` : ''}</>
+            : point.headline ?? point.label}
+          {!by && point.why ? <span className={styles.lineWhy}>{point.why}</span> : null}
+          {reasoningButton(point)}
+        </span>
+        {extras ? <div className={`${styles.lineWide} ${styles.inner}`}>{extras}</div> : null}
+        {panel ? <div className={styles.lineWide}>{panel}</div> : null}
+      </div>
+    )
+  }
+
+  const renderSlot = (point: DecisionPointView, content: ReactNode) => (
+    <div
+      key={`${point.source}:${point.dp}`}
+      id={bookAnchor(point)}
+      tabIndex={-1}
+      className={styles.slot}
+      data-book-dp={point.dp}
+      data-book-mark={marks.get(point)}
+    >
+      <div className={styles.slotHead}>
+        <span className={styles.dpTag}>{point.dp}</span>
+        <b>{point.label}</b>
+      </div>
+      <div className={styles.inner}>
+        {content}
+        {extrasOf(point)}
+      </div>
+    </div>
+  )
+
+  /** A section's present points, consecutive rows in one table, consecutive lines in one list. */
+  const renderSection = (section: Section) => {
+    const present = section.points.filter((point) => !ABSENT_STATES.has(point.state))
+    const runs: { kind: 'table' | 'lines' | 'slot'; items: { point: DecisionPointView; entry: BookEntry }[] }[] = []
+    for (const point of present) {
+      const entry = entryOf(point)
+      if (entry.kind === 'skip') continue
+      const kind = entry.kind === 'row' ? 'table' : entry.kind === 'slot' ? 'slot' : 'lines'
+      const last = runs[runs.length - 1]
+      if (last && last.kind === kind && kind !== 'slot') last.items.push({ point, entry })
+      else runs.push({ kind, items: [{ point, entry }] })
+    }
+    return runs.map((run, index) => {
+      if (run.kind === 'slot') {
+        const { point, entry } = run.items[0]
+        return entry.kind === 'slot' ? <Fragment key={`slot-${index}`}>{renderSlot(point, entry.content)}</Fragment> : null
+      }
+      if (run.kind === 'lines') {
+        return (
+          <div key={`lines-${index}`} className={styles.lines}>
+            {run.items.map(({ point, entry }) => renderLine(point, entry.kind === 'covered' ? entry.by : undefined))}
+          </div>
+        )
+      }
+      return (
+        <div key={`table-${index}`} className={styles.table} role="group" aria-label={section.title}>
+          <div className={styles.thead} aria-hidden="true">
+            <span>{isEnglish ? 'Decision' : '決策點'}</span>
+            <span>{isEnglish ? 'This patient now' : '本病人現在'}</span>
+            <span>{isEnglish ? 'The guideline says' : '指引怎麼說'}</span>
+            <span>{isEnglish ? 'Today' : '今天'}</span>
+          </div>
+          {run.items.map(({ point, entry }) => (entry.kind === 'row' ? renderRow(point, entry.row, entry.queued) : null))}
+        </div>
+      )
+    })
+  }
+
+  // Sections numbered down the page, as the map numbers them — or by the
+  // pack's own marker where its label carries one (AF's ⓪ ① and A／R／C).
+  const numbered = sections.map((section, index) => {
+    const marked = /^([⓪①-⑳]|[A-Z])\s+(.+)$/u.exec(section.title)
+    return marked
+      ? { section: { ...section, title: marked[2] }, num: marked[1] }
+      : { section, num: String(index + 1) }
+  })
+  const major = (section: Section) => section.points.some((point) => {
+    if (ABSENT_STATES.has(point.state)) return false
+    const kind = entryOf(point).kind
+    return kind === 'row' || kind === 'slot'
+  })
+
+  // The values the decisions read, by date, as the header's second line.
+  const byDate = new Map<string, VisitDecisionModel['keyValues']>()
+  for (const item of keyValues) {
+    if (!item.value.trim() || /^[—–-]+$/.test(item.value.trim())) continue
+    const date = displayDate(item.date, now) ?? ''
+    byDate.set(date, [...(byDate.get(date) ?? []), item])
+  }
 
   return (
-    <div className="space-y-3" data-testid="cdss-visit-book">
-      {top}
-      <div className="grid items-start gap-4 @min-[56rem]:grid-cols-[13.5rem_minmax(0,1fr)]">
-        <nav
-          aria-label={isEnglish ? 'Decision map' : '決策地圖'}
-          className="rounded-lg border border-border bg-card p-2 @min-[56rem]:sticky @min-[56rem]:top-2 @min-[56rem]:max-h-[calc(100vh-1rem)] @min-[56rem]:overflow-y-auto"
-          data-testid="cdss-book-map"
-        >
-          <div className="flex items-baseline justify-between gap-2 px-1.5 pb-1">
-            <span className="text-sm font-semibold text-foreground">{isEnglish ? 'Decision map' : '決策地圖'}</span>
-            <span className="text-[11px] text-muted-foreground">
-              {isEnglish ? `${counts.act} to decide · ${counts.ask} to answer` : `待決定 ${counts.act} · 待答 ${counts.ask}`}
+    <div className={styles.book} data-testid="cdss-visit-book">
+      <header className={styles.head}>
+        <div className={styles.headInner}>
+          <div className={styles.headText}>
+            <span className={styles.headLine}>{headline}</span>
+            <span className={styles.headValues} data-testid="cdss-book-values">
+              {[...byDate.entries()].map(([date, items], index) => (
+                <Fragment key={date || 'undated'}>
+                  {index ? ' ｜ ' : ''}
+                  {date ? `${date} ` : ''}
+                  {items.map((item, itemIndex) => (
+                    <Fragment key={item.key}>
+                      {itemIndex ? ' · ' : ''}
+                      {item.label} <b className={item.alert ? styles.alert : undefined}>{item.value}</b>
+                      {item.abnormal ? (item.abnormal === 'high' ? (isEnglish ? ' H' : ' 高') : (isEnglish ? ' L' : ' 低')) : ''}
+                      {item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : ''}
+                    </Fragment>
+                  ))}
+                </Fragment>
+              ))}
+              {onEditValues ? (
+                <button type="button" className={styles.headEdit} onClick={onEditValues}>{isEnglish ? 'Add or correct' : '補填／修改'}</button>
+              ) : null}
             </span>
           </div>
-          <div className="grid gap-x-3 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-1">
-            {sections.map((section, index) => (
-              <div key={section.key} className="pt-1.5">
-                {index === 0 || sections[index - 1].block !== section.block ? (
-                  <p className="mt-1 border-b border-border px-1.5 pb-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground/80">{blockTitle(section.block, isEnglish)}</p>
+          <button type="button" className={pending.length ? styles.pending : styles.pendingDone} onClick={() => scrollTo(PLAN_ANCHOR)} data-testid="cdss-book-pending">
+            {pending.length
+              ? (isEnglish ? `${pending.length} to decide today` : `今天待決定 ${pending.length}`)
+              : asking.length
+                ? (isEnglish ? `${asking.length} to answer` : `待答 ${asking.length}`)
+                : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.body}>
+        <nav aria-label={isEnglish ? 'Decision map' : '決策地圖'} className={styles.map} data-testid="cdss-book-map">
+          <div className={styles.mapHead}>
+            <span className={styles.mapTitle}>{isEnglish ? 'Decision map' : '決策地圖'}</span>
+            <span className={styles.mapCount}>
+              {isEnglish ? `${counted.length} DPs · ${pending.length + asking.length} open` : `${counted.length} 個 DP · ${pending.length + asking.length} 待處理`}
+            </span>
+          </div>
+          <div className={styles.legend} aria-hidden="true">
+            {pending.some((point) => marks.get(point) === 'safety') ? <span><span className={styles.markSafety} />{isEnglish ? 'Safety' : '安全'}</span> : null}
+            <span><span className={styles.markAct} />{isEnglish ? 'To decide' : '待決定'}</span>
+            <span><span className={styles.markAsk} />{isEnglish ? 'To answer' : '待答'}</span>
+            <span><svg className={styles.markDone} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>{isEnglish ? 'Settled' : '已定'}</span>
+            <span><span className={styles.markInfo} />{isEnglish ? 'Info' : '資訊'}</span>
+            <span className={styles.legendMuted}>{isEnglish ? 'Grey: not applicable' : '灰字 不適用'}</span>
+          </div>
+          {numbered.map(({ section, num }, index) => {
+            const open = section.points.filter((point) => ['act', 'safety', 'ask'].includes(marks.get(point)!)).length
+            return (
+              <div key={section.key} className={styles.mapSection}>
+                {index === 0 || numbered[index - 1].section.block !== section.block ? (
+                  <p className={styles.mapBlock}>{blockShortTitle(section.block, isEnglish)}</p>
                 ) : null}
-                <p className="px-1.5 text-[11px] font-semibold text-muted-foreground">{section.title}</p>
-                <ul>
+                <button type="button" className={styles.mapSectionHead} onClick={() => scrollTo(sectionAnchor(section.key))}>
+                  <span className={styles.mapNum}>{num}</span>
+                  <span className={styles.mapName}>{section.title}</span>
+                  {open ? <span className={styles.mapPending}>{isEnglish ? `${open} open` : `${open} 待`}</span> : null}
+                </button>
+                <ul className={styles.mapLines}>
                   {section.points.map((point) => {
-                    const mark = markOf(point)
+                    const mark = marks.get(point)!
+                    const note = mark === 'act' || mark === 'safety'
+                      ? MARK_WORDS[mark]
+                      : mark === 'ask'
+                        ? MARK_WORDS.ask
+                        : mark === 'absent'
+                          ? (point.state === 'not-included' ? { zh: '未納入', en: 'Not covered' } : MARK_WORDS.absent)
+                          : undefined
                     return (
                       <li key={`${point.source}:${point.dp}`}>
                         <button
                           type="button"
-                          className={cn(
-                            'flex min-h-7 w-full items-center gap-1.5 rounded px-1.5 text-left text-xs transition-colors hover:bg-muted/60 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                            mark === 'act' || mark === 'safety' ? 'bg-amber-50 font-semibold text-amber-900 dark:bg-amber-500/10 dark:text-amber-200' : mark === 'absent' ? 'text-muted-foreground/70' : 'text-foreground',
-                          )}
+                          className={styles.mapLine}
                           onClick={() => goTo(point)}
                           data-book-map-dp={point.dp}
                           data-book-mark={mark}
                         >
                           <Mark mark={mark} />
-                          <span className="shrink-0 font-mono text-[10px] font-semibold">{point.dp}</span>
-                          <span className="min-w-0 truncate">{point.label}</span>
-                          {isComplex(point) ? <span className="ml-auto shrink-0 text-[10px] text-primary" aria-hidden="true">▸</span> : null}
+                          <span className={styles.mapDp}>{point.dp}</span>
+                          <span className={styles.mapLabel}>{point.label}</span>
+                          {note ? <span className={styles.mapNote}>{isEnglish ? note.en : note.zh}</span> : <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>}
                         </button>
                       </li>
                     )
                   })}
                 </ul>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </nav>
 
-        <div className="min-w-0 space-y-5">
+        <main className={styles.sheet} aria-label={isEnglish ? 'The visit' : '本次門診'}>
+          {top ? <div className={styles.inner}>{top}</div> : null}
+          {triggers.length ? (
+            <p className={styles.triggers} data-testid="cdss-visit-triggers">
+              <b>{isEnglish ? 'Reassessment opened by: ' : '重新評估的原因：'}</b>
+              {triggers.map((trigger, index) => (
+                <span key={trigger.id} data-trigger={trigger.id}>{index ? (isEnglish ? '; ' : '；') : ''}{trigger.text}</span>
+              ))}
+            </p>
+          ) : null}
           {BLOCK_ORDER.map((block) => (
-            <section key={block} className="space-y-3" aria-label={blockTitle(block, isEnglish)} data-book-block={block}>
-              <h3 className="border-b border-border pb-1 text-xs font-semibold tracking-wide text-muted-foreground">{blockTitle(block, isEnglish)}</h3>
-              {byBlock(block).map((section) => {
-                const present = section.points.filter((point) => !ABSENT_STATES.has(point.state))
+            <Fragment key={block}>
+              {numbered.filter(({ section }) => section.block === block).map(({ section, num }, index) => {
                 const absent = section.points.filter((point) => ABSENT_STATES.has(point.state))
                 return (
-                  <section key={section.key} className="space-y-1.5" data-book-section={section.key}>
-                    <h4 className="px-0.5 text-base font-semibold text-foreground">{section.title}</h4>
-                    {present.length ? (
-                      <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
-                        {present.map((point) => <Fragment key={`${point.source}:${point.dp}`}>{renderEntry(point)}</Fragment>)}
-                      </div>
-                    ) : null}
+                  <section
+                    key={section.key}
+                    id={sectionAnchor(section.key)}
+                    tabIndex={-1}
+                    className={`${styles.section} ${major(section) ? '' : styles.minor}`}
+                    aria-labelledby={`${sectionAnchor(section.key)}-title`}
+                    data-book-section={section.key}
+                    data-book-block={block}
+                  >
+                    <div className={styles.sectionHead}>
+                      <span className={styles.sectionNum}>{num}</span>
+                      <h2 id={`${sectionAnchor(section.key)}-title`} className={styles.sectionTitle}>{section.title}</h2>
+                      {index === 0 ? <span className={styles.sectionAside}>{blockShortTitle(block, isEnglish)}</span> : null}
+                    </div>
+                    {renderSection(section)}
                     {absent.length ? (
-                      <p className="px-0.5 text-xs text-muted-foreground/80" data-book-absent={section.key}>
-                        {isEnglish ? 'Not applicable: ' : '不適用　'}
-                        {absent.map((point, index) => (
+                      <p className={styles.absent} data-book-absent={section.key}>
+                        {isEnglish ? 'Not applicable　' : '不適用　'}
+                        {absent.map((point, pointIndex) => (
                           <span key={`${point.source}:${point.dp}`} id={bookAnchor(point)} tabIndex={-1}>
-                            {index ? ' · ' : ''}
-                            <span className="font-mono">{point.dp}</span> {point.label}
+                            {pointIndex ? ' · ' : ''}
+                            <span className={styles.dpInline}>{point.dp}</span> {point.label}
                           </span>
                         ))}
                       </p>
@@ -373,11 +646,44 @@ export function VisitBookLayout({
                   </section>
                 )
               })}
-              {blockFooters?.[block]}
-            </section>
+              {blockFooters?.[block] ? <div className={styles.inner}>{blockFooters[block]}</div> : null}
+            </Fragment>
           ))}
-          {end}
-        </div>
+
+          <section id={PLAN_ANCHOR} tabIndex={-1} className={styles.plan} aria-labelledby={`${PLAN_ANCHOR}-title`} data-testid="cdss-book-end">
+            <div className={styles.planHead}>
+              <h2 id={`${PLAN_ANCHOR}-title`} className={styles.planTitle}>{isEnglish ? "Today's plan" : '今天的計畫'}</h2>
+            </div>
+            {plan.notes.length ? (
+              <ul className={styles.planList} data-testid="cdss-visit-plan-notes">
+                {plan.notes.map((note) => <li key={note.text}><b>{note.text}</b></li>)}
+              </ul>
+            ) : null}
+            {plan.items.length ? (
+              <ol className={styles.planList} data-testid="cdss-visit-plan">
+                {plan.items.map((item) => (
+                  <li key={item.key} data-dp={item.point.dp} data-plan-item="">
+                    <span className={styles.dpTag}>{item.point.dp}</span>　<b>{item.actionLabel}</b>
+                    <span className={styles.small}>{isEnglish ? ' — ' : '：'}{item.check.text}{checkIntervalSuffix(item.check, isEnglish)}</span>
+                    {item.reopenWhen ? <span className={styles.small}>{isEnglish ? ' Reopen when: ' : '　重新評估：'}{item.reopenWhen}</span> : null}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className={styles.planEmpty} data-testid="cdss-visit-plan-empty">
+                {isEnglish ? 'No decision recorded today asks for a follow-up check yet.' : '今天還沒有需要回應檢查的決定。'}
+              </p>
+            )}
+            {pending.length ? (
+              <p className={styles.planPending}>
+                <b>{isEnglish ? 'Not yet decided　' : '尚未決定　'}</b>
+                {pending.map((point) => `${point.dp} ${point.label}`).join(' · ')}
+              </p>
+            ) : null}
+            {decidedLine ? <p className={styles.question} data-testid="cdss-visit-decided-line">{decidedLine}</p> : null}
+            <div className={styles.inner}>{summary}</div>
+          </section>
+        </main>
       </div>
     </div>
   )

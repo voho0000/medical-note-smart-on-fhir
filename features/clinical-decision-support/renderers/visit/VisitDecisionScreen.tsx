@@ -697,27 +697,17 @@ export function VisitDecisionScreen({
     const isComplex = (point: DecisionPointView) => (DECISION_STATES.has(point.state) || Boolean(openStepOf(point))) && Boolean(
       point.criteria?.length || point.next || (point.chain?.length ?? 0) > 1 || point.actions.length >= 3,
     )
-    const bookShownKey = (point: DecisionPointView) => {
-      const entry = entryOf(point)
-      if (entry.kind !== 'row') return undefined
-      return (entry.row.current ?? entry.row.steps[entry.row.steps.length - 1]).key
-    }
-    const bookDetail = openPoint ? (
-      <DecisionPointDetail
-        key={visitDecisionKey(openPoint)}
-        point={openPoint}
-        shownAbove={{ headline: true, why: true }}
-        steps={openDeciding ? [openDeciding.step] : pointSteps(openPoint, decisions, now)}
-        {...(openDeciding ? { decidedWith: openDeciding.owner } : bookShownKey(openPoint) ? { controlsAbove: bookShownKey(openPoint) } : {})}
-        isEnglish={isEnglish}
-        sourceOfPage={sourceOfPage}
-        modules={modules}
-        renderDetail={renderDetail}
-        onDecide={onRecordDecision ? (step, action) => record(step.key, step.point, action, 'map') : undefined}
-        onClear={onClearDecision ? (step) => clear(step.key) : undefined}
-        onClose={() => setOpenKey(null)}
-      />
-    ) : null
+    // The cards behind a point, at the foot of its 看依據.
+    const moduleCardsOf = (point: DecisionPointView) => point.moduleIds.flatMap((id) => {
+      const recommendation = modules.get(id)
+      if (!recommendation) return []
+      return [(
+        <section key={id} className="space-y-1.5 pt-2" aria-label={recommendation.moduleName ?? recommendation.title} data-testid={`cdss-visit-detail-module-${id}`}>
+          <p className="text-xs font-semibold text-foreground">{recommendation.moduleName ?? recommendation.title}</p>
+          <div className="-mx-2" data-testid={`cdss-visit-detail-module-body-${id}`}>{renderDetail(recommendation)}</div>
+        </section>
+      )]
+    })
     return (
       <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
         <VisitBookLayout
@@ -730,25 +720,20 @@ export function VisitDecisionScreen({
           openKeyOf={visitDecisionKey}
           openKey={openPoint ? openKey : null}
           onToggle={toggleOpen}
-          detail={bookDetail}
+          moduleCardsOf={moduleCardsOf}
           {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
           {...(onClearDecision ? { onClear: (step: QueueStep) => clear(step.key) } : {})}
           basisOf={basisOf}
           extrasOf={(point) => surfaces?.pointExtras?.(point, { once: true }) ?? null}
+          headline={status.text}
+          keyValues={model.keyValues}
+          triggers={model.triggers}
+          now={now}
+          {...(surfaces?.editValues ? { onEditValues: surfaces.editValues } : {})}
           top={(
             <>
               <VisitStatusLine model={model} sentence={status.text} />
-              <VisitValues
-                model={model}
-                isEnglish={isEnglish}
-                now={now}
-                {...(surfaces?.editValues ? { onEditValues: surfaces.editValues } : {})}
-                {...(surfaces?.editValue ? { onEditValue: surfaces.editValue } : {})}
-                {...(surfaces?.statusLine?.valueAddons ? { valueAddons: surfaces.statusLine.valueAddons } : {})}
-                {...(surfaces?.statusLine?.extras ? { extras: surfaces.statusLine.extras } : {})}
-              />
               {surfaces?.statusPanel ?? null}
-              <VisitTriggers model={model} isEnglish={isEnglish} />
             </>
           )}
           blockFooters={{
@@ -765,15 +750,9 @@ export function VisitDecisionScreen({
               </>
             ),
           }}
-          end={(
-            <section className="space-y-2 border-t-2 border-foreground/80 pt-3" aria-label={isEnglish ? "Today's plan" : '今天的計畫'} data-testid="cdss-book-end">
-              <VisitPlan plan={plan} isEnglish={isEnglish} />
-              {status.decided ? (
-                <p className="px-0.5 text-sm font-medium text-foreground" data-testid="cdss-visit-decided-line">{status.text}</p>
-              ) : null}
-              <VisitSummary text={summaryText} isEnglish={isEnglish} />
-            </section>
-          )}
+          plan={plan}
+          {...(status.decided ? { decidedLine: status.text } : {})}
+          summary={<VisitSummary text={summaryText} isEnglish={isEnglish} />}
         />
         {footer}
       </div>
